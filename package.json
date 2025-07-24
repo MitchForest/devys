@@ -1,0 +1,38 @@
+{
+  "name": "claude-code-ide",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Next-gen IDE for Multi-agent workflows",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run --filter '*' dev",
+    "build": "bun run --filter '*' build",
+    "lint": "eslint . --ext .ts,.tsx --ignore-path .gitignore --cache",
+    "lint:fix": "eslint . --ext .ts,.tsx --ignore-path .gitignore --fix",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "check": "bun run typecheck && bun run lint",
+    "test": "bun run --filter '*' test",
+    "clean": "bun run --filter '*' clean && rm -rf node_modules",
+    "desktop": "bun run --filter @claude-code-ide/desktop dev",
+    "server": "bun run --filter @claude-code-ide/server dev"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^20.11.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "prettier": "^3.2.4",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  }
+}
