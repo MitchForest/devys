@@ -67,9 +67,9 @@ export function FileExplorer({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-3 border-b border-border">
+      <div className="p-3 border-b border-panel">
         <div className="flex items-center justify-between mb-2">
-          <h2 className="text-sm font-semibold uppercase text-muted-foreground">Explorer</h2>
+          <h2 className="text-sm font-semibold uppercase text-muted">Explorer</h2>
           <div className="flex items-center gap-1">
             <Button
               variant="ghost"
@@ -99,18 +99,18 @@ export function FileExplorer({
         </div>
         
         <div className="relative">
-          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted" />
           <input
             type="text"
             placeholder="Search files..."
-            className="w-full pl-8 pr-3 py-1 text-sm bg-secondary/50 border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring"
+            className="w-full pl-8 pr-3 py-1 text-sm bg-surface-4 border border-input rounded-md focus:outline-none focus:ring-1 focus:ring-ring transition-colors"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
       </div>
       
-      <div className="flex-1 overflow-y-auto p-2">
+      <div className="flex-1 overflow-y-auto scrollbar-zed p-2">
         {filteredNodes.length > 0 ? (
           <FileTree
             nodes={filteredNodes}
@@ -127,7 +127,7 @@ export function FileExplorer({
             onPaste={onPaste}
           />
         ) : (
-          <div className="text-center text-sm text-muted-foreground py-8">
+          <div className="text-center text-sm text-muted py-8">
             {searchQuery ? 'No files found' : 'No files in workspace'}
           </div>
         )}

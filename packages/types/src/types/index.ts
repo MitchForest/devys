@@ -5,10 +5,8 @@ export interface FileNode {
   type: 'file' | 'directory';
   children?: FileNode[];
   isExpanded?: boolean;
-  gitStatus?: GitStatus;
+  gitStatus?: 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked';
 }
-
-export type GitStatus = 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked';
 
 export interface FileTab {
   id: string;
@@ -19,70 +17,51 @@ export interface FileTab {
   language?: string;
 }
 
-export interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant' | 'system';
+// Re-export AI types from ai.ts to avoid duplication
+export {
+  type ChatMessage,
+  type FileAttachment,
+  type ChatSession,
+  type WorkflowStep,
+  type Workflow,
+  type Agent,
+  type Memory,
+  type ProjectContext,
+  type AIError,
+  type StreamingOptions,
+  type ToolDefinition,
+  type GitStatus,
+  type GitFileStatus,
+  // FileNode is already defined in this file
+} from '../ai';
+
+export interface ToolResult {
+  tool_use_id: string;
+  content: any;
+}
+
+export interface AIRequest {
+  messages: any[];
+  tools?: any[];
+  temperature?: number;
+  max_tokens?: number;
+}
+
+export interface AIResponse {
   content: string;
-  timestamp: Date;
-  attachments?: FileAttachment[];
+  tool_calls?: any[];
 }
 
-export interface FileAttachment {
-  path: string;
-  name: string;
-  content?: string;
-}
-
-export interface ChatSession {
-  id: string;
-  title: string;
-  messages: ChatMessage[];
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface WorkflowStep {
-  id: string;
-  type: 'ai-query' | 'command' | 'approval';
-  status: 'pending' | 'running' | 'completed' | 'failed';
-  config: Record<string, unknown>;
-  result?: unknown;
+export interface ServerStatus {
+  connected: boolean;
   error?: string;
-}
-
-export interface Workflow {
-  id: string;
-  name: string;
-  description: string;
-  steps: WorkflowStep[];
-  status: 'idle' | 'running' | 'completed' | 'failed';
-  progress: number;
-}
-
-export interface ProjectContext {
-  projectPath: string;
-  projectType?: string;
-  dependencies: string[];
-  conventions: CodeConvention[];
-  recentChanges: ChangeRecord[];
-}
-
-export interface CodeConvention {
-  type: 'naming' | 'structure' | 'style';
-  pattern: string;
-  examples: string[];
-}
-
-export interface ChangeRecord {
-  timestamp: Date;
-  files: string[];
-  description: string;
-  author: string;
 }
 
 export interface TerminalSession {
   id: string;
   title: string;
-  active: boolean;
-  output: string[];
+  isActive: boolean;
+  command?: string;
+  cwd?: string;
+  output?: string[];
 }

@@ -68,7 +68,7 @@ export function ThemeProvider({
     // Update meta theme-color
     const metaThemeColor = document.querySelector('meta[name="theme-color"]');
     if (metaThemeColor) {
-      metaThemeColor.setAttribute('content', resolved === 'dark' ? '#0a0a0a' : '#ffffff');
+      metaThemeColor.setAttribute('content', resolved === 'dark' ? '#212830' : '#FAFAFA');
     }
   }, [theme]);
 

@@ -1,6 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { open, save } from '@tauri-apps/plugin-dialog';
-import { readTextFile, writeTextFile, readDir, createDir, removeFile, removeDir, rename } from '@tauri-apps/plugin-fs';
+import { readTextFile, writeTextFile, readDir, create, remove, rename } from '@tauri-apps/plugin-fs';
 
 export const tauriBridge = {
   // File operations
@@ -17,42 +16,35 @@ export const tauriBridge = {
   },
 
   async createDirectory(path: string): Promise<void> {
-    await createDir(path, { recursive: true });
+    await create(path);
   },
 
   async deleteFile(path: string): Promise<void> {
-    await removeFile(path);
+    await remove(path);
   },
 
   async deleteDirectory(path: string): Promise<void> {
-    await removeDir(path, { recursive: true });
+    await remove(path);
   },
 
   async renameFile(oldPath: string, newPath: string): Promise<void> {
     await rename(oldPath, newPath);
   },
 
-  // Dialog operations
+  // Dialog operations - TODO: Implement when dialog plugin is added
   async openFileDialog(): Promise<string | null> {
-    const selected = await open({
-      multiple: false,
-      directory: false,
-    });
-    return selected as string | null;
+    // TODO: Add @tauri-apps/plugin-dialog when needed
+    return null;
   },
 
   async openFolderDialog(): Promise<string | null> {
-    const selected = await open({
-      multiple: false,
-      directory: true,
-    });
-    return selected as string | null;
+    // TODO: Add @tauri-apps/plugin-dialog when needed
+    return null;
   },
 
   async saveFileDialog(defaultPath?: string): Promise<string | null> {
-    return await save({
-      defaultPath,
-    });
+    // TODO: Add @tauri-apps/plugin-dialog when needed
+    return null;
   },
 
   // Custom commands (to be implemented in Rust)

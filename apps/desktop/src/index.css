@@ -16,11 +16,10 @@ html, body {
 body {
   margin: 0;
   padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: 'Zed Mono', ui-monospace, SFMono-Regular, 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "liga" 1, "calt" 1, "ss01" 1;
 }
 
 #root {
@@ -29,53 +28,179 @@ body {
   overflow: hidden;
 }
 
-/* Tailwind v4 approach - using CSS variables and theme() */
+/* Tailwind v4 approach - Zed-inspired design system */
 @layer base {
   :root {
-    /* Light mode colors */
-    --color-background: 0 0% 100%;
-    --color-foreground: 222.2 84% 4.9%;
-    --color-primary: 222.2 47.4% 11.2%;
-    --color-primary-foreground: 210 40% 98%;
-    --color-secondary: 210 40% 96.1%;
-    --color-secondary-foreground: 222.2 47.4% 11.2%;
-    --color-muted: 210 40% 96.1%;
-    --color-muted-foreground: 215.4 16.3% 46.9%;
-    --color-accent: 210 40% 96.1%;
-    --color-accent-foreground: 222.2 47.4% 11.2%;
-    --color-destructive: 0 84.2% 60.2%;
-    --color-destructive-foreground: 210 40% 98%;
-    --color-border: 214.3 31.8% 91.4%;
-    --color-input: 214.3 31.8% 91.4%;
-    --color-ring: 222.2 84% 4.9%;
+    /* Light mode colors - Zed inspired */
+    --color-background: 0 0% 98%;           /* #FAFAFA - Main background */
+    --color-foreground: 0 0% 20%;           /* #333333 - Main text */
     
-    /* Custom IDE colors */
-    --color-sidebar: 0 0% 98%;
-    --color-editor: 0 0% 100%;
-    --color-panel: 0 0% 97%;
+    /* Surface hierarchy - Light mode */
+    --color-surface-1: 0 0% 100%;           /* #FFFFFF - Highest (editor) */
+    --color-surface-2: 0 0% 97%;            /* #F7F7F7 - High (panels) */
+    --color-surface-3: 0 0% 94%;            /* #F0F0F0 - Medium (sidebar) */
+    --color-surface-4: 0 0% 91%;            /* #E8E8E8 - Low (inactive elements) */
+    
+    /* Interactive elements - Light mode */
+    --color-primary: 220 70% 50%;           /* #1A73E8 - Primary actions */
+    --color-primary-foreground: 0 0% 100%;  /* #FFFFFF */
+    --color-secondary: 0 0% 93%;            /* #EDEDED - Secondary surfaces */
+    --color-secondary-foreground: 0 0% 20%; /* #333333 */
+    
+    /* State colors - Light mode */
+    --color-hover: 0 0% 89%;                /* #E3E3E3 - Hover state */
+    --color-active: 0 0% 85%;               /* #D9D9D9 - Active/pressed state */
+    --color-selected: 220 70% 95%;          /* #E8F0FE - Selected with primary tint */
+    
+    /* Semantic colors - Light mode */
+    --color-muted: 0 0% 45%;                /* #737373 - Muted text */
+    --color-accent: 220 70% 50%;            /* #1A73E8 - Same as primary */
+    --color-accent-foreground: 0 0% 100%;   /* #FFFFFF */
+    --color-destructive: 0 84% 60%;         /* #EF4444 - Errors/destructive */
+    --color-destructive-foreground: 0 0% 100%;
+    
+    /* Borders and inputs - Light mode */
+    --color-border: 0 0% 88%;               /* #E0E0E0 - Default border */
+    --color-input: 0 0% 88%;                /* #E0E0E0 - Input border */
+    --color-ring: 220 70% 50%;              /* #1A73E8 - Focus ring */
+    
+    /* Special surfaces - Light mode */
+    --color-tooltip: 0 0% 15%;              /* #262626 - Tooltip background */
+    --color-tooltip-foreground: 0 0% 98%;   /* #FAFAFA - Tooltip text */
+    
+    /* Editor specific - Light mode */
+    --color-editor-bg: 0 0% 100%;           /* #FFFFFF - Editor background */
+    --color-editor-active-line: 0 0% 97%;   /* #F7F7F7 - Active line */
+    --color-editor-selection: 220 70% 90%;  /* #C2DEFF - Text selection */
+    
+    /* Panel specific - Light mode */
+    --color-panel-bg: 0 0% 97%;             /* #F7F7F7 - Panel background */
+    --color-panel-border: 0 0% 90%;         /* #E5E5E5 - Panel borders */
+    
+    /* Sidebar specific - Light mode */
+    --color-sidebar-bg: 0 0% 96%;           /* #F5F5F5 - Sidebar background */
+    --color-sidebar-hover: 0 0% 92%;        /* #EBEBEB - Sidebar hover */
+    
+    /* Tab bar specific - Light mode */
+    --color-tab-bar-bg: 0 0% 94%;           /* #F0F0F0 - Tab bar background */
+    --color-tab-active: 0 0% 100%;          /* #FFFFFF - Active tab */
+    --color-tab-inactive: 0 0% 94%;         /* #F0F0F0 - Inactive tab */
+    --color-tab-hover: 0 0% 96%;            /* #F5F5F5 - Tab hover */
+    
+    /* Terminal/Console - Light mode */
+    --color-terminal-bg: 0 0% 98%;          /* #FAFAFA - Terminal background */
+    --color-terminal-fg: 0 0% 20%;          /* #333333 - Terminal text */
+    
+    /* Shadows and effects */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+    
+    /* Spacing scale (matching Tailwind) */
+    --spacing-1: 0.25rem;
+    --spacing-2: 0.5rem;
+    --spacing-3: 0.75rem;
+    --spacing-4: 1rem;
+    --spacing-5: 1.25rem;
+    --spacing-6: 1.5rem;
+    --spacing-8: 2rem;
+    
+    /* Border radius */
+    --radius-sm: 0.125rem;
+    --radius-md: 0.25rem;
+    --radius-lg: 0.375rem;
+    
+    /* Font sizes */
+    --font-size-xs: 0.75rem;
+    --font-size-sm: 0.813rem;
+    --font-size-base: 0.875rem;
+    --font-size-lg: 1rem;
+    --font-size-xl: 1.125rem;
+    
+    /* Line heights */
+    --line-height-xs: 1rem;
+    --line-height-sm: 1.25rem;
+    --line-height-base: 1.5rem;
+    --line-height-lg: 1.75rem;
+    --line-height-xl: 2rem;
   }
 
   .dark {
-    --color-background: 222.2 84% 4.9%;
-    --color-foreground: 210 40% 98%;
-    --color-primary: 210 40% 98%;
-    --color-primary-foreground: 222.2 47.4% 11.2%;
-    --color-secondary: 217.2 32.6% 17.5%;
-    --color-secondary-foreground: 210 40% 98%;
-    --color-muted: 217.2 32.6% 17.5%;
-    --color-muted-foreground: 215 20.2% 65.1%;
-    --color-accent: 217.2 32.6% 17.5%;
-    --color-accent-foreground: 210 40% 98%;
-    --color-destructive: 0 62.8% 30.6%;
-    --color-destructive-foreground: 210 40% 98%;
-    --color-border: 217.2 32.6% 17.5%;
-    --color-input: 217.2 32.6% 17.5%;
-    --color-ring: 212.7 26.8% 83.9%;
+    /* Dark mode colors - Matching Zed's actual dark theme */
+    --color-background: 213 15% 15%;        /* #212830 - Main background */
+    --color-foreground: 0 0% 85%;           /* #D9D9D9 - Main text */
     
-    /* Custom IDE colors */
-    --color-sidebar: 222.2 84% 4.9%;
-    --color-editor: 224 71% 4%;
-    --color-panel: 220 65% 6%;
+    /* Surface hierarchy - Dark mode (from your extracted colors) */
+    --color-surface-1: 210 10% 17%;         /* #262C30 - Highest (active tab) */
+    --color-surface-2: 207 11% 16%;         /* #242930 - High (file explorer) */
+    --color-surface-3: 208 11% 14%;         /* #22272C - Medium (editor) */
+    --color-surface-4: 210 6% 11%;          /* #191D20 - Low (input backgrounds) */
+    
+    /* Interactive elements - Dark mode */
+    --color-primary: 207 67% 52%;           /* #3B82F6 - Primary actions */
+    --color-primary-foreground: 0 0% 98%;   /* #FAFAFA */
+    --color-secondary: 210 14% 20%;         /* #2C333D - Secondary surfaces */
+    --color-secondary-foreground: 0 0% 85%; /* #D9D9D9 */
+    
+    /* State colors - Dark mode */
+    --color-hover: 210 13% 23%;             /* #333943 - Hover state */
+    --color-active: 210 12% 28%;            /* #3F4652 - Active/pressed state */
+    --color-selected: 207 44% 20%;          /* #1D3D5C - Selected with primary tint */
+    
+    /* Semantic colors - Dark mode */
+    --color-muted: 0 0% 60%;                /* #999999 - Muted text */
+    --color-accent: 207 67% 52%;            /* #3B82F6 - Same as primary */
+    --color-accent-foreground: 0 0% 98%;    /* #FAFAFA */
+    --color-destructive: 0 72% 51%;         /* #DC2626 - Errors/destructive */
+    --color-destructive-foreground: 0 0% 98%;
+    
+    /* Borders and inputs - Dark mode */
+    --color-border: 210 13% 22%;            /* #303841 - Default border */
+    --color-input: 210 13% 22%;             /* #303841 - Input border */
+    --color-ring: 207 67% 52%;              /* #3B82F6 - Focus ring */
+    
+    /* Special surfaces - Dark mode */
+    --color-tooltip: 0 0% 95%;              /* #F2F2F2 - Tooltip background */
+    --color-tooltip-foreground: 0 0% 10%;   /* #1A1A1A - Tooltip text */
+    
+    /* Editor specific - Dark mode */
+    --color-editor-bg: 208 11% 14%;         /* #22272C - Editor background */
+    --color-editor-active-line: 210 11% 16%; /* #252B31 - Active line */
+    --color-editor-selection: 207 44% 25%;  /* #244E7A - Text selection */
+    
+    /* Panel specific - Dark mode */
+    --color-panel-bg: 208 14% 19%;          /* #2F353F - Panel background */
+    --color-panel-border: 210 13% 24%;      /* #353D48 - Panel borders */
+    
+    /* Sidebar specific - Dark mode */
+    --color-sidebar-bg: 207 11% 16%;        /* #242930 - Sidebar background */
+    --color-sidebar-hover: 210 12% 20%;     /* #2E3540 - Sidebar hover */
+    
+    /* Tab bar specific - Dark mode */
+    --color-tab-bar-bg: 213 13% 28%;        /* #424854 - Tab bar background */
+    --color-tab-active: 210 10% 17%;        /* #262C30 - Active tab */
+    --color-tab-inactive: 210 13% 23%;      /* #333943 - Inactive tab */
+    --color-tab-hover: 210 12% 25%;         /* #374048 - Tab hover */
+    
+    /* Terminal/Console - Dark mode */
+    --color-terminal-bg: 210 6% 11%;        /* #191D20 - Terminal background */
+    --color-terminal-fg: 0 0% 85%;          /* #D9D9D9 - Terminal text */
+    
+    /* Shadows and effects (more subtle in dark mode) */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5);
+  }
+}
+
+/* Animation utilities */
+@layer utilities {
+  .animation-delay-150 {
+    animation-delay: 150ms;
+  }
+  
+  .animation-delay-300 {
+    animation-delay: 300ms;
   }
 }
 
@@ -97,11 +222,156 @@ body {
     background-color: hsl(var(--color-background));
     color: hsl(var(--color-foreground));
     font-feature-settings: "rlig" 1, "calt" 1;
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-base);
   }
 }
 
-/* Custom utility classes for our themed colors */
+/* Custom utility classes for our Zed-inspired theme */
 @layer utilities {
+  /* Background utilities for surface hierarchy */
+  .bg-surface-1 {
+    background-color: hsl(var(--color-surface-1));
+  }
+  
+  .bg-surface-2 {
+    background-color: hsl(var(--color-surface-2));
+  }
+  
+  .bg-surface-3 {
+    background-color: hsl(var(--color-surface-3));
+  }
+  
+  .bg-surface-4 {
+    background-color: hsl(var(--color-surface-4));
+  }
+  
+  /* Editor specific backgrounds */
+  .bg-editor {
+    background-color: hsl(var(--color-editor-bg));
+  }
+  
+  .bg-editor-active-line {
+    background-color: hsl(var(--color-editor-active-line));
+  }
+  
+  .bg-editor-selection {
+    background-color: hsl(var(--color-editor-selection));
+  }
+  
+  /* Panel specific backgrounds */
+  .bg-panel {
+    background-color: hsl(var(--color-panel-bg));
+  }
+  
+  .border-panel {
+    border-color: hsl(var(--color-panel-border));
+  }
+  
+  /* Sidebar specific backgrounds */
+  .bg-sidebar {
+    background-color: hsl(var(--color-sidebar-bg));
+  }
+  
+  .hover\:bg-sidebar-hover:hover {
+    background-color: hsl(var(--color-sidebar-hover));
+  }
+  
+  /* Tab bar specific backgrounds */
+  .bg-tab-bar {
+    background-color: hsl(var(--color-tab-bar-bg));
+  }
+  
+  .bg-tab-active {
+    background-color: hsl(var(--color-tab-active));
+  }
+  
+  .bg-tab-inactive {
+    background-color: hsl(var(--color-tab-inactive));
+  }
+  
+  .hover\:bg-tab-hover:hover {
+    background-color: hsl(var(--color-tab-hover));
+  }
+  
+  /* Terminal specific backgrounds */
+  .bg-terminal {
+    background-color: hsl(var(--color-terminal-bg));
+  }
+  
+  .text-terminal {
+    color: hsl(var(--color-terminal-fg));
+  }
+  
+  /* State utilities */
+  .bg-hover {
+    background-color: hsl(var(--color-hover));
+  }
+  
+  .bg-active {
+    background-color: hsl(var(--color-active));
+  }
+  
+  .bg-selected {
+    background-color: hsl(var(--color-selected));
+  }
+  
+  /* Tooltip utilities */
+  .bg-tooltip {
+    background-color: hsl(var(--color-tooltip));
+  }
+  
+  .text-tooltip {
+    color: hsl(var(--color-tooltip-foreground));
+  }
+  
+  /* Focus states with Zed-style ring */
+  .focus-ring {
+    outline: none;
+  }
+  .focus-ring:focus {
+    --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+    --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color);
+    box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
+    --tw-ring-offset-width: 1px;
+    --tw-ring-color: hsl(var(--color-ring));
+    --tw-ring-offset-color: hsl(var(--color-background));
+  }
+  
+  /* Smooth transitions for interactive elements */
+  .transition-zed {
+    transition-property: all;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+  }
+  
+  /* Zed-style scrollbar */
+  .scrollbar-zed {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--color-border)) transparent;
+  }
+  
+  .scrollbar-zed::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  .scrollbar-zed::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .scrollbar-zed::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--color-border));
+    border-radius: var(--radius-sm);
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  
+  .scrollbar-zed::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--color-muted));
+  }
+  
+  /* Preserve all the existing utility classes below... */
   /* Layout utilities */
   .h-screen {
     height: 100vh;
@@ -119,16 +389,36 @@ body {
     width: 100%;
   }
   
-  .h-6 {
-    height: 1.5rem;
-  }
-  
   .h-3 {
     height: 0.75rem;
   }
   
   .h-4 {
     height: 1rem;
+  }
+  
+  .h-6 {
+    height: 1.5rem;
+  }
+  
+  .h-9 {
+    height: 2.25rem;
+  }
+  
+  .h-10 {
+    height: 2.5rem;
+  }
+  
+  .h-11 {
+    height: 2.75rem;
+  }
+  
+  .h-64 {
+    height: 16rem;
+  }
+  
+  .h-px {
+    height: 1px;
   }
   
   .w-3 {
@@ -143,6 +433,10 @@ body {
     width: 1.5rem;
   }
   
+  .w-10 {
+    width: 2.5rem;
+  }
+  
   .w-64 {
     width: 16rem;
   }
@@ -155,21 +449,25 @@ body {
     width: 1px;
   }
   
-  .h-px {
-    height: 1px;
-  }
-  
-  .h-64 {
-    height: 16rem;
-  }
-  
   .min-w-\[8rem\] {
     min-width: 8rem;
+  }
+  
+  .min-w-0 {
+    min-width: 0;
+  }
+  
+  .max-w-full {
+    max-width: 100%;
   }
   
   /* Flexbox utilities */
   .flex {
     display: flex;
+  }
+  
+  .inline-flex {
+    display: inline-flex;
   }
   
   .flex-col {
@@ -211,8 +509,16 @@ body {
   }
   
   /* Spacing utilities */
+  .p-0\.5 {
+    padding: 0.125rem;
+  }
+  
   .p-1 {
     padding: 0.25rem;
+  }
+  
+  .p-1\.5 {
+    padding: 0.375rem;
   }
   
   .p-2 {
@@ -285,6 +591,14 @@ body {
   
   .mb-2 {
     margin-bottom: 0.5rem;
+  }
+  
+  .ml-1 {
+    margin-left: 0.25rem;
+  }
+  
+  .mr-1 {
+    margin-right: 0.25rem;
   }
   
   .ml-auto {
@@ -401,6 +715,10 @@ body {
     overflow-y: auto;
   }
   
+  .overflow-x-auto {
+    overflow-x: auto;
+  }
+  
   /* Text utilities */
   .text-xs {
     font-size: 0.75rem;
@@ -437,6 +755,12 @@ body {
     text-align: center;
   }
   
+  .truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
   /* Other utilities */
   .cursor-pointer {
     cursor: pointer;
@@ -454,6 +778,10 @@ body {
     cursor: row-resize;
   }
   
+  .select-none {
+    user-select: none;
+  }
+  
   .outline-none {
     outline: 2px solid transparent;
     outline-offset: 2px;
@@ -461,6 +789,12 @@ body {
   
   .transition-colors {
     transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+  }
+  
+  .transition-opacity {
+    transition-property: opacity;
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     transition-duration: 150ms;
   }
@@ -477,16 +811,45 @@ body {
     display: none;
   }
   
-  .inline-flex {
-    display: inline-flex;
+  .block {
+    display: block;
+  }
+  
+  .inline {
+    display: inline;
   }
   
   .whitespace-nowrap {
     white-space: nowrap;
   }
   
-  .bg-transparent {
-    background-color: transparent;
+  .shrink-0 {
+    flex-shrink: 0;
+  }
+  
+  .aspect-square {
+    aspect-ratio: 1 / 1;
+  }
+  
+  .opacity-0 {
+    opacity: 0;
+  }
+  
+  .opacity-100 {
+    opacity: 1;
+  }
+  
+  /* Group hover utilities */
+  .group:hover .group-hover\:opacity-100 {
+    opacity: 1;
+  }
+  
+  .group:hover .group-hover\:flex {
+    display: flex;
+  }
+  
+  .group:hover .group-hover\:hidden {
+    display: none;
   }
   
   /* Size utilities for icons */
@@ -495,59 +858,9 @@ body {
     height: 1rem;
   }
   
-  /* Button size utilities */
-  .h-9 {
-    height: 2.25rem;
-  }
-  
-  .h-10 {
-    height: 2.5rem;
-  }
-  
-  .h-11 {
-    height: 2.75rem;
-  }
-  
-  .w-10 {
-    width: 2.5rem;
-  }
-  
-  /* Display utilities */
-  .block {
-    display: block;
-  }
-  
-  /* Aspect ratio utilities */
-  .aspect-square {
-    aspect-ratio: 1 / 1;
-  }
-  
-  /* Max width utilities */
-  .max-w-full {
-    max-width: 100%;
-  }
-  
-  /* Specific element selectors */
-  .\[data-state\=open\] {
-    /* Applied via JavaScript */
-  }
-  
-  .\[data-side\=bottom\] {
-    /* Applied via JavaScript */
-  }
-  
-  /* SVG utilities */
-  .\[\&_svg\]\:pointer-events-none svg {
-    pointer-events: none;
-  }
-  
-  .\[\&_svg\]\:size-4 svg {
-    width: 1rem;
-    height: 1rem;
-  }
-  
-  .\[\&_svg\]\:shrink-0 svg {
-    flex-shrink: 0;
+  /* Background utilities */
+  .bg-transparent {
+    background-color: transparent;
   }
   
   .bg-background {
@@ -598,8 +911,12 @@ body {
     background-color: hsl(var(--color-muted));
   }
   
+  .text-muted {
+    color: hsl(var(--color-muted));
+  }
+  
   .text-muted-foreground {
-    color: hsl(var(--color-muted-foreground));
+    color: hsl(var(--color-muted));
   }
   
   .bg-accent {
@@ -634,25 +951,11 @@ body {
     --tw-ring-color: hsl(var(--color-ring));
   }
   
-  /* IDE specific utilities */
-  .bg-sidebar {
-    background-color: hsl(var(--color-sidebar));
-  }
-  
-  .bg-editor {
-    background-color: hsl(var(--color-editor));
-  }
-  
-  .bg-panel {
-    background-color: hsl(var(--color-panel));
-  }
-  
   /* Focus utilities */
   .ring-offset-background {
     --tw-ring-offset-color: hsl(var(--color-background));
   }
   
-  /* Focus visible utilities */
   .focus-visible\:outline-none:focus-visible {
     outline: 2px solid transparent;
     outline-offset: 2px;
@@ -672,7 +975,6 @@ body {
     --tw-ring-offset-width: 2px;
   }
   
-  /* Focus utilities for general focus state */
   .focus\:bg-accent:focus {
     background-color: hsl(var(--color-accent));
   }
@@ -725,7 +1027,19 @@ body {
     text-decoration-line: underline;
   }
   
-  /* Additional utilities */
+  .hover\:bg-primary\/20:hover {
+    background-color: hsl(var(--color-primary) / 0.2);
+  }
+  
+  .hover\:bg-accent\/50:hover {
+    background-color: hsl(var(--color-accent) / 0.5);
+  }
+  
+  .hover\:text-foreground:hover {
+    color: hsl(var(--color-foreground));
+  }
+  
+  /* Additional opacity utilities */
   .bg-secondary\/50 {
     background-color: hsl(var(--color-secondary) / 0.5);
   }
@@ -734,8 +1048,9 @@ body {
     background-color: hsl(var(--color-secondary) / 0.2);
   }
   
-  .hover\:bg-primary\/20:hover {
-    background-color: hsl(var(--color-primary) / 0.2);
+  /* Underline utilities */
+  .underline-offset-4 {
+    text-underline-offset: 0.25rem;
   }
   
   /* Popover utilities */
@@ -744,6 +1059,15 @@ body {
   }
   
   .text-popover-foreground {
+    color: hsl(var(--color-foreground));
+  }
+  
+  /* Card utilities */
+  .bg-card {
+    background-color: hsl(var(--color-surface-2));
+  }
+  
+  .text-card-foreground {
     color: hsl(var(--color-foreground));
   }
   
@@ -822,15 +1146,6 @@ body {
     pointer-events: none;
   }
   
-  /* Card utilities */
-  .bg-card {
-    background-color: hsl(var(--color-background));
-  }
-  
-  .text-card-foreground {
-    color: hsl(var(--color-foreground));
-  }
-  
   /* Dark mode utilities */
   .dark\:text-yellow-400:where(.dark, .dark *) {
     color: rgb(250 204 21);
@@ -873,11 +1188,6 @@ body {
     color: rgb(107 114 128);
   }
   
-  /* Additional missing utilities */
-  .underline-offset-4 {
-    text-underline-offset: 0.25rem;
-  }
-  
   /* Scrollbar utilities */
   .scrollbar-thin {
     scrollbar-width: thin;
@@ -901,102 +1211,56 @@ body {
     background-color: hsl(var(--color-muted-foreground));
   }
   
-  /* Overflow utilities */
-  .overflow-x-auto {
-    overflow-x: auto;
+  /* SVG utilities */
+  .\[\&_svg\]\:pointer-events-none svg {
+    pointer-events: none;
   }
   
-  /* Opacity utilities */
-  .opacity-0 {
-    opacity: 0;
+  .\[\&_svg\]\:size-4 svg {
+    width: 1rem;
+    height: 1rem;
   }
   
-  .opacity-100 {
-    opacity: 1;
-  }
-  
-  .group:hover .group-hover\:opacity-100 {
-    opacity: 1;
-  }
-  
-  /* Transition utilities */
-  .transition-opacity {
-    transition-property: opacity;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-duration: 150ms;
-  }
-  
-  /* Min width utilities */
-  .min-w-0 {
-    min-width: 0;
-  }
-  
-  /* Hover opacity utilities */
-  .hover\:text-foreground:hover {
-    color: hsl(var(--color-foreground));
-  }
-  
-  /* Panel resize handle styles */
-  .hover\:bg-primary\/20:hover {
-    background-color: hsl(var(--color-primary) / 0.2);
-  }
-  
-  /* Accent opacity */
-  .hover\:bg-accent\/50:hover {
-    background-color: hsl(var(--color-accent) / 0.5);
-  }
-  
-  /* Additional spacing */
-  .p-0\.5 {
-    padding: 0.125rem;
-  }
-  
-  .p-1\.5 {
-    padding: 0.375rem;
-  }
-  
-  .py-1\.5 {
-    padding-top: 0.375rem;
-    padding-bottom: 0.375rem;
-  }
-  
-  .ml-1 {
-    margin-left: 0.25rem;
-  }
-  
-  .mr-1 {
-    margin-right: 0.25rem;
-  }
-  
-  /* Inline display */
-  .inline {
-    display: inline;
-  }
-  
-  .select-none {
-    user-select: none;
-  }
-  
-  .truncate {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  
-  .shrink-0 {
+  .\[\&_svg\]\:shrink-0 svg {
     flex-shrink: 0;
   }
   
-  .group:hover .group-hover\:flex {
-    display: flex;
+  /* Specific element selectors - removed empty rules */
+}
+
+/* Custom animations for Zed-style interactions */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
   }
-  
-  .group:hover .group-hover\:hidden {
-    display: none;
+  to {
+    opacity: 1;
   }
 }
 
-/* Keyframes */
+@keyframes slideInFromTop {
+  from {
+    transform: translateY(-4px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInFromBottom {
+  from {
+    transform: translateY(4px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Keyframes for Radix UI animations */
 @keyframes enter {
   from {
     opacity: var(--tw-enter-opacity, 1);
@@ -1017,4 +1281,17 @@ body {
     opacity: var(--tw-exit-opacity, 1);
     transform: translate3d(var(--tw-exit-translate-x, 0), var(--tw-exit-translate-y, 0), 0) scale3d(var(--tw-exit-scale, 1), var(--tw-exit-scale, 1), var(--tw-exit-scale, 1));
   }
+}
+
+/* Apply animations to dropdown menus, tooltips, etc. */
+.animate-fade-in {
+  animation: fadeIn 150ms ease-out;
+}
+
+.animate-slide-in-top {
+  animation: slideInFromTop 150ms ease-out;
+}
+
+.animate-slide-in-bottom {
+  animation: slideInFromBottom 150ms ease-out;
 }

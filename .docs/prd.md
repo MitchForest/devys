@@ -19,6 +19,7 @@ A next-generation IDE specifically designed for Claude Code SDK that transforms 
 - **Hono** as the lightweight web framework
 - **SQLite** (via Bun:sqlite) for session persistence and chat history
 - **WebSocket** support for real-time communication
+- **TypeScript SDK** for Claude Code integration (no Python subprocess needed)
 
 ### Desktop & Mobile
 - **Tauri 2.0** for desktop application (cross-platform)
@@ -26,8 +27,8 @@ A next-generation IDE specifically designed for Claude Code SDK that transforms 
 - Unified codebase with platform-specific adaptations
 
 ### AI & Agent Infrastructure
-- **Claude Code SDK** (Python/TypeScript/CLI) for all AI operations
-- **AI SDK v5** for streaming, agent coordination, and multi-modal support
+- **Claude Code SDK** (TypeScript) for all AI operations - https://docs.anthropic.com/en/docs/claude-code/sdk
+- **AI SDK v5** (Vercel) for streaming, agent coordination, and multi-modal support - https://v5.ai-sdk.dev/docs/foundations/overview
 - **Claude Code Router** for model routing and cost optimization
 - **OpenAI Realtime API** or **Whisper** for speech-to-text integration
 - **MCP (Model Context Protocol)** integration for extensible tool ecosystem

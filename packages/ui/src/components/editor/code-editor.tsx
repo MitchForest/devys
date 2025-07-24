@@ -7,6 +7,7 @@ import { html } from '@codemirror/lang-html';
 import { css } from '@codemirror/lang-css';
 import { markdown } from '@codemirror/lang-markdown';
 import { EditorView } from '@codemirror/view';
+import { createEditorTheme } from './editor-theme';
 
 interface CodeEditorProps {
   value: string;
@@ -58,13 +59,7 @@ export function CodeEditor({
   // Editor extensions
   const extensions = useMemo(() => {
     const baseExtensions = [
-      EditorView.theme({
-        '&': { height },
-        '.cm-scroller': { overflow: 'auto' },
-        '.cm-focused': { outline: 'none' },
-        '.cm-editor': { fontSize: '14px' },
-        '.cm-content': { fontFamily: 'ui-monospace, monospace' }
-      }),
+      createEditorTheme(theme === 'dark'),
       EditorView.lineWrapping
     ];
 
@@ -73,14 +68,14 @@ export function CodeEditor({
     }
     
     return baseExtensions;
-  }, [height, languageExtension]);
+  }, [theme, languageExtension]);
 
   return (
     <div className={`h-full overflow-hidden ${className}`}>
       <CodeMirror
         value={value}
         onChange={handleChange}
-        theme={theme}
+        theme={undefined}
         extensions={extensions}
         editable={!readOnly}
         basicSetup={{

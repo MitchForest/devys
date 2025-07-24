@@ -71,7 +71,7 @@ claude-code-ide/
 - **Framework**: Hono (lightweight, fast)
 - **Database**: SQLite (via Bun:sqlite)
 - **WebSocket**: Native Hono WebSocket support
-- **AI Integration**: Claude Code SDK (Python subprocess)
+- **AI Integration**: Claude Code SDK (TypeScript) - https://docs.anthropic.com/en/docs/claude-code/sdk
 
 ## Phase 1 Features
 
@@ -132,10 +132,10 @@ claude-code-ide/
   }
   ```
 - **Claude Code SDK Integration**
-  - Python subprocess management
-  - Message streaming
-  - Tool execution
-  - Session handling
+  - TypeScript SDK for direct integration
+  - Message streaming using AI SDK v5 patterns
+  - Tool execution with type-safe interfaces
+  - Session handling with native TypeScript support
 
 ### 7. Basic Workflow Engine
 - **Single Workflow Support**
@@ -236,10 +236,10 @@ claude-code-ide/
 
 ### Week 5-6: AI Integration
 1. **Claude Code Provider**
-   - Provider abstraction
-   - SDK integration
-   - Message streaming
-   - Error handling
+   - Provider abstraction using AI SDK v5 patterns
+   - TypeScript SDK integration
+   - Message streaming with `streamText` from AI SDK v5
+   - Error handling with proper TypeScript types
 
 2. **Chat Interface**
    - Message components
@@ -415,8 +415,8 @@ interface ProjectContext {
 
 ### Technical Risks
 1. **Claude Code SDK Integration**
-   - Mitigation: Build abstraction layer early
-   - Fallback: Direct API integration
+   - Mitigation: Use TypeScript SDK for type safety and direct integration
+   - Leverage AI SDK v5 patterns for consistent interfaces
 
 2. **Performance with Large Codebases**
    - Mitigation: Implement virtualization early

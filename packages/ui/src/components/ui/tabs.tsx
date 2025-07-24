@@ -40,15 +40,15 @@ export function Tabs({
   return (
     <div className={cn('flex flex-col h-full', className)}>
       {/* Tab Header */}
-      <div className="flex items-center border-b border-border bg-background">
+      <div className="flex items-center border-b border-panel bg-tab-bar">
         <div className="flex-1 flex items-center min-w-0">
-          <div className="flex-1 flex items-center overflow-x-auto scrollbar-thin">
+          <div className="flex-1 flex items-center overflow-x-auto scrollbar-zed">
             {tabs.map((tab) => (
               <div
                 key={tab.id}
                 className={cn(
-                  'group flex items-center gap-2 px-3 py-1.5 border-r border-border cursor-pointer hover:bg-accent/50 transition-colors min-w-0',
-                  activeTab?.id === tab.id && 'bg-accent',
+                  'group flex items-center gap-2 px-3 py-1.5 border-r border-border cursor-pointer transition-zed min-w-0',
+                  activeTab?.id === tab.id ? 'bg-tab-active' : 'bg-tab-inactive hover:bg-tab-hover',
                   tabClassName
                 )}
                 onClick={() => onTabSelect?.(tab.id)}
@@ -58,7 +58,7 @@ export function Tabs({
                 {tab.isDirty && <span className="text-xs">•</span>}
                 {onTabClose && (
                   <button
-                    className="ml-1 p-0.5 opacity-0 group-hover:opacity-100 hover:bg-background rounded transition-opacity"
+                    className="ml-1 p-0.5 opacity-0 group-hover:opacity-100 hover:bg-active rounded transition-opacity"
                     onClick={(e) => {
                       e.stopPropagation();
                       onTabClose(tab.id);
@@ -75,7 +75,7 @@ export function Tabs({
           <div className="flex items-center border-l border-border">
             {onTabAdd && (
               <button
-                className="p-1.5 hover:bg-accent transition-colors"
+                className="p-1.5 hover:bg-hover transition-zed"
                 onClick={onTabAdd}
                 title="New Tab"
               >
@@ -84,7 +84,7 @@ export function Tabs({
             )}
             {onTabsAction && (
               <button
-                className="p-1.5 hover:bg-accent transition-colors"
+                className="p-1.5 hover:bg-hover transition-zed"
                 onClick={onTabsAction}
                 title="More Actions"
               >
@@ -93,7 +93,7 @@ export function Tabs({
             )}
             {onPanelClose && (
               <button
-                className="p-1.5 hover:bg-accent transition-colors border-l border-border"
+                className="p-1.5 hover:bg-hover transition-zed border-l border-border"
                 onClick={onPanelClose}
                 title="Close Panel"
               >

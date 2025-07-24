@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import filesRoute from './routes/files';
+import { chatRoute } from './routes/chat';
 import { wsManager, type WSData } from './ws/websocket';
 
 const app = new Hono();
@@ -20,6 +21,7 @@ app.get('/', (c) => {
     version: '0.1.0',
     endpoints: {
       files: '/api/files/*',
+      chat: '/api/chat',
       websocket: 'ws://localhost:3001/ws'
     }
   });
@@ -27,6 +29,9 @@ app.get('/', (c) => {
 
 // Mount file routes
 app.route('/api/files', filesRoute);
+
+// Mount chat routes
+app.route('/api/chat', chatRoute);
 
 // Health check
 app.get('/health', (c) => {

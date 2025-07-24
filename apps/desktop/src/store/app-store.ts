@@ -106,7 +106,7 @@ export const useAppStore = create<AppState>()(
       terminalSessions: [{
         id: 'terminal-1',
         title: 'Terminal 1',
-        active: true,
+        isActive: true,
         output: []
       }],
       activeTerminalId: 'terminal-1',
@@ -218,7 +218,7 @@ export const useAppStore = create<AppState>()(
         const newSession: TerminalSession = {
           id: `terminal-${Date.now()}`,
           title,
-          active: true,
+          isActive: true,
           output: []
         };
         
