@@ -11,7 +11,7 @@ export const tauriBridge = {
     await writeTextFile(path, content);
   },
 
-  async listFiles(path: string): Promise<any[]> {
+  async listFiles(path: string): Promise<unknown[]> {
     return await readDir(path);
   },
 
@@ -42,13 +42,13 @@ export const tauriBridge = {
     return null;
   },
 
-  async saveFileDialog(defaultPath?: string): Promise<string | null> {
+  async saveFileDialog(_defaultPath?: string): Promise<string | null> {
     // TODO: Add @tauri-apps/plugin-dialog when needed
     return null;
   },
 
   // Custom commands (to be implemented in Rust)
-  async getProjectInfo(): Promise<any> {
+  async getProjectInfo(): Promise<unknown> {
     return await invoke('get_project_info');
   },
 

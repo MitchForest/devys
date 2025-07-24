@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { streamText } from 'ai';
 import { createClaudeCode } from '@claude-code-ide/core/providers/claude-code-language-model';
-import type { ChatMessage, FileAttachment } from '@claude-code-ide/types';
+// Types are imported but used in commented code for future implementation
 
 // Request validation schema
 const ChatRequestSchema = z.object({
@@ -82,11 +82,10 @@ chatRoute.post('/', zValidator('json', ChatRequestSchema), async (c) => {
       messages: aiMessages,
       system: process.env.CLAUDE_SYSTEM_PROMPT,
       temperature: parseFloat(process.env.CLAUDE_TEMPERATURE || '0.7'),
-      maxTokens: parseInt(process.env.CLAUDE_MAX_TOKENS || '4096'),
-      // Enable multi-step for tool use
-      maxSteps: parseInt(process.env.CLAUDE_MAX_TURNS || '10'),
+      maxRetries: 3,
       // Tool definitions will be added here when we implement tool support
       // tools: claudeCodeTools,
+      // maxSteps will be added when we have tools configured
     });
 
     // Return the stream response with proper headers

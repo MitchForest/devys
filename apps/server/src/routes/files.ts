@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { FileNodeSchema } from '@claude-code-ide/types';
+// FileNodeSchema import removed - not used
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { zValidator } from '@hono/zod-validator';
@@ -25,13 +25,20 @@ const WriteFileSchema = z.object({
 });
 
 // Helper to get git status for a file (placeholder for now)
-async function getGitStatus(filePath: string): Promise<'modified' | 'added' | 'deleted' | 'renamed' | 'untracked' | undefined> {
+async function getGitStatus(_filePath: string): Promise<'modified' | 'added' | 'deleted' | 'renamed' | 'untracked' | undefined> {
   // TODO: Implement actual git status checking
   return undefined;
 }
 
 // Helper to build file node structure
-async function buildFileNode(filePath: string, basePath: string): Promise<any> {
+async function buildFileNode(filePath: string, basePath: string): Promise<{
+  id: string;
+  name: string;
+  path: string;
+  type: 'file' | 'directory';
+  children?: any[];
+  gitStatus?: 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked';
+}> {
   const stats = await fs.stat(filePath);
   const relativePath = path.relative(basePath, filePath);
   const name = path.basename(filePath);

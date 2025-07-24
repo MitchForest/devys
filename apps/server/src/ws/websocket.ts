@@ -58,20 +58,20 @@ export interface WSData {
 export class WebSocketManager {
   private connections: Map<string, ServerWebSocket<WSData>> = new Map();
   private fileWatchers: Map<string, Set<string>> = new Map(); // path -> connectionIds
-  private terminals: Map<string, any> = new Map(); // terminalId -> terminal process
+  private terminals: Map<string, unknown> = new Map(); // terminalId -> terminal process
   private connectionCounter = 0;
 
-  addConnection(ws: ServerWebSocket<any>) {
+  addConnection(ws: ServerWebSocket<unknown>) {
     const connectionId = `ws-${++this.connectionCounter}`;
     ws.data = { connectionId };
     this.connections.set(connectionId, ws as ServerWebSocket<WSData>);
-    console.log(`WebSocket connected: ${connectionId}`);
+    // WebSocket connected: ${connectionId}
     return connectionId;
   }
 
   removeConnection(connectionId: string) {
     this.connections.delete(connectionId);
-    console.log(`WebSocket disconnected: ${connectionId}`);
+    // WebSocket disconnected: ${connectionId}
     
     // Clean up file watchers
     for (const [path, watchers] of this.fileWatchers.entries()) {
@@ -82,8 +82,8 @@ export class WebSocketManager {
     }
   }
 
-  async handleMessage(ws: ServerWebSocket<any>, message: string | Buffer) {
-    const connectionId = ws.data?.connectionId;
+  async handleMessage(ws: ServerWebSocket<unknown>, message: string | Buffer) {
+    const connectionId = (ws.data as WSData | undefined)?.connectionId;
     if (!connectionId) return;
     
     try {

@@ -1,5 +1,6 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport } from 'ai';
 import { ChatMessage } from './chat-message';
 import { ChatInput } from './chat-input';
 import { cn } from '../../lib/utils';
@@ -26,7 +27,7 @@ export function ChatInterface({
 }: ChatInterfaceProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState<string>('');
 
   // Use AI SDK v5's useChat hook
   const {
@@ -38,22 +39,17 @@ export function ChatInterface({
     setMessages,
     addToolResult
   } = useChat({
-    api: apiEndpoint,
-    body: {
-      sessionId: session?.id,
-      attachments: attachedFiles
-    },
+    transport: new DefaultChatTransport({
+      api: apiEndpoint,
+      body: {
+        sessionId: session?.id,
+        attachments: attachedFiles
+      }
+    }),
     onFinish: ({ message }) => {
       // Update session with new message
       if (session && onSessionUpdate) {
-        const chatMessage: ChatMessageType = {
-          id: message.id,
-          role: message.role as 'user' | 'assistant' | 'system' | 'tool',
-          content: message.content,
-          timestamp: new Date(),
-          createdAt: new Date(),
-          toolInvocations: message.toolInvocations
-        };
+        const chatMessage = convertToChatMessage(message);
         
         const updatedSession: ChatSession = {
           ...session,
@@ -81,7 +77,7 @@ export function ChatInterface({
       }));
       setMessages(initialMessages as any);
     }
-  }, [session?.id, setMessages]);
+  }, [session?.id, session?.messages, setMessages]);
 
   // Handle form submission
   const handleSubmit = (e: React.FormEvent) => {
@@ -100,15 +96,15 @@ export function ChatInterface({
   };
 
   // Auto-scroll to bottom when new messages arrive
-  const scrollToBottom = () => {
+  const scrollToBottom = useCallback(() => {
     if (isAutoScrollEnabled) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  };
+  }, [isAutoScrollEnabled]);
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, scrollToBottom]);
 
   // Handle scroll to determine if auto-scroll should be enabled
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
@@ -119,12 +115,18 @@ export function ChatInterface({
 
   // Convert AI SDK message to our ChatMessage type for rendering
   const convertToChatMessage = (message: any): ChatMessageType => {
+    // Extract text content from parts
+    const textContent = message.parts
+      ?.filter((part: any) => part.type === 'text')
+      ?.map((part: any) => part.text)
+      ?.join('') || message.content || '';
+    
     return {
       id: message.id,
       role: message.role as 'user' | 'assistant' | 'system' | 'tool',
-      content: message.content,
-      timestamp: message.createdAt || new Date(),
-      createdAt: message.createdAt || new Date(),
+      content: textContent,
+      timestamp: new Date(),
+      createdAt: new Date(),
       toolInvocations: message.toolInvocations
     };
   };
@@ -133,8 +135,8 @@ export function ChatInterface({
   const isLoading = status === 'streaming' || status === 'submitted';
 
   // Handle tool execution results
-  const handleToolResult = (toolCallId: string, result: any) => {
-    addToolResult({ toolCallId, result });
+  const handleToolResult = (toolCallId: string, result: unknown) => {
+    addToolResult({ tool: toolCallId, toolCallId, output: result });
   };
 
   return (

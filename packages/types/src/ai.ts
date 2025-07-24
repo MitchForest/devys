@@ -2,9 +2,9 @@
 export interface ToolInvocation {
   toolCallId: string;
   toolName: string;
-  args: any;
+  args: unknown;
   state: 'executing' | 'completed' | 'failed';
-  result?: any;
+  result?: unknown;
 }
 
 // Core message types following AI SDK v5 conventions
@@ -26,7 +26,7 @@ export interface ChatSession {
   messages: ChatMessage[];
   createdAt: Date;
   updatedAt: Date;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 // File attachment for context
@@ -64,8 +64,8 @@ export interface StreamingOptions {
 export interface ToolDefinition {
   name: string;
   description: string;
-  parameters: Record<string, any>; // JSON Schema
-  execute: (args: any) => Promise<any>;
+  parameters: Record<string, unknown>; // JSON Schema
+  execute: (args: unknown) => Promise<unknown>;
 }
 
 // Workflow types
@@ -74,7 +74,7 @@ export interface Workflow {
   name: string;
   description?: string;
   steps: WorkflowStep[];
-  context?: Record<string, any>;
+  context?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -84,8 +84,8 @@ export interface WorkflowStep {
   type: 'analyze' | 'plan' | 'execute' | 'verify';
   name: string;
   description?: string;
-  input?: Record<string, any>;
-  output?: Record<string, any>;
+  input?: Record<string, unknown>;
+  output?: Record<string, unknown>;
   status: 'pending' | 'running' | 'completed' | 'failed';
   error?: string;
 }
@@ -106,7 +106,7 @@ export interface Memory {
   id: string;
   type: 'conversation' | 'workflow' | 'project';
   content: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   embedding?: number[];
   createdAt: Date;
   expiresAt?: Date;
@@ -141,6 +141,6 @@ export interface GitFileStatus {
 // Error types
 export interface AIError extends Error {
   code: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
   retryable?: boolean;
 }

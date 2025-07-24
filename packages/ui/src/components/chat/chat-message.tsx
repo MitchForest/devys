@@ -7,9 +7,10 @@ import { ToolExecutionCard } from './tool-execution-card';
 interface ChatMessageProps {
   message: ChatMessageType;
   isLoading?: boolean;
+  onToolResult?: (toolCallId: string, result: unknown) => void;
 }
 
-export function ChatMessage({ message, isLoading }: ChatMessageProps) {
+export function ChatMessage({ message, isLoading, onToolResult: _onToolResult }: ChatMessageProps) {
   const [copied, setCopied] = React.useState(false);
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';

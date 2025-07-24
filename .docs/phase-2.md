@@ -1,5 +1,9 @@
 # Claude Code IDE - Phase 2 Implementation Plan
 
+TODO:
+- investigate sub agents: https://docs.anthropic.com/en/docs/claude-code/sub-agents
+- and all of claude code sdk: https://docs.anthropic.com/en/docs/claude-code/sdk 
+
 ## Overview
 Phase 2 transforms the basic IDE into a sophisticated multi-agent development environment, leveraging AI SDK v5's advanced patterns and Claude Code SDK's full capabilities. This phase focuses on agent orchestration, workflow customization, and developer experience enhancements.
 

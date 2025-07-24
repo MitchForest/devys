@@ -25,7 +25,7 @@ export function CodeEditor({
   language = 'text',
   theme = 'dark',
   readOnly = false,
-  height = '100%',
+  height: _height = '100%',
   className = ''
 }: CodeEditorProps) {
   const handleChange = useCallback((val: string) => {

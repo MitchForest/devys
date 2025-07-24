@@ -41,7 +41,7 @@ app.get('/health', (c) => {
 const port = process.env.PORT || 3001;
 
 // Create Bun server with both HTTP and WebSocket support
-const server = Bun.serve({
+Bun.serve({
   port: Number(port),
   
   // Handle HTTP requests with Hono
@@ -75,5 +75,5 @@ const server = Bun.serve({
   }
 });
 
-console.log(`Server running on http://localhost:${port}`);
-console.log(`WebSocket available at ws://localhost:${port}`);
+// Server running on http://localhost:${port}
+// WebSocket available at ws://localhost:${port}

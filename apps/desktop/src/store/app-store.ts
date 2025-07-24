@@ -288,7 +288,7 @@ export const useAppStore = create<AppState>()(
           try {
             const message = JSON.parse(event.data);
             // Handle WebSocket messages here
-            console.log('WebSocket message:', message);
+            // Handle WebSocket message: message
           } catch (error) {
             console.error('Failed to parse WebSocket message:', error);
           }

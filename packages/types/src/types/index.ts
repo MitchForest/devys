@@ -1,13 +1,3 @@
-export interface FileNode {
-  id: string;
-  name: string;
-  path: string;
-  type: 'file' | 'directory';
-  children?: FileNode[];
-  isExpanded?: boolean;
-  gitStatus?: 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked';
-}
-
 export interface FileTab {
   id: string;
   path: string;
@@ -17,39 +7,59 @@ export interface FileTab {
   language?: string;
 }
 
-// Re-export AI types from ai.ts to avoid duplication
-export {
-  type ChatMessage,
-  type FileAttachment,
-  type ChatSession,
-  type WorkflowStep,
-  type Workflow,
-  type Agent,
-  type Memory,
-  type ProjectContext,
-  type AIError,
-  type StreamingOptions,
-  type ToolDefinition,
-  type GitStatus,
-  type GitFileStatus,
-  // FileNode is already defined in this file
+// Import AI types from ai.ts
+import type {
+  ChatMessage,
+  FileAttachment,
+  ChatSession,
+  WorkflowStep,
+  Workflow,
+  Agent,
+  Memory,
+  ProjectContext,
+  AIError,
+  StreamingOptions,
+  ToolDefinition,
+  ToolInvocation,
+  GitStatus,
+  GitFileStatus,
+  FileNode
 } from '../ai';
+
+// Re-export AI types
+export type {
+  ChatMessage,
+  FileAttachment,
+  ChatSession,
+  WorkflowStep,
+  Workflow,
+  Agent,
+  Memory,
+  ProjectContext,
+  AIError,
+  StreamingOptions,
+  ToolDefinition,
+  ToolInvocation,
+  GitStatus,
+  GitFileStatus,
+  FileNode
+};
 
 export interface ToolResult {
   tool_use_id: string;
-  content: any;
+  content: unknown;
 }
 
 export interface AIRequest {
-  messages: any[];
-  tools?: any[];
+  messages: ChatMessage[];
+  tools?: ToolDefinition[];
   temperature?: number;
   max_tokens?: number;
 }
 
 export interface AIResponse {
   content: string;
-  tool_calls?: any[];
+  tool_calls?: ToolInvocation[];
 }
 
 export interface ServerStatus {

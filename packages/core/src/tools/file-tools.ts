@@ -10,7 +10,8 @@ export function createFileTools(fileSystemService: FileSystemService): Record<st
       parameters: {
         path: z.string().describe('The file path to read')
       },
-      execute: async ({ path }: { path: string }) => {
+      execute: async (args: unknown) => {
+        const { path } = args as { path: string };
         try {
           const content = await fileSystemService.readFile(path);
           return {
@@ -33,7 +34,8 @@ export function createFileTools(fileSystemService: FileSystemService): Record<st
         path: z.string().describe('The file path to write to'),
         content: z.string().describe('The content to write')
       },
-      execute: async ({ path, content }: { path: string; content: string }) => {
+      execute: async (args: unknown) => {
+        const { path, content } = args as { path: string; content: string };
         try {
           await fileSystemService.writeFile(path, content);
           return {
@@ -56,7 +58,8 @@ export function createFileTools(fileSystemService: FileSystemService): Record<st
         path: z.string().describe('The file path to create'),
         content: z.string().optional().describe('Initial content for the file')
       },
-      execute: async ({ path, content }: { path: string; content?: string }) => {
+      execute: async (args: unknown) => {
+        const { path, content } = args as { path: string; content?: string };
         try {
           await fileSystemService.createFile(path, content);
           return {
@@ -78,7 +81,8 @@ export function createFileTools(fileSystemService: FileSystemService): Record<st
       parameters: {
         path: z.string().optional().describe('The directory path to list (defaults to project root)')
       },
-      execute: async ({ path }: { path?: string }) => {
+      execute: async (args: unknown) => {
+        const { path } = args as { path?: string };
         try {
           const files = await fileSystemService.listFiles(path);
           return {
@@ -100,7 +104,8 @@ export function createFileTools(fileSystemService: FileSystemService): Record<st
       parameters: {
         path: z.string().describe('The file or directory path to delete')
       },
-      execute: async ({ path }: { path: string }) => {
+      execute: async (args: unknown) => {
+        const { path } = args as { path: string };
         try {
           await fileSystemService.deleteFile(path);
           return {
@@ -123,7 +128,8 @@ export function createFileTools(fileSystemService: FileSystemService): Record<st
         oldPath: z.string().describe('The current file path'),
         newPath: z.string().describe('The new file path')
       },
-      execute: async ({ oldPath, newPath }: { oldPath: string; newPath: string }) => {
+      execute: async (args: unknown) => {
+        const { oldPath, newPath } = args as { oldPath: string; newPath: string };
         try {
           await fileSystemService.renameFile(oldPath, newPath);
           return {

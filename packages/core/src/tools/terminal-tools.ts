@@ -12,11 +12,12 @@ export function createTerminalTools(): Record<string, ToolDefinition> {
         cwd: z.string().optional().describe('Working directory for the command'),
         timeout: z.number().optional().describe('Command timeout in milliseconds')
       },
-      execute: async ({ command, cwd, timeout = 30000 }: { 
-        command: string; 
-        cwd?: string; 
-        timeout?: number 
-      }) => {
+      execute: async (args: unknown) => {
+        const { command, cwd, timeout = 30000 } = args as { 
+          command: string; 
+          cwd?: string; 
+          timeout?: number 
+        };
         return new Promise((resolve) => {
           const [cmd, ...args] = command.split(' ');
           const child = spawn(cmd, args, {
@@ -88,7 +89,8 @@ export function createTerminalTools(): Record<string, ToolDefinition> {
       parameters: {
         command: z.string().describe('The command to check')
       },
-      execute: async ({ command }: { command: string }) => {
+      execute: async (args: unknown) => {
+        const { command } = args as { command: string };
         return new Promise((resolve) => {
           const child = spawn('which', [command], { shell: true });
           

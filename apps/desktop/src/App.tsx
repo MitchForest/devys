@@ -7,14 +7,12 @@ import {
   ThemeToggle, 
   ToastContainer, 
   useToast, 
-  ChatInterface,
-  useChatSession,
   type Tab 
 } from '@claude-code-ide/ui';
 import { FileCode, MessageSquare, Terminal as TerminalIcon } from 'lucide-react';
 import { useAppStore } from './store';
 import { useTheme } from './contexts/theme-context';
-import type { FileAttachment } from '@claude-code-ide/types';
+import { ChatTab } from './components/ChatTab';
 
 function App() {
   const { theme, setTheme, resolvedTheme } = useTheme();
@@ -79,7 +77,7 @@ function App() {
       // Cleanup on unmount
       useAppStore.getState().disconnectWebSocket();
     };
-  }, []);
+  }, [chatSessions.length, connectWebSocket, createChatSession, initializeServices, refreshFileTree]);
 
   // Keyboard shortcuts handler
   useEffect(() => {
@@ -277,50 +275,19 @@ function App() {
   }));
   
   // Convert chat sessions to tabs
-  const chatTabs: Tab[] = chatSessions.map(session => {
-    const { 
-      session: chatSession, 
-      updateSession, 
-      attachedFiles, 
-      attachFile, 
-      removeFile 
-    } = useChatSession({
-      id: session.id,
-      title: session.title,
-      messages: session.messages || [],
-      createdAt: new Date(),
-      updatedAt: new Date()
-    });
-
-    return {
-      id: session.id,
-      title: session.title,
-      content: (
-        <ChatInterface
-          session={chatSession}
-          onSessionUpdate={updateSession}
-          attachedFiles={attachedFiles}
-          onAttachFile={() => {
-            // Open file dialog to attach files
-            const selectedFile = openFiles.find(f => f.id === activeFileId);
-            if (selectedFile) {
-              attachFile({
-                id: selectedFile.id,
-                path: selectedFile.path,
-                name: selectedFile.name,
-                content: selectedFile.content,
-                language: selectedFile.language
-              });
-              showToast(`Attached ${selectedFile.name}`, 'success', 2000);
-            } else {
-              showToast('Select a file in the editor to attach', 'info', 3000);
-            }
-          }}
-          onRemoveFile={removeFile}
-        />
-      )
-    };
-  });
+  const chatTabs: Tab[] = chatSessions.map(session => ({
+    id: session.id,
+    title: session.title,
+    content: (
+      <ChatTab
+        key={session.id}
+        session={session}
+        openFiles={openFiles}
+        activeFileId={activeFileId}
+        showToast={showToast}
+      />
+    )
+  }));
 
   return (
     <div className="h-screen w-screen bg-background text-foreground flex flex-col" style={{ fontSize: 'var(--font-size-base)', lineHeight: 'var(--line-height-base)' }}>

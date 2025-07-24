@@ -2,7 +2,6 @@ import {
   LanguageModelV2,
   LanguageModelV2CallOptions,
   LanguageModelV2StreamPart,
-  LanguageModelV2Usage,
   LanguageModelV2CallWarning,
   LanguageModelV2Content,
   LanguageModelV2FinishReason,
@@ -268,7 +267,7 @@ export class ClaudeCodeLanguageModel implements LanguageModelV2 {
                 type: 'tool-call',
                 toolCallId: block.id,
                 toolName: block.name,
-                args: block.input || {},
+                input: block.input || {},
               });
             }
           }
@@ -316,6 +315,11 @@ export class ClaudeCodeProvider implements ProviderV2 {
   // Required for provider interface but not used for Claude Code
   textEmbeddingModel(): never {
     throw new Error('Text embedding not supported by Claude Code');
+  }
+
+  // Required for provider interface but not used for Claude Code
+  imageModel(): never {
+    throw new Error('Image generation not supported by Claude Code');
   }
 }
 

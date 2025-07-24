@@ -49,8 +49,7 @@ export function FileExplorer({
         if (filteredChildren.length > 0) {
           acc.push({
             ...node,
-            children: filteredChildren,
-            isExpanded: true
+            children: filteredChildren
           });
         } else if (matches) {
           acc.push(node);
