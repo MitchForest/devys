@@ -109,8 +109,22 @@ export const TerminalWithRef = React.forwardRef<{
     xtermRef.current = xterm;
     fitAddonRef.current = fitAddon;
 
-    // Fit terminal to container
-    fitAddon.fit();
+    // Fit terminal to container after DOM is ready
+    const fitTerminal = () => {
+      if (fitAddonRef.current && terminalRef.current && terminalRef.current.offsetWidth > 0 && terminalRef.current.offsetHeight > 0) {
+        try {
+          fitAddon.fit();
+        } catch (error) {
+          console.warn('Failed to fit terminal:', error);
+        }
+      }
+    };
+    
+    // Try to fit immediately
+    fitTerminal();
+    
+    // Also try after a small delay to ensure DOM is ready
+    setTimeout(fitTerminal, 100);
 
     // Set up event handlers
     if (onData) {
@@ -136,8 +150,12 @@ export const TerminalWithRef = React.forwardRef<{
 
     // Handle window resize
     const handleResize = () => {
-      if (fitAddonRef.current) {
-        fitAddonRef.current.fit();
+      if (fitAddonRef.current && terminalRef.current && terminalRef.current.offsetWidth > 0 && terminalRef.current.offsetHeight > 0) {
+        try {
+          fitAddonRef.current.fit();
+        } catch (error) {
+          console.warn('Failed to fit terminal on resize:', error);
+        }
       }
     };
 
@@ -221,8 +239,12 @@ export const TerminalWithRef = React.forwardRef<{
       }
     },
     fit: () => {
-      if (fitAddonRef.current) {
-        fitAddonRef.current.fit();
+      if (fitAddonRef.current && terminalRef.current && terminalRef.current.offsetWidth > 0 && terminalRef.current.offsetHeight > 0) {
+        try {
+          fitAddonRef.current.fit();
+        } catch (error) {
+          console.warn('Failed to fit terminal:', error);
+        }
       }
     },
     getTerminal: () => xtermRef.current

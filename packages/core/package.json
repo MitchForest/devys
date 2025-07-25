@@ -1,5 +1,5 @@
 {
-  "name": "@claude-code-ide/core",
+  "name": "@devys/core",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -13,7 +13,8 @@
     "./agents": "./src/agents/index.ts",
     "./providers": "./src/providers/index.ts",
     "./workflows": "./src/workflows/index.ts",
-    "./memory": "./src/memory/index.ts"
+    "./memory": "./src/memory/index.ts",
+    "./services/file-system.service": "./src/services/file-system.service.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -23,7 +24,7 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@claude-code-ide/types": "workspace:*",
+    "@devys/types": "workspace:*",
     "zod": "^3.22.4",
     "nanoid": "^5.0.4"
   },

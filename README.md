@@ -1,6 +1,6 @@
-# Claude Code IDE
+# Devys
 
-A next-generation IDE specifically designed for Claude Code SDK that transforms the terminal-based AI coding experience into a modern, multi-agent development environment.
+A next-generation IDE designed for AI-powered development that transforms the terminal-based coding experience into a modern, multi-agent development environment.
 
 ## 🚀 Quick Start
 
@@ -15,11 +15,36 @@ A next-generation IDE specifically designed for Claude Code SDK that transforms 
 # Install dependencies
 bun install
 
-# Run development server
-bun run desktop
+# Create .env file from example and add your Anthropic API key
+cp .env.example .env
+# Edit .env and add your ANTHROPIC_API_KEY
+```
 
-# Run the backend server
+### Running the Application
+
+You need to run both the server and desktop app in separate terminals:
+
+**Terminal 1 - Backend Server:**
+```bash
+# Start the backend server (required for API and WebSocket)
 bun run server
+# Server will run on http://localhost:3001
+```
+
+**Terminal 2 - Desktop App:**
+```bash
+# Start the desktop application
+bun run desktop
+# Desktop app will run on http://localhost:5173
+```
+
+**Alternative - Run both concurrently:**
+```bash
+# Install concurrently if needed
+bun add -d concurrently
+
+# Run both server and desktop
+bunx concurrently "bun run server" "bun run desktop"
 ```
 
 ### Development Commands
@@ -44,7 +69,7 @@ bun run clean
 ## 🏗️ Project Structure
 
 ```
-claude-code-ide/
+devys/
 ├── apps/
 │   ├── desktop/          # Tauri desktop application
 │   └── server/           # Hono backend server

@@ -14,7 +14,7 @@ import {
   Edit3
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import type { FileNode, GitStatus } from '@claude-code-ide/types';
+import type { FileNode, GitStatus } from '@devys/types';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -27,6 +27,7 @@ interface FileTreeProps {
   nodes: FileNode[];
   selectedPath?: string;
   onSelectFile?: (path: string) => void;
+  onOpenFolder?: (path: string) => void;
   onCreateFile?: (parentPath: string) => void;
   onCreateFolder?: (parentPath: string) => void;
   onRename?: (path: string, newName: string) => void;
@@ -102,6 +103,7 @@ export function FileTree({
   nodes, 
   selectedPath, 
   onSelectFile,
+  onOpenFolder,
   onCreateFile,
   onCreateFolder,
   onRename,
@@ -261,6 +263,10 @@ export function FileTree({
         <ContextMenuContent>
           {node.type === 'directory' && (
             <>
+              <ContextMenuItem onClick={() => onOpenFolder?.(node.path)}>
+                Open Folder
+              </ContextMenuItem>
+              <ContextMenuSeparator />
               <ContextMenuItem onClick={() => onCreateFile?.(node.path)}>
                 New File
               </ContextMenuItem>

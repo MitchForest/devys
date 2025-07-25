@@ -70,8 +70,9 @@ export interface ServerStatus {
 export interface TerminalSession {
   id: string;
   title: string;
-  isActive: boolean;
+  active?: boolean; // Optional for backward compatibility
+  isActive?: boolean; // Support both naming conventions
   command?: string;
-  cwd: string;
+  cwd?: string; // Optional for backward compatibility
   output: string[];
 }

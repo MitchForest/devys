@@ -1,9 +1,9 @@
-import type { FileAttachment, FileNode } from '@claude-code-ide/types';
+import type { FileAttachment, FileNode } from '@devys/types';
 
 export class FileService {
   private apiEndpoint: string;
 
-  constructor(apiEndpoint = '/api/files') {
+  constructor(apiEndpoint = 'http://localhost:3001/api/files') {
     this.apiEndpoint = apiEndpoint;
   }
 

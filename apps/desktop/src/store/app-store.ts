@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
-import type { FileNode, FileTab, ChatSession, ChatMessage, TerminalSession, Workflow } from '@claude-code-ide/types';
-import { FileSystemService } from '@claude-code-ide/core';
+import type { FileNode, FileTab, ChatSession, ChatMessage, TerminalSession, Workflow } from '@devys/types';
+import { FileSystemService } from '@devys/core/services/file-system.service';
 
 interface UIState {
   activePanel: 'explorer' | 'chat' | 'terminal';
@@ -91,7 +91,7 @@ export const useAppStore = create<AppState>()(
       theme: 'dark',
       
       // Initial Project State
-      projectPath: null,
+      projectPath: '/Users/mitchellwhite/Code/devys',
       fileTree: [],
       selectedFile: null,
       gitStatus: {},
@@ -106,9 +106,9 @@ export const useAppStore = create<AppState>()(
       terminalSessions: [{
         id: 'terminal-1',
         title: 'Terminal 1',
-        isActive: true,
+        active: true,
         output: [],
-        cwd: process.cwd()
+        cwd: '/'
       }],
       activeTerminalId: 'terminal-1',
       
@@ -133,10 +133,10 @@ export const useAppStore = create<AppState>()(
       
       refreshFileTree: async () => {
         const { fileSystemService, projectPath } = get();
-        if (!fileSystemService || !projectPath) return;
+        if (!fileSystemService) return;
         
         try {
-          const nodes = await fileSystemService.listFiles(projectPath);
+          const nodes = await fileSystemService.listFiles(projectPath || undefined);
           set({ fileTree: nodes });
         } catch (error) {
           console.error('Failed to refresh file tree:', error);
@@ -219,9 +219,9 @@ export const useAppStore = create<AppState>()(
         const newSession: TerminalSession = {
           id: `terminal-${Date.now()}`,
           title,
-          isActive: true,
+          active: true,
           output: [],
-          cwd: process.cwd()
+          cwd: '/'
         };
         
         // Create session in terminal service when WebSocket is connected

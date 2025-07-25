@@ -1,7 +1,7 @@
 import React from 'react';
 import { X, File, FileCode, FileText, FileJson } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import type { FileAttachment } from '@claude-code-ide/types';
+import type { FileAttachment } from '@devys/types';
 
 interface FileAttachmentListProps {
   attachments: FileAttachment[];

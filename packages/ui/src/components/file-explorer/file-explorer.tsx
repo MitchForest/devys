@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { Search, FolderOpen, Plus, RefreshCw } from 'lucide-react';
 import { FileTree } from './file-tree';
 import { Button } from '../ui/button';
-import type { FileNode } from '@claude-code-ide/types';
+import type { FileNode } from '@devys/types';
 
 interface FileExplorerProps {
   nodes: FileNode[];
   selectedPath?: string;
   onSelectFile?: (path: string) => void;
+  onOpenFolder?: (path: string) => void;
   onCreateFile?: (parentPath: string) => void;
   onCreateFolder?: (parentPath: string) => void;
   onRename?: (path: string, newName: string) => void;
@@ -26,6 +27,7 @@ export function FileExplorer({
   nodes,
   selectedPath,
   onSelectFile,
+  onOpenFolder,
   onCreateFile,
   onCreateFolder,
   onRename,
@@ -117,6 +119,7 @@ export function FileExplorer({
             nodes={filteredNodes}
             selectedPath={selectedPath}
             onSelectFile={onSelectFile}
+            onOpenFolder={onOpenFolder}
             onCreateFile={onCreateFile}
             onCreateFolder={onCreateFolder}
             onRename={onRename}

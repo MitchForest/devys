@@ -10,11 +10,11 @@ import {
   TerminalTab,
   terminalService,
   type Tab 
-} from '@claude-code-ide/ui';
-import { FileCode, MessageSquare, Terminal as TerminalIcon } from 'lucide-react';
+} from '@devys/ui';
+import { FileCode, MessageSquare, Terminal as TerminalIcon, Workflow } from 'lucide-react';
 import { useAppStore } from './store';
-import { useTheme } from './contexts/theme-context';
-import { ChatTab } from './components/ChatTab';
+import { useTheme } from '@devys/ui';
+import { ChatInterface, WorkflowPanel, useChatSession } from '@devys/ui';
 
 function App() {
   const { theme, setTheme, resolvedTheme } = useTheme();
@@ -26,6 +26,7 @@ function App() {
     showChat,
     
     // Project State
+    projectPath,
     fileTree,
     selectedFile,
     
@@ -41,8 +42,13 @@ function App() {
     chatSessions,
     activeChatSessionId,
     
+    // WebSocket
+    ws,
+    wsConnected: _wsConnected,
+    
     // Actions
     selectFile,
+    setProjectPath,
     toggleTerminal,
     toggleChat,
     openFile,
@@ -70,6 +76,12 @@ function App() {
     // Connect terminal service to WebSocket
     terminalService.connect('ws://localhost:3001');
     
+    // Create initial terminal session in the service
+    if (terminalSessions.length > 0) {
+      const initialSession = terminalSessions[0];
+      terminalService.createSession(initialSession.id, initialSession.title, initialSession.cwd || projectPath || '/');
+    }
+    
     // Load initial file tree
     refreshFileTree();
     
@@ -83,7 +95,7 @@ function App() {
       useAppStore.getState().disconnectWebSocket();
       terminalService.disconnect();
     };
-  }, [chatSessions.length, connectWebSocket, createChatSession, initializeServices, refreshFileTree]);
+  }, [chatSessions.length, connectWebSocket, createChatSession, initializeServices, refreshFileTree, terminalSessions, projectPath]);
 
   // Keyboard shortcuts handler
   useEffect(() => {
@@ -303,7 +315,7 @@ function App() {
         key={session.id}
         session={session}
         theme={resolvedTheme}
-        onTitleChange={(_title) => {
+        onTitleChange={(_title: string) => {
           // Update terminal title if needed
         }}
       />
@@ -311,19 +323,47 @@ function App() {
   }));
   
   // Convert chat sessions to tabs
-  const chatTabs: Tab[] = chatSessions.map(session => ({
-    id: session.id,
-    title: session.title,
-    content: (
-      <ChatTab
-        key={session.id}
-        session={session}
-        openFiles={openFiles}
-        activeFileId={activeFileId}
-        showToast={showToast}
-      />
-    )
-  }));
+  const chatTabs: Tab[] = [
+    ...chatSessions.map(session => ({
+      id: session.id,
+      title: session.title,
+      content: (
+        <ChatInterface
+          key={session.id}
+          session={session}
+          onSessionUpdate={(updatedSession) => {
+            // TODO: Implement chat session update
+            console.log('Session update:', updatedSession);
+          }}
+          attachedFiles={[]} // TODO: Implement file attachment state per session
+          onAttachFile={() => {
+            // Open file dialog to attach files
+            const selectedFile = openFiles.find(f => f.id === activeFileId);
+            if (selectedFile) {
+              // TODO: Implement file attachment
+              showToast(`Attached ${selectedFile.name}`, 'success', 2000);
+            } else {
+              showToast('Select a file in the editor to attach', 'info', 3000);
+            }
+          }}
+          onRemoveFile={() => {}}
+        />
+      )
+    })),
+    // Add workflow tab
+    {
+      id: 'workflow-tab',
+      title: 'Workflow',
+      icon: <Workflow className="h-3 w-3" />,
+      content: (
+        <WorkflowPanel
+          className="h-full"
+          activeChatSessionId={activeChatSessionId}
+          ws={ws}
+        />
+      )
+    }
+  ];
 
   return (
     <div className="h-screen w-screen bg-background text-foreground flex flex-col" style={{ fontSize: 'var(--font-size-base)', lineHeight: 'var(--line-height-base)' }}>
@@ -337,23 +377,29 @@ function App() {
                 nodes={fileTree}
                 selectedPath={selectedFile || undefined}
                 onSelectFile={handleFileSelect}
+                onOpenFolder={(path: string) => {
+                  // Change the project path to browse into the folder
+                  setProjectPath(path);
+                  refreshFileTree();
+                  showToast(`Opened folder: ${path}`, 'success', 2000);
+                }}
                 onCreateFile={handleFileCreate}
                 onCreateFolder={handleFolderCreate}
                 onRename={handleFileRename}
                 onDelete={handleFileDelete}
-                onCopyPath={(path) => {
+                onCopyPath={(path: string) => {
                   navigator.clipboard.writeText(path);
                 }}
-                onCopyRelativePath={(path) => {
+                onCopyRelativePath={(path: string) => {
                   navigator.clipboard.writeText(path.substring(1)); // Remove leading /
                 }}
-                onCut={(_path) => {
+                onCut={(_path: string) => {
                   // TODO: Implement cut
                 }}
-                onCopy={(_path) => {
+                onCopy={(_path: string) => {
                   // TODO: Implement copy
                 }}
-                onPaste={(_path) => {
+                onPaste={(_path: string) => {
                   // TODO: Implement paste
                 }}
                 onRefresh={() => {
@@ -404,7 +450,7 @@ function App() {
                         tabs={terminalTabs}
                         activeTabId={activeTerminalId || ''}
                         onTabSelect={setActiveTerminal}
-                        onTabClose={(tabId) => {
+                        onTabClose={(tabId: string) => {
                           closeTerminalSession(tabId);
                         }}
                         onTabAdd={() => {
@@ -432,7 +478,7 @@ function App() {
                     tabs={chatTabs}
                     activeTabId={activeChatSessionId || ''}
                     onTabSelect={setChatSession}
-                    onTabClose={(tabId) => {
+                    onTabClose={(tabId: string) => {
                       // TODO: Implement chat session close
                       const newSessions = chatSessions.filter(s => s.id !== tabId);
                       if (newSessions.length === 0) {

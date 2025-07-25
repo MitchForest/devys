@@ -4,6 +4,7 @@ import { logger } from 'hono/logger';
 import filesRoute from './routes/files';
 import { chatRoute } from './routes/chat';
 import terminalRoute from './routes/terminal';
+import { workflow } from './routes/workflow';
 import { wsManager, type WSData } from './ws/websocket';
 
 // Validate required environment variables
@@ -56,6 +57,9 @@ app.route('/api/chat', chatRoute);
 
 // Mount terminal routes
 app.route('/api/terminal', terminalRoute);
+
+// Mount workflow routes
+app.route('/api/workflow', workflow);
 
 // Health check
 app.get('/health', (c) => {

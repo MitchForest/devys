@@ -75,7 +75,7 @@ export function TerminalTab({ session, theme = 'dark', onTitleChange }: Terminal
         if (commandBuffer.current.trim()) {
           terminalRef.current!.writeln('');
           
-          // Execute command
+          // Execute command through WebSocket
           terminalService.executeCommand({
             sessionId: session.id,
             command: commandBuffer.current.trim(),

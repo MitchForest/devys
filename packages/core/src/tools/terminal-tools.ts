@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ToolDefinition } from '@claude-code-ide/types';
+import type { ToolDefinition } from '@devys/types';
 import { spawn } from 'child_process';
 
 export function createTerminalTools(): Record<string, ToolDefinition> {

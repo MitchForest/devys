@@ -28,7 +28,7 @@ interface ThemeProviderProps {
 export function ThemeProvider({
   children,
   defaultTheme = 'system',
-  storageKey = 'claude-code-theme'
+  storageKey = 'devys-theme'
 }: ThemeProviderProps) {
   const [theme, setThemeState] = useState<Theme>(() => {
     // Check localStorage first

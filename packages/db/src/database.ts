@@ -39,7 +39,7 @@ export interface ToolInvocation {
 export class DatabaseService {
   private db: Database;
 
-  constructor(dbPath: string = './claude-code-ide.db') {
+  constructor(dbPath: string = './devys.db') {
     this.db = new Database(dbPath);
     this.db.exec('PRAGMA journal_mode = WAL'); // Better concurrency
     this.initializeSchema();

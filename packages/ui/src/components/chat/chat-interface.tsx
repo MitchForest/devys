@@ -4,7 +4,7 @@ import { DefaultChatTransport } from 'ai';
 import { ChatMessage } from './chat-message';
 import { ChatInput } from './chat-input';
 import { cn } from '../../lib/utils';
-import type { FileAttachment, ChatSession, ChatMessage as ChatMessageType } from '@claude-code-ide/types';
+import type { FileAttachment, ChatSession, ChatMessage as ChatMessageType } from '@devys/types';
 
 interface ChatInterfaceProps {
   session?: ChatSession;
@@ -22,7 +22,7 @@ export function ChatInterface({
   attachedFiles = [],
   onAttachFile,
   onRemoveFile,
-  apiEndpoint = '/api/chat',
+  apiEndpoint = 'http://localhost:3001/api/chat',
   className
 }: ChatInterfaceProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -81,9 +81,9 @@ export function ChatInterface({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (input.trim() && status !== 'streaming') {
-      sendMessage({
-        text: input.trim()
-      });
+      // Call sendMessage with just the content string
+      // The AI SDK will handle creating the message object
+      (sendMessage as any)(input.trim());
       setInput('');
     }
   };
@@ -113,11 +113,18 @@ export function ChatInterface({
 
   // Convert AI SDK message to our ChatMessage type for rendering
   const convertToChatMessage = (message: Message): ChatMessageType => {
-    // Extract text content from parts
-    const textContent = message.parts
-      ?.filter((part) => 'text' in part)
-      ?.map((part) => (part as { text: string }).text)
-      ?.join('') || '';
+    // Extract text content based on message structure
+    let textContent = '';
+    
+    // Handle different message formats
+    const msg = message as any;
+    if (typeof msg.content === 'string') {
+      textContent = msg.content;
+    } else if ('content' in msg && msg.content) {
+      textContent = String(msg.content);
+    } else if ('text' in msg) {
+      textContent = msg.text || '';
+    }
     
     return {
       id: message.id,
@@ -125,7 +132,7 @@ export function ChatInterface({
       content: textContent,
       timestamp: new Date(),
       createdAt: new Date(),
-      toolInvocations: undefined // UIMessage doesn't have toolInvocations
+      toolInvocations: (message as any).toolInvocations // Pass through tool invocations if they exist
     };
   };
 

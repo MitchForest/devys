@@ -32,9 +32,9 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      '@claude-code-ide/core': path.resolve(__dirname, '../../packages/core/src'),
-      '@claude-code-ide/ui': path.resolve(__dirname, '../../packages/ui/src'),
-      '@claude-code-ide/types': path.resolve(__dirname, '../../packages/types/src'),
+      '@devys/core': path.resolve(__dirname, '../../packages/core/src'),
+      '@devys/ui': path.resolve(__dirname, '../../packages/ui/src'),
+      '@devys/types': path.resolve(__dirname, '../../packages/types/src'),
     },
   },
 });

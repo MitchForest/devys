@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { ChatSession, FileAttachment, ChatMessage } from '@claude-code-ide/types';
+import type { ChatSession, FileAttachment, ChatMessage } from '@devys/types';
 
 interface UseChatSessionOptions {
   id?: string;
@@ -28,7 +28,7 @@ export function useChatSession(options: UseChatSessionOptions = {}): UseChatSess
     id: initialId, 
     title: initialTitle = 'New Conversation', 
     messages: initialMessages = [],
-    apiEndpoint = '/api/chat',
+    apiEndpoint = 'http://localhost:3001/api/chat',
     autoLoad = true
   } = options;
 
@@ -38,8 +38,7 @@ export function useChatSession(options: UseChatSessionOptions = {}): UseChatSess
       title: initialTitle,
       messages: initialMessages,
       createdAt: new Date(),
-      updatedAt: new Date(),
-      status: 'active'
+      updatedAt: new Date()
     } : null
   );
 
@@ -128,8 +127,7 @@ export function useChatSession(options: UseChatSessionOptions = {}): UseChatSess
       title: 'New Conversation',
       messages: [],
       createdAt: new Date(),
-      updatedAt: new Date(),
-      status: 'active'
+      updatedAt: new Date()
     };
     
     setSession(newSession);

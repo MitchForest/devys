@@ -34,7 +34,7 @@ export interface ChatSession {
 
 // File attachment for context
 export interface FileAttachment {
-  id?: string; // Optional for flexibility
+  id: string; // Required for UI components
   path: string;
   name: string;
   content?: string;

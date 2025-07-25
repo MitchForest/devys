@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { Send, Paperclip, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import type { FileAttachment } from '@claude-code-ide/types';
+import type { FileAttachment } from '@devys/types';
 
 interface ChatInputProps {
   value: string;

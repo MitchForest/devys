@@ -1,8 +1,8 @@
-import { EventEmitter } from 'events';
-import type { TerminalSession } from '@claude-code-ide/types';
+import { EventEmitter } from '../lib/event-emitter';
+import type { TerminalSession } from '@devys/types';
 
 // Re-export for convenience
-export type { TerminalSession } from '@claude-code-ide/types';
+export type { TerminalSession } from '@devys/types';
 
 export interface TerminalCommand {
   sessionId: string;
@@ -22,7 +22,7 @@ export class TerminalService extends EventEmitter {
   private ws: WebSocket | null = null;
   private apiEndpoint: string;
 
-  constructor(apiEndpoint = '/api/terminal') {
+  constructor(apiEndpoint = 'http://localhost:3001/api/terminal') {
     super();
     this.apiEndpoint = apiEndpoint;
   }
@@ -76,24 +76,24 @@ export class TerminalService extends EventEmitter {
     error?: string;
   }) {
     switch (message.type) {
-      case 'output':
+      case 'terminal:output':
         this.handleOutput({
-          sessionId: message.sessionId || '',
-          type: (message.outputType || 'stdout') as 'stdout' | 'stderr' | 'exit',
+          sessionId: message.id || '',
+          type: 'stdout',
           data: message.data || '',
-          timestamp: new Date(message.timestamp || Date.now())
+          timestamp: new Date()
         });
         break;
       
-      case 'exit':
-        if (message.sessionId && message.code !== undefined) {
-          this.handleExit(message.sessionId, message.code);
+      case 'terminal:exit':
+        if (message.id && message.code !== undefined) {
+          this.handleExit(message.id, message.code);
         }
         break;
       
       case 'error':
         this.emit('terminal-error', {
-          sessionId: message.sessionId,
+          sessionId: message.id || message.sessionId,
           error: message.error
         });
         break;
@@ -111,7 +111,8 @@ export class TerminalService extends EventEmitter {
   private handleExit(sessionId: string, code: number) {
     const session = this.sessions.get(sessionId);
     if (session) {
-      session.isActive = false;
+      if ('isActive' in session) session.isActive = false;
+      if ('active' in session) session.active = false;
       this.emit('exit', { sessionId, code });
     }
   }
@@ -120,7 +121,7 @@ export class TerminalService extends EventEmitter {
     const session: TerminalSession = {
       id,
       title,
-      cwd: cwd || process.cwd(),
+      cwd: cwd || '/',
       isActive: true,
       output: []
     };
@@ -131,8 +132,8 @@ export class TerminalService extends EventEmitter {
     // Send create session message to server
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({
-        type: 'create-session',
-        sessionId: id,
+        type: 'terminal:create',
+        id: id,
         cwd: session.cwd
       }));
     }
@@ -154,14 +155,16 @@ export class TerminalService extends EventEmitter {
       throw new Error(`Session ${command.sessionId} not found`);
     }
 
-    session.command = command.command;
+    if (session.command !== undefined) {
+      session.command = command.command;
+    }
     session.output.push(`$ ${command.command}\n`);
 
     // Send command to server via WebSocket
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({
-        type: 'execute',
-        sessionId: command.sessionId,
+        type: 'terminal:execute',
+        id: command.sessionId,
         command: command.command,
         cwd: command.cwd || session.cwd
       }));
@@ -201,13 +204,14 @@ export class TerminalService extends EventEmitter {
     const session = this.sessions.get(sessionId);
     if (!session) return;
 
-    session.isActive = false;
+    if ('isActive' in session) session.isActive = false;
+    if ('active' in session) session.active = false;
 
     // Send kill message to server
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({
-        type: 'kill-session',
-        sessionId
+        type: 'terminal:close',
+        id: sessionId
       }));
     }
 

@@ -1,4 +1,4 @@
-import type { FileNode } from '@claude-code-ide/types';
+import type { FileNode } from '@devys/types';
 
 export interface FileSystemOptions {
   baseUrl: string;

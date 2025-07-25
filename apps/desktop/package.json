@@ -1,5 +1,5 @@
 {
-  "name": "@claude-code-ide/desktop",
+  "name": "@devys/desktop",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -16,9 +16,9 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@claude-code-ide/core": "workspace:*",
-    "@claude-code-ide/types": "workspace:*",
-    "@claude-code-ide/ui": "workspace:*",
+    "@devys/core": "workspace:*",
+    "@devys/types": "workspace:*",
+    "@devys/ui": "workspace:*",
     "@codemirror/lang-javascript": "^6.2.1",
     "@codemirror/lang-python": "^6.1.4",
     "@codemirror/language": "^6.10.0",

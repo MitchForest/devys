@@ -1,10 +1,10 @@
 {
-  "name": "@claude-code-ide/server",
+  "name": "@devys/server",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --env-file=../../.env run --watch src/index.ts",
+    "dev": "bun --env-file=../../.env src/index.ts",
     "build": "bun build src/index.ts --outdir=dist --target=bun",
     "start": "bun run dist/index.js",
     "typecheck": "tsc --noEmit",
@@ -14,8 +14,8 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@claude-code-ide/core": "workspace:*",
-    "@claude-code-ide/types": "workspace:*",
+    "@devys/core": "workspace:*",
+    "@devys/types": "workspace:*",
     "@hono/node-server": "^1.7.0",
     "@hono/zod-validator": "^0.7.2",
     "hono": "^4.0.0",

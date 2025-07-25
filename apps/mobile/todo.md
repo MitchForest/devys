@@ -1,0 +1,1 @@
+this will be our mobile tauri app which needs ot be a lighter version (perhaps no file explorer/code editor, just agents)

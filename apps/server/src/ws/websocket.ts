@@ -46,6 +46,14 @@ const WSMessageSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal('ping')
+  }),
+  z.object({
+    type: z.literal('workflow:subscribe'),
+    executionId: z.string()
+  }),
+  z.object({
+    type: z.literal('workflow:unsubscribe'),
+    executionId: z.string()
   })
 ]);
 
@@ -57,6 +65,9 @@ export type WSResponse =
   | { type: 'terminal:output'; id: string; data: string }
   | { type: 'terminal:exit'; id: string; code: number }
   | { type: 'chat:response'; sessionId: string; message: string; streaming: boolean }
+  | { type: 'workflow:progress'; event: unknown }
+  | { type: 'workflow:subscribed'; executionId: string }
+  | { type: 'workflow:unsubscribed'; executionId: string }
   | { type: 'error'; message: string }
   | { type: 'pong' };
 
@@ -134,6 +145,22 @@ export class WebSocketManager {
           
         case 'ping':
           this.send(connectionId, { type: 'pong' });
+          break;
+          
+        case 'workflow:subscribe':
+          // For Phase 1, we just acknowledge the subscription
+          // The workflow engine will broadcast to all connections
+          this.send(connectionId, { 
+            type: 'workflow:subscribed', 
+            executionId: parsed.executionId 
+          });
+          break;
+          
+        case 'workflow:unsubscribe':
+          this.send(connectionId, { 
+            type: 'workflow:unsubscribed', 
+            executionId: parsed.executionId 
+          });
           break;
       }
     } catch (error) {

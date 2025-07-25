@@ -2,8 +2,8 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { streamText } from 'ai';
-import { createClaudeCode } from '@claude-code-ide/core/providers/claude-code-language-model';
-import { db } from '../db/database';
+import { createClaudeCode } from '@devys/core';
+import { db } from '@devys/db';
 import { randomUUID } from 'crypto';
 
 // Request validation schema

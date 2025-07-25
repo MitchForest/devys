@@ -5,7 +5,7 @@ import type {
   ProjectContext,
   FileAttachment,
   AIProviderConfig
-} from '@claude-code-ide/types';
+} from '@devys/types';
 
 /**
  * Base interface for AI providers

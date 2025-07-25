@@ -1,5 +1,5 @@
 {
-  "name": "claude-code-ide",
+  "name": "devys",
   "version": "0.1.0",
   "private": true,
   "description": "Next-gen IDE for Multi-agent workflows",
@@ -9,7 +9,8 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun run --filter '*' dev",
+    "dev": "bun run dev:all",
+    "dev:all": "bunx concurrently -n \"server,desktop\" -c \"yellow,cyan\" \"bun run server\" \"bun run desktop\"",
     "build": "bun run --filter '*' build",
     "lint": "eslint . --ext .ts,.tsx --ignore-path .gitignore --cache",
     "lint:fix": "eslint . --ext .ts,.tsx --ignore-path .gitignore --fix",
@@ -17,14 +18,15 @@
     "check": "bun run typecheck && bun run lint",
     "test": "bun run --filter '*' test",
     "clean": "bun run --filter '*' clean && rm -rf node_modules",
-    "desktop": "bun run --filter @claude-code-ide/desktop dev",
-    "server": "bun run --filter @claude-code-ide/server dev"
+    "desktop": "bun run --filter @devys/desktop dev",
+    "server": "bun run --filter @devys/server dev"
   },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/node": "^20.11.0",
-    "@typescript-eslint/eslint-plugin": "^7.0.0",
-    "@typescript-eslint/parser": "^7.0.0",
+    "@types/uuid": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
     "eslint": "^8.56.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-react": "^7.33.2",
@@ -38,11 +40,20 @@
   "dependencies": {
     "@ai-sdk/react": "^2.0.0-beta.26",
     "@anthropic-ai/claude-code": "^1.0.59",
+    "@radix-ui/react-progress": "^1.1.7",
+    "@radix-ui/react-scroll-area": "^1.2.9",
+    "@tailwindcss/typography": "^0.5.16",
+    "@types/react-syntax-highlighter": "^15.5.13",
     "ai": "^5.0.0-beta.26",
     "hono": "^4.8.5",
+    "react-markdown": "^10.1.0",
+    "react-syntax-highlighter": "^15.6.1",
+    "remark-gfm": "^4.0.1",
+    "uuid": "^11.1.0",
     "xterm": "^5.3.0",
     "xterm-addon-fit": "^0.8.0",
     "xterm-addon-search": "^0.13.0",
-    "xterm-addon-web-links": "^0.9.0"
+    "xterm-addon-web-links": "^0.9.0",
+    "zustand": "^5.0.6"
   }
 }

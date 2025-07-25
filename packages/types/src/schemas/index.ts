@@ -11,17 +11,29 @@ export const FileNodeSchema: z.ZodType<FileNode> = z.object({
   gitStatus: z.enum(['modified', 'added', 'deleted', 'renamed', 'untracked']).optional(),
 });
 
-export const ChatMessageSchema = z.object({
+export const ChatMessageValidationSchema = z.object({
   id: z.string(),
-  role: z.enum(['user', 'assistant', 'system']),
+  role: z.enum(['user', 'assistant', 'system', 'tool']),
   content: z.string(),
   timestamp: z.date(),
+  createdAt: z.date().optional(),
+  updatedAt: z.date().optional(),
+  toolInvocations: z.array(z.object({
+    toolCallId: z.string(),
+    toolName: z.string(),
+    args: z.unknown(),
+    state: z.enum(['executing', 'completed', 'failed']),
+    result: z.unknown().optional(),
+  })).optional(),
   attachments: z
     .array(
       z.object({
+        id: z.string(),
         path: z.string(),
         name: z.string(),
         content: z.string().optional(),
+        language: z.string().optional(),
+        selected: z.boolean().optional(),
       })
     )
     .optional(),

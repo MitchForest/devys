@@ -1,8 +1,9 @@
 import React from 'react';
-import { User, Bot, Copy, Check, Wrench } from 'lucide-react';
+import { User, Bot, Wrench, Copy, Check } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import type { ChatMessage as ChatMessageType } from '@claude-code-ide/types';
+import type { ChatMessage as ChatMessageType } from '@devys/types';
 import { ToolExecutionCard, type ToolArgs, type ToolResult } from './tool-execution-card';
+import { MarkdownRenderer } from './markdown-renderer';
 
 interface ChatMessageProps {
   message: ChatMessageType;
@@ -112,69 +113,9 @@ export function ChatMessage({ message, isLoading, onToolResult: _onToolResult }:
 }
 
 function MessageContent({ content }: { content: string }) {
-  // Parse markdown and code blocks
-  const parts = content.split(/(```[\s\S]*?```)/g);
-
-  return (
-    <>
-      {parts.map((part, index) => {
-        if (part.startsWith('```')) {
-          const lines = part.split('\n');
-          const language = lines[0].replace('```', '').trim();
-          const code = lines.slice(1, -1).join('\n');
-
-          return (
-            <CodeBlock
-              key={index}
-              language={language}
-              code={code}
-            />
-          );
-        }
-
-        return (
-          <span
-            key={index}
-            dangerouslySetInnerHTML={{
-              __html: part
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                .replace(/`(.*?)`/g, '<code>$1</code>')
-                .replace(/\n/g, '<br />')
-            }}
-          />
-        );
-      })}
-    </>
-  );
+  return <MarkdownRenderer content={content} />;
 }
 
-function CodeBlock({ language, code }: { language: string; code: string }) {
-  const [copied, setCopied] = React.useState(false);
-
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <div className="relative group my-2">
-      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button
-          onClick={handleCopy}
-          className="flex items-center gap-1 text-xs bg-surface-2 hover:bg-surface-3 px-2 py-1 rounded transition-colors"
-        >
-          {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-          {copied ? 'Copied' : 'Copy'}
-        </button>
-      </div>
-      <pre className="bg-surface-3 rounded-md p-3 overflow-x-auto">
-        <code className={`language-${language}`}>{code}</code>
-      </pre>
-    </div>
-  );
-}
 
 function ToolInvocation({ invocation }: { invocation: { toolName: string; args?: Record<string, unknown>; result?: unknown } }) {
   return (
