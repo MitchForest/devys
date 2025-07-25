@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
-import type { FileNode, FileTab, ChatSession, TerminalSession, Workflow } from '@claude-code-ide/types';
+import type { FileNode, FileTab, ChatSession, ChatMessage, TerminalSession, Workflow } from '@claude-code-ide/types';
 import { FileSystemService } from '@claude-code-ide/core';
 
 interface UIState {
@@ -65,7 +65,7 @@ interface AppState extends UIState, ProjectState, EditorState, SessionState, Wor
   // Actions - Sessions
   createChatSession: (title: string) => void;
   setChatSession: (sessionId: string) => void;
-  addChatMessage: (sessionId: string, message: any) => void;
+  addChatMessage: (sessionId: string, message: ChatMessage) => void;
   createTerminalSession: (title: string) => void;
   setActiveTerminal: (terminalId: string) => void;
   closeTerminalSession: (terminalId: string) => void;
@@ -107,7 +107,8 @@ export const useAppStore = create<AppState>()(
         id: 'terminal-1',
         title: 'Terminal 1',
         isActive: true,
-        output: []
+        output: [],
+        cwd: process.cwd()
       }],
       activeTerminalId: 'terminal-1',
       
@@ -219,8 +220,19 @@ export const useAppStore = create<AppState>()(
           id: `terminal-${Date.now()}`,
           title,
           isActive: true,
-          output: []
+          output: [],
+          cwd: process.cwd()
         };
+        
+        // Create session in terminal service when WebSocket is connected
+        const ws = get().ws;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'terminal:create',
+            id: newSession.id,
+            cwd: newSession.cwd
+          }));
+        }
         
         return {
           terminalSessions: [...state.terminalSessions, newSession],
@@ -286,9 +298,9 @@ export const useAppStore = create<AppState>()(
         
         websocket.onmessage = (event) => {
           try {
-            const message = JSON.parse(event.data);
+            const _message = JSON.parse(event.data);
             // Handle WebSocket messages here
-            // Handle WebSocket message: message
+            // TODO: Handle WebSocket message
           } catch (error) {
             console.error('Failed to parse WebSocket message:', error);
           }

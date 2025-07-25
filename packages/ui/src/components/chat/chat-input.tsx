@@ -46,7 +46,7 @@ export function ChatInput({
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if (value.trim() && !isLoading) {
-        onSubmit(e as any);
+        onSubmit(e as unknown as React.FormEvent);
       }
     }
   };

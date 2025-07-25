@@ -17,6 +17,7 @@ interface FileExplorerProps {
   onCut?: (path: string) => void;
   onCopy?: (path: string) => void;
   onPaste?: (path: string) => void;
+  onAttachToChat?: (path: string) => void;
   onRefresh?: () => void;
   projectName?: string;
 }
@@ -34,6 +35,7 @@ export function FileExplorer({
   onCut,
   onCopy,
   onPaste,
+  onAttachToChat,
   onRefresh
 }: FileExplorerProps) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -124,6 +126,7 @@ export function FileExplorer({
             onCut={onCut}
             onCopy={onCopy}
             onPaste={onPaste}
+            onAttachToChat={onAttachToChat}
           />
         ) : (
           <div className="text-center text-sm text-muted py-8">

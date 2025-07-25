@@ -26,6 +26,9 @@ export interface ChatSession {
   messages: ChatMessage[];
   createdAt: Date;
   updatedAt: Date;
+  status?: 'active' | 'completed' | 'error';
+  model?: string;
+  projectPath?: string;
   metadata?: Record<string, unknown>;
 }
 

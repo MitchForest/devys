@@ -72,6 +72,6 @@ export interface TerminalSession {
   title: string;
   isActive: boolean;
   command?: string;
-  cwd?: string;
-  output?: string[];
+  cwd: string;
+  output: string[];
 }

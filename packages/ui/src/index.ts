@@ -9,6 +9,14 @@ export * from './components/file-explorer/file-explorer';
 export * from './components/file-explorer/file-tree';
 export * from './components/editor';
 export * from './components/chat';
+export * from './components/terminal';
+
+// Services
+export * from './services/file-service';
+export * from './services/terminal-service';
+
+// Hooks
+export * from './hooks/use-chat-session';
 
 // Utils
 export * from './lib/utils';

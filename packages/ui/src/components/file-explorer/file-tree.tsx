@@ -36,6 +36,7 @@ interface FileTreeProps {
   onCut?: (path: string) => void;
   onCopy?: (path: string) => void;
   onPaste?: (path: string) => void;
+  onAttachToChat?: (path: string) => void;
 }
 
 const getFileIcon = (name: string) => {
@@ -109,7 +110,8 @@ export function FileTree({
   onCopyRelativePath,
   onCut,
   onCopy,
-  onPaste
+  onPaste,
+  onAttachToChat
 }: FileTreeProps) {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
@@ -277,6 +279,12 @@ export function FileTree({
           <ContextMenuSeparator />
           <ContextMenuItem onClick={() => onCopyPath?.(node.path)}>Copy Path</ContextMenuItem>
           <ContextMenuItem onClick={() => onCopyRelativePath?.(node.path)}>Copy Relative Path</ContextMenuItem>
+          {node.type === 'file' && onAttachToChat && (
+            <>
+              <ContextMenuSeparator />
+              <ContextMenuItem onClick={() => onAttachToChat(node.path)}>Attach to Chat</ContextMenuItem>
+            </>
+          )}
         </ContextMenuContent>
       </ContextMenu>
     );

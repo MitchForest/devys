@@ -2,7 +2,7 @@ import React from 'react';
 import { User, Bot, Copy, Check, Wrench } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { ChatMessage as ChatMessageType } from '@claude-code-ide/types';
-import { ToolExecutionCard } from './tool-execution-card';
+import { ToolExecutionCard, type ToolArgs, type ToolResult } from './tool-execution-card';
 
 interface ChatMessageProps {
   message: ChatMessageType;
@@ -30,8 +30,8 @@ export function ChatMessage({ message, isLoading, onToolResult: _onToolResult }:
           <ToolExecutionCard
             key={index}
             toolName={invocation.toolName}
-            args={invocation.args}
-            result={invocation.result}
+            args={invocation.args as ToolArgs}
+            result={invocation.result as ToolResult | undefined}
             isExecuting={invocation.state === 'executing'}
           />
         ))}
@@ -85,7 +85,7 @@ export function ChatMessage({ message, isLoading, onToolResult: _onToolResult }:
         {message.toolInvocations && message.toolInvocations.length > 0 && (
           <div className="mt-2 space-y-2">
             {message.toolInvocations.map((invocation, index) => (
-              <ToolInvocation key={index} invocation={invocation} />
+              <ToolInvocation key={index} invocation={invocation as { toolName: string; args?: Record<string, unknown>; result?: unknown }} />
             ))}
           </div>
         )}
@@ -176,7 +176,7 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
   );
 }
 
-function ToolInvocation({ invocation }: { invocation: any }) {
+function ToolInvocation({ invocation }: { invocation: { toolName: string; args?: Record<string, unknown>; result?: unknown } }) {
   return (
     <div className="bg-surface-2 rounded-md p-3 text-sm">
       <div className="flex items-center gap-2 mb-1">

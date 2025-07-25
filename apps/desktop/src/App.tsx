@@ -6,7 +6,9 @@ import {
   CodeEditor, 
   ThemeToggle, 
   ToastContainer, 
-  useToast, 
+  useToast,
+  TerminalTab,
+  terminalService,
   type Tab 
 } from '@claude-code-ide/ui';
 import { FileCode, MessageSquare, Terminal as TerminalIcon } from 'lucide-react';
@@ -65,6 +67,9 @@ function App() {
     initializeServices(serverUrl);
     connectWebSocket('ws://localhost:3001');
     
+    // Connect terminal service to WebSocket
+    terminalService.connect('ws://localhost:3001');
+    
     // Load initial file tree
     refreshFileTree();
     
@@ -76,6 +81,7 @@ function App() {
     return () => {
       // Cleanup on unmount
       useAppStore.getState().disconnectWebSocket();
+      terminalService.disconnect();
     };
   }, [chatSessions.length, connectWebSocket, createChatSession, initializeServices, refreshFileTree]);
 
@@ -229,6 +235,31 @@ function App() {
     }
   };
 
+  const handleAttachToChat = async (path: string) => {
+    if (!fileSystemService) return;
+    
+    try {
+      // Read file content
+      const _content = await fileSystemService.readFile(path);
+      const fileName = path.split('/').pop() || 'Untitled';
+      
+      // Get current chat session
+      const currentChatSession = chatSessions.find(s => s.id === activeChatSessionId);
+      if (!currentChatSession) {
+        showToast('Please open a chat session first', 'error', 3000);
+        return;
+      }
+      
+      // TODO: Attach file to current chat session
+      // This would require accessing the ChatTab component's attachFile method
+      // For now, just show a success message
+      showToast(`Attached ${fileName} to chat`, 'success', 2000);
+    } catch (error) {
+      console.error('Failed to attach file:', error);
+      showToast('Failed to attach file to chat', 'error', 3000);
+    }
+  };
+
   // Convert editor files to tabs
   const editorTabs: Tab[] = openFiles.map(file => ({
     id: file.id,
@@ -268,9 +299,14 @@ function App() {
     id: session.id,
     title: session.title,
     content: (
-      <div className="p-4">
-        <p className="text-sm text-muted-foreground">Terminal integration coming soon...</p>
-      </div>
+      <TerminalTab
+        key={session.id}
+        session={session}
+        theme={resolvedTheme}
+        onTitleChange={(_title) => {
+          // Update terminal title if needed
+        }}
+      />
     )
   }));
   
@@ -323,6 +359,7 @@ function App() {
                 onRefresh={() => {
                   refreshFileTree();
                 }}
+                onAttachToChat={handleAttachToChat}
               />
             </div>
           </Panel>

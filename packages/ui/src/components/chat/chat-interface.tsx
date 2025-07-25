@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { useChat } from '@ai-sdk/react';
+import { useChat, type UIMessage as Message } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { ChatMessage } from './chat-message';
 import { ChatInput } from './chat-input';
@@ -36,7 +36,7 @@ export function ChatInterface({
     stop,
     status,
     error,
-    setMessages,
+    setMessages: _setMessages,
     addToolResult
   } = useChat({
     transport: new DefaultChatTransport({
@@ -44,6 +44,9 @@ export function ChatInterface({
       body: {
         sessionId: session?.id,
         attachments: attachedFiles
+      },
+      headers: {
+        'X-Session-Id': session?.id || ''
       }
     }),
     onFinish: ({ message }) => {
@@ -68,16 +71,11 @@ export function ChatInterface({
   // Set initial messages when session changes
   useEffect(() => {
     if (session?.messages) {
-      const initialMessages = session.messages.map(msg => ({
-        id: msg.id,
-        role: msg.role as 'user' | 'assistant' | 'system',
-        content: msg.content,
-        createdAt: msg.timestamp || msg.createdAt || new Date(),
-        toolInvocations: msg.toolInvocations
-      }));
-      setMessages(initialMessages as any);
+      // TODO: Sync session messages with useChat
+      // The AI SDK's UIMessage type has a different structure than our ChatMessage
+      // For now, let useChat manage its own state
     }
-  }, [session?.id, session?.messages, setMessages]);
+  }, [session?.id, session?.messages]);
 
   // Handle form submission
   const handleSubmit = (e: React.FormEvent) => {
@@ -114,12 +112,12 @@ export function ChatInterface({
   };
 
   // Convert AI SDK message to our ChatMessage type for rendering
-  const convertToChatMessage = (message: any): ChatMessageType => {
+  const convertToChatMessage = (message: Message): ChatMessageType => {
     // Extract text content from parts
     const textContent = message.parts
-      ?.filter((part: any) => part.type === 'text')
-      ?.map((part: any) => part.text)
-      ?.join('') || message.content || '';
+      ?.filter((part) => 'text' in part)
+      ?.map((part) => (part as { text: string }).text)
+      ?.join('') || '';
     
     return {
       id: message.id,
@@ -127,7 +125,7 @@ export function ChatInterface({
       content: textContent,
       timestamp: new Date(),
       createdAt: new Date(),
-      toolInvocations: message.toolInvocations
+      toolInvocations: undefined // UIMessage doesn't have toolInvocations
     };
   };
 

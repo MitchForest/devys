@@ -36,7 +36,14 @@ async function buildFileNode(filePath: string, basePath: string): Promise<{
   name: string;
   path: string;
   type: 'file' | 'directory';
-  children?: any[];
+  children?: Array<{
+    id: string;
+    name: string;
+    path: string;
+    type: 'file' | 'directory';
+    children?: unknown[];
+    gitStatus?: 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked';
+  }>;
   gitStatus?: 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked';
 }> {
   const stats = await fs.stat(filePath);

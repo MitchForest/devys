@@ -3,7 +3,28 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import filesRoute from './routes/files';
 import { chatRoute } from './routes/chat';
+import terminalRoute from './routes/terminal';
 import { wsManager, type WSData } from './ws/websocket';
+
+// Validate required environment variables
+const validateEnvironment = () => {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.error('❌ Missing required environment variable: ANTHROPIC_API_KEY');
+    console.error('Please create a .env file with your Anthropic API key');
+    console.error('See .env.example for reference');
+    process.exit(1);
+  }
+  
+  // eslint-disable-next-line no-console
+  console.log('✅ Environment validated successfully');
+  // eslint-disable-next-line no-console
+  console.log(`📊 Model: ${process.env.CLAUDE_MODEL || 'sonnet'}`);
+  // eslint-disable-next-line no-console
+  console.log(`🌡️  Temperature: ${process.env.CLAUDE_TEMPERATURE || '0.7'}`);
+};
+
+// Validate on startup
+validateEnvironment();
 
 const app = new Hono();
 
@@ -32,6 +53,9 @@ app.route('/api/files', filesRoute);
 
 // Mount chat routes
 app.route('/api/chat', chatRoute);
+
+// Mount terminal routes
+app.route('/api/terminal', terminalRoute);
 
 // Health check
 app.get('/health', (c) => {
@@ -75,5 +99,9 @@ Bun.serve({
   }
 });
 
-// Server running on http://localhost:${port}
-// WebSocket available at ws://localhost:${port}
+// eslint-disable-next-line no-console
+console.log(`🚀 Server running on http://localhost:${port}`);
+// eslint-disable-next-line no-console
+console.log(`🔌 WebSocket available at ws://localhost:${port}`);
+// eslint-disable-next-line no-console
+console.log(`📁 Working directory: ${process.cwd()}`);

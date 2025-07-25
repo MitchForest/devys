@@ -8,7 +8,13 @@ import {
   ProviderV2,
 } from '@ai-sdk/provider';
 import { generateId } from '@ai-sdk/provider-utils';
-import { query as claudeCodeQuery, type SDKMessage, type SDKAssistantMessage } from '@anthropic-ai/claude-code';
+import { 
+  query as claudeCodeQuery, 
+  type SDKMessage, 
+  type SDKAssistantMessage,
+  type SDKResultMessage,
+  type SDKSystemMessage
+} from '@anthropic-ai/claude-code';
 
 export interface ClaudeCodeLanguageModelSettings {
   /**
@@ -35,6 +41,26 @@ export interface ClaudeCodeLanguageModelSettings {
    * API key for authentication
    */
   apiKey?: string;
+  
+  /**
+   * Session ID for continuing conversations
+   */
+  sessionId?: string;
+  
+  /**
+   * Permission mode for Claude Code operations
+   */
+  permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan';
+  
+  /**
+   * Allowed tools for this session
+   */
+  allowedTools?: string[];
+  
+  /**
+   * Disallowed tools for this session
+   */
+  disallowedTools?: string[];
 }
 
 /**
@@ -92,6 +118,20 @@ export class ClaudeCodeLanguageModel implements LanguageModelV2 {
     const prompt = this.convertToPrompt(options);
     const settings = this.settings;
     
+    // Track session information
+    let currentSessionId: string | null = null;
+    const usage = {
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+    };
+    
+    // Create abort controller that properly connects to options.abortSignal
+    const abortController = new AbortController();
+    if (options.abortSignal) {
+      options.abortSignal.addEventListener('abort', () => abortController.abort());
+    }
+    
     // Create a readable stream
     const stream = new ReadableStream<LanguageModelV2StreamPart>({
       async start(controller) {
@@ -105,30 +145,48 @@ export class ClaudeCodeLanguageModel implements LanguageModelV2 {
           // Stream messages from Claude Code
           const sdkMessages = claudeCodeQuery({
             prompt,
-            abortController: options.abortSignal ? new AbortController() : undefined,
+            abortController,
             options: {
-              maxTurns: settings.maxTurns || 1,
-              cwd: settings.cwd,
+              maxTurns: settings.maxTurns || 10,
+              cwd: settings.cwd || process.cwd(),
+              model: settings.model,
+              customSystemPrompt: settings.systemPrompt,
+              permissionMode: settings.permissionMode,
+              allowedTools: settings.allowedTools,
+              disallowedTools: settings.disallowedTools,
+              continue: settings.sessionId ? true : false,
+              resume: settings.sessionId,
             }
           });
           
           for await (const message of sdkMessages) {
+            // Extract session ID from messages
+            if ('session_id' in message && message.session_id) {
+              currentSessionId = message.session_id;
+            }
+            
             // Transform SDK messages to stream parts
             const streamParts = transformToStreamParts(message);
             
             for (const part of streamParts) {
               controller.enqueue(part);
             }
+            
+            // Extract usage from result messages
+            if (message.type === 'result') {
+              const resultMsg = message as SDKResultMessage;
+              if (resultMsg.usage) {
+                usage.inputTokens = resultMsg.usage.input_tokens || 0;
+                usage.outputTokens = resultMsg.usage.output_tokens || 0;
+                usage.totalTokens = usage.inputTokens + usage.outputTokens;
+              }
+            }
           }
           
           // Finish the stream
           controller.enqueue({
             type: 'finish',
-            usage: {
-              inputTokens: 0, // Claude Code doesn't provide token counts
-              outputTokens: 0,
-              totalTokens: 0,
-            },
+            usage,
             finishReason: 'stop' as LanguageModelV2FinishReason
           });
           
@@ -139,59 +197,112 @@ export class ClaudeCodeLanguageModel implements LanguageModelV2 {
       }
     });
 
-    return { stream };
+    return { 
+      stream,
+      response: currentSessionId ? { headers: { 'x-session-id': currentSessionId } } : undefined
+    };
 
     function transformToStreamParts(message: SDKMessage): LanguageModelV2StreamPart[] {
       const parts: LanguageModelV2StreamPart[] = [];
       
-      if (message.type === 'assistant') {
-        const assistantMessage = message as SDKAssistantMessage;
-        const messageId = generateId();
-        
-        // Process content blocks from assistant message
-        if (assistantMessage.message.content) {
-          for (const block of assistantMessage.message.content) {
-            if (block.type === 'text' && block.text) {
-              // Start text
-              parts.push({
-                type: 'text-start',
-                id: messageId,
-              });
-              
-              // Text delta
-              parts.push({
-                type: 'text-delta',
-                id: messageId,
-                delta: block.text,
-              });
-              
-              // End text
-              parts.push({
-                type: 'text-end',
-                id: messageId,
-              });
-            } else if (block.type === 'tool_use') {
-              // Tool call start
-              parts.push({
-                type: 'tool-input-start',
-                id: block.id,
-                toolName: block.name,
-              });
-              
-              // Tool call delta with args
-              parts.push({
-                type: 'tool-input-delta',
-                id: block.id,
-                delta: JSON.stringify(block.input || {}),
-              });
-              
-              // Tool call end
-              parts.push({
-                type: 'tool-input-end',
-                id: block.id,
-              });
+      switch (message.type) {
+        case 'assistant': {
+          const assistantMessage = message as SDKAssistantMessage;
+          const messageId = generateId();
+          
+          // Process content blocks from assistant message
+          if (assistantMessage.message.content) {
+            for (const block of assistantMessage.message.content) {
+              if (block.type === 'text' && block.text) {
+                // Start text
+                parts.push({
+                  type: 'text-start',
+                  id: messageId,
+                });
+                
+                // Text delta
+                parts.push({
+                  type: 'text-delta',
+                  id: messageId,
+                  delta: block.text,
+                });
+                
+                // End text
+                parts.push({
+                  type: 'text-end',
+                  id: messageId,
+                });
+              } else if (block.type === 'tool_use') {
+                // Tool input start
+                parts.push({
+                  type: 'tool-input-start',
+                  id: block.id,
+                  toolName: block.name,
+                });
+                
+                // Tool input delta - stream the entire input as JSON
+                const inputJson = JSON.stringify(block.input || {});
+                parts.push({
+                  type: 'tool-input-delta',
+                  id: block.id,
+                  delta: inputJson,
+                });
+                
+                // Tool input end
+                parts.push({
+                  type: 'tool-input-end',
+                  id: block.id,
+                });
+                
+                // Special handling for Bash tool - route to terminal
+                if (block.name === 'Bash' && block.input && typeof block.input === 'object') {
+                  const input = block.input as { command?: string };
+                  if (input.command) {
+                    // Import dynamically to avoid circular dependency
+                    import('../services/terminal-bridge').then(({ terminalBridge }) => {
+                      if (input.command) {
+                        terminalBridge.routeCommand(input.command);
+                      }
+                    }).catch(() => {
+                      // Terminal bridge not available
+                    });
+                  }
+                }
+              }
             }
           }
+          break;
+        }
+        
+        case 'system': {
+          const systemMessage = message as SDKSystemMessage;
+          // For system messages, we can emit metadata about the session
+          if (systemMessage.subtype === 'init') {
+            // This is useful for debugging but not shown to user
+            // eslint-disable-next-line no-console
+            console.log(`Claude Code session initialized:`, {
+              sessionId: systemMessage.session_id,
+              model: systemMessage.model,
+              tools: systemMessage.tools?.length || 0,
+              cwd: systemMessage.cwd
+            });
+          }
+          break;
+        }
+        
+        case 'user': {
+          // User messages from Claude Code (e.g., from sub-agents)
+          // These are typically already handled in the prompt
+          break;
+        }
+        
+        case 'result': {
+          const resultMessage = message as SDKResultMessage;
+          // Result messages indicate completion
+          if (resultMessage.is_error) {
+            console.error(`Claude Code error:`, resultMessage.subtype);
+          }
+          break;
         }
       }
       
@@ -229,7 +340,7 @@ export class ClaudeCodeLanguageModel implements LanguageModelV2 {
     return result.trim();
   }
 
-  private extractMessageContent(content: any): string {
+  private extractMessageContent(content: unknown): string {
     if (typeof content === 'string') {
       return content;
     }
@@ -294,13 +405,19 @@ export class ClaudeCodeLanguageModel implements LanguageModelV2 {
 export class ClaudeCodeProvider implements ProviderV2 {
   private apiKey?: string;
   private cwd?: string;
+  private defaultSettings?: Partial<ClaudeCodeLanguageModelSettings>;
 
-  constructor(options: { apiKey?: string; cwd?: string } = {}) {
+  constructor(options: { 
+    apiKey?: string; 
+    cwd?: string;
+    defaultSettings?: Partial<ClaudeCodeLanguageModelSettings>;
+  } = {}) {
     this.apiKey = options.apiKey;
     this.cwd = options.cwd;
+    this.defaultSettings = options.defaultSettings;
   }
 
-  languageModel(modelId: string): ClaudeCodeLanguageModel {
+  languageModel(modelId: string, settings?: Partial<ClaudeCodeLanguageModelSettings>): ClaudeCodeLanguageModel {
     if (modelId !== 'opus' && modelId !== 'sonnet') {
       throw new Error(`Invalid model ID: ${modelId}. Must be 'opus' or 'sonnet'`);
     }
@@ -309,6 +426,8 @@ export class ClaudeCodeProvider implements ProviderV2 {
       model: modelId as 'opus' | 'sonnet',
       apiKey: this.apiKey,
       cwd: this.cwd,
+      ...this.defaultSettings,
+      ...settings,
     });
   }
 
@@ -326,6 +445,10 @@ export class ClaudeCodeProvider implements ProviderV2 {
 /**
  * Create a Claude Code provider instance
  */
-export function createClaudeCode(options: { apiKey?: string; cwd?: string } = {}) {
+export function createClaudeCode(options: { 
+  apiKey?: string; 
+  cwd?: string;
+  defaultSettings?: Partial<ClaudeCodeLanguageModelSettings>;
+} = {}) {
   return new ClaudeCodeProvider(options);
 }

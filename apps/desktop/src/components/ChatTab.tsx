@@ -25,7 +25,7 @@ export function ChatTab({ session, openFiles, activeFileId, showToast }: ChatTab
 
   return (
     <ChatInterface
-      session={chatSession}
+      session={chatSession || undefined}
       onSessionUpdate={updateSession}
       attachedFiles={attachedFiles}
       onAttachFile={() => {

@@ -6,7 +6,6 @@ import {
   FilePlus, 
   FolderOpen,
   Search,
-  GitBranch,
   ChevronDown,
   ChevronRight,
   Check,
@@ -14,10 +13,47 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
+export interface ToolArgs {
+  file_path?: string;
+  command?: string;
+  pattern?: string;
+  path?: string;
+  content?: string;
+  old_string?: string;
+  new_string?: string;
+  edits?: Array<{
+    old_string?: string;
+    new_string?: string;
+    replace_all?: boolean;
+  }>;
+  query?: string;
+  url?: string;
+  description?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface ToolResult {
+  success?: boolean;
+  error?: string;
+  output?: string;
+  content?: string;
+  message?: string;
+  files?: string[];
+  // matches can be either file paths (string[]) or grep results
+  matches?: string[] | GrepMatch[];
+}
+
+interface GrepMatch {
+  file: string;
+  line: number;
+  content: string;
+}
+
 interface ToolExecutionCardProps {
   toolName: string;
-  args: any;
-  result?: any;
+  args: ToolArgs;
+  result?: ToolResult;
   isExecuting?: boolean;
   onApprove?: () => void;
   onReject?: () => void;
@@ -35,21 +71,21 @@ export function ToolExecutionCard({
 
   const getIcon = () => {
     switch (toolName) {
-      case 'str_replace':
+      case 'FileEdit':
+      case 'FileMultiEdit':
         return <FileEdit className="h-4 w-4" />;
-      case 'bash':
+      case 'Bash':
         return <Terminal className="h-4 w-4" />;
-      case 'read_file':
+      case 'Read':
         return <FileText className="h-4 w-4" />;
-      case 'write_file':
-      case 'create_file':
+      case 'Write':
         return <FilePlus className="h-4 w-4" />;
-      case 'list_files':
+      case 'LS':
+      case 'Glob':
         return <FolderOpen className="h-4 w-4" />;
-      case 'search':
+      case 'Grep':
+      case 'WebSearch':
         return <Search className="h-4 w-4" />;
-      case 'git':
-        return <GitBranch className="h-4 w-4" />;
       default:
         return <Terminal className="h-4 w-4" />;
     }
@@ -57,22 +93,30 @@ export function ToolExecutionCard({
 
   const getTitle = () => {
     switch (toolName) {
-      case 'str_replace':
-        return `Editing ${args.path}`;
-      case 'bash':
+      case 'FileEdit':
+        return `Editing ${args.file_path}`;
+      case 'FileMultiEdit':
+        return `Editing ${args.file_path} (${args.edits?.length || 0} changes)`;
+      case 'Bash':
         return `Running: ${args.command}`;
-      case 'read_file':
-        return `Reading ${args.path}`;
-      case 'write_file':
-        return `Writing to ${args.path}`;
-      case 'create_file':
-        return `Creating ${args.path}`;
-      case 'list_files':
+      case 'Read':
+        return `Reading ${args.file_path}`;
+      case 'Write':
+        return `Writing to ${args.file_path}`;
+      case 'LS':
         return `Listing ${args.path || 'directory'}`;
-      case 'search':
+      case 'Grep':
         return `Searching for "${args.pattern}"`;
-      case 'git':
-        return `Git: ${args.command}`;
+      case 'Glob':
+        return `Finding files: ${args.pattern}`;
+      case 'WebSearch':
+        return `Searching web: "${args.query}"`;
+      case 'WebFetch':
+        return `Fetching ${args.url}`;
+      case 'Agent':
+        return `Spawning agent: ${args.description}`;
+      case 'TodoWrite':
+        return `Updating todo list`;
       default:
         return toolName;
     }
@@ -122,8 +166,9 @@ export function ToolExecutionCard({
             isExecuting={isExecuting}
           />
           
-          {/* Approval buttons for certain tools */}
-          {(toolName === 'str_replace' || toolName === 'write_file' || toolName === 'create_file') && 
+          {/* Approval buttons for destructive tools */}
+          {(toolName === 'FileEdit' || toolName === 'FileMultiEdit' || toolName === 'Write' || 
+            toolName === 'Bash' || toolName === 'Agent') && 
            !isExecuting && onApprove && onReject && (
             <div className="flex gap-2 p-3 border-t border-border">
               <button
@@ -148,45 +193,91 @@ export function ToolExecutionCard({
   );
 }
 
-function ToolContent({ toolName, args, result, isExecuting }: any) {
+function ToolContent({ toolName, args, result, isExecuting }: {
+  toolName: string;
+  args: ToolArgs;
+  result?: ToolResult;
+  isExecuting?: boolean;
+}) {
   switch (toolName) {
-    case 'str_replace':
-      return <FileEditContent args={args} result={result} />;
+    case 'FileEdit':
+    case 'FileMultiEdit':
+      return <FileEditContent args={args} result={result} toolName={toolName} />;
     
-    case 'bash':
+    case 'Bash':
       return <TerminalContent args={args} result={result} isExecuting={isExecuting} />;
     
-    case 'read_file':
+    case 'Read':
       return <FileReadContent args={args} result={result} />;
     
-    case 'write_file':
-    case 'create_file':
+    case 'Write':
       return <FileWriteContent args={args} result={result} />;
     
-    case 'search':
+    case 'Grep':
       return <SearchContent args={args} result={result} />;
+    
+    case 'LS':
+    case 'Glob':
+      return <FileListContent args={args} result={result} />;
     
     default:
       return <GenericContent args={args} result={result} />;
   }
 }
 
-function FileEditContent({ args, result }: any) {
+function FileEditContent({ args, result, toolName }: {
+  args: ToolArgs;
+  result?: ToolResult;
+  toolName: string;
+}) {
+  // Handle FileMultiEdit
+  if (toolName === 'FileMultiEdit' && args.edits) {
+    return (
+      <div className="p-3 space-y-3">
+        {args.edits.map((edit, index: number) => (
+          <div key={index} className="space-y-2 border-b border-border pb-2 last:border-0">
+            <div className="text-xs text-muted">Edit {index + 1}:</div>
+            {edit.old_string && (
+              <div>
+                <div className="text-xs text-muted mb-1">Remove:</div>
+                <pre className="bg-red-500/10 text-red-500 p-2 rounded text-xs overflow-x-auto">
+                  {edit.old_string}
+                </pre>
+              </div>
+            )}
+            {edit.new_string && (
+              <div>
+                <div className="text-xs text-muted mb-1">Add:</div>
+                <pre className="bg-green-500/10 text-green-500 p-2 rounded text-xs overflow-x-auto">
+                  {edit.new_string}
+                </pre>
+              </div>
+            )}
+          </div>
+        ))}
+        {result?.error && (
+          <div className="text-xs text-destructive">{result.error}</div>
+        )}
+      </div>
+    );
+  }
+
+  // Handle single FileEdit
   return (
     <div className="p-3 space-y-2">
-      {args.old_str && (
+      {args.old_string && (
         <div>
           <div className="text-xs text-muted mb-1">Remove:</div>
           <pre className="bg-red-500/10 text-red-500 p-2 rounded text-xs overflow-x-auto">
-            {args.old_str}
+            {args.old_string}
           </pre>
         </div>
       )}
-      {args.new_str && (
+      {args.new_string && (
         <div>
           <div className="text-xs text-muted mb-1">Add:</div>
           <pre className="bg-green-500/10 text-green-500 p-2 rounded text-xs overflow-x-auto">
-            {args.new_str}
+            {args.new_string}
           </pre>
         </div>
       )}
@@ -197,7 +288,11 @@ function FileEditContent({ args, result }: any) {
   );
 }
 
-function TerminalContent({ args, result, isExecuting }: any) {
+function TerminalContent({ args, result, isExecuting }: {
+  args: ToolArgs;
+  result?: ToolResult;
+  isExecuting?: boolean;
+}) {
   return (
     <div className="p-3">
       <div className="bg-surface-1 rounded p-3 font-mono text-xs">
@@ -220,7 +315,10 @@ function TerminalContent({ args, result, isExecuting }: any) {
   );
 }
 
-function FileReadContent({ args, result }: any) {
+function FileReadContent({ args: _args, result }: {
+  args: ToolArgs;
+  result?: ToolResult;
+}) {
   const [showFull, setShowFull] = useState(false);
   const content = result?.content || '';
   const lines = content.split('\n');
@@ -247,7 +345,10 @@ function FileReadContent({ args, result }: any) {
   );
 }
 
-function FileWriteContent({ args, result }: any) {
+function FileWriteContent({ args, result }: {
+  args: ToolArgs;
+  result?: ToolResult;
+}) {
   return (
     <div className="p-3">
       {args.content && (
@@ -265,18 +366,63 @@ function FileWriteContent({ args, result }: any) {
   );
 }
 
-function SearchContent({ args, result }: any) {
+function SearchContent({ args, result }: {
+  args: ToolArgs;
+  result?: ToolResult;
+}) {
   return (
     <div className="p-3 space-y-2">
       <div className="text-xs text-muted">
         Pattern: <code className="bg-surface-3 px-1 rounded">{args.pattern}</code>
       </div>
-      {result?.matches && (
+      {result?.matches && Array.isArray(result.matches) && (
         <div className="space-y-1">
-          {result.matches.map((match: any, i: number) => (
-            <div key={i} className="text-xs">
-              <span className="text-primary">{match.file}:{match.line}</span>
-              <pre className="bg-surface-1 rounded p-1 mt-1">{match.content}</pre>
+          {result.matches.map((match: string | GrepMatch, i: number) => {
+            if (typeof match === 'string') {
+              return (
+                <div key={i} className="text-xs font-mono">
+                  {match}
+                </div>
+              );
+            } else {
+              return (
+                <div key={i} className="text-xs">
+                  <span className="text-primary">{match.file}:{match.line}</span>
+                  <pre className="bg-surface-1 rounded p-1 mt-1">{match.content}</pre>
+                </div>
+              );
+            }
+          })}
+        </div>
+      )}
+      {result?.error && (
+        <div className="text-xs text-destructive">{result.error}</div>
+      )}
+    </div>
+  );
+}
+
+function FileListContent({ args: _args, result }: {
+  args: ToolArgs;
+  result?: ToolResult;
+}) {
+  return (
+    <div className="p-3">
+      {result?.files && Array.isArray(result.files) && (
+        <div className="space-y-1">
+          {result.files.map((file: string, i: number) => (
+            <div key={i} className="text-xs font-mono">
+              {file}
+            </div>
+          ))}
+        </div>
+      )}
+      {result?.matches && Array.isArray(result.matches) && (
+        <div className="space-y-1">
+          {/* FileListContent only deals with string matches (file paths) */}
+          {(result.matches as string[]).map((match, i) => (
+            <div key={i} className="text-xs font-mono">
+              {match}
             </div>
           ))}
         </div>
@@ -288,7 +434,10 @@ function SearchContent({ args, result }: any) {
   );
 }
 
-function GenericContent({ args, result }: any) {
+function GenericContent({ args, result }: {
+  args: ToolArgs;
+  result?: ToolResult;
+}) {
   return (
     <div className="p-3 space-y-2">
       <div>

@@ -100,7 +100,7 @@ export function ThemeProvider({
     }
     
     // Update Zustand store
-    const store = (window as Window & { __appStore?: any }).__appStore;
+    const store = (window as Window & { __appStore?: { getState: () => { setTheme: (theme: 'light' | 'dark' | 'system') => void } } }).__appStore;
     if (store) {
       store.getState().setTheme(newTheme);
     }
