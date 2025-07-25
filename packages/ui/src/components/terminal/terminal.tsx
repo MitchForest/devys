@@ -40,6 +40,12 @@ export const TerminalWithRef = React.forwardRef<{
 
   useEffect(() => {
     if (!terminalRef.current || xtermRef.current) return;
+    
+    // Additional guard for React StrictMode
+    if (terminalRef.current.querySelector('.xterm')) {
+      console.warn('Terminal already initialized in this element');
+      return;
+    }
 
     // Create terminal instance
     const xterm = new XTerm({
@@ -102,16 +108,36 @@ export const TerminalWithRef = React.forwardRef<{
     xterm.loadAddon(webLinksAddon);
     xterm.loadAddon(searchAddon);
 
-    // Open terminal in DOM
-    xterm.open(terminalRef.current);
-
-    // Store references
+    // Store references first
     xtermRef.current = xterm;
     fitAddonRef.current = fitAddon;
 
+    // Use requestAnimationFrame to ensure DOM is ready
+    requestAnimationFrame(() => {
+      if (terminalRef.current) {
+        try {
+          xterm.open(terminalRef.current);
+        } catch (error) {
+          console.error('Failed to open terminal:', error);
+          // Try again after a delay
+          setTimeout(() => {
+            if (terminalRef.current && !xterm.element) {
+              try {
+                xterm.open(terminalRef.current);
+              } catch (e) {
+                console.error('Failed to open terminal on retry:', e);
+              }
+            }
+          }, 100);
+        }
+      } else {
+        console.error('Terminal ref not ready');
+      }
+    });
+
     // Fit terminal to container after DOM is ready
     const fitTerminal = () => {
-      if (fitAddonRef.current && terminalRef.current && terminalRef.current.offsetWidth > 0 && terminalRef.current.offsetHeight > 0) {
+      if (fitAddonRef.current && terminalRef.current && xtermRef.current?.element && terminalRef.current.offsetWidth > 0 && terminalRef.current.offsetHeight > 0) {
         try {
           fitAddon.fit();
         } catch (error) {
@@ -120,11 +146,10 @@ export const TerminalWithRef = React.forwardRef<{
       }
     };
     
-    // Try to fit immediately
-    fitTerminal();
-    
-    // Also try after a small delay to ensure DOM is ready
-    setTimeout(fitTerminal, 100);
+    // Fit after terminal is opened
+    requestAnimationFrame(() => {
+      setTimeout(fitTerminal, 150); // Wait for terminal to be opened
+    });
 
     // Set up event handlers
     if (onData) {
@@ -150,7 +175,7 @@ export const TerminalWithRef = React.forwardRef<{
 
     // Handle window resize
     const handleResize = () => {
-      if (fitAddonRef.current && terminalRef.current && terminalRef.current.offsetWidth > 0 && terminalRef.current.offsetHeight > 0) {
+      if (fitAddonRef.current && terminalRef.current && xtermRef.current?.element && terminalRef.current.offsetWidth > 0 && terminalRef.current.offsetHeight > 0) {
         try {
           fitAddonRef.current.fit();
         } catch (error) {
@@ -163,7 +188,11 @@ export const TerminalWithRef = React.forwardRef<{
 
     return () => {
       window.removeEventListener('resize', handleResize);
-      xterm.dispose();
+      try {
+        xterm.dispose();
+      } catch (error) {
+        console.warn('Error disposing terminal:', error);
+      }
       xtermRef.current = null;
       fitAddonRef.current = null;
     };
@@ -239,7 +268,7 @@ export const TerminalWithRef = React.forwardRef<{
       }
     },
     fit: () => {
-      if (fitAddonRef.current && terminalRef.current && terminalRef.current.offsetWidth > 0 && terminalRef.current.offsetHeight > 0) {
+      if (fitAddonRef.current && terminalRef.current && xtermRef.current?.element && terminalRef.current.offsetWidth > 0 && terminalRef.current.offsetHeight > 0) {
         try {
           fitAddonRef.current.fit();
         } catch (error) {

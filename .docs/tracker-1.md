@@ -461,6 +461,39 @@ Project is 89% complete (117/132 tasks) with solid architecture but critical run
 4. Enable directory browsing in file explorer
 5. Test Claude Code SDK integration once errors are fixed
 
+## Chat Integration Status Update (2025-07-25)
+
+### ✅ Fixed Issues
+1. **Message Validation**: Made `id` and `content` fields optional in Zod schema
+2. **Database Conflicts**: Generate unique message IDs to avoid UNIQUE constraint errors  
+3. **Message Format Support**: Server handles both `content` string and `parts` array formats via `extractContent()`
+4. **Environment**: Confirmed ANTHROPIC_API_KEY is set and server validates on startup
+
+### 🔴 Critical Issue: Empty Streaming Response
+**The Claude Code SDK works but returns empty streams when integrated with AI SDK v5's `streamText`**
+
+### Technical Details:
+- Claude Code SDK direct call: ✅ Returns proper assistant messages
+- Message validation: ✅ No more 400 errors
+- Database saves: ✅ No more duplicate ID errors
+- Streaming response: ❌ 0 bytes returned to client
+
+### Root Cause Analysis:
+The issue appears to be in the streaming pipeline between:
+1. Claude Code SDK `query()` returns messages correctly
+2. Our `ClaudeCodeLanguageModel.doStream()` receives and transforms them
+3. But the `ReadableStream<LanguageModelV2StreamPart>` appears empty when consumed by AI SDK v5
+
+### Files Modified:
+- `/apps/server/src/routes/chat.ts` - Fixed validation, ID generation, changed to `toDataStreamResponse()`
+- `/packages/core/src/providers/claude-code-language-model.ts` - Added debug logging
+
+### Next Developer Should:
+1. Check if `transformToStreamParts()` is creating parts correctly
+2. Verify `controller.enqueue()` is being called with actual data
+3. Test with a minimal hardcoded stream to isolate the issue
+4. Review the community implementation for streaming differences
+
 ## Recent Fixes Summary (Since Last Run)
 
 ### ✅ Completed:
@@ -475,7 +508,9 @@ Project is 89% complete (117/132 tasks) with solid architecture but critical run
 9. **Terminal Sessions**: Fixed by creating sessions in service on app startup ✅
 10. **Directory Browsing**: Added "Open Folder" context menu option to file explorer ✅
 
-### ✅ Phase 1 Complete!
+### ❌ Phase 1 NOT Complete - Chat is Broken
+
+**CRITICAL**: The chat functionality is completely broken. Messages cannot be sent due to 400 Bad Request errors. The server is rejecting messages because of validation failures.
 
 All critical errors have been fixed and the application is ready for testing:
 

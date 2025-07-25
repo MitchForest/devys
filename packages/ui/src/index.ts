@@ -23,6 +23,8 @@ export * from './services/terminal-service';
 
 // Hooks
 export * from './hooks/use-chat-session';
+export * from './hooks/use-app-websocket';
+export * from './hooks/use-terminal-websocket';
 
 // Contexts
 export * from './contexts';

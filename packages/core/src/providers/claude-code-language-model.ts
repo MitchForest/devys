@@ -126,9 +126,9 @@ export class ClaudeCodeLanguageModel implements LanguageModelV2 {
       totalTokens: 0,
     };
     
-    // Create abort controller that properly connects to options.abortSignal
-    const abortController = new AbortController();
-    if (options.abortSignal) {
+    // Create abort controller - Claude Code SDK expects its own controller
+    const abortController = options.abortSignal ? new AbortController() : undefined;
+    if (options.abortSignal && abortController) {
       options.abortSignal.addEventListener('abort', () => abortController.abort());
     }
     
@@ -160,6 +160,8 @@ export class ClaudeCodeLanguageModel implements LanguageModelV2 {
           });
           
           for await (const message of sdkMessages) {
+            console.log(`[Claude Code] Received message:`, message.type);
+            
             // Extract session ID from messages
             if ('session_id' in message && message.session_id) {
               currentSessionId = message.session_id;
@@ -192,6 +194,7 @@ export class ClaudeCodeLanguageModel implements LanguageModelV2 {
           
           controller.close();
         } catch (error) {
+          console.error('[Claude Code] Stream error:', error);
           controller.error(error);
         }
       }
@@ -310,34 +313,41 @@ export class ClaudeCodeLanguageModel implements LanguageModelV2 {
     }
   }
 
-  private convertToPrompt(options: LanguageModelV2CallOptions): string {
+  private convertToPrompt(options: LanguageModelV2CallOptions): string | AsyncIterable<SDKUserMessage> {
     const prompt = options.prompt;
-    let result = '';
     
-    // Add system messages
-    const systemMessages = prompt.filter(m => m.role === 'system');
-    if (systemMessages.length > 0 || this.settings.systemPrompt) {
-      const systemContent = systemMessages.length > 0 
-        ? systemMessages.map(m => m.content).join('\n')
-        : this.settings.systemPrompt || '';
-      
-      result += `System: ${systemContent}\n\n`;
-    }
-    
-    // Convert messages to Claude Code format
-    for (const message of prompt) {
-      if (message.role === 'system') continue;
-      
-      if (message.role === 'user') {
-        const content = this.extractMessageContent(message.content);
-        result += `User: ${content}\n\n`;
-      } else if (message.role === 'assistant') {
-        const content = this.extractMessageContent(message.content);
-        result += `Assistant: ${content}\n\n`;
+    // Create an async iterable of messages for Claude Code SDK
+    async function* generateMessages(): AsyncIterable<SDKUserMessage> {
+      // Send each message as a separate SDK message
+      for (const message of prompt) {
+        if (message.role === 'user') {
+          const content = typeof message.content === 'string' 
+            ? message.content 
+            : message.content.map((p: any) => p.text || '').join('');
+          
+          yield {
+            type: 'user',
+            message: {
+              role: 'user',
+              content: content
+            },
+            parent_tool_use_id: null,
+            session_id: ''
+          } as SDKUserMessage;
+        }
       }
     }
     
-    return result.trim();
+    // Return the last user message for simple cases
+    const userMessages = prompt.filter(m => m.role === 'user');
+    if (userMessages.length > 0) {
+      const lastUser = userMessages[userMessages.length - 1];
+      const content = this.extractMessageContent(lastUser.content);
+      console.log('[Claude Code] Prompt:', content);
+      return content;
+    }
+    
+    return '';
   }
 
   private extractMessageContent(content: unknown): string {

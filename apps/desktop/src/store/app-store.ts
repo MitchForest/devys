@@ -39,9 +39,6 @@ interface AppState extends UIState, ProjectState, EditorState, SessionState, Wor
   // File System Service
   fileSystemService: FileSystemService | null;
   
-  // WebSocket connection
-  ws: WebSocket | null;
-  wsConnected: boolean;
   
   // Actions - UI
   setActivePanel: (panel: 'explorer' | 'chat' | 'terminal') => void;
@@ -77,8 +74,6 @@ interface AppState extends UIState, ProjectState, EditorState, SessionState, Wor
   
   // Actions - Services
   initializeServices: (serverUrl: string) => void;
-  connectWebSocket: (wsUrl: string) => void;
-  disconnectWebSocket: () => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -119,8 +114,6 @@ export const useAppStore = create<AppState>()(
       
       // Services
       fileSystemService: null,
-      ws: null,
-      wsConnected: false,
       
       // UI Actions
       setActivePanel: (panel) => set({ activePanel: panel }),
@@ -224,15 +217,7 @@ export const useAppStore = create<AppState>()(
           cwd: '/'
         };
         
-        // Create session in terminal service when WebSocket is connected
-        const ws = get().ws;
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
-            type: 'terminal:create',
-            id: newSession.id,
-            cwd: newSession.cwd
-          }));
-        }
+        // Terminal sessions will be created via the terminal context
         
         return {
           terminalSessions: [...state.terminalSessions, newSession],
@@ -273,48 +258,6 @@ export const useAppStore = create<AppState>()(
       initializeServices: (serverUrl) => {
         const fileSystemService = new FileSystemService({ baseUrl: serverUrl });
         set({ fileSystemService });
-      },
-      
-      connectWebSocket: (wsUrl) => {
-        const { ws } = get();
-        if (ws) {
-          ws.close();
-        }
-        
-        const websocket = new WebSocket(wsUrl);
-        
-        websocket.onopen = () => {
-          set({ wsConnected: true });
-        };
-        
-        websocket.onclose = () => {
-          set({ wsConnected: false });
-        };
-        
-        websocket.onerror = (error) => {
-          console.error('WebSocket error:', error);
-          set({ wsConnected: false });
-        };
-        
-        websocket.onmessage = (event) => {
-          try {
-            const _message = JSON.parse(event.data);
-            // Handle WebSocket messages here
-            // TODO: Handle WebSocket message
-          } catch (error) {
-            console.error('Failed to parse WebSocket message:', error);
-          }
-        };
-        
-        set({ ws: websocket });
-      },
-      
-      disconnectWebSocket: () => {
-        const { ws } = get();
-        if (ws) {
-          ws.close();
-          set({ ws: null, wsConnected: false });
-        }
       }
     }))
   )

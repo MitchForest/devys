@@ -7,7 +7,7 @@ import {
   ThemeToggle, 
   ToastContainer, 
   useToast,
-  TerminalTab,
+  TerminalTabSimple,
   terminalService,
   type Tab 
 } from '@devys/ui';
@@ -42,9 +42,6 @@ function App() {
     chatSessions,
     activeChatSessionId,
     
-    // WebSocket
-    ws,
-    wsConnected: _wsConnected,
     
     // Actions
     selectFile,
@@ -60,7 +57,6 @@ function App() {
     createChatSession,
     setChatSession,
     initializeServices,
-    connectWebSocket,
     refreshFileTree,
     fileSystemService,
     updateFileContent,
@@ -71,16 +67,6 @@ function App() {
     // Initialize services when component mounts
     const serverUrl = 'http://localhost:3001';
     initializeServices(serverUrl);
-    connectWebSocket('ws://localhost:3001');
-    
-    // Connect terminal service to WebSocket
-    terminalService.connect('ws://localhost:3001');
-    
-    // Create initial terminal session in the service
-    if (terminalSessions.length > 0) {
-      const initialSession = terminalSessions[0];
-      terminalService.createSession(initialSession.id, initialSession.title, initialSession.cwd || projectPath || '/');
-    }
     
     // Load initial file tree
     refreshFileTree();
@@ -89,13 +75,7 @@ function App() {
     if (chatSessions.length === 0) {
       createChatSession('Chat 1');
     }
-    
-    return () => {
-      // Cleanup on unmount
-      useAppStore.getState().disconnectWebSocket();
-      terminalService.disconnect();
-    };
-  }, [chatSessions.length, connectWebSocket, createChatSession, initializeServices, refreshFileTree, terminalSessions, projectPath]);
+  }, [chatSessions.length, createChatSession, initializeServices, refreshFileTree]);
 
   // Keyboard shortcuts handler
   useEffect(() => {
@@ -311,9 +291,9 @@ function App() {
     id: session.id,
     title: session.title,
     content: (
-      <TerminalTab
+      <TerminalTabSimple
         key={session.id}
-        session={session}
+        sessionId={session.id}
         theme={resolvedTheme}
         onTitleChange={(_title: string) => {
           // Update terminal title if needed
@@ -359,7 +339,6 @@ function App() {
         <WorkflowPanel
           className="h-full"
           activeChatSessionId={activeChatSessionId}
-          ws={ws}
         />
       )
     }

@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { useChat, type UIMessage as Message } from '@ai-sdk/react';
+import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { ChatMessage } from './chat-message';
 import { ChatInput } from './chat-input';
@@ -27,18 +27,12 @@ export function ChatInterface({
 }: ChatInterfaceProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
-  const [input, setInput] = useState<string>('');
 
-  // Use AI SDK v5's useChat hook
-  const {
-    messages,
-    sendMessage,
-    stop,
-    status,
-    error,
-    setMessages: _setMessages,
-    addToolResult
-  } = useChat({
+  // Manual input state management (v5 requirement)
+  const [chatInput, setChatInput] = useState('');
+  
+  // Use AI SDK v5's useChat hook properly
+  const { messages, sendMessage, stop, status, error, addToolResult } = useChat({
     transport: new DefaultChatTransport({
       api: apiEndpoint,
       body: {
@@ -62,11 +56,14 @@ export function ChatInterface({
         onSessionUpdate(updatedSession);
       }
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       console.error('Chat error:', error);
-    },
-    experimental_throttle: 50 // Throttle UI updates for performance
+    }
   });
+  
+  // Determine loading state
+  const isLoading = status === 'streaming';
+
 
   // Set initial messages when session changes
   useEffect(() => {
@@ -78,19 +75,20 @@ export function ChatInterface({
   }, [session?.id, session?.messages]);
 
   // Handle form submission
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (input.trim() && status !== 'streaming') {
-      // Call sendMessage with just the content string
-      // The AI SDK will handle creating the message object
-      (sendMessage as any)(input.trim());
-      setInput('');
-    }
+    if (!chatInput.trim() || isLoading) return;
+    
+    const userMessage = chatInput.trim();
+    setChatInput('');
+    
+    // Use sendMessage from AI SDK v5 with proper format
+    sendMessage({ role: 'user', content: userMessage });
   };
 
   // Handle input change
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value);
+    setChatInput(e.target.value);
   };
 
   // Auto-scroll to bottom when new messages arrive
@@ -112,18 +110,24 @@ export function ChatInterface({
   };
 
   // Convert AI SDK message to our ChatMessage type for rendering
-  const convertToChatMessage = (message: Message): ChatMessageType => {
+  const convertToChatMessage = (message: any): ChatMessageType => {
     // Extract text content based on message structure
     let textContent = '';
     
-    // Handle different message formats
-    const msg = message as any;
-    if (typeof msg.content === 'string') {
-      textContent = msg.content;
-    } else if ('content' in msg && msg.content) {
-      textContent = String(msg.content);
-    } else if ('text' in msg) {
-      textContent = msg.text || '';
+    // AI SDK v5 messages use parts array
+    if (message.parts && Array.isArray(message.parts)) {
+      // Extract text from parts
+      const textParts = message.parts
+        .filter((part: any) => part.type === 'text')
+        .map((part: any) => part.text)
+        .join('');
+      textContent = textParts;
+    } else if (message.text) {
+      // Direct text property
+      textContent = message.text;
+    } else if (message.content) {
+      // Legacy content property
+      textContent = typeof message.content === 'string' ? message.content : '';
     }
     
     return {
@@ -132,12 +136,10 @@ export function ChatInterface({
       content: textContent,
       timestamp: new Date(),
       createdAt: new Date(),
-      toolInvocations: (message as any).toolInvocations // Pass through tool invocations if they exist
+      toolInvocations: message.toolInvocations // Pass through tool invocations if they exist
     };
   };
 
-  // Determine loading state
-  const isLoading = status === 'streaming' || status === 'submitted';
 
   // Handle tool execution results
   const handleToolResult = (toolCallId: string, result: unknown) => {
@@ -184,7 +186,7 @@ export function ChatInterface({
 
       {/* Input Area */}
       <ChatInput
-        value={input}
+        value={chatInput}
         onChange={handleInputChange}
         onSubmit={handleSubmit}
         isLoading={isLoading}

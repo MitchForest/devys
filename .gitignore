@@ -94,6 +94,10 @@ temp/
 *.tmp
 *.temp
 
+# Test files with API keys
+test-*.js
+test-*.mjs
+
 # Package files
 *.tgz
 *.zip
