@@ -1,4 +1,4 @@
-use tauri::{Manager, menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder}};
+use tauri::{Manager, Emitter, menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder, PredefinedMenuItem}};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -46,16 +46,22 @@ fn create_app_menu(handle: &tauri::AppHandle) -> Result<Menu<tauri::Wry>, Box<dy
     // macOS app menu
     #[cfg(target_os = "macos")]
     {
+        let about_metadata = tauri::menu::AboutMetadata {
+            name: Some("Devys".to_string()),
+            version: Some("0.1.0".to_string()),
+            ..Default::default()
+        };
+        
         let app_menu = SubmenuBuilder::new(handle, "Devys")
-            .about()
+            .item(&PredefinedMenuItem::about(handle, Some("About Devys"), Some(about_metadata))?)
             .separator()
-            .services()
+            .item(&PredefinedMenuItem::services(handle, None)?)
             .separator()
-            .hide()
-            .hide_others()
-            .show_all()
+            .item(&PredefinedMenuItem::hide(handle, None)?)
+            .item(&PredefinedMenuItem::hide_others(handle, None)?)
+            .item(&PredefinedMenuItem::show_all(handle, None)?)
             .separator()
-            .quit()
+            .item(&PredefinedMenuItem::quit(handle, None)?)
             .build()?;
         
         menu = menu.item(&app_menu);
@@ -70,18 +76,18 @@ fn create_app_menu(handle: &tauri::AppHandle) -> Result<Menu<tauri::Wry>, Box<dy
     let file_menu = SubmenuBuilder::new(handle, "File")
         .item(&open_folder)
         .separator()
-        .close_window()
+        .item(&PredefinedMenuItem::close_window(handle, None)?)
         .build()?;
     
     // Edit menu
     let edit_menu = SubmenuBuilder::new(handle, "Edit")
-        .undo()
-        .redo()
+        .item(&PredefinedMenuItem::undo(handle, None)?)
+        .item(&PredefinedMenuItem::redo(handle, None)?)
         .separator()
-        .cut()
-        .copy()
-        .paste()
-        .select_all()
+        .item(&PredefinedMenuItem::cut(handle, None)?)
+        .item(&PredefinedMenuItem::copy(handle, None)?)
+        .item(&PredefinedMenuItem::paste(handle, None)?)
+        .item(&PredefinedMenuItem::select_all(handle, None)?)
         .build()?;
     
     // View menu
@@ -93,7 +99,7 @@ fn create_app_menu(handle: &tauri::AppHandle) -> Result<Menu<tauri::Wry>, Box<dy
     let view_menu = SubmenuBuilder::new(handle, "View")
         .item(&toggle_chat)
         .separator()
-        .fullscreen()
+        .item(&PredefinedMenuItem::fullscreen(handle, None)?)
         .build()?;
     
     // Terminal menu
@@ -114,8 +120,8 @@ fn create_app_menu(handle: &tauri::AppHandle) -> Result<Menu<tauri::Wry>, Box<dy
     
     // Window menu
     let window_menu = SubmenuBuilder::new(handle, "Window")
-        .minimize()
-        .zoom()
+        .item(&PredefinedMenuItem::minimize(handle, None)?)
+        .item(&PredefinedMenuItem::maximize(handle, None)?)
         .build()?;
     
     menu = menu

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import type { FileNode, FileTab, ChatSession, ChatMessage, TerminalSession, Workflow } from '@devys/types';
-import { FileSystemService } from '@devys/core/services/file-system.service';
+import { FileSystemService } from '@devys/core/browser';
 
 interface UIState {
   activePanel: 'explorer' | 'chat' | 'terminal';
@@ -216,7 +216,7 @@ export const useAppStore = create<AppState>()(
           title,
           active: true,
           output: [],
-          cwd: state.projectPath || process.cwd()
+          cwd: state.projectPath || '/'
         };
         
         // Terminal sessions will be created via the terminal context

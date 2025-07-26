@@ -4,19 +4,39 @@
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
+      "types": "./dist/index.d.ts",
       "default": "./src/index.ts"
     },
-    "./agents": "./src/agents/index.ts",
-    "./providers": "./src/providers/index.ts",
-    "./workflows": "./src/workflows/index.ts",
-    "./memory": "./src/memory/index.ts",
-    "./services/file-system.service": "./src/services/file-system.service.ts"
+    "./agents": {
+      "types": "./dist/agents/index.d.ts",
+      "default": "./src/agents/index.ts"
+    },
+    "./providers": {
+      "types": "./dist/providers/index.d.ts",
+      "default": "./src/providers/index.ts"
+    },
+    "./workflows": {
+      "types": "./dist/workflows/index.d.ts",
+      "default": "./src/workflows/index.ts"
+    },
+    "./memory": {
+      "types": "./dist/memory/index.d.ts",
+      "default": "./src/memory/index.ts"
+    },
+    "./services/file-system.service": {
+      "types": "./dist/services/file-system.service.d.ts",
+      "default": "./src/services/file-system.service.ts"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "default": "./src/browser.ts"
+    }
   },
   "scripts": {
+    "build": "tsc",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",

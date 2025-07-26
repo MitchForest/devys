@@ -9,9 +9,9 @@ import {
   ToastContainer, 
   useToast,
   TerminalTabSimple,
-  WelcomePage,
   type Tab 
 } from '@devys/ui';
+import { WelcomePage } from '@devys/ui';
 import { FileCode, MessageSquare, Terminal as TerminalIcon } from 'lucide-react';
 import { useAppStore } from './store';
 import { useTheme, cn } from '@devys/ui';
@@ -404,7 +404,7 @@ function App() {
               showToast(`Opened folder: ${folderPath}`, 'success', 2000);
             }
           }}
-          onOpenRecent={(path) => {
+          onOpenRecent={(path: string) => {
             setProjectPath(path);
             refreshFileTree();
             showToast(`Opened folder: ${path}`, 'success', 2000);

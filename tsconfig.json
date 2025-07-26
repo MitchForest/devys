@@ -18,12 +18,14 @@
     "incremental": true,
     "baseUrl": ".",
     "paths": {
-      "@claude-code-ide/core": ["./packages/core/src"],
-      "@claude-code-ide/core/*": ["./packages/core/src/*"],
-      "@claude-code-ide/ui": ["./packages/ui/src"],
-      "@claude-code-ide/ui/*": ["./packages/ui/src/*"],
-      "@claude-code-ide/types": ["./packages/types/src"],
-      "@claude-code-ide/types/*": ["./packages/types/src/*"]
+      "@devys/core": ["./packages/core/src"],
+      "@devys/core/*": ["./packages/core/src/*"],
+      "@devys/ui": ["./packages/ui/src"],
+      "@devys/ui/*": ["./packages/ui/src/*"],
+      "@devys/types": ["./packages/types/src"],
+      "@devys/types/*": ["./packages/types/src/*"],
+      "@devys/db": ["./packages/db/src"],
+      "@devys/db/*": ["./packages/db/src/*"]
     }
   },
   "include": [
