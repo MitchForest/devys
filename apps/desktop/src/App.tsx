@@ -5,14 +5,13 @@ import {
   FileExplorer, 
   Tabs, 
   CodeEditor, 
-  ThemeToggle, 
   ToastContainer, 
   useToast,
   TerminalTabSimple,
   type Tab 
 } from '@devys/ui';
 import { WelcomePage } from '@devys/ui';
-import { FileCode, MessageSquare, Terminal as TerminalIcon } from 'lucide-react';
+import { FileCode, MessageSquare, Terminal as TerminalIcon, Sun, Moon, Monitor } from 'lucide-react';
 import { useAppStore } from './store';
 import { useTheme, cn } from '@devys/ui';
 import { ChatInterface } from '@devys/ui';
@@ -76,12 +75,14 @@ function App() {
     if (projectPath) {
       refreshFileTree();
     }
-    
-    // Create initial chat session if none exists
+  }, [initializeServices, projectPath, refreshFileTree]);
+  
+  // Create initial chat session only once on mount
+  useEffect(() => {
     if (chatSessions.length === 0) {
-      createChatSession('New Chat');
+      createChatSession('Chat 1');
     }
-  }, [chatSessions.length, createChatSession, initializeServices, projectPath, refreshFileTree]);
+  }, []); // Empty dependency array ensures this runs only once
 
   // Keyboard shortcuts handler
   useEffect(() => {
@@ -146,7 +147,7 @@ function App() {
         case 'toggle-chat':
           toggleChat();
           if (!showChat && chatSessions.length === 0) {
-            createChatSession('New Chat');
+            createChatSession('Chat 1');
           }
           break;
       }
@@ -355,6 +356,7 @@ function App() {
       <TerminalTabSimple
         key={session.id}
         sessionId={session.id}
+        cwd={projectPath}
         theme={resolvedTheme}
         onTitleChange={(_title: string) => {
           // Update terminal title if needed
@@ -394,7 +396,7 @@ function App() {
   // Show welcome page if no project is open
   if (!projectPath) {
     return (
-      <div className="h-screen w-screen bg-background text-foreground flex flex-col" style={{ fontSize: 'var(--font-size-base)', lineHeight: 'var(--line-height-base)' }}>
+      <div className="h-screen w-screen bg-background text-foreground flex flex-col">
         <WelcomePage
           onOpenFolder={async () => {
             const folderPath = await tauriBridge.openFolderDialog();
@@ -417,7 +419,7 @@ function App() {
   }
 
   return (
-    <div className="h-screen w-screen bg-background text-foreground flex flex-col" style={{ fontSize: 'var(--font-size-base)', lineHeight: 'var(--line-height-base)' }}>
+    <div className="h-screen w-screen bg-background text-foreground flex flex-col">
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         <PanelGroup direction="horizontal">
@@ -497,7 +499,7 @@ function App() {
                   ) : (
                     <div className="h-full flex items-center justify-center">
                       <div className="text-center">
-                        <h1 className="text-2xl font-bold">Welcome to Devys</h1>
+                        <h1 className="text-2xl font-mono font-normal">&lt;devys/&gt;</h1>
                         <p className="mt-2 text-muted-foreground">
                           Select a file from the explorer to begin editing
                         </p>
@@ -557,6 +559,11 @@ function App() {
                       const count = chatSessions.length + 1;
                       createChatSession(`Chat ${count}`);
                     }}
+                    onHistorySelect={(sessionId: string) => {
+                      // TODO: Load historical chat session
+                      console.log('Load session:', sessionId);
+                    }}
+                    historySessions={[]} // TODO: Load from storage
                     onPanelClose={() => toggleChat()}
                     contentClassName="h-full"
                   />
@@ -568,7 +575,7 @@ function App() {
       </div>
 
       {/* Status Bar */}
-      <div className="h-6 bg-surface-2 border-t border-border flex items-center px-2 text-xs text-muted">
+      <div className="h-7 bg-surface-2 border-t border-border flex items-center justify-between px-3 text-xs text-muted">
         <span className="flex items-center gap-3">
           {projectPath && (
             <span className="text-muted-foreground">
@@ -576,35 +583,35 @@ function App() {
             </span>
           )}
           {activeFileId && openFiles.find(f => f.id === activeFileId) && (
-            <span className="flex items-center gap-1">
+            <>
               <span className="text-muted-foreground">—</span>
               <span>{openFiles.find(f => f.id === activeFileId)?.name}</span>
               {openFiles.find(f => f.id === activeFileId)?.isDirty && (
-                <span className="text-muted-foreground">•</span>
+                <span className="text-muted-foreground ml-1">•</span>
               )}
-            </span>
+            </>
           )}
         </span>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex items-center gap-2">
           <button
             className={cn(
-              "p-1 rounded transition-colors",
-              showChat ? "bg-surface-3 text-foreground" : "hover:bg-surface-3 text-muted hover:text-foreground"
+              "p-1 rounded-sm transition-zed hover:bg-hover",
+              showChat ? "text-foreground" : "text-muted hover:text-foreground"
             )}
             onClick={() => {
-              toggleChat();
               if (!showChat && chatSessions.length === 0) {
-                createChatSession('New Chat');
+                createChatSession('Chat 1');
               }
+              toggleChat();
             }}
             title={showChat ? "Hide Chat" : "Show Chat"}
           >
-            <MessageSquare className="h-3 w-3" />
+            <MessageSquare className="h-3.5 w-3.5" />
           </button>
           <button
             className={cn(
-              "p-1 rounded transition-colors",
-              showTerminal ? "bg-surface-3 text-foreground" : "hover:bg-surface-3 text-muted hover:text-foreground"
+              "p-1 rounded-sm transition-zed hover:bg-hover",
+              showTerminal ? "text-foreground" : "text-muted hover:text-foreground"
             )}
             onClick={() => {
               toggleTerminal();
@@ -614,10 +621,24 @@ function App() {
             }}
             title={showTerminal ? "Hide Terminal" : "Show Terminal"}
           >
-            <TerminalIcon className="h-3 w-3" />
+            <TerminalIcon className="h-3.5 w-3.5" />
           </button>
-          <div className="w-px h-4 bg-border mx-1" />
-          <ThemeToggle theme={theme} onThemeChange={setTheme} className="h-4 px-2" />
+          <button
+            className={cn(
+              "p-1 rounded-sm transition-zed hover:bg-hover text-muted hover:text-foreground"
+            )}
+            onClick={() => {
+              const themes: Array<'light' | 'dark' | 'system'> = ['light', 'dark', 'system'];
+              const currentIndex = themes.indexOf(theme);
+              const nextIndex = (currentIndex + 1) % themes.length;
+              setTheme(themes[nextIndex]);
+            }}
+            title={`Theme: ${theme}`}
+          >
+            {theme === 'light' && <Sun className="h-3.5 w-3.5" />}
+            {theme === 'dark' && <Moon className="h-3.5 w-3.5" />}
+            {theme === 'system' && <Monitor className="h-3.5 w-3.5" />}
+          </button>
         </div>
       </div>
       

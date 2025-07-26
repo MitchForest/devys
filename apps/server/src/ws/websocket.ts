@@ -2,6 +2,7 @@ import { ServerWebSocket } from 'bun';
 import { z } from 'zod';
 import { spawn, type ChildProcess } from 'child_process';
 import * as path from 'path';
+import * as os from 'os';
 
 // WebSocket message types
 const WSMessageSchema = z.discriminatedUnion('type', [
@@ -272,7 +273,7 @@ export class WebSocketManager {
     this.send(connectionId, {
       type: 'terminal:output',
       sessionId: terminalId,
-      data: `Terminal ${terminalId} created\r\n${prompt}`
+      data: `${prompt}`
     });
   }
 
@@ -482,7 +483,7 @@ export class WebSocketManager {
     // Get just the last part of the path for display
     const cwdName = cwd.split(path.sep).pop() || cwd;
     const username = process.env.USER || 'user';
-    const hostname = process.env.HOSTNAME || 'localhost';
+    const hostname = os.hostname().replace(/\.local$/, '') || 'localhost';
     
     // Format: username@hostname cwdName % 
     return `${username}@${hostname} ${cwdName} % `;

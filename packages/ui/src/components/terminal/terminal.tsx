@@ -261,10 +261,7 @@ export const TerminalWithRef = React.forwardRef<{
         "xterm-container",
         className
       )}
-      style={{
-        opacity: isReady ? 1 : 0,
-        transition: 'opacity 0.2s'
-      }}
+      data-ready={isReady}
     />
   );
 });

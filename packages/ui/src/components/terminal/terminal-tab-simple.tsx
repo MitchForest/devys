@@ -5,10 +5,11 @@ import { useTerminalWebSocketContext } from '../../contexts/terminal-websocket-c
 interface TerminalTabSimpleProps {
   sessionId: string;
   theme?: 'dark' | 'light';
+  cwd?: string;
   onTitleChange?: (title: string) => void;
 }
 
-export function TerminalTabSimple({ sessionId, theme = 'dark', onTitleChange }: TerminalTabSimpleProps) {
+export function TerminalTabSimple({ sessionId, theme = 'dark', cwd, onTitleChange }: TerminalTabSimpleProps) {
   const terminalRef = useRef<{
     write: (data: string) => void;
     writeln: (data: string) => void;
@@ -34,9 +35,9 @@ export function TerminalTabSimple({ sessionId, theme = 'dark', onTitleChange }: 
   // Create session when connected
   useEffect(() => {
     if (isConnected) {
-      createSession(sessionId);
+      createSession(sessionId, cwd);
     }
-  }, [isConnected, sessionId, createSession]);
+  }, [isConnected, sessionId, cwd, createSession]);
 
   // Handle terminal data input
   const handleData = useCallback((data: string) => {

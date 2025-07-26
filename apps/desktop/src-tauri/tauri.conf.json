@@ -1,5 +1,5 @@
 {
-  "productName": "Devys",
+  "productName": "devys",
   "version": "0.1.0",
   "identifier": "com.devys.app",
   "build": {
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "Devys",
+        "title": "<devys/>",
         "width": 1400,
         "height": 900,
         "resizable": true,

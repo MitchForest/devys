@@ -37,24 +37,24 @@ body {
     
     /* Surface hierarchy - Light mode */
     --color-surface-1: 0 0% 100%;           /* #FFFFFF - Highest (editor) */
-    --color-surface-2: 0 0% 97%;            /* #F7F7F7 - High (panels) */
+    --color-surface-2: 0 0% 96%;            /* #F5F5F5 - High (panels) */
     --color-surface-3: 0 0% 94%;            /* #F0F0F0 - Medium (sidebar) */
     --color-surface-4: 0 0% 91%;            /* #E8E8E8 - Low (inactive elements) */
     
     /* Interactive elements - Light mode */
-    --color-primary: 220 70% 50%;           /* #1A73E8 - Primary actions */
+    --color-primary: 0 0% 35%;              /* #595959 - Primary actions (neutral gray) */
     --color-primary-foreground: 0 0% 100%;  /* #FFFFFF */
     --color-secondary: 0 0% 93%;            /* #EDEDED - Secondary surfaces */
     --color-secondary-foreground: 0 0% 20%; /* #333333 */
     
     /* State colors - Light mode */
-    --color-hover: 0 0% 89%;                /* #E3E3E3 - Hover state */
-    --color-active: 0 0% 85%;               /* #D9D9D9 - Active/pressed state */
-    --color-selected: 220 70% 95%;          /* #E8F0FE - Selected with primary tint */
+    --color-hover: 0 0% 92%;                /* #EBEBEB - Hover state */
+    --color-active: 0 0% 88%;               /* #E0E0E0 - Active/pressed state */
+    --color-selected: 0 0% 94%;             /* #F0F0F0 - Selected (neutral) */
     
     /* Semantic colors - Light mode */
     --color-muted: 0 0% 45%;                /* #737373 - Muted text */
-    --color-accent: 220 70% 50%;            /* #1A73E8 - Same as primary */
+    --color-accent: 0 0% 35%;               /* #595959 - Same as primary (neutral) */
     --color-accent-foreground: 0 0% 100%;   /* #FFFFFF */
     --color-destructive: 0 84% 60%;         /* #EF4444 - Errors/destructive */
     --color-destructive-foreground: 0 0% 100%;
@@ -62,19 +62,19 @@ body {
     /* Borders and inputs - Light mode */
     --color-border: 0 0% 88%;               /* #E0E0E0 - Default border */
     --color-input: 0 0% 88%;                /* #E0E0E0 - Input border */
-    --color-ring: 220 70% 50%;              /* #1A73E8 - Focus ring */
+    --color-ring: 0 0% 70%;                 /* #B3B3B3 - Focus ring (neutral) */
     
     /* Special surfaces - Light mode */
     --color-tooltip: 0 0% 15%;              /* #262626 - Tooltip background */
     --color-tooltip-foreground: 0 0% 98%;   /* #FAFAFA - Tooltip text */
     
     /* Editor specific - Light mode */
-    --color-editor-bg: 0 0% 100%;           /* #FFFFFF - Editor background */
+    --color-editor-bg: 0 0% 99%;            /* #FCFCFC - Editor background (slightly darker than pure white) */
     --color-editor-active-line: 0 0% 97%;   /* #F7F7F7 - Active line */
-    --color-editor-selection: 220 70% 90%;  /* #C2DEFF - Text selection */
+    --color-editor-selection: 0 0% 90%;     /* #E6E6E6 - Text selection (neutral) */
     
     /* Panel specific - Light mode */
-    --color-panel-bg: 0 0% 97%;             /* #F7F7F7 - Panel background */
+    --color-panel-bg: 0 0% 96%;             /* #F5F5F5 - Panel background (lighter than editor) */
     --color-panel-border: 0 0% 90%;         /* #E5E5E5 - Panel borders */
     
     /* Sidebar specific - Light mode */
@@ -88,7 +88,7 @@ body {
     --color-tab-hover: 0 0% 96%;            /* #F5F5F5 - Tab hover */
     
     /* Terminal/Console - Light mode */
-    --color-terminal-bg: 0 0% 98%;          /* #FAFAFA - Terminal background */
+    --color-terminal-bg: 0 0% 99%;          /* #FCFCFC - Terminal background */
     --color-terminal-fg: 0 0% 20%;          /* #333333 - Terminal text */
     
     /* Terminal ANSI colors - Light mode */
@@ -130,13 +130,22 @@ body {
     --spacing-12: 3rem;
     
     /* Component-specific spacing */
-    --panel-padding: var(--spacing-2);
+    --panel-padding: var(--spacing-3);
+    --panel-padding-compact: var(--spacing-2);
     --tab-padding-x: var(--spacing-3);
     --tab-padding-y: var(--spacing-1-5);
     --button-padding-x: var(--spacing-2);
     --button-padding-y: var(--spacing-1);
     --input-padding-x: var(--spacing-3);
     --input-padding-y: var(--spacing-1-5);
+    --header-height: var(--spacing-7);
+    --status-bar-height: var(--spacing-7);
+    
+    /* Consistent component sizes */
+    --icon-size-xs: 0.75rem;  /* 12px */
+    --icon-size-sm: 0.875rem; /* 14px */
+    --icon-size-md: 1rem;     /* 16px */
+    --input-min-height: 2.5rem; /* 40px */
     
     /* Border radius */
     --radius-sm: 0.125rem;
@@ -164,45 +173,45 @@ body {
     --color-foreground: 0 0% 85%;           /* #D9D9D9 - Main text */
     
     /* Surface hierarchy - Dark mode (from your extracted colors) */
-    --color-surface-1: 210 10% 17%;         /* #262C30 - Highest (active tab) */
-    --color-surface-2: 207 11% 16%;         /* #242930 - High (file explorer) */
-    --color-surface-3: 208 11% 14%;         /* #22272C - Medium (editor) */
+    --color-surface-1: 210 10% 13%;         /* #1F2428 - Highest (editor - darker) */
+    --color-surface-2: 207 11% 16%;         /* #242930 - High (panels - lighter) */
+    --color-surface-3: 208 11% 14%;         /* #22272C - Medium (sidebar) */
     --color-surface-4: 210 6% 11%;          /* #191D20 - Low (input backgrounds) */
     
     /* Interactive elements - Dark mode */
-    --color-primary: 207 67% 52%;           /* #3B82F6 - Primary actions */
-    --color-primary-foreground: 0 0% 98%;   /* #FAFAFA */
+    --color-primary: 0 0% 75%;              /* #BFBFBF - Primary actions (neutral gray) */
+    --color-primary-foreground: 0 0% 10%;   /* #1A1A1A */
     --color-secondary: 210 14% 20%;         /* #2C333D - Secondary surfaces */
     --color-secondary-foreground: 0 0% 85%; /* #D9D9D9 */
     
     /* State colors - Dark mode */
-    --color-hover: 210 13% 23%;             /* #333943 - Hover state */
-    --color-active: 210 12% 28%;            /* #3F4652 - Active/pressed state */
-    --color-selected: 207 44% 20%;          /* #1D3D5C - Selected with primary tint */
+    --color-hover: 210 13% 20%;             /* #2D333C - Hover state */
+    --color-active: 210 12% 25%;            /* #384047 - Active/pressed state */
+    --color-selected: 210 13% 18%;          /* #292F38 - Selected (neutral) */
     
     /* Semantic colors - Dark mode */
     --color-muted: 0 0% 60%;                /* #999999 - Muted text */
-    --color-accent: 207 67% 52%;            /* #3B82F6 - Same as primary */
-    --color-accent-foreground: 0 0% 98%;    /* #FAFAFA */
+    --color-accent: 0 0% 75%;               /* #BFBFBF - Same as primary (neutral) */
+    --color-accent-foreground: 0 0% 10%;    /* #1A1A1A */
     --color-destructive: 0 72% 51%;         /* #DC2626 - Errors/destructive */
     --color-destructive-foreground: 0 0% 98%;
     
     /* Borders and inputs - Dark mode */
     --color-border: 210 13% 22%;            /* #303841 - Default border */
     --color-input: 210 13% 22%;             /* #303841 - Input border */
-    --color-ring: 207 67% 52%;              /* #3B82F6 - Focus ring */
+    --color-ring: 0 0% 50%;                 /* #808080 - Focus ring (neutral) */
     
     /* Special surfaces - Dark mode */
     --color-tooltip: 0 0% 95%;              /* #F2F2F2 - Tooltip background */
     --color-tooltip-foreground: 0 0% 10%;   /* #1A1A1A - Tooltip text */
     
     /* Editor specific - Dark mode */
-    --color-editor-bg: 208 11% 14%;         /* #22272C - Editor background */
-    --color-editor-active-line: 210 11% 16%; /* #252B31 - Active line */
-    --color-editor-selection: 207 44% 25%;  /* #244E7A - Text selection */
+    --color-editor-bg: 210 10% 13%;         /* #1F2428 - Editor background (darker than panels) */
+    --color-editor-active-line: 210 11% 15%; /* #232A2F - Active line */
+    --color-editor-selection: 210 13% 23%;  /* #333943 - Text selection (neutral) */
     
     /* Panel specific - Dark mode */
-    --color-panel-bg: 208 14% 19%;          /* #2F353F - Panel background */
+    --color-panel-bg: 207 11% 16%;          /* #242930 - Panel background (lighter than editor) */
     --color-panel-border: 210 13% 24%;      /* #353D48 - Panel borders */
     
     /* Sidebar specific - Dark mode */
@@ -216,7 +225,7 @@ body {
     --color-tab-hover: 210 12% 25%;         /* #374048 - Tab hover */
     
     /* Terminal/Console - Dark mode */
-    --color-terminal-bg: 210 6% 11%;        /* #191D20 - Terminal background */
+    --color-terminal-bg: 210 10% 12%;       /* #1C2126 - Terminal background */
     --color-terminal-fg: 0 0% 85%;          /* #D9D9D9 - Terminal text */
     
     /* Terminal ANSI colors - Dark mode */
@@ -441,15 +450,23 @@ body {
   }
   
   .h-3 {
-    height: 0.75rem;
+    height: var(--icon-size-xs);
+  }
+  
+  .h-3\.5 {
+    height: var(--icon-size-sm);
   }
   
   .h-4 {
-    height: 1rem;
+    height: var(--icon-size-md);
   }
   
   .h-6 {
     height: 1.5rem;
+  }
+  
+  .h-7 {
+    height: var(--status-bar-height);
   }
   
   .h-9 {
@@ -473,11 +490,15 @@ body {
   }
   
   .w-3 {
-    width: 0.75rem;
+    width: var(--icon-size-xs);
+  }
+  
+  .w-3\.5 {
+    width: var(--icon-size-sm);
   }
   
   .w-4 {
-    width: 1rem;
+    width: var(--icon-size-md);
   }
   
   .w-6 {
@@ -506,6 +527,10 @@ body {
   
   .min-w-0 {
     min-width: 0;
+  }
+  
+  .min-h-input {
+    min-height: var(--input-min-height);
   }
   
   .max-w-full {
@@ -1367,6 +1392,25 @@ body {
   
   .top-2 {
     top: 0.5rem;
+  }
+  
+  /* Terminal ready state */
+  .xterm-container {
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  
+  .xterm-container[data-ready="true"] {
+    opacity: 1;
+  }
+  
+  /* CodeMirror editor styles */
+  .cm-editor {
+    height: 100%;
+  }
+  
+  .cm-scroller {
+    overflow: auto !important;
   }
   
   /* Specific element selectors - removed empty rules */

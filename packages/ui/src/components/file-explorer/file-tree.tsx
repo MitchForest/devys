@@ -178,7 +178,6 @@ export function FileTree({
                 </>
               ) : (
                 <>
-                  <span className="w-4" />
                   {React.createElement(getFileIcon(node.name), {
                     className: 'h-3 w-3 shrink-0'
                   })}

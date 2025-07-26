@@ -1,4 +1,4 @@
-# Devys
+# devys
 
 A next-generation IDE designed for AI-powered development that transforms the terminal-based coding experience into a modern, multi-agent development environment.
 

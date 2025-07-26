@@ -71,7 +71,7 @@ export function CodeEditor({
   }, [theme, languageExtension]);
 
   return (
-    <div className={`h-full overflow-hidden ${className}`}>
+    <div className={`h-full ${className}`}>
       <CodeMirror
         value={value}
         onChange={handleChange}

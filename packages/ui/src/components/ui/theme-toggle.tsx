@@ -1,6 +1,6 @@
 import React from 'react';
 import { Moon, Sun, Monitor } from 'lucide-react';
-import { Button } from './button';
+import { cn } from '../../lib/utils';
 
 interface ThemeToggleProps {
   theme: 'light' | 'dark' | 'system';
@@ -17,16 +17,17 @@ export function ThemeToggle({ theme, onThemeChange, className }: ThemeToggleProp
   };
 
   return (
-    <Button
-      variant="ghost"
-      size="icon"
+    <button
       onClick={cycleTheme}
-      className={className}
+      className={cn(
+        "rounded-sm transition-zed hover:bg-hover text-muted hover:text-foreground",
+        className
+      )}
       title={`Theme: ${theme}`}
     >
-      {theme === 'light' && <Sun className="h-4 w-4" />}
-      {theme === 'dark' && <Moon className="h-4 w-4" />}
-      {theme === 'system' && <Monitor className="h-4 w-4" />}
-    </Button>
+      {theme === 'light' && <Sun className="h-3.5 w-3.5" />}
+      {theme === 'dark' && <Moon className="h-3.5 w-3.5" />}
+      {theme === 'system' && <Monitor className="h-3.5 w-3.5" />}
+    </button>
   );
 }

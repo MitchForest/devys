@@ -1,6 +1,8 @@
 import React, { useRef, useEffect } from 'react';
-import { Send, Paperclip, X } from 'lucide-react';
+import { Send, Paperclip, X, Image, ArrowUp, AtSign, ChevronDown } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { Badge } from '../ui/badge';
+import { Button } from '../ui/button';
 import type { FileAttachment } from '@devys/types';
 
 interface ChatInputProps {
@@ -85,53 +87,75 @@ export function ChatInput({
       )}
 
       {/* Input area */}
-      <div className="flex items-end gap-2 p-4">
-        {onAttachFile && (
-          <button
-            type="button"
-            onClick={onAttachFile}
-            disabled={isLoading}
-            className={cn(
-              'p-2 rounded-md transition-colors',
-              'hover:bg-surface-2 text-muted hover:text-foreground',
-              'disabled:opacity-50 disabled:cursor-not-allowed'
-            )}
-          >
-            <Paperclip className="h-4 w-4" />
-          </button>
-        )}
-
-        <div className="flex-1 relative">
-          <textarea
-            ref={textareaRef}
-            value={value}
-            onChange={onChange}
-            onKeyDown={handleKeyDown}
-            placeholder={placeholder}
-            disabled={isLoading}
-            rows={1}
-            className={cn(
-              'w-full resize-none bg-surface-2 rounded-md px-3 py-2 pr-10',
-              'placeholder:text-muted-foreground',
-              'focus:outline-none focus:ring-2 focus:ring-ring',
-              'disabled:opacity-50 disabled:cursor-not-allowed',
-              'max-h-32 overflow-y-auto'
-            )}
-            style={{ minHeight: '40px' }}
-          />
+      <div className="p-4">
+        <div className="bg-surface-2 rounded-lg p-3 space-y-2">
+          {/* First row - Context badge */}
+          <div className="flex items-center">
+            <Badge
+              variant="secondary"
+              className="cursor-pointer hover:bg-hover transition-zed"
+              onClick={() => console.log('Add context')}
+            >
+              <AtSign className="h-3 w-3 mr-1" />
+              Add Context
+            </Badge>
+          </div>
+          
+          {/* Second row - Text input */}
+          <div className="relative">
+            <textarea
+              ref={textareaRef}
+              value={value}
+              onChange={onChange}
+              onKeyDown={handleKeyDown}
+              placeholder="Plan, search, execute..."
+              disabled={isLoading}
+              rows={1}
+              className={cn(
+                'w-full resize-none bg-transparent',
+                'placeholder:text-muted-foreground text-sm',
+                'focus:outline-none',
+                'disabled:opacity-50 disabled:cursor-not-allowed',
+                'min-h-[2.5rem] max-h-32'
+              )}
+            />
+          </div>
+          
+          {/* Third row - Model selector and action buttons */}
+          <div className="flex items-center justify-between">
+            <Badge
+              variant="secondary"
+              className="cursor-pointer hover:bg-hover transition-zed"
+              onClick={() => console.log('Select model')}
+            >
+              Claude 3.5 Sonnet
+              <ChevronDown className="h-3 w-3 ml-1" />
+            </Badge>
+            
+            <div className="flex items-center gap-2">
+              {onAttachFile && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={onAttachFile}
+                  disabled={isLoading}
+                  className="h-7 w-7"
+                >
+                  <Image className="h-4 w-4" />
+                </Button>
+              )}
+              <Button
+                type="submit"
+                size="icon"
+                disabled={!value.trim() || isLoading}
+                className="h-7 w-7 rounded-full"
+              >
+                <ArrowUp className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </div>
-
-        <button
-          type="submit"
-          disabled={!value.trim() || isLoading}
-          className={cn(
-            'p-2 rounded-md transition-colors',
-            'bg-primary text-primary-foreground hover:bg-primary/90',
-            'disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-muted'
-          )}
-        >
-          <Send className="h-4 w-4" />
-        </button>
       </div>
     </form>
   );

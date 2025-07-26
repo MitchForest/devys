@@ -4,7 +4,7 @@ import { useTerminalWebSocket } from '../hooks/use-terminal-websocket';
 interface TerminalWebSocketContextType {
   sendInput: (sessionId: string, data: string) => void;
   resizeTerminal: (sessionId: string, cols: number, rows: number) => void;
-  createSession: (sessionId: string) => void;
+  createSession: (sessionId: string, cwd?: string) => void;
   closeSession: (sessionId: string) => void;
   isConnected: boolean;
   connectionState: string;

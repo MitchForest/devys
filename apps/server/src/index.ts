@@ -13,7 +13,7 @@ const initializeServer = () => {
   // No API key validation needed
   
   // eslint-disable-next-line no-console
-  console.log('🚀 Starting Devys Server');
+  console.log('🚀 Starting devys Server');
   // eslint-disable-next-line no-console
   console.log('================================');
   // eslint-disable-next-line no-console

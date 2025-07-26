@@ -75,8 +75,8 @@ export function FileExplorer({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-2 border-b border-panel">
-        <div className="flex items-center justify-between mb-1.5">
+      <div className="px-3 py-2 border-b border-panel">
+        <div className="flex items-center justify-between mb-2">
           <h2 className="text-xs font-medium text-muted">Explorer</h2>
           <div className="flex items-center gap-1">
             <Button
@@ -116,19 +116,19 @@ export function FileExplorer({
           </div>
         </div>
         
-        <div className="relative flex items-center">
-          <Search className="absolute left-2 h-3 w-3 text-muted pointer-events-none" />
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted pointer-events-none" />
           <input
             type="text"
             placeholder="Search files..."
-            className="w-full pl-7 pr-3 py-1.5 text-xs bg-surface-4 border border-input rounded-md focus:outline-none focus:ring-1 focus:ring-ring transition-colors placeholder:text-muted placeholder:text-xs"
+            className="w-full pl-7 pr-3 py-1.5 text-xs bg-surface-4 border border-input rounded-md focus:outline-none focus:ring-1 focus:ring-ring transition-colors placeholder:text-muted placeholder:text-xs relative"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
       </div>
       
-      <div className="flex-1 overflow-y-auto scrollbar-zed p-2">
+      <div className="flex-1 overflow-y-auto scrollbar-zed px-2 py-1">
         {filteredNodes.length > 0 ? (
           <FileTree
             nodes={filteredNodes}

@@ -64,11 +64,12 @@ export function useTerminalWebSocket({ url, onOutput, onSessionCreated, onSessio
     });
   }, [send]);
 
-  const createSession = useCallback((sessionId: string) => {
+  const createSession = useCallback((sessionId: string, cwd?: string) => {
     send({
       type: 'terminal:create',
       payload: {
         sessionId,
+        cwd,
       },
     });
   }, [send]);

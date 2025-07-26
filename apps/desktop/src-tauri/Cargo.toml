@@ -1,8 +1,8 @@
 [package]
 name = "devys"
 version = "0.1.0"
-description = "Devys - AI-powered development environment"
-authors = ["Devys Contributors"]
+description = "devys - AI-powered development environment"
+authors = ["devys Contributors"]
 edition = "2021"
 
 [lib]

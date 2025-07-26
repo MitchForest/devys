@@ -62,7 +62,7 @@ export function ChatMessage({ message, isLoading, onToolResult: _onToolResult }:
       {/* Content */}
       <div className="flex-1 space-y-2 overflow-hidden">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">
+          <span className="text-xs font-medium">
             {isUser ? 'You' : 'Claude'}
           </span>
           <span className="text-xs text-muted">
@@ -70,7 +70,7 @@ export function ChatMessage({ message, isLoading, onToolResult: _onToolResult }:
           </span>
         </div>
 
-        <div className="prose prose-sm max-w-none dark:prose-invert">
+        <div className="prose prose-sm max-w-none dark:prose-invert text-xs">
           {isLoading ? (
             <div className="flex items-center gap-1">
               <span className="animate-pulse">●</span>

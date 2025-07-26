@@ -1,6 +1,14 @@
 import React from 'react';
-import { X, Plus, MoreHorizontal } from 'lucide-react';
+import { X, Plus, MoreHorizontal, History } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from './dropdown-menu';
 
 export interface Tab {
   id: string;
@@ -18,6 +26,8 @@ interface TabsProps {
   onTabAdd?: () => void;
   onTabsAction?: () => void;
   onPanelClose?: () => void;
+  onHistorySelect?: (tabId: string) => void;
+  historySessions?: Tab[];
   className?: string;
   tabClassName?: string;
   contentClassName?: string;
@@ -31,6 +41,8 @@ export function Tabs({
   onTabAdd,
   onTabsAction,
   onPanelClose,
+  onHistorySelect,
+  historySessions = [],
   className,
   tabClassName,
   contentClassName,
@@ -82,14 +94,36 @@ export function Tabs({
                 <Plus className="h-4 w-4" />
               </button>
             )}
-            {onTabsAction && (
-              <button
-                className="p-1.5 hover:bg-hover transition-zed"
-                onClick={onTabsAction}
-                title="More Actions"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </button>
+            {(onHistorySelect || historySessions.length > 0) && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className="p-1.5 hover:bg-hover transition-zed"
+                    title="Chat History"
+                  >
+                    <History className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>Chat History</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {historySessions.length === 0 ? (
+                    <DropdownMenuItem disabled>
+                      <span className="text-xs text-muted">No previous chats</span>
+                    </DropdownMenuItem>
+                  ) : (
+                    historySessions.map((session) => (
+                      <DropdownMenuItem
+                        key={session.id}
+                        onClick={() => onHistorySelect?.(session.id)}
+                        className="text-xs"
+                      >
+                        <span className="truncate">{session.title}</span>
+                      </DropdownMenuItem>
+                    ))
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
             {onPanelClose && (
               <button

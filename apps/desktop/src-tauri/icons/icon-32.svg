@@ -1,0 +1,9 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="16" cy="16" r="16" fill="#1F2428" stroke="#2D333C" stroke-width="0"/>
+  
+  <!-- Text -->
+  <text x="16" y="17.333333333333332" font-family="'SF Mono', Monaco, monospace" font-size="4" font-weight="400" text-anchor="middle" fill="#BFBFBF">
+    &lt;devys/&gt;
+  </text>
+</svg>

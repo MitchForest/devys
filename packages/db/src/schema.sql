@@ -1,4 +1,4 @@
--- Devys Database Schema
+-- devys Database Schema
 -- SQLite database for session persistence and chat history
 
 -- Sessions table - stores Claude Code session information

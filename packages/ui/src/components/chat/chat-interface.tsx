@@ -136,9 +136,9 @@ export function ChatInterface({
         onScroll={handleScroll}
       >
         {messages.length === 0 ? (
-          <div className="text-center text-gray-500 mt-8">
-            <p className="text-lg">Welcome to Devys</p>
-            <p className="text-sm mt-2">Start a conversation or attach files to begin</p>
+          <div className="text-center text-muted mt-8">
+            <p className="text-base font-mono">Welcome to &lt;devys/&gt;</p>
+            <p className="text-xs mt-2">Start a conversation or attach files to begin</p>
           </div>
         ) : (
           messages.map((message) => (

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Icon Generator</title>
+  <style>
+    body { 
+      margin: 0; 
+      background: #333; 
+      display: flex; 
+      flex-wrap: wrap;
+      gap: 20px;
+      padding: 20px;
+    }
+    canvas { 
+      background: white; 
+      border: 1px solid #666;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="icon32" width="32" height="32"></canvas>
+  <canvas id="icon128" width="128" height="128"></canvas>
+  <canvas id="icon256" width="256" height="256"></canvas>
+  <canvas id="icon512" width="512" height="512"></canvas>
+
+  <script>
+    const sizes = [32, 128, 256, 512];
+    
+    sizes.forEach(size => {
+      const canvas = document.getElementById(`icon${size}`);
+      const ctx = canvas.getContext('2d');
+      
+      // Clear and fill background
+      ctx.fillStyle = '#1F2428';
+      ctx.beginPath();
+      ctx.arc(size/2, size/2, size/2 - 2, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Add border
+      ctx.strokeStyle = '#2D333C';
+      ctx.lineWidth = size / 128;
+      ctx.stroke();
+      
+      // Add text
+      ctx.fillStyle = '#BFBFBF';
+      ctx.font = `${Math.floor(size * 0.14)}px 'SF Mono', Monaco, monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('<devys/>', size/2, size/2);
+      
+      // Add download link
+      canvas.onclick = () => {
+        canvas.toBlob(blob => {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = size === 256 ? 'icon.png' : `${size}x${size}.png`;
+          a.click();
+        });
+      };
+    });
+    
+    console.log('Click each canvas to download the PNG file');
+  </script>
+</body>
+</html>

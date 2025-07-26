@@ -47,13 +47,13 @@ fn create_app_menu(handle: &tauri::AppHandle) -> Result<Menu<tauri::Wry>, Box<dy
     #[cfg(target_os = "macos")]
     {
         let about_metadata = tauri::menu::AboutMetadata {
-            name: Some("Devys".to_string()),
+            name: Some("devys".to_string()),
             version: Some("0.1.0".to_string()),
             ..Default::default()
         };
         
-        let app_menu = SubmenuBuilder::new(handle, "Devys")
-            .item(&PredefinedMenuItem::about(handle, Some("About Devys"), Some(about_metadata))?)
+        let app_menu = SubmenuBuilder::new(handle, "devys")
+            .item(&PredefinedMenuItem::about(handle, Some("About devys"), Some(about_metadata))?)
             .separator()
             .item(&PredefinedMenuItem::services(handle, None)?)
             .separator()
