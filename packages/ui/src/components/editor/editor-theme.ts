@@ -7,11 +7,19 @@ import { tags as t } from '@lezer/highlight';
 export const createEditorTheme = (isDark: boolean): Extension => {
   const theme = EditorView.theme({
     '&': {
-      color: 'hsl(var(--color-foreground))',
-      backgroundColor: 'hsl(var(--color-editor-bg))',
+      color: 'var(--color-foreground)',
+      backgroundColor: 'transparent',
       height: '100%',
       fontSize: 'var(--font-size-base)',
       fontFamily: '"Zed Mono", ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace',
+    },
+    
+    '&.cm-editor': {
+      backgroundColor: 'hsl(var(--color-editor-bg))',
+    },
+    
+    '&.cm-editor.cm-focused': {
+      outline: 'none',
     },
     
     '.cm-content': {
@@ -109,10 +117,15 @@ export const createEditorTheme = (isDark: boolean): Extension => {
       minWidth: 'var(--spacing-8)',
     },
     
+    '.cm-editor': {
+      height: '100%',
+    },
+    
     '.cm-scroller': {
       fontFamily: '"Zed Mono", ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace',
       scrollbarWidth: 'thin',
       scrollbarColor: 'hsl(var(--color-border)) transparent',
+      overflow: 'auto',
     },
     
     '.cm-scroller::-webkit-scrollbar': {

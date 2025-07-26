@@ -16,13 +16,8 @@ let workflowEngine: WorkflowEngine | null = null;
 // Initialize workflow engine
 function getWorkflowEngine() {
   if (!workflowEngine) {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      throw new Error('ANTHROPIC_API_KEY environment variable is required');
-    }
-
+    // Claude Code uses its own authentication via 'claude setup-token'
     const model = new ClaudeCodeLanguageModel({
-      apiKey,
       model: 'sonnet'
     });
 

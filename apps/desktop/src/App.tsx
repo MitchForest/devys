@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { listen } from '@tauri-apps/api/event';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { 
   FileExplorer, 
@@ -8,13 +9,14 @@ import {
   ToastContainer, 
   useToast,
   TerminalTabSimple,
-  terminalService,
+  WelcomePage,
   type Tab 
 } from '@devys/ui';
-import { FileCode, MessageSquare, Terminal as TerminalIcon, Workflow } from 'lucide-react';
+import { FileCode, MessageSquare, Terminal as TerminalIcon } from 'lucide-react';
 import { useAppStore } from './store';
-import { useTheme } from '@devys/ui';
-import { ChatInterface, WorkflowPanel, useChatSession } from '@devys/ui';
+import { useTheme, cn } from '@devys/ui';
+import { ChatInterface } from '@devys/ui';
+import { tauriBridge } from './lib/tauri-bridge';
 
 function App() {
   const { theme, setTheme, resolvedTheme } = useTheme();
@@ -29,6 +31,7 @@ function App() {
     projectPath,
     fileTree,
     selectedFile,
+    showHiddenFiles,
     
     // Editor State
     openFiles,
@@ -60,7 +63,8 @@ function App() {
     refreshFileTree,
     fileSystemService,
     updateFileContent,
-    markFileDirty
+    markFileDirty,
+    toggleHiddenFiles
   } = useAppStore();
 
   useEffect(() => {
@@ -68,14 +72,16 @@ function App() {
     const serverUrl = 'http://localhost:3001';
     initializeServices(serverUrl);
     
-    // Load initial file tree
-    refreshFileTree();
+    // Only load file tree if project path exists
+    if (projectPath) {
+      refreshFileTree();
+    }
     
     // Create initial chat session if none exists
     if (chatSessions.length === 0) {
-      createChatSession('Chat 1');
+      createChatSession('New Chat');
     }
-  }, [chatSessions.length, createChatSession, initializeServices, refreshFileTree]);
+  }, [chatSessions.length, createChatSession, initializeServices, projectPath, refreshFileTree]);
 
   // Keyboard shortcuts handler
   useEffect(() => {
@@ -85,9 +91,14 @@ function App() {
         e.preventDefault();
         
         const activeFile = openFiles.find(f => f.id === activeFileId);
-        if (activeFile && activeFile.isDirty && fileSystemService) {
+        if (activeFile && activeFile.isDirty && fileSystemService && projectPath) {
           try {
-            await fileSystemService.writeFile(activeFile.path, activeFile.content || '');
+            // Convert relative path to absolute path
+            const absolutePath = activeFile.path.startsWith('/') 
+              ? projectPath + activeFile.path 
+              : activeFile.path;
+            
+            await fileSystemService.writeFile(absolutePath, activeFile.content || '');
             markFileDirty(activeFile.id, false);
             showToast(`Saved ${activeFile.name}`, 'success', 2000);
           } catch (error) {
@@ -100,7 +111,51 @@ function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [openFiles, activeFileId, fileSystemService, markFileDirty, showToast]);
+  }, [openFiles, activeFileId, fileSystemService, markFileDirty, showToast, projectPath]);
+
+  // Handle terminal creation with project path
+  const handleNewTerminal = () => {
+    if (!showTerminal) {
+      toggleTerminal();
+    }
+    const count = terminalSessions.length + 1;
+    createTerminalSession(`Terminal ${count}`);
+  };
+
+  // Listen for menu events from Tauri
+  useEffect(() => {
+    const unsubscribe = listen<string>('menu-action', (event) => {
+      switch (event.payload) {
+        case 'new-terminal':
+          handleNewTerminal();
+          break;
+        case 'close-terminal':
+          if (activeTerminalId) {
+            closeTerminalSession(activeTerminalId);
+          }
+          break;
+        case 'open-folder':
+          tauriBridge.openFolderDialog().then(folderPath => {
+            if (folderPath) {
+              setProjectPath(folderPath);
+              refreshFileTree();
+              showToast(`Opened folder: ${folderPath}`, 'success', 2000);
+            }
+          });
+          break;
+        case 'toggle-chat':
+          toggleChat();
+          if (!showChat && chatSessions.length === 0) {
+            createChatSession('New Chat');
+          }
+          break;
+      }
+    });
+
+    return () => {
+      unsubscribe.then(fn => fn());
+    };
+  }, [handleNewTerminal, activeTerminalId, closeTerminalSession, toggleChat, showChat, chatSessions.length, createChatSession, setProjectPath, refreshFileTree, showToast]);
 
   const handleFileSelect = async (path: string) => {
     selectFile(path);
@@ -113,9 +168,14 @@ function App() {
     }
     
     // Read file content from backend
-    if (fileSystemService) {
+    if (fileSystemService && projectPath) {
       try {
-        const content = await fileSystemService.readFile(path);
+        // Convert relative path to absolute path
+        const absolutePath = path.startsWith('/') 
+          ? projectPath + path 
+          : path;
+        
+        const content = await fileSystemService.readFile(absolutePath);
         const fileName = path.split('/').pop() || 'Untitled';
         const fileId = path;
         
@@ -129,6 +189,7 @@ function App() {
         });
       } catch (error) {
         console.error('Failed to read file:', error);
+        showToast(`Failed to open ${path}`, 'error', 3000);
       }
     }
   };
@@ -268,7 +329,7 @@ function App() {
             </span>
           )}
         </div>
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden bg-editor">
           <CodeEditor
             value={file.content || ''}
             onChange={(value) => {
@@ -303,46 +364,57 @@ function App() {
   }));
   
   // Convert chat sessions to tabs
-  const chatTabs: Tab[] = [
-    ...chatSessions.map(session => ({
-      id: session.id,
-      title: session.title,
-      content: (
-        <ChatInterface
-          key={session.id}
-          session={session}
-          onSessionUpdate={(updatedSession) => {
-            // TODO: Implement chat session update
-            console.log('Session update:', updatedSession);
-          }}
-          attachedFiles={[]} // TODO: Implement file attachment state per session
-          onAttachFile={() => {
-            // Open file dialog to attach files
-            const selectedFile = openFiles.find(f => f.id === activeFileId);
-            if (selectedFile) {
-              // TODO: Implement file attachment
-              showToast(`Attached ${selectedFile.name}`, 'success', 2000);
-            } else {
-              showToast('Select a file in the editor to attach', 'info', 3000);
+  const chatTabs: Tab[] = chatSessions.map(session => ({
+    id: session.id,
+    title: session.title,
+    content: (
+      <ChatInterface
+        key={session.id}
+        session={session}
+        onSessionUpdate={(updatedSession) => {
+          // TODO: Implement chat session update
+          setChatSession(updatedSession.id);
+        }}
+        attachedFiles={[]} // TODO: Implement file attachment state per session
+        onAttachFile={() => {
+          // Open file dialog to attach files
+          const selectedFile = openFiles.find(f => f.id === activeFileId);
+          if (selectedFile) {
+            // TODO: Implement file attachment
+            showToast(`Attached ${selectedFile.name}`, 'success', 2000);
+          } else {
+            showToast('Select a file in the editor to attach', 'info', 3000);
+          }
+        }}
+        onRemoveFile={() => {}}
+      />
+    )
+  }));
+
+  // Show welcome page if no project is open
+  if (!projectPath) {
+    return (
+      <div className="h-screen w-screen bg-background text-foreground flex flex-col" style={{ fontSize: 'var(--font-size-base)', lineHeight: 'var(--line-height-base)' }}>
+        <WelcomePage
+          onOpenFolder={async () => {
+            const folderPath = await tauriBridge.openFolderDialog();
+            if (folderPath) {
+              setProjectPath(folderPath);
+              refreshFileTree();
+              showToast(`Opened folder: ${folderPath}`, 'success', 2000);
             }
           }}
-          onRemoveFile={() => {}}
+          onOpenRecent={(path) => {
+            setProjectPath(path);
+            refreshFileTree();
+            showToast(`Opened folder: ${path}`, 'success', 2000);
+          }}
+          recentFolders={[]}  // TODO: Implement recent folders
         />
-      )
-    })),
-    // Add workflow tab
-    {
-      id: 'workflow-tab',
-      title: 'Workflow',
-      icon: <Workflow className="h-3 w-3" />,
-      content: (
-        <WorkflowPanel
-          className="h-full"
-          activeChatSessionId={activeChatSessionId}
-        />
-      )
-    }
-  ];
+        <ToastContainer toasts={toasts} onClose={closeToast} />
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen w-screen bg-background text-foreground flex flex-col" style={{ fontSize: 'var(--font-size-base)', lineHeight: 'var(--line-height-base)' }}>
@@ -352,27 +424,38 @@ function App() {
           {/* File Explorer */}
           <Panel defaultSize={15} minSize={10} maxSize={30}>
             <div className="h-full bg-surface-3 border-r border-border">
-              <FileExplorer
-                nodes={fileTree}
-                selectedPath={selectedFile || undefined}
-                onSelectFile={handleFileSelect}
-                onOpenFolder={(path: string) => {
-                  // Change the project path to browse into the folder
-                  setProjectPath(path);
-                  refreshFileTree();
-                  showToast(`Opened folder: ${path}`, 'success', 2000);
-                }}
-                onCreateFile={handleFileCreate}
-                onCreateFolder={handleFolderCreate}
-                onRename={handleFileRename}
-                onDelete={handleFileDelete}
-                onCopyPath={(path: string) => {
-                  navigator.clipboard.writeText(path);
-                }}
-                onCopyRelativePath={(path: string) => {
-                  navigator.clipboard.writeText(path.substring(1)); // Remove leading /
-                }}
-                onCut={(_path: string) => {
+              <div className="h-full flex flex-col">
+                <FileExplorer
+                  nodes={fileTree}
+                  selectedPath={selectedFile || undefined}
+                  onSelectFile={handleFileSelect}
+                  onOpenFolder={async (path: string) => {
+                    // If path is '/', open native folder dialog
+                    if (path === '/') {
+                      const folderPath = await tauriBridge.openFolderDialog();
+                      if (folderPath) {
+                        setProjectPath(folderPath);
+                        refreshFileTree();
+                        showToast(`Opened folder: ${folderPath}`, 'success', 2000);
+                      }
+                    } else {
+                      // Otherwise, change to the specified folder
+                      setProjectPath(path);
+                      refreshFileTree();
+                      showToast(`Opened folder: ${path}`, 'success', 2000);
+                    }
+                  }}
+                  onCreateFile={handleFileCreate}
+                  onCreateFolder={handleFolderCreate}
+                  onRename={handleFileRename}
+                  onDelete={handleFileDelete}
+                  onCopyPath={(path: string) => {
+                    navigator.clipboard.writeText(path);
+                  }}
+                  onCopyRelativePath={(path: string) => {
+                    navigator.clipboard.writeText(path.substring(1)); // Remove leading /
+                  }}
+                  onCut={(_path: string) => {
                   // TODO: Implement cut
                 }}
                 onCopy={(_path: string) => {
@@ -385,7 +468,13 @@ function App() {
                   refreshFileTree();
                 }}
                 onAttachToChat={handleAttachToChat}
-              />
+                onToggleHidden={() => {
+                  toggleHiddenFiles();
+                  refreshFileTree();
+                }}
+                showHidden={showHiddenFiles}
+                />
+              </div>
             </div>
           </Panel>
           
@@ -408,7 +497,7 @@ function App() {
                   ) : (
                     <div className="h-full flex items-center justify-center">
                       <div className="text-center">
-                        <h1 className="text-2xl font-bold">Welcome to Claude Code IDE</h1>
+                        <h1 className="text-2xl font-bold">Welcome to Devys</h1>
                         <p className="mt-2 text-muted-foreground">
                           Select a file from the explorer to begin editing
                         </p>
@@ -480,43 +569,55 @@ function App() {
 
       {/* Status Bar */}
       <div className="h-6 bg-surface-2 border-t border-border flex items-center px-2 text-xs text-muted">
-        <span>
-          {activeFileId && openFiles.find(f => f.id === activeFileId)?.isDirty 
-            ? `${openFiles.find(f => f.id === activeFileId)?.name} • Modified`
-            : 'Ready'
-          }
+        <span className="flex items-center gap-3">
+          {projectPath && (
+            <span className="text-muted-foreground">
+              {projectPath.split('/').pop()}
+            </span>
+          )}
+          {activeFileId && openFiles.find(f => f.id === activeFileId) && (
+            <span className="flex items-center gap-1">
+              <span className="text-muted-foreground">—</span>
+              <span>{openFiles.find(f => f.id === activeFileId)?.name}</span>
+              {openFiles.find(f => f.id === activeFileId)?.isDirty && (
+                <span className="text-muted-foreground">•</span>
+              )}
+            </span>
+          )}
         </span>
-        <div className="ml-auto flex items-center gap-4">
-          {!showTerminal && (
-            <button
-              className="hover:text-foreground transition-colors"
-              onClick={() => {
-                toggleTerminal();
-                if (terminalSessions.length === 0) {
-                  createTerminalSession('Terminal 1');
-                }
-              }}
-            >
-              <TerminalIcon className="h-3 w-3 inline mr-1" />
-              Terminal
-            </button>
-          )}
-          {!showChat && (
-            <button
-              className="hover:text-foreground transition-colors"
-              onClick={() => {
-                toggleChat();
-                if (chatSessions.length === 0) {
-                  createChatSession('Chat 1');
-                }
-              }}
-            >
-              <MessageSquare className="h-3 w-3 inline mr-1" />
-              Chat
-            </button>
-          )}
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            className={cn(
+              "p-1 rounded transition-colors",
+              showChat ? "bg-surface-3 text-foreground" : "hover:bg-surface-3 text-muted hover:text-foreground"
+            )}
+            onClick={() => {
+              toggleChat();
+              if (!showChat && chatSessions.length === 0) {
+                createChatSession('New Chat');
+              }
+            }}
+            title={showChat ? "Hide Chat" : "Show Chat"}
+          >
+            <MessageSquare className="h-3 w-3" />
+          </button>
+          <button
+            className={cn(
+              "p-1 rounded transition-colors",
+              showTerminal ? "bg-surface-3 text-foreground" : "hover:bg-surface-3 text-muted hover:text-foreground"
+            )}
+            onClick={() => {
+              toggleTerminal();
+              if (!showTerminal && terminalSessions.length === 0) {
+                createTerminalSession('Terminal 1');
+              }
+            }}
+            title={showTerminal ? "Hide Terminal" : "Show Terminal"}
+          >
+            <TerminalIcon className="h-3 w-3" />
+          </button>
+          <div className="w-px h-4 bg-border mx-1" />
           <ThemeToggle theme={theme} onThemeChange={setTheme} className="h-4 px-2" />
-          <span>Claude Code IDE v0.1.0</span>
         </div>
       </div>
       

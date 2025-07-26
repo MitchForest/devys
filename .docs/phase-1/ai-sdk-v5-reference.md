@@ -575,3 +575,4 @@ const { messages } = useChat<MyUIMessage>({
 - [Agents](https://v5.ai-sdk.dev/docs/foundations/agents)
 - [Example Custom Provider Implementation](https://github.com/ben-vargas/ai-sdk-provider-claude-code)
 - [Stream Text](https://v5.ai-sdk.dev/docs/reference/ai-sdk-core/stream-text) 
+[Trasnport](https://v5.ai-sdk.dev/docs/ai-sdk-ui/transport)

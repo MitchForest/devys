@@ -1,12 +1,12 @@
 [package]
-name = "claude-code-ide"
+name = "devys"
 version = "0.1.0"
-description = "Claude Code IDE - Next-generation IDE for Claude Code SDK"
-authors = ["Claude Code IDE Contributors"]
+description = "Devys - AI-powered development environment"
+authors = ["Devys Contributors"]
 edition = "2021"
 
 [lib]
-name = "claude_code_ide_lib"
+name = "devys_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [build-dependencies]
@@ -16,6 +16,7 @@ tauri-build = { version = "2.0.0-rc", features = [] }
 tauri = { version = "2.0.0-rc", features = [] }
 tauri-plugin-fs = "2.0.0-rc"
 tauri-plugin-shell = "2.0.0-rc"
+tauri-plugin-dialog = "2.0.0-rc"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

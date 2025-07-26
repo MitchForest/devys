@@ -47,7 +47,7 @@ export function Tabs({
               <div
                 key={tab.id}
                 className={cn(
-                  'group flex items-center gap-2 px-3 py-1.5 border-r border-border cursor-pointer transition-zed min-w-0',
+                  'group flex items-center gap-1.5 px-3 py-1 border-r border-border cursor-pointer transition-zed min-w-0',
                   activeTab?.id === tab.id ? 'bg-tab-active' : 'bg-tab-inactive hover:bg-tab-hover',
                   tabClassName
                 )}

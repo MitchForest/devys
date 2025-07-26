@@ -7,25 +7,25 @@ import terminalRoute from './routes/terminal';
 import { workflow } from './routes/workflow';
 import { wsManager, type WSData } from './ws/websocket';
 
-// Validate required environment variables
-const validateEnvironment = () => {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.error('❌ Missing required environment variable: ANTHROPIC_API_KEY');
-    console.error('Please create a .env file with your Anthropic API key');
-    console.error('See .env.example for reference');
-    process.exit(1);
-  }
+// Initialize server
+const initializeServer = () => {
+  // Claude Code uses its own authentication via 'claude setup-token'
+  // No API key validation needed
   
   // eslint-disable-next-line no-console
-  console.log('✅ Environment validated successfully');
+  console.log('🚀 Starting Devys Server');
   // eslint-disable-next-line no-console
-  console.log(`📊 Model: ${process.env.CLAUDE_MODEL || 'sonnet'}`);
+  console.log('================================');
   // eslint-disable-next-line no-console
-  console.log(`🌡️  Temperature: ${process.env.CLAUDE_TEMPERATURE || '0.7'}`);
+  console.log('🔐 Auth: Claude Code (via `claude setup-token`)');
+  // eslint-disable-next-line no-console
+  console.log('📊 Model: Configured in Claude Code');
+  // eslint-disable-next-line no-console
+  console.log('🔧 API: Claude Code SDK');
 };
 
-// Validate on startup
-validateEnvironment();
+// Initialize on startup
+initializeServer();
 
 const app = new Hono();
 

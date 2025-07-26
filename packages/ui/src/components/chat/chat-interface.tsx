@@ -22,7 +22,6 @@ export function ChatInterface({
   attachedFiles = [],
   onAttachFile,
   onRemoveFile,
-  apiEndpoint = 'http://localhost:3001/api/chat',
   className
 }: ChatInterfaceProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -31,34 +30,11 @@ export function ChatInterface({
   // Manual input state management (v5 requirement)
   const [chatInput, setChatInput] = useState('');
   
-  // Use AI SDK v5's useChat hook properly
+  // Use AI SDK v5's useChat hook with proper transport configuration
   const { messages, sendMessage, stop, status, error, addToolResult } = useChat({
     transport: new DefaultChatTransport({
-      api: apiEndpoint,
-      body: {
-        sessionId: session?.id,
-        attachments: attachedFiles
-      },
-      headers: {
-        'X-Session-Id': session?.id || ''
-      }
-    }),
-    onFinish: ({ message }) => {
-      // Update session with new message
-      if (session && onSessionUpdate) {
-        const chatMessage = convertToChatMessage(message);
-        
-        const updatedSession: ChatSession = {
-          ...session,
-          messages: [...session.messages, chatMessage],
-          updatedAt: new Date()
-        };
-        onSessionUpdate(updatedSession);
-      }
-    },
-    onError: (error: Error) => {
-      console.error('Chat error:', error);
-    }
+      api: 'http://localhost:3001/api/chat'
+    })
   });
   
   // Determine loading state
@@ -82,8 +58,14 @@ export function ChatInterface({
     const userMessage = chatInput.trim();
     setChatInput('');
     
-    // Use sendMessage from AI SDK v5 with proper format
-    sendMessage({ role: 'user', content: userMessage });
+    // Use sendMessage from AI SDK v5 - it expects a simple object with text
+    if (typeof sendMessage === 'function') {
+      await sendMessage({
+        text: userMessage
+      });
+    } else {
+      console.error('sendMessage is not a function:', typeof sendMessage, sendMessage);
+    }
   };
 
   // Handle input change
@@ -155,7 +137,7 @@ export function ChatInterface({
       >
         {messages.length === 0 ? (
           <div className="text-center text-gray-500 mt-8">
-            <p className="text-lg">Welcome to Claude Code IDE</p>
+            <p className="text-lg">Welcome to Devys</p>
             <p className="text-sm mt-2">Start a conversation or attach files to begin</p>
           </div>
         ) : (

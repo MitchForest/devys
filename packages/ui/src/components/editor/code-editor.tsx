@@ -78,6 +78,7 @@ export function CodeEditor({
         theme={undefined}
         extensions={extensions}
         editable={!readOnly}
+        height="100%"
         basicSetup={{
           lineNumbers: true,
           foldGutter: true,

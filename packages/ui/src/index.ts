@@ -16,6 +16,8 @@ export * from './components/editor';
 export * from './components/chat';
 export * from './components/terminal';
 export * from './components/workflow';
+export * from './components/menu/menu-bar';
+export * from './components/welcome/welcome-page';
 
 // Services
 export * from './services/file-service';

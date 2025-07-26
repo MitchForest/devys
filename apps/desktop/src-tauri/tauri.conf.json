@@ -1,7 +1,7 @@
 {
-  "productName": "Claude Code IDE",
+  "productName": "Devys",
   "version": "0.1.0",
-  "identifier": "com.claudecodeide.app",
+  "identifier": "com.devys.app",
   "build": {
     "beforeDevCommand": "bun run dev",
     "beforeBuildCommand": "bun run build",
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "Claude Code IDE",
+        "title": "Devys",
         "width": 1400,
         "height": 900,
         "resizable": true,
@@ -24,7 +24,8 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "capabilities": ["main-capability"]
     }
   },
   "bundle": {

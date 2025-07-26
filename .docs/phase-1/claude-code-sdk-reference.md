@@ -262,3 +262,12 @@ const options = {
 4. **Permission System**: Fine-grained control over tool usage
 5. **Sub-Agents**: Can spawn specialized agents for subtasks
 6. **MCP Support**: Integrate external data sources
+
+- [Claude Code SK](https://docs.anthropic.com/en/docs/claude-code/sdk)
+- [Sub Agents](https://docs.anthropic.com/en/docs/claude-code/sub-agents)
+- [Common Workflows](https://docs.anthropic.com/en/docs/claude-code/common-workflows#run-parallel-claude-code-sessions-with-git-worktrees)
+- [Hooks 1](https://docs.anthropic.com/en/docs/claude-code/hooks-guide)
+- [Hooks 2](https://docs.anthropic.com/en/docs/claude-code/hooks)
+- [Slash Commands](https://docs.anthropic.com/en/docs/claude-code/slash-commands)
+- [Auth](https://docs.anthropic.com/en/docs/claude-code/iam)
+- [Github](https://docs.anthropic.com/en/docs/claude-code/github-actions)

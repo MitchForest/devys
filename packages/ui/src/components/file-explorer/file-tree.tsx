@@ -149,7 +149,7 @@ export function FileTree({
           <div>
             <div
               className={cn(
-                'group flex items-center gap-1 px-2 py-1 text-sm cursor-pointer rounded-sm transition-colors',
+                'group flex items-center gap-1 px-2 py-0.5 text-xs cursor-pointer rounded-sm transition-colors',
                 'hover:bg-hover',
                 isSelected && 'bg-selected',
                 getGitStatusColor(node.gitStatus)
@@ -166,21 +166,21 @@ export function FileTree({
               {node.type === 'directory' ? (
                 <>
                   {isExpanded ? (
-                    <ChevronDown className="h-4 w-4 shrink-0" />
+                    <ChevronDown className="h-3 w-3 shrink-0" />
                   ) : (
-                    <ChevronRight className="h-4 w-4 shrink-0" />
+                    <ChevronRight className="h-3 w-3 shrink-0" />
                   )}
                   {isExpanded ? (
-                    <FolderOpen className="h-4 w-4 shrink-0" />
+                    <FolderOpen className="h-3 w-3 shrink-0" />
                   ) : (
-                    <Folder className="h-4 w-4 shrink-0" />
+                    <Folder className="h-3 w-3 shrink-0" />
                   )}
                 </>
               ) : (
                 <>
                   <span className="w-4" />
                   {React.createElement(getFileIcon(node.name), {
-                    className: 'h-4 w-4 shrink-0'
+                    className: 'h-3 w-3 shrink-0'
                   })}
                 </>
               )}

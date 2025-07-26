@@ -15,29 +15,39 @@ const WSMessageSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal('terminal:create'),
-    id: z.string(),
-    cwd: z.string().optional()
+    payload: z.object({
+      sessionId: z.string(),
+      cwd: z.string().optional()
+    })
   }),
   z.object({
     type: z.literal('terminal:execute'),
-    id: z.string(),
-    command: z.string(),
-    cwd: z.string().optional()
+    payload: z.object({
+      sessionId: z.string(),
+      command: z.string(),
+      cwd: z.string().optional()
+    })
   }),
   z.object({
     type: z.literal('terminal:input'),
-    id: z.string(),
-    data: z.string()
+    payload: z.object({
+      sessionId: z.string(),
+      data: z.string()
+    })
   }),
   z.object({
     type: z.literal('terminal:resize'),
-    id: z.string(),
-    cols: z.number(),
-    rows: z.number()
+    payload: z.object({
+      sessionId: z.string(),
+      cols: z.number(),
+      rows: z.number()
+    })
   }),
   z.object({
     type: z.literal('terminal:close'),
-    id: z.string()
+    payload: z.object({
+      sessionId: z.string()
+    })
   }),
   z.object({
     type: z.literal('chat:message'),
@@ -62,8 +72,10 @@ export type WSMessage = z.infer<typeof WSMessageSchema>;
 // WebSocket response types
 export type WSResponse = 
   | { type: 'file:changed'; path: string; event: 'created' | 'modified' | 'deleted' }
-  | { type: 'terminal:output'; id: string; data: string }
-  | { type: 'terminal:exit'; id: string; code: number }
+  | { type: 'terminal:output'; sessionId: string; data: string }
+  | { type: 'terminal:exit'; sessionId: string; code: number }
+  | { type: 'terminal:created'; sessionId: string }
+  | { type: 'terminal:closed'; sessionId: string }
   | { type: 'chat:response'; sessionId: string; message: string; streaming: boolean }
   | { type: 'workflow:progress'; event: unknown }
   | { type: 'workflow:subscribed'; executionId: string }
@@ -79,6 +91,7 @@ interface TerminalProcess {
   process: ChildProcess | null;
   cwd: string;
   connectionId: string;
+  buffer?: string;
 }
 
 export class WebSocketManager {
@@ -126,11 +139,23 @@ export class WebSocketManager {
           break;
           
         case 'terminal:create':
-          this.createTerminal(connectionId, parsed.id, parsed.cwd);
+          this.createTerminal(connectionId, parsed.payload.sessionId, parsed.payload.cwd);
           break;
           
         case 'terminal:execute':
-          this.executeCommand(connectionId, parsed.id, parsed.command, parsed.cwd);
+          this.executeCommand(connectionId, parsed.payload.sessionId, parsed.payload.command, parsed.payload.cwd);
+          break;
+          
+        case 'terminal:input':
+          this.handleTerminalInput(connectionId, parsed.payload.sessionId, parsed.payload.data);
+          break;
+          
+        case 'terminal:resize':
+          // TODO: Implement terminal resize
+          break;
+          
+        case 'terminal:close':
+          this.closeTerminal(parsed.payload.sessionId);
           break;
           
         case 'chat:message':
@@ -238,9 +263,16 @@ export class WebSocketManager {
 
     // Send initial output
     this.send(connectionId, {
+      type: 'terminal:created',
+      sessionId: terminalId
+    });
+    
+    const terminal = this.terminals.get(terminalId)!;
+    const prompt = this.getPrompt(terminal.cwd);
+    this.send(connectionId, {
       type: 'terminal:output',
-      id: terminalId,
-      data: `Terminal ${terminalId} created\r\n$ `
+      sessionId: terminalId,
+      data: `Terminal ${terminalId} created\r\n${prompt}`
     });
   }
 
@@ -264,22 +296,28 @@ export class WebSocketManager {
       terminal.cwd = cwd;
     }
 
+    // Don't intercept claude command - let it execute normally
+    // The system will handle whether it's installed or not
+
     // Handle cd command specially
     if (command.startsWith('cd ')) {
       const newDir = command.substring(3).trim();
       try {
+        const oldPrompt = this.getPrompt(terminal.cwd);
         terminal.cwd = path.resolve(terminal.cwd, newDir);
+        const newPrompt = this.getPrompt(terminal.cwd);
         this.send(connectionId, {
           type: 'terminal:output',
-          id: terminalId,
-          data: `$ ${command}\r\n$ `
+          sessionId: terminalId,
+          data: `${oldPrompt}${command}\r\n${newPrompt}`
         });
         return;
       } catch (error) {
+        const prompt = this.getPrompt(terminal.cwd);
         this.send(connectionId, {
           type: 'terminal:output',
-          id: terminalId,
-          data: `$ ${command}\r\ncd: ${error instanceof Error ? error.message : 'Invalid path'}\r\n$ `
+          sessionId: terminalId,
+          data: `${prompt}${command}\r\ncd: ${error instanceof Error ? error.message : 'Invalid path'}\r\n${prompt}`
         });
         return;
       }
@@ -294,18 +332,19 @@ export class WebSocketManager {
 
     terminal.process = proc;
 
-    // Send command echo
+    // Send command echo with prompt
+    const prompt = this.getPrompt(terminal.cwd);
     this.send(connectionId, {
       type: 'terminal:output',
-      id: terminalId,
-      data: `$ ${command}\r\n`
+      sessionId: terminalId,
+      data: `${prompt}${command}\r\n`
     });
 
     // Handle stdout
     proc.stdout.on('data', (data: Buffer) => {
       this.send(connectionId, {
         type: 'terminal:output',
-        id: terminalId,
+        sessionId: terminalId,
         data: data.toString().replace(/\n/g, '\r\n')
       });
     });
@@ -314,7 +353,7 @@ export class WebSocketManager {
     proc.stderr.on('data', (data: Buffer) => {
       this.send(connectionId, {
         type: 'terminal:output',
-        id: terminalId,
+        sessionId: terminalId,
         data: data.toString().replace(/\n/g, '\r\n')
       });
     });
@@ -324,23 +363,25 @@ export class WebSocketManager {
       terminal.process = null;
       this.send(connectionId, {
         type: 'terminal:exit',
-        id: terminalId,
+        sessionId: terminalId,
         code: code || 0
       });
-      // Send new prompt
+      // Send new prompt with path
+      const prompt = this.getPrompt(terminal.cwd);
       this.send(connectionId, {
         type: 'terminal:output',
-        id: terminalId,
-        data: '$ '
+        sessionId: terminalId,
+        data: prompt
       });
     });
 
     // Handle error
     proc.on('error', (error) => {
+      const prompt = this.getPrompt(terminal.cwd);
       this.send(connectionId, {
         type: 'terminal:output',
-        id: terminalId,
-        data: `Error: ${error.message}\r\n$ `
+        sessionId: terminalId,
+        data: `Error: ${error.message}\r\n${prompt}`
       });
       terminal.process = null;
     });
@@ -352,10 +393,99 @@ export class WebSocketManager {
     if (terminal) {
       this.send(terminal.connectionId, {
         type: 'terminal:output',
-        id: terminalId,
+        sessionId: terminalId,
         data: output.replace(/\n/g, '\r\n')
       });
     }
+  }
+
+  private handleTerminalInput(connectionId: string, terminalId: string, data: string) {
+    const terminal = this.terminals.get(terminalId);
+    if (!terminal) {
+      this.send(connectionId, {
+        type: 'error',
+        message: `Terminal ${terminalId} not found`
+      });
+      return;
+    }
+
+    // If there's a running process, send input to it
+    if (terminal.process && terminal.process.stdin) {
+      terminal.process.stdin.write(data);
+    } else {
+      // No running process, accumulate input and echo it back
+      // Initialize buffer if not exists
+      if (!terminal.buffer) {
+        terminal.buffer = '';
+      }
+      
+      // Handle special characters
+      if (data === '\r' || data === '\n') {
+        // Enter key pressed - execute the buffered command
+        const command = terminal.buffer.trim();
+        terminal.buffer = '';
+        if (command) {
+          this.executeCommand(connectionId, terminalId, command);
+        } else {
+          // Just send a new prompt with path
+          const prompt = this.getPrompt(terminal.cwd);
+          this.send(connectionId, {
+            type: 'terminal:output',
+            sessionId: terminalId,
+            data: `\r\n${prompt}`
+          });
+        }
+      } else if (data === '\x7f' || data === '\b') {
+        // Backspace
+        if (terminal.buffer.length > 0) {
+          terminal.buffer = terminal.buffer.slice(0, -1);
+          // Send backspace sequence to update the display
+          this.send(connectionId, {
+            type: 'terminal:output',
+            sessionId: terminalId,
+            data: '\b \b'
+          });
+        }
+      } else if (data === '\x03') {
+        // Ctrl+C - clear buffer and send new prompt
+        terminal.buffer = '';
+        const prompt = this.getPrompt(terminal.cwd);
+        this.send(connectionId, {
+          type: 'terminal:output',
+          sessionId: terminalId,
+          data: `^C\r\n${prompt}`
+        });
+      } else {
+        // Regular character - add to buffer and echo
+        terminal.buffer += data;
+        this.send(connectionId, {
+          type: 'terminal:output',
+          sessionId: terminalId,
+          data: data
+        });
+      }
+    }
+  }
+
+  private closeTerminal(terminalId: string) {
+    const terminal = this.terminals.get(terminalId);
+    if (terminal) {
+      // Kill the process if running
+      if (terminal.process && !terminal.process.killed) {
+        terminal.process.kill();
+      }
+      this.terminals.delete(terminalId);
+    }
+  }
+
+  private getPrompt(cwd: string): string {
+    // Get just the last part of the path for display
+    const cwdName = cwd.split(path.sep).pop() || cwd;
+    const username = process.env.USER || 'user';
+    const hostname = process.env.HOSTNAME || 'localhost';
+    
+    // Format: username@hostname cwdName % 
+    return `${username}@${hostname} ${cwdName} % `;
   }
 }
 

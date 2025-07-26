@@ -13,8 +13,14 @@ import {
   type SDKMessage, 
   type SDKAssistantMessage,
   type SDKResultMessage,
-  type SDKSystemMessage
+  type SDKSystemMessage,
+  type SDKUserMessage
 } from '@anthropic-ai/claude-code';
+import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
+
+// Create require function for ES modules
+const require = createRequire(import.meta.url);
 
 export interface ClaudeCodeLanguageModelSettings {
   /**
@@ -38,7 +44,8 @@ export interface ClaudeCodeLanguageModelSettings {
   cwd?: string;
   
   /**
-   * API key for authentication
+   * API key for authentication (DEPRECATED - Claude Code uses 'claude setup-token' for auth)
+   * @deprecated Use 'claude setup-token' command instead
    */
   apiKey?: string;
   
@@ -53,14 +60,103 @@ export interface ClaudeCodeLanguageModelSettings {
   permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan';
   
   /**
-   * Allowed tools for this session
+   * Allowed tools for this session (space-separated or comma-separated)
    */
-  allowedTools?: string[];
+  allowedTools?: string | string[];
   
   /**
-   * Disallowed tools for this session
+   * Disallowed tools for this session (space-separated or comma-separated)
    */
-  disallowedTools?: string[];
+  disallowedTools?: string | string[];
+  
+  /**
+   * Output format for Claude Code
+   */
+  outputFormat?: 'text' | 'json' | 'stream-json';
+  
+  /**
+   * Run in non-interactive print mode
+   */
+  print?: boolean;
+  
+  /**
+   * Resume a specific session by ID
+   */
+  resume?: string;
+  
+  /**
+   * Continue the most recent session
+   */
+  continue?: boolean;
+  
+  /**
+   * MCP configuration file path
+   */
+  mcpConfig?: string;
+  
+  /**
+   * Permission prompt tool for non-interactive runs (e.g., 'mcp__permissions__approve')
+   */
+  permissionPromptTool?: string;
+  
+  /**
+   * Skip all permission prompts (dangerous!)
+   */
+  dangerouslySkipPermissions?: boolean;
+  
+  /**
+   * Assume yes to all prompts (dangerous!)
+   */
+  dangerouslyAssumeYesToAllPrompts?: boolean;
+  
+  /**
+   * Memory paths to load (e.g., ['./CLAUDE.md', '~/.claude/CLAUDE.md'])
+   */
+  memoryPaths?: string[];
+  
+  /**
+   * Append to system prompt
+   */
+  appendSystemPrompt?: string;
+  
+  /**
+   * Shell configuration options
+   */
+  shell?: {
+    isInteractive?: boolean;
+    stdinIsTTY?: boolean;
+    runningOnCICD?: boolean;
+    promptType?: string;
+  };
+  
+  /**
+   * Transcript configuration
+   */
+  transcriptMode?: string;
+  transcriptPath?: string;
+  logTo?: string;
+  cacheDir?: string;
+  
+  /**
+   * Jupyter kernel configuration
+   */
+  jupyterKernelName?: string;
+  jupyterInstallKernel?: boolean;
+  
+  /**
+   * Experimental features
+   */
+  experimentalAllowAllToolUseInCostExcel?: boolean;
+  
+  /**
+   * Hooks for tool execution control
+   */
+  hooks?: {
+    preToolUse?: (tool: string, input: any) => Promise<{ allow: boolean; input?: any }>;
+    postToolUse?: (tool: string, result: any) => Promise<void>;
+    stop?: () => Promise<{ allow: boolean; reason?: string }>;
+    userPromptSubmit?: (prompt: string) => Promise<{ allow: boolean; updatedPrompt?: string }>;
+  };
 }
 
 /**
@@ -78,10 +174,9 @@ export class ClaudeCodeLanguageModel implements LanguageModelV2 {
     this.modelId = settings.model;
     this.settings = settings;
     
-    // Set API key if provided
-    if (settings.apiKey) {
-      process.env.ANTHROPIC_API_KEY = settings.apiKey;
-    }
+    // Claude Code uses its own authentication via 'claude setup-token'
+    // Not the standard ANTHROPIC_API_KEY
+    // Remove API key setting as it's not used by Claude Code SDK
   }
 
   async doGenerate(options: LanguageModelV2CallOptions) {
@@ -96,7 +191,10 @@ export class ClaudeCodeLanguageModel implements LanguageModelV2 {
       options: {
         maxTurns: this.settings.maxTurns || 1,
         cwd: this.settings.cwd,
-      }
+        // Explicitly set the path to the CLI
+        pathToClaudeCodeExecutable: require.resolve('@anthropic-ai/claude-code/cli.js')
+        // Claude Code uses its own authentication via 'claude setup-token'
+      } as any // Type definition is missing env property
     });
 
     for await (const message of sdkMessages) {
@@ -142,21 +240,97 @@ export class ClaudeCodeLanguageModel implements LanguageModelV2 {
             warnings: [] as LanguageModelV2CallWarning[]
           });
           
+          // Debug environment
+          console.log('[Claude Code] Environment check:', {
+            cwd: settings.cwd || process.cwd(),
+            // Claude Code uses its own auth via 'claude setup-token'
+            note: 'Authentication handled by Claude Code CLI'
+          });
+          
+          // Convert allowed/disallowed tools to string format if needed
+          const allowedToolsStr = Array.isArray(settings.allowedTools) 
+            ? settings.allowedTools.join(',') 
+            : settings.allowedTools;
+          const disallowedToolsStr = Array.isArray(settings.disallowedTools) 
+            ? settings.disallowedTools.join(',') 
+            : settings.disallowedTools;
+          
+          // Debug: Log the full command options
+          console.log('[Claude Code] Query options:', {
+            prompt: typeof prompt === 'string' ? prompt.substring(0, 100) + '...' : '<AsyncIterable>',
+            hasAbortController: !!abortController,
+            optionsPreview: {
+              print: settings.print !== false,
+              outputFormat: settings.outputFormat || 'stream-json',
+              cwd: settings.cwd || process.cwd()
+            }
+          });
+          
           // Stream messages from Claude Code
           const sdkMessages = claudeCodeQuery({
             prompt,
             abortController,
             options: {
+              // Core options
               maxTurns: settings.maxTurns || 10,
               cwd: settings.cwd || process.cwd(),
               model: settings.model,
+              
+              // Prompt configuration
               customSystemPrompt: settings.systemPrompt,
+              appendSystemPrompt: settings.appendSystemPrompt,
+              
+              // Permission and tools
               permissionMode: settings.permissionMode,
-              allowedTools: settings.allowedTools,
-              disallowedTools: settings.disallowedTools,
-              continue: settings.sessionId ? true : false,
-              resume: settings.sessionId,
-            }
+              allowedTools: allowedToolsStr,
+              disallowedTools: disallowedToolsStr,
+              permissionPromptTool: settings.permissionPromptTool,
+              dangerouslySkipPermissions: settings.dangerouslySkipPermissions,
+              dangerouslyAssumeYesToAllPrompts: settings.dangerouslyAssumeYesToAllPrompts,
+              
+              // Session management
+              continue: settings.continue || (settings.sessionId ? true : false),
+              resume: settings.resume || settings.sessionId,
+              
+              // Output configuration
+              outputFormat: settings.outputFormat || 'stream-json',
+              print: settings.print !== false, // Default to true for non-interactive
+              
+              // MCP and memory
+              mcpConfig: settings.mcpConfig,
+              memoryPaths: settings.memoryPaths,
+              
+              // Shell configuration - Force non-interactive for server context
+              ...(settings.shell ? {
+                'shell.isInteractive': settings.shell.isInteractive,
+                'shell.stdinIsTTY': settings.shell.stdinIsTTY,
+                'shell.runningOnCICD': settings.shell.runningOnCICD,
+                'shell.promptType': settings.shell.promptType,
+              } : {
+                // Default to non-interactive settings
+                'shell.isInteractive': false,
+                'shell.stdinIsTTY': false,
+                'shell.runningOnCICD': true, // This forces non-interactive behavior
+              }),
+              
+              // Transcript and logging
+              transcriptMode: settings.transcriptMode,
+              transcriptPath: settings.transcriptPath,
+              logTo: settings.logTo,
+              cacheDir: settings.cacheDir,
+              
+              // Jupyter
+              jupyterKernelName: settings.jupyterKernelName,
+              jupyterInstallKernel: settings.jupyterInstallKernel,
+              
+              // Experimental
+              experimentalAllowAllToolUseInCostExcel: settings.experimentalAllowAllToolUseInCostExcel,
+              
+              // Explicitly set the path to the CLI
+              pathToClaudeCodeExecutable: require.resolve('@anthropic-ai/claude-code/cli.js')
+              // Claude Code uses its own authentication via 'claude setup-token'
+              // Environment is inherited from the parent process
+            } as any // Type definition is missing env property
           });
           
           for await (const message of sdkMessages) {
@@ -168,7 +342,7 @@ export class ClaudeCodeLanguageModel implements LanguageModelV2 {
             }
             
             // Transform SDK messages to stream parts
-            const streamParts = transformToStreamParts(message);
+            const streamParts = await transformToStreamParts(message);
             
             for (const part of streamParts) {
               controller.enqueue(part);
@@ -205,7 +379,7 @@ export class ClaudeCodeLanguageModel implements LanguageModelV2 {
       response: currentSessionId ? { headers: { 'x-session-id': currentSessionId } } : undefined
     };
 
-    function transformToStreamParts(message: SDKMessage): LanguageModelV2StreamPart[] {
+    async function transformToStreamParts(message: SDKMessage): Promise<LanguageModelV2StreamPart[]> {
       const parts: LanguageModelV2StreamPart[] = [];
       
       switch (message.type) {
@@ -413,16 +587,15 @@ export class ClaudeCodeLanguageModel implements LanguageModelV2 {
  * Claude Code provider for AI SDK v5
  */
 export class ClaudeCodeProvider implements ProviderV2 {
-  private apiKey?: string;
   private cwd?: string;
   private defaultSettings?: Partial<ClaudeCodeLanguageModelSettings>;
 
   constructor(options: { 
-    apiKey?: string; 
+    apiKey?: string; // Deprecated - Claude Code uses 'claude setup-token'
     cwd?: string;
     defaultSettings?: Partial<ClaudeCodeLanguageModelSettings>;
   } = {}) {
-    this.apiKey = options.apiKey;
+    // apiKey is deprecated - Claude Code uses its own authentication
     this.cwd = options.cwd;
     this.defaultSettings = options.defaultSettings;
   }
@@ -434,7 +607,6 @@ export class ClaudeCodeProvider implements ProviderV2 {
     
     return new ClaudeCodeLanguageModel({
       model: modelId as 'opus' | 'sonnet',
-      apiKey: this.apiKey,
       cwd: this.cwd,
       ...this.defaultSettings,
       ...settings,
@@ -454,9 +626,12 @@ export class ClaudeCodeProvider implements ProviderV2 {
 
 /**
  * Create a Claude Code provider instance
+ * 
+ * Note: Claude Code uses its own authentication system.
+ * Run 'claude setup-token' to authenticate before using.
  */
 export function createClaudeCode(options: { 
-  apiKey?: string; 
+  apiKey?: string; // Deprecated - use 'claude setup-token' instead
   cwd?: string;
   defaultSettings?: Partial<ClaudeCodeLanguageModelSettings>;
 } = {}) {

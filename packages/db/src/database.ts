@@ -39,8 +39,10 @@ export interface ToolInvocation {
 export class DatabaseService {
   private db: Database;
 
-  constructor(dbPath: string = './devys.db') {
-    this.db = new Database(dbPath);
+  constructor(dbPath?: string) {
+    // Use path relative to packages/db if no path provided
+    const defaultPath = join(__dirname, '..', '..', 'devys.db');
+    this.db = new Database(dbPath || defaultPath);
     this.db.exec('PRAGMA journal_mode = WAL'); // Better concurrency
     this.initializeSchema();
   }

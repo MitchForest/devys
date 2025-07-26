@@ -8,43 +8,58 @@ A next-generation IDE designed for AI-powered development that transforms the te
 - [Bun](https://bun.sh) >= 1.0.0
 - [Rust](https://rustup.rs/) (for Tauri)
 - [Node.js](https://nodejs.org/) >= 18 (for some dependencies)
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) >= 1.0.59
+- Active Claude subscription
 
 ### Installation
 
 ```bash
-# Install dependencies
+# 1. Install Claude Code globally (if not already installed)
+bun add -g @anthropic-ai/claude-code
+
+# 2. Authenticate Claude Code (REQUIRED - one-time setup)
+claude setup-token
+# This will open your browser to authenticate with your Claude subscription
+
+# 3. Install project dependencies
 bun install
 
-# Create .env file from example and add your Anthropic API key
-cp .env.example .env
-# Edit .env and add your ANTHROPIC_API_KEY
+# Note: Claude Code uses its own authentication system
+# No .env file or API keys are needed!
 ```
 
 ### Running the Application
 
-You need to run both the server and desktop app in separate terminals:
+**Option 1 - Run Everything (Recommended):**
+```bash
+# This runs both server and Tauri desktop app
+bun run dev
+```
 
-**Terminal 1 - Backend Server:**
+**Option 2 - Run Components Separately:**
+
+Terminal 1 - Backend Server:
 ```bash
 # Start the backend server (required for API and WebSocket)
 bun run server
 # Server will run on http://localhost:3001
 ```
 
-**Terminal 2 - Desktop App:**
+Terminal 2 - Desktop App:
 ```bash
-# Start the desktop application
+# Start the Tauri desktop application
 bun run desktop
-# Desktop app will run on http://localhost:5173
+# This will open the native desktop app
 ```
 
-**Alternative - Run both concurrently:**
+**Option 3 - Web Version Only (for testing):**
 ```bash
-# Install concurrently if needed
-bun add -d concurrently
+# Run server
+bun run server
 
-# Run both server and desktop
-bunx concurrently "bun run server" "bun run desktop"
+# In another terminal, run just Vite (web version)
+cd apps/desktop && bun run dev
+# Access at http://localhost:5173
 ```
 
 ### Development Commands
@@ -90,10 +105,31 @@ devys/
 - **Editor**: CodeMirror 6
 - **Terminal**: xterm.js
 
+## 🔧 Troubleshooting
+
+### Claude Code Authentication Issues
+If you get "Claude Code process exited with code 1":
+1. Run `claude setup-token` to authenticate
+2. Make sure you have an active Claude subscription
+3. Try running `claude` in your terminal to verify it works
+
+### Tauri Desktop App Not Opening
+If the desktop app doesn't open:
+1. Make sure Rust is installed: `rustc --version`
+2. Check Tauri prerequisites: https://tauri.app/v1/guides/getting-started/prerequisites
+3. Try running `bun run desktop` separately
+
+### Session Documentation
+Claude Code sessions are documented in the `.pm` folder:
+- `.pm/index.md` - Session index
+- `.pm/sessions/{id}/` - Individual session logs
+
 ## 📖 Documentation
 
 - [Phase 1 Plan](.docs/phase-1.md)
 - [Phase 1 Tracker](.docs/tracker-1.md)
+- [Phase 2 Implementation](.docs/phase-2/implementation-plan.md)
+- [Claude Code Authentication](.docs/phase-2/authentication-notes.md)
 - [Product Requirements](.docs/prd.md)
 
 ## 🤝 Contributing

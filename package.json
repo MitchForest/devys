@@ -18,7 +18,7 @@
     "check": "bun run typecheck && bun run lint",
     "test": "bun run --filter '*' test",
     "clean": "bun run --filter '*' clean && rm -rf node_modules",
-    "desktop": "bun run --filter @devys/desktop dev",
+    "desktop": "bun run --filter @devys/desktop tauri:dev",
     "server": "bun run --filter @devys/server dev"
   },
   "devDependencies": {
@@ -45,6 +45,7 @@
     "@tailwindcss/typography": "^0.5.16",
     "@types/react-syntax-highlighter": "^15.5.13",
     "ai": "^5.0.0-beta.26",
+    "dotenv": "^17.2.1",
     "hono": "^4.8.5",
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^15.6.1",

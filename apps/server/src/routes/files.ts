@@ -31,7 +31,7 @@ async function getGitStatus(_filePath: string): Promise<'modified' | 'added' | '
 }
 
 // Helper to build file node structure
-async function buildFileNode(filePath: string, basePath: string): Promise<{
+async function buildFileNode(filePath: string, basePath: string, showHidden: boolean = true): Promise<{
   id: string;
   name: string;
   path: string;
@@ -56,16 +56,30 @@ async function buildFileNode(filePath: string, basePath: string): Promise<{
     
     // Filter out common directories to ignore
     const filtered = entries.filter(entry => {
-      return !entry.startsWith('.') && 
-             entry !== 'node_modules' && 
-             entry !== 'dist' &&
-             entry !== 'build';
+      // Skip system files
+      if (entry === '.DS_Store' || entry === 'Thumbs.db') return false;
+      
+      // Apply filters based on showHidden parameter
+      if (!showHidden) {
+        // Hide dot files and common build directories
+        return !entry.startsWith('.') && 
+               entry !== 'node_modules' && 
+               entry !== 'dist' &&
+               entry !== 'build' &&
+               entry !== 'target' &&
+               entry !== 'coverage' &&
+               entry !== 'bun.lockb' &&
+               !entry.endsWith('.log');
+      }
+      
+      // When showing hidden files, show everything except git objects
+      return entry !== '.git/objects';
     });
     
     for (const entry of filtered) {
       const childPath = path.join(filePath, entry);
       try {
-        const childNode = await buildFileNode(childPath, basePath);
+        const childNode = await buildFileNode(childPath, basePath, showHidden);
         children.push(childNode);
       } catch (error) {
         // Skip files we can't read
@@ -98,6 +112,7 @@ async function buildFileNode(filePath: string, basePath: string): Promise<{
 // List files in a directory
 filesRoute.get('/list', async (c) => {
   const projectPath = c.req.query('path') || process.cwd();
+  const showHidden = c.req.query('showHidden') === 'true';
   
   try {
     const stats = await fs.stat(projectPath);
@@ -109,11 +124,27 @@ filesRoute.get('/list', async (c) => {
     const nodes = [];
     
     for (const entry of entries) {
-      if (entry.startsWith('.') || entry === 'node_modules') continue;
+      // Skip system files
+      if (entry === '.DS_Store' || entry === 'Thumbs.db') continue;
+      
+      // Apply filters based on showHidden parameter
+      if (!showHidden) {
+        if (entry.startsWith('.') || 
+            entry === 'node_modules' || 
+            entry === 'dist' || 
+            entry === 'build' || 
+            entry === 'target' || 
+            entry === 'coverage' ||
+            entry === 'bun.lockb' ||
+            entry.endsWith('.log')) continue;
+      } else {
+        // When showing hidden files, only skip git objects
+        if (entry === '.git/objects') continue;
+      }
       
       const fullPath = path.join(projectPath, entry);
       try {
-        const node = await buildFileNode(fullPath, projectPath);
+        const node = await buildFileNode(fullPath, projectPath, showHidden);
         nodes.push(node);
       } catch (error) {
         // Skip files we can't read

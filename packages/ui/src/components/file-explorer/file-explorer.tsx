@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, FolderOpen, Plus, RefreshCw } from 'lucide-react';
+import { Search, FolderOpen, Plus, RefreshCw, Eye, EyeOff } from 'lucide-react';
 import { FileTree } from './file-tree';
 import { Button } from '../ui/button';
 import type { FileNode } from '@devys/types';
@@ -20,6 +20,8 @@ interface FileExplorerProps {
   onPaste?: (path: string) => void;
   onAttachToChat?: (path: string) => void;
   onRefresh?: () => void;
+  onToggleHidden?: () => void;
+  showHidden?: boolean;
   projectName?: string;
 }
 
@@ -38,9 +40,12 @@ export function FileExplorer({
   onCopy,
   onPaste,
   onAttachToChat,
-  onRefresh
+  onRefresh,
+  onToggleHidden,
+  showHidden: showHiddenProp = true
 }: FileExplorerProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const showHidden = showHiddenProp;
 
   const filterNodes = (nodes: FileNode[], query: string): FileNode[] => {
     if (!query) return nodes;
@@ -70,9 +75,9 @@ export function FileExplorer({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-3 border-b border-panel">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-sm font-semibold uppercase text-muted">Explorer</h2>
+      <div className="p-2 border-b border-panel">
+        <div className="flex items-center justify-between mb-1.5">
+          <h2 className="text-xs font-medium text-muted">Explorer</h2>
           <div className="flex items-center gap-1">
             <Button
               variant="ghost"
@@ -86,9 +91,19 @@ export function FileExplorer({
               variant="ghost"
               size="icon"
               className="h-6 w-6"
-              onClick={() => onCreateFolder?.('/')}
+              onClick={() => onOpenFolder?.('/')}
+              title="Open Folder"
             >
               <FolderOpen className="h-3 w-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={onToggleHidden}
+              title={showHidden ? "Hide system files" : "Show system files"}
+            >
+              {showHidden ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
             </Button>
             <Button
               variant="ghost"
@@ -101,12 +116,12 @@ export function FileExplorer({
           </div>
         </div>
         
-        <div className="relative">
-          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted" />
+        <div className="relative flex items-center">
+          <Search className="absolute left-2 h-3 w-3 text-muted pointer-events-none" />
           <input
             type="text"
             placeholder="Search files..."
-            className="w-full pl-8 pr-3 py-1 text-sm bg-surface-4 border border-input rounded-md focus:outline-none focus:ring-1 focus:ring-ring transition-colors"
+            className="w-full pl-7 pr-3 py-1.5 text-xs bg-surface-4 border border-input rounded-md focus:outline-none focus:ring-1 focus:ring-ring transition-colors placeholder:text-muted placeholder:text-xs"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />

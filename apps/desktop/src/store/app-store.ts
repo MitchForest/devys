@@ -14,6 +14,7 @@ interface ProjectState {
   projectPath: string | null;
   fileTree: FileNode[];
   selectedFile: string | null;
+  showHiddenFiles: boolean;
   gitStatus: Record<string, 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked'>;
 }
 
@@ -50,6 +51,7 @@ interface AppState extends UIState, ProjectState, EditorState, SessionState, Wor
   setProjectPath: (path: string) => void;
   refreshFileTree: () => Promise<void>;
   selectFile: (path: string | null) => void;
+  toggleHiddenFiles: () => void;
   updateGitStatus: (status: Record<string, 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked'>) => void;
   
   // Actions - Editor
@@ -81,15 +83,16 @@ export const useAppStore = create<AppState>()(
     subscribeWithSelector((set, get) => ({
       // Initial UI State
       activePanel: 'explorer',
-      showTerminal: true,
-      showChat: true,
+      showTerminal: false,
+      showChat: false,
       theme: 'dark',
       
       // Initial Project State
-      projectPath: '/Users/mitchellwhite/Code/devys',
+      projectPath: null,
       fileTree: [],
       selectedFile: null,
       gitStatus: {},
+      showHiddenFiles: true,
       
       // Initial Editor State
       openFiles: [],
@@ -98,14 +101,8 @@ export const useAppStore = create<AppState>()(
       // Initial Session State
       chatSessions: [],
       activeChatSessionId: null,
-      terminalSessions: [{
-        id: 'terminal-1',
-        title: 'Terminal 1',
-        active: true,
-        output: [],
-        cwd: '/'
-      }],
-      activeTerminalId: 'terminal-1',
+      terminalSessions: [],
+      activeTerminalId: null,
       
       // Initial Workflow State
       activeWorkflow: null,
@@ -126,13 +123,18 @@ export const useAppStore = create<AppState>()(
       
       refreshFileTree: async () => {
         const { fileSystemService, projectPath } = get();
-        if (!fileSystemService) return;
+        if (!fileSystemService || !projectPath) {
+          // If no project path, ensure file tree is empty
+          set({ fileTree: [] });
+          return;
+        }
         
         try {
-          const nodes = await fileSystemService.listFiles(projectPath || undefined);
+          const nodes = await fileSystemService.listFiles(projectPath);
           set({ fileTree: nodes });
         } catch (error) {
           console.error('Failed to refresh file tree:', error);
+          set({ fileTree: [] });
         }
       },
       
@@ -214,7 +216,7 @@ export const useAppStore = create<AppState>()(
           title,
           active: true,
           output: [],
-          cwd: '/'
+          cwd: state.projectPath || process.cwd()
         };
         
         // Terminal sessions will be created via the terminal context
@@ -256,9 +258,22 @@ export const useAppStore = create<AppState>()(
       
       // Service Actions
       initializeServices: (serverUrl) => {
-        const fileSystemService = new FileSystemService({ baseUrl: serverUrl });
+        const { showHiddenFiles } = get();
+        const fileSystemService = new FileSystemService({ 
+          baseUrl: serverUrl,
+          showHidden: showHiddenFiles 
+        });
         set({ fileSystemService });
-      }
+      },
+      
+      // Toggle hidden files
+      toggleHiddenFiles: () => set((state) => {
+        const newShowHidden = !state.showHiddenFiles;
+        if (state.fileSystemService) {
+          state.fileSystemService.setShowHidden(newShowHidden);
+        }
+        return { showHiddenFiles: newShowHidden };
+      })
     }))
   )
 );

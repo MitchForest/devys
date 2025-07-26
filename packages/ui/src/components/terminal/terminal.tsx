@@ -5,6 +5,7 @@ import { WebLinksAddon } from 'xterm-addon-web-links';
 import { SearchAddon } from 'xterm-addon-search';
 import 'xterm/css/xterm.css';
 import { cn } from '../../lib/utils';
+import { getTerminalTheme } from '../../lib/css-variables';
 
 interface TerminalProps {
   id: string;
@@ -39,59 +40,31 @@ export const TerminalWithRef = React.forwardRef<{
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    if (!terminalRef.current || xtermRef.current) return;
+    if (!terminalRef.current) return;
+    
+    // Clean up any existing terminal first
+    if (xtermRef.current) {
+      try {
+        xtermRef.current.dispose();
+      } catch (e) {
+        // Ignore disposal errors
+      }
+      xtermRef.current = null;
+    }
     
     // Additional guard for React StrictMode
-    if (terminalRef.current.querySelector('.xterm')) {
-      console.warn('Terminal already initialized in this element');
-      return;
+    const existingTerminal = terminalRef.current.querySelector('.xterm');
+    if (existingTerminal) {
+      existingTerminal.remove();
     }
 
     // Create terminal instance
     const xterm = new XTerm({
       fontSize,
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-      theme: theme === 'dark' ? {
-        foreground: '#f8f8f2',
-        background: '#1e1e1e',
-        cursor: '#f8f8f0',
-        black: '#272822',
-        red: '#f92672',
-        green: '#a6e22e',
-        yellow: '#f4bf75',
-        blue: '#66d9ef',
-        magenta: '#ae81ff',
-        cyan: '#a1efe4',
-        white: '#f8f8f2',
-        brightBlack: '#75715e',
-        brightRed: '#f92672',
-        brightGreen: '#a6e22e',
-        brightYellow: '#f4bf75',
-        brightBlue: '#66d9ef',
-        brightMagenta: '#ae81ff',
-        brightCyan: '#a1efe4',
-        brightWhite: '#f9f8f5'
-      } : {
-        foreground: '#383a42',
-        background: '#fafafa',
-        cursor: '#383a42',
-        black: '#383a42',
-        red: '#e45649',
-        green: '#50a14f',
-        yellow: '#c18401',
-        blue: '#0184bc',
-        magenta: '#a626a4',
-        cyan: '#0997b3',
-        white: '#fafafa',
-        brightBlack: '#4f525d',
-        brightRed: '#e45649',
-        brightGreen: '#50a14f',
-        brightYellow: '#c18401',
-        brightBlue: '#0184bc',
-        brightMagenta: '#a626a4',
-        brightCyan: '#0997b3',
-        brightWhite: '#fafafa'
-      },
+      cols: 80,
+      rows: 24,
+      theme: getTerminalTheme(theme),
       cursorBlink: true,
       cursorStyle: 'block',
       scrollback: 10000,
@@ -114,16 +87,36 @@ export const TerminalWithRef = React.forwardRef<{
 
     // Use requestAnimationFrame to ensure DOM is ready
     requestAnimationFrame(() => {
-      if (terminalRef.current) {
+      if (terminalRef.current && terminalRef.current.offsetWidth > 0 && terminalRef.current.offsetHeight > 0) {
         try {
           xterm.open(terminalRef.current);
+          // Fit after opening
+          setTimeout(() => {
+            if (fitAddonRef.current && xtermRef.current?.element) {
+              try {
+                fitAddonRef.current.fit();
+              } catch (e) {
+                // Ignore fit errors on initial render
+              }
+            }
+          }, 50);
         } catch (error) {
           console.error('Failed to open terminal:', error);
           // Try again after a delay
           setTimeout(() => {
-            if (terminalRef.current && !xterm.element) {
+            if (terminalRef.current && !xterm.element && terminalRef.current.offsetWidth > 0) {
               try {
                 xterm.open(terminalRef.current);
+                // Fit after retry
+                setTimeout(() => {
+                  if (fitAddonRef.current && xtermRef.current?.element) {
+                    try {
+                      fitAddonRef.current.fit();
+                    } catch (e) {
+                      // Ignore fit errors
+                    }
+                  }
+                }, 50);
               } catch (e) {
                 console.error('Failed to open terminal on retry:', e);
               }
@@ -131,24 +124,26 @@ export const TerminalWithRef = React.forwardRef<{
           }, 100);
         }
       } else {
-        console.error('Terminal ref not ready');
+        // Terminal container not ready, wait and retry
+        setTimeout(() => {
+          if (terminalRef.current && !xterm.element && terminalRef.current.offsetWidth > 0) {
+            try {
+              xterm.open(terminalRef.current);
+              setTimeout(() => {
+                if (fitAddonRef.current && xtermRef.current?.element) {
+                  try {
+                    fitAddonRef.current.fit();
+                  } catch (e) {
+                    // Ignore fit errors
+                  }
+                }
+              }, 50);
+            } catch (e) {
+              console.error('Failed to open terminal after waiting:', e);
+            }
+          }
+        }, 200);
       }
-    });
-
-    // Fit terminal to container after DOM is ready
-    const fitTerminal = () => {
-      if (fitAddonRef.current && terminalRef.current && xtermRef.current?.element && terminalRef.current.offsetWidth > 0 && terminalRef.current.offsetHeight > 0) {
-        try {
-          fitAddon.fit();
-        } catch (error) {
-          console.warn('Failed to fit terminal:', error);
-        }
-      }
-    };
-    
-    // Fit after terminal is opened
-    requestAnimationFrame(() => {
-      setTimeout(fitTerminal, 150); // Wait for terminal to be opened
     });
 
     // Set up event handlers
@@ -166,34 +161,48 @@ export const TerminalWithRef = React.forwardRef<{
       xterm.onTitleChange(onTitleChange);
     }
 
-    // Write welcome message
-    xterm.writeln('Welcome to Claude Code IDE Terminal');
-    xterm.writeln('');
-    xterm.write('$ ');
-
+    // Set ready state
     setIsReady(true);
+    
+    // Focus terminal after it's ready
+    requestAnimationFrame(() => {
+      xterm.focus();
+    });
 
-    // Handle window resize
-    const handleResize = () => {
-      if (fitAddonRef.current && terminalRef.current && xtermRef.current?.element && terminalRef.current.offsetWidth > 0 && terminalRef.current.offsetHeight > 0) {
+    // Use ResizeObserver to handle fitting when container has dimensions
+    const resizeObserver = new ResizeObserver(() => {
+      if (
+        fitAddonRef.current &&
+        terminalRef.current?.isConnected &&
+        terminalRef.current.offsetWidth > 0 &&
+        terminalRef.current.offsetHeight > 0 &&
+        xtermRef.current?.element
+      ) {
         try {
           fitAddonRef.current.fit();
         } catch (error) {
-          console.warn('Failed to fit terminal on resize:', error);
+          console.warn('Failed to fit terminal:', error);
         }
       }
-    };
+    });
 
-    window.addEventListener('resize', handleResize);
+    // Start observing after terminal is opened
+    requestAnimationFrame(() => {
+      if (terminalRef.current) {
+        resizeObserver.observe(terminalRef.current);
+      }
+    });
 
     return () => {
-      window.removeEventListener('resize', handleResize);
-      try {
-        xterm.dispose();
-      } catch (error) {
-        console.warn('Error disposing terminal:', error);
+      resizeObserver.disconnect();
+      if (xtermRef.current) {
+        try {
+          xtermRef.current.dispose();
+        } catch (error) {
+          // Ignore disposal errors
+        }
+        xtermRef.current = null;
       }
-      xtermRef.current = null;
       fitAddonRef.current = null;
     };
   }, [fontSize, theme, onData, onResize, onTitleChange]);
@@ -201,48 +210,7 @@ export const TerminalWithRef = React.forwardRef<{
   // Update terminal theme when prop changes
   useEffect(() => {
     if (!xtermRef.current) return;
-
-    xtermRef.current.options.theme = theme === 'dark' ? {
-      foreground: '#f8f8f2',
-      background: '#1e1e1e',
-      cursor: '#f8f8f0',
-      black: '#272822',
-      red: '#f92672',
-      green: '#a6e22e',
-      yellow: '#f4bf75',
-      blue: '#66d9ef',
-      magenta: '#ae81ff',
-      cyan: '#a1efe4',
-      white: '#f8f8f2',
-      brightBlack: '#75715e',
-      brightRed: '#f92672',
-      brightGreen: '#a6e22e',
-      brightYellow: '#f4bf75',
-      brightBlue: '#66d9ef',
-      brightMagenta: '#ae81ff',
-      brightCyan: '#a1efe4',
-      brightWhite: '#f9f8f5'
-    } : {
-      foreground: '#383a42',
-      background: '#fafafa',
-      cursor: '#383a42',
-      black: '#383a42',
-      red: '#e45649',
-      green: '#50a14f',
-      yellow: '#c18401',
-      blue: '#0184bc',
-      magenta: '#a626a4',
-      cyan: '#0997b3',
-      white: '#fafafa',
-      brightBlack: '#4f525d',
-      brightRed: '#e45649',
-      brightGreen: '#50a14f',
-      brightYellow: '#c18401',
-      brightBlue: '#0184bc',
-      brightMagenta: '#a626a4',
-      brightCyan: '#0997b3',
-      brightWhite: '#fafafa'
-    };
+    xtermRef.current.options.theme = getTerminalTheme(theme);
   }, [theme]);
 
   // Public methods exposed via ref
@@ -268,7 +236,13 @@ export const TerminalWithRef = React.forwardRef<{
       }
     },
     fit: () => {
-      if (fitAddonRef.current && terminalRef.current && xtermRef.current?.element && terminalRef.current.offsetWidth > 0 && terminalRef.current.offsetHeight > 0) {
+      if (
+        fitAddonRef.current &&
+        terminalRef.current?.isConnected &&
+        terminalRef.current.offsetWidth > 0 &&
+        terminalRef.current.offsetHeight > 0 &&
+        xtermRef.current?.element
+      ) {
         try {
           fitAddonRef.current.fit();
         } catch (error) {

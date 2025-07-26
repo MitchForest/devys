@@ -46,9 +46,11 @@ const ChatRequestSchema = z.object({
 
 export const chatRoute = new Hono();
 
+
 // Initialize Claude Code provider with default settings
+// Note: Claude Code uses its own authentication via 'claude setup-token'
+// No API key needed here
 const claudeCodeProvider = createClaudeCode({
-  apiKey: process.env.ANTHROPIC_API_KEY,
   cwd: process.cwd(),
   defaultSettings: {
     permissionMode: 'default', // Require approval for destructive operations
@@ -81,12 +83,12 @@ chatRoute.post('/', async (c) => {
       session = db.getSession(sessionId);
       if (!session) {
         // Create new session with provided ID
-        session = db.createSession(sessionId, process.cwd(), process.env.CLAUDE_MODEL || 'sonnet');
+        session = db.createSession(sessionId, process.cwd(), 'sonnet');
       }
     } else {
       // Generate new session ID
       sessionId = randomUUID();
-      session = db.createSession(sessionId, process.cwd(), process.env.CLAUDE_MODEL || 'sonnet');
+      session = db.createSession(sessionId, process.cwd(), 'sonnet');
     }
     
     // Helper function to extract content from message
@@ -144,15 +146,16 @@ chatRoute.post('/', async (c) => {
     // If we have attachments, prepend a system message
     if (systemMessage) {
       aiMessages.unshift({
+        id: randomUUID(),
         role: 'system',
         content: systemMessage,
         toolInvocations: undefined
       });
     }
 
-    // Create model with session support
+    // Create model with session support and hooks
     const model = claudeCodeProvider.languageModel(
-      process.env.CLAUDE_MODEL || 'sonnet',
+      'sonnet', // Claude Code will use the model configured via CLI
       {
         sessionId: sessionId,
         cwd: process.cwd(), // Use the project working directory
@@ -164,8 +167,6 @@ chatRoute.post('/', async (c) => {
     const result = await streamText({
       model,
       messages: aiMessages,
-      system: process.env.CLAUDE_SYSTEM_PROMPT,
-      temperature: parseFloat(process.env.CLAUDE_TEMPERATURE || '0.7'),
       maxRetries: 3,
       onFinish: async ({ text, usage, finishReason }) => {
         // Save assistant message to database
@@ -184,10 +185,12 @@ chatRoute.post('/', async (c) => {
         });
         
         // Update session metadata with usage info
+        let totalCost = 0;
         if (usage && usage.totalTokens) {
+          totalCost = usage.totalTokens * 0.00001; // Rough estimate
           db.updateSessionMetadata(sessionId, {
             total_tokens_used: usage.totalTokens,
-            total_cost_usd: usage.totalTokens * 0.00001 // Rough estimate
+            total_cost_usd: totalCost
           });
         }
       }
@@ -230,7 +233,7 @@ chatRoute.get('/health', (c) => {
   return c.json({ 
     status: 'ok',
     provider: 'claude-code',
-    model: process.env.CLAUDE_MODEL || 'sonnet'
+    model: 'Configured via Claude Code CLI'
   });
 });
 
@@ -264,3 +267,4 @@ chatRoute.get('/sessions', (c) => {
     offset
   });
 });
+

@@ -2,18 +2,24 @@ import type { FileNode } from '@devys/types';
 
 export interface FileSystemOptions {
   baseUrl: string;
+  showHidden?: boolean;
 }
 
 export class FileSystemService {
   private baseUrl: string;
+  private showHidden: boolean;
 
   constructor(options: FileSystemOptions) {
     this.baseUrl = options.baseUrl;
+    this.showHidden = options.showHidden ?? true;
   }
 
-  async listFiles(path?: string): Promise<FileNode[]> {
-    const params = path ? `?path=${encodeURIComponent(path)}` : '';
-    const response = await fetch(`${this.baseUrl}/api/files/list${params}`);
+  async listFiles(path?: string, showHidden?: boolean): Promise<FileNode[]> {
+    const queryParams = new URLSearchParams();
+    if (path) queryParams.append('path', path);
+    queryParams.append('showHidden', String(showHidden ?? this.showHidden));
+    
+    const response = await fetch(`${this.baseUrl}/api/files/list?${queryParams}`);
     
     if (!response.ok) {
       throw new Error(`Failed to list files: ${response.statusText}`);
@@ -90,6 +96,10 @@ export class FileSystemService {
     if (!response.ok) {
       throw new Error(`Failed to delete file: ${response.statusText}`);
     }
+  }
+
+  setShowHidden(showHidden: boolean): void {
+    this.showHidden = showHidden;
   }
 
   async watchFile(path: string, ws: WebSocket): Promise<void> {
