@@ -1,0 +1,20 @@
+{
+  "name": "devys-control-plane",
+  "version": "0.1.0",
+  "module": "src/server.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun run --watch src/server.ts",
+    "start": "bun run src/server.ts",
+    "test": "bun test",
+    "db:migrate": "bun run db/migrate.ts"
+  },
+  "dependencies": {
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5"
+  }
+}
