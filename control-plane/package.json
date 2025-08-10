@@ -5,10 +5,20 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "bun run --watch src/server.ts",
-    "start": "bun run src/server.ts",
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "build": "bun build ./src/index.ts --target=bun --outdir=./dist",
     "test": "bun test",
-    "db:migrate": "bun run db/migrate.ts"
+    "test:integration": "bun test test/integration",
+    "test:watch": "bun test --watch",
+    "lint": "bun run eslint src/**/*.ts",
+    "typecheck": "bun run tsc --noEmit",
+    "db:migrate": "bun run db/migrate.ts",
+    "docker:build": "docker build -t devys-control-plane .",
+    "docker:run": "docker-compose up -d",
+    "docker:stop": "docker-compose down",
+    "k8s:deploy": "kubectl apply -f k8s/",
+    "clean": "rm -rf dist node_modules bun.lockb"
   },
   "dependencies": {
     "zod": "latest",

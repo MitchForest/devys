@@ -1,0 +1,90 @@
+version: '3.8'
+
+services:
+  control-plane:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: devys-control-plane
+    ports:
+      - "3000:3000"      # Main API
+      - "9001:9001"      # Context MCP Server
+      - "9002:9002"      # Model MCP Server
+    volumes:
+      - ./data:/app/data  # Persist database
+      - ./workspace:/workspace  # Mount workspace for file operations
+    environment:
+      - NODE_ENV=production
+      - DATABASE_PATH=/app/data/control.db
+      - WORKSPACE_PATH=/workspace
+      - MCP_CONTEXT_PORT=9001
+      - MCP_MODEL_PORT=9002
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - LOG_LEVEL=info
+    restart: unless-stopped
+    networks:
+      - devys-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: devys-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - devys-network
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: devys-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=devys
+      - POSTGRES_USER=devys
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-devys123}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - devys-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devys"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nginx:
+    image: nginx:alpine
+    container_name: devys-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - control-plane
+    networks:
+      - devys-network
+    restart: unless-stopped
+
+networks:
+  devys-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+  postgres-data:
