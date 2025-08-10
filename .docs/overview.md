@@ -2,6 +2,9 @@ Phase 1 (✅ Complete): Dual-plane architecture establishing sub-50ms keystroke 
 
 Phase 2 (Current): Context intelligence layer with Merkle-tree caching for instant, token-optimized AI context generation
 
+----------------------
+
+
 Phase 3 (Proposed): Multi-model AI orchestration via claude-code-router with agent specialization (o3, editor→Claude, reviewer→Gemini)
 
 Claude Code, CC Router, Agents, Hooks, Slash Commands, etc
@@ -38,6 +41,41 @@ Planning Model: This is the primary model you select in your chat session. It ha
 Edit Models: These models receive specific file edits determined by the planning model. They work in parallel, enabling faster responses, reducing token usage, and controlling costs. Edit tasks are automatically routed to models based on file complexity and size.
 
 
+1. Stored Prompts Management
+The system needs to store and manage reusable prompt templates:
+
+System prompts for different agents (planner, editor, reviewer)
+Task-specific prompts
+Variable interpolation in prompts
+
+2. Agent-Specific Context Assembly
+Different agents need different context formats:
+
+Planner: Full context with all file contents
+Editor: Code maps + specific files from plan
+Reviewer: Diffs + surrounding context
+
+3. Context Composition Pipeline
+The final assembly that combines:
+System Instructions (stored prompts)
+↓
+User Query (specific task)
+↓
+File Map (structure overview)
+↓
+Code Maps (symbol summaries)
+↓
+Selected File Contents (optimized)
+4. Integration Points
+
+How this connects to claude-code CLI
+How agents consume the context
+Router integration for model selection
+
+
+
+
+----------------------
 
 
 
