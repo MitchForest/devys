@@ -87,7 +87,7 @@ class ControlPlaneServer {
   private db: Database;
   private sessions: Map<string, Session>;
   private ptySidecarProcess?: any;
-  private contextServer: ContextServer;
+  public contextServer: ContextServer; // Made public for API access
   private claudeOrchestrator: ClaudeOrchestrator;
   private wsClients: Map<string, ServerWebSocket<any>>;
   
@@ -115,9 +115,16 @@ class ControlPlaneServer {
   }
   
   private async initDatabase() {
-    // Read and execute schema
-    const schema = await Bun.file("db/schema.sql").text();
-    this.db.exec(schema);
+    try {
+      // Read and execute schema
+      const schema = await Bun.file("db/schema.sql").text();
+      this.db.exec(schema);
+    } catch (error: any) {
+      // Ignore if tables/indexes already exist
+      if (!error.message?.includes('already exists')) {
+        throw error;
+      }
+    }
   }
   
   private async startPtySidecar() {
@@ -454,23 +461,72 @@ class ControlPlaneServer {
   }
 }
 
-// Placeholder services (will be implemented in Phase 2)
+// Phase 2: Real Context Server Implementation
+import { ContextGenerator } from './services/context/context-generator';
+
 class ContextServer {
+  private contextGenerators: Map<string, ContextGenerator> = new Map();
+  
   constructor(private db: Database) {}
   
+  private getGenerator(workspace: string): ContextGenerator {
+    if (!this.contextGenerators.has(workspace)) {
+      this.contextGenerators.set(workspace, new ContextGenerator(workspace, this.db));
+    }
+    return this.contextGenerators.get(workspace)!;
+  }
+  
   async generateContext(workspace: string): Promise<RepoContext> {
-    // Placeholder - will be implemented in Phase 2
+    const generator = this.getGenerator(workspace);
+    const context = await generator.generateContext();
+    
+    // Transform to legacy RepoContext format for compatibility
     return {
       codeMap: {
-        functions: [],
-        classes: [],
-        interfaces: [],
-        types: [],
+        functions: context.codeMap?.functions.map(f => ({
+          name: f.name,
+          file: f.file,
+          line: f.line,
+          type: 'function' as const,
+          signature: f.signature,
+          complexity: f.complexity,
+          references: 0
+        })) || [],
+        classes: context.codeMap?.classes.map(c => ({
+          name: c.name,
+          file: c.file,
+          line: c.line,
+          type: 'class' as const,
+          signature: c.name,
+          complexity: 1,
+          references: 0
+        })) || [],
+        interfaces: context.codeMap?.interfaces.map(i => ({
+          name: i.name,
+          file: i.file,
+          line: i.line,
+          type: 'interface' as const,
+          signature: i.name,
+          complexity: 1,
+          references: 0
+        })) || [],
+        types: context.codeMap?.types.map(t => ({
+          name: t.name,
+          file: t.file,
+          line: t.line,
+          type: 'type' as const,
+          signature: t.definition,
+          complexity: 1,
+          references: 0
+        })) || [],
         imports: [],
-        workingSet: [],
+        workingSet: context.selectedFiles?.map(f => ({
+          path: f.path,
+          lastModified: Date.now()
+        })) || [],
       },
       recentChanges: [],
-      activeFiles: [],
+      activeFiles: context.selectedFiles?.map(f => f.path) || [],
       failingTests: [],
       openPRs: [],
     };
@@ -482,8 +538,21 @@ class ContextServer {
     trigger: string,
     data?: any
   ): Promise<RepoContext> {
-    // Placeholder - will be implemented in Phase 2
-    return currentContext;
+    const generator = this.getGenerator(workspace);
+    const context = await generator.updateContext(trigger, data);
+    
+    // Transform to legacy format
+    return this.generateContext(workspace);
+  }
+  
+  async getMetrics(workspace: string) {
+    const generator = this.getGenerator(workspace);
+    return generator.getMetrics();
+  }
+  
+  clearCache(workspace: string) {
+    const generator = this.getGenerator(workspace);
+    generator.clearCache();
   }
 }
 
@@ -498,8 +567,12 @@ class ClaudeOrchestrator {
   }
 }
 
+// Import context API
+import { ContextAPI } from './api/context-api';
+
 // Start the server
 const controlPlane = new ControlPlaneServer();
+const contextAPI = new ContextAPI(controlPlane.contextServer);
 
 const server = Bun.serve({
   port: 3000,
@@ -521,6 +594,11 @@ const server = Bun.serve({
       return success
         ? undefined
         : new Response('WebSocket upgrade failed', { status: 500 });
+    }
+    
+    // Context API routes (Phase 2)
+    if (url.pathname.startsWith('/api/context/')) {
+      return contextAPI.handleRequest(req);
     }
     
     // API routes

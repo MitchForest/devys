@@ -19,12 +19,18 @@ export class CacheManager {
     this.initializeCache();
   }
   
-  private initializeCache() {
+  private async initializeCache() {
     // Run migration for cache tables
-    const migration = Bun.file('db/migrations/002_cache_tables.sql');
-    migration.text().then(sql => {
-      this.db.exec(sql);
-    });
+    try {
+      const migrationPath = new URL('../../db/migrations/002_cache_tables.sql', import.meta.url).pathname;
+      const migration = await Bun.file(migrationPath).text();
+      this.db.exec(migration);
+    } catch (error: any) {
+      // Ignore if tables already exist
+      if (!error.message?.includes('already exists')) {
+        console.error('Cache initialization error:', error);
+      }
+    }
   }
   
   async getMerkleTree(workspace: string, commitSha: string): Promise<MerkleTree | null> {

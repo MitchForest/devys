@@ -23,7 +23,8 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "typescript": "^5"
+    "typescript": "^5",
+    "mitata": "^0.1.11"
   },
   "trustedDependencies": [
     "tree-sitter-go",
