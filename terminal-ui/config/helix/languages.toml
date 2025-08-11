@@ -1,0 +1,149 @@
+[[language]]
+name = "typescript"
+language-servers = ["typescript-language-server", "devys-lsp"]
+formatter = { command = "prettier", args = ["--parser", "typescript"] }
+auto-format = true
+
+[[language]]
+name = "tsx"
+language-servers = ["typescript-language-server", "devys-lsp"]
+formatter = { command = "prettier", args = ["--parser", "tsx"] }
+auto-format = true
+
+[[language]]
+name = "javascript"
+language-servers = ["typescript-language-server", "devys-lsp"]
+formatter = { command = "prettier", args = ["--parser", "babel"] }
+auto-format = true
+
+[[language]]
+name = "jsx"
+language-servers = ["typescript-language-server", "devys-lsp"]
+formatter = { command = "prettier", args = ["--parser", "babel"] }
+auto-format = true
+
+[[language]]
+name = "rust"
+language-servers = ["rust-analyzer", "devys-lsp"]
+formatter = { command = "rustfmt", args = ["--edition=2021"] }
+auto-format = true
+
+[[language]]
+name = "python"
+language-servers = ["pylsp", "devys-lsp"]
+formatter = { command = "black", args = ["-"] }
+auto-format = true
+
+[[language]]
+name = "go"
+language-servers = ["gopls", "devys-lsp"]
+formatter = { command = "gofmt" }
+auto-format = true
+
+[[language]]
+name = "json"
+language-servers = ["vscode-json-language-server", "devys-lsp"]
+formatter = { command = "prettier", args = ["--parser", "json"] }
+auto-format = true
+
+[[language]]
+name = "yaml"
+language-servers = ["yaml-language-server", "devys-lsp"]
+formatter = { command = "prettier", args = ["--parser", "yaml"] }
+auto-format = true
+
+[[language]]
+name = "markdown"
+language-servers = ["marksman", "devys-lsp"]
+formatter = { command = "prettier", args = ["--parser", "markdown"] }
+auto-format = false
+
+[[language]]
+name = "html"
+language-servers = ["vscode-html-language-server", "devys-lsp"]
+formatter = { command = "prettier", args = ["--parser", "html"] }
+auto-format = true
+
+[[language]]
+name = "css"
+language-servers = ["vscode-css-language-server", "devys-lsp"]
+formatter = { command = "prettier", args = ["--parser", "css"] }
+auto-format = true
+
+[[language]]
+name = "scss"
+language-servers = ["vscode-css-language-server", "devys-lsp"]
+formatter = { command = "prettier", args = ["--parser", "scss"] }
+auto-format = true
+
+# Language server configurations
+[language-server.devys-lsp]
+command = "devys-lsp"
+args = ["--stdio"]
+environment = { "RUST_LOG" = "info" }
+
+[language-server.typescript-language-server]
+command = "typescript-language-server"
+args = ["--stdio"]
+config.hostInfo = "helix"
+config.preferences.includeInlayParameterNameHints = "all"
+config.preferences.includeInlayParameterNameHintsWhenArgumentMatchesName = false
+config.preferences.includeInlayFunctionParameterTypeHints = true
+config.preferences.includeInlayVariableTypeHints = false
+config.preferences.includeInlayPropertyDeclarationTypeHints = true
+config.preferences.includeInlayFunctionLikeReturnTypeHints = true
+config.preferences.includeInlayEnumMemberValueHints = true
+
+[language-server.rust-analyzer]
+command = "rust-analyzer"
+config.check.command = "clippy"
+config.cargo.features = "all"
+config.procMacro.enable = true
+config.diagnostics.experimental.enable = true
+
+[language-server.pylsp]
+command = "pylsp"
+config.pylsp.plugins.pycodestyle.enabled = false
+config.pylsp.plugins.mccabe.enabled = false
+config.pylsp.plugins.pyflakes.enabled = false
+config.pylsp.plugins.flake8.enabled = true
+config.pylsp.plugins.autopep8.enabled = false
+config.pylsp.plugins.yapf.enabled = false
+config.pylsp.plugins.black.enabled = true
+
+[language-server.gopls]
+command = "gopls"
+config.gofumpt = true
+config.local = "github.com/your-org"
+config.semanticTokens = true
+config.staticcheck = true
+config.verboseOutput = false
+
+[language-server.vscode-json-language-server]
+command = "vscode-json-language-server"
+args = ["--stdio"]
+config.provideFormatter = true
+config.json.schemas = [
+  { fileMatch = ["package.json"], url = "https://json.schemastore.org/package.json" },
+  { fileMatch = ["tsconfig*.json"], url = "https://json.schemastore.org/tsconfig.json" },
+]
+
+[language-server.yaml-language-server]
+command = "yaml-language-server"
+args = ["--stdio"]
+config.yaml.schemas = { "https://json.schemastore.org/github-workflow.json" = ".github/workflows/*.{yml,yaml}" }
+config.yaml.format.enable = true
+
+[language-server.marksman]
+command = "marksman"
+args = ["server"]
+
+[language-server.vscode-html-language-server]
+command = "vscode-html-language-server"
+args = ["--stdio"]
+config.provideFormatter = true
+
+[language-server.vscode-css-language-server]
+command = "vscode-css-language-server"
+args = ["--stdio"]
+config.provideFormatter = true

@@ -115,3 +115,48 @@ export interface TestResult {
   error?: string;
   duration: number;
 }
+
+// New types for Phase 4 Grunt Agent
+export interface GruntTask {
+  type: 'format' | 'lint' | 'test' | 'commit' | 'docs' | 'cleanup';
+  files?: string[];
+  scope?: string;
+  message?: string;
+}
+
+export interface GruntConfig {
+  tasks: GruntTask[];
+  preferLocal?: boolean;
+  maxConcurrency?: number;
+  budgetLimit?: number;
+}
+
+export interface TaskResult {
+  type: string;
+  status: 'success' | 'failed' | 'partial';
+  files: string[];
+  model: string;
+  tokens: number;
+  cost?: number;
+  duration?: number;
+  output?: string;
+  error?: string;
+  analysis?: string;
+}
+
+export interface GruntResult {
+  results: TaskResult[];
+  tokenUsage: number;
+  cost: number;
+  duration?: number;
+  tasksCompleted: number;
+  tasksSuccessful: number;
+  error?: string;
+}
+
+export interface TaskClassifier {
+  complexity: 'simple' | 'moderate' | 'complex';
+  canParallelize: boolean;
+  estimatedTokens: number;
+  priority: 'low' | 'medium' | 'high';
+}

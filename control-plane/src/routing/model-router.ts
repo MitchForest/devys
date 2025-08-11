@@ -32,111 +32,263 @@ export class ModelRouter {
   private loadModelConfigs(): Map<string, ModelConfig> {
     const configs = new Map<string, ModelConfig>();
     
-    // Claude models
-    configs.set('claude-3-opus', {
-      name: 'claude-3-opus',
+    // Anthropic Claude models (Phase 4 updates)
+    configs.set('claude-3-5-sonnet', {
+      name: 'claude-3-5-sonnet',
       provider: 'anthropic',
       endpoint: 'https://api.anthropic.com/v1/messages',
       apiKey: process.env.ANTHROPIC_API_KEY,
-      maxTokens: 100000,
-      costPerToken: 0.00003,
-      latency: 2000,
-      capabilities: ['reasoning', 'coding', 'analysis'],
-      rateLimit: {
-        requestsPerMinute: 50,
-        tokensPerMinute: 100000
-      }
-    });
-    
-    configs.set('claude-3-sonnet', {
-      name: 'claude-3-sonnet',
-      provider: 'anthropic',
-      endpoint: 'https://api.anthropic.com/v1/messages',
-      apiKey: process.env.ANTHROPIC_API_KEY,
-      maxTokens: 100000,
-      costPerToken: 0.00001,
+      maxTokens: 200000,
+      costPerToken: 0.003,
       latency: 1500,
-      capabilities: ['coding', 'analysis'],
+      capabilities: ['reasoning', 'coding', 'analysis', 'premium'],
       rateLimit: {
         requestsPerMinute: 100,
         tokensPerMinute: 200000
       }
     });
     
-    configs.set('claude-3-haiku', {
-      name: 'claude-3-haiku',
+    configs.set('claude-3-5-haiku', {
+      name: 'claude-3-5-haiku',
       provider: 'anthropic',
       endpoint: 'https://api.anthropic.com/v1/messages',
       apiKey: process.env.ANTHROPIC_API_KEY,
-      maxTokens: 100000,
-      costPerToken: 0.0000025,
+      maxTokens: 200000,
+      costPerToken: 0.0008,
       latency: 800,
-      capabilities: ['coding', 'simple-tasks'],
+      capabilities: ['coding', 'fast', 'cost-effective'],
       rateLimit: {
         requestsPerMinute: 200,
         tokensPerMinute: 400000
       }
     });
     
-    // OpenAI models
-    configs.set('gpt-4-turbo', {
-      name: 'gpt-4-turbo',
+    configs.set('claude-3-opus', {
+      name: 'claude-3-opus',
+      provider: 'anthropic',
+      endpoint: 'https://api.anthropic.com/v1/messages',
+      apiKey: process.env.ANTHROPIC_API_KEY,
+      maxTokens: 200000,
+      costPerToken: 0.015,
+      latency: 2000,
+      capabilities: ['reasoning', 'coding', 'analysis', 'premium', 'complex'],
+      rateLimit: {
+        requestsPerMinute: 50,
+        tokensPerMinute: 100000
+      }
+    });
+    
+    // Google Gemini models (Phase 4 updates)
+    configs.set('gemini-2.0-flash-thinking', {
+      name: 'gemini-2.0-flash-thinking',
+      provider: 'google',
+      endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-thinking',
+      apiKey: process.env.GOOGLE_API_KEY,
+      maxTokens: 1000000,
+      costPerToken: 0.0,
+      latency: 3000,
+      capabilities: ['large-context', 'reasoning', 'planning', 'free', 'thinking'],
+      rateLimit: {
+        requestsPerMinute: 15,
+        tokensPerMinute: 1000000
+      }
+    });
+    
+    configs.set('gemini-2.0-flash', {
+      name: 'gemini-2.0-flash',
+      provider: 'google',
+      endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash',
+      apiKey: process.env.GOOGLE_API_KEY,
+      maxTokens: 1000000,
+      costPerToken: 0.0,
+      latency: 1500,
+      capabilities: ['large-context', 'coding', 'fast', 'free'],
+      rateLimit: {
+        requestsPerMinute: 15,
+        tokensPerMinute: 1000000
+      }
+    });
+    
+    configs.set('gemini-1.5-pro', {
+      name: 'gemini-1.5-pro',
+      provider: 'google',
+      endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro',
+      apiKey: process.env.GOOGLE_API_KEY,
+      maxTokens: 2000000,
+      costPerToken: 0.0,
+      latency: 2000,
+      capabilities: ['large-context', 'reasoning', 'coding', 'free'],
+      rateLimit: {
+        requestsPerMinute: 15,
+        tokensPerMinute: 2000000
+      }
+    });
+    
+    // OpenAI models (Phase 4 updates)
+    configs.set('o1', {
+      name: 'o1',
       provider: 'openai',
       endpoint: 'https://api.openai.com/v1/chat/completions',
       apiKey: process.env.OPENAI_API_KEY,
       maxTokens: 128000,
-      costPerToken: 0.00002,
-      latency: 2500,
-      capabilities: ['reasoning', 'coding', 'analysis'],
+      costPerToken: 0.015,
+      latency: 5000,
+      capabilities: ['reasoning', 'complex', 'premium', 'analysis'],
       rateLimit: {
-        requestsPerMinute: 60,
-        tokensPerMinute: 150000
+        requestsPerMinute: 20,
+        tokensPerMinute: 128000
       }
     });
     
-    configs.set('gpt-4', {
-      name: 'gpt-4',
+    configs.set('o1-mini', {
+      name: 'o1-mini',
       provider: 'openai',
       endpoint: 'https://api.openai.com/v1/chat/completions',
       apiKey: process.env.OPENAI_API_KEY,
-      maxTokens: 8192,
-      costPerToken: 0.00003,
+      maxTokens: 128000,
+      costPerToken: 0.003,
       latency: 3000,
-      capabilities: ['reasoning', 'coding', 'analysis'],
+      capabilities: ['reasoning', 'coding', 'fast'],
       rateLimit: {
-        requestsPerMinute: 40,
-        tokensPerMinute: 80000
+        requestsPerMinute: 50,
+        tokensPerMinute: 200000
       }
     });
     
-    configs.set('gpt-3.5-turbo', {
-      name: 'gpt-3.5-turbo',
+    configs.set('gpt-4o', {
+      name: 'gpt-4o',
       provider: 'openai',
       endpoint: 'https://api.openai.com/v1/chat/completions',
       apiKey: process.env.OPENAI_API_KEY,
-      maxTokens: 16385,
-      costPerToken: 0.000001,
-      latency: 500,
-      capabilities: ['coding', 'simple-tasks'],
+      maxTokens: 128000,
+      costPerToken: 0.0025,
+      latency: 2000,
+      capabilities: ['reasoning', 'coding', 'analysis', 'multimodal'],
+      rateLimit: {
+        requestsPerMinute: 100,
+        tokensPerMinute: 300000
+      }
+    });
+    
+    configs.set('gpt-4o-mini', {
+      name: 'gpt-4o-mini',
+      provider: 'openai',
+      endpoint: 'https://api.openai.com/v1/chat/completions',
+      apiKey: process.env.OPENAI_API_KEY,
+      maxTokens: 128000,
+      costPerToken: 0.00015,
+      latency: 1000,
+      capabilities: ['coding', 'fast', 'cost-effective'],
       rateLimit: {
         requestsPerMinute: 200,
         tokensPerMinute: 500000
       }
     });
     
-    // Google models
-    configs.set('gemini-pro', {
-      name: 'gemini-pro',
-      provider: 'google',
-      endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro',
-      apiKey: process.env.GOOGLE_API_KEY,
-      maxTokens: 32000,
-      costPerToken: 0.00001,
-      latency: 1800,
+    // DeepSeek models (New in Phase 4)
+    configs.set('deepseek-chat', {
+      name: 'deepseek-chat',
+      provider: 'deepseek',
+      endpoint: 'https://api.deepseek.com/v1/chat/completions',
+      apiKey: process.env.DEEPSEEK_API_KEY,
+      maxTokens: 64000,
+      costPerToken: 0.00014,
+      latency: 1200,
+      capabilities: ['coding', 'cost-effective', 'fast'],
+      rateLimit: {
+        requestsPerMinute: 100,
+        tokensPerMinute: 300000
+      }
+    });
+    
+    configs.set('deepseek-reasoner', {
+      name: 'deepseek-reasoner',
+      provider: 'deepseek',
+      endpoint: 'https://api.deepseek.com/v1/chat/completions',
+      apiKey: process.env.DEEPSEEK_API_KEY,
+      maxTokens: 64000,
+      costPerToken: 0.00055,
+      latency: 2000,
       capabilities: ['reasoning', 'coding', 'analysis'],
       rateLimit: {
-        requestsPerMinute: 60,
-        tokensPerMinute: 120000
+        requestsPerMinute: 50,
+        tokensPerMinute: 150000
+      }
+    });
+    
+    configs.set('deepseek-coder', {
+      name: 'deepseek-coder',
+      provider: 'deepseek',
+      endpoint: 'https://api.deepseek.com/v1/chat/completions',
+      apiKey: process.env.DEEPSEEK_API_KEY,
+      maxTokens: 64000,
+      costPerToken: 0.00014,
+      latency: 1000,
+      capabilities: ['coding', 'specialized', 'cost-effective'],
+      rateLimit: {
+        requestsPerMinute: 150,
+        tokensPerMinute: 400000
+      }
+    });
+    
+    // Ollama local models (New in Phase 4)
+    configs.set('qwen2.5-coder:14b', {
+      name: 'qwen2.5-coder:14b',
+      provider: 'ollama',
+      endpoint: 'http://localhost:11434/api/generate',
+      apiKey: undefined,
+      maxTokens: 32000,
+      costPerToken: 0.0,
+      latency: 500,
+      capabilities: ['coding', 'local', 'free', 'grunt'],
+      rateLimit: {
+        requestsPerMinute: 1000,
+        tokensPerMinute: 100000
+      }
+    });
+    
+    configs.set('llama3.3:70b', {
+      name: 'llama3.3:70b',
+      provider: 'ollama',
+      endpoint: 'http://localhost:11434/api/generate',
+      apiKey: undefined,
+      maxTokens: 128000,
+      costPerToken: 0.0,
+      latency: 1500,
+      capabilities: ['reasoning', 'coding', 'local', 'free'],
+      rateLimit: {
+        requestsPerMinute: 1000,
+        tokensPerMinute: 200000
+      }
+    });
+    
+    configs.set('codestral:22b', {
+      name: 'codestral:22b',
+      provider: 'ollama',
+      endpoint: 'http://localhost:11434/api/generate',
+      apiKey: undefined,
+      maxTokens: 32000,
+      costPerToken: 0.0,
+      latency: 800,
+      capabilities: ['coding', 'specialized', 'local', 'free'],
+      rateLimit: {
+        requestsPerMinute: 1000,
+        tokensPerMinute: 150000
+      }
+    });
+    
+    configs.set('deepseek-r1:7b', {
+      name: 'deepseek-r1:7b',
+      provider: 'ollama',
+      endpoint: 'http://localhost:11434/api/generate',
+      apiKey: undefined,
+      maxTokens: 64000,
+      costPerToken: 0.0,
+      latency: 600,
+      capabilities: ['reasoning', 'coding', 'local', 'free', 'fast'],
+      rateLimit: {
+        requestsPerMinute: 1000,
+        tokensPerMinute: 200000
       }
     });
     
@@ -276,7 +428,7 @@ export class ModelRouter {
     switch (model.provider) {
       case 'anthropic':
         return {
-          model: model.name.replace('claude-3-', 'claude-3.'),
+          model: model.name.replace('claude-3-', 'claude-3-5-').replace('claude-3-5-5-', 'claude-3-5-'),
           messages: [
             {
               role: 'user',
@@ -284,7 +436,7 @@ export class ModelRouter {
             }
           ],
           max_tokens: Math.min(request.maxTokens, model.maxTokens),
-          temperature: request.temperature
+          temperature: request.temperature || 0.7
         };
         
       case 'openai':
@@ -297,7 +449,7 @@ export class ModelRouter {
             }
           ],
           max_tokens: Math.min(request.maxTokens, model.maxTokens),
-          temperature: request.temperature
+          temperature: request.temperature || 0.7
         };
         
       case 'google':
@@ -313,7 +465,31 @@ export class ModelRouter {
           ],
           generationConfig: {
             maxOutputTokens: Math.min(request.maxTokens, model.maxTokens),
-            temperature: request.temperature
+            temperature: request.temperature || 0.7
+          }
+        };
+        
+      case 'deepseek':
+        return {
+          model: model.name,
+          messages: [
+            {
+              role: 'user',
+              content: request.prompt
+            }
+          ],
+          max_tokens: Math.min(request.maxTokens, model.maxTokens),
+          temperature: request.temperature || 0.7
+        };
+        
+      case 'ollama':
+        return {
+          model: model.name,
+          prompt: request.prompt,
+          stream: false,
+          options: {
+            temperature: request.temperature || 0.7,
+            num_predict: Math.min(request.maxTokens, model.maxTokens)
           }
         };
         
@@ -338,14 +514,32 @@ export class ModelRouter {
         headers['Authorization'] = `Bearer ${model.apiKey}`;
         break;
         
+      case 'deepseek':
+        headers['Authorization'] = `Bearer ${model.apiKey}`;
+        break;
+        
       case 'google':
         // Google uses API key in URL
         break;
+        
+      case 'ollama':
+        // Ollama doesn't need auth headers
+        break;
     }
     
-    const url = model.provider === 'google' 
-      ? `${model.endpoint}:generateContent?key=${model.apiKey}`
-      : model.endpoint;
+    let url: string;
+    switch (model.provider) {
+      case 'google':
+        url = `${model.endpoint}:generateContent?key=${model.apiKey}`;
+        break;
+      case 'ollama':
+        // Use the Ollama-specific endpoint
+        url = model.endpoint;
+        break;
+      default:
+        url = model.endpoint;
+        break;
+    }
     
     const response = await fetch(url, {
       method: 'POST',
@@ -371,6 +565,12 @@ export class ModelRouter {
         
       case 'google':
         return response.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        
+      case 'deepseek':
+        return response.choices?.[0]?.message?.content || '';
+        
+      case 'ollama':
+        return response.response || '';
         
       default:
         return '';

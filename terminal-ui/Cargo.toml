@@ -1,0 +1,32 @@
+[package]
+name = "devys-terminal-ui"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "devys-core"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+reqwest = { version = "0.11", features = ["json"] }
+clap = { version = "4.0", features = ["derive"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.0", features = ["v4"] }
+tokio-tungstenite = "0.21"
+futures-util = "0.3"
+shellexpand = "3.1"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+[workspace]
+members = [
+    "plugins/ai-command",
+    "plugins/grunt-status",
+    "plugins/context-viz",
+    "lsp",
+    "tui"
+]
