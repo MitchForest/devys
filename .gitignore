@@ -1,0 +1,29 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+*.xcuserdatad/
+xcuserdata/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# CocoaPods
+Pods/
+
+# macOS
+.DS_Store
+*.swp
+*~
+
+# Secrets - NEVER commit these
+**/GoogleCredentials.plist
+**/Secrets.xcconfig
+client_secret*.json
+
+# Keep the example template
+!**/GoogleCredentials.example.plist
+
+# Private docs
+.docs/
