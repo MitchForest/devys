@@ -28,7 +28,7 @@ A native macOS infinite canvas for orchestrating AI coding agents, terminals, br
 | Action | Shortcut |
 |--------|----------|
 | Group selected | ⌘G |
-| Ungroup | ⇧⌘G |
+| Ungroup | ⇧⌘U |
 | Auto-group | Snap panes edge-to-edge |
 
 ### Create Panes

@@ -121,7 +121,7 @@ public struct AppCommands: Commands {
                     // TODO: Implement in Sprint 5
                     NotificationCenter.default.post(name: .ungroupPanes, object: nil)
                 }
-                .keyboardShortcut("g", modifiers: [.command, .shift])
+                .keyboardShortcut("u", modifiers: [.command, .shift])
             }
         }
     }
