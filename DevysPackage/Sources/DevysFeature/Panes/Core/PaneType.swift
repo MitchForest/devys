@@ -11,9 +11,9 @@ public enum PaneType: Equatable {
     case fileExplorer(FileExplorerPaneState)
     case codeEditor(CodeEditorPaneState)
     case git(GitPaneState)
-    
+
     // MARK: - Properties
-    
+
     /// SF Symbol name for this pane type
     public var iconName: String {
         switch self {
@@ -24,7 +24,7 @@ public enum PaneType: Equatable {
         case .git: return "arrow.triangle.branch"
         }
     }
-    
+
     /// Default title for new panes of this type
     public var defaultTitle: String {
         switch self {
@@ -43,7 +43,7 @@ public enum PaneType: Equatable {
 public struct TerminalPaneState: Equatable, Hashable {
     public var workingDirectory: URL?
     public var shell: String
-    
+
     public init(
         workingDirectory: URL? = nil,
         shell: String = "/bin/zsh"
@@ -56,7 +56,7 @@ public struct TerminalPaneState: Equatable, Hashable {
 /// State for browser panes
 public struct BrowserPaneState: Equatable, Hashable {
     public var url: URL?
-    
+
     public init(url: URL? = URL(string: "http://localhost:3000")) {
         self.url = url
     }
@@ -65,7 +65,7 @@ public struct BrowserPaneState: Equatable, Hashable {
 /// State for file explorer panes
 public struct FileExplorerPaneState: Equatable, Hashable {
     public var rootURL: URL?
-    
+
     public init(rootURL: URL? = nil) {
         self.rootURL = rootURL
     }
@@ -75,7 +75,7 @@ public struct FileExplorerPaneState: Equatable, Hashable {
 public struct CodeEditorPaneState: Equatable, Hashable {
     public var fileURL: URL?
     public var content: String
-    
+
     public init(fileURL: URL? = nil, content: String = "") {
         self.fileURL = fileURL
         self.content = content
@@ -85,7 +85,7 @@ public struct CodeEditorPaneState: Equatable, Hashable {
 /// State for git panes
 public struct GitPaneState: Equatable, Hashable {
     public var repositoryURL: URL?
-    
+
     public init(repositoryURL: URL? = nil) {
         self.repositoryURL = repositoryURL
     }

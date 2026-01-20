@@ -8,27 +8,30 @@ import SwiftUI
 /// - Collapse/expand functionality
 public struct PaneContainerView: View {
     let pane: Pane
-    @EnvironmentObject private var canvas: CanvasState
-    
+    @Environment(\.canvasState) private var _canvas
+
+    // swiftlint:disable:next force_unwrapping
+    private var canvas: CanvasState { _canvas! } // Safe: always injected by parent
+
     /// Whether this pane is currently selected
     private var isSelected: Bool {
         canvas.isPaneSelected(pane.id)
     }
-    
+
     /// Whether this pane is currently hovered
     private var isHovered: Bool {
         canvas.hoveredPaneId == pane.id
     }
-    
+
     public init(pane: Pane) {
         self.pane = pane
     }
-    
+
     public var body: some View {
         VStack(spacing: 0) {
             // Title bar
             titleBar
-            
+
             // Content area (hidden when collapsed)
             if !pane.isCollapsed {
                 contentArea
@@ -53,24 +56,24 @@ public struct PaneContainerView: View {
             canvas.hoveredPaneId = hovering ? pane.id : nil
         }
     }
-    
+
     // MARK: - Title Bar
-    
+
     private var titleBar: some View {
         HStack(spacing: 8) {
             // Pane type icon
             Image(systemName: pane.type.iconName)
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
-            
+
             // Title
             Text(pane.title)
                 .font(Typography.paneTitle)
                 .lineLimit(1)
                 .foregroundStyle(.primary)
-            
+
             Spacer()
-            
+
             // Control buttons
             HStack(spacing: 4) {
                 // Collapse/expand button
@@ -81,7 +84,7 @@ public struct PaneContainerView: View {
                 }
                 .buttonStyle(.plain)
                 .help(pane.isCollapsed ? "Expand" : "Collapse")
-                
+
                 // Close button
                 Button(action: { canvas.deletePane(pane.id) }) {
                     Image(systemName: "xmark")
@@ -98,9 +101,9 @@ public struct PaneContainerView: View {
         .frame(height: Layout.paneTitleBarHeight)
         .background(Theme.paneTitleBar)
     }
-    
+
     // MARK: - Content Area
-    
+
     private var contentArea: some View {
         ZStack {
             // Placeholder content based on pane type
@@ -108,7 +111,7 @@ public struct PaneContainerView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-    
+
     @ViewBuilder
     private var paneContent: some View {
         switch pane.type {
@@ -153,17 +156,17 @@ struct PlaceholderContent: View {
     let icon: String
     let title: String
     let subtitle: String
-    
+
     var body: some View {
         VStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.system(size: 32))
                 .foregroundStyle(.tertiary)
-            
+
             Text(title)
                 .font(.headline)
                 .foregroundStyle(.secondary)
-            
+
             Text(subtitle)
                 .font(.caption)
                 .foregroundStyle(.tertiary)
@@ -178,7 +181,7 @@ struct PlaceholderContent: View {
 #Preview {
     ZStack {
         Color.gray.opacity(0.2)
-        
+
         PaneContainerView(
             pane: Pane(
                 type: .terminal(TerminalPaneState()),
@@ -187,7 +190,7 @@ struct PlaceholderContent: View {
             )
         )
         .frame(width: 400, height: 300)
-        .environmentObject(CanvasState())
+        .canvasState(CanvasState())
     }
     .frame(width: 500, height: 400)
 }

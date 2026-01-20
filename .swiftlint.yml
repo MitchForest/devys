@@ -1,0 +1,44 @@
+# SwiftLint configuration for Devys
+
+excluded:
+  - DevysPackage/.build
+  - DevysPackage/Package.swift
+  - .build
+  - Pods
+  - Carthage
+  - DerivedData
+
+# Disable rules that are too noisy
+disabled_rules:
+  - trailing_comma
+  - identifier_name
+  - type_name
+  - file_length
+  - function_body_length
+  - line_length
+  - todo  # TODOs are intentional sprint markers
+  - multiple_closures_with_trailing_closure
+  - type_body_length  # CanvasState is appropriately sized for its responsibilities
+
+# Opt-in rules
+opt_in_rules:
+  - empty_count
+  - force_unwrapping
+  - implicitly_unwrapped_optional
+
+# Customizations
+force_cast: warning
+force_try: warning
+function_parameter_count:
+  warning: 6
+  error: 8
+
+nesting:
+  type_level:
+    warning: 2
+  function_level:
+    warning: 3
+
+cyclomatic_complexity:
+  warning: 15
+  error: 25

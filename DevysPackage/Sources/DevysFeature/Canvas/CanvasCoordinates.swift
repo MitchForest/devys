@@ -4,7 +4,7 @@ import CoreGraphics
 // MARK: - Coordinate Transforms
 
 extension CanvasState {
-    
+
     /// Convert a screen point to canvas coordinates.
     ///
     /// The canvas uses a coordinate system where (0,0) is at the center of the viewport
@@ -21,7 +21,7 @@ extension CanvasState {
             y: (screenPoint.y - center.y) / scale - offset.y
         )
     }
-    
+
     /// Convert a canvas point to screen coordinates.
     ///
     /// - Parameters:
@@ -35,7 +35,7 @@ extension CanvasState {
             y: (canvasPoint.y + offset.y) * scale + center.y
         )
     }
-    
+
     /// Get the visible rectangle in canvas coordinates.
     ///
     /// This is useful for:
@@ -57,7 +57,7 @@ extension CanvasState {
             height: bottomRight.y - topLeft.y
         )
     }
-    
+
     /// Convert a size from screen to canvas coordinates.
     ///
     /// - Parameter screenSize: Size in screen points
@@ -68,7 +68,7 @@ extension CanvasState {
             height: screenSize.height / scale
         )
     }
-    
+
     /// Convert a size from canvas to screen coordinates.
     ///
     /// - Parameter canvasSize: Size in canvas units
@@ -84,7 +84,7 @@ extension CanvasState {
 // MARK: - Zoom Toward Point
 
 extension CanvasState {
-    
+
     /// Zoom toward a specific screen point (e.g., cursor position).
     ///
     /// This keeps the point under the cursor stationary while zooming,
@@ -96,16 +96,16 @@ extension CanvasState {
     ///   - viewportSize: Size of the viewport
     public func zoom(to newScale: CGFloat, toward screenPoint: CGPoint, viewportSize: CGSize) {
         let clampedScale = min(max(newScale, Layout.minScale), Layout.maxScale)
-        
+
         // Get the canvas point under the cursor before zoom
         let canvasPointBeforeZoom = canvasPoint(from: screenPoint, viewportSize: viewportSize)
-        
+
         // Apply new scale
         scale = clampedScale
-        
+
         // Get where that canvas point would be on screen after zoom
         let screenPointAfterZoom = self.screenPoint(from: canvasPointBeforeZoom, viewportSize: viewportSize)
-        
+
         // Adjust offset to keep the point stationary
         let deltaScreen = CGSize(
             width: screenPoint.x - screenPointAfterZoom.x,

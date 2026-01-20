@@ -7,21 +7,21 @@ import SwiftUI
 /// - Fades out after inactivity
 /// - Can be clicked to reset to 100%
 public struct ZoomIndicator: View {
-    @ObservedObject var canvas: CanvasState
-    
+    var canvas: CanvasState
+
     /// Whether the indicator should be fully visible
     @State private var isVisible: Bool = true
-    
+
     /// Timer to track fade-out delay
     @State private var fadeTask: Task<Void, Never>?
-    
+
     /// Duration before fading out (seconds)
     private let fadeDelay: TimeInterval = 2.0
-    
+
     public init(canvas: CanvasState) {
         self.canvas = canvas
     }
-    
+
     public var body: some View {
         Button(action: { canvas.zoomTo100() }) {
             Text(zoomText)
@@ -42,19 +42,19 @@ public struct ZoomIndicator: View {
         }
         .help("Click to reset to 100%")
     }
-    
+
     private var zoomText: String {
         let percentage = Int(round(canvas.scale * 100))
         return "\(percentage)%"
     }
-    
+
     private func showAndScheduleFade() {
         // Cancel any existing fade task
         fadeTask?.cancel()
-        
+
         // Show the indicator
         isVisible = true
-        
+
         // Schedule fade-out
         fadeTask = Task {
             try? await Task.sleep(for: .seconds(fadeDelay))
@@ -71,7 +71,7 @@ public struct ZoomIndicator: View {
 #Preview {
     ZStack {
         Color.gray.opacity(0.2)
-        
+
         VStack {
             Spacer()
             HStack {
