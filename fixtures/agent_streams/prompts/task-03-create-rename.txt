@@ -1,0 +1,15 @@
+You are running inside /Users/mitchwhite/Code/devys.
+
+Make ONLY these changes under fixtures/agent_workspace. Do NOT run tests.
+Steps:
+
+1) Create fixtures/agent_workspace/data/extra.json with:
+   {
+     "name": "extra",
+     "enabled": true
+   }
+2) Rename fixtures/agent_workspace/notes.txt to fixtures/agent_workspace/notes-archived.txt.
+3) Update fixtures/agent_workspace/README.md to list extra.json and the rename.
+4) Run: git status --short
+
+Finish with a 1-2 sentence summary.

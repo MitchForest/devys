@@ -1,0 +1,9 @@
+You are running inside /Users/mitchwhite/Code/devys.
+
+Do NOT edit or create files. Do NOT run tests.
+Steps:
+
+1) Run: cat fixtures/agent_workspace/does-not-exist.txt
+2) Run: ls fixtures/agent_workspace
+
+Finish with a 1-2 sentence summary.

@@ -1,0 +1,12 @@
+You are running inside /Users/mitchwhite/Code/devys.
+
+Do NOT edit or create files. Do NOT run tests.
+Do these steps exactly in order:
+
+1) Run: pwd
+2) Run: ls fixtures/agent_workspace
+3) Run: rg --files fixtures/agent_workspace
+4) Read: fixtures/agent_workspace/README.md
+5) Read: fixtures/agent_workspace/src/math.rs
+
+Finish with a 2-sentence summary of what this fixture workspace contains.

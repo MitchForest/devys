@@ -1,0 +1,6 @@
+graph LR
+  api["API\n(service)"]
+  db["Database\n(storage)"]
+  worker["Worker\n(job)"]
+  api -- "users" --> db
+  api -- "send_email" --> worker

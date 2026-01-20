@@ -1,0 +1,5 @@
+{
+  "app": "fixture",
+  "version": 1,
+  "features": ["alpha", "beta"]
+}

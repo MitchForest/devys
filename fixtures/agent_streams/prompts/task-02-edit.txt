@@ -1,0 +1,12 @@
+You are running inside /Users/mitchwhite/Code/devys.
+
+Make ONLY these changes under fixtures/agent_workspace. Do NOT run tests.
+Steps:
+
+1) Edit fixtures/agent_workspace/src/math.rs to add two functions:
+   - mul(a, b) -> a * b
+   - div(a, b) -> a / b
+2) Update fixtures/agent_workspace/README.md to mention the new mul/div functions.
+3) Run: rg -n "mul|div" fixtures/agent_workspace/src/math.rs
+
+Finish with a 1-2 sentence summary.

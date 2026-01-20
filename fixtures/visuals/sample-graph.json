@@ -1,0 +1,27 @@
+{
+  "nodes": [
+    {
+      "id": "api",
+      "label": "API",
+      "kind": "service",
+      "data": {"path": "app/src"}
+    },
+    {
+      "id": "db",
+      "label": "Database",
+      "kind": "storage",
+      "data": {"table": "users"}
+    },
+    {
+      "id": "worker",
+      "label": "Worker",
+      "kind": "job",
+      "data": {"queue": "emails"}
+    }
+  ],
+  "edges": [
+    {"source": "api", "target": "db", "kind": "writes", "label": "users"},
+    {"source": "api", "target": "worker", "kind": "emits", "label": "send_email"}
+  ],
+  "metadata": {"title": "Sample Graph"}
+}
