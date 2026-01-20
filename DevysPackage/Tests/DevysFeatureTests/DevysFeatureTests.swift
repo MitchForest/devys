@@ -356,3 +356,245 @@ struct CoordinateTransformTests {
         #expect(backToScreen.height == 50)
     }
 }
+
+// MARK: - Pane Model Tests
+
+@Suite("Pane Model")
+struct PaneModelTests {
+    
+    @Test("Pane creation with defaults")
+    func paneCreation() {
+        let pane = Pane(
+            type: .terminal(TerminalPaneState()),
+            frame: CGRect(x: 0, y: 0, width: 400, height: 300),
+            title: "Test Terminal"
+        )
+        
+        #expect(pane.title == "Test Terminal")
+        #expect(pane.frame.width == 400)
+        #expect(pane.frame.height == 300)
+        #expect(pane.isCollapsed == false)
+        #expect(pane.groupId == nil)
+    }
+    
+    @Test("Pane center calculation")
+    func paneCenterCalculation() {
+        let pane = Pane(
+            type: .browser(BrowserPaneState()),
+            frame: CGRect(x: 100, y: 200, width: 400, height: 300),
+            title: "Browser"
+        )
+        
+        #expect(pane.center.x == 300) // 100 + 400/2
+        #expect(pane.center.y == 350) // 200 + 300/2
+    }
+    
+    @Test("Pane handle positions")
+    func paneHandlePositions() {
+        let pane = Pane(
+            type: .terminal(TerminalPaneState()),
+            frame: CGRect(x: 0, y: 0, width: 100, height: 100),
+            title: "Test"
+        )
+        
+        #expect(pane.leftHandlePosition == CGPoint(x: 0, y: 50))
+        #expect(pane.rightHandlePosition == CGPoint(x: 100, y: 50))
+        #expect(pane.topHandlePosition == CGPoint(x: 50, y: 0))
+        #expect(pane.bottomHandlePosition == CGPoint(x: 50, y: 100))
+    }
+    
+    @Test("Pane equality is by ID")
+    func paneEqualityById() {
+        let id = UUID()
+        let pane1 = Pane(
+            id: id,
+            type: .terminal(TerminalPaneState()),
+            frame: CGRect(x: 0, y: 0, width: 100, height: 100),
+            title: "A"
+        )
+        var pane2 = pane1
+        pane2.title = "B" // Different title, same ID
+        
+        #expect(pane1 == pane2) // Should be equal because same ID
+    }
+    
+    @Test("Pane factory creates centered pane")
+    func paneFactoryCreation() {
+        let position = CGPoint(x: 100, y: 100)
+        let pane = Pane.create(
+            type: .git(GitPaneState()),
+            at: position,
+            title: "Git"
+        )
+        
+        // Center should be at the given position
+        #expect(abs(pane.center.x - 100) < 0.001)
+        #expect(abs(pane.center.y - 100) < 0.001)
+    }
+}
+
+// MARK: - Pane Type Tests
+
+@Suite("Pane Types")
+struct PaneTypeTests {
+    
+    @Test("Terminal pane type properties")
+    func terminalPaneType() {
+        let paneType = PaneType.terminal(TerminalPaneState())
+        #expect(paneType.iconName == "terminal")
+        #expect(paneType.defaultTitle == "Terminal")
+    }
+    
+    @Test("Browser pane type properties")
+    func browserPaneType() {
+        let paneType = PaneType.browser(BrowserPaneState(url: URL(string: "http://example.com")))
+        #expect(paneType.iconName == "globe")
+        #expect(paneType.defaultTitle == "example.com")
+    }
+    
+    @Test("File explorer pane type properties")
+    func fileExplorerPaneType() {
+        let paneType = PaneType.fileExplorer(FileExplorerPaneState())
+        #expect(paneType.iconName == "folder")
+    }
+    
+    @Test("Code editor pane type properties")
+    func codeEditorPaneType() {
+        let paneType = PaneType.codeEditor(CodeEditorPaneState(fileURL: URL(fileURLWithPath: "/test/file.swift")))
+        #expect(paneType.iconName == "doc.text")
+        #expect(paneType.defaultTitle == "file.swift")
+    }
+    
+    @Test("Git pane type properties")
+    func gitPaneType() {
+        let paneType = PaneType.git(GitPaneState())
+        #expect(paneType.iconName == "arrow.triangle.branch")
+        #expect(paneType.defaultTitle == "Git")
+    }
+}
+
+// MARK: - Canvas Pane Management Tests
+
+@Suite("Canvas Pane Management")
+struct CanvasPaneManagementTests {
+    
+    @Test("Create pane adds to canvas")
+    @MainActor
+    func createPaneAddsToCanvas() {
+        let canvas = CanvasState()
+        #expect(canvas.panes.isEmpty)
+        
+        canvas.createPane(type: .terminal(TerminalPaneState()), title: "Test")
+        
+        #expect(canvas.panes.count == 1)
+        #expect(canvas.panes[0].title == "Test")
+    }
+    
+    @Test("Create pane auto-selects")
+    @MainActor
+    func createPaneAutoSelects() {
+        let canvas = CanvasState()
+        canvas.createPane(type: .terminal(TerminalPaneState()), title: "Test")
+        
+        let pane = canvas.panes[0]
+        #expect(canvas.selectedPaneIds.contains(pane.id))
+    }
+    
+    @Test("Delete pane removes from canvas")
+    @MainActor
+    func deletePaneRemovesFromCanvas() {
+        let canvas = CanvasState()
+        canvas.createPane(type: .terminal(TerminalPaneState()), title: "Test")
+        let paneId = canvas.panes[0].id
+        
+        canvas.deletePane(paneId)
+        
+        #expect(canvas.panes.isEmpty)
+        #expect(!canvas.selectedPaneIds.contains(paneId))
+    }
+    
+    @Test("Move pane updates position")
+    @MainActor
+    func movePaneUpdatesPosition() {
+        let canvas = CanvasState()
+        canvas.createPane(type: .terminal(TerminalPaneState()), at: CGPoint(x: 0, y: 0))
+        let paneId = canvas.panes[0].id
+        let originalX = canvas.panes[0].frame.origin.x
+        
+        canvas.movePaneBy(paneId, delta: CGSize(width: 50, height: 30))
+        
+        #expect(canvas.panes[0].frame.origin.x == originalX + 50)
+    }
+    
+    @Test("Resize pane enforces minimum")
+    @MainActor
+    func resizePaneEnforcesMinimum() {
+        let canvas = CanvasState()
+        canvas.createPane(type: .terminal(TerminalPaneState()))
+        let paneId = canvas.panes[0].id
+        
+        canvas.resizePane(paneId, to: CGSize(width: 50, height: 50)) // Too small
+        
+        #expect(canvas.panes[0].frame.size.width >= Layout.paneMinWidth)
+        #expect(canvas.panes[0].frame.size.height >= Layout.paneMinHeight)
+    }
+    
+    @Test("Bring to front updates z-index")
+    @MainActor
+    func bringToFrontUpdatesZIndex() {
+        let canvas = CanvasState()
+        canvas.createPane(type: .terminal(TerminalPaneState()), title: "A")
+        canvas.createPane(type: .terminal(TerminalPaneState()), title: "B")
+        
+        let paneA = canvas.panes[0]
+        let paneBZIndex = canvas.panes[1].zIndex
+        
+        canvas.bringToFront(paneA.id)
+        
+        #expect(canvas.panes[0].zIndex > paneBZIndex)
+    }
+    
+    @Test("Select pane updates selection")
+    @MainActor
+    func selectPaneUpdatesSelection() {
+        let canvas = CanvasState()
+        canvas.createPane(type: .terminal(TerminalPaneState()), title: "A")
+        canvas.createPane(type: .terminal(TerminalPaneState()), title: "B")
+        canvas.clearSelection()
+        
+        let paneA = canvas.panes[0]
+        canvas.selectPane(paneA.id)
+        
+        #expect(canvas.selectedPaneIds.count == 1)
+        #expect(canvas.selectedPaneIds.contains(paneA.id))
+    }
+    
+    @Test("Toggle selection adds and removes")
+    @MainActor
+    func toggleSelectionAddsAndRemoves() {
+        let canvas = CanvasState()
+        canvas.createPane(type: .terminal(TerminalPaneState()), title: "A")
+        let paneA = canvas.panes[0]
+        canvas.clearSelection()
+        
+        canvas.togglePaneSelection(paneA.id)
+        #expect(canvas.selectedPaneIds.contains(paneA.id))
+        
+        canvas.togglePaneSelection(paneA.id)
+        #expect(!canvas.selectedPaneIds.contains(paneA.id))
+    }
+    
+    @Test("Duplicate pane creates copy")
+    @MainActor
+    func duplicatePaneCreatesCopy() {
+        let canvas = CanvasState()
+        canvas.createPane(type: .terminal(TerminalPaneState()), title: "Original")
+        let originalId = canvas.panes[0].id
+        
+        canvas.duplicatePane(originalId)
+        
+        #expect(canvas.panes.count == 2)
+        #expect(canvas.panes[1].title == "Original")
+        #expect(canvas.panes[1].id != originalId)
+    }
+}

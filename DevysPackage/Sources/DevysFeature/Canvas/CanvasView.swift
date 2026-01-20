@@ -34,7 +34,8 @@ public struct CanvasView: View {
                 // Canvas origin marker (for debugging/reference)
                 canvasOriginMarker(viewportSize: geometry.size)
                 
-                // Future: Panes will be rendered here (Sprint 3+)
+                // Panes layer
+                panesLayer(viewportSize: geometry.size)
                 
                 // Zoom indicator
                 VStack {
@@ -47,10 +48,73 @@ public struct CanvasView: View {
                 }
             }
             .contentShape(Rectangle()) // Make entire area interactive
+            .gesture(canvasBackgroundTapGesture)
             .gesture(panGesture)
             .gesture(zoomGesture)
             .scrollZoom(canvas: canvas) // Two-finger scroll to zoom
+            .onAppear {
+                addTestPanesIfEmpty()
+            }
         }
+    }
+    
+    // MARK: - Panes Layer
+    
+    /// Renders all visible panes on the canvas
+    @ViewBuilder
+    private func panesLayer(viewportSize: CGSize) -> some View {
+        let visibleRect = canvas.visibleRect(viewportSize: viewportSize)
+        
+        ForEach(canvas.visiblePanes(in: visibleRect)) { pane in
+            paneView(for: pane, viewportSize: viewportSize)
+        }
+    }
+    
+    /// Renders a single pane at its correct position
+    @ViewBuilder
+    private func paneView(for pane: Pane, viewportSize: CGSize) -> some View {
+        let screenPos = canvas.screenPoint(from: pane.center, viewportSize: viewportSize)
+        let screenSize = canvas.screenSize(from: pane.frame.size)
+        
+        // Adjust height if collapsed
+        let height = pane.isCollapsed 
+            ? Layout.paneTitleBarHeight * canvas.scale 
+            : screenSize.height
+        
+        DraggablePaneView(pane: pane)
+            .frame(width: screenSize.width, height: height)
+            .position(x: screenPos.x, y: screenPos.y - (pane.isCollapsed ? (screenSize.height - height) / 2 : 0))
+    }
+    
+    // MARK: - Test Panes
+    
+    /// Add test panes for development (only if canvas is empty)
+    private func addTestPanesIfEmpty() {
+        #if DEBUG
+        guard canvas.panes.isEmpty else { return }
+        
+        // Add a few test panes
+        canvas.createPane(
+            type: .terminal(TerminalPaneState()),
+            at: CGPoint(x: -250, y: -100),
+            title: "Terminal"
+        )
+        
+        canvas.createPane(
+            type: .browser(BrowserPaneState(url: URL(string: "http://localhost:3000"))),
+            at: CGPoint(x: 250, y: -100),
+            title: "localhost:3000"
+        )
+        
+        canvas.createPane(
+            type: .fileExplorer(FileExplorerPaneState()),
+            at: CGPoint(x: 0, y: 200),
+            title: "Project Files"
+        )
+        
+        // Clear selection after adding test panes
+        canvas.clearSelection()
+        #endif
     }
     
     // MARK: - Computed Properties
@@ -70,6 +134,14 @@ public struct CanvasView: View {
     }
     
     // MARK: - Gestures
+    
+    /// Tap on background to clear selection
+    private var canvasBackgroundTapGesture: some Gesture {
+        TapGesture()
+            .onEnded {
+                canvas.clearSelection()
+            }
+    }
     
     /// Pan gesture - drag to move the canvas
     private var panGesture: some Gesture {
