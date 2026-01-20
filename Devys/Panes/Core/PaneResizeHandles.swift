@@ -9,6 +9,10 @@ import SwiftUI
 /// corners that change the pane origin (top-left, top-right, bottom-left).
 public struct PaneResizeHandles: View {
     let pane: Pane
+    
+    /// Binding to tell parent we're resizing (prevents drag gesture interference)
+    @Binding var isResizing: Bool
+    
     @Environment(\.canvasState) private var _canvas
 
     // swiftlint:disable:next force_unwrapping
@@ -25,8 +29,9 @@ public struct PaneResizeHandles: View {
         canvas.isPaneSelected(pane.id)
     }
 
-    public init(pane: Pane) {
+    public init(pane: Pane, isResizing: Binding<Bool>) {
         self.pane = pane
+        self._isResizing = isResizing
     }
 
     public var body: some View {
@@ -73,9 +78,15 @@ public struct PaneResizeHandles: View {
     private func cornerDragGesture(corner: Corner) -> some Gesture {
         DragGesture(minimumDistance: 1, coordinateSpace: .global)
             .onChanged { value in
+                // Mark that we're resizing (prevents parent drag gesture)
+                if !isResizing {
+                    isResizing = true
+                }
+                
                 // Capture start state on first drag event
                 if startFrame == .zero {
-                    startFrame = pane.frame
+                    // Use live frame from canvas to ensure we have current data
+                    startFrame = canvas.pane(withId: pane.id)?.frame ?? pane.frame
                     startDragLocation = value.startLocation
                 }
 
@@ -94,6 +105,7 @@ public struct PaneResizeHandles: View {
             .onEnded { _ in
                 startFrame = .zero
                 startDragLocation = .zero
+                isResizing = false
             }
     }
 
@@ -189,9 +201,15 @@ public struct PaneResizeHandles: View {
     private func edgeDragGesture(edge: Edge) -> some Gesture {
         DragGesture(minimumDistance: 1, coordinateSpace: .global)
             .onChanged { value in
+                // Mark that we're resizing (prevents parent drag gesture)
+                if !isResizing {
+                    isResizing = true
+                }
+                
                 // Capture start state on first drag event
                 if startFrame == .zero {
-                    startFrame = pane.frame
+                    // Use live frame from canvas to ensure we have current data
+                    startFrame = canvas.pane(withId: pane.id)?.frame ?? pane.frame
                     startDragLocation = value.startLocation
                 }
 
@@ -210,6 +228,7 @@ public struct PaneResizeHandles: View {
             .onEnded { _ in
                 startFrame = .zero
                 startDragLocation = .zero
+                isResizing = false
             }
     }
 

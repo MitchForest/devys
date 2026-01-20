@@ -29,8 +29,11 @@ public struct DraggablePaneView: View {
     /// Tracks drag offset during gesture (in screen coordinates)
     @State private var dragOffset: CGSize = .zero
 
-    /// Whether we're currently dragging
+    /// Whether we're currently dragging (moving the pane)
     @State private var isDragging: Bool = false
+
+    /// Whether we're currently resizing (prevents drag from interfering)
+    @State private var isResizing: Bool = false
 
     /// Start frame when drag began
     @State private var startFrame: CGRect = .zero
@@ -71,10 +74,11 @@ public struct DraggablePaneView: View {
                     .padding(-4)
             }
 
-            PaneContainerView(pane: pane)
+            PaneContainerView(pane: livePane)
 
             // Resize handles (only visible when selected)
-            PaneResizeHandles(pane: pane)
+            // Uses binding to isResizing to prevent drag gesture interference
+            PaneResizeHandles(pane: livePane, isResizing: $isResizing)
         }
         .offset(x: effectiveOffset.width, y: effectiveOffset.height)
         .gesture(dragGesture)
@@ -104,6 +108,9 @@ public struct DraggablePaneView: View {
     private var dragGesture: some Gesture {
         DragGesture(minimumDistance: 3)
             .onChanged { value in
+                // Don't start dragging if we're resizing
+                guard !isResizing else { return }
+
                 if !isDragging {
                     // First drag event - capture start state
                     isDragging = true
@@ -168,6 +175,14 @@ public struct DraggablePaneView: View {
                 )
             }
             .onEnded { value in
+                // If we were resizing, don't apply drag logic
+                guard !isResizing else {
+                    isDragging = false
+                    dragOffset = .zero
+                    startFrame = .zero
+                    return
+                }
+
                 isDragging = false
 
                 // Calculate final delta

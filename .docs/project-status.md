@@ -21,7 +21,7 @@ Devys is a native macOS infinite canvas for orchestrating AI coding agents, term
 | Sprint 5 | Snapping & Grouping | ✅ Complete | 10/10 |
 | Sprint 6 | Bezier Connectors | ⏸️ Deferred | 0/10 |
 | Sprint 7 | Terminal Pane | ✅ Complete | 12/12 |
-| Sprint 8 | Browser Pane | 🔴 Not Started | 0/14 |
+| Sprint 8 | Browser Pane | 🔄 In Progress | 9/14 |
 | Sprint 9 | File Explorer & Code Editor | 🔴 Not Started | 0/12 |
 | Sprint 10 | Git Pane & Persistence | 🔴 Not Started | 0/14 |
 
@@ -93,19 +93,20 @@ Devys is a native macOS infinite canvas for orchestrating AI coding agents, term
 - [x] File drop support
 - [x] Path escaping helper
 
-### Sprint 8: Browser Pane 🔴
+### Sprint 8: Browser Pane 🔄
 *Current sprint - see sprint-8-plan.md*
-- [ ] BrowserState model
-- [ ] WebViewStore observable
-- [ ] BrowserWebView (WKWebView wrapper)
-- [ ] Browser toolbar
-- [ ] BrowserPaneView
-- [ ] Wire into PaneContainerView
-- [ ] Loading states & errors
-- [ ] DevTools integration
+- [x] BrowserState model
+- [x] WebViewStore observable
+- [x] BrowserWebView (WKWebView wrapper)
+- [x] Browser toolbar
+- [x] BrowserPaneView
+- [x] Wire into PaneContainerView
+- [x] Loading states & errors
+- [x] DevTools integration
+- [x] Localhost quick access
 - [ ] URL drag-drop
 - [ ] Context menu
-- [ ] Localhost quick access
+- [ ] Keyboard focus
 - [ ] Unit tests
 
 ### Sprint 9: File Explorer & Code Editor 🔴
@@ -139,46 +140,51 @@ Devys is a native macOS infinite canvas for orchestrating AI coding agents, term
 ```
 Devys/
 ├── Devys.xcworkspace/              # Open this in Xcode
-├── Devys.xcodeproj/                # App shell project
-├── Devys/                          # App target (minimal)
+├── Devys.xcodeproj/                # Xcode project
+├── Devys/                          # App target (all code lives here)
 │   ├── DevysApp.swift              # Entry point
+│   ├── ContentView.swift           # Root view
+│   ├── App/
+│   │   └── AppCommands.swift       # Menu commands
+│   ├── Canvas/
+│   │   ├── CanvasView.swift
+│   │   ├── CanvasState.swift
+│   │   ├── CanvasGridView.swift
+│   │   ├── CanvasCoordinates.swift
+│   │   ├── ScrollZoomModifier.swift
+│   │   └── ZoomIndicator.swift
+│   ├── Panes/
+│   │   ├── Core/
+│   │   │   ├── Pane.swift
+│   │   │   ├── PaneType.swift
+│   │   │   ├── PaneContainerView.swift
+│   │   │   ├── DraggablePaneView.swift
+│   │   │   └── PaneResizeHandles.swift
+│   │   ├── Snapping/
+│   │   │   ├── SnapEngine.swift
+│   │   │   └── SnapGuideView.swift
+│   │   ├── Terminal/
+│   │   │   ├── TerminalState.swift
+│   │   │   ├── TerminalController.swift
+│   │   │   ├── TerminalPaneView.swift
+│   │   │   └── ActivityTrackingTerminalView.swift
+│   │   └── Browser/                # NEW - Sprint 8
+│   │       ├── BrowserState.swift
+│   │       ├── WebViewStore.swift
+│   │       ├── BrowserWebView.swift
+│   │       ├── BrowserToolbar.swift
+│   │       └── BrowserPaneView.swift
+│   ├── Shared/
+│   │   ├── Theme.swift
+│   │   └── CanvasEnvironment.swift
 │   └── Assets.xcassets/
-├── DevysPackage/                   # Main development area
-│   ├── Package.swift
-│   └── Sources/DevysFeature/
-│       ├── App/
-│       │   └── AppCommands.swift   # Menu commands
-│       ├── Canvas/
-│       │   ├── CanvasView.swift
-│       │   ├── CanvasState.swift
-│       │   ├── CanvasGridView.swift
-│       │   ├── CanvasCoordinates.swift
-│       │   ├── ScrollZoomModifier.swift
-│       │   └── ZoomIndicator.swift
-│       ├── Panes/
-│       │   ├── Core/
-│       │   │   ├── Pane.swift
-│       │   │   ├── PaneType.swift
-│       │   │   ├── PaneContainerView.swift
-│       │   │   ├── DraggablePaneView.swift
-│       │   │   └── PaneResizeHandles.swift
-│       │   ├── Snapping/
-│       │   │   ├── SnapEngine.swift
-│       │   │   └── SnapGuideView.swift
-│       │   └── Terminal/
-│       │       ├── TerminalState.swift
-│       │       ├── TerminalController.swift
-│       │       ├── TerminalPaneView.swift
-│       │       └── ActivityTrackingTerminalView.swift
-│       ├── Shared/
-│       │   ├── Theme.swift
-│       │   └── CanvasEnvironment.swift
-│       └── ContentView.swift
 └── Config/
     ├── Shared.xcconfig
     ├── Debug.xcconfig
     └── Release.xcconfig
 ```
+
+**Note**: Code now lives directly in `Devys/` (no more SPM package).
 
 ---
 

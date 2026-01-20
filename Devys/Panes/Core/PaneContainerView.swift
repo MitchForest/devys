@@ -131,11 +131,7 @@ public struct PaneContainerView: View {
         case .terminal(let terminalState):
             TerminalPaneView(paneId: pane.id, state: terminalState)
         case .browser(let state):
-            PlaceholderContent(
-                icon: "globe",
-                title: "Browser",
-                subtitle: state.url?.absoluteString ?? "No URL"
-            )
+            BrowserPaneView(paneId: pane.id, state: state)
         case .fileExplorer:
             PlaceholderContent(
                 icon: "folder",

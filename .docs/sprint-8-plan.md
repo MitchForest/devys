@@ -12,19 +12,19 @@ Functional embedded browser panes using WKWebView for previewing localhost dev s
 
 | Ticket | Title | Status | Commit |
 |--------|-------|--------|--------|
-| S8-01 | Enhance BrowserPaneState Model | ⬜ Not Started | |
-| S8-02 | Create WebViewStore Observable | ⬜ Not Started | |
-| S8-03 | Create BrowserWebView (NSViewRepresentable) | ⬜ Not Started | |
-| S8-04 | Create Browser Toolbar | ⬜ Not Started | |
-| S8-05 | Create BrowserPaneView | ⬜ Not Started | |
-| S8-06 | Wire Browser into PaneContainerView | ⬜ Not Started | |
-| S8-07 | Verify New Browser Menu Command | ⬜ Not Started | |
-| S8-08 | Handle Loading States & Errors | ⬜ Not Started | |
+| S8-01 | Enhance BrowserPaneState Model | ✅ Complete | `feat(browser): enhance BrowserState model` |
+| S8-02 | Create WebViewStore Observable | ✅ Complete | `feat(browser): create WebViewStore observable` |
+| S8-03 | Create BrowserWebView (NSViewRepresentable) | ✅ Complete | `feat(browser): create BrowserWebView wrapper` |
+| S8-04 | Create Browser Toolbar | ✅ Complete | `feat(browser): create browser toolbar` |
+| S8-05 | Create BrowserPaneView | ✅ Complete | `feat(browser): create BrowserPaneView` |
+| S8-06 | Wire Browser into PaneContainerView | ✅ Complete | `feat(browser): wire browser pane into container` |
+| S8-07 | Verify New Browser Menu Command | 🔄 In Progress | |
+| S8-08 | Handle Loading States & Errors | ✅ Complete | (included in S8-02, S8-05) |
 | S8-09 | Implement URL Drag-Drop | ⬜ Not Started | |
-| S8-10 | Browser DevTools Integration | ⬜ Not Started | |
+| S8-10 | Browser DevTools Integration | ✅ Complete | (included in S8-03) |
 | S8-11 | Browser Keyboard Focus | ⬜ Not Started | |
 | S8-12 | Browser Context Menu | ⬜ Not Started | |
-| S8-13 | Localhost Quick Access | ⬜ Not Started | |
+| S8-13 | Localhost Quick Access | ✅ Complete | (included in S8-04) |
 | S8-14 | Write Browser Unit Tests | ⬜ Not Started | |
 
 **Legend**: ⬜ Not Started | 🔄 In Progress | ✅ Complete | ⏸️ Blocked
@@ -1033,3 +1033,6 @@ Sprint 8 is complete when:
 | Date | Change |
 |------|--------|
 | 2026-01-20 | Initial sprint plan created |
+| 2026-01-20 | Implemented S8-01 through S8-06 (core browser functionality) |
+| 2026-01-20 | S8-08, S8-10, S8-13 included in core implementation |
+| 2026-01-20 | Updated project structure (SPM package → flat structure) |

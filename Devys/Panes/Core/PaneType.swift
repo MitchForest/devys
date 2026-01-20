@@ -29,7 +29,7 @@ public enum PaneType: Equatable {
     public var defaultTitle: String {
         switch self {
         case .terminal: return "Terminal"
-        case .browser(let state): return state.url?.host ?? "Browser"
+        case .browser(let state): return state.url.host ?? "Browser"
         case .fileExplorer(let state): return state.rootURL?.lastPathComponent ?? "Files"
         case .codeEditor(let state): return state.fileURL?.lastPathComponent ?? "Untitled"
         case .git: return "Git"
@@ -41,14 +41,9 @@ public enum PaneType: Equatable {
 
 // Note: TerminalState is defined in Panes/Terminal/TerminalState.swift
 
-/// State for browser panes
-public struct BrowserPaneState: Equatable, Hashable {
-    public var url: URL?
-
-    public init(url: URL? = URL(string: "http://localhost:3000")) {
-        self.url = url
-    }
-}
+// Note: BrowserState is defined in Panes/Browser/BrowserState.swift
+// Keeping BrowserPaneState as a typealias for backwards compatibility
+public typealias BrowserPaneState = BrowserState
 
 /// State for file explorer panes
 public struct FileExplorerPaneState: Equatable, Hashable {
