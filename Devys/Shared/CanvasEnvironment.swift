@@ -21,3 +21,25 @@ extension View {
         environment(\.canvasState, state)
     }
 }
+
+// MARK: - Workspace Environment Key
+
+/// Environment key for accessing WorkspaceState throughout the view hierarchy
+private struct WorkspaceStateKey: EnvironmentKey {
+    static let defaultValue: WorkspaceState? = nil
+}
+
+extension EnvironmentValues {
+    /// The current workspace state (optional, will be nil if not provided)
+    public var workspaceState: WorkspaceState? {
+        get { self[WorkspaceStateKey.self] }
+        set { self[WorkspaceStateKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Injects a WorkspaceState into the environment
+    public func workspaceState(_ state: WorkspaceState) -> some View {
+        environment(\.workspaceState, state)
+    }
+}

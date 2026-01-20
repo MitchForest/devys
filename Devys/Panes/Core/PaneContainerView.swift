@@ -69,6 +69,11 @@ public struct PaneContainerView: View {
 
     private var titleBar: some View {
         HStack(spacing: 8) {
+            // Hotkey badge
+            if let hotkeyIndex = pane.hotkeyIndex {
+                HotkeyBadge(index: hotkeyIndex)
+            }
+
             // Running indicator for terminals
             if case .terminal = pane.type {
                 TerminalStatusIndicator(isRunning: isTerminalRunning)
@@ -132,18 +137,10 @@ public struct PaneContainerView: View {
             TerminalPaneView(paneId: pane.id, state: terminalState)
         case .browser(let state):
             BrowserPaneView(paneId: pane.id, state: state)
-        case .fileExplorer:
-            PlaceholderContent(
-                icon: "folder",
-                title: "File Explorer",
-                subtitle: "Sprint 9"
-            )
-        case .codeEditor:
-            PlaceholderContent(
-                icon: "doc.text",
-                title: "Code Editor",
-                subtitle: "Sprint 9"
-            )
+        case .fileExplorer(let state):
+            FileExplorerView(paneId: pane.id, state: state)
+        case .codeEditor(let state):
+            CodeEditorPlaceholderView(state: state)
         case .git:
             PlaceholderContent(
                 icon: "arrow.triangle.branch",
@@ -151,6 +148,64 @@ public struct PaneContainerView: View {
                 subtitle: "Sprint 10"
             )
         }
+    }
+}
+
+// MARK: - Code Editor Placeholder
+
+/// Temporary placeholder for code editor (full implementation in Sprint 10)
+struct CodeEditorPlaceholderView: View {
+    let state: CodeEditorPaneState
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if let url = state.fileURL {
+                // Show file path bar
+                HStack {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                    Text(url.path)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.gray.opacity(0.1))
+
+                Divider()
+            }
+
+            // Show content as read-only text
+            ScrollView {
+                Text(state.content.isEmpty ? "Empty file" : state.content)
+                    .font(.system(size: 12, design: .monospaced))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                    .textSelection(.enabled)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+}
+
+// MARK: - Hotkey Badge
+
+/// Small badge showing the keyboard shortcut to focus this pane
+struct HotkeyBadge: View {
+    let index: Int
+
+    var body: some View {
+        Text("⌘\(index)")
+            .font(.system(size: 10, weight: .medium, design: .monospaced))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(Color.gray.opacity(0.2))
+            .clipShape(RoundedRectangle(cornerRadius: 3))
+            .help("Press ⌘\(index) to focus this pane")
     }
 }
 

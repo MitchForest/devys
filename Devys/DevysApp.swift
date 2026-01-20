@@ -2,9 +2,13 @@ import SwiftUI
 
 @main
 struct DevysApp: App {
+    /// Root workspace state managing all project tabs
+    @State private var workspaceState = WorkspaceState()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .workspaceState(workspaceState)
         }
         .windowStyle(.automatic)
         .windowResizability(.contentMinSize)

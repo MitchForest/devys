@@ -35,6 +35,21 @@ public enum PaneType: Equatable {
         case .git: return "Git"
         }
     }
+
+    /// Whether this pane type should be scoped to a project
+    ///
+    /// Project-scoped panes will:
+    /// - Inherit the active project's root URL
+    /// - Show a project indicator in the title bar
+    /// - Be associated with a specific project tab
+    public var isProjectScoped: Bool {
+        switch self {
+        case .terminal, .fileExplorer, .git:
+            return true
+        case .browser, .codeEditor:
+            return false
+        }
+    }
 }
 
 // MARK: - Pane State Types

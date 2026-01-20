@@ -29,6 +29,12 @@ public struct Pane: Identifiable, Equatable {
     /// Whether the pane is collapsed (showing only title bar)
     public var isCollapsed: Bool
 
+    /// Project this pane is scoped to (nil if not project-scoped)
+    public var projectId: UUID?
+
+    /// Hotkey index for keyboard navigation (1-9, nil if not assigned)
+    public var hotkeyIndex: Int?
+
     // MARK: - Initialization
 
     public init(
@@ -38,7 +44,9 @@ public struct Pane: Identifiable, Equatable {
         zIndex: Int = 0,
         groupId: UUID? = nil,
         title: String,
-        isCollapsed: Bool = false
+        isCollapsed: Bool = false,
+        projectId: UUID? = nil,
+        hotkeyIndex: Int? = nil
     ) {
         self.id = id
         self.type = type
@@ -47,6 +55,8 @@ public struct Pane: Identifiable, Equatable {
         self.groupId = groupId
         self.title = title
         self.isCollapsed = isCollapsed
+        self.projectId = projectId
+        self.hotkeyIndex = hotkeyIndex
     }
 
     // MARK: - Computed Properties
@@ -90,7 +100,8 @@ extension Pane {
     public static func create(
         type: PaneType,
         at position: CGPoint,
-        title: String? = nil
+        title: String? = nil,
+        projectId: UUID? = nil
     ) -> Pane {
         let size = CGSize(
             width: Layout.paneDefaultWidth,
@@ -105,7 +116,8 @@ extension Pane {
         return Pane(
             type: type,
             frame: frame,
-            title: title ?? type.defaultTitle
+            title: title ?? type.defaultTitle,
+            projectId: type.isProjectScoped ? projectId : nil
         )
     }
 }

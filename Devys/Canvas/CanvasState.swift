@@ -58,9 +58,16 @@ public final class CanvasState {
     /// Tracks which terminal panes have running commands
     public var terminalRunningStates: [UUID: Bool] = [:]
 
+    // MARK: - Project Scoping
+
+    /// Current project ID for auto-scoping new panes
+    public var currentProjectId: UUID?
+
     // MARK: - Initialization
 
-    public init() {}
+    public init(currentProjectId: UUID? = nil) {
+        self.currentProjectId = currentProjectId
+    }
 
     // MARK: - Pane Queries
 
@@ -89,13 +96,22 @@ public final class CanvasState {
     // MARK: - Pane Creation
 
     /// Create a new pane at the center of the current viewport
-    public func createPane(type: PaneType, at position: CGPoint? = nil, title: String? = nil) {
+    public func createPane(
+        type: PaneType,
+        at position: CGPoint? = nil,
+        title: String? = nil,
+        projectId: UUID? = nil
+    ) {
         let pos = position ?? CGPoint(x: -offset.x, y: -offset.y)
-        var pane = Pane.create(type: type, at: pos, title: title)
+        let effectiveProjectId = projectId ?? currentProjectId
+        var pane = Pane.create(type: type, at: pos, title: title, projectId: effectiveProjectId)
         pane.zIndex = nextZIndex
         nextZIndex += 1
         panes.append(pane)
         selectedPaneIds = [pane.id]
+
+        // Recalculate hotkey indices
+        recalculateHotkeyIndices()
     }
 
     // MARK: - Pane Modification
@@ -107,6 +123,7 @@ public final class CanvasState {
         if hoveredPaneId == id {
             hoveredPaneId = nil
         }
+        recalculateHotkeyIndices()
     }
 
     /// Delete all selected panes
@@ -115,6 +132,7 @@ public final class CanvasState {
             panes.removeAll { $0.id == id }
         }
         selectedPaneIds.removeAll()
+        recalculateHotkeyIndices()
     }
 
     /// Move a pane by a delta (in canvas coordinates)
@@ -462,4 +480,46 @@ public final class CanvasState {
             }
         }
     }
+
+    // MARK: - Hotkey Management
+
+    /// Recalculate hotkey indices for all panes (1-9)
+    ///
+    /// Assigns hotkeys based on z-index order (bottom to top).
+    /// Only the first 9 panes get hotkeys.
+    public func recalculateHotkeyIndices() {
+        let sortedPanes = panesSortedByZIndex
+
+        for (index, pane) in sortedPanes.prefix(9).enumerated() {
+            if let paneIndex = paneIndex(withId: pane.id) {
+                panes[paneIndex].hotkeyIndex = index + 1
+            }
+        }
+
+        // Clear hotkeys for panes beyond 9
+        for pane in sortedPanes.dropFirst(9) {
+            if let paneIndex = paneIndex(withId: pane.id) {
+                panes[paneIndex].hotkeyIndex = nil
+            }
+        }
+    }
+
+    /// Focus a pane by its hotkey index (1-9)
+    ///
+    /// Selects the pane and posts a notification for the pane to become first responder.
+    public func focusPaneByHotkey(_ index: Int) {
+        guard let pane = panes.first(where: { $0.hotkeyIndex == index }) else { return }
+        selectPane(pane.id)
+        NotificationCenter.default.post(name: .focusPane, object: pane.id)
+    }
+}
+
+// MARK: - Hotkey Notifications
+
+public extension Notification.Name {
+    /// Request to focus a specific pane (object is the pane UUID)
+    static let focusPane = Notification.Name("devys.focusPane")
+
+    /// Request to focus pane by hotkey index (object is the Int index 1-9)
+    static let focusPaneByHotkey = Notification.Name("devys.focusPaneByHotkey")
 }
