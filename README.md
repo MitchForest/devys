@@ -1,6 +1,53 @@
-# Devys - macOS App
+# Devys - Visual Canvas for Software Development 2.0
 
-A modern macOS application using a **workspace + SPM package** architecture for clean separation between app shell and feature code.
+A native macOS infinite canvas for orchestrating AI coding agents, terminals, browsers, and development workflows. Built for developers who direct AI agents rather than write code directly.
+
+## Keyboard Shortcuts
+
+### Canvas Navigation
+| Action | Shortcut |
+|--------|----------|
+| Pan canvas | Drag on background |
+| Zoom in/out | ⌘+ / ⌘- or pinch gesture |
+| Zoom with trackpad | Two-finger scroll (hold ⌘ during momentum) |
+| Zoom to 100% | ⌘1 |
+| Zoom to fit | ⌘0 |
+
+### Pane Management
+| Action | Shortcut |
+|--------|----------|
+| Select pane | Click |
+| Multi-select | ⇧-click or ⌘-click |
+| Move pane | Drag pane |
+| Delete selected | Delete or ⌫ |
+| Duplicate pane | ⌘D |
+| Close pane | ⌘W |
+| Toggle fullscreen | ⌘Return |
+
+### Grouping
+| Action | Shortcut |
+|--------|----------|
+| Group selected | ⌘G |
+| Ungroup | ⇧⌘G |
+| Auto-group | Snap panes edge-to-edge |
+
+### Create Panes
+| Action | Shortcut |
+|--------|----------|
+| New Terminal | ⇧⌘T |
+| New Browser | ⇧⌘B |
+| New File Explorer | ⇧⌘E |
+| New Code Editor | ⌥⌘N |
+| New Git | ⇧⌘G |
+| New Canvas | ⇧⌘N |
+
+## Features
+
+- **Infinite Canvas**: Pan and zoom with native macOS gestures
+- **Draggable Panes**: Terminal, browser, file explorer, code editor, git panes
+- **Snap & Group**: Panes snap together and auto-group for unified movement
+- **Resize Handles**: Corner and edge handles for precise sizing
+- **Visual Guides**: Alignment guides appear when snapping
 
 ## Project Architecture
 
