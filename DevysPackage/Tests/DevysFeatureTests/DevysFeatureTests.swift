@@ -140,3 +140,219 @@ struct TypographyTests {
         #expect(font16.pointSize == 16)
     }
 }
+
+// MARK: - Canvas State Tests
+
+@Suite("Canvas State")
+struct CanvasStateTests {
+    
+    @Test("Initial state has default values")
+    @MainActor
+    func initialState() {
+        let canvas = CanvasState()
+        #expect(canvas.offset == .zero)
+        #expect(canvas.scale == Layout.defaultScale)
+    }
+    
+    @Test("Zoom in increases scale")
+    @MainActor
+    func zoomInIncreasesScale() {
+        let canvas = CanvasState()
+        let initialScale = canvas.scale
+        canvas.zoomIn()
+        #expect(canvas.scale > initialScale)
+    }
+    
+    @Test("Zoom out decreases scale")
+    @MainActor
+    func zoomOutDecreasesScale() {
+        let canvas = CanvasState()
+        let initialScale = canvas.scale
+        canvas.zoomOut()
+        #expect(canvas.scale < initialScale)
+    }
+    
+    @Test("Zoom is clamped to max")
+    @MainActor
+    func zoomClampedToMax() {
+        let canvas = CanvasState()
+        canvas.setScale(100.0) // Way above max
+        #expect(canvas.scale == Layout.maxScale)
+    }
+    
+    @Test("Zoom is clamped to min")
+    @MainActor
+    func zoomClampedToMin() {
+        let canvas = CanvasState()
+        canvas.setScale(0.001) // Way below min
+        #expect(canvas.scale == Layout.minScale)
+    }
+    
+    @Test("Zoom to fit resets state")
+    @MainActor
+    func zoomToFitResetsState() {
+        let canvas = CanvasState()
+        canvas.setScale(2.0)
+        canvas.setOffset(CGPoint(x: 100, y: 200))
+        
+        canvas.zoomToFit()
+        
+        #expect(canvas.scale == Layout.defaultScale)
+        #expect(canvas.offset == .zero)
+    }
+    
+    @Test("Pan updates offset")
+    @MainActor
+    func panUpdatesOffset() {
+        let canvas = CanvasState()
+        canvas.pan(by: CGSize(width: 100, height: 50))
+        
+        #expect(canvas.offset.x == 100)
+        #expect(canvas.offset.y == 50)
+    }
+    
+    @Test("Pan accounts for scale")
+    @MainActor
+    func panAccountsForScale() {
+        let canvas = CanvasState()
+        canvas.setScale(2.0) // 200% zoom
+        canvas.pan(by: CGSize(width: 100, height: 50))
+        
+        // At 2x zoom, 100 screen points = 50 canvas units
+        #expect(canvas.offset.x == 50)
+        #expect(canvas.offset.y == 25)
+    }
+}
+
+// MARK: - Coordinate Transform Tests
+
+@Suite("Coordinate Transforms")
+struct CoordinateTransformTests {
+    
+    let viewportSize = CGSize(width: 800, height: 600)
+    
+    @Test("Screen center maps to canvas origin at default state")
+    @MainActor
+    func screenCenterMapsToOrigin() {
+        let canvas = CanvasState()
+        let center = CGPoint(x: 400, y: 300)
+        let canvasPoint = canvas.canvasPoint(from: center, viewportSize: viewportSize)
+        
+        #expect(abs(canvasPoint.x) < 0.001)
+        #expect(abs(canvasPoint.y) < 0.001)
+    }
+    
+    @Test("Canvas origin maps to screen center at default state")
+    @MainActor
+    func canvasOriginMapsToScreenCenter() {
+        let canvas = CanvasState()
+        let screenPoint = canvas.screenPoint(from: .zero, viewportSize: viewportSize)
+        
+        #expect(abs(screenPoint.x - 400) < 0.001)
+        #expect(abs(screenPoint.y - 300) < 0.001)
+    }
+    
+    @Test("Round trip conversion is identity")
+    @MainActor
+    func roundTripIsIdentity() {
+        let canvas = CanvasState()
+        canvas.setScale(1.5)
+        canvas.setOffset(CGPoint(x: 50, y: -30))
+        
+        let originalScreen = CGPoint(x: 200, y: 150)
+        let canvasPoint = canvas.canvasPoint(from: originalScreen, viewportSize: viewportSize)
+        let backToScreen = canvas.screenPoint(from: canvasPoint, viewportSize: viewportSize)
+        
+        #expect(abs(backToScreen.x - originalScreen.x) < 0.001)
+        #expect(abs(backToScreen.y - originalScreen.y) < 0.001)
+    }
+    
+    @Test("Panning moves canvas in correct direction")
+    @MainActor
+    func panMovesCorrectly() {
+        let canvas = CanvasState()
+        
+        // Pan right (positive X offset)
+        canvas.setOffset(CGPoint(x: 100, y: 0))
+        
+        // Canvas origin should now be to the right of center
+        let originOnScreen = canvas.screenPoint(from: .zero, viewportSize: viewportSize)
+        #expect(originOnScreen.x > 400)
+    }
+    
+    @Test("Zooming scales distances correctly")
+    @MainActor
+    func zoomScalesDistances() {
+        let canvas = CanvasState()
+        
+        // At 1x zoom
+        let point1x = canvas.screenPoint(from: CGPoint(x: 100, y: 0), viewportSize: viewportSize)
+        let dist1x = point1x.x - 400 // Distance from center
+        
+        // At 2x zoom
+        canvas.setScale(2.0)
+        let point2x = canvas.screenPoint(from: CGPoint(x: 100, y: 0), viewportSize: viewportSize)
+        let dist2x = point2x.x - 400
+        
+        // Distance should double
+        #expect(abs(dist2x - dist1x * 2) < 0.001)
+    }
+    
+    @Test("Visible rect correct at default state")
+    @MainActor
+    func visibleRectAtDefault() {
+        let canvas = CanvasState()
+        let rect = canvas.visibleRect(viewportSize: viewportSize)
+        
+        // At 1x zoom, centered, visible rect should be viewport size
+        #expect(abs(rect.width - 800) < 0.001)
+        #expect(abs(rect.height - 600) < 0.001)
+        
+        // Centered on origin
+        #expect(abs(rect.midX) < 0.001)
+        #expect(abs(rect.midY) < 0.001)
+    }
+    
+    @Test("Visible rect shrinks when zoomed in")
+    @MainActor
+    func visibleRectShrinksOnZoomIn() {
+        let canvas = CanvasState()
+        canvas.setScale(2.0)
+        
+        let rect = canvas.visibleRect(viewportSize: viewportSize)
+        
+        // At 2x zoom, we see half the canvas area
+        #expect(abs(rect.width - 400) < 0.001)
+        #expect(abs(rect.height - 300) < 0.001)
+    }
+    
+    @Test("Visible rect expands when zoomed out")
+    @MainActor
+    func visibleRectExpandsOnZoomOut() {
+        let canvas = CanvasState()
+        canvas.setScale(0.5)
+        
+        let rect = canvas.visibleRect(viewportSize: viewportSize)
+        
+        // At 0.5x zoom, we see twice the canvas area
+        #expect(abs(rect.width - 1600) < 0.001)
+        #expect(abs(rect.height - 1200) < 0.001)
+    }
+    
+    @Test("Size conversion works correctly")
+    @MainActor
+    func sizeConversionWorks() {
+        let canvas = CanvasState()
+        canvas.setScale(2.0)
+        
+        let screenSize = CGSize(width: 100, height: 50)
+        let canvasSize = canvas.canvasSize(from: screenSize)
+        
+        #expect(canvasSize.width == 50)
+        #expect(canvasSize.height == 25)
+        
+        let backToScreen = canvas.screenSize(from: canvasSize)
+        #expect(backToScreen.width == 100)
+        #expect(backToScreen.height == 50)
+    }
+}
