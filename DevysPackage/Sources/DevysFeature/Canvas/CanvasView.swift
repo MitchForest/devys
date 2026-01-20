@@ -49,9 +49,7 @@ public struct CanvasView: View {
             .contentShape(Rectangle()) // Make entire area interactive
             .gesture(panGesture)
             .gesture(zoomGesture)
-            .onAppear {
-                setupScrollWheelZoom()
-            }
+            .scrollZoom(canvas: canvas) // Two-finger scroll to zoom
         }
     }
     
@@ -95,15 +93,6 @@ public struct CanvasView: View {
                 let newScale = canvas.scale * value
                 canvas.setScale(newScale)
             }
-    }
-    
-    // MARK: - Scroll Wheel Zoom
-    
-    /// Set up scroll wheel zoom using NSEvent monitoring
-    private func setupScrollWheelZoom() {
-        // Note: This requires AppKit integration for scroll wheel events
-        // Will be implemented via NSViewRepresentable or NSEvent.addLocalMonitorForEvents
-        // For now, pinch gesture works on trackpad
     }
     
     // MARK: - Debug Views
