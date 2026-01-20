@@ -1,5 +1,4 @@
 import SwiftUI
-import DevysFeature
 
 @main
 struct DevysApp: App {

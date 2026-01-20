@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		8B90D1482DEDD44A00FBD189 /* DevysFeature in Frameworks */ = {isa = PBXBuildFile; productRef = 8B90D1472DEDD44A00FBD189 /* DevysFeature */; };
+		8B90D1492DEDD44A00FBD189 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 8B90D14A2DEDD44A00FBD189 /* SwiftTerm */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -51,7 +51,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				8B90D1482DEDD44A00FBD189 /* DevysFeature in Frameworks */,
+				8B90D1492DEDD44A00FBD189 /* SwiftTerm in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -104,7 +104,7 @@
 			);
 			name = Devys;
 			packageProductDependencies = (
-				8B90D1472DEDD44A00FBD189 /* DevysFeature */,
+				8B90D14A2DEDD44A00FBD189 /* SwiftTerm */,
 			);
 			productName = Devys;
 			productReference = 8BC2655C2DEDD3F400F279A4 /* Devys.app */;
@@ -137,6 +137,9 @@
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 8BC2655D2DEDD3F400F279A4 /* Products */;
+			packageReferences = (
+				8B90D14B2DEDD44A00FBD189 /* XCRemoteSwiftPackageReference "SwiftTerm" */,
+			);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -226,10 +229,22 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		8B90D14B2DEDD44A00FBD189 /* XCRemoteSwiftPackageReference "SwiftTerm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/migueldeicaza/SwiftTerm.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.2.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
-		8B90D1472DEDD44A00FBD189 /* DevysFeature */ = {
+		8B90D14A2DEDD44A00FBD189 /* SwiftTerm */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = DevysFeature;
+			package = 8B90D14B2DEDD44A00FBD189 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
+			productName = SwiftTerm;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
