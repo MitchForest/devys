@@ -103,7 +103,7 @@ public struct CanvasView: View {
 
         // Add a few test panes
         canvas.createPane(
-            type: .terminal(TerminalPaneState()),
+            type: .terminal(TerminalState()),
             at: CGPoint(x: -250, y: -100),
             title: "Terminal"
         )

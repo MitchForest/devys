@@ -35,7 +35,7 @@ public struct ContentView: View {
             }
             // Pane creation commands
             .onReceive(NotificationCenter.default.publisher(for: .newTerminal)) { _ in
-                canvasState.createPane(type: .terminal(TerminalPaneState()))
+                canvasState.createPane(type: .terminal(TerminalState()))
             }
             .onReceive(NotificationCenter.default.publisher(for: .newBrowser)) { _ in
                 canvasState.createPane(type: .browser(BrowserPaneState()))

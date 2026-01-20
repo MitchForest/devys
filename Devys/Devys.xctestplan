@@ -18,13 +18,6 @@
   "testTargets" : [
     {
       "target" : {
-        "containerPath" : "container:Devys.xcodeproj",
-        "identifier" : "8BC265732DEDD3F500F279A4",
-        "name" : "DevysUITests"
-      }
-    },
-    {
-      "target" : {
         "containerPath" : "container:DevysPackage",
         "identifier" : "DevysFeatureTests",
         "name" : "DevysFeatureTests"

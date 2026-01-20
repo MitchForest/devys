@@ -4,6 +4,9 @@ import SwiftUI
 ///
 /// Provides 8 handles: 4 corners + 4 edges.
 /// Each handle allows dragging to resize the pane with live preview.
+///
+/// Uses global coordinate space to avoid jittering when resizing from
+/// corners that change the pane origin (top-left, top-right, bottom-left).
 public struct PaneResizeHandles: View {
     let pane: Pane
     @Environment(\.canvasState) private var _canvas
@@ -11,8 +14,11 @@ public struct PaneResizeHandles: View {
     // swiftlint:disable:next force_unwrapping
     private var canvas: CanvasState { _canvas! } // Safe: always injected by parent
 
-    /// Frame at the start of resize gesture
+    /// Frame at the start of resize gesture (in canvas coordinates)
     @State private var startFrame: CGRect = .zero
+
+    /// Start drag position in global screen coordinates
+    @State private var startDragLocation: CGPoint = .zero
 
     /// Whether this pane is selected (handles only show when selected)
     private var isSelected: Bool {
@@ -65,21 +71,29 @@ public struct PaneResizeHandles: View {
     }
 
     private func cornerDragGesture(corner: Corner) -> some Gesture {
-        DragGesture(minimumDistance: 1)
+        DragGesture(minimumDistance: 1, coordinateSpace: .global)
             .onChanged { value in
-                // Capture start frame on first drag event
-                if value.translation == .zero || startFrame == .zero {
+                // Capture start state on first drag event
+                if startFrame == .zero {
                     startFrame = pane.frame
+                    startDragLocation = value.startLocation
                 }
 
+                // Calculate delta from the ORIGINAL start position (stable reference)
+                let screenDelta = CGSize(
+                    width: value.location.x - startDragLocation.x,
+                    height: value.location.y - startDragLocation.y
+                )
+
                 let delta = CGSize(
-                    width: value.translation.width / canvas.scale,
-                    height: value.translation.height / canvas.scale
+                    width: screenDelta.width / canvas.scale,
+                    height: screenDelta.height / canvas.scale
                 )
                 applyCornerResize(corner, delta: delta)
             }
             .onEnded { _ in
                 startFrame = .zero
+                startDragLocation = .zero
             }
     }
 
@@ -173,21 +187,29 @@ public struct PaneResizeHandles: View {
     }
 
     private func edgeDragGesture(edge: Edge) -> some Gesture {
-        DragGesture(minimumDistance: 1)
+        DragGesture(minimumDistance: 1, coordinateSpace: .global)
             .onChanged { value in
-                // Capture start frame on first drag event
-                if value.translation == .zero || startFrame == .zero {
+                // Capture start state on first drag event
+                if startFrame == .zero {
                     startFrame = pane.frame
+                    startDragLocation = value.startLocation
                 }
 
+                // Calculate delta from the ORIGINAL start position (stable reference)
+                let screenDelta = CGSize(
+                    width: value.location.x - startDragLocation.x,
+                    height: value.location.y - startDragLocation.y
+                )
+
                 let delta = CGSize(
-                    width: value.translation.width / canvas.scale,
-                    height: value.translation.height / canvas.scale
+                    width: screenDelta.width / canvas.scale,
+                    height: screenDelta.height / canvas.scale
                 )
                 applyEdgeResize(edge, delta: delta)
             }
             .onEnded { _ in
                 startFrame = .zero
+                startDragLocation = .zero
             }
     }
 

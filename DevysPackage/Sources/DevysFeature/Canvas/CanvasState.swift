@@ -53,6 +53,11 @@ public final class CanvasState {
     /// Current drag offset for the group being dragged (in canvas coordinates)
     public var groupDragOffset: CGSize = .zero
 
+    // MARK: - Terminal Running State
+
+    /// Tracks which terminal panes have running commands
+    public var terminalRunningStates: [UUID: Bool] = [:]
+
     // MARK: - Initialization
 
     public init() {}
@@ -177,6 +182,16 @@ public final class CanvasState {
     public func updatePaneTitle(_ id: UUID, title: String) {
         guard let index = paneIndex(withId: id) else { return }
         panes[index].title = title
+    }
+
+    /// Update terminal running state (command is executing)
+    public func updateTerminalRunningState(_ id: UUID, isRunning: Bool) {
+        terminalRunningStates[id] = isRunning
+    }
+
+    /// Check if a terminal pane has a running command
+    public func isTerminalRunning(_ id: UUID) -> Bool {
+        terminalRunningStates[id] ?? false
     }
 
     /// Duplicate a pane

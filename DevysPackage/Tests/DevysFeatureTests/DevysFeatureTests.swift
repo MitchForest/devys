@@ -365,7 +365,7 @@ struct PaneModelTests {
     @Test("Pane creation with defaults")
     func paneCreation() {
         let pane = Pane(
-            type: .terminal(TerminalPaneState()),
+            type: .terminal(TerminalState()),
             frame: CGRect(x: 0, y: 0, width: 400, height: 300),
             title: "Test Terminal"
         )
@@ -392,7 +392,7 @@ struct PaneModelTests {
     @Test("Pane handle positions")
     func paneHandlePositions() {
         let pane = Pane(
-            type: .terminal(TerminalPaneState()),
+            type: .terminal(TerminalState()),
             frame: CGRect(x: 0, y: 0, width: 100, height: 100),
             title: "Test"
         )
@@ -408,7 +408,7 @@ struct PaneModelTests {
         let id = UUID()
         let pane1 = Pane(
             id: id,
-            type: .terminal(TerminalPaneState()),
+            type: .terminal(TerminalState()),
             frame: CGRect(x: 0, y: 0, width: 100, height: 100),
             title: "A"
         )
@@ -440,7 +440,7 @@ struct PaneTypeTests {
 
     @Test("Terminal pane type properties")
     func terminalPaneType() {
-        let paneType = PaneType.terminal(TerminalPaneState())
+        let paneType = PaneType.terminal(TerminalState())
         #expect(paneType.iconName == "terminal")
         #expect(paneType.defaultTitle == "Terminal")
     }
@@ -484,7 +484,7 @@ struct CanvasPaneManagementTests {
         let canvas = CanvasState()
         #expect(canvas.panes.isEmpty)
 
-        canvas.createPane(type: .terminal(TerminalPaneState()), title: "Test")
+        canvas.createPane(type: .terminal(TerminalState()), title: "Test")
 
         #expect(canvas.panes.count == 1)
         #expect(canvas.panes[0].title == "Test")
@@ -494,7 +494,7 @@ struct CanvasPaneManagementTests {
     @MainActor
     func createPaneAutoSelects() {
         let canvas = CanvasState()
-        canvas.createPane(type: .terminal(TerminalPaneState()), title: "Test")
+        canvas.createPane(type: .terminal(TerminalState()), title: "Test")
 
         let pane = canvas.panes[0]
         #expect(canvas.selectedPaneIds.contains(pane.id))
@@ -504,7 +504,7 @@ struct CanvasPaneManagementTests {
     @MainActor
     func deletePaneRemovesFromCanvas() {
         let canvas = CanvasState()
-        canvas.createPane(type: .terminal(TerminalPaneState()), title: "Test")
+        canvas.createPane(type: .terminal(TerminalState()), title: "Test")
         let paneId = canvas.panes[0].id
 
         canvas.deletePane(paneId)
@@ -517,7 +517,7 @@ struct CanvasPaneManagementTests {
     @MainActor
     func movePaneUpdatesPosition() {
         let canvas = CanvasState()
-        canvas.createPane(type: .terminal(TerminalPaneState()), at: CGPoint(x: 0, y: 0))
+        canvas.createPane(type: .terminal(TerminalState()), at: CGPoint(x: 0, y: 0))
         let paneId = canvas.panes[0].id
         let originalX = canvas.panes[0].frame.origin.x
 
@@ -530,7 +530,7 @@ struct CanvasPaneManagementTests {
     @MainActor
     func resizePaneEnforcesMinimum() {
         let canvas = CanvasState()
-        canvas.createPane(type: .terminal(TerminalPaneState()))
+        canvas.createPane(type: .terminal(TerminalState()))
         let paneId = canvas.panes[0].id
 
         canvas.resizePane(paneId, to: CGSize(width: 50, height: 50)) // Too small
@@ -543,8 +543,8 @@ struct CanvasPaneManagementTests {
     @MainActor
     func bringToFrontUpdatesZIndex() {
         let canvas = CanvasState()
-        canvas.createPane(type: .terminal(TerminalPaneState()), title: "A")
-        canvas.createPane(type: .terminal(TerminalPaneState()), title: "B")
+        canvas.createPane(type: .terminal(TerminalState()), title: "A")
+        canvas.createPane(type: .terminal(TerminalState()), title: "B")
 
         let paneA = canvas.panes[0]
         let paneBZIndex = canvas.panes[1].zIndex
@@ -558,8 +558,8 @@ struct CanvasPaneManagementTests {
     @MainActor
     func selectPaneUpdatesSelection() {
         let canvas = CanvasState()
-        canvas.createPane(type: .terminal(TerminalPaneState()), title: "A")
-        canvas.createPane(type: .terminal(TerminalPaneState()), title: "B")
+        canvas.createPane(type: .terminal(TerminalState()), title: "A")
+        canvas.createPane(type: .terminal(TerminalState()), title: "B")
         canvas.clearSelection()
 
         let paneA = canvas.panes[0]
@@ -573,7 +573,7 @@ struct CanvasPaneManagementTests {
     @MainActor
     func toggleSelectionAddsAndRemoves() {
         let canvas = CanvasState()
-        canvas.createPane(type: .terminal(TerminalPaneState()), title: "A")
+        canvas.createPane(type: .terminal(TerminalState()), title: "A")
         let paneA = canvas.panes[0]
         canvas.clearSelection()
 
@@ -588,7 +588,7 @@ struct CanvasPaneManagementTests {
     @MainActor
     func duplicatePaneCreatesCopy() {
         let canvas = CanvasState()
-        canvas.createPane(type: .terminal(TerminalPaneState()), title: "Original")
+        canvas.createPane(type: .terminal(TerminalState()), title: "Original")
         let originalId = canvas.panes[0].id
 
         canvas.duplicatePane(originalId)
@@ -596,5 +596,206 @@ struct CanvasPaneManagementTests {
         #expect(canvas.panes.count == 2)
         #expect(canvas.panes[1].title == "Original")
         #expect(canvas.panes[1].id != originalId)
+    }
+}
+
+// MARK: - Terminal State Tests
+
+@Suite("TerminalState Tests")
+struct TerminalStateTests {
+
+    @Test("Default initialization uses environment shell")
+    func defaultInitializationUsesEnvShell() {
+        let state = TerminalState()
+
+        // Should use $SHELL or fall back to /bin/zsh
+        let expectedShell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        #expect(state.shell == expectedShell)
+    }
+
+    @Test("Default initialization uses home directory")
+    func defaultInitializationUsesHomeDirectory() {
+        let state = TerminalState()
+
+        #expect(state.workingDirectory == FileManager.default.homeDirectoryForCurrentUser)
+    }
+
+    @Test("Default scrollback is 10000 lines")
+    func defaultScrollbackIs10000() {
+        let state = TerminalState()
+
+        #expect(state.scrollbackLines == 10_000)
+    }
+
+    @Test("Default title is Terminal")
+    func defaultTitleIsTerminal() {
+        let state = TerminalState()
+
+        #expect(state.title == "Terminal")
+    }
+
+    @Test("Runtime state defaults to not exited")
+    func runtimeStateDefaultsToNotExited() {
+        let state = TerminalState()
+
+        #expect(state.hasExited == false)
+        #expect(state.exitCode == nil)
+    }
+
+    @Test("Custom initialization preserves values")
+    func customInitializationPreservesValues() {
+        let customDir = URL(fileURLWithPath: "/tmp")
+        let customShell = "/bin/bash"
+        let customTitle = "My Terminal"
+        let customScrollback = 5000
+
+        let state = TerminalState(
+            workingDirectory: customDir,
+            shell: customShell,
+            title: customTitle,
+            scrollbackLines: customScrollback
+        )
+
+        #expect(state.workingDirectory == customDir)
+        #expect(state.shell == customShell)
+        #expect(state.title == customTitle)
+        #expect(state.scrollbackLines == customScrollback)
+    }
+
+    @Test("Codable encodes only configuration")
+    func codableEncodesOnlyConfiguration() throws {
+        var state = TerminalState(
+            workingDirectory: URL(fileURLWithPath: "/tmp"),
+            shell: "/bin/bash",
+            scrollbackLines: 5000
+        )
+        state.hasExited = true
+        state.exitCode = 42
+        state.title = "Custom Title"
+
+        let encoder = JSONEncoder()
+        let data = try encoder.encode(state)
+        let json = String(data: data, encoding: .utf8)!
+
+        // Configuration should be encoded
+        #expect(json.contains("workingDirectory"))
+        #expect(json.contains("shell"))
+        #expect(json.contains("scrollbackLines"))
+
+        // Runtime state should NOT be encoded
+        #expect(!json.contains("hasExited"))
+        #expect(!json.contains("exitCode"))
+        #expect(!json.contains("title"))
+    }
+
+    @Test("Codable decode restores configuration with default runtime state")
+    func codableDecodeRestoresConfigurationWithDefaultRuntimeState() throws {
+        let json = """
+        {
+            "workingDirectory": "file:///tmp/",
+            "shell": "/bin/bash",
+            "scrollbackLines": 5000
+        }
+        """
+        let data = json.data(using: .utf8)!
+
+        let decoder = JSONDecoder()
+        let state = try decoder.decode(TerminalState.self, from: data)
+
+        // Configuration restored
+        #expect(state.workingDirectory.path == "/tmp")
+        #expect(state.shell == "/bin/bash")
+        #expect(state.scrollbackLines == 5000)
+
+        // Runtime state has defaults
+        #expect(state.title == "Terminal")
+        #expect(state.hasExited == false)
+        #expect(state.exitCode == nil)
+    }
+
+    @Test("TerminalState is Equatable")
+    func terminalStateIsEquatable() {
+        let state1 = TerminalState()
+        let state2 = TerminalState()
+
+        #expect(state1 == state2)
+
+        var state3 = TerminalState()
+        state3.title = "Different"
+        #expect(state1 != state3)
+    }
+
+    @Test("TerminalState is Hashable")
+    func terminalStateIsHashable() {
+        let state1 = TerminalState()
+        let state2 = TerminalState()
+
+        var set: Set<TerminalState> = []
+        set.insert(state1)
+        set.insert(state2)
+
+        // Same state should dedupe
+        #expect(set.count == 1)
+    }
+}
+
+// MARK: - Path Escaping Tests
+
+@Suite("Path Escaping Tests")
+struct PathEscapingTests {
+
+    @Test("Simple path remains unchanged")
+    func simplePathUnchanged() {
+        let path = "/Users/test/file.txt"
+        let escaped = TerminalState.escapePath(path)
+        #expect(escaped == path)
+    }
+
+    @Test("Path with spaces is escaped")
+    func pathWithSpacesEscaped() {
+        let path = "/Users/test/my file.txt"
+        let escaped = TerminalState.escapePath(path)
+        #expect(escaped == "/Users/test/my\\ file.txt")
+    }
+
+    @Test("Path with special characters is escaped")
+    func pathWithSpecialCharsEscaped() {
+        let path = "/Users/test/file$var.txt"
+        let escaped = TerminalState.escapePath(path)
+        #expect(escaped == "/Users/test/file\\$var.txt")
+    }
+
+    @Test("Path with quotes is escaped")
+    func pathWithQuotesEscaped() {
+        let path = "/Users/test/file\"name\".txt"
+        let escaped = TerminalState.escapePath(path)
+        #expect(escaped == "/Users/test/file\\\"name\\\".txt")
+    }
+
+    @Test("Path with multiple special chars")
+    func pathWithMultipleSpecialChars() {
+        let path = "/Users/test/my file (copy).txt"
+        let escaped = TerminalState.escapePath(path)
+        #expect(escaped == "/Users/test/my\\ file\\ \\(copy\\).txt")
+    }
+
+    @Test("Multiple paths joined with spaces")
+    func multiplePathsJoined() {
+        let paths = ["/Users/test/file1.txt", "/Users/test/my file.txt"]
+        let escaped = TerminalState.escapePaths(paths)
+        #expect(escaped == "/Users/test/file1.txt /Users/test/my\\ file.txt")
+    }
+
+    @Test("Empty path returns empty")
+    func emptyPathReturnsEmpty() {
+        let escaped = TerminalState.escapePath("")
+        #expect(escaped == "")
+    }
+
+    @Test("Backslash is escaped")
+    func backslashIsEscaped() {
+        let path = "/Users/test/file\\name.txt"
+        let escaped = TerminalState.escapePath(path)
+        #expect(escaped == "/Users/test/file\\\\name.txt")
     }
 }

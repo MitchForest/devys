@@ -23,6 +23,14 @@ public struct PaneContainerView: View {
         canvas.hoveredPaneId == pane.id
     }
 
+    /// Whether terminal has a running command
+    private var isTerminalRunning: Bool {
+        if case .terminal = pane.type {
+            return canvas.isTerminalRunning(pane.id)
+        }
+        return false
+    }
+
     public init(pane: Pane) {
         self.pane = pane
     }
@@ -61,6 +69,11 @@ public struct PaneContainerView: View {
 
     private var titleBar: some View {
         HStack(spacing: 8) {
+            // Running indicator for terminals
+            if case .terminal = pane.type {
+                TerminalStatusIndicator(isRunning: isTerminalRunning)
+            }
+
             // Pane type icon
             Image(systemName: pane.type.iconName)
                 .font(.system(size: 12))
@@ -115,12 +128,8 @@ public struct PaneContainerView: View {
     @ViewBuilder
     private var paneContent: some View {
         switch pane.type {
-        case .terminal:
-            PlaceholderContent(
-                icon: "terminal",
-                title: "Terminal",
-                subtitle: "Sprint 7"
-            )
+        case .terminal(let terminalState):
+            TerminalPaneView(paneId: pane.id, state: terminalState)
         case .browser(let state):
             PlaceholderContent(
                 icon: "globe",
@@ -146,6 +155,22 @@ public struct PaneContainerView: View {
                 subtitle: "Sprint 10"
             )
         }
+    }
+}
+
+// MARK: - Terminal Status Indicator
+
+/// Shows running/idle status for terminal panes
+/// - Green: Agent is running (generating output)
+/// - Red: Needs input (waiting for you)
+struct TerminalStatusIndicator: View {
+    let isRunning: Bool
+
+    var body: some View {
+        Circle()
+            .fill(isRunning ? Color.green : Color.red)
+            .frame(width: 8, height: 8)
+            .help(isRunning ? "Agent running" : "Needs input")
     }
 }
 
@@ -184,7 +209,7 @@ struct PlaceholderContent: View {
 
         PaneContainerView(
             pane: Pane(
-                type: .terminal(TerminalPaneState()),
+                type: .terminal(TerminalState()),
                 frame: CGRect(x: 0, y: 0, width: 400, height: 300),
                 title: "Terminal"
             )

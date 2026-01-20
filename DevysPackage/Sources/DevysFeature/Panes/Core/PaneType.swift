@@ -6,7 +6,7 @@ import SwiftUI
 /// Each pane type has its own state struct that holds
 /// configuration and runtime state for that pane type.
 public enum PaneType: Equatable {
-    case terminal(TerminalPaneState)
+    case terminal(TerminalState)
     case browser(BrowserPaneState)
     case fileExplorer(FileExplorerPaneState)
     case codeEditor(CodeEditorPaneState)
@@ -39,19 +39,7 @@ public enum PaneType: Equatable {
 
 // MARK: - Pane State Types
 
-/// State for terminal panes
-public struct TerminalPaneState: Equatable, Hashable {
-    public var workingDirectory: URL?
-    public var shell: String
-
-    public init(
-        workingDirectory: URL? = nil,
-        shell: String = "/bin/zsh"
-    ) {
-        self.workingDirectory = workingDirectory
-        self.shell = shell
-    }
-}
+// Note: TerminalState is defined in Panes/Terminal/TerminalState.swift
 
 /// State for browser panes
 public struct BrowserPaneState: Equatable, Hashable {
