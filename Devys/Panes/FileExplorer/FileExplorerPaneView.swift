@@ -132,14 +132,13 @@ public struct FileExplorerView: View {
     }
 
     private func handleOpenFile(_ url: URL) {
-        // Create a code editor pane for this file
         guard let canvas = _canvas else { return }
 
-        // Read file content
-        let content = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        // Find or create linked editor for this file explorer
+        guard let editorId = canvas.findOrCreateLinkedEditor(for: paneId) else { return }
 
-        let editorState = CodeEditorPaneState(fileURL: url, content: content)
-        canvas.createPane(type: .codeEditor(editorState), title: url.lastPathComponent)
+        // Open file in the linked editor
+        canvas.openFileInEditor(url: url, editorId: editorId)
     }
 
     private func handleSelectionChange(_ urls: [URL]) {

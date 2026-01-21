@@ -2,7 +2,7 @@
 
 A native macOS infinite canvas for orchestrating AI coding agents, terminals, browsers, and development workflows. Built for developers who direct AI agents rather than write code directly.
 
-## Keyboard Shortcuts
+## Keyboard Shortcuts x
 
 ### Canvas Navigation
 | Action | Shortcut |

@@ -11,6 +11,7 @@ public enum PaneType: Equatable {
     case fileExplorer(FileExplorerPaneState)
     case codeEditor(CodeEditorPaneState)
     case git(GitPaneState)
+    case diff(DiffPaneState)
 
     // MARK: - Properties
 
@@ -22,6 +23,7 @@ public enum PaneType: Equatable {
         case .fileExplorer: return "folder"
         case .codeEditor: return "doc.text"
         case .git: return "arrow.triangle.branch"
+        case .diff: return "doc.text.magnifyingglass"
         }
     }
 
@@ -33,6 +35,7 @@ public enum PaneType: Equatable {
         case .fileExplorer(let state): return state.rootURL?.lastPathComponent ?? "Files"
         case .codeEditor(let state): return state.fileURL?.lastPathComponent ?? "Untitled"
         case .git: return "Git"
+        case .diff(let state): return state.filePath ?? "Diff"
         }
     }
 
@@ -44,7 +47,7 @@ public enum PaneType: Equatable {
     /// - Be associated with a specific project tab
     public var isProjectScoped: Bool {
         switch self {
-        case .terminal, .fileExplorer, .git:
+        case .terminal, .fileExplorer, .git, .diff:
             return true
         case .browser, .codeEditor:
             return false
@@ -64,8 +67,13 @@ public typealias BrowserPaneState = BrowserState
 public struct FileExplorerPaneState: Equatable, Hashable {
     public var rootURL: URL?
 
-    public init(rootURL: URL? = nil) {
+    /// The ID of the code editor pane that this file explorer opens files into.
+    /// If nil, a new editor will be created and linked on first file open.
+    public var linkedEditorPaneId: UUID?
+
+    public init(rootURL: URL? = nil, linkedEditorPaneId: UUID? = nil) {
         self.rootURL = rootURL
+        self.linkedEditorPaneId = linkedEditorPaneId
     }
 }
 
@@ -84,7 +92,12 @@ public struct CodeEditorPaneState: Equatable, Hashable {
 public struct GitPaneState: Equatable, Hashable {
     public var repositoryURL: URL?
 
-    public init(repositoryURL: URL? = nil) {
+    /// The ID of the diff pane that this git pane shows diffs in.
+    /// If nil, a new diff pane will be created on first file click.
+    public var linkedDiffPaneId: UUID?
+
+    public init(repositoryURL: URL? = nil, linkedDiffPaneId: UUID? = nil) {
         self.repositoryURL = repositoryURL
+        self.linkedDiffPaneId = linkedDiffPaneId
     }
 }

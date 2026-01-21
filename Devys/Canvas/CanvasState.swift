@@ -514,6 +514,164 @@ public final class CanvasState {
     }
 }
 
+// MARK: - File Explorer → Editor Linking
+
+extension CanvasState {
+    /// Find or create a linked code editor for a file explorer pane.
+    ///
+    /// If the file explorer already has a valid linked editor, returns it.
+    /// Otherwise, creates a new editor pane and updates the file explorer's link.
+    ///
+    /// - Parameter fileExplorerId: The ID of the file explorer pane
+    /// - Returns: The ID of the linked code editor pane
+    public func findOrCreateLinkedEditor(for fileExplorerId: UUID) -> UUID? {
+        guard let explorerIndex = paneIndex(withId: fileExplorerId),
+              case .fileExplorer(var state) = panes[explorerIndex].type else {
+            return nil
+        }
+
+        // Check if linked editor still exists
+        if let linkedId = state.linkedEditorPaneId,
+           let _ = pane(withId: linkedId),
+           case .codeEditor = pane(withId: linkedId)?.type {
+            return linkedId
+        }
+
+        // Create new code editor pane
+        let editorPosition = CGPoint(
+            x: panes[explorerIndex].frame.maxX + 20,
+            y: panes[explorerIndex].frame.origin.y
+        )
+
+        let editorState = CodeEditorPaneState()
+        var editorPane = Pane.create(
+            type: .codeEditor(editorState),
+            at: editorPosition,
+            title: "Editor",
+            projectId: panes[explorerIndex].projectId
+        )
+        editorPane.zIndex = nextZIndex
+        nextZIndex += 1
+        panes.append(editorPane)
+
+        // Update file explorer's linked editor
+        state.linkedEditorPaneId = editorPane.id
+        panes[explorerIndex].type = .fileExplorer(state)
+
+        recalculateHotkeyIndices()
+        return editorPane.id
+    }
+
+    /// Open a file in a specific code editor pane.
+    ///
+    /// Posts a notification that the editor view listens to.
+    /// - Parameters:
+    ///   - url: The file URL to open
+    ///   - editorId: The ID of the code editor pane
+    public func openFileInEditor(url: URL, editorId: UUID) {
+        // Bring to front
+        bringToFront(editorId)
+
+        // Post notification for the editor view to handle
+        NotificationCenter.default.post(
+            name: .openFileInEditor,
+            object: OpenFileRequest(editorPaneId: editorId, fileURL: url)
+        )
+    }
+
+    /// Update the linked editor ID for a file explorer pane.
+    public func setLinkedEditor(for fileExplorerId: UUID, editorId: UUID?) {
+        guard let index = paneIndex(withId: fileExplorerId),
+              case .fileExplorer(var state) = panes[index].type else {
+            return
+        }
+        state.linkedEditorPaneId = editorId
+        panes[index].type = .fileExplorer(state)
+    }
+}
+
+// MARK: - Git → Diff Linking
+
+extension CanvasState {
+    /// Find or create a linked diff pane for a git pane.
+    ///
+    /// - Parameter gitPaneId: The ID of the git pane
+    /// - Returns: The ID of the linked diff pane
+    public func findOrCreateLinkedDiff(for gitPaneId: UUID) -> UUID? {
+        guard let gitIndex = paneIndex(withId: gitPaneId),
+              case .git(var gitState) = panes[gitIndex].type else {
+            return nil
+        }
+
+        // Check if linked diff still exists
+        if let linkedId = gitState.linkedDiffPaneId,
+           let _ = pane(withId: linkedId),
+           case .diff = pane(withId: linkedId)?.type {
+            return linkedId
+        }
+
+        // Create new diff pane
+        let diffPosition = CGPoint(
+            x: panes[gitIndex].frame.maxX + 20,
+            y: panes[gitIndex].frame.origin.y
+        )
+
+        let diffState = DiffPaneState()
+        var diffPane = Pane.create(
+            type: .diff(diffState),
+            at: diffPosition,
+            title: "Diff",
+            projectId: panes[gitIndex].projectId
+        )
+        diffPane.zIndex = nextZIndex
+        nextZIndex += 1
+        panes.append(diffPane)
+
+        // Update git pane's linked diff
+        gitState.linkedDiffPaneId = diffPane.id
+        panes[gitIndex].type = .git(gitState)
+
+        recalculateHotkeyIndices()
+        return diffPane.id
+    }
+
+    /// Update the diff content in a diff pane.
+    ///
+    /// - Parameters:
+    ///   - diffPaneId: The ID of the diff pane
+    ///   - filePath: The file path being diffed
+    ///   - rawDiff: The raw diff text
+    ///   - isStaged: Whether this is a staged diff
+    public func updateDiffPane(
+        _ diffPaneId: UUID,
+        filePath: String,
+        rawDiff: String,
+        isStaged: Bool
+    ) {
+        guard let index = paneIndex(withId: diffPaneId) else { return }
+
+        let newState = DiffPaneState(
+            filePath: filePath,
+            rawDiff: rawDiff,
+            isStaged: isStaged
+        )
+        panes[index].type = .diff(newState)
+        panes[index].title = (filePath as NSString).lastPathComponent
+        bringToFront(diffPaneId)
+    }
+}
+
+/// Request to open a file in a specific editor pane
+public struct OpenFileRequest {
+    public let editorPaneId: UUID
+    public let fileURL: URL
+}
+
+public extension Notification.Name {
+    /// Request to open a file in a specific editor pane
+    static let openFileInEditor = Notification.Name("devys.openFileInEditor")
+}
+
 // MARK: - Hotkey Notifications
 
 public extension Notification.Name {

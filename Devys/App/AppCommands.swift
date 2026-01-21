@@ -33,6 +33,18 @@ public struct AppCommands: Commands {
 
             Divider()
 
+            Button("Save") {
+                NotificationCenter.default.post(name: .saveFile, object: nil)
+            }
+            .keyboardShortcut("s", modifiers: .command)
+
+            Button("Save All") {
+                NotificationCenter.default.post(name: .saveAllFiles, object: nil)
+            }
+            .keyboardShortcut("s", modifiers: [.command, .shift])
+
+            Divider()
+
             Button("New Canvas") {
                 // TODO: Implement in Sprint 10 (Persistence)
             }
@@ -187,4 +199,8 @@ public extension Notification.Name {
     // Grouping
     static let groupPanes = Notification.Name("devys.groupPanes")
     static let ungroupPanes = Notification.Name("devys.ungroupPanes")
+
+    // File Operations
+    static let saveFile = Notification.Name("devys.saveFile")
+    static let saveAllFiles = Notification.Name("devys.saveAllFiles")
 }

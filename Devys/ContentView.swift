@@ -166,7 +166,9 @@ private struct PaneCreationModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onReceive(NotificationCenter.default.publisher(for: .newTerminal)) { _ in
-                canvas?.createPane(type: .terminal(TerminalState()))
+                // Auto-set working directory to project root if available
+                let workingDir = workspace.activeProject?.rootURL ?? FileManager.default.homeDirectoryForCurrentUser
+                canvas?.createPane(type: .terminal(TerminalState(workingDirectory: workingDir)))
             }
             .onReceive(NotificationCenter.default.publisher(for: .newBrowser)) { _ in
                 canvas?.createPane(type: .browser(BrowserPaneState()))

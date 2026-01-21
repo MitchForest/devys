@@ -140,53 +140,71 @@ public struct PaneContainerView: View {
         case .fileExplorer(let state):
             FileExplorerView(paneId: pane.id, state: state)
         case .codeEditor(let state):
-            CodeEditorPlaceholderView(state: state)
-        case .git:
-            PlaceholderContent(
-                icon: "arrow.triangle.branch",
-                title: "Git",
-                subtitle: "Sprint 10"
-            )
+            CodeEditorWrapperView(paneId: pane.id, initialState: state)
+        case .git(let state):
+            GitPaneView(paneId: pane.id, repositoryURL: state.repositoryURL)
+        case .diff(let state):
+            DiffPaneView(paneId: pane.id, state: state)
         }
     }
 }
 
-// MARK: - Code Editor Placeholder
+// MARK: - Code Editor Wrapper
 
-/// Temporary placeholder for code editor (full implementation in Sprint 10)
-struct CodeEditorPlaceholderView: View {
-    let state: CodeEditorPaneState
+/// Wrapper that converts initial state to @State for the code editor
+struct CodeEditorWrapperView: View {
+    let paneId: UUID
+    let initialState: CodeEditorPaneState
+
+    @State private var editorState: CodeEditorState
+
+    init(paneId: UUID, initialState: CodeEditorPaneState) {
+        self.paneId = paneId
+        self.initialState = initialState
+        self._editorState = State(initialValue: CodeEditorState(
+            fileURL: initialState.fileURL,
+            content: initialState.content
+        ))
+    }
 
     var body: some View {
-        VStack(spacing: 0) {
-            if let url = state.fileURL {
-                // Show file path bar
-                HStack {
-                    Image(systemName: "doc.text")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                    Text(url.path)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                    Spacer()
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Color.gray.opacity(0.1))
-
-                Divider()
+        CodeEditorPaneView(paneId: paneId, state: $editorState)
+            .onReceive(NotificationCenter.default.publisher(for: .saveFile)) { _ in
+                saveActiveFile()
             }
-
-            // Show content as read-only text
-            ScrollView {
-                Text(state.content.isEmpty ? "Empty file" : state.content)
-                    .font(.system(size: 12, design: .monospaced))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-                    .textSelection(.enabled)
+            .onReceive(NotificationCenter.default.publisher(for: .saveAllFiles)) { _ in
+                saveAllFiles()
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .onReceive(NotificationCenter.default.publisher(for: .openFileInEditor)) { notification in
+                handleOpenFileRequest(notification)
+            }
+    }
+
+    private func handleOpenFileRequest(_ notification: Notification) {
+        guard let request = notification.object as? OpenFileRequest,
+              request.editorPaneId == paneId else { return }
+
+        // Load file content
+        let content = (try? String(contentsOf: request.fileURL, encoding: .utf8)) ?? ""
+
+        // Open file in editor
+        editorState.openFile(request.fileURL, content: content)
+    }
+
+    private func saveActiveFile() {
+        guard let activeId = editorState.activeFileId else { return }
+        do {
+            try editorState.saveFile(activeId)
+        } catch {
+            print("Failed to save file: \(error.localizedDescription)")
+        }
+    }
+
+    private func saveAllFiles() {
+        do {
+            try editorState.saveAllFiles()
+        } catch {
+            print("Failed to save files: \(error.localizedDescription)")
         }
     }
 }

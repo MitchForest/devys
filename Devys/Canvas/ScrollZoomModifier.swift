@@ -41,6 +41,7 @@ public struct ScrollZoomModifier: ViewModifier {
         }
     }
 
+    @MainActor
     private func handleScrollEvent(_ event: NSEvent, canvas: CanvasState) {
         // Get scroll delta
         let deltaY = event.scrollingDeltaY
@@ -78,9 +79,7 @@ public struct ScrollZoomModifier: ViewModifier {
         // Get viewport size and cursor location
         guard let window = event.window,
               let contentView = window.contentView else {
-            Task { @MainActor in
-                canvas.setScale(newScale)
-            }
+            canvas.setScale(newScale)
             return
         }
 
@@ -93,9 +92,7 @@ public struct ScrollZoomModifier: ViewModifier {
         )
 
         // Zoom toward cursor position
-        Task { @MainActor in
-            canvas.zoom(to: newScale, toward: location, viewportSize: viewportSize)
-        }
+        canvas.zoom(to: newScale, toward: location, viewportSize: viewportSize)
     }
 }
 
