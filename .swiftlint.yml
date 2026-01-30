@@ -1,0 +1,177 @@
+# SwiftLint Configuration for Devys
+# https://github.com/realm/SwiftLint
+
+# Paths to include
+included:
+  - Apps
+  - Packages
+
+# Paths to exclude
+excluded:
+  - Packages/*/Tests
+  - .build
+  - DerivedData
+
+# Rules configuration
+disabled_rules:
+  - trailing_comma           # Allow trailing commas
+  - todo                     # Allow TODO comments during development
+  - opening_brace            # More flexible brace placement
+  - statement_position       # Allow different statement positions
+
+opt_in_rules:
+  - array_init
+  - closure_end_indentation
+  - closure_spacing
+  - collection_alignment
+  - contains_over_filter_count
+  - contains_over_filter_is_empty
+  - contains_over_first_not_nil
+  - discouraged_object_literal
+  - empty_collection_literal
+  - empty_count
+  - empty_string
+  - explicit_init
+  - extension_access_modifier
+  - fallthrough
+  - fatal_error_message
+  - first_where
+  - flatmap_over_map_reduce
+  - identical_operands
+  - joined_default_parameter
+  - last_where
+  - legacy_multiple
+  - literal_expression_end_indentation
+  - modifier_order
+  - multiline_arguments
+  - multiline_literal_brackets
+  - multiline_parameters
+  - operator_usage_whitespace
+  - overridden_super_call
+  - prefer_self_type_over_type_of_self
+  - prefer_zero_over_explicit_init
+  - private_action
+  - private_outlet
+  - prohibited_super_call
+  - redundant_nil_coalescing
+  - redundant_type_annotation
+  - single_test_class
+  - sorted_first_last
+  - toggle_bool
+  - trailing_closure
+  - unneeded_parentheses_in_closure_argument
+  - unowned_variable_capture
+  - vertical_parameter_alignment_on_call
+  - yoda_condition
+
+# Line length
+line_length:
+  warning: 120
+  error: 150
+  ignores_comments: true
+  ignores_urls: true
+
+# Type body length
+type_body_length:
+  warning: 300
+  error: 500
+
+# File length
+file_length:
+  warning: 500
+  error: 1000
+  ignore_comment_only_lines: true
+
+# Function body length
+function_body_length:
+  warning: 50
+  error: 100
+
+# Function parameter count
+function_parameter_count:
+  warning: 6
+  error: 8
+
+# Type name
+type_name:
+  min_length:
+    warning: 2
+    error: 1
+  max_length:
+    warning: 50
+    error: 60
+
+# Identifier name
+identifier_name:
+  min_length:
+    warning: 1
+    error: 1
+  max_length:
+    warning: 50
+    error: 60
+  excluded:
+    - id
+    - i
+    - j
+    - x
+    - y
+    - z
+    - fd
+    - to
+
+# Nesting
+nesting:
+  type_level:
+    warning: 3
+    error: 5
+  function_level:
+    warning: 3
+    error: 5
+
+# Cyclomatic complexity
+cyclomatic_complexity:
+  warning: 15
+  error: 25
+
+# Large tuple
+large_tuple:
+  warning: 4
+  error: 6
+
+# Force cast/try/unwrapping
+force_cast: warning
+force_try: warning
+force_unwrapping: warning
+
+# Trailing whitespace
+trailing_whitespace:
+  ignores_empty_lines: true
+  ignores_comments: true
+
+# Vertical whitespace
+vertical_whitespace:
+  max_empty_lines: 2
+
+# Modifier order
+modifier_order:
+  preferred_modifier_order:
+    - acl
+    - setterACL
+    - override
+    - dynamic
+    - mutators
+    - lazy
+    - final
+    - required
+    - convenience
+    - typeMethods
+    - owned
+
+# Custom rules
+custom_rules:
+  no_print:
+    name: "No print statements"
+    regex: "\\bprint\\("
+    message: "Use proper logging instead of print()"
+    severity: warning
+    excluded: ".*Tests\\.swift"

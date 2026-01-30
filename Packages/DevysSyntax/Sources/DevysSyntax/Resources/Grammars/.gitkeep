@@ -1,0 +1,21 @@
+# Placeholder for TextMate grammar JSON files
+# These will be added in Phase 5 (DevysSyntax Core Engine)
+#
+# Expected files:
+# - swift.json
+# - python.json
+# - javascript.json
+# - typescript.json
+# - tsx.json
+# - jsx.json
+# - html.json
+# - css.json
+# - json.json
+# - markdown.json
+# - ruby.json
+# - rust.json
+# - c.json
+# - cpp.json
+# - go.json
+# - php.json
+# - shellscript.json

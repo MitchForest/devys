@@ -1,0 +1,19 @@
+# Placeholder for Shiki theme JSON files
+# These will be added in Phase 5 (DevysSyntax Core Engine)
+#
+# Expected files (Dark):
+# - github-dark.json
+# - github-dark-dimmed.json
+# - vitesse-dark.json
+# - one-dark-pro.json
+# - tokyo-night.json
+# - dracula.json
+# - nord.json
+# - monokai.json
+# - catppuccin-mocha.json
+#
+# Expected files (Light):
+# - github-light.json
+# - vitesse-light.json
+# - one-light.json
+# - catppuccin-latte.json
