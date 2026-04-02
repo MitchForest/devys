@@ -1,0 +1,260 @@
+// DefaultWorktreeInfoWatcher.swift
+// DevysGit - Worktree info file watcher.
+
+import Foundation
+import CoreServices
+import Workspace
+import Darwin
+
+public final class DefaultWorktreeInfoWatcher: WorktreeInfoWatcher, @unchecked Sendable {
+    private enum DebounceKey: Hashable {
+        case branch(Worktree.ID)
+        case files(Worktree.ID)
+    }
+
+    private struct WorktreeWatch {
+        let worktree: Worktree
+        let headWatcher: DispatchSourceFileSystemObject?
+        let indexWatcher: DispatchSourceFileSystemObject?
+        let fileStream: FileEventStream?
+
+        func stop() {
+            headWatcher?.cancel()
+            indexWatcher?.cancel()
+            fileStream?.stop()
+        }
+    }
+
+    private final class FileEventStream {
+        private var stream: FSEventStreamRef?
+        private let onEvent: () -> Void
+
+        init(path: String, queue: DispatchQueue, onEvent: @escaping () -> Void) {
+            self.onEvent = onEvent
+
+            var context = FSEventStreamContext(
+                version: 0,
+                info: UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque()),
+                retain: nil,
+                release: nil,
+                copyDescription: nil
+            )
+
+            let flags = FSEventStreamCreateFlags(
+                kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagNoDefer
+            )
+
+            stream = FSEventStreamCreate(
+                kCFAllocatorDefault,
+                { _, info, _, _, _, _ in
+                    guard let info else { return }
+                    let watcher = Unmanaged<FileEventStream>.fromOpaque(info).takeUnretainedValue()
+                    watcher.onEvent()
+                },
+                &context,
+                [path] as CFArray,
+                FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
+                0.2,
+                flags
+            )
+
+            if let stream {
+                FSEventStreamSetDispatchQueue(stream, queue)
+                FSEventStreamStart(stream)
+            }
+        }
+
+        func stop() {
+            guard let stream else { return }
+            FSEventStreamStop(stream)
+            FSEventStreamInvalidate(stream)
+            FSEventStreamRelease(stream)
+            self.stream = nil
+        }
+
+        deinit {
+            stop()
+        }
+    }
+
+    private let queue = DispatchQueue(label: "com.devys.git.worktree-info-watcher")
+    private var continuation: AsyncStream<WorktreeInfoEvent>.Continuation?
+    private var watches: [Worktree.ID: WorktreeWatch] = [:]
+    private var debounceItems: [DebounceKey: DispatchWorkItem] = [:]
+    private var pullRequestTrackingEnabled = false
+    private var isStopped = false
+
+    public init() {}
+
+    public func handle(_ command: WorktreeInfoCommand) {
+        queue.async { [weak self] in
+            self?.handleCommand(command)
+        }
+    }
+
+    public func eventStream() -> AsyncStream<WorktreeInfoEvent> {
+        AsyncStream { continuation in
+            queue.async { [weak self] in
+                guard let self else { return }
+                self.continuation = continuation
+                continuation.onTermination = { _ in
+                    self.queue.async { [weak self] in
+                        self?.stopAll()
+                    }
+                }
+            }
+        }
+    }
+
+    private func handleCommand(_ command: WorktreeInfoCommand) {
+        switch command {
+        case .setWorktrees(let worktrees):
+            updateWorktrees(worktrees)
+        case .setSelectedWorktreeId:
+            break
+        case .setPullRequestTrackingEnabled(let enabled):
+            let wasEnabled = pullRequestTrackingEnabled
+            pullRequestTrackingEnabled = enabled
+            if enabled, !wasEnabled, let repositoryRoot = worktreesRepositoryRoot() {
+                emit(.repositoryPullRequestRefresh(repositoryRootURL: repositoryRoot, worktreeIds: Array(watches.keys)))
+            }
+        case .stop:
+            stopAll()
+        }
+    }
+
+    private func updateWorktrees(_ worktrees: [Worktree]) {
+        let incoming = Dictionary(uniqueKeysWithValues: worktrees.map { ($0.id, $0) })
+        let incomingIds = Set(incoming.keys)
+        let existingIds = Set(watches.keys)
+
+        for removedId in existingIds.subtracting(incomingIds) {
+            removeWatch(for: removedId)
+        }
+
+        for (id, worktree) in incoming where watches[id] == nil {
+            startWatch(for: worktree)
+        }
+
+        if pullRequestTrackingEnabled, let repositoryRoot = worktreesRepositoryRoot() {
+            emit(.repositoryPullRequestRefresh(repositoryRootURL: repositoryRoot, worktreeIds: Array(watches.keys)))
+        }
+    }
+
+    private func startWatch(for worktree: Worktree) {
+        guard !isStopped else { return }
+        let gitDir = resolveGitDir(for: worktree)
+        let headWatcher = gitDir.flatMap { gitURL in
+            makeFileWatcher(url: gitURL.appendingPathComponent("HEAD")) { [weak self] in
+                self?.schedule(.branchChanged(worktreeId: worktree.id), key: .branch(worktree.id))
+            }
+        }
+
+        let indexWatcher = gitDir.flatMap { gitURL in
+            makeFileWatcher(url: gitURL.appendingPathComponent("index")) { [weak self] in
+                self?.schedule(.filesChanged(worktreeId: worktree.id), key: .files(worktree.id))
+            }
+        }
+
+        let fileStream: FileEventStream?
+        if FileManager.default.fileExists(atPath: worktree.workingDirectory.path) {
+            fileStream = FileEventStream(
+                path: worktree.workingDirectory.path,
+                queue: queue
+            ) { [weak self] in
+                self?.schedule(.filesChanged(worktreeId: worktree.id), key: .files(worktree.id))
+            }
+        } else {
+            fileStream = nil
+        }
+
+        watches[worktree.id] = WorktreeWatch(
+            worktree: worktree,
+            headWatcher: headWatcher,
+            indexWatcher: indexWatcher,
+            fileStream: fileStream
+        )
+    }
+
+    private func removeWatch(for id: Worktree.ID) {
+        watches[id]?.stop()
+        watches.removeValue(forKey: id)
+        debounceItems[.branch(id)]?.cancel()
+        debounceItems[.files(id)]?.cancel()
+        debounceItems.removeValue(forKey: .branch(id))
+        debounceItems.removeValue(forKey: .files(id))
+    }
+
+    private func makeFileWatcher(url: URL, handler: @escaping () -> Void) -> DispatchSourceFileSystemObject? {
+        let fd = open(url.path, O_EVTONLY)
+        guard fd != -1 else { return nil }
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd,
+            eventMask: [.write, .delete, .rename, .extend],
+            queue: queue
+        )
+        source.setEventHandler(handler: handler)
+        source.setCancelHandler {
+            close(fd)
+        }
+        source.resume()
+        return source
+    }
+
+    private func resolveGitDir(for worktree: Worktree) -> URL? {
+        let gitURL = worktree.workingDirectory.appendingPathComponent(".git")
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: gitURL.path, isDirectory: &isDirectory) else {
+            return nil
+        }
+
+        if isDirectory.boolValue {
+            return gitURL.standardizedFileURL
+        }
+
+        guard let content = try? String(contentsOf: gitURL, encoding: .utf8) else {
+            return nil
+        }
+
+        for rawLine in content.split(whereSeparator: \.isNewline) {
+            let line = String(rawLine).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard line.hasPrefix("gitdir:") else { continue }
+            let pathValue = line.dropFirst("gitdir:".count)
+            let path = String(pathValue).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !path.isEmpty else { continue }
+            let url = URL(fileURLWithPath: String(path), relativeTo: worktree.workingDirectory)
+            return url.standardizedFileURL
+        }
+
+        return nil
+    }
+
+    private func schedule(_ event: WorktreeInfoEvent, key: DebounceKey) {
+        debounceItems[key]?.cancel()
+        let item = DispatchWorkItem { [weak self] in
+            self?.emit(event)
+        }
+        debounceItems[key] = item
+        queue.asyncAfter(deadline: .now() + 0.25, execute: item)
+    }
+
+    private func emit(_ event: WorktreeInfoEvent) {
+        guard !isStopped else { return }
+        continuation?.yield(event)
+    }
+
+    private func worktreesRepositoryRoot() -> URL? {
+        watches.values.first?.worktree.repositoryRootURL
+    }
+
+    private func stopAll() {
+        guard !isStopped else { return }
+        isStopped = true
+        debounceItems.values.forEach { $0.cancel() }
+        debounceItems.removeAll()
+        watches.values.forEach { $0.stop() }
+        watches.removeAll()
+        continuation?.finish()
+        continuation = nil
+    }
+}

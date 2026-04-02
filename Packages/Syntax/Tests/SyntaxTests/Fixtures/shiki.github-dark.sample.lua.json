@@ -1,0 +1,695 @@
+{
+  "language": "lua",
+  "theme": "github-dark",
+  "lines": [
+    {
+      "text": "local function greet(name)",
+      "segments": [
+        {
+          "start": 0,
+          "end": 5,
+          "text": "local",
+          "scopes": [
+            "source.lua",
+            "meta.function.lua",
+            "keyword.local.lua"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        },
+        {
+          "start": 5,
+          "end": 6,
+          "text": " ",
+          "scopes": [
+            "source.lua",
+            "meta.function.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 6,
+          "end": 14,
+          "text": "function",
+          "scopes": [
+            "source.lua",
+            "meta.function.lua",
+            "keyword.control.lua"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        },
+        {
+          "start": 14,
+          "end": 15,
+          "text": " ",
+          "scopes": [
+            "source.lua",
+            "meta.function.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 15,
+          "end": 20,
+          "text": "greet",
+          "scopes": [
+            "source.lua",
+            "meta.function.lua",
+            "entity.name.function.lua"
+          ],
+          "color": "#B392F0",
+          "fontStyle": 0
+        },
+        {
+          "start": 20,
+          "end": 21,
+          "text": "(",
+          "scopes": [
+            "source.lua",
+            "meta.function.lua",
+            "meta.parameter.lua",
+            "punctuation.definition.parameters.begin.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 21,
+          "end": 25,
+          "text": "name",
+          "scopes": [
+            "source.lua",
+            "meta.function.lua",
+            "meta.parameter.lua",
+            "variable.parameter.function.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 25,
+          "end": 26,
+          "text": ")",
+          "scopes": [
+            "source.lua",
+            "meta.function.lua",
+            "meta.parameter.lua",
+            "punctuation.definition.parameters.finish.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "  return \"Hello \" .. name .. \"!\"",
+      "segments": [
+        {
+          "start": 0,
+          "end": 2,
+          "text": "  ",
+          "scopes": [
+            "source.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 2,
+          "end": 8,
+          "text": "return",
+          "scopes": [
+            "source.lua",
+            "keyword.control.lua"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        },
+        {
+          "start": 8,
+          "end": 9,
+          "text": " ",
+          "scopes": [
+            "source.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 9,
+          "end": 10,
+          "text": "\"",
+          "scopes": [
+            "source.lua",
+            "string.quoted.double.lua",
+            "punctuation.definition.string.begin.lua"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        },
+        {
+          "start": 10,
+          "end": 16,
+          "text": "Hello ",
+          "scopes": [
+            "source.lua",
+            "string.quoted.double.lua"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        },
+        {
+          "start": 16,
+          "end": 18,
+          "text": "\" ",
+          "scopes": [
+            "source.lua",
+            "string.quoted.double.lua",
+            "punctuation.definition.string.end.lua"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        },
+        {
+          "start": 18,
+          "end": 20,
+          "text": "..",
+          "scopes": [
+            "source.lua",
+            "keyword.operator.lua"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        },
+        {
+          "start": 20,
+          "end": 21,
+          "text": " ",
+          "scopes": [
+            "source.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 21,
+          "end": 25,
+          "text": "name",
+          "scopes": [
+            "source.lua",
+            "variable.other.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 25,
+          "end": 26,
+          "text": " ",
+          "scopes": [
+            "source.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 26,
+          "end": 28,
+          "text": "..",
+          "scopes": [
+            "source.lua",
+            "keyword.operator.lua"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        },
+        {
+          "start": 28,
+          "end": 29,
+          "text": " ",
+          "scopes": [
+            "source.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 29,
+          "end": 30,
+          "text": "\"",
+          "scopes": [
+            "source.lua",
+            "string.quoted.double.lua",
+            "punctuation.definition.string.begin.lua"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        },
+        {
+          "start": 30,
+          "end": 31,
+          "text": "!",
+          "scopes": [
+            "source.lua",
+            "string.quoted.double.lua"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        },
+        {
+          "start": 31,
+          "end": 32,
+          "text": "\"",
+          "scopes": [
+            "source.lua",
+            "string.quoted.double.lua",
+            "punctuation.definition.string.end.lua"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "end",
+      "segments": [
+        {
+          "start": 0,
+          "end": 3,
+          "text": "end",
+          "scopes": [
+            "source.lua",
+            "keyword.control.lua"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "",
+      "segments": []
+    },
+    {
+      "text": "local users = { \"Devys\", \"Syntax\" }",
+      "segments": [
+        {
+          "start": 0,
+          "end": 5,
+          "text": "local",
+          "scopes": [
+            "source.lua",
+            "keyword.local.lua"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        },
+        {
+          "start": 5,
+          "end": 6,
+          "text": " ",
+          "scopes": [
+            "source.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 6,
+          "end": 11,
+          "text": "users",
+          "scopes": [
+            "source.lua",
+            "variable.other.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 11,
+          "end": 12,
+          "text": " ",
+          "scopes": [
+            "source.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 12,
+          "end": 13,
+          "text": "=",
+          "scopes": [
+            "source.lua",
+            "keyword.operator.lua"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        },
+        {
+          "start": 13,
+          "end": 16,
+          "text": " { ",
+          "scopes": [
+            "source.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 16,
+          "end": 17,
+          "text": "\"",
+          "scopes": [
+            "source.lua",
+            "string.quoted.double.lua",
+            "punctuation.definition.string.begin.lua"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        },
+        {
+          "start": 17,
+          "end": 22,
+          "text": "Devys",
+          "scopes": [
+            "source.lua",
+            "string.quoted.double.lua"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        },
+        {
+          "start": 22,
+          "end": 23,
+          "text": "\"",
+          "scopes": [
+            "source.lua",
+            "string.quoted.double.lua",
+            "punctuation.definition.string.end.lua"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        },
+        {
+          "start": 23,
+          "end": 25,
+          "text": ", ",
+          "scopes": [
+            "source.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 25,
+          "end": 26,
+          "text": "\"",
+          "scopes": [
+            "source.lua",
+            "string.quoted.double.lua",
+            "punctuation.definition.string.begin.lua"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        },
+        {
+          "start": 26,
+          "end": 32,
+          "text": "Syntax",
+          "scopes": [
+            "source.lua",
+            "string.quoted.double.lua"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        },
+        {
+          "start": 32,
+          "end": 34,
+          "text": "\" ",
+          "scopes": [
+            "source.lua",
+            "string.quoted.double.lua",
+            "punctuation.definition.string.end.lua"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        },
+        {
+          "start": 34,
+          "end": 35,
+          "text": "}",
+          "scopes": [
+            "source.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "for _, user in ipairs(users) do",
+      "segments": [
+        {
+          "start": 0,
+          "end": 3,
+          "text": "for",
+          "scopes": [
+            "source.lua",
+            "keyword.control.lua"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        },
+        {
+          "start": 3,
+          "end": 4,
+          "text": " ",
+          "scopes": [
+            "source.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 4,
+          "end": 5,
+          "text": "_",
+          "scopes": [
+            "source.lua",
+            "variable.other.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 5,
+          "end": 7,
+          "text": ", ",
+          "scopes": [
+            "source.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 7,
+          "end": 11,
+          "text": "user",
+          "scopes": [
+            "source.lua",
+            "variable.other.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 11,
+          "end": 12,
+          "text": " ",
+          "scopes": [
+            "source.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 12,
+          "end": 14,
+          "text": "in",
+          "scopes": [
+            "source.lua",
+            "keyword.control.lua"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        },
+        {
+          "start": 14,
+          "end": 15,
+          "text": " ",
+          "scopes": [
+            "source.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 15,
+          "end": 21,
+          "text": "ipairs",
+          "scopes": [
+            "source.lua",
+            "support.function.lua"
+          ],
+          "color": "#79B8FF",
+          "fontStyle": 0
+        },
+        {
+          "start": 21,
+          "end": 22,
+          "text": "(",
+          "scopes": [
+            "source.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 22,
+          "end": 27,
+          "text": "users",
+          "scopes": [
+            "source.lua",
+            "variable.other.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 27,
+          "end": 29,
+          "text": ") ",
+          "scopes": [
+            "source.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 29,
+          "end": 31,
+          "text": "do",
+          "scopes": [
+            "source.lua",
+            "keyword.control.lua"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "  print(greet(user))",
+      "segments": [
+        {
+          "start": 0,
+          "end": 2,
+          "text": "  ",
+          "scopes": [
+            "source.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 2,
+          "end": 7,
+          "text": "print",
+          "scopes": [
+            "source.lua",
+            "support.function.lua"
+          ],
+          "color": "#79B8FF",
+          "fontStyle": 0
+        },
+        {
+          "start": 7,
+          "end": 8,
+          "text": "(",
+          "scopes": [
+            "source.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 8,
+          "end": 13,
+          "text": "greet",
+          "scopes": [
+            "source.lua",
+            "support.function.any-method.lua"
+          ],
+          "color": "#79B8FF",
+          "fontStyle": 0
+        },
+        {
+          "start": 13,
+          "end": 14,
+          "text": "(",
+          "scopes": [
+            "source.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 14,
+          "end": 18,
+          "text": "user",
+          "scopes": [
+            "source.lua",
+            "variable.other.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 18,
+          "end": 20,
+          "text": "))",
+          "scopes": [
+            "source.lua"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "end",
+      "segments": [
+        {
+          "start": 0,
+          "end": 3,
+          "text": "end",
+          "scopes": [
+            "source.lua",
+            "keyword.control.lua"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "",
+      "segments": []
+    }
+  ]
+}

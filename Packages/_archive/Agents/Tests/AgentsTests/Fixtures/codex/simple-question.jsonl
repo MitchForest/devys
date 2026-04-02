@@ -1,0 +1,6 @@
+{"jsonrpc":"2.0","method":"thread/started","params":{"threadId":"thr_test_001"}}
+{"jsonrpc":"2.0","method":"turn/started","params":{"turn":{"id":"turn_test_001"}}}
+{"jsonrpc":"2.0","method":"item/agentMessage/delta","params":{"delta":"The answer"}}
+{"jsonrpc":"2.0","method":"item/agentMessage/delta","params":{"delta":" is 4."}}
+{"jsonrpc":"2.0","method":"codex/event/agent_message","params":{"id":"msg_001","msg":{"message":"The answer is 4."}}}
+{"jsonrpc":"2.0","method":"turn/completed","params":{"turn":{"id":"turn_test_001"}}}

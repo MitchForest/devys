@@ -1,0 +1,7 @@
+{"jsonrpc":"2.0","method":"thread/started","params":{"threadId":"thr_test_004"}}
+{"jsonrpc":"2.0","method":"turn/started","params":{"turn":{"id":"turn_test_004"}}}
+{"jsonrpc":"2.0","method":"item/reasoning/textDelta","params":{"itemId":"item_reason_001","delta":"Let me think about this"}}
+{"jsonrpc":"2.0","method":"item/reasoning/textDelta","params":{"itemId":"item_reason_001","delta":" step by step..."}}
+{"jsonrpc":"2.0","method":"item/reasoning/summaryTextDelta","params":{"itemId":"item_reason_001","delta":"Reasoning about error handling"}}
+{"jsonrpc":"2.0","method":"item/agentMessage/delta","params":{"delta":"Here's my analysis of error handling:"}}
+{"jsonrpc":"2.0","method":"turn/completed","params":{"turn":{"id":"turn_test_004"}}}

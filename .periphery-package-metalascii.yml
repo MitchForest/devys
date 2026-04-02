@@ -1,0 +1,14 @@
+# Periphery Configuration for MetalASCII package scans
+#
+# MetalASCII contains many GPU/Metal uniform structs whose fields are written in
+# Swift and consumed by shaders, which Periphery reports as assign-only false positives.
+
+retain_public: true
+retain_objc_annotated: true
+retain_assign_only_properties: true
+format: xcode
+exclude_tests: true
+report_exclude:
+  - "**/DerivedSources/**"
+  - "**/.build/**"
+  - "**/Projects/_archived/**"

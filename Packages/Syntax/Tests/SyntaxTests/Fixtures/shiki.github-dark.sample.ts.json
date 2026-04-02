@@ -1,0 +1,1528 @@
+{
+  "language": "typescript",
+  "theme": "github-dark",
+  "lines": [
+    {
+      "text": "// sample.ts",
+      "segments": [
+        {
+          "start": 0,
+          "end": 2,
+          "text": "//",
+          "scopes": [
+            "source.ts",
+            "comment.line.double-slash.ts",
+            "punctuation.definition.comment.ts"
+          ],
+          "color": "#6A737D",
+          "fontStyle": 0
+        },
+        {
+          "start": 2,
+          "end": 12,
+          "text": " sample.ts",
+          "scopes": [
+            "source.ts",
+            "comment.line.double-slash.ts"
+          ],
+          "color": "#6A737D",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "export type ID = string | number;",
+      "segments": [
+        {
+          "start": 0,
+          "end": 6,
+          "text": "export",
+          "scopes": [
+            "source.ts",
+            "meta.type.declaration.ts",
+            "keyword.control.export.ts"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        },
+        {
+          "start": 6,
+          "end": 7,
+          "text": " ",
+          "scopes": [
+            "source.ts",
+            "meta.type.declaration.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 7,
+          "end": 11,
+          "text": "type",
+          "scopes": [
+            "source.ts",
+            "meta.type.declaration.ts",
+            "storage.type.type.ts"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        },
+        {
+          "start": 11,
+          "end": 12,
+          "text": " ",
+          "scopes": [
+            "source.ts",
+            "meta.type.declaration.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 12,
+          "end": 14,
+          "text": "ID",
+          "scopes": [
+            "source.ts",
+            "meta.type.declaration.ts",
+            "entity.name.type.alias.ts"
+          ],
+          "color": "#B392F0",
+          "fontStyle": 0
+        },
+        {
+          "start": 14,
+          "end": 15,
+          "text": " ",
+          "scopes": [
+            "source.ts",
+            "meta.type.declaration.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 15,
+          "end": 16,
+          "text": "=",
+          "scopes": [
+            "source.ts",
+            "meta.type.declaration.ts",
+            "keyword.operator.assignment.ts"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        },
+        {
+          "start": 16,
+          "end": 17,
+          "text": " ",
+          "scopes": [
+            "source.ts",
+            "meta.type.declaration.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 17,
+          "end": 23,
+          "text": "string",
+          "scopes": [
+            "source.ts",
+            "meta.type.declaration.ts",
+            "support.type.primitive.ts"
+          ],
+          "color": "#79B8FF",
+          "fontStyle": 0
+        },
+        {
+          "start": 23,
+          "end": 24,
+          "text": " ",
+          "scopes": [
+            "source.ts",
+            "meta.type.declaration.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 24,
+          "end": 25,
+          "text": "|",
+          "scopes": [
+            "source.ts",
+            "meta.type.declaration.ts",
+            "keyword.operator.type.ts"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        },
+        {
+          "start": 25,
+          "end": 26,
+          "text": " ",
+          "scopes": [
+            "source.ts",
+            "meta.type.declaration.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 26,
+          "end": 32,
+          "text": "number",
+          "scopes": [
+            "source.ts",
+            "meta.type.declaration.ts",
+            "support.type.primitive.ts"
+          ],
+          "color": "#79B8FF",
+          "fontStyle": 0
+        },
+        {
+          "start": 32,
+          "end": 33,
+          "text": ";",
+          "scopes": [
+            "source.ts",
+            "punctuation.terminator.statement.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "",
+      "segments": []
+    },
+    {
+      "text": "export interface User {",
+      "segments": [
+        {
+          "start": 0,
+          "end": 6,
+          "text": "export",
+          "scopes": [
+            "source.ts",
+            "meta.interface.ts",
+            "keyword.control.export.ts"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        },
+        {
+          "start": 6,
+          "end": 7,
+          "text": " ",
+          "scopes": [
+            "source.ts",
+            "meta.interface.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 7,
+          "end": 16,
+          "text": "interface",
+          "scopes": [
+            "source.ts",
+            "meta.interface.ts",
+            "storage.type.interface.ts"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        },
+        {
+          "start": 16,
+          "end": 17,
+          "text": " ",
+          "scopes": [
+            "source.ts",
+            "meta.interface.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 17,
+          "end": 21,
+          "text": "User",
+          "scopes": [
+            "source.ts",
+            "meta.interface.ts",
+            "entity.name.type.interface.ts"
+          ],
+          "color": "#B392F0",
+          "fontStyle": 0
+        },
+        {
+          "start": 21,
+          "end": 22,
+          "text": " ",
+          "scopes": [
+            "source.ts",
+            "meta.interface.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 22,
+          "end": 23,
+          "text": "{",
+          "scopes": [
+            "source.ts",
+            "meta.interface.ts",
+            "punctuation.definition.block.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "  id: ID;",
+      "segments": [
+        {
+          "start": 0,
+          "end": 2,
+          "text": "  ",
+          "scopes": [
+            "source.ts",
+            "meta.interface.ts",
+            "meta.field.declaration.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 2,
+          "end": 4,
+          "text": "id",
+          "scopes": [
+            "source.ts",
+            "meta.interface.ts",
+            "meta.field.declaration.ts",
+            "meta.definition.property.ts",
+            "variable.object.property.ts"
+          ],
+          "color": "#FFAB70",
+          "fontStyle": 0
+        },
+        {
+          "start": 4,
+          "end": 5,
+          "text": ":",
+          "scopes": [
+            "source.ts",
+            "meta.interface.ts",
+            "meta.field.declaration.ts",
+            "meta.type.annotation.ts",
+            "keyword.operator.type.annotation.ts"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        },
+        {
+          "start": 5,
+          "end": 6,
+          "text": " ",
+          "scopes": [
+            "source.ts",
+            "meta.interface.ts",
+            "meta.field.declaration.ts",
+            "meta.type.annotation.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 6,
+          "end": 8,
+          "text": "ID",
+          "scopes": [
+            "source.ts",
+            "meta.interface.ts",
+            "meta.field.declaration.ts",
+            "meta.type.annotation.ts",
+            "entity.name.type.ts"
+          ],
+          "color": "#B392F0",
+          "fontStyle": 0
+        },
+        {
+          "start": 8,
+          "end": 9,
+          "text": ";",
+          "scopes": [
+            "source.ts",
+            "meta.interface.ts",
+            "punctuation.terminator.statement.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "  name: string;",
+      "segments": [
+        {
+          "start": 0,
+          "end": 2,
+          "text": "  ",
+          "scopes": [
+            "source.ts",
+            "meta.interface.ts",
+            "meta.field.declaration.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 2,
+          "end": 6,
+          "text": "name",
+          "scopes": [
+            "source.ts",
+            "meta.interface.ts",
+            "meta.field.declaration.ts",
+            "meta.definition.property.ts",
+            "variable.object.property.ts"
+          ],
+          "color": "#FFAB70",
+          "fontStyle": 0
+        },
+        {
+          "start": 6,
+          "end": 7,
+          "text": ":",
+          "scopes": [
+            "source.ts",
+            "meta.interface.ts",
+            "meta.field.declaration.ts",
+            "meta.type.annotation.ts",
+            "keyword.operator.type.annotation.ts"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        },
+        {
+          "start": 7,
+          "end": 8,
+          "text": " ",
+          "scopes": [
+            "source.ts",
+            "meta.interface.ts",
+            "meta.field.declaration.ts",
+            "meta.type.annotation.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 8,
+          "end": 14,
+          "text": "string",
+          "scopes": [
+            "source.ts",
+            "meta.interface.ts",
+            "meta.field.declaration.ts",
+            "meta.type.annotation.ts",
+            "support.type.primitive.ts"
+          ],
+          "color": "#79B8FF",
+          "fontStyle": 0
+        },
+        {
+          "start": 14,
+          "end": 15,
+          "text": ";",
+          "scopes": [
+            "source.ts",
+            "meta.interface.ts",
+            "punctuation.terminator.statement.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "  isActive?: boolean;",
+      "segments": [
+        {
+          "start": 0,
+          "end": 2,
+          "text": "  ",
+          "scopes": [
+            "source.ts",
+            "meta.interface.ts",
+            "meta.field.declaration.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 2,
+          "end": 10,
+          "text": "isActive",
+          "scopes": [
+            "source.ts",
+            "meta.interface.ts",
+            "meta.field.declaration.ts",
+            "meta.definition.property.ts",
+            "variable.object.property.ts"
+          ],
+          "color": "#FFAB70",
+          "fontStyle": 0
+        },
+        {
+          "start": 10,
+          "end": 11,
+          "text": "?",
+          "scopes": [
+            "source.ts",
+            "meta.interface.ts",
+            "meta.field.declaration.ts",
+            "keyword.operator.optional.ts"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        },
+        {
+          "start": 11,
+          "end": 12,
+          "text": ":",
+          "scopes": [
+            "source.ts",
+            "meta.interface.ts",
+            "meta.field.declaration.ts",
+            "meta.type.annotation.ts",
+            "keyword.operator.type.annotation.ts"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        },
+        {
+          "start": 12,
+          "end": 13,
+          "text": " ",
+          "scopes": [
+            "source.ts",
+            "meta.interface.ts",
+            "meta.field.declaration.ts",
+            "meta.type.annotation.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 13,
+          "end": 20,
+          "text": "boolean",
+          "scopes": [
+            "source.ts",
+            "meta.interface.ts",
+            "meta.field.declaration.ts",
+            "meta.type.annotation.ts",
+            "support.type.primitive.ts"
+          ],
+          "color": "#79B8FF",
+          "fontStyle": 0
+        },
+        {
+          "start": 20,
+          "end": 21,
+          "text": ";",
+          "scopes": [
+            "source.ts",
+            "meta.interface.ts",
+            "punctuation.terminator.statement.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "}",
+      "segments": [
+        {
+          "start": 0,
+          "end": 1,
+          "text": "}",
+          "scopes": [
+            "source.ts",
+            "meta.interface.ts",
+            "punctuation.definition.block.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "",
+      "segments": []
+    },
+    {
+      "text": "export function toLabel(user: User): string {",
+      "segments": [
+        {
+          "start": 0,
+          "end": 6,
+          "text": "export",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "keyword.control.export.ts"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        },
+        {
+          "start": 6,
+          "end": 7,
+          "text": " ",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 7,
+          "end": 15,
+          "text": "function",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "storage.type.function.ts"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        },
+        {
+          "start": 15,
+          "end": 16,
+          "text": " ",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 16,
+          "end": 23,
+          "text": "toLabel",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.definition.function.ts",
+            "entity.name.function.ts"
+          ],
+          "color": "#B392F0",
+          "fontStyle": 0
+        },
+        {
+          "start": 23,
+          "end": 24,
+          "text": "(",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.parameters.ts",
+            "punctuation.definition.parameters.begin.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 24,
+          "end": 28,
+          "text": "user",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.parameters.ts",
+            "variable.parameter.ts"
+          ],
+          "color": "#FFAB70",
+          "fontStyle": 0
+        },
+        {
+          "start": 28,
+          "end": 29,
+          "text": ":",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.parameters.ts",
+            "meta.type.annotation.ts",
+            "keyword.operator.type.annotation.ts"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        },
+        {
+          "start": 29,
+          "end": 30,
+          "text": " ",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.parameters.ts",
+            "meta.type.annotation.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 30,
+          "end": 34,
+          "text": "User",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.parameters.ts",
+            "meta.type.annotation.ts",
+            "entity.name.type.ts"
+          ],
+          "color": "#B392F0",
+          "fontStyle": 0
+        },
+        {
+          "start": 34,
+          "end": 35,
+          "text": ")",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.parameters.ts",
+            "punctuation.definition.parameters.end.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 35,
+          "end": 36,
+          "text": ":",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.return.type.ts",
+            "keyword.operator.type.annotation.ts"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        },
+        {
+          "start": 36,
+          "end": 37,
+          "text": " ",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.return.type.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 37,
+          "end": 43,
+          "text": "string",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.return.type.ts",
+            "support.type.primitive.ts"
+          ],
+          "color": "#79B8FF",
+          "fontStyle": 0
+        },
+        {
+          "start": 43,
+          "end": 44,
+          "text": " ",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.return.type.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 44,
+          "end": 45,
+          "text": "{",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.block.ts",
+            "punctuation.definition.block.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "  return `${user.id}:${user.name}`;",
+      "segments": [
+        {
+          "start": 0,
+          "end": 2,
+          "text": "  ",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.block.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 2,
+          "end": 8,
+          "text": "return",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.block.ts",
+            "keyword.control.flow.ts"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        },
+        {
+          "start": 8,
+          "end": 9,
+          "text": " ",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.block.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 9,
+          "end": 10,
+          "text": "`",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.block.ts",
+            "string.template.ts",
+            "punctuation.definition.string.template.begin.ts"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        },
+        {
+          "start": 10,
+          "end": 12,
+          "text": "${",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.block.ts",
+            "string.template.ts",
+            "meta.template.expression.ts",
+            "punctuation.definition.template-expression.begin.ts"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        },
+        {
+          "start": 12,
+          "end": 16,
+          "text": "user",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.block.ts",
+            "string.template.ts",
+            "meta.template.expression.ts",
+            "meta.embedded.line.ts",
+            "variable.other.object.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 16,
+          "end": 17,
+          "text": ".",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.block.ts",
+            "string.template.ts",
+            "meta.template.expression.ts",
+            "meta.embedded.line.ts",
+            "punctuation.accessor.ts"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        },
+        {
+          "start": 17,
+          "end": 19,
+          "text": "id",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.block.ts",
+            "string.template.ts",
+            "meta.template.expression.ts",
+            "meta.embedded.line.ts",
+            "variable.other.property.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 19,
+          "end": 20,
+          "text": "}",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.block.ts",
+            "string.template.ts",
+            "meta.template.expression.ts",
+            "punctuation.definition.template-expression.end.ts"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        },
+        {
+          "start": 20,
+          "end": 21,
+          "text": ":",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.block.ts",
+            "string.template.ts"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        },
+        {
+          "start": 21,
+          "end": 23,
+          "text": "${",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.block.ts",
+            "string.template.ts",
+            "meta.template.expression.ts",
+            "punctuation.definition.template-expression.begin.ts"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        },
+        {
+          "start": 23,
+          "end": 27,
+          "text": "user",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.block.ts",
+            "string.template.ts",
+            "meta.template.expression.ts",
+            "meta.embedded.line.ts",
+            "variable.other.object.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 27,
+          "end": 28,
+          "text": ".",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.block.ts",
+            "string.template.ts",
+            "meta.template.expression.ts",
+            "meta.embedded.line.ts",
+            "punctuation.accessor.ts"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        },
+        {
+          "start": 28,
+          "end": 32,
+          "text": "name",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.block.ts",
+            "string.template.ts",
+            "meta.template.expression.ts",
+            "meta.embedded.line.ts",
+            "variable.other.property.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 32,
+          "end": 33,
+          "text": "}",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.block.ts",
+            "string.template.ts",
+            "meta.template.expression.ts",
+            "punctuation.definition.template-expression.end.ts"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        },
+        {
+          "start": 33,
+          "end": 34,
+          "text": "`",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.block.ts",
+            "string.template.ts",
+            "punctuation.definition.string.template.end.ts"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        },
+        {
+          "start": 34,
+          "end": 35,
+          "text": ";",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.block.ts",
+            "punctuation.terminator.statement.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "}",
+      "segments": [
+        {
+          "start": 0,
+          "end": 1,
+          "text": "}",
+          "scopes": [
+            "source.ts",
+            "meta.function.ts",
+            "meta.block.ts",
+            "punctuation.definition.block.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "",
+      "segments": []
+    },
+    {
+      "text": "const user: User = { id: 42, name: \"Ada\" };",
+      "segments": [
+        {
+          "start": 0,
+          "end": 5,
+          "text": "const",
+          "scopes": [
+            "source.ts",
+            "meta.var.expr.ts",
+            "storage.type.ts"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        },
+        {
+          "start": 5,
+          "end": 6,
+          "text": " ",
+          "scopes": [
+            "source.ts",
+            "meta.var.expr.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 6,
+          "end": 10,
+          "text": "user",
+          "scopes": [
+            "source.ts",
+            "meta.var.expr.ts",
+            "meta.var-single-variable.expr.ts",
+            "meta.definition.variable.ts",
+            "variable.other.constant.ts"
+          ],
+          "color": "#79B8FF",
+          "fontStyle": 0
+        },
+        {
+          "start": 10,
+          "end": 11,
+          "text": ":",
+          "scopes": [
+            "source.ts",
+            "meta.var.expr.ts",
+            "meta.var-single-variable.expr.ts",
+            "meta.type.annotation.ts",
+            "keyword.operator.type.annotation.ts"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        },
+        {
+          "start": 11,
+          "end": 12,
+          "text": " ",
+          "scopes": [
+            "source.ts",
+            "meta.var.expr.ts",
+            "meta.var-single-variable.expr.ts",
+            "meta.type.annotation.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 12,
+          "end": 16,
+          "text": "User",
+          "scopes": [
+            "source.ts",
+            "meta.var.expr.ts",
+            "meta.var-single-variable.expr.ts",
+            "meta.type.annotation.ts",
+            "entity.name.type.ts"
+          ],
+          "color": "#B392F0",
+          "fontStyle": 0
+        },
+        {
+          "start": 16,
+          "end": 17,
+          "text": " ",
+          "scopes": [
+            "source.ts",
+            "meta.var.expr.ts",
+            "meta.var-single-variable.expr.ts",
+            "meta.type.annotation.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 17,
+          "end": 18,
+          "text": "=",
+          "scopes": [
+            "source.ts",
+            "meta.var.expr.ts",
+            "keyword.operator.assignment.ts"
+          ],
+          "color": "#F97583",
+          "fontStyle": 0
+        },
+        {
+          "start": 18,
+          "end": 19,
+          "text": " ",
+          "scopes": [
+            "source.ts",
+            "meta.var.expr.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 19,
+          "end": 20,
+          "text": "{",
+          "scopes": [
+            "source.ts",
+            "meta.var.expr.ts",
+            "meta.objectliteral.ts",
+            "punctuation.definition.block.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 20,
+          "end": 21,
+          "text": " ",
+          "scopes": [
+            "source.ts",
+            "meta.var.expr.ts",
+            "meta.objectliteral.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 21,
+          "end": 23,
+          "text": "id",
+          "scopes": [
+            "source.ts",
+            "meta.var.expr.ts",
+            "meta.objectliteral.ts",
+            "meta.object.member.ts",
+            "meta.object-literal.key.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 23,
+          "end": 24,
+          "text": ":",
+          "scopes": [
+            "source.ts",
+            "meta.var.expr.ts",
+            "meta.objectliteral.ts",
+            "meta.object.member.ts",
+            "meta.object-literal.key.ts",
+            "punctuation.separator.key-value.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 24,
+          "end": 25,
+          "text": " ",
+          "scopes": [
+            "source.ts",
+            "meta.var.expr.ts",
+            "meta.objectliteral.ts",
+            "meta.object.member.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 25,
+          "end": 27,
+          "text": "42",
+          "scopes": [
+            "source.ts",
+            "meta.var.expr.ts",
+            "meta.objectliteral.ts",
+            "meta.object.member.ts",
+            "constant.numeric.decimal.ts"
+          ],
+          "color": "#79B8FF",
+          "fontStyle": 0
+        },
+        {
+          "start": 27,
+          "end": 28,
+          "text": ",",
+          "scopes": [
+            "source.ts",
+            "meta.var.expr.ts",
+            "meta.objectliteral.ts",
+            "punctuation.separator.comma.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 28,
+          "end": 29,
+          "text": " ",
+          "scopes": [
+            "source.ts",
+            "meta.var.expr.ts",
+            "meta.objectliteral.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 29,
+          "end": 33,
+          "text": "name",
+          "scopes": [
+            "source.ts",
+            "meta.var.expr.ts",
+            "meta.objectliteral.ts",
+            "meta.object.member.ts",
+            "meta.object-literal.key.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 33,
+          "end": 34,
+          "text": ":",
+          "scopes": [
+            "source.ts",
+            "meta.var.expr.ts",
+            "meta.objectliteral.ts",
+            "meta.object.member.ts",
+            "meta.object-literal.key.ts",
+            "punctuation.separator.key-value.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 34,
+          "end": 35,
+          "text": " ",
+          "scopes": [
+            "source.ts",
+            "meta.var.expr.ts",
+            "meta.objectliteral.ts",
+            "meta.object.member.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 35,
+          "end": 36,
+          "text": "\"",
+          "scopes": [
+            "source.ts",
+            "meta.var.expr.ts",
+            "meta.objectliteral.ts",
+            "meta.object.member.ts",
+            "string.quoted.double.ts",
+            "punctuation.definition.string.begin.ts"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        },
+        {
+          "start": 36,
+          "end": 39,
+          "text": "Ada",
+          "scopes": [
+            "source.ts",
+            "meta.var.expr.ts",
+            "meta.objectliteral.ts",
+            "meta.object.member.ts",
+            "string.quoted.double.ts"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        },
+        {
+          "start": 39,
+          "end": 40,
+          "text": "\"",
+          "scopes": [
+            "source.ts",
+            "meta.var.expr.ts",
+            "meta.objectliteral.ts",
+            "meta.object.member.ts",
+            "string.quoted.double.ts",
+            "punctuation.definition.string.end.ts"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        },
+        {
+          "start": 40,
+          "end": 41,
+          "text": " ",
+          "scopes": [
+            "source.ts",
+            "meta.var.expr.ts",
+            "meta.objectliteral.ts",
+            "meta.object.member.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 41,
+          "end": 42,
+          "text": "}",
+          "scopes": [
+            "source.ts",
+            "meta.var.expr.ts",
+            "meta.objectliteral.ts",
+            "punctuation.definition.block.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 42,
+          "end": 43,
+          "text": ";",
+          "scopes": [
+            "source.ts",
+            "punctuation.terminator.statement.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "console.log(toLabel(user));",
+      "segments": [
+        {
+          "start": 0,
+          "end": 7,
+          "text": "console",
+          "scopes": [
+            "source.ts",
+            "meta.function-call.ts",
+            "variable.other.object.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 7,
+          "end": 8,
+          "text": ".",
+          "scopes": [
+            "source.ts",
+            "meta.function-call.ts",
+            "punctuation.accessor.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 8,
+          "end": 11,
+          "text": "log",
+          "scopes": [
+            "source.ts",
+            "meta.function-call.ts",
+            "entity.name.function.ts"
+          ],
+          "color": "#B392F0",
+          "fontStyle": 0
+        },
+        {
+          "start": 11,
+          "end": 12,
+          "text": "(",
+          "scopes": [
+            "source.ts",
+            "meta.brace.round.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 12,
+          "end": 19,
+          "text": "toLabel",
+          "scopes": [
+            "source.ts",
+            "meta.function-call.ts",
+            "entity.name.function.ts"
+          ],
+          "color": "#B392F0",
+          "fontStyle": 0
+        },
+        {
+          "start": 19,
+          "end": 20,
+          "text": "(",
+          "scopes": [
+            "source.ts",
+            "meta.brace.round.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 20,
+          "end": 24,
+          "text": "user",
+          "scopes": [
+            "source.ts",
+            "variable.other.readwrite.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 24,
+          "end": 25,
+          "text": ")",
+          "scopes": [
+            "source.ts",
+            "meta.brace.round.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 25,
+          "end": 26,
+          "text": ")",
+          "scopes": [
+            "source.ts",
+            "meta.brace.round.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 26,
+          "end": 27,
+          "text": ";",
+          "scopes": [
+            "source.ts",
+            "punctuation.terminator.statement.ts"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "",
+      "segments": []
+    }
+  ]
+}

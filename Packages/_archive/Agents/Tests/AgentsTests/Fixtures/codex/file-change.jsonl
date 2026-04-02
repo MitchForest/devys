@@ -1,0 +1,7 @@
+{"jsonrpc":"2.0","method":"thread/started","params":{"threadId":"thr_test_003"}}
+{"jsonrpc":"2.0","method":"turn/started","params":{"turn":{"id":"turn_test_003"}}}
+{"jsonrpc":"2.0","method":"item/started","params":{"item":{"id":"item_fc_001","type":"fileChange","title":"Add comment to main.swift","files":[{"path":"/tmp/test/main.swift","status":"modified","additions":1,"deletions":0}]}}}
+{"jsonrpc":"2.0","id":2,"method":"item/fileChange/requestApproval","params":{"threadId":"thr_test_003","turnId":"turn_test_003","itemId":"item_fc_001","command":"apply patch to main.swift"}}
+{"jsonrpc":"2.0","method":"item/completed","params":{"itemId":"item_fc_001","status":"completed"}}
+{"jsonrpc":"2.0","method":"item/agentMessage/delta","params":{"delta":"Done! I've added the comment."}}
+{"jsonrpc":"2.0","method":"turn/completed","params":{"turn":{"id":"turn_test_003"}}}

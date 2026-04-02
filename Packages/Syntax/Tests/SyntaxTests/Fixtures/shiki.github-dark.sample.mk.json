@@ -1,0 +1,397 @@
+{
+  "language": "make",
+  "theme": "github-dark",
+  "lines": [
+    {
+      "text": "APP := devys",
+      "segments": [
+        {
+          "start": 0,
+          "end": 3,
+          "text": "APP",
+          "scopes": [
+            "source.makefile",
+            "variable.other.makefile"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 3,
+          "end": 4,
+          "text": " ",
+          "scopes": [
+            "source.makefile"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 4,
+          "end": 6,
+          "text": ":=",
+          "scopes": [
+            "source.makefile",
+            "punctuation.separator.key-value.makefile"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 6,
+          "end": 12,
+          "text": " devys",
+          "scopes": [
+            "source.makefile"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "SOURCES := main.c util.c",
+      "segments": [
+        {
+          "start": 0,
+          "end": 7,
+          "text": "SOURCES",
+          "scopes": [
+            "source.makefile",
+            "variable.other.makefile"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 7,
+          "end": 8,
+          "text": " ",
+          "scopes": [
+            "source.makefile"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 8,
+          "end": 10,
+          "text": ":=",
+          "scopes": [
+            "source.makefile",
+            "punctuation.separator.key-value.makefile"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 10,
+          "end": 24,
+          "text": " main.c util.c",
+          "scopes": [
+            "source.makefile"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "",
+      "segments": []
+    },
+    {
+      "text": "all: build",
+      "segments": [
+        {
+          "start": 0,
+          "end": 3,
+          "text": "all",
+          "scopes": [
+            "source.makefile",
+            "meta.scope.target.makefile",
+            "entity.name.function.target.makefile"
+          ],
+          "color": "#B392F0",
+          "fontStyle": 0
+        },
+        {
+          "start": 3,
+          "end": 4,
+          "text": ":",
+          "scopes": [
+            "source.makefile",
+            "meta.scope.target.makefile",
+            "punctuation.separator.key-value.makefile"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 4,
+          "end": 10,
+          "text": " build",
+          "scopes": [
+            "source.makefile",
+            "meta.scope.target.makefile",
+            "meta.scope.prerequisites.makefile"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "",
+      "segments": []
+    },
+    {
+      "text": "build:",
+      "segments": [
+        {
+          "start": 0,
+          "end": 5,
+          "text": "build",
+          "scopes": [
+            "source.makefile",
+            "meta.scope.target.makefile",
+            "entity.name.function.target.makefile"
+          ],
+          "color": "#B392F0",
+          "fontStyle": 0
+        },
+        {
+          "start": 5,
+          "end": 6,
+          "text": ":",
+          "scopes": [
+            "source.makefile",
+            "meta.scope.target.makefile",
+            "punctuation.separator.key-value.makefile"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "\tcc -o $(APP) $(SOURCES)",
+      "segments": [
+        {
+          "start": 0,
+          "end": 1,
+          "text": "\t",
+          "scopes": [
+            "source.makefile",
+            "meta.scope.recipe.makefile"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 1,
+          "end": 7,
+          "text": "cc -o ",
+          "scopes": [
+            "source.makefile",
+            "meta.scope.recipe.makefile"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 7,
+          "end": 9,
+          "text": "$(",
+          "scopes": [
+            "source.makefile",
+            "meta.scope.recipe.makefile",
+            "string.interpolated.makefile",
+            "punctuation.definition.variable.makefile"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        },
+        {
+          "start": 9,
+          "end": 12,
+          "text": "APP",
+          "scopes": [
+            "source.makefile",
+            "meta.scope.recipe.makefile",
+            "string.interpolated.makefile",
+            "variable.other.makefile"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 12,
+          "end": 13,
+          "text": ")",
+          "scopes": [
+            "source.makefile",
+            "meta.scope.recipe.makefile",
+            "string.interpolated.makefile",
+            "punctuation.definition.variable.makefile"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        },
+        {
+          "start": 13,
+          "end": 14,
+          "text": " ",
+          "scopes": [
+            "source.makefile",
+            "meta.scope.recipe.makefile"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 14,
+          "end": 16,
+          "text": "$(",
+          "scopes": [
+            "source.makefile",
+            "meta.scope.recipe.makefile",
+            "string.interpolated.makefile",
+            "punctuation.definition.variable.makefile"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        },
+        {
+          "start": 16,
+          "end": 23,
+          "text": "SOURCES",
+          "scopes": [
+            "source.makefile",
+            "meta.scope.recipe.makefile",
+            "string.interpolated.makefile",
+            "variable.other.makefile"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 23,
+          "end": 24,
+          "text": ")",
+          "scopes": [
+            "source.makefile",
+            "meta.scope.recipe.makefile",
+            "string.interpolated.makefile",
+            "punctuation.definition.variable.makefile"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "",
+      "segments": []
+    },
+    {
+      "text": "clean:",
+      "segments": [
+        {
+          "start": 0,
+          "end": 5,
+          "text": "clean",
+          "scopes": [
+            "source.makefile",
+            "meta.scope.target.makefile",
+            "entity.name.function.target.makefile"
+          ],
+          "color": "#B392F0",
+          "fontStyle": 0
+        },
+        {
+          "start": 5,
+          "end": 6,
+          "text": ":",
+          "scopes": [
+            "source.makefile",
+            "meta.scope.target.makefile",
+            "punctuation.separator.key-value.makefile"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "\trm -f $(APP)",
+      "segments": [
+        {
+          "start": 0,
+          "end": 1,
+          "text": "\t",
+          "scopes": [
+            "source.makefile",
+            "meta.scope.recipe.makefile"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 1,
+          "end": 7,
+          "text": "rm -f ",
+          "scopes": [
+            "source.makefile",
+            "meta.scope.recipe.makefile"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 7,
+          "end": 9,
+          "text": "$(",
+          "scopes": [
+            "source.makefile",
+            "meta.scope.recipe.makefile",
+            "string.interpolated.makefile",
+            "punctuation.definition.variable.makefile"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        },
+        {
+          "start": 9,
+          "end": 12,
+          "text": "APP",
+          "scopes": [
+            "source.makefile",
+            "meta.scope.recipe.makefile",
+            "string.interpolated.makefile",
+            "variable.other.makefile"
+          ],
+          "color": "#E1E4E8",
+          "fontStyle": 0
+        },
+        {
+          "start": 12,
+          "end": 13,
+          "text": ")",
+          "scopes": [
+            "source.makefile",
+            "meta.scope.recipe.makefile",
+            "string.interpolated.makefile",
+            "punctuation.definition.variable.makefile"
+          ],
+          "color": "#9ECBFF",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "",
+      "segments": []
+    }
+  ]
+}

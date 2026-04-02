@@ -1,0 +1,826 @@
+{
+  "language": "kotlin",
+  "theme": "github-light",
+  "lines": [
+    {
+      "text": "data class User(val id: Int, val name: String)",
+      "segments": [
+        {
+          "start": 0,
+          "end": 4,
+          "text": "data",
+          "scopes": [
+            "source.kotlin",
+            "storage.modifier.other.kotlin"
+          ],
+          "color": "#D73A49",
+          "fontStyle": 0
+        },
+        {
+          "start": 4,
+          "end": 5,
+          "text": " ",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 5,
+          "end": 10,
+          "text": "class",
+          "scopes": [
+            "source.kotlin",
+            "keyword.hard.class.kotlin"
+          ],
+          "color": "#D73A49",
+          "fontStyle": 0
+        },
+        {
+          "start": 10,
+          "end": 11,
+          "text": " ",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 11,
+          "end": 15,
+          "text": "User",
+          "scopes": [
+            "source.kotlin",
+            "entity.name.type.class.kotlin"
+          ],
+          "color": "#6F42C1",
+          "fontStyle": 0
+        },
+        {
+          "start": 15,
+          "end": 16,
+          "text": "(",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 16,
+          "end": 19,
+          "text": "val",
+          "scopes": [
+            "source.kotlin",
+            "keyword.hard.kotlin"
+          ],
+          "color": "#D73A49",
+          "fontStyle": 0
+        },
+        {
+          "start": 19,
+          "end": 20,
+          "text": " ",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 20,
+          "end": 22,
+          "text": "id",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 22,
+          "end": 24,
+          "text": ": ",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 24,
+          "end": 27,
+          "text": "Int",
+          "scopes": [
+            "source.kotlin",
+            "entity.name.type.kotlin"
+          ],
+          "color": "#6F42C1",
+          "fontStyle": 0
+        },
+        {
+          "start": 27,
+          "end": 29,
+          "text": ", ",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 29,
+          "end": 32,
+          "text": "val",
+          "scopes": [
+            "source.kotlin",
+            "keyword.hard.kotlin"
+          ],
+          "color": "#D73A49",
+          "fontStyle": 0
+        },
+        {
+          "start": 32,
+          "end": 33,
+          "text": " ",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 33,
+          "end": 37,
+          "text": "name",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 37,
+          "end": 39,
+          "text": ": ",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 39,
+          "end": 45,
+          "text": "String",
+          "scopes": [
+            "source.kotlin",
+            "entity.name.type.kotlin"
+          ],
+          "color": "#6F42C1",
+          "fontStyle": 0
+        },
+        {
+          "start": 45,
+          "end": 46,
+          "text": ")",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "",
+      "segments": []
+    },
+    {
+      "text": "fun greet(user: User): String {",
+      "segments": [
+        {
+          "start": 0,
+          "end": 3,
+          "text": "fun",
+          "scopes": [
+            "source.kotlin",
+            "keyword.hard.fun.kotlin"
+          ],
+          "color": "#D73A49",
+          "fontStyle": 0
+        },
+        {
+          "start": 3,
+          "end": 4,
+          "text": " ",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 4,
+          "end": 9,
+          "text": "greet",
+          "scopes": [
+            "source.kotlin",
+            "entity.name.function.declaration.kotlin"
+          ],
+          "color": "#6F42C1",
+          "fontStyle": 0
+        },
+        {
+          "start": 9,
+          "end": 14,
+          "text": "(user",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 14,
+          "end": 16,
+          "text": ": ",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 16,
+          "end": 20,
+          "text": "User",
+          "scopes": [
+            "source.kotlin",
+            "entity.name.type.kotlin"
+          ],
+          "color": "#6F42C1",
+          "fontStyle": 0
+        },
+        {
+          "start": 20,
+          "end": 21,
+          "text": ")",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 21,
+          "end": 23,
+          "text": ": ",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 23,
+          "end": 29,
+          "text": "String",
+          "scopes": [
+            "source.kotlin",
+            "entity.name.type.kotlin"
+          ],
+          "color": "#6F42C1",
+          "fontStyle": 0
+        },
+        {
+          "start": 29,
+          "end": 30,
+          "text": " ",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 30,
+          "end": 31,
+          "text": "{",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "    return \"Hello ${user.name}!\"",
+      "segments": [
+        {
+          "start": 0,
+          "end": 4,
+          "text": "    ",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 4,
+          "end": 10,
+          "text": "return",
+          "scopes": [
+            "source.kotlin",
+            "keyword.control.kotlin"
+          ],
+          "color": "#D73A49",
+          "fontStyle": 0
+        },
+        {
+          "start": 10,
+          "end": 11,
+          "text": " ",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 11,
+          "end": 12,
+          "text": "\"",
+          "scopes": [
+            "source.kotlin",
+            "string.quoted.double.kotlin"
+          ],
+          "color": "#032F62",
+          "fontStyle": 0
+        },
+        {
+          "start": 12,
+          "end": 18,
+          "text": "Hello ",
+          "scopes": [
+            "source.kotlin",
+            "string.quoted.double.kotlin"
+          ],
+          "color": "#032F62",
+          "fontStyle": 0
+        },
+        {
+          "start": 18,
+          "end": 20,
+          "text": "${",
+          "scopes": [
+            "source.kotlin",
+            "string.quoted.double.kotlin",
+            "meta.template.expression.kotlin",
+            "punctuation.definition.template-expression.begin"
+          ],
+          "color": "#032F62",
+          "fontStyle": 0
+        },
+        {
+          "start": 20,
+          "end": 29,
+          "text": "user.name",
+          "scopes": [
+            "source.kotlin",
+            "string.quoted.double.kotlin",
+            "meta.template.expression.kotlin"
+          ],
+          "color": "#032F62",
+          "fontStyle": 0
+        },
+        {
+          "start": 29,
+          "end": 30,
+          "text": "}",
+          "scopes": [
+            "source.kotlin",
+            "string.quoted.double.kotlin",
+            "meta.template.expression.kotlin",
+            "punctuation.definition.template-expression.end"
+          ],
+          "color": "#032F62",
+          "fontStyle": 0
+        },
+        {
+          "start": 30,
+          "end": 31,
+          "text": "!",
+          "scopes": [
+            "source.kotlin",
+            "string.quoted.double.kotlin"
+          ],
+          "color": "#032F62",
+          "fontStyle": 0
+        },
+        {
+          "start": 31,
+          "end": 32,
+          "text": "\"",
+          "scopes": [
+            "source.kotlin",
+            "string.quoted.double.kotlin"
+          ],
+          "color": "#032F62",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "}",
+      "segments": [
+        {
+          "start": 0,
+          "end": 1,
+          "text": "}",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "",
+      "segments": []
+    },
+    {
+      "text": "fun main() {",
+      "segments": [
+        {
+          "start": 0,
+          "end": 3,
+          "text": "fun",
+          "scopes": [
+            "source.kotlin",
+            "keyword.hard.fun.kotlin"
+          ],
+          "color": "#D73A49",
+          "fontStyle": 0
+        },
+        {
+          "start": 3,
+          "end": 4,
+          "text": " ",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 4,
+          "end": 8,
+          "text": "main",
+          "scopes": [
+            "source.kotlin",
+            "entity.name.function.declaration.kotlin"
+          ],
+          "color": "#6F42C1",
+          "fontStyle": 0
+        },
+        {
+          "start": 8,
+          "end": 12,
+          "text": "() {",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "    val users = listOf(User(1, \"Devys\"))",
+      "segments": [
+        {
+          "start": 0,
+          "end": 4,
+          "text": "    ",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 4,
+          "end": 7,
+          "text": "val",
+          "scopes": [
+            "source.kotlin",
+            "keyword.hard.kotlin"
+          ],
+          "color": "#D73A49",
+          "fontStyle": 0
+        },
+        {
+          "start": 7,
+          "end": 8,
+          "text": " ",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 8,
+          "end": 14,
+          "text": "users ",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 14,
+          "end": 15,
+          "text": "=",
+          "scopes": [
+            "source.kotlin",
+            "keyword.operator.assignment.kotlin"
+          ],
+          "color": "#D73A49",
+          "fontStyle": 0
+        },
+        {
+          "start": 15,
+          "end": 16,
+          "text": " ",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 16,
+          "end": 22,
+          "text": "listOf",
+          "scopes": [
+            "source.kotlin",
+            "entity.name.function.call.kotlin"
+          ],
+          "color": "#6F42C1",
+          "fontStyle": 0
+        },
+        {
+          "start": 22,
+          "end": 23,
+          "text": "(",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 23,
+          "end": 27,
+          "text": "User",
+          "scopes": [
+            "source.kotlin",
+            "entity.name.function.call.kotlin"
+          ],
+          "color": "#6F42C1",
+          "fontStyle": 0
+        },
+        {
+          "start": 27,
+          "end": 28,
+          "text": "(",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 28,
+          "end": 29,
+          "text": "1",
+          "scopes": [
+            "source.kotlin",
+            "constant.numeric.decimal.kotlin"
+          ],
+          "color": "#005CC5",
+          "fontStyle": 0
+        },
+        {
+          "start": 29,
+          "end": 31,
+          "text": ", ",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 31,
+          "end": 32,
+          "text": "\"",
+          "scopes": [
+            "source.kotlin",
+            "string.quoted.double.kotlin"
+          ],
+          "color": "#032F62",
+          "fontStyle": 0
+        },
+        {
+          "start": 32,
+          "end": 37,
+          "text": "Devys",
+          "scopes": [
+            "source.kotlin",
+            "string.quoted.double.kotlin"
+          ],
+          "color": "#032F62",
+          "fontStyle": 0
+        },
+        {
+          "start": 37,
+          "end": 38,
+          "text": "\"",
+          "scopes": [
+            "source.kotlin",
+            "string.quoted.double.kotlin"
+          ],
+          "color": "#032F62",
+          "fontStyle": 0
+        },
+        {
+          "start": 38,
+          "end": 40,
+          "text": "))",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "    for (user in users) {",
+      "segments": [
+        {
+          "start": 0,
+          "end": 4,
+          "text": "    ",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 4,
+          "end": 7,
+          "text": "for",
+          "scopes": [
+            "source.kotlin",
+            "keyword.control.kotlin"
+          ],
+          "color": "#D73A49",
+          "fontStyle": 0
+        },
+        {
+          "start": 7,
+          "end": 14,
+          "text": " (user ",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 14,
+          "end": 16,
+          "text": "in",
+          "scopes": [
+            "source.kotlin",
+            "keyword.hard.kotlin"
+          ],
+          "color": "#D73A49",
+          "fontStyle": 0
+        },
+        {
+          "start": 16,
+          "end": 25,
+          "text": " users) {",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "        println(greet(user))",
+      "segments": [
+        {
+          "start": 0,
+          "end": 8,
+          "text": "        ",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 8,
+          "end": 15,
+          "text": "println",
+          "scopes": [
+            "source.kotlin",
+            "entity.name.function.call.kotlin"
+          ],
+          "color": "#6F42C1",
+          "fontStyle": 0
+        },
+        {
+          "start": 15,
+          "end": 16,
+          "text": "(",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        },
+        {
+          "start": 16,
+          "end": 21,
+          "text": "greet",
+          "scopes": [
+            "source.kotlin",
+            "entity.name.function.call.kotlin"
+          ],
+          "color": "#6F42C1",
+          "fontStyle": 0
+        },
+        {
+          "start": 21,
+          "end": 28,
+          "text": "(user))",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "    }",
+      "segments": [
+        {
+          "start": 0,
+          "end": 5,
+          "text": "    }",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "}",
+      "segments": [
+        {
+          "start": 0,
+          "end": 1,
+          "text": "}",
+          "scopes": [
+            "source.kotlin"
+          ],
+          "color": "#24292E",
+          "fontStyle": 0
+        }
+      ]
+    },
+    {
+      "text": "",
+      "segments": []
+    }
+  ]
+}

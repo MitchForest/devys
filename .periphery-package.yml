@@ -1,0 +1,24 @@
+# Periphery Configuration for Devys package-level scans
+#
+# Used for scanning SwiftPM package manifests without xcodebuild.
+
+# Retain public declarations (library code may be used by consumers)
+retain_public: true
+
+# Retain @objc and @objcMembers annotated declarations
+retain_objc_annotated: true
+
+# Retain assign-only properties (sometimes used for debugging)
+retain_assign_only_properties: false
+
+# Output format
+format: xcode
+
+# Exclude test targets from indexing
+exclude_tests: true
+
+# Exclude source files matching these patterns from results
+report_exclude:
+  - "**/DerivedSources/**"
+  - "**/.build/**"
+  - "Packages/**/Tests/**"

@@ -1,0 +1,13 @@
+prefix=/Users/mitchwhite/Code/devys/Packages/DevysSyntax/.onig-build/arm64
+exec_prefix=/Users/mitchwhite/Code/devys/Packages/DevysSyntax/.onig-build/arm64
+libdir=/Users/mitchwhite/Code/devys/Packages/DevysSyntax/.onig-build/arm64/lib
+includedir=/Users/mitchwhite/Code/devys/Packages/DevysSyntax/.onig-build/arm64/include
+datarootdir=/Users/mitchwhite/Code/devys/Packages/DevysSyntax/.onig-build/arm64/share
+datadir=/Users/mitchwhite/Code/devys/Packages/DevysSyntax/.onig-build/arm64/share
+
+Name: oniguruma
+Description: Regular expression library
+Version: 6.9.9
+Requires:
+Libs: -L${libdir} -lonig
+Cflags: -I${includedir}

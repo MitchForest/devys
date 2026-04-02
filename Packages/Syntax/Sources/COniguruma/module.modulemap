@@ -1,0 +1,4 @@
+module COniguruma {
+    header "include/oniguruma.h"
+    export *
+}
