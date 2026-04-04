@@ -36,38 +36,6 @@ extension ContentView {
         )
     }
 
-    func editorSessionForContent(_ content: TabContent?, tabId: TabID) -> EditorSession? {
-        guard case .editor(let url) = content else {
-            if editorSessions[tabId] != nil {
-                DispatchQueue.main.async {
-                    editorSessions.removeValue(forKey: tabId)
-                    EditorSessionRegistry.shared.unregister(tabId: tabId)
-                }
-            }
-            return nil
-        }
-
-        if let existing = editorSessions[tabId] {
-            if existing.url != url {
-                let session = EditorSession(url: url)
-                DispatchQueue.main.async {
-                    EditorSessionRegistry.shared.unregister(tabId: tabId)
-                    editorSessions[tabId] = session
-                    EditorSessionRegistry.shared.register(tabId: tabId, session: session)
-                }
-                return session
-            }
-            return existing
-        }
-
-        let session = EditorSession(url: url)
-        DispatchQueue.main.async {
-            editorSessions[tabId] = session
-            EditorSessionRegistry.shared.register(tabId: tabId, session: session)
-        }
-        return session
-    }
-
     func terminalSessionForContent(_ content: TabContent?) -> GhosttyTerminalSession? {
         guard case .terminal(let id) = content else { return nil }
         return terminalSessions[id]

@@ -30,14 +30,14 @@ public final class GitStore {
     /// Currently selected file path.
     private(set) var selectedFilePath: String?
     
-    /// Parsed diff for the selected file.
-    private(set) var selectedDiff: ParsedDiff?
+    /// Diff snapshot for the selected file.
+    private(set) var selectedDiff: DiffSnapshot?
     
     /// Whether viewing staged or unstaged diff.
     private(set) var isViewingStaged: Bool = false
 
-    /// Current diff parse task (for cancellation).
-    private var diffTask: Task<ParsedDiff, Never>?
+    /// Current diff load task (for cancellation).
+    private var diffTask: Task<DiffSnapshot, Never>?
     private var diffRequestID = UUID()
     
     // MARK: - View Settings
@@ -263,18 +263,15 @@ extension GitStore {
         diffRequestID = requestID
         do {
             let contextLines = diffContextLinesByPath[path] ?? 3
-            let diffText = try await gitService.diff(
+            let snapshot = try await gitService.diffSnapshot(
                 for: path,
                 staged: staged,
                 contextLines: contextLines,
                 ignoreWhitespace: ignoreWhitespace
             )
-            let parseTask = Task.detached(priority: .userInitiated) {
-                if Task.isCancelled { return ParsedDiff() }
-                return DiffParser.parse(diffText)
-            }
-            diffTask = parseTask
-            let parsed = await parseTask.value
+            let loadTask = Task { snapshot }
+            diffTask = loadTask
+            let parsed = await loadTask.value
             if diffRequestID == requestID {
                 selectedDiff = parsed
             }

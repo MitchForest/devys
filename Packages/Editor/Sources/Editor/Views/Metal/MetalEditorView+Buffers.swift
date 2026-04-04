@@ -5,18 +5,19 @@
 import AppKit
 import MetalKit
 import Rendering
+import Syntax
 
 extension MetalEditorView {
     // MARK: - Building Buffers
 
-    func buildCellBuffer(lines: [String], startLine: Int) {
+    func buildCellBuffer(rows: [PreparedEditorRow]) {
         guard let lineBuffer = lineBuffer else { return }
 
         cellBuffer.beginFrame()
         let metrics = makeLineRenderMetrics()
 
-        for (offset, text) in lines.enumerated() {
-            let lineIndex = startLine + offset
+        for row in rows {
+            let lineIndex = row.lineIndex
             let lineY = Float(lineBuffer.viewportY(forLine: lineIndex)) * metrics.scale
 
             if shouldSkipLine(lineY: lineY, cellHeight: metrics.cellHeight) {
@@ -24,22 +25,21 @@ extension MetalEditorView {
             }
 
             drawLineNumber(
-                lineIndex: lineIndex,
+                row.lineNumberPacket,
                 lineY: lineY,
                 metrics: metrics
             )
 
-            if let highlighted = cachedHighlightedLines[lineIndex] {
+            if let highlighted = row.highlightedLine,
+               highlighted.status.isRenderable {
                 logHighlightUsageIfNeeded(lineIndex: lineIndex, highlighted: highlighted)
-                renderHighlightedLine(
-                    highlighted,
-                    text: text,
-                    lineY: lineY,
-                    metrics: metrics
-                )
-            } else {
-                renderPlainLine(text, lineY: lineY, metrics: metrics)
             }
+            renderPacket(
+                row.contentPacket,
+                startX: metrics.gutterWidth,
+                lineY: lineY,
+                metrics: metrics
+            )
         }
 
         cellBuffer.endFrame()
@@ -67,125 +67,47 @@ extension MetalEditorView {
     }
 
     func drawLineNumber(
-        lineIndex: Int,
+        _ packet: ResolvedTextRenderPacket,
         lineY: Float,
         metrics: LineRenderMetrics
     ) {
-        let lineNumStr = String(lineIndex + 1)
-        let lineNumX = metrics.gutterWidth - Float(lineNumStr.count + 1) * metrics.cellWidth
-        for (i, char) in lineNumStr.enumerated() {
-            let entry = glyphAtlas.entry(for: char)
-            cellBuffer.addCell(
-                EditorCellGPU(
-                    position: SIMD2(lineNumX + Float(i) * metrics.cellWidth, lineY),
-                    foregroundColor: lineNumberColor,
-                    backgroundColor: backgroundColor,
-                    uvOrigin: entry.uvOrigin,
-                    uvSize: entry.uvSize,
-                    flags: EditorCellFlags.lineNumber.rawValue
-                )
-            )
-        }
+        let lineNumX = metrics.gutterWidth - Float(packet.cellCount + 1) * metrics.cellWidth
+        renderPacket(packet, startX: lineNumX, lineY: lineY, metrics: metrics)
     }
 
-    func renderHighlightedLine(
-        _ highlighted: HighlightedLine,
-        text: String,
+    func renderPacket(
+        _ packet: ResolvedTextRenderPacket,
+        startX: Float,
         lineY: Float,
         metrics: LineRenderMetrics
     ) {
-        var x = metrics.gutterWidth
-        var renderedUpTo = 0  // Track how many characters we've rendered
-        
-        for token in highlighted.tokens {
-            let fgColor = hexToLinearColor(token.foregroundColor)
-            let bgColor = token.backgroundColor.map { hexToLinearColor($0) } ?? backgroundColor
-
-            let tokenText = textForToken(token, in: text)
-            for char in tokenText {
-                let entry = glyphAtlas.entry(for: char)
-                let flags = tokenFlags(token)
-
-                cellBuffer.addCell(
-                    EditorCellGPU(
-                        position: SIMD2(x, lineY),
-                        foregroundColor: fgColor,
-                        backgroundColor: bgColor,
-                        uvOrigin: entry.uvOrigin,
-                        uvSize: entry.uvSize,
-                        flags: flags
-                    )
-                )
-                x += metrics.cellWidth
-                renderedUpTo += 1
-            }
-        }
-        
-        // If text has changed and has more characters than the cached tokens cover,
-        // render the remaining characters in plain foreground color.
-        // This handles the case where the user types new characters and the
-        // highlight cache is stale.
-        if renderedUpTo < text.count {
-            let remainingText = text.dropFirst(renderedUpTo)
-            for char in remainingText {
-                let entry = glyphAtlas.entry(for: char)
-                cellBuffer.addCell(
-                    EditorCellGPU(
-                        position: SIMD2(x, lineY),
-                        foregroundColor: foregroundColor,
-                        backgroundColor: backgroundColor,
-                        uvOrigin: entry.uvOrigin,
-                        uvSize: entry.uvSize,
-                        flags: 0
-                    )
-                )
-                x += metrics.cellWidth
-            }
-        }
-    }
-
-    func renderPlainLine(_ text: String, lineY: Float, metrics: LineRenderMetrics) {
-        var x = metrics.gutterWidth
-        for char in text {
-            let entry = glyphAtlas.entry(for: char)
+        var x = startX
+        for cell in packet.cells {
             cellBuffer.addCell(
                 EditorCellGPU(
                     position: SIMD2(x, lineY),
-                    foregroundColor: foregroundColor,
-                    backgroundColor: backgroundColor,
-                    uvOrigin: entry.uvOrigin,
-                    uvSize: entry.uvSize,
-                    flags: 0
+                    foregroundColor: cell.foregroundColor,
+                    backgroundColor: cell.backgroundColor,
+                    uvOrigin: cell.uvOrigin,
+                    uvSize: cell.uvSize,
+                    flags: cell.flags
                 )
             )
             x += metrics.cellWidth
         }
     }
 
-    func textForToken(_ token: HighlightedToken, in text: String) -> String {
-        let tokenStart = token.range.lowerBound
-        let tokenEnd = min(token.range.upperBound, text.utf16.count)
-        let startIdx = text.utf16Index(at: tokenStart)
-        let endIdx = text.utf16Index(at: tokenEnd)
-        return String(text[startIdx..<endIdx])
-    }
-
-    func tokenFlags(_ token: HighlightedToken) -> UInt32 {
-        var flags: UInt32 = 0
-        if token.fontStyle.contains(.bold) { flags |= EditorCellFlags.bold.rawValue }
-        if token.fontStyle.contains(.italic) { flags |= EditorCellFlags.italic.rawValue }
-        return flags
-    }
-
     func logHighlightUsageIfNeeded(
         lineIndex: Int,
-        highlighted: HighlightedLine
+        highlighted: SyntaxHighlightedLine
     ) {
         #if DEBUG
         if !hasLoggedHighlightUsage {
             hasLoggedHighlightUsage = true
             metalEditorLogger.debug("Render using highlight for line \(lineIndex, privacy: .public)")
-            metalEditorLogger.debug("Cache has \(self.cachedHighlightedLines.count, privacy: .public) entries")
+            let lineRange = 0..<(self.document?.lineCount ?? 0)
+            let cacheCount = self.document?.syntaxController?.currentSnapshot().lines(in: lineRange).count ?? 0
+            metalEditorLogger.debug("Cache has \(cacheCount, privacy: .public) entries")
             metalEditorLogger.debug("Line has \(highlighted.tokens.count, privacy: .public) tokens")
             if let first = highlighted.tokens.first {
                 let tokenRange = String(describing: first.range)

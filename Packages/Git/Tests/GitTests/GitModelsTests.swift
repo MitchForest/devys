@@ -93,14 +93,15 @@ struct GitModelsTests {
     
     @Test func hunkToPatch() {
         let hunk = DiffHunk(
+            id: "hunk-1",
             header: "@@ -1,3 +1,4 @@",
             lines: [
-                DiffLine(type: .header, content: "@@ -1,3 +1,4 @@"),
-                DiffLine(type: .context, content: "line 1", oldLineNumber: 1, newLineNumber: 1),
-                DiffLine(type: .removed, content: "line 2", oldLineNumber: 2, newLineNumber: nil),
-                DiffLine(type: .added, content: "line 2 modified", oldLineNumber: nil, newLineNumber: 2),
-                DiffLine(type: .added, content: "new line", oldLineNumber: nil, newLineNumber: 3),
-                DiffLine(type: .context, content: "line 3", oldLineNumber: 3, newLineNumber: 4)
+                DiffLine(id: "line-1", type: .header, content: "@@ -1,3 +1,4 @@"),
+                DiffLine(id: "line-2", type: .context, content: "line 1", oldLineNumber: 1, newLineNumber: 1),
+                DiffLine(id: "line-3", type: .removed, content: "line 2", oldLineNumber: 2, newLineNumber: nil),
+                DiffLine(id: "line-4", type: .added, content: "line 2 modified", oldLineNumber: nil, newLineNumber: 2),
+                DiffLine(id: "line-5", type: .added, content: "new line", oldLineNumber: nil, newLineNumber: 3),
+                DiffLine(id: "line-6", type: .context, content: "line 3", oldLineNumber: 3, newLineNumber: 4)
             ],
             oldStart: 1,
             oldCount: 3,
@@ -125,17 +126,19 @@ struct GitModelsTests {
         let diff = ParsedDiff(
             hunks: [
                 DiffHunk(
+                    id: "hunk-a",
                     header: "@@ -1,3 +1,5 @@",
                     lines: [
-                        DiffLine(type: .added, content: "a"),
-                        DiffLine(type: .added, content: "b"),
-                        DiffLine(type: .removed, content: "c")
+                        DiffLine(id: "line-a", type: .added, content: "a"),
+                        DiffLine(id: "line-b", type: .added, content: "b"),
+                        DiffLine(id: "line-c", type: .removed, content: "c")
                     ]
                 ),
                 DiffHunk(
+                    id: "hunk-b",
                     header: "@@ -10,2 +12,3 @@",
                     lines: [
-                        DiffLine(type: .added, content: "d")
+                        DiffLine(id: "line-d", type: .added, content: "d")
                     ]
                 )
             ]
@@ -144,5 +147,112 @@ struct GitModelsTests {
         #expect(diff.totalAdded == 3)
         #expect(diff.totalRemoved == 1)
         #expect(diff.hasChanges)
+    }
+
+    @Test func reparsingSameDiffRetainsDeterministicIdentifiers() {
+        let diffText = """
+        --- a/file.swift
+        +++ b/file.swift
+        @@ -1,2 +1,2 @@
+        -let value = 1
+        +let value = 2
+         print(value)
+        """
+
+        let firstParse = DiffParser.parse(diffText)
+        let secondParse = DiffParser.parse(diffText)
+
+        #expect(firstParse.hunks.map(\.id) == secondParse.hunks.map(\.id))
+        #expect(
+            firstParse.hunks.flatMap(\.lines).map(\.id) ==
+            secondParse.hunks.flatMap(\.lines).map(\.id)
+        )
+
+        let firstSnapshot = DiffSnapshot(
+            from: firstParse,
+            baseContent: "let value = 1\nprint(value)\n",
+            modifiedContent: "let value = 2\nprint(value)\n"
+        )
+        let secondSnapshot = DiffSnapshot(
+            from: secondParse,
+            baseContent: "let value = 1\nprint(value)\n",
+            modifiedContent: "let value = 2\nprint(value)\n"
+        )
+
+        #expect(firstSnapshot.sourceDocuments == secondSnapshot.sourceDocuments)
+        #expect(firstSnapshot.version == secondSnapshot.version)
+    }
+
+    @Test func diffSourceRequestUsesParsedRenamePaths() {
+        let parsedDiff = ParsedDiff(
+            hunks: [],
+            oldPath: "Sources/Legacy.swift",
+            newPath: "Sources/Renamed.swift"
+        )
+
+        let stagedRequest = GitClient.makeDiffSourceContentRequest(
+            parsedDiff: parsedDiff,
+            staged: true
+        )
+        #expect(stagedRequest.baseGitSpecifier == "HEAD:Sources/Legacy.swift")
+        #expect(stagedRequest.modifiedGitSpecifier == ":Sources/Renamed.swift")
+        #expect(stagedRequest.modifiedWorktreePath == nil)
+
+        let unstagedRequest = GitClient.makeDiffSourceContentRequest(
+            parsedDiff: parsedDiff,
+            staged: false
+        )
+        #expect(unstagedRequest.baseGitSpecifier == ":Sources/Legacy.swift")
+        #expect(unstagedRequest.modifiedGitSpecifier == nil)
+        #expect(unstagedRequest.modifiedWorktreePath == "Sources/Renamed.swift")
+    }
+
+    @Test func missingRequiredSourceDocumentDisablesSyntaxExplicitly() {
+        let parsedDiff = DiffParser.parse("""
+        --- a/Sources/Legacy.swift
+        +++ b/Sources/Renamed.swift
+        @@ -1 +1 @@
+        -let value = 1
+        +let value = 2
+        """)
+
+        let snapshot = DiffSnapshot(
+            from: parsedDiff,
+            baseContent: nil,
+            modifiedContent: "let value = 2\n"
+        )
+
+        #expect(snapshot.sourceDocuments.availability == .unavailable)
+        #expect(!snapshot.sourceDocuments.supportsSyntaxHighlighting)
+    }
+
+    @Test func diffVersionChangesWhenOnlySourcePathsChange() {
+        let firstParse = DiffParser.parse("""
+        --- a/Sources/First.swift
+        +++ b/Sources/First.swift
+        @@ -1 +1 @@
+        -let value = 1
+        +let value = 2
+        """)
+        let secondParse = DiffParser.parse("""
+        --- a/Sources/Second.swift
+        +++ b/Sources/Second.swift
+        @@ -1 +1 @@
+        -let value = 1
+        +let value = 2
+        """)
+
+        let firstSnapshot = DiffSnapshot(
+            from: firstParse,
+            baseContent: "let value = 1\n",
+            modifiedContent: "let value = 2\n"
+        )
+        let secondSnapshot = DiffSnapshot(
+            from: secondParse,
+            baseContent: "let value = 1\n",
+            modifiedContent: "let value = 2\n"
+        )
+
+        #expect(firstSnapshot.version != secondSnapshot.version)
     }
 }

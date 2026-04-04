@@ -3,8 +3,31 @@
 //
 // Tests for EditorDocument.
 
+import Foundation
 import Testing
+import Text
 @testable import Editor
+
+private struct PreparedDocumentIOService: DocumentIOService {
+    let textDocument: TextDocument
+    let language: String
+
+    func loadPreview(url _: URL) async throws -> LoadedDocumentPreview {
+        LoadedDocumentPreview(
+            content: textDocument.snapshot().slice(
+                TextByteRange(0, textDocument.snapshot().utf8Length)
+            ).text,
+            language: language
+        )
+    }
+
+    func load(url _: URL) async throws -> LoadedDocumentContents {
+        LoadedDocumentContents(
+            textDocument: textDocument,
+            language: language
+        )
+    }
+}
 
 @Suite("EditorDocument Tests")
 struct EditorDocumentTests {
@@ -22,17 +45,29 @@ struct EditorDocumentTests {
     func testDocumentWithContent() {
         let doc = EditorDocument(content: "Hello\nWorld")
         #expect(doc.lineCount == 2)
+        #expect(doc.characterCount == "Hello\nWorld".count)
         #expect(doc.line(at: 0) == "Hello")
         #expect(doc.line(at: 1) == "World")
+    }
+
+    @Test("Unchanged content produces a stable reopen identity across fresh documents")
+    @MainActor
+    func testStableReopenIdentityAcrossFreshDocuments() {
+        let first = EditorDocument(content: "let value = 1\n", language: "swift")
+        let second = EditorDocument(content: "let value = 1\n", language: "swift")
+
+        #expect(first.reopenIdentity == second.reopenIdentity)
     }
     
     @Test("Inserts text")
     @MainActor
     func testInsertText() {
         let doc = EditorDocument(content: "Hello")
+        let originalIdentity = doc.reopenIdentity
         doc.cursor.position = TextPosition(line: 0, column: 5)
         doc.insert(" World")
         #expect(doc.line(at: 0) == "Hello World")
+        #expect(doc.reopenIdentity != originalIdentity)
     }
     
     @Test("Deletes backward")
@@ -58,5 +93,64 @@ struct EditorDocumentTests {
         
         doc.moveCursorToLineEnd()
         #expect(doc.cursor.position.column == 5)
+    }
+
+    @Test("Edits multibyte characters using character columns")
+    @MainActor
+    func testMultibyteCharacterEditing() {
+        let doc = EditorDocument(content: "A🙂B")
+        doc.cursor.position = TextPosition(line: 0, column: 2)
+
+        doc.deleteBackward()
+        #expect(doc.line(at: 0) == "AB")
+
+        doc.cursor.position = TextPosition(line: 0, column: 1)
+        doc.insert("é")
+        #expect(doc.line(at: 0) == "AéB")
+    }
+
+    @Test("Loads from a prebuilt text document")
+    @MainActor
+    func testLoadFromPreparedTextDocument() async throws {
+        let url = URL(fileURLWithPath: "/tmp/Prepared.swift")
+        let prepared = TextDocument(content: "struct Example {}\n")
+        let service = PreparedDocumentIOService(
+            textDocument: prepared,
+            language: "swift"
+        )
+
+        let document = try await EditorDocument.load(from: url, ioService: service)
+
+        #expect(document.content == "struct Example {}\n")
+        #expect(document.lineCount == 2)
+        #expect(document.fileURL == url)
+    }
+
+    @Test("Preview-backed document upgrades to prepared text ownership in place")
+    @MainActor
+    func testPreviewDocumentActivatesPreparedTextDocument() async throws {
+        let url = URL(fileURLWithPath: "/tmp/PreviewUpgrade.swift")
+        let document = EditorDocument.makePreviewDocument(
+            content: "let preview = true\n",
+            language: "swift",
+            fileURL: url
+        )
+
+        let expectedVersion = document.documentVersion
+        #expect(document.snapshot == nil)
+        #expect(document.hasLoadedTextDocument == false)
+        #expect(document.content == "let preview = true\n")
+
+        let prepared = try await EditorDocument.prepareTextDocument(content: document.content)
+        try await document.activatePreparedTextDocument(
+            prepared,
+            expectedVersion: expectedVersion,
+            fileURL: url
+        )
+
+        #expect(document.snapshot != nil)
+        #expect(document.hasLoadedTextDocument)
+        #expect(document.content == "let preview = true\n")
+        #expect(document.fileURL == url)
     }
 }

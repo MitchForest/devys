@@ -98,26 +98,52 @@ collect_package_targets() {
 
 collect_app_schemes() {
     app_schemes=( )
+    local target_names=( )
+    local shared_schemes=( )
     local line
     local in_targets=0
+    local in_schemes=0
     local trimmed
 
     while IFS= read -r line; do
         if [[ "$line" =~ ^[[:space:]]*Targets: ]]; then
             in_targets=1
+            in_schemes=0
+            continue
+        fi
+
+        if [[ "$line" =~ ^[[:space:]]*Schemes: ]]; then
+            in_targets=0
+            in_schemes=1
             continue
         fi
 
         if [[ "$in_targets" -eq 1 ]]; then
             if [[ "$line" =~ ^[[:space:]]*Build[[:space:]]Configurations: ]]; then
-                break
+                in_targets=0
+                continue
             fi
-
             trimmed="${line#"${line%%[![:space:]]*}"}"
             [[ -z "$trimmed" ]] && continue
-            app_schemes+=("$trimmed")
+            target_names+=("$trimmed")
+            continue
+        fi
+
+        if [[ "$in_schemes" -eq 1 ]]; then
+            trimmed="${line#"${line%%[![:space:]]*}"}"
+            [[ -z "$trimmed" ]] && continue
+            shared_schemes+=("$trimmed")
         fi
     done < <(xcodebuild -list -project "$XCODE_PROJECT" 2>/dev/null)
+
+    for target_name in "${target_names[@]}"; do
+        for scheme_name in "${shared_schemes[@]}"; do
+            if [[ "$target_name" == "$scheme_name" ]]; then
+                app_schemes+=("$scheme_name")
+                break
+            fi
+        done
+    done
 
     if [[ ${#app_schemes[@]} -eq 0 ]]; then
         echo "Failed to discover app targets from $XCODE_PROJECT."

@@ -10,13 +10,25 @@ import Workspace
 
 @MainActor
 extension ContentView {
+    var uniqueEditorSessions: [EditorSession] {
+        var seen: Set<ObjectIdentifier> = []
+        var result: [EditorSession] = []
+        for session in editorSessions.values {
+            let identifier = ObjectIdentifier(session)
+            if seen.insert(identifier).inserted {
+                result.append(session)
+            }
+        }
+        return result
+    }
+
     var sessionMetadataSnapshot: String {
         var parts: [String] = []
         for (id, session) in terminalSessions {
             parts.append("\(id):\(session.tabTitle):\(session.tabIcon)")
         }
-        for (id, session) in editorSessions {
-            parts.append("\(id):\(session.isDirty)")
+        for session in uniqueEditorSessions {
+            parts.append("\(session.id):\(session.isDirty):\(session.isLoading)")
         }
         return parts.sorted().joined(separator: "|")
     }
@@ -29,8 +41,7 @@ extension ContentView {
             runCommandStore.clearTerminal(id)
         case .editor:
             if let tabId {
-                editorSessions.removeValue(forKey: tabId)
-                EditorSessionRegistry.shared.unregister(tabId: tabId)
+                removeEditorSession(tabId: tabId)
             }
         default:
             break

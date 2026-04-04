@@ -28,8 +28,12 @@ extension MetalDiffDocumentView {
     func updateVisibleRect() {
         guard let scrollView = enclosingScrollView else { return }
         let visibleRect = scrollView.contentView.bounds
+        lastScrollDeltaY = visibleRect.origin.y - lastVisibleOriginY
+        lastVisibleOriginY = visibleRect.origin.y
+        shouldRecordScrollTrace = lastScrollDeltaY != 0
         mtkView.frame = visibleRect
         updateUniforms()
+        refreshSyntaxViewport()
     }
 }
 #endif

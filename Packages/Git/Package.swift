@@ -15,6 +15,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../Workspace"),
+        .package(path: "../Text"),
         .package(path: "../Syntax"),
         .package(path: "../Rendering"),
         .package(path: "../UI")
@@ -24,6 +25,7 @@ let package = Package(
             name: "Git",
             dependencies: [
                 .product(name: "Workspace", package: "Workspace"),
+                "Text",
                 "Syntax",
                 .product(name: "Rendering", package: "Rendering"),
                 "UI"

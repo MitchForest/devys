@@ -28,19 +28,26 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		PRD001 /* mac-client.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "mac-client.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1B2C3D40100000000000001 /* mac-clientTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "mac-clientTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		PRD001 /* mac-client.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "mac-client.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		RES001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		RES002 /* Devys.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Devys.entitlements; sourceTree = "<group>"; };
 		RES004 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		GRP001 /* Apps/mac-client/Sources/mac */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = "Apps/mac-client/Sources/mac"; sourceTree = "<group>"; };
 		A1B2C3D40100000000000002 /* Apps/mac-client/Tests/mac-clientTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = "Apps/mac-client/Tests/mac-clientTests"; sourceTree = "<group>"; };
+		GRP001 /* Apps/mac-client/Sources/mac */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = "Apps/mac-client/Sources/mac"; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		A1B2C3D40100000000000003 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		FRM001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -52,13 +59,6 @@
 				APP013 /* Editor in Frameworks */,
 				APP015 /* Git in Frameworks */,
 				APP017 /* GhosttyTerminal in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		A1B2C3D40100000000000003 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -106,6 +106,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		A1B2C3D40100000000000006 /* mac-clientTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1B2C3D4010000000000000B /* Build configuration list for PBXNativeTarget "mac-clientTests" */;
+			buildPhases = (
+				A1B2C3D40100000000000005 /* Sources */,
+				A1B2C3D40100000000000003 /* Frameworks */,
+				A1B2C3D40100000000000004 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A1B2C3D40100000000000008 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A1B2C3D40100000000000002 /* Apps/mac-client/Tests/mac-clientTests */,
+			);
+			name = "mac-clientTests";
+			packageProductDependencies = (
+			);
+			productName = "mac-clientTests";
+			productReference = A1B2C3D40100000000000001 /* mac-clientTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		TGT001 /* mac-client */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = CFG002 /* Build configuration list for PBXNativeTarget "mac-client" */;
@@ -134,29 +157,6 @@
 			productName = "mac-client";
 			productReference = PRD001 /* mac-client.app */;
 			productType = "com.apple.product-type.application";
-		};
-		A1B2C3D40100000000000006 /* mac-clientTests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = A1B2C3D4010000000000000B /* Build configuration list for PBXNativeTarget "mac-clientTests" */;
-			buildPhases = (
-				A1B2C3D40100000000000005 /* Sources */,
-				A1B2C3D40100000000000003 /* Frameworks */,
-				A1B2C3D40100000000000004 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				A1B2C3D40100000000000008 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				A1B2C3D40100000000000002 /* Apps/mac-client/Tests/mac-clientTests */,
-			);
-			name = "mac-clientTests";
-			packageProductDependencies = (
-			);
-			productName = "mac-clientTests";
-			productReference = A1B2C3D40100000000000001 /* mac-clientTests.xctest */;
-			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -202,6 +202,13 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		A1B2C3D40100000000000004 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		RES000 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -210,24 +217,17 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		A1B2C3D40100000000000004 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		SRC000 /* Sources */ = {
+		A1B2C3D40100000000000005 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		A1B2C3D40100000000000005 /* Sources */ = {
+		SRC000 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -245,6 +245,53 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		A1B2C3D40100000000000009 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.devys.macTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				SWIFT_WARN_CONCURRENCY = YES;
+				SWIFT_WARN_STRICT_CONCURRENCY = YES;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/mac-client.app/Contents/MacOS/mac-client";
+			};
+			name = Debug;
+		};
+		A1B2C3D4010000000000000A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.devys.macTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				SWIFT_WARN_CONCURRENCY = YES;
+				SWIFT_WARN_STRICT_CONCURRENCY = YES;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/mac-client.app/Contents/MacOS/mac-client";
+			};
+			name = Release;
+		};
 		CFG003 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -443,56 +490,18 @@
 			};
 			name = Release;
 		};
-		A1B2C3D40100000000000009 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-					"@loader_path/../Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.devys.macTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-				SWIFT_STRICT_CONCURRENCY = complete;
-				SWIFT_VERSION = 6.0;
-				SWIFT_WARN_CONCURRENCY = YES;
-				SWIFT_WARN_STRICT_CONCURRENCY = YES;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/mac-client.app/Contents/MacOS/mac-client";
-			};
-			name = Debug;
-		};
-		A1B2C3D4010000000000000A /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-					"@loader_path/../Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.devys.macTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
-				SWIFT_STRICT_CONCURRENCY = complete;
-				SWIFT_VERSION = 6.0;
-				SWIFT_WARN_CONCURRENCY = YES;
-				SWIFT_WARN_STRICT_CONCURRENCY = YES;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/mac-client.app/Contents/MacOS/mac-client";
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		A1B2C3D4010000000000000B /* Build configuration list for PBXNativeTarget "mac-clientTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1B2C3D40100000000000009 /* Debug */,
+				A1B2C3D4010000000000000A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		CFG001 /* Build configuration list for PBXProject "Devys" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -507,15 +516,6 @@
 			buildConfigurations = (
 				CFG005 /* Debug */,
 				CFG006 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		A1B2C3D4010000000000000B /* Build configuration list for PBXNativeTarget "mac-clientTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				A1B2C3D40100000000000009 /* Debug */,
-				A1B2C3D4010000000000000A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

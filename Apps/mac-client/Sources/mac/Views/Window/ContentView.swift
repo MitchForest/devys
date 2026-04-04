@@ -36,6 +36,7 @@ struct ContentView: View {
     
     @State var terminalSessions: [UUID: GhosttyTerminalSession] = [:]
     @State var editorSessions: [TabID: EditorSession] = [:]
+    @State var editorSessionPool = EditorSessionPool()
     
     /// Delegate for DevysSplit tab lifecycle hooks (close/save prompts)
     @State var splitDelegate = DevysSplitCloseDelegate()

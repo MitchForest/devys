@@ -8,7 +8,7 @@ import UI
 
 @MainActor
 struct MetalDiffView: View {
-    let diff: ParsedDiff
+    let diffSnapshotInput: DiffSnapshot
     let filePath: String
     let mode: DiffViewMode
     let configuration: DiffRenderConfiguration
@@ -18,13 +18,20 @@ struct MetalDiffView: View {
     let onRejectHunk: ((Int) async -> Void)?
 
     @State private var layout: DiffRenderLayout = .unified(
-        .init(rows: [], hunkHeaders: [], contentSize: .zero, maxLineNumberDigits: 1)
+        .init(
+            rows: [],
+            hunkHeaders: [],
+            contentSize: .zero,
+            maxLineNumberDigits: 1,
+            sourceDocuments: .empty
+        )
     )
+    @State private var diffSnapshot: DiffSnapshot = .empty
     @State private var scrollOffset: CGPoint = .zero
     @State private var availableWidth: CGFloat = 0
     @State private var diffTheme: DiffTheme = .current()
-    @State private var themeName: String = "github-dark"
-    @State private var performanceProfile: DiffPerformanceProfile = .init(totalLines: 0)
+    @State private var themeName: String = "devys-dark"
+    @State private var largeContentPolicy: DiffLargeContentPolicy = .init(totalLines: 0)
     @State private var layoutTask: Task<Void, Never>?
     @State private var layoutGeneration: Int = 0
     @State private var bannerDismissed = false
@@ -43,7 +50,27 @@ struct MetalDiffView: View {
         onAcceptHunk: ((Int) async -> Void)? = nil,
         onRejectHunk: ((Int) async -> Void)? = nil
     ) {
-        self.diff = diff
+        self.diffSnapshotInput = DiffSnapshot(from: diff)
+        self.filePath = filePath
+        self.mode = mode
+        self.configuration = configuration
+        self.isStaged = isStaged
+        self.focusedHunkIndex = focusedHunkIndex
+        self.onAcceptHunk = onAcceptHunk
+        self.onRejectHunk = onRejectHunk
+    }
+
+    init(
+        snapshot: DiffSnapshot,
+        filePath: String,
+        mode: DiffViewMode,
+        configuration: DiffRenderConfiguration,
+        isStaged: Bool,
+        focusedHunkIndex: Int? = nil,
+        onAcceptHunk: ((Int) async -> Void)? = nil,
+        onRejectHunk: ((Int) async -> Void)? = nil
+    ) {
+        self.diffSnapshotInput = snapshot
         self.filePath = filePath
         self.mode = mode
         self.configuration = configuration
@@ -63,8 +90,9 @@ struct MetalDiffView: View {
                     themeName: themeName,
                     language: LanguageDetector.detect(from: filePath),
                     configuration: effectiveConfiguration,
-                    syntaxHighlightingEnabled: performanceProfile.enableSyntaxHighlighting,
-                    maxHighlightLineLength: performanceProfile.maxHighlightLineLength,
+                    syntaxHighlightingEnabled: effectiveSyntaxHighlightingEnabled,
+                    maxHighlightLineLength: largeContentPolicy.maximumSyntaxLineLength,
+                    syntaxBacklogPolicy: largeContentPolicy.syntaxBacklogPolicy,
                     scrollOffset: $scrollOffset,
                     splitRatio: $splitRatio
                 )
@@ -81,15 +109,17 @@ struct MetalDiffView: View {
             .clipped()
             .onAppear {
                 updateTheme()
-                updatePerformanceProfile()
+                updateLargeContentPolicy()
+                refreshDiffSnapshot()
                 rebuildLayout(width: width)
             }
             .onChange(of: width) { _, newWidth in
                 rebuildLayout(width: newWidth)
             }
-            .onChange(of: diff) { _, _ in
-                updatePerformanceProfile()
+            .onChange(of: diffSnapshotInput) { _, _ in
+                updateLargeContentPolicy()
                 bannerDismissed = false
+                refreshDiffSnapshot()
                 rebuildLayout(width: width)
             }
             .onChange(of: mode) { _, _ in
@@ -108,9 +138,10 @@ struct MetalDiffView: View {
     }
 
     private func updateTheme() {
-        let preferredTheme = devysTheme.isDark ? "github-dark" : "github-light"
-        diffTheme = DiffTheme(devysTheme: devysTheme)
-        themeName = preferredTheme
+        let requestedThemeName = devysTheme.isDark ? "devys-dark" : "devys-light"
+        let resolved = ThemeRegistry.resolvedTheme(name: requestedThemeName)
+        diffTheme = DiffTheme(theme: resolved.theme)
+        themeName = resolved.descriptor.name
     }
 
     private func rebuildLayout(width: CGFloat) {
@@ -118,7 +149,7 @@ struct MetalDiffView: View {
         availableWidth = width
         let metrics = EditorMetrics.measure(fontSize: configuration.fontSize, fontName: configuration.fontName)
         let configSnapshot = effectiveConfiguration
-        let diffSnapshot = diff
+        let diffSnapshot = diffSnapshot
         let modeSnapshot = mode
         let lineHeight = metrics.lineHeight
         let cellWidth = metrics.cellWidth
@@ -130,7 +161,7 @@ struct MetalDiffView: View {
         layoutTask = Task { @MainActor in
             let buildTask = Task.detached(priority: .userInitiated) {
                 DiffRenderLayoutBuilder.build(
-                    diff: diffSnapshot,
+                    snapshot: diffSnapshot,
                     mode: modeSnapshot,
                     configuration: configSnapshot,
                     lineHeight: lineHeight,
@@ -146,23 +177,32 @@ struct MetalDiffView: View {
         }
     }
 
-    private func updatePerformanceProfile() {
-        performanceProfile = DiffPerformanceProfile(from: diff)
+    private func refreshDiffSnapshot() {
+        diffSnapshot = diffSnapshotInput
+    }
+
+    private func updateLargeContentPolicy() {
+        largeContentPolicy = DiffLargeContentPolicy(snapshot: diffSnapshotInput)
     }
 
     private var effectiveConfiguration: DiffRenderConfiguration {
         var config = configuration
-        if !performanceProfile.enableWordDiff {
+        if !largeContentPolicy.enableWordDiff {
             config.showWordDiff = false
         }
-        if !performanceProfile.enableWrap {
+        if !largeContentPolicy.enableWrap {
             config.wrapLines = false
         }
         return config
     }
 
+    private var effectiveSyntaxHighlightingEnabled: Bool {
+        diffSnapshotInput.sourceDocuments.supportsSyntaxHighlighting
+            && largeContentPolicy.enableSyntaxHighlighting
+    }
+
     private var shouldShowPerformanceBanner: Bool {
-        performanceProfile.isReduced && !bannerDismissed
+        largeContentPolicy.isReduced && !bannerDismissed
     }
 
     private var performanceBanner: some View {
@@ -172,10 +212,10 @@ struct MetalDiffView: View {
                 .foregroundStyle(devysTheme.accent)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Large diff (\(performanceProfile.totalLines) lines)")
+                Text("Large diff (\(largeContentPolicy.totalLines) lines)")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(devysTheme.text)
-                Text(performanceProfile.bannerDetailText)
+                Text(largeContentPolicy.bannerDetailText)
                     .font(.system(size: 11))
                     .foregroundStyle(devysTheme.textSecondary)
             }
@@ -209,9 +249,9 @@ struct MetalDiffView: View {
         let metrics = EditorMetrics.measure(fontSize: configuration.fontSize, fontName: configuration.fontName)
         ForEach(layout.hunkHeaders) { header in
             let y = CGFloat(header.rowIndex) * metrics.lineHeight - scrollOffset.y
-            if header.hunkIndex < diff.hunks.count {
+            if header.hunkIndex < diffSnapshotInput.hunks.count {
                 HunkActionBar(
-                    hunk: diff.hunks[header.hunkIndex],
+                    hunk: diffSnapshotInput.hunks[header.hunkIndex],
                     isStaged: isStaged,
                     isFocused: focusedHunkIndex == header.hunkIndex,
                     onAccept: { await onAcceptHunk(header.hunkIndex) },
@@ -221,45 +261,5 @@ struct MetalDiffView: View {
                 .offset(x: -scrollOffset.x, y: y)
             }
         }
-    }
-}
-
-private struct DiffPerformanceProfile: Equatable {
-    let totalLines: Int
-    let enableWordDiff: Bool
-    let enableWrap: Bool
-    let enableSyntaxHighlighting: Bool
-    let maxHighlightLineLength: Int
-
-    init(totalLines: Int) {
-        self.totalLines = totalLines
-        let maxWordDiffLines = 800
-        let maxWrapLines = 1500
-        let maxSyntaxLines = 2000
-
-        enableWordDiff = totalLines <= maxWordDiffLines
-        enableWrap = totalLines <= maxWrapLines
-        enableSyntaxHighlighting = totalLines <= maxSyntaxLines
-        maxHighlightLineLength = enableSyntaxHighlighting ? 1200 : 0
-    }
-
-    init(from diff: ParsedDiff) {
-        let lineCount = diff.hunks.reduce(0) { $0 + $1.lines.count }
-        self.init(totalLines: lineCount)
-    }
-
-    var isReduced: Bool {
-        !enableWordDiff || !enableWrap || !enableSyntaxHighlighting
-    }
-
-    var bannerDetailText: String {
-        var disabled: [String] = []
-        if !enableSyntaxHighlighting { disabled.append("syntax highlighting") }
-        if !enableWordDiff { disabled.append("word diff") }
-        if !enableWrap { disabled.append("wrapping") }
-        if disabled.isEmpty {
-            return "All features enabled."
-        }
-        return "Disabled: " + disabled.joined(separator: ", ") + "."
     }
 }

@@ -43,6 +43,7 @@ public struct GlyphAtlasEntry: Sendable {
 /// Manages a texture atlas of pre-rendered glyphs for GPU text rendering.
 @MainActor
 public final class EditorGlyphAtlas {
+    private static let replacementGlyph: Character = "?"
     
     // MARK: - Properties
     
@@ -153,7 +154,25 @@ public final class EditorGlyphAtlas {
         }
         
         // Failed to add - return space as fallback
-        return glyphMap[" "] ?? .empty
+        assertionFailure("Missing glyph atlas entry for \(String(char))")
+        return glyphMap[Self.replacementGlyph] ?? .empty
+    }
+
+    public func resolve(_ packet: TextRenderPacket) -> ResolvedTextRenderPacket {
+        guard !packet.isEmpty else { return .empty }
+
+        prepareGlyphs(for: packet)
+        let cells = packet.cells.map { cell in
+            let entry = resolvedEntry(for: cell.glyph)
+            return ResolvedTextRenderCell(
+                foregroundColor: cell.foregroundColor,
+                backgroundColor: cell.backgroundColor,
+                uvOrigin: entry.uvOrigin,
+                uvSize: entry.uvSize,
+                flags: cell.flags
+            )
+        }
+        return ResolvedTextRenderPacket(cells: cells)
     }
     
     // MARK: - Glyph Rendering
@@ -161,6 +180,20 @@ public final class EditorGlyphAtlas {
     private func preloadGlyphs() {
         for char in Self.preloadCharacters {
             _ = addGlyph(char)
+        }
+    }
+
+    private func prepareGlyphs(for packet: TextRenderPacket) {
+        var didMutateAtlas = false
+        for cell in packet.cells {
+            if glyphMap[cell.glyph] != nil {
+                continue
+            }
+            didMutateAtlas = addGlyph(cell.glyph) || didMutateAtlas
+        }
+
+        if didMutateAtlas {
+            updateTexture()
         }
     }
     
@@ -333,8 +366,17 @@ public final class EditorGlyphAtlas {
     // MARK: - Statistics
     
     public var glyphCount: Int { glyphMap.count }
-    
+
     public func hasGlyph(_ char: Character) -> Bool {
         glyphMap[char] != nil
+    }
+
+    private func resolvedEntry(for char: Character) -> GlyphAtlasEntry {
+        if let entry = glyphMap[char] {
+            return entry
+        }
+
+        logger.error("Missing prepared glyph for '\(String(char), privacy: .public)'")
+        return glyphMap[Self.replacementGlyph] ?? .empty
     }
 }

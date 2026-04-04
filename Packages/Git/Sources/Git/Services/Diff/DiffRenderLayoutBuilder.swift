@@ -3,6 +3,7 @@
 
 import Foundation
 import CoreGraphics
+import Syntax
 
 struct DiffLayoutContext {
     let configuration: DiffRenderConfiguration
@@ -10,11 +11,12 @@ struct DiffLayoutContext {
     let availableWidth: CGFloat
     let maxLineNumberDigits: Int
     let splitRatio: CGFloat
+    let sourceDocuments: DiffSourceDocuments
 }
 
 enum DiffRenderLayoutBuilder {
     static func build(
-        diff: ParsedDiff,
+        snapshot: DiffSnapshot,
         mode: DiffViewMode,
         configuration: DiffRenderConfiguration,
         lineHeight: CGFloat,
@@ -22,20 +24,25 @@ enum DiffRenderLayoutBuilder {
         availableWidth: CGFloat,
         splitRatio: CGFloat = 0.5
     ) -> DiffRenderLayout {
-        let maxDigits = max(1, digits(for: maxLineNumber(in: diff)))
+        _ = SyntaxRuntimeDiagnostics.recordDiffProjectionWorkDuringRender(
+            operation: "DiffRenderLayoutBuilder.build",
+            metadata: "mode=\(mode)"
+        )
+        let maxDigits = max(1, digits(for: maxLineNumber(in: snapshot)))
         let context = DiffLayoutContext(
             configuration: configuration,
             cellWidth: cellWidth,
             availableWidth: availableWidth,
             maxLineNumberDigits: maxDigits,
-            splitRatio: splitRatio
+            splitRatio: splitRatio,
+            sourceDocuments: snapshot.sourceDocuments
         )
 
         switch mode {
         case .unified:
-            return .unified(buildUnified(diff: diff, context: context, lineHeight: lineHeight))
+            return .unified(buildUnified(snapshot: snapshot, context: context, lineHeight: lineHeight))
         case .split:
-            return .split(buildSplit(diff: diff, context: context, lineHeight: lineHeight))
+            return .split(buildSplit(snapshot: snapshot, context: context, lineHeight: lineHeight))
         }
     }
 }

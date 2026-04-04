@@ -51,17 +51,26 @@ struct TabContentView: View {
                 if let session = editorSession {
                     if let document = session.document {
                         EditorView(document: document, onDocumentURLChange: onEditorURLChange)
-                    } else if session.isLoading {
-                        PlaceholderView(icon: "doc.text", title: "Loading", subtitle: url.lastPathComponent)
                     } else {
-                        PlaceholderView(
-                            icon: "exclamationmark.triangle",
-                            title: "Failed to load",
-                            subtitle: url.lastPathComponent
-                        )
+                        switch session.phase {
+                        case .loading, .idle:
+                            PlaceholderView(icon: "doc.text", title: "Loading", subtitle: url.lastPathComponent)
+                        case .failed(let message):
+                            PlaceholderView(
+                                icon: "exclamationmark.triangle",
+                                title: "Failed to load",
+                                subtitle: message
+                            )
+                        case .preview, .loaded:
+                            PlaceholderView(icon: "doc.text", title: "Loading", subtitle: url.lastPathComponent)
+                        }
                     }
                 } else {
-                    EditorView(url: url)
+                    PlaceholderView(
+                        icon: "exclamationmark.triangle",
+                        title: "Editor session unavailable",
+                        subtitle: url.lastPathComponent
+                    )
                 }
             case .none:
                 PlaceholderView(icon: "doc", title: tab.title, subtitle: "")

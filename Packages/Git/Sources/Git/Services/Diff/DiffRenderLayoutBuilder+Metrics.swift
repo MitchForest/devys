@@ -9,9 +9,9 @@ extension DiffRenderLayoutBuilder {
         return Int(floor(log10(Double(value)))) + 1
     }
 
-    static func maxLineNumber(in diff: ParsedDiff) -> Int {
+    static func maxLineNumber(in snapshot: DiffSnapshot) -> Int {
         var maxValue = 0
-        for hunk in diff.hunks {
+        for hunk in snapshot.hunks {
             for line in hunk.lines {
                 if let old = line.oldLineNumber { maxValue = max(maxValue, old) }
                 if let new = line.newLineNumber { maxValue = max(maxValue, new) }

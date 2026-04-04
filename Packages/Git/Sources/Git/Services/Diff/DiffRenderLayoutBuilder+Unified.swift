@@ -5,7 +5,7 @@ import CoreGraphics
 
 extension DiffRenderLayoutBuilder {
     static func buildUnified(
-        diff: ParsedDiff,
+        snapshot: DiffSnapshot,
         context: DiffLayoutContext,
         lineHeight: CGFloat
     ) -> UnifiedDiffLayout {
@@ -13,14 +13,16 @@ extension DiffRenderLayoutBuilder {
         var headers: [DiffHunkHeaderLayout] = []
         var rowIndex = 0
 
-        for (hunkIndex, hunk) in diff.hunks.enumerated() {
+        for (hunkIndex, hunk) in snapshot.hunks.enumerated() {
             let headerRow = UnifiedDiffRow(
+                id: "unified-hunk-header-\(hunk.id)",
                 kind: .hunkHeader,
                 lineType: .header,
                 oldLineNumber: nil,
                 newLineNumber: nil,
                 content: hunk.header,
-                wordChanges: nil
+                wordChanges: nil,
+                highlightSegment: nil
             )
             rows.append(headerRow)
             headers.append(DiffHunkHeaderLayout(hunkIndex: hunkIndex, rowIndex: rowIndex, hunk: hunk))
@@ -28,12 +30,14 @@ extension DiffRenderLayoutBuilder {
 
             if !context.configuration.showsHunkHeaders {
                 rows.append(UnifiedDiffRow(
+                    id: "unified-hunk-spacer-\(hunk.id)",
                     kind: .line,
                     lineType: .context,
                     oldLineNumber: nil,
                     newLineNumber: nil,
                     content: "",
-                    wordChanges: nil
+                    wordChanges: nil,
+                    highlightSegment: nil
                 ))
                 rowIndex += 1
             }
@@ -52,7 +56,8 @@ extension DiffRenderLayoutBuilder {
             rows: rows,
             hunkHeaders: headers,
             contentSize: CGSize(width: contentWidth, height: contentHeight),
-            maxLineNumberDigits: context.maxLineNumberDigits
+            maxLineNumberDigits: context.maxLineNumberDigits,
+            sourceDocuments: context.sourceDocuments
         )
     }
 
@@ -116,12 +121,18 @@ extension DiffRenderLayoutBuilder {
         guard context.configuration.wrapLines else {
             return [
                 UnifiedDiffRow(
+                    id: "unified-\(line.id)-0",
                     kind: .line,
                     lineType: line.type,
                     oldLineNumber: line.oldLineNumber,
                     newLineNumber: line.newLineNumber,
                     content: content,
-                    wordChanges: convertedChanges
+                    wordChanges: convertedChanges,
+                    highlightSegment: unifiedHighlightSegment(
+                        for: line,
+                        utf16Range: 0..<content.utf16.count,
+                        context: context
+                    )
                 )
             ]
         }
@@ -131,13 +142,52 @@ extension DiffRenderLayoutBuilder {
 
         return segments.enumerated().map { index, segment in
             UnifiedDiffRow(
+                id: "unified-\(line.id)-\(index)",
                 kind: .line,
                 lineType: line.type,
                 oldLineNumber: index == 0 ? line.oldLineNumber : nil,
                 newLineNumber: index == 0 ? line.newLineNumber : nil,
                 content: segment.content,
-                wordChanges: segment.wordChanges
+                wordChanges: segment.wordChanges,
+                highlightSegment: unifiedHighlightSegment(
+                    for: line,
+                    utf16Range: segment.utf16Range,
+                    context: context
+                )
             )
         }
+    }
+
+    static func unifiedHighlightSegment(
+        for line: DiffLine,
+        utf16Range: Range<Int>,
+        context: DiffLayoutContext
+    ) -> DiffHighlightSegment? {
+        guard let indices = context.sourceDocuments.lineMappings[line.id] else { return nil }
+
+        let side: DiffSourceSide
+        let sourceLineIndex: Int
+
+        switch line.type {
+        case .removed:
+            guard let baseIndex = indices.base else { return nil }
+            side = .base
+            sourceLineIndex = baseIndex
+
+        case .added, .context:
+            guard let modifiedIndex = indices.modified else { return nil }
+            side = .modified
+            sourceLineIndex = modifiedIndex
+
+        case .noNewline, .header:
+            return nil
+        }
+
+        return DiffHighlightSegment(
+            side: side,
+            sourceLineID: line.id,
+            sourceLineIndex: sourceLineIndex,
+            utf16Range: utf16Range
+        )
     }
 }

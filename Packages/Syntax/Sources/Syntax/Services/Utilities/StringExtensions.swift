@@ -1,5 +1,5 @@
 // StringExtensions.swift
-// DevysSyntax - Shiki-compatible syntax highlighting
+// Syntax string helpers
 //
 // String utilities for UTF-16 indexing and other operations.
 

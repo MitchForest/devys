@@ -1,5 +1,5 @@
 // BundleExtension.swift
-// DevysSyntax - Shiki-compatible syntax highlighting
+// Syntax - bundle lookup helpers
 //
 // Provides access to the module bundle for resource loading.
 

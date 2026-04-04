@@ -179,20 +179,7 @@ extension ContentView {
             return existingTabId
         }
         
-        // Create new tab
-        let (title, icon) = tabMetadata(for: content)
-        let activityIndicator = tabActivityIndicator()
-        if let tabId = controller.createTab(
-            title: title,
-            icon: icon,
-            activityIndicator: activityIndicator,
-            inPane: paneId
-        ) {
-            tabContents[tabId] = content
-            selectTab(tabId)
-            return tabId
-        }
-        return nil
+        return createTab(in: paneId, content: content)
     }
     
     /// Handle a git diff dropped from the sidebar
@@ -210,20 +197,7 @@ extension ContentView {
             return existingTabId
         }
         
-        // Create tab
-        let (title, icon) = tabMetadata(for: content)
-        let activityIndicator = tabActivityIndicator()
-        if let tabId = controller.createTab(
-            title: title,
-            icon: icon,
-            activityIndicator: activityIndicator,
-            inPane: paneId
-        ) {
-            tabContents[tabId] = content
-            selectTab(tabId)
-            return tabId
-        }
-        return nil
+        return createTab(in: paneId, content: content)
     }
 
     private func handleTabCloseRequest(tab: Tab, paneId: PaneID) -> Bool {
@@ -284,12 +258,7 @@ extension ContentView {
             previewTabId = nil
         }
 
-        if case .editor = content {
-            editorSessions.removeValue(forKey: id)
-            EditorSessionRegistry.shared.unregister(tabId: id)
-        } else {
-            cleanupSession(for: content, tabId: id)
-        }
+        cleanupSession(for: content, tabId: id)
     }
 
     /// Shows save/don't save/cancel dialog

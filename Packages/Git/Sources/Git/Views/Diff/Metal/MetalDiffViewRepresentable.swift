@@ -4,6 +4,7 @@
 #if os(macOS)
 import SwiftUI
 import Rendering
+import Syntax
 
 @MainActor
 struct MetalDiffViewRepresentable: NSViewRepresentable {
@@ -14,6 +15,7 @@ struct MetalDiffViewRepresentable: NSViewRepresentable {
     let configuration: DiffRenderConfiguration
     let syntaxHighlightingEnabled: Bool
     let maxHighlightLineLength: Int
+    let syntaxBacklogPolicy: SyntaxBacklogPolicy
     @Binding var scrollOffset: CGPoint
     @Binding var splitRatio: CGFloat
 
@@ -40,7 +42,11 @@ struct MetalDiffViewRepresentable: NSViewRepresentable {
         documentView.updateTheme(theme, themeName: themeName)
         documentView.updateLanguage(language)
         documentView.updateLayout(layout)
-        documentView.updateHighlighting(enabled: syntaxHighlightingEnabled, maxLineLength: maxHighlightLineLength)
+        documentView.updateHighlighting(
+            enabled: syntaxHighlightingEnabled,
+            maxLineLength: maxHighlightLineLength,
+            backlogPolicy: syntaxBacklogPolicy
+        )
         documentView.updateSplitRatio(splitRatio)
         documentView.onSplitRatioChanged = { newRatio in
             context.coordinator.splitRatio.wrappedValue = newRatio
@@ -62,7 +68,11 @@ struct MetalDiffViewRepresentable: NSViewRepresentable {
             documentView.updateTheme(theme, themeName: themeName)
             documentView.updateLanguage(language)
             documentView.updateLayout(layout)
-            documentView.updateHighlighting(enabled: syntaxHighlightingEnabled, maxLineLength: maxHighlightLineLength)
+            documentView.updateHighlighting(
+                enabled: syntaxHighlightingEnabled,
+                maxLineLength: maxHighlightLineLength,
+                backlogPolicy: syntaxBacklogPolicy
+            )
             documentView.updateSplitRatio(splitRatio)
             documentView.onSplitRatioChanged = { newRatio in
                 context.coordinator.splitRatio.wrappedValue = newRatio

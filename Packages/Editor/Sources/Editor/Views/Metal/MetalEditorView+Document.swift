@@ -2,13 +2,48 @@
 // DevysEditor
 
 #if os(macOS)
+// periphery:ignore:all - editor render scheduling hooks are exercised through view lifecycle and tests
 import Foundation
 import MetalKit
 import Syntax
 import Rendering
+import Text
 
 extension MetalEditorView {
     // MARK: - Document
+
+    func displaySnapshot(
+        for visibleRange: Range<Int>,
+        document: EditorDocument
+    ) -> EditorDisplaySnapshot {
+        if let snapshot = document.snapshot {
+            updateLargeFilePolicy(for: snapshot)
+            return displayModel.snapshot(
+                EditorDisplaySnapshotRequest(
+                    documentReopenIdentity: document.reopenIdentity,
+                    documentSnapshot: snapshot,
+                    syntaxSnapshot: document.syntaxController?.currentSnapshot(),
+                    semanticOverlaySnapshot: semanticOverlaySnapshot,
+                    visibleRange: visibleRange,
+                    renderContext: displayRenderContext
+                )
+            )
+        }
+
+        let visibleLines = document.lines(in: visibleRange).enumerated().map { offset, line in
+            LineSlice(lineIndex: visibleRange.lowerBound + offset, text: line)
+        }
+        largeFilePolicy = .default
+        return displayModel.previewSnapshot(
+            EditorPreviewSnapshotRequest(
+                documentReopenIdentity: document.reopenIdentity,
+                documentVersion: document.documentVersion,
+                visibleLines: visibleLines,
+                visibleRange: visibleRange,
+                renderContext: displayRenderContext
+            )
+        )
+    }
 
     func documentDidChange() {
         guard let document = document else {
@@ -16,16 +51,24 @@ extension MetalEditorView {
             return
         }
 
+        displayModel.reset()
         configureLineBuffer(for: document)
-        loadThemeColors()
         startHighlighting(for: document)
     }
 
     private func resetDocumentState() {
         lineBuffer = nil
-        highlightEngine = nil
-        backgroundHighlightTask?.cancel()
-        backgroundHighlightTask = nil
+        syntaxSchedulingCoordinator.cancelAll()
+        pendingThemeSyntaxController = nil
+        pendingThemeDescriptor = nil
+        preparedFrame = nil
+        appliedThemeDescriptor = ThemeRegistry.preferredThemeDescriptor
+        largeFilePolicy = .default
+        revisitTrackingIdentifier = nil
+        hasRecordedRevisitInteractiveFrame = false
+        hasRecordedRevisitHighlightedFrame = false
+        shouldRecordScrollTrace = false
+        displayModel.reset()
     }
 
     private func configureLineBuffer(for document: EditorDocument) {
@@ -34,51 +77,64 @@ extension MetalEditorView {
     }
 
     private func startHighlighting(for document: EditorDocument) {
-        Task { @MainActor in
-            backgroundHighlightTask?.cancel()
-            backgroundHighlightTask = nil
-            let engine = await HighlightEngine(
-                language: document.language,
-                themeName: self.configuration.themeName
-            )
-            self.highlightEngine = engine
-            await highlightVisibleLines(document: document, engine: engine)
+        syntaxSchedulingCoordinator.cancelAll()
+        pendingThemeSyntaxController = nil
+        pendingThemeDescriptor = nil
+        let requestedTheme = ThemeRegistry.descriptor(name: configuration.themeName)
+        loadThemeColors(themeName: requestedTheme.name)
+
+        guard let snapshot = document.snapshot else {
+            appliedThemeDescriptor = requestedTheme
+            largeFilePolicy = .default
+            beginOpenTracking()
+            refreshPreparedFrame(document: document)
+            return
         }
+
+        updateLargeFilePolicy(for: snapshot)
+        let reusesExistingSyntax =
+            document.syntaxController != nil &&
+            document.syntaxThemeName == requestedTheme.name &&
+            document.syntaxMaximumTokenizationLineLength == largeFilePolicy.maximumSyntaxLineLength
+        _ = document.ensureSyntaxController(
+            themeName: requestedTheme.name,
+            maximumTokenizationLineLength: largeFilePolicy.maximumSyntaxLineLength
+        )
+        appliedThemeDescriptor = requestedTheme
+        if reusesExistingSyntax {
+            beginRevisitTracking()
+        } else {
+            beginOpenTracking()
+        }
+        refreshSyntaxViewport(document: document)
     }
 
-    func highlightVisibleLines(
-        document: EditorDocument,
-        engine: HighlightEngine
-    ) async {
-        lineBuffer?.updateVisibleRange()
-        guard let visibleRange = lineBuffer?.visibleRange else {
+    func highlightVisibleLines(document: EditorDocument) {
+        guard let snapshot = document.snapshot else {
+            refreshPreparedFrame(document: document)
+            return
+        }
+
+        updateLargeFilePolicy(for: snapshot)
+        guard let context = syntaxSchedulingContext(for: document),
+              let visibleLineRanges = syntaxSchedulingCoordinatorVisibleRanges(for: context) else {
             metalEditorLogger.error("No tokenization range available")
             return
         }
 
-        let lines = document.lines(in: visibleRange)
-        guard !lines.isEmpty else { return }
-
-        isHighlighting = true
-        let highlighted = await engine.highlightLines(
-            lines,
-            startingAt: visibleRange.lowerBound
-        )
-        isHighlighting = false
-
-        logHighlightDebug(highlighted, visibleRange: visibleRange)
-        applyHighlightedLines(highlighted)
-        scheduleBackgroundHighlight()
-    }
-
-    private func applyHighlightedLines(_ highlighted: [HighlightedLine]) {
-        cachedHighlightedLines.removeAll()
-        for line in highlighted {
-            cachedHighlightedLines[line.lineIndex] = line
+        syntaxSchedulingCoordinator.refreshViewport { [weak self] in
+            self?.syntaxSchedulingContext(for: document)
         }
+        refreshPreparedFrame(document: document)
+        let highlighted = context.scheduledSyntaxController()?.currentSnapshot().lines(
+            in: visibleLineRanges.tokenizationRange
+        ).values.sorted {
+            $0.lineIndex < $1.lineIndex
+        } ?? []
+        logHighlightDebug(highlighted, visibleRange: visibleLineRanges.tokenizationRange)
     }
 
-    private func logHighlightDebug(_ highlighted: [HighlightedLine], visibleRange: Range<Int>) {
+    private func logHighlightDebug(_ highlighted: [SyntaxHighlightedLine], visibleRange: Range<Int>) {
         #if DEBUG
         let highlightedCount = highlighted.count
         let rangeDescription = String(describing: visibleRange)
@@ -104,219 +160,53 @@ extension MetalEditorView {
     }
 
     /// Load colors based on configuration
-    private func loadThemeColors() {
-        if configuration.useDevysColors {
-            loadDevysColors()
-        } else {
-            loadShikiThemeColors()
-        }
+    private func loadThemeColors(themeName: String? = nil) {
+        loadSyntaxThemeColors(themeName: themeName ?? appliedThemeDescriptor.name)
     }
 
-    /// Load colors from DevysColors design system
-    private func loadDevysColors() {
-        let palette = configuration.colorScheme == .light ? Self.devysColorsLight : Self.devysColorsDark
+    /// Load colors from the active syntax theme
+    private func loadSyntaxThemeColors(themeName: String) {
+        let resolvedTheme = ThemeRegistry.resolvedTheme(name: themeName)
+        let theme = resolvedTheme.theme
 
-        backgroundColor = palette.bg0
-        foregroundColor = palette.text
-        lineNumberColor = palette.textTertiary
-        cursorColor = palette.accent
-        selectionColor = palette.accentMuted
-
-        // Set clear color (Metal expects linear values here too since we use _srgb format)
+        let bgHex = theme.editorBackground
+        backgroundColor = hexToLinearColor(bgHex)
         mtkView.clearColor = MTLClearColor(
             red: Double(backgroundColor.x),
             green: Double(backgroundColor.y),
             blue: Double(backgroundColor.z),
             alpha: 1.0
         )
-    }
 
-    /// Load colors from Shiki theme
-    private func loadShikiThemeColors() {
-        do {
-            let theme = try ShikiTheme.load(name: configuration.themeName)
+        if let lnHex = theme.lineNumberForeground {
+            lineNumberColor = hexToLinearColor(lnHex)
+        }
 
-            // Background
-            if let bgHex = theme.editorBackground {
-                backgroundColor = hexToLinearColor(bgHex)
-                mtkView.clearColor = MTLClearColor(
-                    red: Double(backgroundColor.x),
-                    green: Double(backgroundColor.y),
-                    blue: Double(backgroundColor.z),
-                    alpha: 1.0
-                )
-            }
+        textColor = hexToLinearColor(theme.editorForeground)
 
-            // Foreground
-            if let fgHex = theme.editorForeground {
-                foregroundColor = hexToLinearColor(fgHex)
-            }
+        if let cursorHex = theme.cursorColor {
+            cursorColor = hexToLinearColor(cursorHex)
+        }
 
-            // Line numbers
-            if let lnHex = theme.colors?["editorLineNumber.foreground"] {
-                lineNumberColor = hexToLinearColor(lnHex)
-            }
-
-            // Cursor
-            if let cursorHex = theme.cursorColor {
-                cursorColor = hexToLinearColor(cursorHex)
-            }
-
-            // Selection
-            if let selHex = theme.selectionBackground {
-                selectionColor = hexToLinearColor(selHex)
-            }
-        } catch {
-            let themeName = configuration.themeName
-            metalEditorLogger.error(
-                "Failed to load theme \(themeName, privacy: .public): \(String(describing: error), privacy: .public)"
-            )
-            // Fallback to DevysColors
-            loadDevysColors()
+        if let selHex = theme.selectionBackground {
+            selectionColor = hexToLinearColor(selHex)
         }
     }
 
-    /// Highlight visible lines asynchronously
-    func highlightVisibleLines() async {
-        guard !isHighlighting,
-              let document = document,
-              let lineBuffer = lineBuffer,
-              let engine = highlightEngine else {
-            return
-        }
-
-        isHighlighting = true
-        defer { isHighlighting = false }
-
-        _ = await processHighlightBatch(
-            document: document,
-            lineBuffer: lineBuffer,
-            engine: engine
-        )
+    func highlightVisibleLines() {
+        guard let document else { return }
+        highlightVisibleLines(document: document)
     }
 
-    private func processHighlightBatch(
-        document: EditorDocument,
-        lineBuffer: LineBuffer,
-        engine: HighlightEngine
-    ) async -> Bool {
-        lineBuffer.updateVisibleRange()
-        let visibleRange = lineBuffer.visibleRange
-        let tokenRange = lineBuffer.tokenizationRange
-
-        guard let batch = nextHighlightBatch(
-            document: document,
-            visibleRange: visibleRange,
-            tokenRange: tokenRange
-        ) else {
-            return false
-        }
-
-        let highlighted = await engine.highlightLines(
-            batch.lines,
-            startingAt: batch.start
-        )
-
-        for line in highlighted {
-            cachedHighlightedLines[line.lineIndex] = line
-        }
-
-        return true
-    }
-
-    private func nextHighlightBatch(
-        document: EditorDocument,
-        visibleRange: Range<Int>,
-        tokenRange: Range<Int>
-    ) -> (start: Int, lines: [String])? {
-        guard tokenRange.lowerBound < tokenRange.upperBound else { return nil }
-
-        let visibleMissing = missingLines(in: visibleRange)
-        let startCandidate: Int?
-
-        if let firstVisible = visibleMissing.first {
-            startCandidate = firstVisible
-        } else if let firstTokenMissing = missingLines(in: tokenRange).first {
-            startCandidate = firstTokenMissing
-        } else {
-            return nil
-        }
-
-        guard var start = startCandidate else { return nil }
-        if start > tokenRange.lowerBound,
-           cachedHighlightedLines[start - 1] == nil {
-            if let cached = nearestCachedLine(before: start, in: tokenRange) {
-                start = cached + 1
-            } else {
-                start = tokenRange.lowerBound
-            }
-        }
-
-        let end = min(start + highlightBatchSize, tokenRange.upperBound)
-        guard start < end else { return nil }
-
-        let lines = document.lines(in: start..<end)
-        guard !lines.isEmpty else { return nil }
-
-        return (start: start, lines: lines)
-    }
-
-    private func missingLines(in range: Range<Int>) -> [Int] {
-        var result: [Int] = []
-        for lineIndex in range where cachedHighlightedLines[lineIndex] == nil {
-            result.append(lineIndex)
-        }
-        return result
-    }
-
-    private func nearestCachedLine(before index: Int, in range: Range<Int>) -> Int? {
-        guard index > range.lowerBound else { return nil }
-        var candidate = index - 1
-        while candidate >= range.lowerBound {
-            if cachedHighlightedLines[candidate] != nil {
-                return candidate
-            }
-            if candidate == range.lowerBound { break }
-            candidate -= 1
-        }
-        return nil
-    }
-
-    private func scheduleBackgroundHighlight() {
-        backgroundHighlightTask?.cancel()
-        backgroundHighlightTask = Task { @MainActor in
-            while !Task.isCancelled {
-                guard let document,
-                      let lineBuffer,
-                      let engine = highlightEngine else {
-                    return
-                }
-
-                if isHighlighting {
-                    await Task.yield()
-                    continue
-                }
-
-                isHighlighting = true
-                let didWork = await processHighlightBatch(
-                    document: document,
-                    lineBuffer: lineBuffer,
-                    engine: engine
-                )
-                isHighlighting = false
-
-                if !didWork {
-                    return
-                }
-
-                await Task.yield()
-                try? await Task.sleep(nanoseconds: 16_000_000)
-            }
+    func scheduleBackgroundHighlight() {
+        syntaxSchedulingCoordinator.startBackgroundIfNeeded { [weak self] in
+            self?.syntaxSchedulingContext()
         }
     }
 
     func configurationDidChange() {
         guard let device = mtkView.device else { return }
+        let requestedTheme = ThemeRegistry.descriptor(name: configuration.themeName)
 
         metrics = EditorMetrics.measure(
             fontSize: configuration.fontSize,
@@ -331,24 +221,187 @@ extension MetalEditorView {
         )
 
         lineBuffer?.metrics = metrics
+        displayModel.reset()
 
-        // Load theme colors
-        loadThemeColors()
-
-        // Reload highlight engine with new theme
         if let document = document {
-            Task { @MainActor in
-                backgroundHighlightTask?.cancel()
-                backgroundHighlightTask = nil
-                highlightEngine = await HighlightEngine(
-                    language: document.language,
-                    themeName: configuration.themeName
-                )
-                cachedHighlightedLines.removeAll()
-                await highlightVisibleLines()
-                scheduleBackgroundHighlight()
+            if requestedTheme.version != appliedThemeDescriptor.version,
+               document.syntaxController != nil {
+                beginThemeTransition(for: document, theme: requestedTheme)
+            } else if document.syntaxController == nil {
+                appliedThemeDescriptor = requestedTheme
+                pendingThemeDescriptor = nil
+                loadThemeColors(themeName: requestedTheme.name)
+                startHighlighting(for: document)
+            } else {
+                pendingThemeDescriptor = nil
+                loadThemeColors(themeName: appliedThemeDescriptor.name)
+                refreshSyntaxViewport(document: document)
             }
+        } else {
+            appliedThemeDescriptor = requestedTheme
+            pendingThemeDescriptor = nil
+            loadThemeColors(themeName: requestedTheme.name)
         }
+    }
+
+    func beginOpenTracking() {
+        openTrackingGeneration += 1
+        openTrackingIdentifier = "editor-open-\(openTrackingGeneration)"
+        hasRecordedOpenInteractiveFrame = false
+        hasRecordedOpenHighlightedFrame = false
+        guard let openTrackingIdentifier else { return }
+        SyntaxRuntimeDiagnostics.beginTrackedOpen(
+            surface: "editor",
+            identifier: openTrackingIdentifier
+        )
+    }
+
+    func beginRevisitTracking() {
+        revisitTrackingGeneration += 1
+        revisitTrackingIdentifier = "editor-revisit-\(revisitTrackingGeneration)"
+        hasRecordedRevisitInteractiveFrame = false
+        hasRecordedRevisitHighlightedFrame = false
+        guard let revisitTrackingIdentifier else { return }
+        SyntaxRuntimeDiagnostics.beginTrackedRevisit(
+            surface: "editor",
+            identifier: revisitTrackingIdentifier
+        )
+    }
+
+    // periphery:ignore - kept for render diagnostics and future viewport transitions
+    func displaySyntaxSnapshot(
+        for visibleRange: Range<Int>,
+        document: EditorDocument
+    ) -> SyntaxSnapshot? {
+        activatePendingThemeIfReady(document: document, visibleRange: visibleRange)
+        return displaySnapshot(for: visibleRange, document: document)
+            .visibleRows
+            .contains { $0.highlightedLine != nil }
+            ? document.syntaxController?.currentSnapshot()
+            : nil
+    }
+
+    private func scheduledSyntaxController(for document: EditorDocument) -> SyntaxController? {
+        pendingThemeSyntaxController ?? document.syntaxController
+    }
+
+    private func beginThemeTransition(
+        for document: EditorDocument,
+        theme: RuntimeThemeDescriptor
+    ) {
+        guard let snapshot = document.snapshot else { return }
+        syntaxSchedulingCoordinator.cancelAll()
+        pendingThemeDescriptor = theme
+        pendingThemeSyntaxController = SyntaxController(
+            documentSnapshot: snapshot,
+            language: document.language,
+            themeName: theme.name,
+            warmCacheIdentity: document.syntaxWarmCacheIdentity,
+            maximumTokenizationLineLength: largeFilePolicy.maximumSyntaxLineLength
+        )
+        refreshSyntaxViewport(document: document)
+    }
+
+    private func activatePendingThemeIfReady(
+        document: EditorDocument,
+        visibleRange: Range<Int>? = nil
+    ) {
+        guard let pendingThemeSyntaxController,
+              let pendingThemeDescriptor else { return }
+        let visibleRange = visibleRange ?? lineBuffer?.visibleRange ?? 0..<0
+        guard pendingThemeSyntaxController.currentSnapshot().hasActualHighlights(in: visibleRange) else { return }
+
+        document.adoptSyntaxController(
+            pendingThemeSyntaxController,
+            themeName: pendingThemeDescriptor.name,
+            maximumTokenizationLineLength: largeFilePolicy.maximumSyntaxLineLength
+        )
+        appliedThemeDescriptor = pendingThemeDescriptor
+        loadThemeColors(themeName: pendingThemeDescriptor.name)
+        self.pendingThemeSyntaxController = nil
+        self.pendingThemeDescriptor = nil
+    }
+
+    // periphery:ignore - reserved for phased visible-highlight budgeting
+    private func startVisibleHighlightBudget(document: EditorDocument) {
+        guard document.snapshot != nil else { return }
+        syntaxSchedulingCoordinator.refreshViewport { [weak self] in
+            self?.syntaxSchedulingContext(for: document)
+        }
+    }
+
+    private func updateLargeFilePolicy(for documentSnapshot: DocumentSnapshot) {
+        largeFilePolicy = EditorLargeFilePolicy(documentSnapshot: documentSnapshot)
+    }
+
+    // periphery:ignore - exposed for scheduling tests and viewport heuristics
+    func preferredHighlightRange(
+        lineBuffer: LineBuffer,
+        lineCount: Int
+    ) -> Range<Int> {
+        syntaxSchedulingCoordinator.preferredHighlightRange(
+            lineBuffer: lineBuffer,
+            lineCount: lineCount,
+            lastScrollDelta: lastHighlightScrollDelta,
+            lineHeight: metrics.lineHeight
+        )
+    }
+
+    private func refreshSyntaxViewport(document: EditorDocument? = nil) {
+        let targetDocument = document ?? self.document
+        syntaxSchedulingCoordinator.refreshViewport { [weak self] in
+            self?.syntaxSchedulingContext(for: targetDocument)
+        }
+        refreshPreparedFrame(document: targetDocument)
+    }
+
+    private var displayRenderContext: EditorDisplayRenderContext {
+        EditorDisplayRenderContext(
+            themeVersion: appliedThemeDescriptor.version,
+            metrics: metrics,
+            lineNumberColor: lineNumberColor,
+            textColor: textColor,
+            backgroundColor: backgroundColor
+        )
+    }
+
+    private func syntaxSchedulingContext(
+        for documentOverride: EditorDocument? = nil
+    ) -> EditorSyntaxSchedulingCoordinator.Context? {
+        guard let document = documentOverride ?? document,
+              let lineBuffer,
+              document.snapshot != nil else {
+            return nil
+        }
+
+        return EditorSyntaxSchedulingCoordinator.Context(
+            document: document,
+            lineBuffer: lineBuffer,
+            scheduledSyntaxController: { [weak self] in
+                guard let self else { return nil }
+                return self.scheduledSyntaxController(for: document)
+            },
+            activatePendingThemeIfReady: { [weak self] visibleRange in
+                self?.activatePendingThemeIfReady(document: document, visibleRange: visibleRange)
+            },
+            requestDraw: { [weak self] in
+                guard let self else { return }
+                self.refreshPreparedFrame(document: document)
+                self.mtkView.draw()
+            },
+            largeFilePolicy: largeFilePolicy,
+            highlightBatchSize: highlightBatchSize,
+            openHighlightBudgetNanoseconds: openHighlightBudgetNanoseconds,
+            lastScrollDelta: lastHighlightScrollDelta,
+            lineHeight: metrics.lineHeight
+        )
+    }
+
+    private func syntaxSchedulingCoordinatorVisibleRanges(
+        for context: EditorSyntaxSchedulingCoordinator.Context
+    ) -> (visibleRange: Range<Int>, tokenizationRange: Range<Int>)? {
+        context.lineBuffer.updateVisibleRange()
+        return (context.lineBuffer.visibleRange, context.lineBuffer.tokenizationRange)
     }
 }
 

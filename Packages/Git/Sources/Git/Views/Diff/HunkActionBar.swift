@@ -170,6 +170,7 @@ struct HunkActionBar: View {
     VStack(spacing: 0) {
         HunkActionBar(
             hunk: DiffHunk(
+                id: "preview-hunk-1",
                 header: "@@ -10,5 +10,7 @@",
                 lines: [],
                 oldStart: 10,
@@ -185,6 +186,7 @@ struct HunkActionBar: View {
         
         HunkActionBar(
             hunk: DiffHunk(
+                id: "preview-hunk-2",
                 header: "@@ -20,3 +22,8 @@",
                 lines: [],
                 oldStart: 20,

@@ -9,8 +9,20 @@ struct DiffWordChange: Sendable, Equatable {
     let type: WordDiff.ChangeType
 }
 
+enum DiffSourceSide: String, Sendable, Equatable {
+    case base
+    case modified
+}
+
+struct DiffHighlightSegment: Sendable, Equatable {
+    let side: DiffSourceSide
+    let sourceLineID: DiffIdentity
+    let sourceLineIndex: Int
+    let utf16Range: Range<Int>
+}
+
 struct DiffHunkHeaderLayout: Identifiable, Sendable {
-    let id: UUID
+    let id: String
     let hunkIndex: Int
     let rowIndex: Int
     let oldStart: Int
@@ -19,7 +31,7 @@ struct DiffHunkHeaderLayout: Identifiable, Sendable {
     let newCount: Int
 
     init(hunkIndex: Int, rowIndex: Int, hunk: DiffHunk) {
-        self.id = hunk.id
+        self.id = "hunk-header-\(hunk.id)"
         self.hunkIndex = hunkIndex
         self.rowIndex = rowIndex
         self.oldStart = hunk.oldStart
@@ -35,38 +47,23 @@ struct UnifiedDiffRow: Identifiable, Sendable {
         case line
     }
 
-    let id: UUID
+    let id: String
     let kind: Kind
     let lineType: DiffLine.LineType
     let oldLineNumber: Int?
     let newLineNumber: Int?
     let content: String
     let wordChanges: [DiffWordChange]?
-
-    init(
-        id: UUID = UUID(),
-        kind: Kind,
-        lineType: DiffLine.LineType,
-        oldLineNumber: Int?,
-        newLineNumber: Int?,
-        content: String,
-        wordChanges: [DiffWordChange]?
-    ) {
-        self.id = id
-        self.kind = kind
-        self.lineType = lineType
-        self.oldLineNumber = oldLineNumber
-        self.newLineNumber = newLineNumber
-        self.content = content
-        self.wordChanges = wordChanges
-    }
+    let highlightSegment: DiffHighlightSegment?
 }
 
 struct SplitDiffSide: Sendable {
+    let sourceLineID: DiffIdentity?
     let lineNumber: Int?
     let lineType: DiffLine.LineType
     let content: String
     let wordChanges: [DiffWordChange]?
+    let highlightSegment: DiffHighlightSegment?
 }
 
 struct SplitDiffRow: Identifiable, Sendable {
@@ -75,22 +72,10 @@ struct SplitDiffRow: Identifiable, Sendable {
         case line
     }
 
-    let id: UUID
+    let id: String
     let kind: Kind
     let left: SplitDiffSide?
     let right: SplitDiffSide?
-
-    init(
-        id: UUID = UUID(),
-        kind: Kind,
-        left: SplitDiffSide?,
-        right: SplitDiffSide?
-    ) {
-        self.id = id
-        self.kind = kind
-        self.left = left
-        self.right = right
-    }
 }
 
 struct UnifiedDiffLayout: Sendable {
@@ -98,6 +83,7 @@ struct UnifiedDiffLayout: Sendable {
     let hunkHeaders: [DiffHunkHeaderLayout]
     let contentSize: CGSize
     let maxLineNumberDigits: Int
+    let sourceDocuments: DiffSourceDocuments
 }
 
 struct SplitDiffLayout: Sendable {
@@ -105,6 +91,7 @@ struct SplitDiffLayout: Sendable {
     let hunkHeaders: [DiffHunkHeaderLayout]
     let contentSize: CGSize
     let maxLineNumberDigits: Int
+    let sourceDocuments: DiffSourceDocuments
 }
 
 enum DiffRenderLayout: Sendable {
@@ -135,6 +122,15 @@ enum DiffRenderLayout: Sendable {
             return layout.maxLineNumberDigits
         case .split(let layout):
             return layout.maxLineNumberDigits
+        }
+    }
+
+    var sourceDocuments: DiffSourceDocuments {
+        switch self {
+        case .unified(let layout):
+            return layout.sourceDocuments
+        case .split(let layout):
+            return layout.sourceDocuments
         }
     }
 }

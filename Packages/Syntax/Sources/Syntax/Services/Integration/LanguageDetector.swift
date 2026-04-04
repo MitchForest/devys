@@ -1,5 +1,5 @@
 // LanguageDetector.swift
-// DevysSyntax - Shiki-compatible syntax highlighting
+// Syntax language detection
 //
 // Copyright © 2026 Devys. All rights reserved.
 

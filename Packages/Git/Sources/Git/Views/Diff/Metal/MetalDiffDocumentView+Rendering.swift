@@ -7,9 +7,7 @@ import Rendering
 
 extension MetalDiffDocumentView {
     func renderUnified(
-        layout: UnifiedDiffLayout,
-        startRow: Int,
-        endRow: Int,
+        snapshot: ResolvedUnifiedDiffDisplaySnapshot,
         visibleOrigin: CGPoint,
         visibleSize: CGSize,
         metrics: RenderMetrics
@@ -17,24 +15,26 @@ extension MetalDiffDocumentView {
         let contentOriginX = -Float(visibleOrigin.x) * metrics.scale
         let rowHeight = Float(self.metrics.lineHeight) * metrics.scale
         let backgroundWidth = Float(visibleSize.width) * metrics.scale
-        let maxRow = min(endRow, layout.rows.count - 1)
 
-        for rowIndex in startRow...maxRow {
-            let row = layout.rows[rowIndex]
-            let rowY = (Float(rowIndex) * Float(self.metrics.lineHeight) - Float(visibleOrigin.y)) * metrics.scale
+        for row in snapshot.rows {
+            let rowY = (Float(row.rowIndex) * Float(self.metrics.lineHeight) - Float(visibleOrigin.y)) * metrics.scale
 
             switch row.kind {
             case .hunkHeader:
-                let headerColor = diffTheme.hunkHeaderBackground
                 underlayBuffer.addQuad(
                     x: 0,
                     y: rowY,
                     width: backgroundWidth,
                     height: rowHeight,
-                    color: headerColor
+                    color: diffTheme.hunkHeaderBackground
                 )
                 if configuration.showsHunkHeaders {
-                    renderHunkHeaderText(row: row, metrics: metrics, contentOriginX: contentOriginX, rowY: rowY)
+                    renderPacket(
+                        row.content.packet,
+                        origin: SIMD2(contentOriginX + metrics.gutterPadding, rowY),
+                        metrics: metrics,
+                        maxX: nil
+                    )
                 }
             case .line:
                 renderUnifiedLine(
@@ -49,40 +49,44 @@ extension MetalDiffDocumentView {
     }
 
     func renderSplit(
-        layout: SplitDiffLayout,
-        startRow: Int,
-        endRow: Int,
+        snapshot: ResolvedSplitDiffDisplaySnapshot,
         visibleOrigin: CGPoint,
         visibleSize: CGSize,
         metrics: RenderMetrics
     ) {
         let rowHeight = Float(self.metrics.lineHeight) * metrics.scale
         let backgroundWidth = Float(visibleSize.width) * metrics.scale
-        let visibleWidth = backgroundWidth
-        let dividerX = visibleWidth * Float(splitRatio)
+        let dividerX = backgroundWidth * Float(splitRatio)
         let leftPaneWidth = dividerX
-        let rightPaneWidth = visibleWidth - dividerX - metrics.dividerWidth
-        let maxRow = min(endRow, layout.rows.count - 1)
+        let rightPaneWidth = backgroundWidth - dividerX - metrics.dividerWidth
 
-        let dividerColor = diffTheme.border
         underlayBuffer.addQuad(
             x: dividerX,
             y: 0,
             width: metrics.dividerWidth,
             height: Float(visibleSize.height) * metrics.scale,
-            color: dividerColor
+            color: diffTheme.border
         )
 
-        for rowIndex in startRow...maxRow {
-            let row = layout.rows[rowIndex]
-            let rowY = (Float(rowIndex) * Float(self.metrics.lineHeight) - Float(visibleOrigin.y)) * metrics.scale
+        for row in snapshot.rows {
+            let rowY = (Float(row.rowIndex) * Float(self.metrics.lineHeight) - Float(visibleOrigin.y)) * metrics.scale
 
             switch row.kind {
             case .hunkHeader:
-                let headerColor = diffTheme.hunkHeaderBackground
-                underlayBuffer.addQuad(x: 0, y: rowY, width: backgroundWidth, height: rowHeight, color: headerColor)
-                if configuration.showsHunkHeaders {
-                    renderSplitHeaderText(rowIndex: rowIndex, layout: layout, metrics: metrics, rowY: rowY)
+                underlayBuffer.addQuad(
+                    x: 0,
+                    y: rowY,
+                    width: backgroundWidth,
+                    height: rowHeight,
+                    color: diffTheme.hunkHeaderBackground
+                )
+                if configuration.showsHunkHeaders, let headerPacket = row.headerPacket {
+                    renderPacket(
+                        headerPacket,
+                        origin: SIMD2(metrics.gutterPadding, rowY),
+                        metrics: metrics,
+                        maxX: nil
+                    )
                 }
             case .line:
                 renderSplitLine(
@@ -97,49 +101,8 @@ extension MetalDiffDocumentView {
         }
     }
 
-    private func renderHunkHeaderText(
-        row: UnifiedDiffRow,
-        metrics: RenderMetrics,
-        contentOriginX: Float,
-        rowY: Float
-    ) {
-        let context = TextRenderContext(
-            text: row.content,
-            tokens: nil,
-            wordChanges: nil,
-            textColor: diffTheme.hunkHeaderForeground,
-            backgroundColor: .zero,
-            origin: SIMD2(contentOriginX + metrics.gutterPadding, rowY),
-            metrics: metrics,
-            maxX: nil
-        )
-        renderText(context)
-    }
-
-    private func renderSplitHeaderText(
-        rowIndex: Int,
-        layout: SplitDiffLayout,
-        metrics: RenderMetrics,
-        rowY: Float
-    ) {
-        guard let header = layout.hunkHeaders.first(where: { $0.rowIndex == rowIndex }) else { return }
-        let text = "@@ -\(header.oldStart),\(header.oldCount) +\(header.newStart),\(header.newCount) @@"
-
-        let context = TextRenderContext(
-            text: text,
-            tokens: nil,
-            wordChanges: nil,
-            textColor: diffTheme.hunkHeaderForeground,
-            backgroundColor: .zero,
-            origin: SIMD2(metrics.gutterPadding, rowY),
-            metrics: metrics,
-            maxX: nil
-        )
-        renderText(context)
-    }
-
     private func renderUnifiedLine(
-        row: UnifiedDiffRow,
+        row: ResolvedVisibleUnifiedDiffDisplayRow,
         metrics: RenderMetrics,
         contentOriginX: Float,
         rowY: Float,
@@ -159,11 +122,16 @@ extension MetalDiffDocumentView {
             startX: contentOriginX
         )
         x = renderUnifiedPrefix(row: row, metrics: metrics, rowY: rowY, startX: x)
-        renderUnifiedContent(row: row, metrics: metrics, rowY: rowY, startX: x)
+        renderPacket(
+            row.content.packet,
+            origin: SIMD2(x + metrics.gutterPadding, rowY),
+            metrics: metrics,
+            maxX: nil
+        )
     }
 
     private func renderUnifiedBackground(
-        row: UnifiedDiffRow,
+        row: ResolvedVisibleUnifiedDiffDisplayRow,
         metrics: RenderMetrics,
         rowY: Float,
         backgroundWidth: Float
@@ -194,7 +162,7 @@ extension MetalDiffDocumentView {
     }
 
     private func renderUnifiedLineNumbers(
-        row: UnifiedDiffRow,
+        row: ResolvedVisibleUnifiedDiffDisplayRow,
         metrics: RenderMetrics,
         rowY: Float,
         startX: Float
@@ -210,7 +178,7 @@ extension MetalDiffDocumentView {
             height: metrics.lineHeight,
             color: gutterColor
         )
-        renderLineNumber(row.oldLineNumber, columnX: x, metrics: metrics, lineType: row.lineType, rowY: rowY)
+        renderLineNumber(row.oldLineNumberPacket, columnX: x, metrics: metrics, rowY: rowY)
         x += metrics.lineNumberColumnWidth
 
         underlayBuffer.addQuad(
@@ -220,55 +188,32 @@ extension MetalDiffDocumentView {
             height: metrics.lineHeight,
             color: gutterColor
         )
-        renderLineNumber(row.newLineNumber, columnX: x, metrics: metrics, lineType: row.lineType, rowY: rowY)
+        renderLineNumber(row.newLineNumberPacket, columnX: x, metrics: metrics, rowY: rowY)
         x += metrics.lineNumberColumnWidth
 
         return x
     }
 
     private func renderUnifiedPrefix(
-        row: UnifiedDiffRow,
+        row: ResolvedVisibleUnifiedDiffDisplayRow,
         metrics: RenderMetrics,
         rowY: Float,
         startX: Float
     ) -> Float {
         guard configuration.showPrefix else { return startX }
-        let prefix = prefixCharacter(for: row.lineType, isNoNewline: row.lineType == .noNewline)
-        let prefixContext = TextRenderContext(
-            text: prefix,
-            tokens: nil,
-            wordChanges: nil,
-            textColor: prefixColor(for: row.lineType),
-            backgroundColor: .zero,
-            origin: SIMD2(startX + metrics.gutterPadding, rowY),
-            metrics: metrics,
-            maxX: nil
-        )
-        renderText(prefixContext)
+        if let prefixPacket = row.prefixPacket {
+            renderPacket(
+                prefixPacket,
+                origin: SIMD2(startX + metrics.gutterPadding, rowY),
+                metrics: metrics,
+                maxX: nil
+            )
+        }
         return startX + metrics.prefixColumnWidth
     }
 
-    private func renderUnifiedContent(
-        row: UnifiedDiffRow,
-        metrics: RenderMetrics,
-        rowY: Float,
-        startX: Float
-    ) {
-        let textContext = TextRenderContext(
-            text: row.content,
-            tokens: tokens(for: row.content),
-            wordChanges: row.wordChanges,
-            textColor: diffTheme.foreground,
-            backgroundColor: .zero,
-            origin: SIMD2(startX + metrics.gutterPadding, rowY),
-            metrics: metrics,
-            maxX: nil
-        )
-        renderText(textContext)
-    }
-
     private func renderSplitLine(
-        row: SplitDiffRow,
+        row: ResolvedVisibleSplitDiffDisplayRow,
         metrics: RenderMetrics,
         rowY: Float,
         dividerX: Float,
@@ -318,7 +263,7 @@ extension MetalDiffDocumentView {
     }
 
     private func renderSplitSide(
-        side: SplitDiffSide,
+        side: ResolvedSplitDiffDisplaySide,
         metrics: RenderMetrics,
         xOrigin: Float,
         rowY: Float,
@@ -359,68 +304,29 @@ extension MetalDiffDocumentView {
                 height: metrics.lineHeight,
                 color: gutterColor
             )
-            renderLineNumber(side.lineNumber, columnX: x, metrics: metrics, lineType: side.lineType, rowY: rowY)
+            renderLineNumber(side.lineNumberPacket, columnX: x, metrics: metrics, rowY: rowY)
             x += metrics.lineNumberColumnWidth
         }
 
-        let textContext = TextRenderContext(
-            text: side.content,
-            tokens: tokens(for: side.content),
-            wordChanges: side.wordChanges,
-            textColor: diffTheme.foreground,
-            backgroundColor: .zero,
+        renderPacket(
+            side.content.packet,
             origin: SIMD2(x + metrics.gutterPadding, rowY),
             metrics: metrics,
             maxX: xOrigin + backgroundWidth
         )
-        renderText(textContext)
     }
 
     private func renderLineNumber(
-        _ number: Int?,
+        _ packet: ResolvedTextRenderPacket?,
         columnX: Float,
         metrics: RenderMetrics,
-        lineType: DiffLine.LineType,
         rowY: Float
     ) {
-        guard let number else { return }
-        let numberText = String(number)
+        guard let packet else { return }
         let availableWidth = metrics.lineNumberColumnWidth - metrics.gutterPadding
-        let textWidth = Float(numberText.count) * metrics.cellWidth
+        let textWidth = Float(packet.cellCount) * metrics.cellWidth
         let x = columnX + max(0, availableWidth - textWidth)
-        let context = TextRenderContext(
-            text: numberText,
-            tokens: nil,
-            wordChanges: nil,
-            textColor: diffTheme.lineNumber,
-            backgroundColor: gutterBackground(for: lineType),
-            origin: SIMD2(x, rowY),
-            metrics: metrics,
-            maxX: nil
-        )
-        renderText(context)
-    }
-
-    private func prefixCharacter(for type: DiffLine.LineType, isNoNewline: Bool) -> String {
-        if isNoNewline { return "\\" }
-        switch type {
-        case .added: return "+"
-        case .removed: return "-"
-        case .context: return " "
-        case .header: return ""
-        case .noNewline: return "\\"
-        }
-    }
-
-    private func prefixColor(for type: DiffLine.LineType) -> SIMD4<Float> {
-        switch type {
-        case .added:
-            return hexToLinearColor("#2e7d32")
-        case .removed:
-            return hexToLinearColor("#c62828")
-        default:
-            return diffTheme.lineNumber
-        }
+        renderPacket(packet, origin: SIMD2(x, rowY), metrics: metrics, maxX: nil)
     }
 
     private func lineBackgroundColor(for type: DiffLine.LineType) -> SIMD4<Float> {
@@ -454,17 +360,6 @@ extension MetalDiffDocumentView {
         case .removed:
             return diffTheme.removedGutterBackground
         default:
-            return SIMD4<Float>(0, 0, 0, 0)
-        }
-    }
-
-    func wordChangeColor(for type: WordDiff.ChangeType) -> SIMD4<Float> {
-        switch type {
-        case .added:
-            return diffTheme.addedTextBackground
-        case .removed:
-            return diffTheme.removedTextBackground
-        case .unchanged:
             return SIMD4<Float>(0, 0, 0, 0)
         }
     }

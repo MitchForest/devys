@@ -27,4 +27,30 @@ struct DiffFileParserTests {
         #expect(files[0].filePath == "first.swift")
         #expect(files[1].filePath == "second.swift")
     }
+
+    @Test func keepsRenameOnlyDiffsAndCanonicalizesPathsWithSpaces() {
+        let diff = """
+        diff --git a/dir with space/old name.swift b/dir with space/new name.swift
+        similarity index 100%
+        rename from dir with space/old name.swift
+        rename to dir with space/new name.swift
+        diff --git a/dir with space/file name.swift b/dir with space/file name.swift
+        --- a/dir with space/file name.swift\t
+        +++ b/dir with space/file name.swift\t
+        @@ -1 +1 @@
+        -one
+        +two
+        """
+
+        let files = DiffFileParser.parseFiles(diff)
+
+        #expect(files.count == 2)
+        #expect(files[0].filePath == "dir with space/new name.swift")
+        #expect(files[0].diff.oldPath == "dir with space/old name.swift")
+        #expect(files[0].diff.newPath == "dir with space/new name.swift")
+        #expect(files[0].diff.hasChanges)
+        #expect(files[1].filePath == "dir with space/file name.swift")
+        #expect(files[1].diff.oldPath == "dir with space/file name.swift")
+        #expect(files[1].diff.newPath == "dir with space/file name.swift")
+    }
 }

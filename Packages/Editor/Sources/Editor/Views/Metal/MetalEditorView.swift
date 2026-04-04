@@ -4,11 +4,13 @@
 // MTKView-based editor view with Metal rendering.
 
 #if os(macOS)
+// periphery:ignore:all - Metal editor entry points are reached via NSView/MTKView runtime callbacks
 import AppKit
 import MetalKit
-import Syntax
-import Rendering
 import OSLog
+import Rendering
+import Syntax
+import Text
 
 let metalEditorLogger = Logger(subsystem: "com.devys.editor", category: "MetalEditorView")
 
@@ -45,27 +47,38 @@ public final class MetalEditorView: NSView, MTKViewDelegate {
     var document: EditorDocument? {
         didSet { documentDidChange() }
     }
+    var observedDocumentLoadStateRevision: Int = -1
 
     /// Callback when the document URL changes (Save As)
     var onDocumentURLChange: ((URL) -> Void)?
     
     /// Line buffer for viewport
     var lineBuffer: LineBuffer?
+    var displayModel = EditorDisplayModel()
     
-    /// Highlight engine
-    var highlightEngine: HighlightEngine?
-    
-    /// Cached highlighted lines
-    var cachedHighlightedLines: [Int: HighlightedLine] = [:]
-    
-    /// Whether highlighting is in progress
-    var isHighlighting = false
-
     /// Highlight batch size for incremental tokenization
     let highlightBatchSize = 64
+    let openHighlightBudgetNanoseconds: UInt64 = 12_000_000
 
-    /// Background highlight task (buffer fill)
-    var backgroundHighlightTask: Task<Void, Never>?
+    let syntaxSchedulingCoordinator = EditorSyntaxSchedulingCoordinator()
+    var lastHighlightScrollDelta: CGFloat = 0
+    var appliedThemeDescriptor: RuntimeThemeDescriptor = ThemeRegistry.preferredThemeDescriptor
+    var pendingThemeDescriptor: RuntimeThemeDescriptor?
+    var pendingThemeSyntaxController: SyntaxController?
+    var semanticOverlaySnapshot: SemanticOverlaySnapshot?
+    var largeFilePolicy: EditorLargeFilePolicy = .default
+    var preparedFrame: PreparedFrame?
+    var openTrackingGeneration = 0
+    var openTrackingIdentifier: String?
+    var hasRecordedOpenInteractiveFrame = false
+    var hasRecordedOpenHighlightedFrame = false
+    var revisitTrackingGeneration = 0
+    var revisitTrackingIdentifier: String?
+    var hasRecordedRevisitInteractiveFrame = false
+    var hasRecordedRevisitHighlightedFrame = false
+    var visibleEditGeneration = 0
+    var pendingVisibleEditIdentifier: String?
+    var shouldRecordScrollTrace = false
     
     /// Debug: has logged highlight usage once
     var hasLoggedHighlightUsage = false
@@ -78,11 +91,11 @@ public final class MetalEditorView: NSView, MTKViewDelegate {
     /// Background color (linear sRGB)
     var backgroundColor: SIMD4<Float> = hexToLinearColor("#0D0D0D")
     
-    /// Foreground color (linear sRGB)
-    var foregroundColor: SIMD4<Float> = hexToLinearColor("#EFEFEF")
-    
     /// Line number color (linear sRGB)
     var lineNumberColor: SIMD4<Float> = hexToLinearColor("#555555")
+
+    /// Default editor text color (linear sRGB)
+    var textColor: SIMD4<Float> = hexToLinearColor("#d4d4d4")
     
     /// Cursor color (linear sRGB) - white for monochrome terminal aesthetic
     var cursorColor: SIMD4<Float> = hexToLinearColor("#FFFFFF", alpha: 0.9)
@@ -93,37 +106,23 @@ public final class MetalEditorView: NSView, MTKViewDelegate {
     /// Selection anchor for drag/shift selection
     var selectionAnchor: TextPosition?
     
-    // DevysColors palettes (properly converted to linear sRGB)
-    struct DevysColorPalette {
-        let bg0: SIMD4<Float>
-        let text: SIMD4<Float>
-        let textTertiary: SIMD4<Float>
-        let accent: SIMD4<Float>
-        let accentMuted: SIMD4<Float>
-    }
-    
-    static let devysColorsDark = DevysColorPalette(
-        bg0: hexToLinearColor("#000000"),           // True black background
-        text: hexToLinearColor("#EFEFEF"),          // Primary text
-        textTertiary: hexToLinearColor("#666666"),  // Tertiary text (line numbers)
-        accent: hexToLinearColor("#FFFFFF"),        // White accent for monochrome
-        accentMuted: hexToLinearColor("#FFFFFF", alpha: 0.12)
-    )
-    
-    static let devysColorsLight = DevysColorPalette(
-        bg0: hexToLinearColor("#FFFFFF"),           // White background
-        text: hexToLinearColor("#1A1A1A"),          // Primary text (near black)
-        textTertiary: hexToLinearColor("#888888"),  // Tertiary text (line numbers)
-        accent: hexToLinearColor("#1A1A1A"),        // Dark accent for light mode
-        accentMuted: hexToLinearColor("#1A1A1A", alpha: 0.12)
-    )
-    
     /// Animation time
     var animationTime: Float = 0
     var lastFrameTime: CFTimeInterval = 0
     
     /// Scale factor
     var scaleFactor: CGFloat = 2.0
+
+    var backgroundHighlightTask: Task<Void, Never>? {
+        get { syntaxSchedulingCoordinator.backgroundHighlightTask }
+        set { syntaxSchedulingCoordinator.backgroundHighlightTask = newValue }
+    }
+
+    // periphery:ignore - mirrored task handle for render scheduling coordination
+    var visibleHighlightBudgetTask: Task<Void, Never>? {
+        get { syntaxSchedulingCoordinator.visibleHighlightBudgetTask }
+        set { syntaxSchedulingCoordinator.visibleHighlightBudgetTask = newValue }
+    }
     
     // MARK: - Initialization
     
@@ -146,8 +145,7 @@ public final class MetalEditorView: NSView, MTKViewDelegate {
         mtkView = MTKView(frame: bounds, device: device)
         mtkView.delegate = self
         mtkView.colorPixelFormat = .bgra8Unorm_srgb
-        // Use proper linear value for dark background (hexToLinearColor("#0D0D0D"))
-        let bg = Self.devysColorsDark.bg0
+        let bg = hexToLinearColor("#000000")
         mtkView.clearColor = MTLClearColor(red: Double(bg.x), green: Double(bg.y), blue: Double(bg.z), alpha: 1.0)
         mtkView.preferredFramesPerSecond = 60
         mtkView.isPaused = false
@@ -189,6 +187,23 @@ public final class MetalEditorView: NSView, MTKViewDelegate {
 }
 
 extension MetalEditorView {
+    struct PreparedEditorRow {
+        let lineIndex: Int
+        let highlightedLine: SyntaxHighlightedLine?
+        let lineNumberPacket: ResolvedTextRenderPacket
+        let contentPacket: ResolvedTextRenderPacket
+    }
+
+    struct DrawContext {
+        let document: EditorDocument
+        let lineBuffer: LineBuffer
+    }
+
+    struct PreparedFrame {
+        let displaySnapshot: EditorDisplaySnapshot
+        let resolvedRows: [PreparedEditorRow]
+    }
+
     // MARK: - Layout
     
     public override func layout() {
@@ -196,82 +211,28 @@ extension MetalEditorView {
         mtkView.frame = bounds
         lineBuffer?.viewportHeight = bounds.height
         updateUniforms()
+        refreshPreparedFrame()
+        highlightVisibleLines()
     }
     
     // MARK: - MTKViewDelegate
     
     public func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
         updateUniforms()
+        refreshPreparedFrame()
     }
     
     public func draw(in view: MTKView) {
-        // Update animation time
-        let currentTime = CACurrentMediaTime()
-        if lastFrameTime > 0 {
-            animationTime += Float(currentTime - lastFrameTime)
-        }
-        lastFrameTime = currentTime
-        uniforms.time = animationTime
-        
-        guard let document = document,
-              let lineBuffer = lineBuffer,
-              mtkView.drawableSize.width > 0,
-              mtkView.drawableSize.height > 0 else {
-            return
-        }
-        
-        // Update visible range
-        lineBuffer.updateVisibleRange()
-        
-        // Get lines to render
-        let visibleRange = lineBuffer.visibleRange
-        let lines = document.lines(in: visibleRange)
-        
-        // Check if we need to highlight new lines (on scroll)
-        let needsHighlight = visibleRange.contains { lineIndex in
-            cachedHighlightedLines[lineIndex] == nil
-        }
-        
-        if needsHighlight && !isHighlighting {
-            backgroundHighlightTask?.cancel()
-            backgroundHighlightTask = nil
-            Task { @MainActor in
-                await highlightVisibleLines()
-            }
-        }
-        
-        // Build cell buffer
-        buildCellBuffer(lines: lines, startLine: visibleRange.lowerBound)
-        
-        // Build overlay buffer (cursor)
+        updateAnimationClock()
+        guard let frame = preparedFrame else { return }
+        SyntaxRuntimeDiagnostics.beginRenderPass(surface: "editor")
+        defer { SyntaxRuntimeDiagnostics.endRenderPass(surface: "editor") }
+        recordFrameDiagnostics(frame)
+        buildCellBuffer(rows: frame.resolvedRows)
         buildOverlayBuffer()
-        
-        // Sync to GPU
         cellBuffer.syncToGPU()
         overlayBuffer.syncToGPU()
-        
-        // Render
-        guard let renderPassDescriptor = view.currentRenderPassDescriptor,
-              let drawable = view.currentDrawable,
-              let commandBuffer = pipeline.commandQueue.makeCommandBuffer() else {
-            return
-        }
-        
-        guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else {
-            return
-        }
-        
-        // Draw cells
-        drawCells(encoder: encoder)
-        
-        // Draw overlays
-        drawOverlays(encoder: encoder)
-        
-        encoder.endEncoding()
-        commandBuffer.present(drawable)
-        commandBuffer.commit()
-        
-        cellBuffer.advanceBuffer()
+        renderFrame(in: view)
     }
     
     // MARK: - Drawing
@@ -318,6 +279,168 @@ extension MetalEditorView {
         uniforms.cellSize = SIMD2(Float(metrics.cellWidth) * scale, Float(metrics.lineHeight) * scale)
         uniforms.atlasSize = SIMD2(Float(glyphAtlas.atlasWidth), Float(glyphAtlas.atlasHeight))
         uniforms.cursorBlinkRate = 2.0
+    }
+
+    private func updateAnimationClock() {
+        let currentTime = CACurrentMediaTime()
+        if lastFrameTime > 0 {
+            animationTime += Float(currentTime - lastFrameTime)
+        }
+        lastFrameTime = currentTime
+        uniforms.time = animationTime
+    }
+
+    // periphery:ignore - retained as a focused guard helper for draw-path evolution
+    private func drawContext() -> DrawContext? {
+        guard let document,
+              let lineBuffer,
+              mtkView.drawableSize.width > 0,
+              mtkView.drawableSize.height > 0 else {
+            return nil
+        }
+        return DrawContext(document: document, lineBuffer: lineBuffer)
+    }
+
+    private func prepareFrame(using context: DrawContext) -> PreparedFrame {
+        context.lineBuffer.updateVisibleRange()
+        let displaySnapshot = displaySnapshot(
+            for: context.lineBuffer.visibleRange,
+            document: context.document
+        )
+        let resolvedRows = displaySnapshot.visibleRows.map { row in
+            PreparedEditorRow(
+                lineIndex: row.lineIndex,
+                highlightedLine: row.highlightedLine,
+                lineNumberPacket: glyphAtlas.resolve(row.lineNumberPacket),
+                contentPacket: glyphAtlas.resolve(row.contentPacket)
+            )
+        }
+        return PreparedFrame(
+            displaySnapshot: displaySnapshot,
+            resolvedRows: resolvedRows
+        )
+    }
+
+    func refreshPreparedFrame(document documentOverride: EditorDocument? = nil) {
+        let targetDocument = documentOverride ?? document
+        guard let targetDocument,
+              let lineBuffer else {
+            preparedFrame = nil
+            return
+        }
+        preparedFrame = prepareFrame(
+            using: DrawContext(document: targetDocument, lineBuffer: lineBuffer)
+        )
+    }
+
+    private func recordFrameDiagnostics(_ frame: PreparedFrame) {
+        let actualHighlightedLines = frame.displaySnapshot.actualHighlightedLineCount
+        let staleLines = frame.displaySnapshot.visibleRows.reduce(into: 0) { count, row in
+            if row.highlightedLine?.status == .stale {
+                count += 1
+            }
+        }
+        let loadingLines = max(
+            0,
+            frame.displaySnapshot.visibleRows.count - actualHighlightedLines - staleLines
+        )
+        let prefetchHits = actualHighlightedLines + staleLines
+        let prefetchMisses = loadingLines
+        SyntaxRuntimeDiagnostics.recordVisiblePresentation(
+            surface: "editor",
+            actualHighlightedLines: actualHighlightedLines,
+            staleLines: staleLines,
+            loadingLines: loadingLines
+        )
+        SyntaxRuntimeDiagnostics.recordPrefetchSample(
+            surface: "editor",
+            hits: prefetchHits,
+            misses: prefetchMisses
+        )
+        recordOpenFrameDiagnostics(for: frame)
+        recordRevisitFrameDiagnostics(for: frame)
+        if shouldRecordScrollTrace {
+            SyntaxRuntimeDiagnostics.recordScrollTrace(
+                surface: "editor",
+                deltaY: Double(lastHighlightScrollDelta),
+                actualHighlightedLines: actualHighlightedLines,
+                staleLines: staleLines,
+                loadingLines: loadingLines,
+                prefetchHits: prefetchHits,
+                prefetchMisses: prefetchMisses
+            )
+            shouldRecordScrollTrace = false
+        }
+        completeVisibleEditIfReady(for: frame)
+    }
+
+    private func recordOpenFrameDiagnostics(for frame: PreparedFrame) {
+        if let openTrackingIdentifier, !hasRecordedOpenInteractiveFrame {
+            SyntaxRuntimeDiagnostics.markFirstInteractiveFrame(
+                surface: "editor",
+                identifier: openTrackingIdentifier
+            )
+            hasRecordedOpenInteractiveFrame = true
+        }
+        let visibleRows = frame.displaySnapshot.visibleRows
+        if let openTrackingIdentifier,
+           !hasRecordedOpenHighlightedFrame,
+           !visibleRows.isEmpty,
+           visibleRows.allSatisfy({ $0.highlightedLine?.status.countsAsActual == true }) {
+            SyntaxRuntimeDiagnostics.markFirstHighlightedFrame(
+                surface: "editor",
+                identifier: openTrackingIdentifier
+            )
+            hasRecordedOpenHighlightedFrame = true
+        }
+    }
+
+    private func recordRevisitFrameDiagnostics(for frame: PreparedFrame) {
+        if let revisitTrackingIdentifier, !hasRecordedRevisitInteractiveFrame {
+            SyntaxRuntimeDiagnostics.markFirstInteractiveRevisitFrame(
+                surface: "editor",
+                identifier: revisitTrackingIdentifier
+            )
+            hasRecordedRevisitInteractiveFrame = true
+        }
+        let visibleRows = frame.displaySnapshot.visibleRows
+        if let revisitTrackingIdentifier,
+           !hasRecordedRevisitHighlightedFrame,
+           !visibleRows.isEmpty,
+           visibleRows.allSatisfy({ $0.highlightedLine?.status.countsAsActual == true }) {
+            SyntaxRuntimeDiagnostics.markFirstHighlightedRevisitFrame(
+                surface: "editor",
+                identifier: revisitTrackingIdentifier
+            )
+            hasRecordedRevisitHighlightedFrame = true
+        }
+    }
+
+    private func completeVisibleEditIfReady(for frame: PreparedFrame) {
+        if let visibleEditIdentifier = pendingVisibleEditIdentifier,
+           !frame.displaySnapshot.visibleRows.isEmpty,
+           frame.displaySnapshot.visibleRows.allSatisfy({ $0.highlightedLine?.status.countsAsActual == true }) {
+            SyntaxRuntimeDiagnostics.completeVisibleEdit(
+                surface: "editor",
+                identifier: visibleEditIdentifier
+            )
+            pendingVisibleEditIdentifier = nil
+        }
+    }
+
+    private func renderFrame(in view: MTKView) {
+        guard let renderPassDescriptor = view.currentRenderPassDescriptor,
+              let drawable = view.currentDrawable,
+              let commandBuffer = pipeline.commandQueue.makeCommandBuffer(),
+              let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else {
+            return
+        }
+        drawCells(encoder: encoder)
+        drawOverlays(encoder: encoder)
+        encoder.endEncoding()
+        commandBuffer.present(drawable)
+        commandBuffer.commit()
+        cellBuffer.advanceBuffer()
     }
 }
 

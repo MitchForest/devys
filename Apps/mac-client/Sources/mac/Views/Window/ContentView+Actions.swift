@@ -62,18 +62,30 @@ extension ContentView {
         panel.prompt = "Save"
         
         guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        let canonicalURL = canonicalEditorSessionURL(url)
+        if let sharedTargetSession = editorSessionPool.session(for: canonicalURL),
+           sharedTargetSession !== session,
+           sharedTargetSession.isDirty {
+            let alert = NSAlert()
+            alert.alertStyle = .critical
+            alert.messageText = "Save Failed"
+            alert.informativeText = "The destination file is already open with unsaved changes."
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+            return
+        }
         
         Task { @MainActor in
             do {
                 let io = DefaultDocumentIOService()
                 try await io.save(content: document.content, to: url)
-                session.updateURL(url)
                 document.isDirty = false
-                
-                // Update tab
-                tabContents[activeTabId] = .editor(url: url)
-                let (title, icon) = tabMetadata(for: .editor(url: url), tabId: activeTabId)
-                controller.updateTab(activeTabId, title: title, icon: icon)
+                if let sharedTargetSession = editorSessionPool.session(for: canonicalURL),
+                   sharedTargetSession !== session {
+                    sharedTargetSession.reload()
+                }
+                updateEditorTabURL(tabId: activeTabId, newURL: url)
             } catch {
                 let alert = NSAlert()
                 alert.alertStyle = .critical
@@ -85,7 +97,8 @@ extension ContentView {
         }
     }
 
-    func createTab(in paneId: PaneID, content: TabContent) {
+    @discardableResult
+    func createTab(in paneId: PaneID, content: TabContent) -> TabID? {
         // Get title and icon from session if available, otherwise use fallbacks
         let (title, icon) = tabMetadata(for: content)
         let activityIndicator = tabActivityIndicator()
@@ -96,9 +109,12 @@ extension ContentView {
             activityIndicator: activityIndicator,
             inPane: paneId
         ) {
-            tabContents[tabId] = content
+            setTabContent(content, for: tabId)
             selectTab(tabId)
+            return tabId
         }
+
+        return nil
     }
 
     func createTerminal() {
@@ -246,7 +262,7 @@ extension ContentView {
     }
 
     private func confirmCloseCurrentFolder() async -> Bool {
-        let dirtySessions = editorSessions.values.filter { $0.isDirty }
+        let dirtySessions = uniqueEditorSessions.filter { $0.isDirty }
         if !dirtySessions.isEmpty {
             let alert = NSAlert()
             alert.alertStyle = .warning
@@ -300,11 +316,11 @@ extension ContentView {
     private func resetWorkspaceState() {
         for (tabId, content) in tabContents {
             cleanupSession(for: content, tabId: tabId)
-            EditorSessionRegistry.shared.unregister(tabId: tabId)
         }
 
         tabContents.removeAll()
         editorSessions.removeAll()
+        editorSessionPool = EditorSessionPool()
         terminalSessions.removeAll()
         runCommandStore.clear()
         selectedTabId = nil

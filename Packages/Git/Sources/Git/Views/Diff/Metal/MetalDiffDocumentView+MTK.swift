@@ -4,63 +4,46 @@
 import AppKit
 import MetalKit
 import Rendering
+import Syntax
 
 extension MetalDiffDocumentView {
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
         updateUniforms()
+        refreshPreparedFrame()
     }
 
     func draw(in view: MTKView) {
+        SyntaxRuntimeDiagnostics.beginRenderPass(surface: "diff")
+        defer { SyntaxRuntimeDiagnostics.endRenderPass(surface: "diff") }
         guard let frame = makeFrameContext(view: view) else { return }
+        recordVisibleDiagnostics(frame.preparedFrame.displaySnapshot)
         renderLayout(frame)
         encode(frame)
         commandBufferFinalize(frame)
     }
 }
 
-private extension MetalDiffDocumentView {
+extension MetalDiffDocumentView {
     struct FrameContext {
-        let layout: DiffRenderLayout
+        let preparedFrame: PreparedFrame
         let drawable: CAMetalDrawable
         let renderPassDescriptor: MTLRenderPassDescriptor
         let commandBuffer: MTLCommandBuffer
-        let visibleOrigin: CGPoint
-        let visibleSize: CGSize
-        let metrics: RenderMetrics
-        let startRow: Int
-        let endRow: Int
     }
 
     func makeFrameContext(view: MTKView) -> FrameContext? {
-        guard let layout else { return nil }
+        guard let preparedFrame else { return nil }
         guard let drawable = view.currentDrawable,
               let renderPassDescriptor = view.currentRenderPassDescriptor,
               let commandBuffer = pipeline.commandQueue.makeCommandBuffer() else {
             return nil
         }
 
-        let visibleRect = enclosingScrollView?.contentView.bounds ?? bounds
-        let visibleOrigin = visibleRect.origin
-        let visibleSize = visibleRect.size
-        let renderMetrics = makeRenderMetrics()
-        let totalRows = rowCount(for: layout)
-        guard totalRows > 0 else { return nil }
-
-        let rowHeight = CGFloat(metrics.lineHeight)
-        let startRow = max(0, Int(floor(visibleOrigin.y / rowHeight)))
-        let endRow = min(totalRows - 1, Int(ceil((visibleOrigin.y + visibleSize.height) / rowHeight)))
-        guard startRow <= endRow else { return nil }
-
         return FrameContext(
-            layout: layout,
+            preparedFrame: preparedFrame,
             drawable: drawable,
             renderPassDescriptor: renderPassDescriptor,
-            commandBuffer: commandBuffer,
-            visibleOrigin: visibleOrigin,
-            visibleSize: visibleSize,
-            metrics: renderMetrics,
-            startRow: startRow,
-            endRow: endRow
+            commandBuffer: commandBuffer
         )
     }
 
@@ -69,24 +52,20 @@ private extension MetalDiffDocumentView {
         cellBuffer.beginFrame()
         overlayBuffer.clear()
 
-        switch frame.layout {
+        switch frame.preparedFrame.resolvedSnapshot {
         case .unified(let unified):
             renderUnified(
-                layout: unified,
-                startRow: frame.startRow,
-                endRow: frame.endRow,
-                visibleOrigin: frame.visibleOrigin,
-                visibleSize: frame.visibleSize,
-                metrics: frame.metrics
+                snapshot: unified,
+                visibleOrigin: frame.preparedFrame.visibleOrigin,
+                visibleSize: frame.preparedFrame.visibleSize,
+                metrics: frame.preparedFrame.renderMetrics
             )
         case .split(let split):
             renderSplit(
-                layout: split,
-                startRow: frame.startRow,
-                endRow: frame.endRow,
-                visibleOrigin: frame.visibleOrigin,
-                visibleSize: frame.visibleSize,
-                metrics: frame.metrics
+                snapshot: split,
+                visibleOrigin: frame.preparedFrame.visibleOrigin,
+                visibleSize: frame.preparedFrame.visibleSize,
+                metrics: frame.preparedFrame.renderMetrics
             )
         }
 
@@ -94,6 +73,124 @@ private extension MetalDiffDocumentView {
         underlayBuffer.syncToGPU()
         cellBuffer.syncToGPU()
         overlayBuffer.syncToGPU()
+    }
+
+    func recordVisibleDiagnostics(_ snapshot: DiffDisplaySnapshot) {
+        let highlightedCount = snapshot.actualHighlightedLineCount
+        let staleCount = snapshot.staleHighlightedLineCount
+        let loadingCount = snapshot.loadingLineCount
+        let prefetchHits = highlightedCount + staleCount
+        let prefetchMisses = loadingCount
+        recordVisiblePresentationDiagnostics(
+            highlightedCount: highlightedCount,
+            staleCount: staleCount,
+            loadingCount: loadingCount,
+            prefetchHits: prefetchHits,
+            prefetchMisses: prefetchMisses
+        )
+        recordOpenAndRevisitDiagnostics(for: snapshot)
+        completePendingVisibleRefreshIfNeeded(for: snapshot)
+        recordScrollDiagnosticsIfNeeded(
+            highlightedCount: highlightedCount,
+            staleCount: staleCount,
+            loadingCount: loadingCount,
+            prefetchHits: prefetchHits,
+            prefetchMisses: prefetchMisses
+        )
+    }
+
+    private func recordVisiblePresentationDiagnostics(
+        highlightedCount: Int,
+        staleCount: Int,
+        loadingCount: Int,
+        prefetchHits: Int,
+        prefetchMisses: Int
+    ) {
+        SyntaxRuntimeDiagnostics.recordVisiblePresentation(
+            surface: "diff",
+            actualHighlightedLines: highlightedCount,
+            staleLines: staleCount,
+            loadingLines: loadingCount
+        )
+        SyntaxRuntimeDiagnostics.recordPrefetchSample(
+            surface: "diff",
+            hits: prefetchHits,
+            misses: prefetchMisses
+        )
+    }
+
+    private func recordOpenAndRevisitDiagnostics(for snapshot: DiffDisplaySnapshot) {
+        recordOpenDiagnosticsIfNeeded(allVisibleSyntaxLinesActual: snapshot.allVisibleSyntaxLinesActual)
+        recordRevisitDiagnosticsIfNeeded(allVisibleSyntaxLinesActual: snapshot.allVisibleSyntaxLinesActual)
+    }
+
+    private func recordOpenDiagnosticsIfNeeded(allVisibleSyntaxLinesActual: Bool) {
+        if let openTrackingIdentifier, !hasRecordedOpenInteractiveFrame {
+            SyntaxRuntimeDiagnostics.markFirstInteractiveFrame(
+                surface: "diff",
+                identifier: openTrackingIdentifier
+            )
+            hasRecordedOpenInteractiveFrame = true
+        }
+
+        if let openTrackingIdentifier,
+           !hasRecordedOpenHighlightedFrame,
+           allVisibleSyntaxLinesActual {
+            SyntaxRuntimeDiagnostics.markFirstHighlightedFrame(
+                surface: "diff",
+                identifier: openTrackingIdentifier
+            )
+            hasRecordedOpenHighlightedFrame = true
+        }
+    }
+
+    private func recordRevisitDiagnosticsIfNeeded(allVisibleSyntaxLinesActual: Bool) {
+        if let revisitTrackingIdentifier, !hasRecordedRevisitInteractiveFrame {
+            SyntaxRuntimeDiagnostics.markFirstInteractiveRevisitFrame(
+                surface: "diff",
+                identifier: revisitTrackingIdentifier
+            )
+            hasRecordedRevisitInteractiveFrame = true
+        }
+
+        if let revisitTrackingIdentifier,
+           !hasRecordedRevisitHighlightedFrame,
+           allVisibleSyntaxLinesActual {
+            SyntaxRuntimeDiagnostics.markFirstHighlightedRevisitFrame(
+                surface: "diff",
+                identifier: revisitTrackingIdentifier
+            )
+            hasRecordedRevisitHighlightedFrame = true
+        }
+    }
+
+    private func completePendingVisibleRefreshIfNeeded(for snapshot: DiffDisplaySnapshot) {
+        guard let pendingVisibleRefreshIdentifier, snapshot.allVisibleSyntaxLinesActual else { return }
+        SyntaxRuntimeDiagnostics.completeVisibleEdit(
+            surface: "diff",
+            identifier: pendingVisibleRefreshIdentifier
+        )
+        self.pendingVisibleRefreshIdentifier = nil
+    }
+
+    private func recordScrollDiagnosticsIfNeeded(
+        highlightedCount: Int,
+        staleCount: Int,
+        loadingCount: Int,
+        prefetchHits: Int,
+        prefetchMisses: Int
+    ) {
+        guard shouldRecordScrollTrace else { return }
+        SyntaxRuntimeDiagnostics.recordScrollTrace(
+            surface: "diff",
+            deltaY: Double(lastScrollDeltaY),
+            actualHighlightedLines: highlightedCount,
+            staleLines: staleCount,
+            loadingLines: loadingCount,
+            prefetchHits: prefetchHits,
+            prefetchMisses: prefetchMisses
+        )
+        shouldRecordScrollTrace = false
     }
 
     func encode(_ frame: FrameContext) {

@@ -81,6 +81,7 @@ public struct EditorView: NSViewRepresentable {
         view.onDocumentURLChange = onDocumentURLChange
         
         if let document {
+            view.observedDocumentLoadStateRevision = document.loadStateRevision
             view.document = document
         } else {
             // Load document async
@@ -108,7 +109,9 @@ public struct EditorView: NSViewRepresentable {
         // Update configuration when color scheme changes
         nsView.configuration = effectiveConfiguration
         nsView.onDocumentURLChange = onDocumentURLChange
-        if let document, nsView.document !== document {
+        if let document,
+           nsView.document !== document || nsView.observedDocumentLoadStateRevision != document.loadStateRevision {
+            nsView.observedDocumentLoadStateRevision = document.loadStateRevision
             nsView.document = document
         }
     }

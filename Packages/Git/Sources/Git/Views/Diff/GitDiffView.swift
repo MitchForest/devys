@@ -132,9 +132,9 @@ public struct GitDiffView: View {
     // MARK: - Diff Content
     
     @ViewBuilder
-    private func diffContentView(diff: ParsedDiff) -> some View {
+    private func diffContentView(diff: DiffSnapshot) -> some View {
         MetalDiffView(
-            diff: diff,
+            snapshot: diff,
             filePath: store.selectedFilePath ?? "",
             mode: store.diffViewMode,
             configuration: DiffRenderConfiguration(

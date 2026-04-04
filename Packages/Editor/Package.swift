@@ -15,6 +15,7 @@ let package = Package(
         ),
     ],
     dependencies: [
+        .package(path: "../Text"),
         .package(path: "../Syntax"),
         .package(path: "../Rendering"),
     ],
@@ -22,6 +23,7 @@ let package = Package(
         .target(
             name: "Editor",
             dependencies: [
+                "Text",
                 "Syntax",
                 .product(name: "Rendering", package: "Rendering")
             ],

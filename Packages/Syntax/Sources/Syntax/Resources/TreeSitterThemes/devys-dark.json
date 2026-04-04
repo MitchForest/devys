@@ -1,0 +1,133 @@
+{
+  "name": "devys-dark",
+  "appearance": "dark",
+  "defaultForeground": "#EDE7DE",
+  "defaultBackground": "#000000",
+  "colors": {
+    "editor.background": "#000000",
+    "editor.foreground": "#EDE7DE",
+    "editorLineNumber.foreground": "#6E675F",
+    "editorGutter.background": "#090909",
+    "editor.lineHighlightBackground": "#11100E",
+    "editor.selectionBackground": "#2A262180",
+    "editorCursor.foreground": "#F5EFE6",
+    "diffEditor.border": "#26231E",
+    "diffEditor.insertedLineBackground": "#163021",
+    "diffEditor.removedLineBackground": "#351D1D",
+    "diffEditor.insertedTextBackground": "#1F4A30",
+    "diffEditor.removedTextBackground": "#5A2A2A",
+    "diffEditorGutter.insertedLineBackground": "#22462E",
+    "diffEditorGutter.removedLineBackground": "#4A2626"
+  },
+  "styles": {
+    "comment": {
+      "foreground": "#6E675F",
+      "fontStyle": "italic"
+    },
+    "constant": {
+      "foreground": "#E8D57A"
+    },
+    "function": {
+      "foreground": "#7FC5BB"
+    },
+    "keyword": {
+      "foreground": "#F08B5A"
+    },
+    "link_text.markup": {
+      "foreground": "#7FC5BB"
+    },
+    "link_uri.markup": {
+      "foreground": "#8FB6D8",
+      "fontStyle": "underline"
+    },
+    "text.reference": {
+      "foreground": "#7FC5BB"
+    },
+    "text.uri": {
+      "foreground": "#8FB6D8",
+      "fontStyle": "underline"
+    },
+    "text.title": {
+      "foreground": "#F5EFE6",
+      "fontStyle": "bold"
+    },
+    "text.emphasis": {
+      "foreground": "#EDE7DE",
+      "fontStyle": "italic"
+    },
+    "text.strong": {
+      "foreground": "#F5EFE6",
+      "fontStyle": "bold"
+    },
+    "text.literal": {
+      "foreground": "#D7B06C"
+    },
+    "markup": {
+      "foreground": "#C9BBB0"
+    },
+    "number": {
+      "foreground": "#E8D57A"
+    },
+    "operator": {
+      "foreground": "#F08B5A"
+    },
+    "property": {
+      "foreground": "#C9BBB0"
+    },
+    "punctuation": {
+      "foreground": "#9E968B"
+    },
+    "punctuation.delimiter": {
+      "foreground": "#9E968B"
+    },
+    "punctuation.special": {
+      "foreground": "#F08B5A",
+      "fontStyle": "bold"
+    },
+    "string": {
+      "foreground": "#D7B06C"
+    },
+    "string.special": {
+      "foreground": "#D7B06C"
+    },
+    "text.literal.markup": {
+      "foreground": "#D7B06C"
+    },
+    "title.markup": {
+      "foreground": "#F5EFE6",
+      "fontStyle": "bold"
+    },
+    "type": {
+      "foreground": "#8FB6D8"
+    },
+    "type.builtin": {
+      "foreground": "#8FB6D8"
+    },
+    "variable": {
+      "foreground": "#EDE7DE"
+    },
+    "variable.parameter": {
+      "foreground": "#E7D9C2"
+    },
+    "emphasis.markup": {
+      "foreground": "#EDE7DE",
+      "fontStyle": "italic"
+    },
+    "emphasis.strong.markup": {
+      "foreground": "#F5EFE6",
+      "fontStyle": "bold"
+    },
+    "strikethrough.markup": {
+      "foreground": "#8F867B"
+    },
+    "punctuation.markup": {
+      "foreground": "#8F867B"
+    },
+    "punctuation.list_marker.markup": {
+      "foreground": "#F08B5A"
+    },
+    "punctuation.embedded.markup": {
+      "foreground": "#9E968B"
+    }
+  }
+}

@@ -13,6 +13,7 @@ cd "$(dirname "$0")/.."
 
 ./scripts/lint.sh
 ./scripts/unused.sh
+./scripts/check-tree-sitter-migration.sh
 
 echo ""
 echo "Quality gate passed."

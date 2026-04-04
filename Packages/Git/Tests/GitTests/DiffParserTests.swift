@@ -126,6 +126,39 @@ struct DiffParserTests {
         let noNewlineLines = lines.filter { $0.type == .noNewline }
         #expect(noNewlineLines.count == 2)
     }
+
+    @Test func parsePathsWithSpacesAndPatchMetadata() {
+        let diff = """
+        diff --git a/dir with space/file name.swift b/dir with space/file name.swift
+        --- a/dir with space/file name.swift\t
+        +++ b/dir with space/file name.swift\t
+        @@ -1 +1 @@
+        -one
+        +two
+        """
+
+        let parsed = DiffParser.parse(diff)
+
+        #expect(parsed.oldPath == "dir with space/file name.swift")
+        #expect(parsed.newPath == "dir with space/file name.swift")
+        #expect(parsed.hasChanges)
+    }
+
+    @Test func parseRenameOnlyDiffAsMetadataChange() {
+        let diff = """
+        diff --git a/dir with space/old name.swift b/dir with space/new name.swift
+        similarity index 100%
+        rename from dir with space/old name.swift
+        rename to dir with space/new name.swift
+        """
+
+        let parsed = DiffParser.parse(diff)
+
+        #expect(parsed.hunks.isEmpty)
+        #expect(parsed.oldPath == "dir with space/old name.swift")
+        #expect(parsed.newPath == "dir with space/new name.swift")
+        #expect(parsed.hasChanges)
+    }
     
     @Test func lineNumbersAreCorrect() {
         let diff = """

@@ -45,13 +45,7 @@ enum DiffFileParser {
 
     private static func parseHeaderPath(from chunk: [String]) -> String? {
         guard let header = chunk.first(where: { $0.hasPrefix("diff --git") }) else { return nil }
-        // Format: diff --git a/path b/path
-        let parts = header.components(separatedBy: " ")
-        guard parts.count >= 4 else { return nil }
-        let bPath = parts[3]
-        if bPath.hasPrefix("b/") {
-            return String(bPath.dropFirst(2))
-        }
-        return bPath
+        let headerPaths = DiffParser.diffGitHeaderPaths(header)
+        return headerPaths?.newPath ?? headerPaths?.oldPath
     }
 }

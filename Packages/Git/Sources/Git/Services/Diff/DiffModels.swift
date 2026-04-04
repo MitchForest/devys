@@ -3,9 +3,11 @@
 
 import Foundation
 
+typealias DiffIdentity = String
+
 /// A single line in a diff hunk.
 struct DiffLine: Identifiable, Equatable, Sendable {
-    let id: UUID
+    let id: DiffIdentity
     let type: LineType
     let content: String
     let oldLineNumber: Int?
@@ -20,7 +22,7 @@ struct DiffLine: Identifiable, Equatable, Sendable {
     }
     
     init(
-        id: UUID = UUID(),
+        id: DiffIdentity,
         type: LineType,
         content: String,
         oldLineNumber: Int? = nil,
@@ -36,7 +38,7 @@ struct DiffLine: Identifiable, Equatable, Sendable {
 
 /// A hunk in a diff (section of changes).
 struct DiffHunk: Identifiable, Equatable, Sendable {
-    let id: UUID
+    let id: DiffIdentity
     let header: String
     let lines: [DiffLine]
     let oldStart: Int
@@ -45,7 +47,7 @@ struct DiffHunk: Identifiable, Equatable, Sendable {
     let newCount: Int
     
     init(
-        id: UUID = UUID(),
+        id: DiffIdentity,
         header: String,
         lines: [DiffLine],
         oldStart: Int = 1,
@@ -119,17 +121,19 @@ struct ParsedDiff: Equatable, Sendable {
         self.newPath = newPath
     }
     
+    // periphery:ignore - surfaced in diff summaries and diagnostics views
     var totalAdded: Int {
         hunks.reduce(0) { $0 + $1.addedCount }
     }
     
+    // periphery:ignore - surfaced in diff summaries and diagnostics views
     var totalRemoved: Int {
         hunks.reduce(0) { $0 + $1.removedCount }
     }
     
     /// Whether the diff has any changes.
     var hasChanges: Bool {
-        !hunks.isEmpty || isBinary
+        !hunks.isEmpty || isBinary || oldPath != newPath
     }
 }
 

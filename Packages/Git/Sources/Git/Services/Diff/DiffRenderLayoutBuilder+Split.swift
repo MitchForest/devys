@@ -5,7 +5,7 @@ import CoreGraphics
 
 extension DiffRenderLayoutBuilder {
     static func buildSplit(
-        diff: ParsedDiff,
+        snapshot: DiffSnapshot,
         context: DiffLayoutContext,
         lineHeight: CGFloat
     ) -> SplitDiffLayout {
@@ -13,14 +13,26 @@ extension DiffRenderLayoutBuilder {
         var headers: [DiffHunkHeaderLayout] = []
         var rowIndex = 0
 
-        for (hunkIndex, hunk) in diff.hunks.enumerated() {
-            let headerRow = SplitDiffRow(kind: .hunkHeader, left: nil, right: nil)
+        for (hunkIndex, hunk) in snapshot.hunks.enumerated() {
+            let headerRow = SplitDiffRow(
+                id: "split-hunk-header-\(hunk.id)",
+                kind: .hunkHeader,
+                left: nil,
+                right: nil
+            )
             rows.append(headerRow)
             headers.append(DiffHunkHeaderLayout(hunkIndex: hunkIndex, rowIndex: rowIndex, hunk: hunk))
             rowIndex += 1
 
             if !context.configuration.showsHunkHeaders {
-                rows.append(SplitDiffRow(kind: .line, left: nil, right: nil))
+                rows.append(
+                    SplitDiffRow(
+                        id: "split-hunk-spacer-\(hunk.id)",
+                        kind: .line,
+                        left: nil,
+                        right: nil
+                    )
+                )
                 rowIndex += 1
             }
 
@@ -38,7 +50,8 @@ extension DiffRenderLayoutBuilder {
             rows: rows,
             hunkHeaders: headers,
             contentSize: CGSize(width: contentWidth, height: contentHeight),
-            maxLineNumberDigits: context.maxLineNumberDigits
+            maxLineNumberDigits: context.maxLineNumberDigits,
+            sourceDocuments: context.sourceDocuments
         )
     }
 
@@ -57,16 +70,30 @@ extension DiffRenderLayoutBuilder {
                 ))
 
                 let side = SplitDiffSide(
+                    sourceLineID: line.id,
                     lineNumber: line.oldLineNumber,
                     lineType: line.type,
                     content: line.content,
-                    wordChanges: nil
+                    wordChanges: nil,
+                    highlightSegment: splitHighlightSegment(
+                        for: line,
+                        side: .base,
+                        utf16Range: 0..<line.content.utf16.count,
+                        context: context
+                    )
                 )
                 let other = SplitDiffSide(
+                    sourceLineID: line.id,
                     lineNumber: line.newLineNumber,
                     lineType: line.type,
                     content: line.content,
-                    wordChanges: nil
+                    wordChanges: nil,
+                    highlightSegment: splitHighlightSegment(
+                        for: line,
+                        side: .modified,
+                        utf16Range: 0..<line.content.utf16.count,
+                        context: context
+                    )
                 )
                 rows.append(contentsOf: splitRows(left: side, right: other, context: context))
 
@@ -108,18 +135,32 @@ extension DiffRenderLayoutBuilder {
 
             let left = oldLine.map {
                 SplitDiffSide(
+                    sourceLineID: $0.id,
                     lineNumber: $0.oldLineNumber,
                     lineType: .removed,
                     content: $0.content,
-                    wordChanges: oldChanges
+                    wordChanges: oldChanges,
+                    highlightSegment: splitHighlightSegment(
+                        for: $0,
+                        side: .base,
+                        utf16Range: 0..<$0.content.utf16.count,
+                        context: context
+                    )
                 )
             }
             let right = newLine.map {
                 SplitDiffSide(
+                    sourceLineID: $0.id,
                     lineNumber: $0.newLineNumber,
                     lineType: .added,
                     content: $0.content,
-                    wordChanges: newChanges
+                    wordChanges: newChanges,
+                    highlightSegment: splitHighlightSegment(
+                        for: $0,
+                        side: .modified,
+                        utf16Range: 0..<$0.content.utf16.count,
+                        context: context
+                    )
                 )
             }
 
@@ -136,8 +177,22 @@ extension DiffRenderLayoutBuilder {
         right: SplitDiffSide?,
         context: DiffLayoutContext
     ) -> [SplitDiffRow] {
+        let baseID = [
+            left?.sourceLineID ?? "nil",
+            right?.sourceLineID ?? "nil",
+            left?.lineType.debugName ?? "nil",
+            right?.lineType.debugName ?? "nil"
+        ].joined(separator: "|")
+
         guard context.configuration.wrapLines else {
-            return [SplitDiffRow(kind: .line, left: left, right: right)]
+            return [
+                SplitDiffRow(
+                    id: "split-\(baseID)-0",
+                    kind: .line,
+                    left: left,
+                    right: right
+                )
+            ]
         }
 
         let smallerRatio = min(context.splitRatio, 1 - context.splitRatio)
@@ -152,7 +207,14 @@ extension DiffRenderLayoutBuilder {
             let leftSegment = index < leftSegments.count ? leftSegments[index] : nil
             let rightSegment = index < rightSegments.count ? rightSegments[index] : nil
 
-            rows.append(SplitDiffRow(kind: .line, left: leftSegment, right: rightSegment))
+            rows.append(
+                SplitDiffRow(
+                    id: "split-\(baseID)-\(index)",
+                    kind: .line,
+                    left: leftSegment,
+                    right: rightSegment
+                )
+            )
         }
 
         return rows
@@ -164,11 +226,46 @@ extension DiffRenderLayoutBuilder {
         let segments = wrapContent(side.content, wordChanges: side.wordChanges, maxChars: maxChars)
         return segments.enumerated().map { index, segment in
             SplitDiffSide(
+                sourceLineID: side.sourceLineID,
                 lineNumber: index == 0 ? side.lineNumber : nil,
                 lineType: side.lineType,
                 content: segment.content,
-                wordChanges: segment.wordChanges
+                wordChanges: segment.wordChanges,
+                highlightSegment: side.highlightSegment.map {
+                    DiffHighlightSegment(
+                        side: $0.side,
+                        sourceLineID: $0.sourceLineID,
+                        sourceLineIndex: $0.sourceLineIndex,
+                        utf16Range: segment.utf16Range
+                    )
+                }
             )
         }
+    }
+
+    static func splitHighlightSegment(
+        for line: DiffLine,
+        side: DiffSourceSide,
+        utf16Range: Range<Int>,
+        context: DiffLayoutContext
+    ) -> DiffHighlightSegment? {
+        guard line.type != .noNewline else { return nil }
+        guard let indices = context.sourceDocuments.lineMappings[line.id] else { return nil }
+
+        let sourceLineIndex: Int?
+        switch side {
+        case .base:
+            sourceLineIndex = indices.base
+        case .modified:
+            sourceLineIndex = indices.modified
+        }
+
+        guard let sourceLineIndex else { return nil }
+        return DiffHighlightSegment(
+            side: side,
+            sourceLineID: line.id,
+            sourceLineIndex: sourceLineIndex,
+            utf16Range: utf16Range
+        )
     }
 }

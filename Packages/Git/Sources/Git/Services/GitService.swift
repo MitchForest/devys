@@ -12,12 +12,19 @@ protocol GitService {
 
     func status() async throws -> [GitFileChange]
     func repositoryInfo() async throws -> GitRepositoryInfo
+    // periphery:ignore - used by alternate diff presentation paths not seen by Periphery
     func diff(
         for path: String,
         staged: Bool,
         contextLines: Int,
         ignoreWhitespace: Bool
     ) async throws -> String
+    func diffSnapshot(
+        for path: String,
+        staged: Bool,
+        contextLines: Int,
+        ignoreWhitespace: Bool
+    ) async throws -> DiffSnapshot
 
     func stage(_ path: String) async throws
     func unstage(_ path: String) async throws
@@ -78,6 +85,7 @@ struct DefaultGitService: GitService {
         try await requireGitClient().repositoryInfo()
     }
 
+    // periphery:ignore - used by alternate diff presentation paths not seen by Periphery
     func diff(
         for path: String,
         staged: Bool,
@@ -85,6 +93,20 @@ struct DefaultGitService: GitService {
         ignoreWhitespace: Bool
     ) async throws -> String {
         try await requireGitClient().diff(
+            for: path,
+            staged: staged,
+            contextLines: contextLines,
+            ignoreWhitespace: ignoreWhitespace
+        )
+    }
+
+    func diffSnapshot(
+        for path: String,
+        staged: Bool,
+        contextLines: Int,
+        ignoreWhitespace: Bool
+    ) async throws -> DiffSnapshot {
+        try await requireGitClient().diffSnapshot(
             for: path,
             staged: staged,
             contextLines: contextLines,

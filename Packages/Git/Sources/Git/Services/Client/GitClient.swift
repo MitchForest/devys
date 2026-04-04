@@ -6,6 +6,12 @@ import Foundation
 /// Actor for performing git operations via CLI.
 /// All operations are async and cancellable.
 actor GitClient {
+    struct DiffSourceContentRequest: Equatable {
+        let baseGitSpecifier: String?
+        let modifiedGitSpecifier: String?
+        let modifiedWorktreePath: String?
+    }
+
     private let repositoryURL: URL
     private let commandTimeout: TimeInterval
     private let pollIntervalNanoseconds: UInt64 = 100_000_000
@@ -187,6 +193,41 @@ extension GitClient {
         }
         args += ["--", path]
         return try await runGitCommand(arguments: args, timeout: commandTimeout)
+    }
+
+    func diffSnapshot(
+        for path: String,
+        staged: Bool,
+        contextLines: Int = 3,
+        ignoreWhitespace: Bool = false
+    ) async throws -> DiffSnapshot {
+        let diffText = try await diff(
+            for: path,
+            staged: staged,
+            contextLines: contextLines,
+            ignoreWhitespace: ignoreWhitespace
+        )
+        let parsedDiff = DiffParser.parse(diffText)
+        guard !parsedDiff.isBinary else {
+            return DiffSnapshot(from: parsedDiff)
+        }
+
+        let sourceRequest = Self.makeDiffSourceContentRequest(
+            parsedDiff: parsedDiff,
+            staged: staged
+        )
+        let baseContent = try await gitObjectContent(sourceRequest.baseGitSpecifier)
+        let modifiedContent: String?
+        if let modifiedGitSpecifier = sourceRequest.modifiedGitSpecifier {
+            modifiedContent = try await gitObjectContent(modifiedGitSpecifier)
+        } else {
+            modifiedContent = worktreeFileContent(path: sourceRequest.modifiedWorktreePath)
+        }
+        return DiffSnapshot(
+            from: parsedDiff,
+            baseContent: baseContent,
+            modifiedContent: modifiedContent
+        )
     }
     
     /// Get shortstat line changes for the working directory.
@@ -411,11 +452,59 @@ extension GitClient {
         }
         return WorktreeLineChanges(added: added, removed: removed)
     }
+
+    static func makeDiffSourceContentRequest(
+        parsedDiff: ParsedDiff,
+        staged: Bool
+    ) -> DiffSourceContentRequest {
+        if staged {
+            return DiffSourceContentRequest(
+                baseGitSpecifier: parsedDiff.oldPath.map { "HEAD:\($0)" },
+                modifiedGitSpecifier: parsedDiff.newPath.map { ":\($0)" },
+                modifiedWorktreePath: nil
+            )
+        }
+
+        return DiffSourceContentRequest(
+            baseGitSpecifier: parsedDiff.oldPath.map { ":\($0)" },
+            modifiedGitSpecifier: nil,
+            modifiedWorktreePath: parsedDiff.newPath
+        )
+    }
+
+    private func gitObjectContent(_ specifier: String?) async throws -> String? {
+        guard let specifier else { return nil }
+        do {
+            let data = try await runGitData("show", specifier)
+            return String(data: data, encoding: .utf8)
+        } catch let error as GitError {
+            guard case .commandFailed = error else {
+                throw error
+            }
+            return nil
+        }
+    }
+
+    private func worktreeFileContent(path: String?) -> String? {
+        guard let path else { return nil }
+        let fileURL = repositoryURL.appendingPathComponent(path)
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            return nil
+        }
+        guard let data = try? Data(contentsOf: fileURL) else {
+            return nil
+        }
+        return String(data: data, encoding: .utf8)
+    }
     
     // MARK: - Git Execution
     
     private func runGit(_ arguments: String...) async throws -> String {
         try await runGitCommand(arguments: arguments, timeout: commandTimeout)
+    }
+
+    private func runGitData(_ arguments: String...) async throws -> Data {
+        try await runGitDataCommand(arguments: arguments, timeout: commandTimeout)
     }
     
     private func runGitCommand(arguments: [String], timeout: TimeInterval) async throws -> String {
@@ -444,6 +533,40 @@ extension GitClient {
             throw makeGitError(arguments: arguments, stdout: stdout, stderr: stderr, status: status)
         }
         
+        return stdout
+    }
+
+    private func runGitDataCommand(arguments: [String], timeout: TimeInterval) async throws -> Data {
+        try Task.checkCancellation()
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        process.arguments = arguments
+        process.currentDirectoryURL = repositoryURL
+
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
+
+        try process.run()
+
+        async let stdoutData = Self.readToEndAsync(from: stdoutPipe.fileHandleForReading)
+        async let stderrData = Self.readToEndAsync(from: stderrPipe.fileHandleForReading)
+
+        let status = try await waitForExit(process, arguments: arguments, timeout: timeout)
+        let stdout = await stdoutData
+        let stderr = String(data: await stderrData, encoding: .utf8) ?? ""
+
+        if status != 0 {
+            throw makeGitError(
+                arguments: arguments,
+                stdout: String(data: stdout, encoding: .utf8) ?? "",
+                stderr: stderr,
+                status: status
+            )
+        }
+
         return stdout
     }
     

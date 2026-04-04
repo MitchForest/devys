@@ -56,7 +56,7 @@ extension ContentView {
         }
 
         if let existingPreviewId = previewTabId {
-            tabContents[existingPreviewId] = content
+            setTabContent(content, for: existingPreviewId)
             let (title, icon) = tabMetadata(for: content)
             let activityIndicator = tabActivityIndicator()
             controller.updateTab(
@@ -75,7 +75,7 @@ extension ContentView {
                 activityIndicator: activityIndicator,
                 inPane: paneId
             ) {
-                tabContents[tabId] = content
+                setTabContent(content, for: tabId)
                 previewTabId = tabId
                 selectTab(tabId)
             }

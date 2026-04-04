@@ -4,6 +4,8 @@
 #if os(macOS)
 import AppKit
 import Rendering
+import Syntax
+import Text
 
 extension MetalEditorView {
     // MARK: - Input
@@ -151,7 +153,9 @@ extension MetalEditorView {
         guard let document else { return }
         copy(nil)
         if let selection = document.selection, !selection.isEmpty {
+            let normalized = selection.normalized
             document.delete(selection)
+            registerDocumentEdit(startLine: normalized.start.line)
         }
     }
 
@@ -205,26 +209,10 @@ extension MetalEditorView {
     private func handleEditingKeys(_ event: NSEvent, document: EditorDocument) -> Bool {
         switch event.keyCode {
         case 51: // backspace
-            let lineBeforeDelete = document.cursor.position.line
-            if let selection = document.selection, !selection.isEmpty {
-                let startLine = selection.normalized.start.line
-                document.delete(selection)
-                invalidateHighlightCache(from: startLine, to: lineBeforeDelete)
-            } else {
-                document.deleteBackward()
-                invalidateHighlightCache(from: document.cursor.position.line, to: lineBeforeDelete)
-            }
+            handleBackspace(document: document)
             return true
         case 117: // delete
-            let lineBeforeDelete = document.cursor.position.line
-            if let selection = document.selection, !selection.isEmpty {
-                let endLine = selection.normalized.end.line
-                document.delete(selection)
-                invalidateHighlightCache(from: lineBeforeDelete, to: endLine)
-            } else {
-                document.deleteForward()
-                invalidateHighlightCache(from: document.cursor.position.line, to: document.cursor.position.line)
-            }
+            handleForwardDelete(document: document)
             return true
         case 36, 76: // return / enter
             insertText("\n", document: document)
@@ -240,29 +228,67 @@ extension MetalEditorView {
         }
     }
 
+    private func handleBackspace(document: EditorDocument) {
+        let lineBeforeDelete = document.cursor.position.line
+        if let selection = document.selection, !selection.isEmpty {
+            deleteSelection(selection, document: document)
+            return
+        }
+
+        document.deleteBackward()
+        registerDocumentEdit(startLine: min(document.cursor.position.line, lineBeforeDelete))
+    }
+
+    private func handleForwardDelete(document: EditorDocument) {
+        let lineBeforeDelete = document.cursor.position.line
+        if let selection = document.selection, !selection.isEmpty {
+            deleteSelection(selection, document: document)
+            return
+        }
+
+        let oldEndLine = document.cursor.position.column == document.lineLength(at: lineBeforeDelete)
+            ? min(lineBeforeDelete + 1, max(0, document.lineCount - 1))
+            : lineBeforeDelete
+        document.deleteForward()
+        registerDocumentEdit(startLine: min(lineBeforeDelete, oldEndLine))
+    }
+
+    private func deleteSelection(_ selection: TextRange, document: EditorDocument) {
+        let normalized = selection.normalized
+        document.delete(selection)
+        registerDocumentEdit(startLine: normalized.start.line)
+    }
+
     private func insertText(_ text: String, document: EditorDocument) {
-        let startLine = document.cursor.position.line
+        let startLine: Int
 
         if let selection = document.selection, !selection.isEmpty {
+            let normalized = selection.normalized
+            startLine = normalized.start.line
             document.replace(selection, with: text)
         } else {
+            startLine = document.cursor.position.line
             document.insert(text)
         }
 
-        let endLine = document.cursor.position.line
-        invalidateHighlightCache(from: startLine, to: endLine)
+        registerDocumentEdit(startLine: startLine)
     }
 
-    /// Invalidates the highlight cache for a range of lines.
-    /// This forces re-highlighting on the next render.
-    private func invalidateHighlightCache(from startLine: Int, to endLine: Int) {
-        for line in startLine...max(startLine, endLine) {
-            cachedHighlightedLines.removeValue(forKey: line)
+    private func registerDocumentEdit(startLine: Int) {
+        document?.syncSyntaxController(dirtyFrom: startLine)
+        backgroundHighlightTask?.cancel()
+        backgroundHighlightTask = nil
+        visibleEditGeneration += 1
+        pendingVisibleEditIdentifier = "editor-edit-\(visibleEditGeneration)"
+        if let pendingVisibleEditIdentifier {
+            SyntaxRuntimeDiagnostics.beginVisibleEdit(
+                surface: "editor",
+                identifier: pendingVisibleEditIdentifier
+            )
         }
-        let linesToRemove = cachedHighlightedLines.keys.filter { $0 > endLine }
-        for line in linesToRemove {
-            cachedHighlightedLines.removeValue(forKey: line)
-        }
+
+        highlightVisibleLines()
+        scheduleBackgroundHighlight()
     }
 
     private func moveCursor(document: EditorDocument, extendSelection: Bool, move: () -> Void) {
@@ -310,7 +336,10 @@ extension MetalEditorView {
     public override func scrollWheel(with event: NSEvent) {
         guard let lineBuffer else { return }
         let delta = ScrollWheelNormalizer.pixelDelta(for: event, lineHeight: metrics.lineHeight)
+        lastHighlightScrollDelta = delta
+        shouldRecordScrollTrace = delta != 0
         lineBuffer.scroll(by: -delta)
+        highlightVisibleLines()
     }
 
     // MARK: - First Responder

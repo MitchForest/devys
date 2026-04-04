@@ -5,6 +5,7 @@
 
 import Foundation
 import SwiftUI
+import Syntax
 
 // MARK: - Color Scheme
 
@@ -17,9 +18,9 @@ enum EditorColorScheme: Sendable {
     /// Get the appropriate theme name for this scheme
     var themeName: String {
         switch self {
-        case .light: return "github-light"
-        case .dark: return "github-dark"
-        case .system: return "github-dark" // Fallback
+        case .light: return "devys-light"
+        case .dark: return "devys-dark"
+        case .system: return "devys-dark"
         }
     }
 }
@@ -43,9 +44,6 @@ struct EditorConfiguration: Sendable {
     /// Insert spaces for tabs
     var insertSpacesForTab: Bool
     
-    /// Use DevysColors instead of theme colors
-    var useDevysColors: Bool
-    
     /// Theme name (derived from colorScheme)
     var themeName: String {
         colorScheme.themeName
@@ -56,15 +54,13 @@ struct EditorConfiguration: Sendable {
         fontSize: CGFloat = 13,
         colorScheme: EditorColorScheme = .dark,
         tabWidth: Int = 4,
-        insertSpacesForTab: Bool = true,
-        useDevysColors: Bool = true
+        insertSpacesForTab: Bool = true
     ) {
         self.fontName = fontName
         self.fontSize = fontSize
         self.colorScheme = colorScheme
         self.tabWidth = tabWidth
         self.insertSpacesForTab = insertSpacesForTab
-        self.useDevysColors = useDevysColors
     }
     
     /// Default configuration (dark mode with DevysColors)
