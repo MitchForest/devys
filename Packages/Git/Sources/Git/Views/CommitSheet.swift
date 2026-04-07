@@ -6,7 +6,7 @@ import UI
 
 /// Sheet for composing and submitting commits.
 @MainActor
-struct CommitSheet: View {
+public struct CommitSheet: View {
     @Bindable var store: GitStore
     
     @Environment(\.dismiss) private var dismiss
@@ -20,11 +20,11 @@ struct CommitSheet: View {
     
     @FocusState private var isMessageFocused: Bool
     
-    init(store: GitStore) {
+    public init(store: GitStore) {
         self.store = store
     }
     
-    var body: some View {
+    public var body: some View {
         VStack(spacing: 0) {
             // Header
             headerView

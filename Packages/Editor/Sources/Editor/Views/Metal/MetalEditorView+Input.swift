@@ -347,7 +347,18 @@ extension MetalEditorView {
     public override var acceptsFirstResponder: Bool { true }
 
     public override func becomeFirstResponder() -> Bool {
-        true
+        hasFocus = true
+        return true
+    }
+
+    public override func resignFirstResponder() -> Bool {
+        hasFocus = false
+        return super.resignFirstResponder()
+    }
+
+    /// Request keyboard focus from the window.
+    public func requestKeyboardFocus() {
+        window?.makeFirstResponder(self)
     }
 }
 

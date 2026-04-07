@@ -5,22 +5,61 @@ import Foundation
 import Observation
 import Workspace
 import Git
+import OSLog
 
 @MainActor
 @Observable
 final class WorktreeInfoStore {
+    struct Configuration {
+        let selectedRefreshInterval: TimeInterval
+        let backgroundRefreshInterval: TimeInterval
+        let deferredHydrationDelay: TimeInterval
+        let refreshDedupInterval: TimeInterval
+        let prRefreshInterval: TimeInterval
+
+        static let `default` = Configuration(
+            selectedRefreshInterval: 5,
+            backgroundRefreshInterval: 60,
+            deferredHydrationDelay: 1,
+            refreshDedupInterval: 1.5,
+            prRefreshInterval: 60
+        )
+    }
+
+    struct UpdateResult {
+        let immediateRefreshWorktreeIds: [Worktree.ID]
+        let deferredHydrationWorktreeIds: [Worktree.ID]
+    }
+
+    enum RefreshReason: String {
+        case initialSelection
+        case fileChange
+        case branchChange
+        case manual
+        case selectedPeriodic
+        case backgroundPeriodic
+        case deferredHydration
+    }
+
+    private static let logger = Logger(subsystem: "com.devys.mac-client", category: "WorktreeInfoStore")
+
     private let infoProvider: WorktreeInfoProvider
     private let infoWatcher: WorktreeInfoWatcher
     private let statusProvider: WorktreeStatusProvider
+    private let configuration: Configuration
     private var watchTask: Task<Void, Never>?
     private var refreshTask: Task<Void, Never>?
-    private var periodicTask: Task<Void, Never>?
+    private var selectedPeriodicTask: Task<Void, Never>?
+    private var backgroundPeriodicTask: Task<Void, Never>?
+    private var deferredHydrationTask: Task<Void, Never>?
     private var worktreesById: [Worktree.ID: Worktree] = [:]
     private var repositoryRootURL: URL?
     private var lastRefreshById: [Worktree.ID: Date] = [:]
     private var lastPullRequestRefresh: Date?
-    private let refreshInterval: TimeInterval = 1.5
-    private let prRefreshInterval: TimeInterval = 60
+    private var pendingHydrationWorktreeIds: [Worktree.ID] = []
+    private var backgroundRefreshCursor = 0
+    private(set) var selectedWorktreeId: Worktree.ID?
+    private var isActiveRepository = true
 
     var entriesById: [Worktree.ID: WorktreeInfoEntry] = [:]
     var isLoading = false
@@ -29,11 +68,13 @@ final class WorktreeInfoStore {
     init(
         infoProvider: WorktreeInfoProvider = DefaultWorktreeInfoProvider(),
         infoWatcher: WorktreeInfoWatcher = DefaultWorktreeInfoWatcher(),
-        statusProvider: WorktreeStatusProvider = DefaultWorktreeStatusProvider()
+        statusProvider: WorktreeStatusProvider = DefaultWorktreeStatusProvider(),
+        configuration: Configuration = .default
     ) {
         self.infoProvider = infoProvider
         self.infoWatcher = infoWatcher
         self.statusProvider = statusProvider
+        self.configuration = configuration
         startWatching()
     }
 
@@ -42,20 +83,78 @@ final class WorktreeInfoStore {
             stopWatching()
         }
     }
+}
 
-    func update(worktrees: [Worktree], repositoryRootURL: URL?) {
+@MainActor
+extension WorktreeInfoStore {
+    func update(
+        worktrees: [Worktree],
+        repositoryRootURL: URL?,
+        isActiveRepository: Bool = true
+    ) -> UpdateResult {
+        let previousRepositoryRootURL = self.repositoryRootURL
+        let nextWorktreesById = Dictionary(uniqueKeysWithValues: worktrees.map { ($0.id, $0) })
+        let repositoryChanged = previousRepositoryRootURL != repositoryRootURL
+
         self.repositoryRootURL = repositoryRootURL
-        worktreesById = Dictionary(uniqueKeysWithValues: worktrees.map { ($0.id, $0) })
+        self.isActiveRepository = isActiveRepository
+        worktreesById = nextWorktreesById
         entriesById = entriesById.filter { worktreesById[$0.key] != nil }
-        infoWatcher.handle(.setWorktrees(worktrees))
-        if repositoryRootURL != nil {
-            infoWatcher.handle(.setPullRequestTrackingEnabled(true))
+        lastRefreshById = lastRefreshById.filter { worktreesById[$0.key] != nil }
+        pendingHydrationWorktreeIds.removeAll { worktreesById[$0] == nil }
+        if backgroundRefreshCursor >= worktrees.count {
+            backgroundRefreshCursor = 0
         }
-        updatePeriodicRefresh(isActive: !worktrees.isEmpty)
+
+        if repositoryChanged {
+            entriesById = [:]
+            lastRefreshById = [:]
+            lastPullRequestRefresh = nil
+            isPRAvailable = nil
+            pendingHydrationWorktreeIds = []
+            backgroundRefreshCursor = 0
+        }
+
+        infoWatcher.handle(.setWorktrees(worktrees))
+        infoWatcher.handle(.setPullRequestTrackingEnabled(isActiveRepository && repositoryRootURL != nil))
+        updatePeriodicRefresh(isActive: isActiveRepository && !worktrees.isEmpty)
+
+        guard isActiveRepository else {
+            pendingHydrationWorktreeIds = []
+            return UpdateResult(
+                immediateRefreshWorktreeIds: [],
+                deferredHydrationWorktreeIds: []
+            )
+        }
+
+        let missingWorktreeIds = worktrees.compactMap { worktree in
+            entriesById[worktree.id] == nil ? worktree.id : nil
+        }
+        let immediateRefreshWorktreeIds: [Worktree.ID]
+        if let selectedWorktreeId,
+           missingWorktreeIds.contains(selectedWorktreeId) {
+            immediateRefreshWorktreeIds = [selectedWorktreeId]
+        } else {
+            immediateRefreshWorktreeIds = []
+        }
+        let deferredHydrationWorktreeIds = missingWorktreeIds.filter { id in
+            !immediateRefreshWorktreeIds.contains(id)
+        }
+        enqueueDeferredHydration(worktreeIds: deferredHydrationWorktreeIds)
+        return UpdateResult(
+            immediateRefreshWorktreeIds: immediateRefreshWorktreeIds,
+            deferredHydrationWorktreeIds: deferredHydrationWorktreeIds
+        )
     }
 
     func setSelectedWorktreeId(_ worktreeId: Worktree.ID?) {
+        selectedWorktreeId = worktreeId
         infoWatcher.handle(.setSelectedWorktreeId(worktreeId))
+        guard isActiveRepository else { return }
+        if let worktreeId,
+           entriesById[worktreeId] == nil {
+            refresh(worktreeIds: [worktreeId], reason: .initialSelection)
+        }
     }
 
     func refreshAll() {
@@ -66,24 +165,58 @@ final class WorktreeInfoStore {
             return
         }
         refreshTask = Task { [weak self] in
-            await self?.refresh(worktrees: worktrees)
+            await self?.refresh(worktrees: worktrees, reason: .manual)
         }
     }
 
-    func refresh(worktreeIds: [Worktree.ID]) {
+    func refresh(worktreeIds: [Worktree.ID], reason: RefreshReason = .manual) {
         let now = Date()
+        let shouldDedup = shouldDedupRefresh(reason: reason)
         let filteredIds = worktreeIds.filter { id in
+            guard shouldDedup else { return true }
             guard let last = lastRefreshById[id] else { return true }
-            return now.timeIntervalSince(last) >= refreshInterval
+            return now.timeIntervalSince(last) >= configuration.refreshDedupInterval
         }
         let worktrees = filteredIds.compactMap { worktreesById[$0] }
         guard !worktrees.isEmpty else { return }
-        refreshTask?.cancel()
+
+        // If a refresh is already in flight, let it complete rather than
+        // cancelling and restarting (which wastes the in-flight git work).
+        // File-change and periodic reasons are deferrable; manual/initial are not.
+        if refreshTask != nil {
+            switch reason {
+            case .fileChange, .selectedPeriodic, .backgroundPeriodic, .deferredHydration:
+                return
+            case .manual, .initialSelection, .branchChange:
+                refreshTask?.cancel()
+            }
+        }
+
         refreshTask = Task { [weak self] in
-            await self?.refresh(worktrees: worktrees)
+            await self?.refresh(worktrees: worktrees, reason: reason)
         }
     }
 
+    func enqueueDeferredHydration(worktreeIds: [Worktree.ID]) {
+        guard !worktreeIds.isEmpty else { return }
+        for worktreeId in worktreeIds where !pendingHydrationWorktreeIds.contains(worktreeId) {
+            pendingHydrationWorktreeIds.append(worktreeId)
+        }
+        scheduleDeferredHydrationIfNeeded()
+    }
+
+    private func shouldDedupRefresh(reason: RefreshReason) -> Bool {
+        switch reason {
+        case .initialSelection, .fileChange, .branchChange, .manual:
+            false
+        case .selectedPeriodic, .backgroundPeriodic, .deferredHydration:
+            true
+        }
+    }
+}
+
+@MainActor
+extension WorktreeInfoStore {
     private func startWatching() {
         guard watchTask == nil else { return }
         watchTask = Task { [weak self] in
@@ -99,23 +232,37 @@ final class WorktreeInfoStore {
         watchTask = nil
         refreshTask?.cancel()
         refreshTask = nil
-        periodicTask?.cancel()
-        periodicTask = nil
+        selectedPeriodicTask?.cancel()
+        selectedPeriodicTask = nil
+        backgroundPeriodicTask?.cancel()
+        backgroundPeriodicTask = nil
+        deferredHydrationTask?.cancel()
+        deferredHydrationTask = nil
         infoWatcher.handle(.stop)
     }
 
     private func handle(_ event: WorktreeInfoEvent) async {
+        guard isActiveRepository else { return }
         switch event {
         case .branchChanged(let worktreeId):
-            refresh(worktreeIds: [worktreeId])
+            refresh(worktreeIds: [worktreeId], reason: .branchChange)
         case .filesChanged(let worktreeId):
-            refresh(worktreeIds: [worktreeId])
+            guard shouldRefreshMetadata(for: worktreeId) else { return }
+            refresh(worktreeIds: [worktreeId], reason: .fileChange)
         case .repositoryPullRequestRefresh:
             await refreshPullRequests()
         }
     }
 
-    private func refresh(worktrees: [Worktree]) async {
+    private func shouldRefreshMetadata(for worktreeId: Worktree.ID) -> Bool {
+        guard let selectedWorktreeId else { return true }
+        return selectedWorktreeId == worktreeId
+    }
+}
+
+@MainActor
+extension WorktreeInfoStore {
+    private func refresh(worktrees: [Worktree], reason: RefreshReason) async {
         guard !worktrees.isEmpty else { return }
         isLoading = true
         defer { isLoading = false }
@@ -123,6 +270,7 @@ final class WorktreeInfoStore {
         for worktree in worktrees {
             lastRefreshById[worktree.id] = now
         }
+        let start = Date()
 
         let provider = infoProvider
         let statusProvider = statusProvider
@@ -131,6 +279,7 @@ final class WorktreeInfoStore {
             for worktree in worktrees {
                 group.addTask {
                     let branchName = await provider.branchName(for: worktree.workingDirectory)
+                    let repositoryInfo = await provider.repositoryInfo(for: worktree.workingDirectory)
                     let lineChanges = await provider.lineChanges(for: worktree.workingDirectory)
                     let statusSummary = await statusProvider.statusSummary(for: worktree.workingDirectory)
                     let existingPR = existingPRs[worktree.id]
@@ -138,6 +287,7 @@ final class WorktreeInfoStore {
                         worktree.id,
                         WorktreeInfoEntry(
                             branchName: branchName,
+                            repositoryInfo: repositoryInfo,
                             lineChanges: lineChanges,
                             statusSummary: statusSummary,
                             pullRequest: existingPR
@@ -158,12 +308,14 @@ final class WorktreeInfoStore {
             updated[id] = entry
         }
         entriesById = updated
+
+        logRefresh(reason: reason, worktreeCount: worktrees.count, startedAt: start)
     }
 
     private func refreshPullRequests() async {
         guard let repositoryRootURL else { return }
         let now = Date()
-        if let last = lastPullRequestRefresh, now.timeIntervalSince(last) < prRefreshInterval {
+        if let last = lastPullRequestRefresh, now.timeIntervalSince(last) < configuration.prRefreshInterval {
             return
         }
         lastPullRequestRefresh = now
@@ -200,23 +352,96 @@ final class WorktreeInfoStore {
         }
         entriesById = updated
     }
+}
 
+@MainActor
+extension WorktreeInfoStore {
     private func updatePeriodicRefresh(isActive: Bool) {
         if !isActive {
-            periodicTask?.cancel()
-            periodicTask = nil
+            selectedPeriodicTask?.cancel()
+            selectedPeriodicTask = nil
+            backgroundPeriodicTask?.cancel()
+            backgroundPeriodicTask = nil
+            deferredHydrationTask?.cancel()
+            deferredHydrationTask = nil
             return
         }
-        guard periodicTask == nil else { return }
-        periodicTask = Task { [weak self] in
-            guard let self else { return }
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 30_000_000_000)
-                if Task.isCancelled { break }
-                await MainActor.run {
-                    self.refreshAll()
+
+        if selectedPeriodicTask == nil {
+            selectedPeriodicTask = Task { [weak self] in
+                guard let self else { return }
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: UInt64(configuration.selectedRefreshInterval * 1_000_000_000))
+                    if Task.isCancelled { break }
+                    await MainActor.run {
+                        guard let selectedWorktreeId = self.selectedWorktreeId else { return }
+                        self.refresh(worktreeIds: [selectedWorktreeId], reason: .selectedPeriodic)
+                    }
                 }
             }
         }
+
+        guard backgroundPeriodicTask == nil else {
+            scheduleDeferredHydrationIfNeeded()
+            return
+        }
+        backgroundPeriodicTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64(configuration.backgroundRefreshInterval * 1_000_000_000))
+                if Task.isCancelled { break }
+                await MainActor.run {
+                    guard let backgroundWorktreeId = self.nextBackgroundRefreshWorktreeId() else { return }
+                    self.refresh(worktreeIds: [backgroundWorktreeId], reason: .backgroundPeriodic)
+                }
+            }
+        }
+        scheduleDeferredHydrationIfNeeded()
+    }
+
+    private func scheduleDeferredHydrationIfNeeded() {
+        guard deferredHydrationTask == nil,
+              !pendingHydrationWorktreeIds.isEmpty else {
+            return
+        }
+
+        deferredHydrationTask = Task { [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(nanoseconds: UInt64(configuration.deferredHydrationDelay * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                self.deferredHydrationTask = nil
+                guard !self.pendingHydrationWorktreeIds.isEmpty else { return }
+                let nextWorktreeId = self.pendingHydrationWorktreeIds.removeFirst()
+                self.refresh(worktreeIds: [nextWorktreeId], reason: .deferredHydration)
+                self.scheduleDeferredHydrationIfNeeded()
+            }
+        }
+    }
+
+    private func nextBackgroundRefreshWorktreeId() -> Worktree.ID? {
+        let candidateIds = worktreesById.keys.sorted().filter { worktreeId in
+            worktreeId != selectedWorktreeId && entriesById[worktreeId] != nil
+        }
+        guard !candidateIds.isEmpty else { return nil }
+        if backgroundRefreshCursor >= candidateIds.count {
+            backgroundRefreshCursor = 0
+        }
+        let worktreeId = candidateIds[backgroundRefreshCursor]
+        backgroundRefreshCursor = (backgroundRefreshCursor + 1) % candidateIds.count
+        return worktreeId
+    }
+
+    private func logRefresh(
+        reason: RefreshReason,
+        worktreeCount: Int,
+        startedAt: Date
+    ) {
+        let durationMilliseconds = Int(Date().timeIntervalSince(startedAt) * 1_000)
+        let message =
+            "refresh reason=\(reason.rawValue) " +
+            "worktrees=\(worktreeCount) " +
+            "duration_ms=\(durationMilliseconds)"
+        Self.logger.debug("\(message, privacy: .public)")
     }
 }

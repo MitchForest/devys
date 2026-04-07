@@ -25,8 +25,13 @@ struct TabContentView: View {
     let gitStore: GitStore?
     let terminalSession: GhosttyTerminalSession?
     let editorSession: EditorSession?
+    let selectedRepositoryRootURL: URL?
+    let selectedRepositoryDisplayName: String?
     let onFocus: () -> Void
+    let onAttentionAcknowledged: () -> Void
+    let onPresentationChange: () -> Void
     let onEditorURLChange: (URL) -> Void
+    let onEditorPresentationChange: (EditorOpenPerformanceSnapshot?) -> Void
 
     var body: some View {
         ZStack {
@@ -46,11 +51,18 @@ struct TabContentView: View {
                     PlaceholderView(icon: "plus.forwardslash.minus", title: "Diff", subtitle: "No repository open")
                 }
             case .settings:
-                SettingsView()
-            case .editor(let url):
+                SettingsView(
+                    repositoryRootURL: selectedRepositoryRootURL,
+                    repositoryDisplayName: selectedRepositoryDisplayName
+                )
+            case .editor(_, let url):
                 if let session = editorSession {
                     if let document = session.document {
-                        EditorView(document: document, onDocumentURLChange: onEditorURLChange)
+                        EditorView(
+                            document: document,
+                            onDocumentURLChange: onEditorURLChange,
+                            focusRequestID: session.focusRequestID
+                        )
                     } else {
                         switch session.phase {
                         case .loading, .idle:
@@ -60,6 +72,18 @@ struct TabContentView: View {
                                 icon: "exclamationmark.triangle",
                                 title: "Failed to load",
                                 subtitle: message
+                            )
+                        case .preview(let preview) where preview.isBinary:
+                            PlaceholderView(
+                                icon: "doc",
+                                title: "Binary file",
+                                subtitle: url.lastPathComponent
+                            )
+                        case .preview(let preview) where preview.isTooLarge:
+                            PlaceholderView(
+                                icon: "doc.text.magnifyingglass",
+                                title: "File too large",
+                                subtitle: tooLargeSubtitle(for: preview, fallback: url.lastPathComponent)
                             )
                         case .preview, .loaded:
                             PlaceholderView(icon: "doc.text", title: "Loading", subtitle: url.lastPathComponent)
@@ -80,7 +104,70 @@ struct TabContentView: View {
         .background(theme.base)
         .contentShape(Rectangle())
         .simultaneousGesture(
-            TapGesture().onEnded { onFocus() }
+            TapGesture().onEnded {
+                onFocus()
+                onAttentionAcknowledged()
+            }
         )
+        .onChange(of: presentationSnapshot) { _, _ in
+            onPresentationChange()
+        }
+        .onAppear {
+            onEditorPresentationChange(editorPerformanceSnapshot)
+        }
+        .onChange(of: editorPerformanceSnapshot) { _, snapshot in
+            onEditorPresentationChange(snapshot)
+        }
+    }
+
+    private var presentationSnapshot: String {
+        switch content {
+        case .terminal:
+            [
+                terminalSession?.tabTitle ?? "",
+                terminalSession?.tabIcon ?? ""
+            ]
+            .joined(separator: "|")
+        case .editor:
+            editorSession?.isDirty == true ? "dirty" : "clean"
+        default:
+            ""
+        }
+    }
+
+    private func tooLargeSubtitle(for preview: EditorSessionPreview, fallback: String) -> String {
+        if let fileSize = preview.fileSize {
+            let fileSizeLabel = ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file)
+            let limitLabel = ByteCountFormatter.string(
+                fromByteCount: Int64(preview.maxBytes),
+                countStyle: .file
+            )
+            return "\(fileSizeLabel) exceeds \(limitLabel)"
+        }
+        return fallback
+    }
+
+    private var editorPerformanceSnapshot: EditorOpenPerformanceSnapshot? {
+        guard case .editor = content,
+              let editorSession else {
+            return nil
+        }
+
+        switch editorSession.phase {
+        case .idle, .loading:
+            return .loading
+        case .failed:
+            return .failed(fileSize: editorSession.currentFileSize)
+        case .preview(let preview):
+            if preview.isBinary {
+                return .binary(fileSize: preview.fileSize)
+            }
+            if preview.isTooLarge {
+                return .tooLarge(fileSize: preview.fileSize)
+            }
+            return .previewText(fileSize: preview.fileSize)
+        case .loaded:
+            return .loaded(fileSize: editorSession.currentFileSize)
+        }
     }
 }

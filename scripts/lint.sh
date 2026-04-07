@@ -21,6 +21,7 @@ collect_default_targets() {
     local discovered=( )
     local package_manifest
     local app_dir
+    local app_name
 
     for package_manifest in Packages/*/Package.swift; do
         [[ -f "$package_manifest" ]] || continue
@@ -29,6 +30,8 @@ collect_default_targets() {
 
     for app_dir in Apps/*; do
         [[ -d "$app_dir" ]] || continue
+        app_name="$(basename "$app_dir")"
+        [[ "$app_name" == _* ]] && continue
         discovered+=("$app_dir")
     done
 

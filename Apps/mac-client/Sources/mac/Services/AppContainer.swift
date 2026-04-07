@@ -12,9 +12,11 @@ import Git
 @Observable
 final class AppContainer {
     let appSettings: AppSettings
-    let recentFoldersService: RecentFoldersService
+    let recentRepositoriesService: RecentRepositoriesService
     let layoutPersistenceService: LayoutPersistenceService
-    let commandSettingsStore: RepositoryCommandSettingsStore
+    let repositorySettingsStore: RepositorySettingsStore
+    let repositoryDiscoveryService: GitRepositoryDiscoveryService
+    let workspaceCreationService: WorkspaceCreationService
 
     private let fileTreeService: FileTreeService
     private let fileWatchServiceFactory: (URL) -> FileWatchService
@@ -22,16 +24,18 @@ final class AppContainer {
     private let worktreeListingServiceFactory: () -> any WorktreeListingService
     private let worktreeInfoProviderFactory: () -> WorktreeInfoProvider
     private let worktreeInfoWatcherFactory: () -> WorktreeInfoWatcher
+    @ObservationIgnored private var fileTreeModelsByRoot: [URL: FileTreeModel] = [:]
 
     init(
         appSettings: AppSettings = AppSettings(),
-        recentFoldersService: RecentFoldersService = RecentFoldersService(),
+        recentRepositoriesService: RecentRepositoriesService = RecentRepositoriesService(),
         layoutPersistenceService: LayoutPersistenceService = LayoutPersistenceService(),
-        commandSettingsStore: RepositoryCommandSettingsStore = RepositoryCommandSettingsStore(),
+        repositorySettingsStore: RepositorySettingsStore = RepositorySettingsStore(),
+        repositoryDiscoveryService: GitRepositoryDiscoveryService = GitRepositoryDiscoveryService(),
+        workspaceCreationService: WorkspaceCreationService = WorkspaceCreationService(),
         fileTreeService: FileTreeService = DefaultFileTreeService(),
-        fileWatchServiceFactory: @escaping (URL) -> FileWatchService = {
-            DefaultFileWatchService(rootURL: $0)
-        },
+        sharedFileWatchRegistry: SharedFileWatchRegistry = SharedFileWatchRegistry(),
+        fileWatchServiceFactory: ((URL) -> FileWatchService)? = nil,
         gitStoreFactory: @escaping (URL?) -> GitStore = { GitStore(projectFolder: $0) },
         worktreeListingServiceFactory: @escaping () -> any WorktreeListingService = {
             DefaultGitWorktreeService()
@@ -44,11 +48,15 @@ final class AppContainer {
         }
     ) {
         self.appSettings = appSettings
-        self.recentFoldersService = recentFoldersService
+        self.recentRepositoriesService = recentRepositoriesService
         self.layoutPersistenceService = layoutPersistenceService
-        self.commandSettingsStore = commandSettingsStore
+        self.repositorySettingsStore = repositorySettingsStore
+        self.repositoryDiscoveryService = repositoryDiscoveryService
+        self.workspaceCreationService = workspaceCreationService
         self.fileTreeService = fileTreeService
-        self.fileWatchServiceFactory = fileWatchServiceFactory
+        self.fileWatchServiceFactory = fileWatchServiceFactory ?? {
+            sharedFileWatchRegistry.makeService(rootURL: $0)
+        }
         self.gitStoreFactory = gitStoreFactory
         self.worktreeListingServiceFactory = worktreeListingServiceFactory
         self.worktreeInfoProviderFactory = worktreeInfoProviderFactory
@@ -56,12 +64,24 @@ final class AppContainer {
     }
 
     func makeFileTreeModel(rootURL: URL) -> FileTreeModel {
-        FileTreeModel(
-            rootURL: rootURL,
+        let normalizedRootURL = rootURL.standardizedFileURL
+        if let model = fileTreeModelsByRoot[normalizedRootURL] {
+            return model
+        }
+
+        let model = FileTreeModel(
+            rootURL: normalizedRootURL,
             settings: appSettings,
             fileTreeService: fileTreeService,
             fileWatchServiceFactory: fileWatchServiceFactory
         )
+        fileTreeModelsByRoot[normalizedRootURL] = model
+        return model
+    }
+
+    func releaseFileTreeModel(rootURL: URL) {
+        let normalizedRootURL = rootURL.standardizedFileURL
+        fileTreeModelsByRoot[normalizedRootURL]?.deactivate()
     }
 
     func makeGitStore(projectFolder: URL?) -> GitStore {

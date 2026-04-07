@@ -35,6 +35,7 @@ final class GhosttySurfaceHostView: NSView {
     var rendererHealthy = true
     var isReadonly = false
     private var lastHandledFocusRequestID = 0
+    private var hasAppliedInitialStageCommand = false
 
     private let surfaceBox = GhosttySurfaceBox()
 
@@ -57,6 +58,7 @@ final class GhosttySurfaceHostView: NSView {
         createSurfaceIfNeeded()
         updateTrackingAreas()
         applyPendingFocusRequest()
+        applyPendingStageCommand()
     }
 
     @available(*, unavailable)
@@ -72,6 +74,7 @@ final class GhosttySurfaceHostView: NSView {
         createSurfaceIfNeeded()
         syncSurfaceMetrics()
         applyPendingFocusRequest()
+        applyPendingStageCommand()
     }
 
     func handleCloseRequested(processAlive: Bool) {
@@ -315,6 +318,7 @@ final class GhosttySurfaceHostView: NSView {
             "ghostty_surface_ready session=\(sessionID, privacy: .public) \(runtimeSummary, privacy: .public)"
         )
         syncSurfaceMetrics()
+        applyPendingStageCommand()
     }
 
     private func shutdown() {
@@ -336,6 +340,21 @@ final class GhosttySurfaceHostView: NSView {
 
     private func applyPendingFocusRequest() {
         handleFocusRequest(session.focusRequestID)
+    }
+
+    private func applyPendingStageCommand() {
+        guard !hasAppliedInitialStageCommand,
+              let stagedCommand = session.stagedCommand,
+              !stagedCommand.isEmpty,
+              let surface
+        else {
+            return
+        }
+        guard claimKeyboardFocusIfPossible() else { return }
+
+        stageCommand(stagedCommand, on: surface)
+        hasAppliedInitialStageCommand = true
+        session.stagedCommand = nil
     }
 
     @discardableResult
@@ -364,6 +383,51 @@ final class GhosttySurfaceHostView: NSView {
             UInt32(max(1, Int(backingBounds.width.rounded(.toNearestOrEven)))),
             UInt32(max(1, Int(backingBounds.height.rounded(.toNearestOrEven))))
         )
+    }
+
+    private func stageCommand(_ command: String, on surface: ghostty_surface_t) {
+        let preservedClipboard = NSPasteboard.general.string(forType: .string)
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(command, forType: .string)
+
+        defer {
+            pasteboard.clearContents()
+            if let preservedClipboard {
+                pasteboard.setString(preservedClipboard, forType: .string)
+            }
+        }
+
+        let flags: NSEvent.ModifierFlags = [.command]
+        guard let keyDown = NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: flags,
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window?.windowNumber ?? 0,
+            context: nil,
+            characters: "v",
+            charactersIgnoringModifiers: "v",
+            isARepeat: false,
+            keyCode: 9
+        ),
+        let keyUp = NSEvent.keyEvent(
+            with: .keyUp,
+            location: .zero,
+            modifierFlags: flags,
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window?.windowNumber ?? 0,
+            context: nil,
+            characters: "v",
+            charactersIgnoringModifiers: "v",
+            isARepeat: false,
+            keyCode: 9
+        ) else {
+            return
+        }
+
+        _ = sendKeyEvent(surface: surface, event: keyDown, action: GHOSTTY_ACTION_PRESS)
+        _ = sendKeyEvent(surface: surface, event: keyUp, action: GHOSTTY_ACTION_RELEASE)
     }
 
     private func sendMouseButton(

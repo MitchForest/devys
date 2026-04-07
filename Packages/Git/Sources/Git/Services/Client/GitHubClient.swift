@@ -57,6 +57,21 @@ actor GitHubClient {
         )
         return try parsePRFiles(output)
     }
+
+    /// Get a single pull request.
+    func getPR(number: Int) async throws -> PullRequest {
+        let output = try await runGH(
+            "pr",
+            "view",
+            "\(number)",
+            "--json",
+            prJSONFields
+        )
+        guard let pullRequest = try parsePRList(output).first else {
+            throw PRError.notFound(number)
+        }
+        return pullRequest
+    }
     
     /// Create a new PR.
     func createPR(

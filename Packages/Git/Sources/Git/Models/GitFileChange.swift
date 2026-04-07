@@ -4,7 +4,7 @@
 import Foundation
 
 /// Status of a file in the git working tree or staging area.
-enum GitFileStatus: String, Sendable, Equatable, Hashable {
+public enum GitFileStatus: String, Sendable, Equatable, Hashable {
     case modified = "M"
     case added = "A"
     case deleted = "D"
@@ -15,7 +15,7 @@ enum GitFileStatus: String, Sendable, Equatable, Hashable {
     case unmerged = "U"
     
     /// SF Symbol name for the status.
-    var iconName: String {
+    public var iconName: String {
         switch self {
         case .modified: return "pencil.circle.fill"
         case .added: return "plus.circle.fill"
@@ -30,13 +30,13 @@ enum GitFileStatus: String, Sendable, Equatable, Hashable {
 }
 
 /// A file change in the git repository.
-struct GitFileChange: Identifiable, Equatable, Hashable, Sendable {
-    let id: String
-    let path: String
-    let status: GitFileStatus
-    let isStaged: Bool
+public struct GitFileChange: Identifiable, Equatable, Hashable, Sendable {
+    public let id: String
+    public let path: String
+    public let status: GitFileStatus
+    public let isStaged: Bool
     
-    init(
+    public init(
         path: String,
         status: GitFileStatus,
         isStaged: Bool
@@ -48,12 +48,12 @@ struct GitFileChange: Identifiable, Equatable, Hashable, Sendable {
     }
     
     /// The filename without directory path.
-    var filename: String {
+    public var filename: String {
         (path as NSString).lastPathComponent
     }
     
     /// The directory containing the file.
-    var directory: String {
+    public var directory: String {
         let dir = (path as NSString).deletingLastPathComponent
         return dir.isEmpty ? "." : dir
     }

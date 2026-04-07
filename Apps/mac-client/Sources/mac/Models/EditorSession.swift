@@ -11,8 +11,87 @@ import Syntax
 import Text
 
 struct EditorSessionPreview: Sendable, Equatable {
-    let content: String
+    enum Kind: Sendable, Equatable {
+        case text(String)
+        case binary
+        case tooLarge
+    }
+
+    let kind: Kind
     let language: String
+    let revision: DocumentPreviewRevision
+    let exceededLimit: Bool
+    let maxBytes: Int
+
+    init(
+        kind: Kind,
+        language: String,
+        revision: DocumentPreviewRevision = DocumentPreviewRevision(
+            fileSize: nil,
+            contentModificationDate: nil
+        ),
+        exceededLimit: Bool = false,
+        maxBytes: Int = DocumentPreviewRequest.default.maxBytes
+    ) {
+        self.kind = kind
+        self.language = language
+        self.revision = revision
+        self.exceededLimit = exceededLimit
+        self.maxBytes = maxBytes
+    }
+
+    init(content: String, language: String) {
+        self.init(kind: .text(content), language: language)
+    }
+
+    init(preview: LoadedDocumentPreview) {
+        let kind: Kind
+        switch preview.kind {
+        case .text(let content):
+            kind = .text(content)
+        case .binary:
+            kind = .binary
+        case .tooLarge:
+            kind = .tooLarge
+        }
+
+        self.init(
+            kind: kind,
+            language: preview.language,
+            revision: preview.revision,
+            exceededLimit: preview.exceededLimit,
+            maxBytes: preview.maxBytes
+        )
+    }
+
+    var content: String? {
+        if case .text(let content) = kind {
+            return content
+        }
+        return nil
+    }
+
+    var requiresFullLoad: Bool {
+        content != nil && !exceededLimit
+    }
+
+    var fileSize: Int64? {
+        revision.fileSize
+    }
+
+    var isBinary: Bool {
+        if case .binary = kind {
+            return true
+        }
+        return false
+    }
+
+    var isTooLarge: Bool {
+        if case .tooLarge = kind {
+            return true
+        }
+        return false
+    }
 }
 
 @MainActor
@@ -35,6 +114,7 @@ final class EditorSession: Identifiable {
 
     var phase: Phase = .idle
     var document: EditorDocument?
+    var focusRequestID: Int = 0
 
     @ObservationIgnored
     private let loader: Loader?
@@ -51,6 +131,9 @@ final class EditorSession: Identifiable {
     @ObservationIgnored
     private var loadRevision: UInt64 = 0
 
+    @ObservationIgnored
+    private var activeRevision: DocumentPreviewRevision?
+
     init(
         url: URL,
         loader: @escaping Loader
@@ -65,14 +148,14 @@ final class EditorSession: Identifiable {
     init(
         url: URL,
         previewLoader: @escaping PreviewLoader = {
-            let preview = try await DefaultDocumentIOService().loadPreview(url: $0)
-            return EditorSessionPreview(
-                content: preview.content,
-                language: preview.language
+            let preview = try await DefaultDocumentIOService().loadPreview(
+                url: $0,
+                request: .default
             )
+            return EditorSessionPreview(preview: preview)
         },
         documentBuilder: @escaping DocumentBuilder = { _, preview in
-            try await EditorDocument.prepareTextDocument(content: preview.content)
+            try await EditorDocument.prepareTextDocument(content: preview.content ?? "")
         }
     ) {
         self.id = UUID()
@@ -86,6 +169,10 @@ final class EditorSession: Identifiable {
         document?.isDirty ?? false
     }
 
+    func requestKeyboardFocus() {
+        focusRequestID &+= 1
+    }
+
     var preview: EditorSessionPreview? {
         if case .preview(let preview) = phase {
             return preview
@@ -93,10 +180,16 @@ final class EditorSession: Identifiable {
         return nil
     }
 
+    var currentFileSize: Int64? {
+        activeRevision?.fileSize
+    }
+
     var isLoading: Bool {
         switch phase {
-        case .loading, .preview:
+        case .loading:
             return true
+        case .preview(let preview):
+            return preview.requiresFullLoad
         default:
             return false
         }
@@ -112,17 +205,7 @@ final class EditorSession: Identifiable {
 
     func open(_ newURL: URL) {
         let canonicalURL = newURL.standardizedFileURL
-        let shouldReload: Bool
-        if url == canonicalURL {
-            switch phase {
-            case .loading, .preview, .loaded:
-                shouldReload = false
-            case .idle, .failed:
-                shouldReload = true
-            }
-        } else {
-            shouldReload = true
-        }
+        let shouldReload = shouldReload(for: canonicalURL)
 
         url = canonicalURL
         document?.fileURL = canonicalURL
@@ -163,10 +246,15 @@ final class EditorSession: Identifiable {
                         url: targetURL
                     )
                     guard !Task.isCancelled else { return }
+                    guard preview.requiresFullLoad else {
+                        await self.completePreviewOnlyResult(revision: revision)
+                        return
+                    }
                     let preparedTextDocument = try await documentBuilder(targetURL, preview)
                     guard !Task.isCancelled else { return }
                     try await self.finishLoading(
                         revision: revision,
+                        preview: preview,
                         preparedTextDocument: preparedTextDocument,
                         expectedVersion: expectedVersion,
                         url: targetURL
@@ -202,24 +290,35 @@ final class EditorSession: Identifiable {
             return document?.documentVersion ?? DocumentVersion()
         }
 
-        if let document {
-            document.fileURL = url
+        if let content = preview.content {
+            if let document,
+               document.fileURL?.standardizedFileURL == url.standardizedFileURL {
+                document.fileURL = url
+                activeRevision = preview.revision
+                phase = .preview(preview)
+                return document.documentVersion
+            }
+
+            let previewDocument = EditorDocument.makePreviewDocument(
+                content: content,
+                language: preview.language,
+                fileURL: url
+            )
+            document = previewDocument
+            activeRevision = preview.revision
             phase = .preview(preview)
-            return document.documentVersion
+            return previewDocument.documentVersion
         }
 
-        let previewDocument = EditorDocument.makePreviewDocument(
-            content: preview.content,
-            language: preview.language,
-            fileURL: url
-        )
-        document = previewDocument
+        document = nil
+        activeRevision = preview.revision
         phase = .preview(preview)
-        return previewDocument.documentVersion
+        return DocumentVersion()
     }
 
     private func finishLoading(
         revision: UInt64,
+        preview: EditorSessionPreview,
         preparedTextDocument: TextDocument,
         expectedVersion: DocumentVersion,
         url: URL
@@ -237,8 +336,8 @@ final class EditorSession: Identifiable {
         }
 
         let loadedDocument = try await EditorDocument.makeLoadedDocument(
-            content: document?.content ?? "",
-            language: LanguageDetector.detect(from: url),
+            content: preview.content ?? "",
+            language: preview.language,
             fileURL: url
         )
         applySuccessfulLoad(revision: revision, document: loadedDocument)
@@ -250,6 +349,7 @@ final class EditorSession: Identifiable {
     ) {
         guard revision == loadRevision else { return }
         document = loadedDocument
+        activeRevision = nil
         applySuccessfulLoad(revision: revision, document: loadedDocument)
     }
 
@@ -259,6 +359,7 @@ final class EditorSession: Identifiable {
     ) {
         guard revision == loadRevision else { return }
         loadTask = nil
+        activeRevision = nil
         phase = .failed(message)
     }
 
@@ -269,6 +370,11 @@ final class EditorSession: Identifiable {
         guard revision == loadRevision else { return }
         loadTask = nil
         phase = .loaded(document)
+    }
+
+    private func completePreviewOnlyResult(revision: UInt64) {
+        guard revision == loadRevision else { return }
+        loadTask = nil
     }
 
     private func clearLoadTask(revision: UInt64) {
@@ -287,8 +393,40 @@ final class EditorSession: Identifiable {
 
     func updateURL(_ newURL: URL) {
         let canonicalURL = newURL.standardizedFileURL
+        if url != canonicalURL {
+            activeRevision = nil
+        }
         url = canonicalURL
         document?.fileURL = canonicalURL
+    }
+
+    private func shouldReload(for canonicalURL: URL) -> Bool {
+        guard url == canonicalURL else {
+            return true
+        }
+
+        switch phase {
+        case .idle, .failed:
+            return true
+        case .loading:
+            return false
+        case .preview:
+            return revisionHasChanged(for: canonicalURL)
+        case .loaded:
+            return revisionHasChanged(for: canonicalURL)
+        }
+    }
+
+    private func revisionHasChanged(for url: URL) -> Bool {
+        guard let activeRevision else {
+            return false
+        }
+
+        guard let currentRevision = try? DocumentPreviewRevision.current(for: url) else {
+            return true
+        }
+
+        return currentRevision != activeRevision
     }
 }
 

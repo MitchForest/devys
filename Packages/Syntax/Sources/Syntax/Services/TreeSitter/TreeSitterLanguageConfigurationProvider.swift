@@ -30,268 +30,116 @@ public enum TreeSitterLanguageConfigurationProvider {
     public static func configuration(
         for language: BundledTreeSitterLanguage
     ) throws -> LanguageConfiguration {
-        switch language {
-        case .cpp:
-            try cpp()
-        case .csharp:
-            try csharp()
-        case .c:
-            try c()
-        case .css:
-            try css()
-        case .go:
-            try go()
-        case .html:
-            try html()
-        case .java:
-            try java()
-        case .javascript:
-            try javascript()
-        case .json:
-            try json()
-        case .jsx:
-            try jsx()
-        case .kotlin:
-            try kotlin()
-        case .lua:
-            try lua()
-        case .make:
-            try make()
-        case .markdown:
-            try markdown()
-        case .markdownInline:
-            try markdownInline()
-        case .php:
-            try php()
-        case .python:
-            try python()
-        case .ruby:
-            try ruby()
-        case .rust:
-            try rust()
-        case .shellscript:
-            try shellscript()
-        case .sql:
-            try sql()
-        case .swift:
-            try swift()
-        case .toml:
-            try toml()
-        case .typescript:
-            try typescript()
-        case .tsx:
-            try tsx()
-        case .yaml:
-            try yaml()
-        }
+        let descriptor = try descriptor(for: language)
+        return try makeConfiguration(
+            language: descriptor.makeLanguage(),
+            name: descriptor.name,
+            bundledLanguage: descriptor.bundledLanguage
+        )
     }
 
     public static func c() throws -> LanguageConfiguration {
-        try makeConfiguration(
-            language: Language(tree_sitter_c()),
-            name: "C",
-            bundledLanguage: .c
-        )
+        try configuration(for: .c)
     }
 
     public static func cpp() throws -> LanguageConfiguration {
-        try makeConfiguration(
-            language: Language(tree_sitter_cpp()),
-            name: "C++",
-            bundledLanguage: .cpp
-        )
+        try configuration(for: .cpp)
     }
 
     public static func csharp() throws -> LanguageConfiguration {
-        try makeConfiguration(
-            language: Language(tree_sitter_c_sharp()),
-            name: "C#",
-            bundledLanguage: .csharp
-        )
+        try configuration(for: .csharp)
     }
 
     public static func css() throws -> LanguageConfiguration {
-        try makeConfiguration(
-            language: Language(tree_sitter_css()),
-            name: "CSS",
-            bundledLanguage: .css
-        )
+        try configuration(for: .css)
     }
 
     public static func html() throws -> LanguageConfiguration {
-        try makeConfiguration(
-            language: Language(tree_sitter_html()),
-            name: "HTML",
-            bundledLanguage: .html
-        )
+        try configuration(for: .html)
     }
 
     public static func go() throws -> LanguageConfiguration {
-        try makeConfiguration(
-            language: Language(tree_sitter_go()),
-            name: "Go",
-            bundledLanguage: .go
-        )
+        try configuration(for: .go)
     }
 
     public static func java() throws -> LanguageConfiguration {
-        try makeConfiguration(
-            language: Language(tree_sitter_java()),
-            name: "Java",
-            bundledLanguage: .java
-        )
+        try configuration(for: .java)
     }
 
     public static func javascript() throws -> LanguageConfiguration {
-        try makeConfiguration(
-            language: Language(tree_sitter_tsx()),
-            name: "JavaScript",
-            bundledLanguage: .javascript
-        )
+        try configuration(for: .javascript)
     }
 
     public static func json() throws -> LanguageConfiguration {
-        try makeConfiguration(
-            language: Language(tree_sitter_json()),
-            name: "JSON",
-            bundledLanguage: .json
-        )
+        try configuration(for: .json)
     }
 
     public static func jsx() throws -> LanguageConfiguration {
-        try makeConfiguration(
-            language: Language(tree_sitter_tsx()),
-            name: "JSX",
-            bundledLanguage: .jsx
-        )
+        try configuration(for: .jsx)
     }
 
     public static func markdown() throws -> LanguageConfiguration {
-        try makeConfiguration(
-            language: Language(tree_sitter_markdown()),
-            name: "Markdown",
-            bundledLanguage: .markdown
-        )
+        try configuration(for: .markdown)
     }
 
     public static func markdownInline() throws -> LanguageConfiguration {
-        try makeConfiguration(
-            language: Language(tree_sitter_markdown_inline()),
-            name: "MarkdownInline",
-            bundledLanguage: .markdownInline
-        )
+        try configuration(for: .markdownInline)
     }
 
     public static func python() throws -> LanguageConfiguration {
-        try makeConfiguration(
-            language: Language(tree_sitter_python()),
-            name: "Python",
-            bundledLanguage: .python
-        )
+        try configuration(for: .python)
     }
 
     public static func kotlin() throws -> LanguageConfiguration {
-        try makeConfiguration(
-            language: Language(tree_sitter_kotlin()),
-            name: "Kotlin",
-            bundledLanguage: .kotlin
-        )
+        try configuration(for: .kotlin)
     }
 
     public static func lua() throws -> LanguageConfiguration {
-        try makeConfiguration(
-            language: Language(tree_sitter_lua()),
-            name: "Lua",
-            bundledLanguage: .lua
-        )
+        try configuration(for: .lua)
     }
 
     public static func make() throws -> LanguageConfiguration {
-        try makeConfiguration(
-            language: Language(tree_sitter_make()),
-            name: "Make",
-            bundledLanguage: .make
-        )
+        try configuration(for: .make)
     }
 
     public static func php() throws -> LanguageConfiguration {
-        try makeConfiguration(
-            language: Language(tree_sitter_php()),
-            name: "PHP",
-            bundledLanguage: .php
-        )
+        try configuration(for: .php)
     }
 
     public static func rust() throws -> LanguageConfiguration {
-        try makeConfiguration(
-            language: Language(tree_sitter_rust()),
-            name: "Rust",
-            bundledLanguage: .rust
-        )
+        try configuration(for: .rust)
     }
 
     public static func ruby() throws -> LanguageConfiguration {
-        try makeConfiguration(
-            language: Language(tree_sitter_ruby()),
-            name: "Ruby",
-            bundledLanguage: .ruby
-        )
+        try configuration(for: .ruby)
     }
 
     public static func shellscript() throws -> LanguageConfiguration {
-        try makeConfiguration(
-            language: Language(tree_sitter_bash()),
-            name: "ShellScript",
-            bundledLanguage: .shellscript
-        )
+        try configuration(for: .shellscript)
     }
 
     public static func sql() throws -> LanguageConfiguration {
-        try makeConfiguration(
-            language: Language(tree_sitter_sql()),
-            name: "SQL",
-            bundledLanguage: .sql
-        )
+        try configuration(for: .sql)
     }
 
     public static func swift() throws -> LanguageConfiguration {
-        try makeConfiguration(
-            language: Language(tree_sitter_swift()),
-            name: "Swift",
-            bundledLanguage: .swift
-        )
+        try configuration(for: .swift)
     }
 
     public static func toml() throws -> LanguageConfiguration {
-        try makeConfiguration(
-            language: Language(tree_sitter_toml()),
-            name: "TOML",
-            bundledLanguage: .toml
-        )
+        try configuration(for: .toml)
     }
 
     public static func typescript() throws -> LanguageConfiguration {
-        try makeConfiguration(
-            language: Language(tree_sitter_typescript()),
-            name: "TypeScript",
-            bundledLanguage: .typescript
-        )
+        try configuration(for: .typescript)
     }
 
     public static func tsx() throws -> LanguageConfiguration {
-        try makeConfiguration(
-            language: Language(tree_sitter_tsx()),
-            name: "TSX",
-            bundledLanguage: .tsx
-        )
+        try configuration(for: .tsx)
     }
 
     public static func yaml() throws -> LanguageConfiguration {
-        try makeConfiguration(
-            language: Language(tree_sitter_yaml()),
-            name: "YAML",
-            bundledLanguage: .yaml
-        )
+        try configuration(for: .yaml)
     }
 
     private static func makeConfiguration(
@@ -320,6 +168,91 @@ public enum TreeSitterLanguageConfigurationProvider {
             .injections: try Query(language: language, data: Data(querySet.injections.utf8))
         ]
     }
+
+    private static func descriptor(
+        for language: BundledTreeSitterLanguage
+    ) throws -> TreeSitterLanguageDescriptor {
+        guard let descriptor = descriptors[language] else {
+            throw TreeSitterLanguageConfigurationProviderError.invalidConfiguration
+        }
+
+        return descriptor
+    }
+
+    private static let descriptors: [BundledTreeSitterLanguage: TreeSitterLanguageDescriptor] = [
+        .c: descriptor(name: "C", bundledLanguage: .c, makeLanguage: Language(tree_sitter_c())),
+        .cpp: descriptor(name: "C++", bundledLanguage: .cpp, makeLanguage: Language(tree_sitter_cpp())),
+        .csharp: descriptor(name: "C#", bundledLanguage: .csharp, makeLanguage: Language(tree_sitter_c_sharp())),
+        .css: descriptor(name: "CSS", bundledLanguage: .css, makeLanguage: Language(tree_sitter_css())),
+        .go: descriptor(name: "Go", bundledLanguage: .go, makeLanguage: Language(tree_sitter_go())),
+        .html: descriptor(name: "HTML", bundledLanguage: .html, makeLanguage: Language(tree_sitter_html())),
+        .java: descriptor(name: "Java", bundledLanguage: .java, makeLanguage: Language(tree_sitter_java())),
+        .javascript: descriptor(
+            name: "JavaScript",
+            bundledLanguage: .javascript,
+            makeLanguage: Language(tree_sitter_tsx())
+        ),
+        .json: descriptor(name: "JSON", bundledLanguage: .json, makeLanguage: Language(tree_sitter_json())),
+        .jsx: descriptor(name: "JSX", bundledLanguage: .jsx, makeLanguage: Language(tree_sitter_tsx())),
+        .kotlin: descriptor(
+            name: "Kotlin",
+            bundledLanguage: .kotlin,
+            makeLanguage: Language(tree_sitter_kotlin())
+        ),
+        .lua: descriptor(name: "Lua", bundledLanguage: .lua, makeLanguage: Language(tree_sitter_lua())),
+        .make: descriptor(name: "Make", bundledLanguage: .make, makeLanguage: Language(tree_sitter_make())),
+        .markdown: descriptor(
+            name: "Markdown",
+            bundledLanguage: .markdown,
+            makeLanguage: Language(tree_sitter_markdown())
+        ),
+        .markdownInline: descriptor(
+            name: "MarkdownInline",
+            bundledLanguage: .markdownInline,
+            makeLanguage: Language(tree_sitter_markdown_inline())
+        ),
+        .php: descriptor(name: "PHP", bundledLanguage: .php, makeLanguage: Language(tree_sitter_php())),
+        .python: descriptor(
+            name: "Python",
+            bundledLanguage: .python,
+            makeLanguage: Language(tree_sitter_python())
+        ),
+        .ruby: descriptor(name: "Ruby", bundledLanguage: .ruby, makeLanguage: Language(tree_sitter_ruby())),
+        .rust: descriptor(name: "Rust", bundledLanguage: .rust, makeLanguage: Language(tree_sitter_rust())),
+        .shellscript: descriptor(
+            name: "ShellScript",
+            bundledLanguage: .shellscript,
+            makeLanguage: Language(tree_sitter_bash())
+        ),
+        .sql: descriptor(name: "SQL", bundledLanguage: .sql, makeLanguage: Language(tree_sitter_sql())),
+        .swift: descriptor(name: "Swift", bundledLanguage: .swift, makeLanguage: Language(tree_sitter_swift())),
+        .toml: descriptor(name: "TOML", bundledLanguage: .toml, makeLanguage: Language(tree_sitter_toml())),
+        .typescript: descriptor(
+            name: "TypeScript",
+            bundledLanguage: .typescript,
+            makeLanguage: Language(tree_sitter_typescript())
+        ),
+        .tsx: descriptor(name: "TSX", bundledLanguage: .tsx, makeLanguage: Language(tree_sitter_tsx())),
+        .yaml: descriptor(name: "YAML", bundledLanguage: .yaml, makeLanguage: Language(tree_sitter_yaml()))
+    ]
+
+    private static func descriptor(
+        name: String,
+        bundledLanguage: BundledTreeSitterLanguage,
+        makeLanguage: @autoclosure @escaping @Sendable () -> Language
+    ) -> TreeSitterLanguageDescriptor {
+        TreeSitterLanguageDescriptor(
+            name: name,
+            bundledLanguage: bundledLanguage,
+            makeLanguage: makeLanguage
+        )
+    }
+}
+
+private struct TreeSitterLanguageDescriptor: Sendable {
+    let name: String
+    let bundledLanguage: BundledTreeSitterLanguage
+    let makeLanguage: @Sendable () -> Language
 }
 
 public enum TreeSitterLanguageConfigurationProviderError: Error, LocalizedError, Sendable {

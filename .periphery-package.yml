@@ -22,3 +22,8 @@ report_exclude:
   - "**/DerivedSources/**"
   - "**/.build/**"
   - "Packages/**/Tests/**"
+  - "**/SwiftTreeSitter/**"
+  - "**/SwiftTreeSitterLayer/**"
+index_exclude:
+  - "**/SwiftTreeSitter/**"
+  - "**/SwiftTreeSitterLayer/**"

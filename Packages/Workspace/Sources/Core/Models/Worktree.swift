@@ -72,4 +72,9 @@ public struct Worktree: Identifiable, Codable, Equatable, Sendable {
             createdAt: createdAt
         )
     }
+
+    /// Whether this worktree is the repository's primary working copy.
+    public var isPrimary: Bool {
+        workingDirectory.standardizedFileURL == repositoryRootURL.standardizedFileURL
+    }
 }

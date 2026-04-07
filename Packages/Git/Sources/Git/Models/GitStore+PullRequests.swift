@@ -12,7 +12,7 @@ extension GitStore {
         do {
             return try await gitService.listPRs(state: state)
         } catch {
-            errorMessage = "Failed to load PRs: \(error.localizedDescription)"
+            setError(error, prefix: "Failed to load PRs")
             return []
         }
     }
@@ -36,7 +36,7 @@ extension GitStore {
                 selectPRFile(first)
             }
         } catch {
-            errorMessage = "Failed to load PR files: \(error.localizedDescription)"
+            setError(error, prefix: "Failed to load PR files")
         }
 
         isLoading = false
@@ -63,7 +63,7 @@ extension GitStore {
             try await gitService.checkoutPR(number: pr.number)
             await refresh()
         } catch {
-            errorMessage = "Failed to checkout PR: \(error.localizedDescription)"
+            setError(error, prefix: "Failed to checkout PR")
         }
 
         isLoading = false
@@ -89,14 +89,14 @@ extension GitStore {
             try await gitService.mergePR(number: pr.number, method: method)
             await refresh()
         } catch {
-            errorMessage = "Failed to merge PR: \(error.localizedDescription)"
+            setError(error, prefix: "Failed to merge PR")
         }
 
         isLoading = false
     }
 
     /// Get PR URL.
-    func prURL(_ pr: PullRequest) async -> URL? {
+    public func prURL(_ pr: PullRequest) async -> URL? {
         guard gitService.hasPRClient else { return nil }
         return await gitService.prURL(number: pr.number)
     }

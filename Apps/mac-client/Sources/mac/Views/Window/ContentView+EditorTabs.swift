@@ -25,16 +25,19 @@ extension ContentView {
             )
         }
 
-        if case .editor(let url) = content {
+        if case .editor(_, let url) = content {
             ensureEditorSession(tabId: tabId, url: url)
         }
     }
 
     func updateEditorTabURL(tabId: TabID, newURL: URL) {
-        tabContents[tabId] = .editor(url: newURL)
+        guard let workspaceID = tabContents[tabId]?.workspaceID else { return }
+        tabContents[tabId] = .editor(workspaceID: workspaceID, url: newURL)
         ensureEditorSession(tabId: tabId, url: newURL, reloadIfNeeded: false)
-        let (title, icon) = tabMetadata(for: .editor(url: newURL), tabId: tabId)
-        controller.updateTab(tabId, title: title, icon: icon)
+        let content = TabContent.editor(workspaceID: workspaceID, url: newURL)
+        let presentation = currentTabPresentation(for: content, tabId: tabId)
+        tabPresentationById[tabId] = presentation
+        controller.updateTab(tabId, title: presentation.title, icon: presentation.icon)
     }
 
     func editorSessionForContent(_ content: TabContent?, tabId: TabID) -> EditorSession? {
@@ -43,6 +46,7 @@ extension ContentView {
     }
 
     func removeEditorSession(tabId: TabID) {
+        endEditorOpenTrace(tabId: tabId, outcome: "cancelled")
         guard let session = editorSessions.removeValue(forKey: tabId) else { return }
         editorSessionPool.release(url: session.url)
         EditorSessionRegistry.shared.unregister(tabId: tabId)

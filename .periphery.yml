@@ -4,10 +4,7 @@
 # Xcode project + schemes (so `periphery scan` works from repo root)
 project: Devys.xcodeproj
 schemes:
-  - ios-client
   - mac-client
-  - assistant-ios
-  - assistant-mac
 
 # Retain public declarations (library code may be used by consumers)
 retain_public: true
@@ -29,3 +26,8 @@ report_exclude:
   - "**/DerivedSources/**"
   - "**/.build/**"
   - "Packages/**/Tests/**"
+  - "**/SwiftTreeSitter/**"
+  - "**/SwiftTreeSitterLayer/**"
+index_exclude:
+  - "**/SwiftTreeSitter/**"
+  - "**/SwiftTreeSitterLayer/**"

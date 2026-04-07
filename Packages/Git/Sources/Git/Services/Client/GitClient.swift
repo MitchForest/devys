@@ -31,7 +31,20 @@ extension GitClient {
         let output = try await runGit("status", "--porcelain=v1")
         return parseStatusOutput(output)
     }
-    
+
+    // periphery:ignore - explicit opt-in path kept for non-default explorer workflows
+    /// Get working tree status plus ignored file entries.
+    func statusIncludingIgnored() async throws -> [GitFileChange] {
+        var changes = try await status()
+        let ignoredFilePaths = try await ignoredPaths()
+        changes.append(
+            contentsOf: ignoredFilePaths.map { path in
+                GitFileChange(path: path, status: .ignored, isStaged: false)
+            }
+        )
+        return changes
+    }
+
     private func parseStatusOutput(_ output: String) -> [GitFileChange] {
         var changes: [GitFileChange] = []
         
@@ -80,30 +93,18 @@ extension GitClient {
         
         return changes
     }
-    
-    private func parseStatusChar(_ char: String) -> GitFileStatus? {
-        switch char {
-        case "M": return .modified
-        case "A": return .added
-        case "D": return .deleted
-        case "R": return .renamed
-        case "C": return .copied
-        case "?": return .untracked
-        case "!": return .ignored
-        case "U": return .unmerged
-        default: return nil
-        }
-    }
-    
+
     // MARK: - Repository Info
     
     /// Get repository info (branch, ahead/behind).
     func repositoryInfo() async throws -> GitRepositoryInfo {
         let branch = try? await getCurrentBranch()
-        let (ahead, behind) = (try? await getAheadBehind()) ?? (0, 0)
+        let upstreamBranch = try? await getUpstreamBranch()
+        let (ahead, behind) = upstreamBranch == nil ? (0, 0) : ((try? await getAheadBehind()) ?? (0, 0))
         
         return GitRepositoryInfo(
             currentBranch: branch,
+            upstreamBranch: upstreamBranch,
             aheadCount: ahead,
             behindCount: behind
         )
@@ -114,7 +115,7 @@ extension GitClient {
         let output = try await runGit("branch", "--show-current")
         return output.trimmingCharacters(in: .whitespacesAndNewlines)
     }
-    
+
     /// Get ahead/behind count relative to upstream.
     func getAheadBehind() async throws -> (ahead: Int, behind: Int) {
         let output = try await runGit("rev-list", "--left-right", "--count", "@{u}...HEAD")
@@ -137,6 +138,21 @@ extension GitClient {
             throw GitError.invalidOutput("Empty repository root")
         }
         return URL(fileURLWithPath: trimmed).standardizedFileURL
+    }
+
+    /// Resolve the shared git directory used by the repository and any linked worktrees.
+    func commonGitDirectory() async throws -> URL {
+        let output = try await runGit("rev-parse", "--git-common-dir")
+        let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw GitError.invalidOutput("Empty git common directory")
+        }
+
+        if trimmed.hasPrefix("/") {
+            return URL(fileURLWithPath: trimmed).standardizedFileURL
+        }
+
+        return repositoryURL.appendingPathComponent(trimmed).standardizedFileURL
     }
 
     /// List worktrees using `git worktree list --porcelain`.
@@ -344,6 +360,15 @@ extension GitClient {
         }
         _ = try await runGitCommand(arguments: args, timeout: 60)
     }
+
+    /// Fetch from remote.
+    func fetch(remote: String = "origin", refspec: String? = nil) async throws {
+        var args = ["fetch", remote]
+        if let refspec, !refspec.isEmpty {
+            args.append(refspec)
+        }
+        _ = try await runGitCommand(arguments: args, timeout: 60)
+    }
     
     // MARK: - Branch Operations
     
@@ -499,11 +524,11 @@ extension GitClient {
     
     // MARK: - Git Execution
     
-    private func runGit(_ arguments: String...) async throws -> String {
+    func runGit(_ arguments: String...) async throws -> String {
         try await runGitCommand(arguments: arguments, timeout: commandTimeout)
     }
 
-    private func runGitData(_ arguments: String...) async throws -> Data {
+    func runGitData(_ arguments: String...) async throws -> Data {
         try await runGitDataCommand(arguments: arguments, timeout: commandTimeout)
     }
     

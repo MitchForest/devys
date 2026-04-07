@@ -27,6 +27,7 @@ struct FileTreeRow: View {
     // MARK: - Properties
     
     let flatNode: FlatFileNode
+    let gitStatusSummary: WorkspaceFileTreeGitStatusSummary?
     let isSelected: Bool
     let onSelect: () -> Void
     let onToggleExpand: () -> Void
@@ -35,6 +36,7 @@ struct FileTreeRow: View {
     
     init(
         flatNode: FlatFileNode,
+        gitStatusSummary: WorkspaceFileTreeGitStatusSummary? = nil,
         isSelected: Bool,
         onSelect: @escaping () -> Void,
         onToggleExpand: @escaping () -> Void,
@@ -42,6 +44,7 @@ struct FileTreeRow: View {
         onAddToChat: ((URL) -> Void)? = nil
     ) {
         self.flatNode = flatNode
+        self.gitStatusSummary = gitStatusSummary
         self.isSelected = isSelected
         self.onSelect = onSelect
         self.onToggleExpand = onToggleExpand
@@ -100,6 +103,13 @@ struct FileTreeRow: View {
                     .truncationMode(.middle)
                 
                 Spacer(minLength: 0)
+
+                if let gitStatusSummary,
+                   !gitStatusSummary.label.isEmpty {
+                    Text(gitStatusSummary.label)
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(gitStatusColor(for: gitStatusSummary))
+                }
             }
         }
         .frame(height: rowHeight)
@@ -223,6 +233,29 @@ struct FileTreeRow: View {
             } else {
                 Color.clear
             }
+        }
+    }
+
+    private func gitStatusColor(for summary: WorkspaceFileTreeGitStatusSummary) -> Color {
+        switch summary.primaryCode {
+        case .modified:
+            return DevysColors.warning
+        case .added:
+            return DevysColors.success
+        case .deleted:
+            return DevysColors.error
+        case .renamed:
+            return theme.textSecondary
+        case .copied:
+            return .purple
+        case .untracked:
+            return theme.textSecondary
+        case .ignored:
+            return theme.textTertiary
+        case .unmerged:
+            return DevysColors.error
+        case .none:
+            return theme.textTertiary
         }
     }
     

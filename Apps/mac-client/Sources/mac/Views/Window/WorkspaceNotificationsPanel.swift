@@ -1,0 +1,113 @@
+// WorkspaceNotificationsPanel.swift
+// Devys - Pending workspace notifications panel.
+//
+// Copyright © 2026 Devys. All rights reserved.
+
+import SwiftUI
+import UI
+
+struct WorkspaceNotificationsPanel: View {
+    @Environment(\.devysTheme) private var theme
+
+    let items: [WorkspaceNotificationPanelItem]
+    let onOpen: (WorkspaceNotificationPanelItem) -> Void
+    let onClear: (WorkspaceNotificationPanelItem) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header
+
+            if items.isEmpty {
+                emptyState
+            } else {
+                ScrollView {
+                    VStack(spacing: DevysSpacing.space2) {
+                        ForEach(items) { item in
+                            row(item)
+                        }
+                    }
+                    .padding(DevysSpacing.space3)
+                }
+            }
+        }
+        .frame(minWidth: 520, minHeight: 360)
+        .background(theme.base)
+    }
+
+    private var header: some View {
+        HStack {
+            Text("Notifications")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(theme.text)
+
+            Spacer()
+
+            Text("\(items.count)")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(theme.textSecondary)
+        }
+        .padding(.horizontal, DevysSpacing.space4)
+        .padding(.vertical, DevysSpacing.space3)
+        .background(theme.surface)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: DevysSpacing.space2) {
+            Text("No pending notifications")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(theme.textSecondary)
+
+            Text("Workspace attention will appear here when terminals or agents need input.")
+                .font(.system(size: 11))
+                .foregroundStyle(theme.textTertiary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(DevysSpacing.space5)
+    }
+
+    private func row(_ item: WorkspaceNotificationPanelItem) -> some View {
+        HStack(alignment: .top, spacing: DevysSpacing.space3) {
+            Button {
+                onOpen(item)
+            } label: {
+                VStack(alignment: .leading, spacing: DevysSpacing.space2) {
+                    Text(item.notification.source.displayName.uppercased())
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(theme.accent)
+
+                    Text(item.notification.title)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(theme.text)
+                        .multilineTextAlignment(.leading)
+
+                    if let subtitle = item.notification.subtitle, !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(.system(size: 11))
+                            .foregroundStyle(theme.textSecondary)
+                            .multilineTextAlignment(.leading)
+                    }
+
+                    Text("\(item.repositoryName) / \(item.workspaceName)")
+                        .font(.system(size: 10))
+                        .foregroundStyle(theme.textTertiary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+
+            Button("Clear") {
+                onClear(item)
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(theme.textSecondary)
+            .padding(.top, 2)
+        }
+        .padding(DevysSpacing.space3)
+        .background(
+            RoundedRectangle(cornerRadius: DevysSpacing.radiusMd)
+                .fill(theme.surface)
+        )
+    }
+}

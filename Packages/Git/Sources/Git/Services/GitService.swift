@@ -11,6 +11,8 @@ protocol GitService {
     var hasPRClient: Bool { get }
 
     func status() async throws -> [GitFileChange]
+    // periphery:ignore - explicit opt-in status path kept for ignored-aware explorer workflows
+    func statusIncludingIgnored() async throws -> [GitFileChange]
     func repositoryInfo() async throws -> GitRepositoryInfo
     // periphery:ignore - used by alternate diff presentation paths not seen by Periphery
     func diff(
@@ -37,6 +39,7 @@ protocol GitService {
     func discardHunk(_ hunk: DiffHunk, for path: String) async throws
 
     func commit(message: String) async throws -> String
+    func fetch() async throws
     func push() async throws
     func pull() async throws
 
@@ -79,6 +82,11 @@ struct DefaultGitService: GitService {
 
     func status() async throws -> [GitFileChange] {
         try await requireGitClient().status()
+    }
+
+    // periphery:ignore - explicit opt-in status path kept for ignored-aware explorer workflows
+    func statusIncludingIgnored() async throws -> [GitFileChange] {
+        try await requireGitClient().statusIncludingIgnored()
     }
 
     func repositoryInfo() async throws -> GitRepositoryInfo {
@@ -152,6 +160,10 @@ struct DefaultGitService: GitService {
 
     func commit(message: String) async throws -> String {
         try await requireGitClient().commit(message: message)
+    }
+
+    func fetch() async throws {
+        try await requireGitClient().fetch()
     }
 
     func push() async throws {

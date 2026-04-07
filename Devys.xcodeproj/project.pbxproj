@@ -11,6 +11,7 @@
 		APP004 /* Syntax in Frameworks */ = {isa = PBXBuildFile; productRef = PKG002 /* Syntax */; };
 		APP005 /* UI in Frameworks */ = {isa = PBXBuildFile; productRef = PKG003 /* UI */; };
 		APP006 /* Split in Frameworks */ = {isa = PBXBuildFile; productRef = PKG004 /* Split */; };
+		APP012 /* Text in Frameworks */ = {isa = PBXBuildFile; productRef = PKG006 /* Text */; };
 		APP013 /* Editor in Frameworks */ = {isa = PBXBuildFile; productRef = PKG005 /* Editor */; };
 		APP015 /* Git in Frameworks */ = {isa = PBXBuildFile; productRef = PKG007 /* Git */; };
 		APP017 /* GhosttyTerminal in Frameworks */ = {isa = PBXBuildFile; productRef = PKG015 /* GhosttyTerminal */; };
@@ -56,6 +57,7 @@
 				APP004 /* Syntax in Frameworks */,
 				APP005 /* UI in Frameworks */,
 				APP006 /* Split in Frameworks */,
+				APP012 /* Text in Frameworks */,
 				APP013 /* Editor in Frameworks */,
 				APP015 /* Git in Frameworks */,
 				APP017 /* GhosttyTerminal in Frameworks */,
@@ -150,6 +152,7 @@
 				PKG002 /* Syntax */,
 				PKG003 /* UI */,
 				PKG004 /* Split */,
+				PKG006 /* Text */,
 				PKG005 /* Editor */,
 				PKG007 /* Git */,
 				PKG015 /* GhosttyTerminal */,
@@ -188,7 +191,9 @@
 				PKR003 /* XCLocalSwiftPackageReference "Packages/UI" */,
 				PKR004 /* XCLocalSwiftPackageReference "Packages/Split" */,
 				PKR005 /* XCLocalSwiftPackageReference "Packages/Editor" */,
+				PKR006 /* XCLocalSwiftPackageReference "Packages/Text" */,
 				PKR007 /* XCLocalSwiftPackageReference "Packages/Git" */,
+				PKR008 /* XCLocalSwiftPackageReference "Packages/Rendering" */,
 				PKR015 /* XCLocalSwiftPackageReference "Packages/GhosttyTerminal" */,
 			);
 			productRefGroup = GRP003 /* Products */;
@@ -543,9 +548,17 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/Editor;
 		};
+		PKR006 /* XCLocalSwiftPackageReference "Packages/Text" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/Text;
+		};
 		PKR007 /* XCLocalSwiftPackageReference "Packages/Git" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/Git;
+		};
+		PKR008 /* XCLocalSwiftPackageReference "Packages/Rendering" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/Rendering;
 		};
 		PKR015 /* XCLocalSwiftPackageReference "Packages/GhosttyTerminal" */ = {
 			isa = XCLocalSwiftPackageReference;
@@ -561,10 +574,12 @@
 		};
 		PKG002 /* Syntax */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = PKR002 /* XCLocalSwiftPackageReference "Packages/Syntax" */;
 			productName = Syntax;
 		};
 		PKG003 /* UI */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = PKR003 /* XCLocalSwiftPackageReference "Packages/UI" */;
 			productName = UI;
 		};
 		PKG004 /* Split */ = {
@@ -574,10 +589,17 @@
 		};
 		PKG005 /* Editor */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = PKR005 /* XCLocalSwiftPackageReference "Packages/Editor" */;
 			productName = Editor;
+		};
+		PKG006 /* Text */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = PKR006 /* XCLocalSwiftPackageReference "Packages/Text" */;
+			productName = Text;
 		};
 		PKG007 /* Git */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = PKR007 /* XCLocalSwiftPackageReference "Packages/Git" */;
 			productName = Git;
 		};
 		PKG015 /* GhosttyTerminal */ = {

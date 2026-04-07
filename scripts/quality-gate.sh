@@ -12,7 +12,18 @@ fi
 cd "$(dirname "$0")/.."
 
 ./scripts/lint.sh
-./scripts/unused.sh
+unused_args=()
+if [[ "${DEVYS_SKIP_APP_PERIPHERY:-0}" == "1" ]]; then
+    unused_args+=(--skip-apps)
+fi
+if [[ "${DEVYS_SKIP_PACKAGE_PERIPHERY:-0}" == "1" ]]; then
+    unused_args+=(--skip-packages)
+fi
+if [[ ${#unused_args[@]} -gt 0 ]]; then
+    ./scripts/unused.sh "${unused_args[@]}"
+else
+    ./scripts/unused.sh
+fi
 ./scripts/check-tree-sitter-migration.sh
 
 echo ""

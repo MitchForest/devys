@@ -56,7 +56,6 @@ public final class RecursiveFileWatchService: FileWatchService, @unchecked Senda
         debounceWorkItem?.cancel()
         debounceWorkItem = nil
         pendingPaths.removeAll()
-        onFileChangeHandler = nil
         lock.unlock()
 
         if let streamToStop {
@@ -233,7 +232,13 @@ public final class RecursiveFileWatchService: FileWatchService, @unchecked Senda
         return work()
     }
 
-    private static func changeType(from flags: FSEventStreamEventFlags) -> FileChangeType {
+    static func changeType(from flags: FSEventStreamEventFlags) -> FileChangeType {
+        if flags & FSEventStreamEventFlags(kFSEventStreamEventFlagMustScanSubDirs) != 0
+            || flags & FSEventStreamEventFlags(kFSEventStreamEventFlagUserDropped) != 0
+            || flags & FSEventStreamEventFlags(kFSEventStreamEventFlagKernelDropped) != 0
+            || flags & FSEventStreamEventFlags(kFSEventStreamEventFlagRootChanged) != 0 {
+            return .overflow
+        }
         if flags & FSEventStreamEventFlags(kFSEventStreamEventFlagItemRemoved) != 0 {
             return .deleted
         }

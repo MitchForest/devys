@@ -23,7 +23,7 @@ public final class CEWorkspaceFileNode: Identifiable {
     public let id: UUID
     
     /// URL to the file or folder.
-    public let url: URL
+    public var url: URL
     
     /// Whether this node represents a directory.
     public let isDirectory: Bool

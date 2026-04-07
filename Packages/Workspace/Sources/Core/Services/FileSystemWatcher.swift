@@ -11,6 +11,7 @@ public enum FileChangeType: Sendable {
     case modified
     case deleted
     case renamed
+    case overflow
 }
 
 /// Callback type for file change notifications.

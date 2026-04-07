@@ -12,18 +12,29 @@ import Workspace
 /// Dynamic metadata (title, icon, folder) comes from the session via TabContentProvider.
 enum TabContent: Equatable {
     case welcome
-    case terminal(id: UUID)
-    case editor(url: URL)
-    case gitDiff(path: String, isStaged: Bool)
+    case terminal(workspaceID: Workspace.ID, id: UUID)
+    case editor(workspaceID: Workspace.ID, url: URL)
+    case gitDiff(workspaceID: Workspace.ID, path: String, isStaged: Bool)
     case settings
+
+    var workspaceID: Workspace.ID? {
+        switch self {
+        case .terminal(let workspaceID, _),
+             .editor(let workspaceID, _),
+             .gitDiff(let workspaceID, _, _):
+            return workspaceID
+        case .welcome, .settings:
+            return nil
+        }
+    }
 
     var fallbackTitle: String {
         switch self {
         case .welcome: return "Welcome"
-        case .gitDiff(let path, _): return (path as NSString).lastPathComponent
+        case .gitDiff(_, let path, _): return (path as NSString).lastPathComponent
         case .terminal: return "Terminal"
         case .settings: return "Settings"
-        case .editor(let url): return url.lastPathComponent
+        case .editor(_, let url): return url.lastPathComponent
         }
     }
 
@@ -33,17 +44,20 @@ enum TabContent: Equatable {
         case .gitDiff: return "plus.forwardslash.minus"
         case .terminal: return "terminal"
         case .settings: return "gearshape"
-        case .editor(let url): return CEWorkspaceFileNode.fileTypeIcon(for: url.pathExtension)
+        case .editor(_, let url): return CEWorkspaceFileNode.fileTypeIcon(for: url.pathExtension)
         }
     }
 
     var stableId: String {
         switch self {
         case .welcome: return "welcome"
-        case .gitDiff(let path, let isStaged): return "gitDiff:\(path):\(isStaged)"
-        case .terminal(let id): return "terminal:\(id.uuidString)"
+        case .gitDiff(let workspaceID, let path, let isStaged):
+            return "gitDiff:\(workspaceID):\(path):\(isStaged)"
+        case .terminal(let workspaceID, let id):
+            return "terminal:\(workspaceID):\(id.uuidString)"
         case .settings: return "settings"
-        case .editor(let url): return "editor:\(url.absoluteString)"
+        case .editor(let workspaceID, let url):
+            return "editor:\(workspaceID):\(url.absoluteString)"
         }
     }
 }

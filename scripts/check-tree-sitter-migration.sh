@@ -4,6 +4,21 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+source ./scripts/tooling.sh
+
+SWIFT_BIN="$(resolve_tool_or_die swift)"
+
+run_clean_swift_test() {
+  env -i \
+    PATH="${PATH}" \
+    HOME="${HOME}" \
+    USER="${USER:-}" \
+    LOGNAME="${LOGNAME:-}" \
+    SHELL="${SHELL:-/bin/bash}" \
+    TMPDIR="${TMPDIR:-/tmp}" \
+    LANG="${LANG:-en_US.UTF-8}" \
+    "$SWIFT_BIN" test --package-path "$1"
+}
 
 forbidden_paths=(
   "Packages/Syntax/Sources/COniguruma"
@@ -98,8 +113,8 @@ for alias in "${required_injection_aliases[@]}"; do
   fi
 done
 
-swift test --package-path Packages/Syntax
-swift test --package-path Packages/Editor
-swift test --package-path Packages/Git
+run_clean_swift_test Packages/Syntax
+run_clean_swift_test Packages/Editor
+run_clean_swift_test Packages/Git
 
 echo "Tree-sitter migration gate passed."

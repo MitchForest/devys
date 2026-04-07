@@ -97,6 +97,9 @@ public final class MetalEditorView: NSView, MTKViewDelegate {
     /// Default editor text color (linear sRGB)
     var textColor: SIMD4<Float> = hexToLinearColor("#d4d4d4")
     
+    /// Whether the editor currently has keyboard focus (is first responder)
+    var hasFocus: Bool = false
+
     /// Cursor color (linear sRGB) - white for monochrome terminal aesthetic
     var cursorColor: SIMD4<Float> = hexToLinearColor("#FFFFFF", alpha: 0.9)
     

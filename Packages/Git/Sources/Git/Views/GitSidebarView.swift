@@ -20,6 +20,7 @@ public struct GitSidebarView: View {
     
     @State private var showingCommitSheet = false
     @State private var expandedSections: Set<String> = ["staged", "unstaged"]
+    @State private var hoveredSection: String?
     
     public init(
         store: GitStore,
@@ -35,8 +36,10 @@ public struct GitSidebarView: View {
     
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header with branch info
-            headerView
+            if let errorMessage = store.errorMessage,
+               !errorMessage.isEmpty {
+                errorBanner(errorMessage)
+            }
             
             if store.isLoading && store.changes.isEmpty {
                 loadingView
@@ -58,9 +61,27 @@ public struct GitSidebarView: View {
                         // Unstaged changes section
                         if !store.unstagedChanges.isEmpty {
                             sectionView(
-                                title: "Changes",
+                                title: "Unstaged",
                                 id: "unstaged",
                                 files: store.unstagedChanges,
+                                isStaged: false
+                            )
+                        }
+
+                        if !store.untrackedChanges.isEmpty {
+                            sectionView(
+                                title: "Untracked",
+                                id: "untracked",
+                                files: store.untrackedChanges,
+                                isStaged: false
+                            )
+                        }
+
+                        if !store.ignoredChanges.isEmpty {
+                            sectionView(
+                                title: "Ignored",
+                                id: "ignored",
+                                files: store.ignoredChanges,
                                 isStaged: false
                             )
                         }
@@ -86,44 +107,12 @@ public struct GitSidebarView: View {
         }
     }
     
-    // MARK: - Header
-    
-    private var headerView: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "arrow.triangle.branch")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-            
-            if let branch = store.repoInfo?.currentBranch {
-                Text(branch)
-                    .font(.system(size: 12, weight: .medium))
-                    .lineLimit(1)
-                
-                if let syncStatus = store.repoInfo?.syncStatus, !syncStatus.isEmpty {
-                    Text(syncStatus)
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                }
-            } else {
-                Text("No repository")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-            }
-            
-            Spacer()
-            
-            // Refresh button
-            Button {
-                Task { await store.refresh() }
-            } label: {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 11))
-            }
-            .buttonStyle(.plain)
-            .disabled(store.isLoading)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+    private func errorBanner(_ message: String) -> some View {
+        Text(message)
+            .font(.system(size: 10))
+            .foregroundStyle(DevysColors.error)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 8)
     }
     
     // MARK: - Section View
@@ -134,62 +123,87 @@ public struct GitSidebarView: View {
         files: [GitFileChange],
         isStaged: Bool
     ) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Section header
-            Button {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    if expandedSections.contains(id) {
-                        expandedSections.remove(id)
-                    } else {
-                        expandedSections.insert(id)
-                    }
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: expandedSections.contains(id) ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.tertiary)
-                        .frame(width: 10)
-                    
-                    Text(title.uppercased())
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                    
-                    Text("\(files.count)")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.tertiary)
-                    
-                    Spacer()
-                    
-                    // Bulk action
-                    if isStaged {
-                        Button("Unstage All") {
-                            Task { await store.unstageAll() }
-                        }
-                        .font(.system(size: 10))
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
-                    } else {
-                        Button("Stage All") {
-                            Task { await store.stageAll() }
-                        }
-                        .font(.system(size: 10))
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            
-            // File list
+        let allowsStageAll = !isStaged && files.contains { $0.status != .ignored }
+
+        return VStack(alignment: .leading, spacing: 0) {
+            sectionHeader(
+                title: title,
+                id: id,
+                count: files.count,
+                isStaged: isStaged,
+                allowsStageAll: allowsStageAll
+            )
+
             if expandedSections.contains(id) {
                 ForEach(files) { file in
                     fileRowView(file: file, isStaged: isStaged)
                 }
             }
+        }
+    }
+
+    private func sectionHeader(
+        title: String,
+        id: String,
+        count: Int,
+        isStaged: Bool,
+        allowsStageAll: Bool
+    ) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                if expandedSections.contains(id) {
+                    expandedSections.remove(id)
+                } else {
+                    expandedSections.insert(id)
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: expandedSections.contains(id) ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(theme.textTertiary)
+                    .frame(width: 10)
+
+                Text(title)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(theme.textSecondary)
+
+                Text("\(count)")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(theme.textTertiary)
+
+                Spacer()
+
+                if hoveredSection == id {
+                    sectionBulkAction(isStaged: isStaged, allowsStageAll: allowsStageAll)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            hoveredSection = hovering ? id : nil
+        }
+    }
+
+    @ViewBuilder
+    private func sectionBulkAction(isStaged: Bool, allowsStageAll: Bool) -> some View {
+        if isStaged {
+            Button("Unstage All") {
+                Task { await store.unstageAll() }
+            }
+            .font(.system(size: 10, weight: .medium))
+            .buttonStyle(.plain)
+            .foregroundStyle(theme.textSecondary)
+        } else if allowsStageAll {
+            Button("Stage All") {
+                Task { await store.stageAll() }
+            }
+            .font(.system(size: 10, weight: .medium))
+            .buttonStyle(.plain)
+            .foregroundStyle(theme.textSecondary)
         }
     }
     
@@ -212,52 +226,52 @@ public struct GitSidebarView: View {
             onAddToChat: onAddDiffToChat != nil ? {
                 onAddDiffToChat?(file.path, isStaged)
             } : nil,
-            onStage: isStaged ? nil : {
+            onStage: isStaged || file.status == .ignored ? nil : {
                 Task<Void, Never> { await store.stage(file.path) }
             },
             onUnstage: isStaged ? {
                 Task<Void, Never> { await store.unstage(file.path) }
             } : nil,
-            onDiscard: isStaged ? nil : {
+            onDiscard: isStaged || file.status == .ignored ? nil : {
                 Task<Void, Never> { await store.discard(file) }
             }
         )
     }
     
-    // MARK: - Empty States
-    
-    private var loadingView: some View {
+}
+
+// MARK: - Empty States & Footer
+
+extension GitSidebarView {
+    var loadingView: some View {
         VStack(spacing: 8) {
             ProgressView()
             Text("Loading...")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(theme.textSecondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-    
-    private var emptyStateView: some View {
+
+    var emptyStateView: some View {
         VStack(spacing: 8) {
             Image(systemName: "checkmark.circle")
                 .font(.system(size: 24))
-                .foregroundStyle(.green.opacity(0.6))
-            
+                .foregroundStyle(DevysColors.success.opacity(0.6))
+
             Text("No Changes")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.secondary)
-            
+                .foregroundStyle(theme.textSecondary)
+
             Text("Working tree is clean")
                 .font(.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(theme.textTertiary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-    
-    // MARK: - Actions Footer
-    
-    private var actionsFooter: some View {
+
+    var actionsFooter: some View {
         HStack(spacing: 8) {
-            // Commit button - terminal style
             Button {
                 showingCommitSheet = true
             } label: {
@@ -273,17 +287,29 @@ public struct GitSidebarView: View {
                 .background(theme.elevated)
                 .overlay(
                     RoundedRectangle(cornerRadius: 4)
-                        .strokeBorder(store.stagedChanges.isEmpty ? theme.border : theme.accent, lineWidth: 1)
+                        .strokeBorder(
+                            store.stagedChanges.isEmpty ? theme.border : theme.accent,
+                            lineWidth: 1
+                        )
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 4))
             }
             .buttonStyle(.plain)
             .disabled(store.stagedChanges.isEmpty)
             .opacity(store.stagedChanges.isEmpty ? 0.5 : 1.0)
-            
+
             Spacer()
-            
-            // Push/Pull buttons
+
+            Button {
+                Task { await store.fetch() }
+            } label: {
+                Image(systemName: "arrow.trianglehead.clockwise")
+                    .font(.system(size: 12))
+            }
+            .buttonStyle(.plain)
+            .help("Fetch")
+            .disabled(store.isLoading)
+
             Button {
                 Task { await store.pull() }
             } label: {
@@ -293,7 +319,7 @@ public struct GitSidebarView: View {
             .buttonStyle(.plain)
             .help("Pull")
             .disabled(store.isLoading)
-            
+
             Button {
                 Task { await store.push() }
             } label: {
@@ -336,7 +362,8 @@ private struct FileRowView: View {
             
             // Filename
             Text(file.filename)
-                .font(.system(size: 12))
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(theme.text)
                 .lineLimit(1)
                 .truncationMode(.middle)
             
@@ -351,7 +378,7 @@ private struct FileRowView: View {
                         } label: {
                             Image(systemName: "plus.circle.fill")
                                 .font(.system(size: 12))
-                                .foregroundStyle(.green)
+                                .foregroundStyle(DevysColors.success)
                         }
                         .buttonStyle(.plain)
                         .help("Stage")
@@ -363,7 +390,7 @@ private struct FileRowView: View {
                         } label: {
                             Image(systemName: "minus.circle.fill")
                                 .font(.system(size: 12))
-                                .foregroundStyle(.orange)
+                                .foregroundStyle(DevysColors.warning)
                         }
                         .buttonStyle(.plain)
                         .help("Unstage")
@@ -375,7 +402,7 @@ private struct FileRowView: View {
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .font(.system(size: 12))
-                                .foregroundStyle(.red)
+                                .foregroundStyle(DevysColors.error)
                         }
                         .buttonStyle(.plain)
                         .help("Discard")
@@ -385,8 +412,8 @@ private struct FileRowView: View {
                 // Directory path (truncated)
                 if !file.directory.isEmpty && file.directory != "." {
                     Text(file.directory)
-                        .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(theme.textTertiary)
                         .lineLimit(1)
                         .truncationMode(.head)
                 }
@@ -410,19 +437,23 @@ private struct FileRowView: View {
         .draggable(GitDiffTransfer(path: file.path, isStaged: isStaged)) {
             // Drag preview
             HStack(spacing: 6) {
-                Image(systemName: "arrow.left.arrow.right")
+                Image(systemName: file.status.iconName)
                     .font(.system(size: 10))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(statusColor)
                 Text(file.filename)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .lineLimit(1)
-                Text(isStaged ? "Staged" : "Changes")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.secondary)
+                Text(isStaged ? "Staged" : "Unstaged")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(theme.textTertiary)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(.ultraThinMaterial)
+            .background(theme.elevated)
+            .overlay {
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(theme.border, lineWidth: 1)
+            }
             .clipShape(RoundedRectangle(cornerRadius: 6))
         }
         .contextMenu {
@@ -488,10 +519,10 @@ private struct FileRowView: View {
     
     private var statusColor: Color {
         switch file.status {
-        case .modified: return .orange
+        case .modified: return DevysColors.warning
         case .added: return DevysColors.success
         case .deleted: return DevysColors.error
-        case .renamed: return theme.textSecondary  // Neutral for renamed
+        case .renamed: return theme.textSecondary
         case .untracked: return theme.textSecondary
         case .unmerged: return DevysColors.error
         case .copied: return .purple

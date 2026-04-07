@@ -8,7 +8,6 @@ import Split
 import UI
 import Editor
 import Git
-import Syntax
 import GhosttyTerminal
 import AppKit
 import Workspace
@@ -16,27 +15,64 @@ import UniformTypeIdentifiers
 
 // MARK: - Content View
 
+struct WorkspaceCreationPresentationRequest: Identifiable {
+    let repository: Repository
+    let mode: WorkspaceCreationMode
+
+    var id: String {
+        "\(repository.id)|\(mode.rawValue)"
+    }
+}
+
+struct NavigatorRevealRequest: Equatable {
+    let workspaceID: Workspace.ID
+    let token: UUID
+}
+
+struct EditorOpenTraceState {
+    let trace: WorkspacePerformanceTrace
+    var tracker: EditorOpenPerformanceTracker
+    var lastCheckpoint: WorkspacePerformanceCheckpoint?
+}
+
 struct ContentView: View {
     // MARK: - State
     
     @Environment(AppContainer.self) var container
     @Environment(AppSettings.self) var appSettings
-    @Environment(RecentFoldersService.self) var recentFoldersService
+    @Environment(RecentRepositoriesService.self) var recentRepositoriesService
     @Environment(LayoutPersistenceService.self) var layoutPersistenceService
-    @Environment(RepositoryCommandSettingsStore.self) var commandSettingsStore
-    @State var windowState = WindowState()
+    @Environment(RepositorySettingsStore.self) var repositorySettingsStore
+    let persistentTerminalHostController = PersistentTerminalHostController()
+    let terminalRelaunchPersistenceStore = TerminalRelaunchPersistenceStore()
+    @State var workspaceCatalog = WindowWorkspaceCatalogStore()
+    @State var runtimeRegistry = WorktreeRuntimeRegistry()
     @State var themeManager = ThemeManager()
-    @State var activeSidebarItem: SidebarItem? = .files
+    @State var activeSidebarItem: WorkspaceSidebarMode? = .files
+    @State var isSidebarVisible: Bool = true
+    @State var isNavigatorCollapsed: Bool = {
+        UserDefaults.standard.bool(forKey: "com.devys.navigator.collapsed")
+    }()
     @State var sidebarWidth: CGFloat = 240
-    @State var gitStore: GitStore?
-    @State var worktreeManager: WorktreeManager?
-    @State var worktreeInfoStore: WorktreeInfoStore?
-    @State var terminalNotificationStore: TerminalNotificationStore?
-    @State var runCommandStore = RunCommandStore()
+    let navigatorWidth: CGFloat = DevysSpacing.navigatorDefaultWidth
+    @State var workspaceTerminalRegistry = WorkspaceTerminalRegistry()
+    @State var workspaceAttentionStore = WorkspaceAttentionStore()
+    @State var workspaceBackgroundProcessRegistry = WorkspaceBackgroundProcessRegistry()
+    @State var workspaceRunStore = WorkspaceRunStore()
+    @State var workspaceCreationRequest: WorkspaceCreationPresentationRequest?
+    @State var navigatorRevealRequest: NavigatorRevealRequest?
+    @State var isCommandPalettePresented = false
+    @State var isNotificationsPanelPresented = false
+    @State var isGitCommitSheetPresented = false
+    @State var isCreatePullRequestSheetPresented = false
+    @State var availableRelaunchSnapshot: TerminalRelaunchSnapshot?
+    @State var pendingTerminalRelaunchSnapshot: TerminalRelaunchSnapshot?
+    @State var rehydratableHostedSessionsByID: [UUID: HostedTerminalSessionRecord] = [:]
+    @State var rehydratableAttachCommandsBySessionID: [UUID: String] = [:]
     
-    @State var terminalSessions: [UUID: GhosttyTerminalSession] = [:]
     @State var editorSessions: [TabID: EditorSession] = [:]
     @State var editorSessionPool = EditorSessionPool()
+    @State var editorOpenTraceStates: [TabID: EditorOpenTraceState] = [:]
     
     /// Delegate for DevysSplit tab lifecycle hooks (close/save prompts)
     @State var splitDelegate = DevysSplitCloseDelegate()
@@ -50,6 +86,7 @@ struct ContentView: View {
     // DevysSplit
     @State var controller = ContentView.makeSplitController()
     @State var tabContents: [TabID: TabContent] = [:]
+    @State var tabPresentationById: [TabID: TabPresentationState] = [:]
     @State var hasInitialized = false
     
     /// Currently selected/focused tab ID
@@ -66,18 +103,97 @@ struct ContentView: View {
     }
     
     var worktreeList: [Worktree] {
-        worktreeManager?.worktrees ?? []
+        workspaceCatalog.selectedRepositoryWorktrees
     }
 
     var worktreeSelectionId: Worktree.ID? {
-        worktreeManager?.selection.selectedWorktreeId
+        workspaceCatalog.selectedWorkspaceID
+    }
+
+    var selectedRepository: Repository? {
+        workspaceCatalog.selectedRepository
+    }
+
+    var selectedCatalogWorktree: Worktree? {
+        workspaceCatalog.selectedWorktree
+    }
+
+    var selectedRepositoryRootURL: URL? {
+        workspaceCatalog.selectedRepositoryRootURL
+    }
+
+    var selectedRepositoryDisplayName: String? {
+        selectedRepository?.displayName
+    }
+
+    var activeRuntime: WorktreeRuntimeHandle? {
+        runtimeRegistry.activeRuntime
+    }
+
+    var activeWorktree: Worktree? {
+        activeRuntime?.worktree
+    }
+
+    var visibleWorkspaceID: Workspace.ID? {
+        activeRuntime?.workspaceID
+    }
+
+    var gitStore: GitStore? {
+        activeRuntime?.gitStore
+    }
+
+    var activeMetadataStore: WorktreeInfoStore? {
+        runtimeRegistry.metadataCoordinator.activeStore
+    }
+
+    var activePortStore: WorkspacePortStore? {
+        runtimeRegistry.portCoordinator.activeStore
+    }
+
+    var navigatorWorktreesByRepository: [Repository.ID: [Worktree]] {
+        workspaceCatalog.worktreesByRepository
+    }
+
+    var workspaceStatesByID: [Worktree.ID: WorktreeState] {
+        workspaceCatalog.workspaceStatesByID
+    }
+
+    var visibleTerminalSessions: [UUID: GhosttyTerminalSession] {
+        workspaceTerminalRegistry.sessions(for: visibleWorkspaceID)
     }
 
     var terminalBellSnapshot: String {
-        terminalSessions
-            .map { "\($0.key.uuidString):\($0.value.bellCount)" }
-            .sorted()
-            .joined(separator: "|")
+        workspaceTerminalRegistry.bellSnapshot
+    }
+
+    var restoreSettingsSnapshot: String {
+        let restore = appSettings.restore
+        return [
+            restore.restoreRepositoriesOnLaunch,
+            restore.restoreSelectedWorkspace,
+            restore.restoreWorkspaceLayoutAndTabs,
+            restore.restoreTerminalSessions
+        ]
+        .map { $0 ? "1" : "0" }
+        .joined(separator: "|")
+    }
+
+    var selectedRepositoryCountSnapshot: String {
+        [
+            "\(workspaceCatalog.repositories.count)",
+            workspaceCatalog.selectedRepositoryID ?? "none",
+            workspaceCatalog.selectedWorkspaceID ?? "none"
+        ].joined(separator: "|")
+    }
+
+    var notificationSettingsSnapshot: String {
+        let notifications = appSettings.notifications
+        return [
+            notifications.terminalActivity,
+            notifications.agentActivity
+        ]
+        .map { $0 ? "1" : "0" }
+        .joined(separator: "|")
     }
     
     // MARK: - Body
@@ -90,117 +206,38 @@ struct ContentView: View {
                 .preferredColorScheme(themeManager.colorScheme)
                 .tint(theme.accent)
         )
-    }
-
-    @ViewBuilder
-    private var rootContent: some View {
-        if windowState.hasFolder {
-            workspaceShell
-        } else {
-            ProjectPickerView(
-                recentFolders: Array(recentFoldersService.load().prefix(5)),
-                onOpenFolder: { requestOpenFolder() },
-                onOpenRecent: { url in
+        .sheet(item: $workspaceCreationRequest) { request in
+            WorkspaceCreationSheet(
+                repository: request.repository,
+                defaults: repositorySettingsStore.settings(for: request.repository.rootURL).workspaceCreation,
+                creationService: container.workspaceCreationService,
+                initialMode: request.mode
+            ) { workspaces in
+                await handleCreatedWorkspaces(workspaces, in: request.repository)
+            }
+        }
+        .sheet(isPresented: $isCommandPalettePresented) {
+            commandPaletteSheetContent
+        }
+        .sheet(isPresented: $isNotificationsPanelPresented) {
+            notificationsPanelContent
+        }
+        .sheet(isPresented: $isGitCommitSheetPresented) {
+            if let gitStore {
+                CommitSheet(store: gitStore)
+            }
+        }
+        .sheet(isPresented: $isCreatePullRequestSheetPresented) {
+            if let gitStore {
+                CreatePRSheet(store: gitStore) { _ in
                     Task { @MainActor in
-                        await openFolder(url)
+                        await handleCreatedPullRequest()
                     }
                 }
-            )
+            }
         }
     }
 
-    private func applyLifecycleModifiers<V: View>(_ view: V) -> some View {
-        applyNotificationModifiers(
-            applySessionModifiers(
-                applyAppearanceModifiers(view)
-            )
-        )
-    }
-
-    private func applyAppearanceModifiers<V: View>(_ view: V) -> some View {
-        view
-            .onAppear {
-                configureSplitDelegate()
-                if !hasInitialized {
-                    hasInitialized = true
-                    themeManager.isDarkMode = appSettings.appearance.isDarkMode
-                    themeManager.setAccentColor(from: appSettings.appearance.accentColor)
-                    themeManager.applyAppearance()
-                    GhosttyTerminalThemeController.apply(themeManager.ghosttyAppearance)
-                    updateGitStore(for: windowState.folder)
-                    updateWorktreeManager(for: windowState.folder)
-                }
-            }
-            .onChange(of: themeManager.isDarkMode) { _, _ in
-                themeManager.applyAppearance()
-                GhosttyTerminalThemeController.apply(themeManager.ghosttyAppearance)
-            }
-            .onChange(of: appSettings.appearance.accentColor) { _, newValue in
-                themeManager.setAccentColor(from: newValue)
-                GhosttyTerminalThemeController.apply(themeManager.ghosttyAppearance)
-                controller.updateColors(splitColorsFromTheme(themeManager.theme))
-            }
-            .onChange(of: themeManager.isDarkMode) { _, _ in
-                controller.updateColors(splitColorsFromTheme(themeManager.theme))
-            }
-            .onChange(of: appSettings.appearance.isDarkMode) { _, newValue in
-                themeManager.isDarkMode = newValue
-            }
-            .onChange(of: windowState.folder) { _, newFolder in
-                updateGitStore(for: newFolder)
-                updateWorktreeManager(for: newFolder)
-            }
-    }
-
-    private func applySessionModifiers<V: View>(_ view: V) -> some View {
-        view
-            .onChange(of: worktreeList) { _, _ in
-                syncWorktreeInfoStore()
-            }
-            .onChange(of: worktreeSelectionId) { _, newValue in
-                syncWorktreeInfoSelection(newValue)
-            }
-            .onChange(of: terminalBellSnapshot) { _, _ in
-                syncTerminalNotifications()
-            }
-            .onChange(of: sessionMetadataSnapshot) { _, _ in
-                syncTabMetadataFromSessions()
-            }
-    }
-
-    private func applyNotificationModifiers<V: View>(_ view: V) -> some View {
-        view
-            .onReceive(NotificationCenter.default.publisher(for: .devysOpenFolder)) { _ in
-                requestOpenFolder()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .devysSave)) { _ in
-                saveActiveEditor()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .devysSaveAs)) { _ in
-                saveActiveEditorAs()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .devysSaveAll)) { _ in
-                Task { @MainActor in
-                    _ = await EditorSessionRegistry.shared.saveAll()
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .devysSaveDefaultLayout)) { _ in
-                saveDefaultLayout()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .devysShowExplorer)) { _ in
-                showSidebarItem(.files)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .devysShowGit)) { _ in
-                showSidebarItem(.git)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .devysShowWorktrees)) { _ in
-                showSidebarItem(.files)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .devysSelectWorktreeIndex)) { notification in
-                guard let index = notification.userInfo?["index"] as? Int else { return }
-                selectWorktree(at: index)
-            }
-    }
 }
 
 @MainActor
@@ -246,28 +283,37 @@ extension ContentView {
 
     var workspaceShell: some View {
         VStack(spacing: 0) {
-            // Main content area
             HStack(spacing: 0) {
-                // Feature Rail (always visible)
-                FeatureRail(
-                    activeItem: $activeSidebarItem,
-                    isDarkMode: $themeManager.isDarkMode,
-                    onNewTerminal: { createTerminal() },
-                    onOpenSettings: { openInPreviewTab(content: .settings) }
-                )
-
-                // Sidebar Content (file tree, etc.)
-                if activeSidebarItem != nil {
-                    sidebarContent
-                        .frame(width: sidebarWidth)
+                if !isNavigatorCollapsed {
+                    navigatorSurface
+                        .frame(width: navigatorWidth)
                         .transition(.move(edge: .leading).combined(with: .opacity))
                 }
 
-                // Main Workspace (DevysSplit)
-                workspace
+                if isSidebarVisible {
+                    sidebarContent
+                        .frame(width: sidebarWidth)
+
+                    SidebarResizeHandle(
+                        width: $sidebarWidth,
+                        minWidth: DevysSpacing.sidebarMinWidth,
+                        maxWidth: DevysSpacing.sidebarMaxWidth,
+                        persistenceKey: "com.devys.sidebar.width"
+                    )
+                }
+
+                VStack(spacing: 0) {
+                    workspaceCanvasToolbar
+                    workspace
+                }
+            }
+            .overlay(alignment: .leading) {
+                NavigatorEdgeHandle(isExpanded: !isNavigatorCollapsed) {
+                    toggleNavigator()
+                }
+                .frame(maxHeight: .infinity, alignment: .leading)
             }
 
-            // Status bar at the bottom
             statusBar
         }
     }

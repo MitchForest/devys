@@ -6,56 +6,41 @@
 import Foundation
 
 public protocol SettingsPersistenceService {
-    func loadExplorerSettings() -> ExplorerSettings
-    func loadAppearanceSettings() -> AppearanceSettings
-    func loadAgentSettings() -> AgentSettings
-
-    func saveExplorerSettings(_ settings: ExplorerSettings)
-    func saveAppearanceSettings(_ settings: AppearanceSettings)
-    func saveAgentSettings(_ settings: AgentSettings)
+    func loadGlobalSettings() -> GlobalSettings
+    func saveGlobalSettings(_ settings: GlobalSettings)
 }
 
 public struct UserDefaultsSettingsPersistenceService: SettingsPersistenceService {
     private enum Keys {
-        static let explorer = "com.devys.settings.explorer"
-        static let appearance = "com.devys.settings.appearance"
-        static let agent = "com.devys.settings.agent"
+        static let global = "com.devys.settings.global"
     }
 
-    public init() {}
+    private let userDefaults: UserDefaults
 
-    public func loadExplorerSettings() -> ExplorerSettings {
-        load(key: Keys.explorer) ?? ExplorerSettings()
+    public init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
     }
 
-    public func loadAppearanceSettings() -> AppearanceSettings {
-        load(key: Keys.appearance) ?? AppearanceSettings()
+    public func loadGlobalSettings() -> GlobalSettings {
+        if let settings: GlobalSettings = load(key: Keys.global) {
+            return settings
+        }
+
+        return GlobalSettings()
     }
 
-    public func loadAgentSettings() -> AgentSettings {
-        load(key: Keys.agent) ?? AgentSettings()
-    }
-
-    public func saveExplorerSettings(_ settings: ExplorerSettings) {
-        save(settings, key: Keys.explorer)
-    }
-
-    public func saveAppearanceSettings(_ settings: AppearanceSettings) {
-        save(settings, key: Keys.appearance)
-    }
-
-    public func saveAgentSettings(_ settings: AgentSettings) {
-        save(settings, key: Keys.agent)
+    public func saveGlobalSettings(_ settings: GlobalSettings) {
+        save(settings, key: Keys.global)
     }
 
     private func save<T: Codable>(_ value: T, key: String) {
         if let data = try? JSONEncoder().encode(value) {
-            UserDefaults.standard.set(data, forKey: key)
+            userDefaults.set(data, forKey: key)
         }
     }
 
     private func load<T: Codable>(key: String) -> T? {
-        guard let data = UserDefaults.standard.data(forKey: key),
+        guard let data = userDefaults.data(forKey: key),
               let value = try? JSONDecoder().decode(T.self, from: data) else {
             return nil
         }

@@ -67,15 +67,38 @@ struct GitModelsTests {
     // MARK: - GitRepositoryInfo
     
     @Test func syncStatus() {
-        let ahead = GitRepositoryInfo(currentBranch: "main", aheadCount: 3, behindCount: 0)
-        let behind = GitRepositoryInfo(currentBranch: "main", aheadCount: 0, behindCount: 2)
-        let both = GitRepositoryInfo(currentBranch: "main", aheadCount: 1, behindCount: 1)
-        let synced = GitRepositoryInfo(currentBranch: "main", aheadCount: 0, behindCount: 0)
+        let ahead = GitRepositoryInfo(
+            currentBranch: "main",
+            upstreamBranch: "origin/main",
+            aheadCount: 3,
+            behindCount: 0
+        )
+        let behind = GitRepositoryInfo(
+            currentBranch: "main",
+            upstreamBranch: "origin/main",
+            aheadCount: 0,
+            behindCount: 2
+        )
+        let both = GitRepositoryInfo(
+            currentBranch: "main",
+            upstreamBranch: "origin/main",
+            aheadCount: 1,
+            behindCount: 1
+        )
+        let synced = GitRepositoryInfo(
+            currentBranch: "main",
+            upstreamBranch: "origin/main",
+            aheadCount: 0,
+            behindCount: 0
+        )
+        let noUpstream = GitRepositoryInfo(currentBranch: "main")
         
         #expect(ahead.syncStatus == "↑3")
         #expect(behind.syncStatus == "↓2")
         #expect(both.syncStatus == "↑1 ↓1")
         #expect(synced.syncStatus == "")
+        #expect(synced.remoteStatusLabel == "UP TO DATE")
+        #expect(noUpstream.remoteStatusLabel == "NO UPSTREAM")
     }
     
     @Test func aheadBehindCounts() {

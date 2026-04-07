@@ -46,12 +46,13 @@ final class GhosttyAppBridge: NSObject, @unchecked Sendable {
         let backingScaleFactor =
             hostView.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
         surfaceConfig.scale_factor = Double(backingScaleFactor)
-        surfaceConfig.wait_after_command = session.requestedCommand != nil
+        let effectiveCommand = session.attachCommand ?? session.requestedCommand
+        surfaceConfig.wait_after_command = effectiveCommand != nil
         surfaceConfig.context = GHOSTTY_SURFACE_CONTEXT_WINDOW
 
         let surface = session.workingDirectory.map(\.path).withOptionalCString { workingDirectory in
             surfaceConfig.working_directory = workingDirectory
-            return session.requestedCommand.withOptionalCString { command in
+            return effectiveCommand.withOptionalCString { command in
                 surfaceConfig.command = command
                 return ghostty_surface_new(app, &surfaceConfig)
             }

@@ -4,30 +4,40 @@
 // Copyright © 2026 Devys. All rights reserved.
 
 import SwiftUI
+import Workspace
 
 extension ContentView {
+    var workspaceCanvasToolbar: some View {
+        ContentViewToolbarSurface(
+            workspaceCatalog: workspaceCatalog,
+            runtimeRegistry: runtimeRegistry,
+            repositorySettingsStore: repositorySettingsStore,
+            isSidebarVisible: isSidebarVisible,
+            onToggleSidebar: toggleSidebar,
+            onShell: { openShellForSelectedWorkspace() },
+            onClaude: { launchClaudeForSelectedWorkspace() },
+            onCodex: { launchCodexForSelectedWorkspace() },
+            onRun: { runSelectedWorkspaceProfile() },
+            onOpenRepositorySettings: { openRepositorySettings() }
+        )
+    }
+
     var statusBar: some View {
-        let selectedWorktree = worktreeManager?.selectedWorktree
-        let worktreeInfo = selectedWorktree.flatMap { worktree in
-            worktreeInfoStore?.entriesById[worktree.id]
-        }
-        let runState = runCommandStore.state(for: selectedWorktree?.id)
-        let runCommand = selectedWorktree.flatMap { worktree in
-            commandSettingsStore.settings(for: worktree.repositoryRootURL).runCommand
-        }
-        return StatusBar(
-            branchName: worktreeInfo?.branchName ?? selectedWorktree?.name,
-            worktreeDetail: selectedWorktree?.detail,
-            lineChanges: worktreeInfo?.lineChanges,
-            pullRequest: worktreeInfo?.pullRequest,
-            prAvailability: worktreeInfoStore?.isPRAvailable,
-            runIsActive: runState?.isRunning == true,
-            onRun: selectedWorktree == nil ? nil : { runSelectedWorktreeCommand() },
-            onStop: runState?.isRunning == true ? { stopSelectedWorktreeCommand() } : nil,
-            onEditRunCommand: selectedWorktree == nil ? nil : { editSelectedWorktreeRunCommand() },
-            onClearRunCommand: (runCommand?.isEmpty == false)
-                ? { clearSelectedWorktreeRunCommand() }
-                : nil
+        ContentViewStatusBarSurface(
+            workspaceCatalog: workspaceCatalog,
+            runtimeRegistry: runtimeRegistry,
+            repositorySettingsStore: repositorySettingsStore,
+            workspaceRunStore: workspaceRunStore,
+            onFetch: { fetchSelectedWorkspaceRemote() },
+            onPull: { pullSelectedWorkspaceRemote() },
+            onPush: { pushSelectedWorkspaceRemote() },
+            onCommit: { commitSelectedWorkspaceChanges() },
+            onCreatePR: { createPullRequestForSelectedWorkspace() },
+            onOpenPR: { openSelectedWorkspacePullRequest() },
+            onRun: { runSelectedWorkspaceProfile() },
+            onStop: { stopSelectedWorkspaceProfile() },
+            onOpenRunSettings: { editSelectedWorkspaceProfiles() },
+            onToggleNavigator: { toggleNavigator() }
         )
     }
 }

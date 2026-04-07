@@ -6,34 +6,38 @@
 import Foundation
 
 /// Represents a git repository tracked by Devys.
-public struct Repository: Identifiable, Codable, Equatable, Sendable {
-    /// Unique identifier for this repository.
-    public let id: UUID
+public struct Repository: Identifiable, Codable, Equatable, Hashable, Sendable {
+    public typealias ID = String
+
+    /// Stable identifier for this repository.
+    /// Uses the standardized repository root path.
+    public let id: ID
 
     /// URL to the repository root.
     public var rootURL: URL
 
     /// Display name for the repository.
-    public var name: String
+    public var displayName: String
 
-    /// Last time this repository was opened.
-    public var lastOpened: Date?
+    /// Reference used to look up repository-scoped settings.
+    public var settingsReference: String
 
     /// Creates a new repository record.
     /// - Parameters:
     ///   - rootURL: Repository root URL.
-    ///   - name: Display name. Defaults to the folder name.
-    ///   - lastOpened: Last opened date.
-    ///   - id: Unique identifier.
+    ///   - displayName: Display name. Defaults to the folder name.
+    ///   - settingsReference: Optional settings reference. Defaults to the repository ID.
     public init(
         rootURL: URL,
-        name: String? = nil,
-        lastOpened: Date? = nil,
-        id: UUID = UUID()
+        displayName: String? = nil,
+        settingsReference: String? = nil
     ) {
-        self.id = id
-        self.rootURL = rootURL
-        self.name = name ?? rootURL.lastPathComponent
-        self.lastOpened = lastOpened
+        let normalizedRootURL = rootURL.standardizedFileURL
+        let stableID = normalizedRootURL.path
+
+        self.id = stableID
+        self.rootURL = normalizedRootURL
+        self.displayName = displayName ?? normalizedRootURL.lastPathComponent
+        self.settingsReference = settingsReference ?? stableID
     }
 }

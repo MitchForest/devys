@@ -12,39 +12,10 @@ public struct DefaultWorktreeStatusProvider: WorktreeStatusProvider {
 
     public func statusSummary(for worktreeURL: URL) async -> WorktreeStatusSummary? {
         let client = GitClient(repositoryURL: worktreeURL)
-        let changes: [GitFileChange]
         do {
-            changes = try await client.status()
+            return try await client.statusSummary()
         } catch {
             return nil
         }
-
-        var staged = 0
-        var unstaged = 0
-        var untracked = 0
-        var conflicts = 0
-
-        for change in changes {
-            if change.status == .unmerged {
-                conflicts += 1
-                continue
-            }
-            if change.status == .untracked {
-                untracked += 1
-                continue
-            }
-            if change.isStaged {
-                staged += 1
-            } else {
-                unstaged += 1
-            }
-        }
-
-        return WorktreeStatusSummary(
-            staged: staged,
-            unstaged: unstaged,
-            untracked: untracked,
-            conflicts: conflicts
-        )
     }
 }

@@ -7,7 +7,7 @@ import SwiftUI
 import Workspace
 import UI
 
-/// The expandable sidebar content showing workspace files for a single folder.
+/// The expandable sidebar content showing workspace files for the active directory.
 ///
 /// Tab opening behavior (VS Code-style):
 /// - Single click: Opens in preview tab (reusable) via `onPreviewFile`
@@ -17,60 +17,38 @@ struct SidebarContentView: View {
 
     // MARK: - Properties
 
-    let windowState: WindowState
+    let model: FileTreeModel?
+    let activeDirectory: URL?
+    let gitStatusIndex: WorkspaceFileTreeGitStatusIndex?
     let onPreviewFile: (URL) -> Void   // Single-click: preview tab
     let onOpenFile: (URL) -> Void      // Double-click: permanent tab
-    let onOpenFolder: () -> Void
+    let onOpenRepository: () -> Void
     let onAddToChat: ((URL) -> Void)?  // Context menu: add file to chat
+    let showsTrailingBorder: Bool
 
     // MARK: - Body
 
     var body: some View {
         HStack(spacing: 0) {
-            VStack(spacing: 0) {
-                // Header
-                sidebarHeader
+            contentArea
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                // Content area
-                contentArea
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if showsTrailingBorder {
+                Rectangle()
+                    .fill(theme.borderSubtle)
+                    .frame(width: 1)
             }
-
-            // Right border connecting to top bar
-            Rectangle()
-                .fill(theme.borderSubtle)
-                .frame(width: 1)
         }
         .background(theme.surface)
     }
 
-    // MARK: - Header
-
-    private var sidebarHeader: some View {
-        HStack {
-            Text("EXPLORER")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(theme.textSecondary)
-
-            Spacer()
-
-            Button(action: onOpenFolder) {
-                Image(systemName: "folder")
-                    .font(.system(size: 12))
-                    .foregroundStyle(theme.textSecondary)
-            }
-            .buttonStyle(.plain)
-            .help("Open Folder (Cmd+O)")
-        }
-        .padding(.horizontal, DevysSpacing.space3)
-        .padding(.vertical, DevysSpacing.space2)
-    }
-
     @ViewBuilder
     private var contentArea: some View {
-        if let folder = windowState.folder {
+        if let activeDirectory {
             SingleFolderTreeView(
-                folder: folder,
+                model: model,
+                folder: activeDirectory,
+                gitStatusIndex: gitStatusIndex,
                 onPreviewFile: onPreviewFile,
                 onOpenFile: onOpenFile,
                 onAddToChat: onAddToChat
@@ -84,20 +62,19 @@ struct SidebarContentView: View {
 // MARK: - Single Folder Tree View
 
 private struct SingleFolderTreeView: View {
-    @Environment(AppContainer.self) private var container
-
+    let model: FileTreeModel?
     let folder: URL
+    let gitStatusIndex: WorkspaceFileTreeGitStatusIndex?
     let onPreviewFile: (URL) -> Void   // Single-click
     let onOpenFile: (URL) -> Void       // Double-click
     let onAddToChat: ((URL) -> Void)?   // Context menu: add to chat
-
-    @State private var model: FileTreeModel?
 
     var body: some View {
         Group {
             if let model = model {
                 FileTreeView(
                     model: model,
+                    gitStatusIndex: gitStatusIndex,
                     onPreviewFile: onPreviewFile,
                     onOpenFile: onOpenFile,
                     onAddToChat: onAddToChat
@@ -107,11 +84,8 @@ private struct SingleFolderTreeView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .onAppear {
-            model = container.makeFileTreeModel(rootURL: folder)
-        }
-        .onChange(of: folder) { _, newFolder in
-            model = container.makeFileTreeModel(rootURL: newFolder)
+        .task(id: folder) {
+            await model?.loadTreeIfNeeded()
         }
     }
 }
@@ -121,19 +95,22 @@ private struct SingleFolderTreeView: View {
 #Preview("Single Folder") {
     @Previewable @State var state = WindowState()
     let container = AppContainer()
-    state.openFolder(URL(fileURLWithPath: "/Users/test/Code/devys"))
+    state.openRepository(URL(fileURLWithPath: "/Users/test/Code/devys"))
 
     return SidebarContentView(
-        windowState: state,
+        model: nil,
+        activeDirectory: state.selectedRepositoryRootURL,
+        gitStatusIndex: nil,
         onPreviewFile: { _ in },
         onOpenFile: { _ in },
-        onOpenFolder: {},
-        onAddToChat: { _ in }
+        onOpenRepository: {},
+        onAddToChat: { _ in },
+        showsTrailingBorder: true
     )
     .frame(width: 240, height: 400)
     .environment(container)
     .environment(container.appSettings)
-    .environment(container.recentFoldersService)
+    .environment(container.recentRepositoriesService)
     .environment(container.layoutPersistenceService)
     .environment(\.devysTheme, DevysTheme(isDark: false))
 }

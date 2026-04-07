@@ -6,6 +6,7 @@ import Foundation
 public protocol WorktreeInfoProvider: Sendable {
     func branchName(for worktreeURL: URL) async -> String?
     func lineChanges(for worktreeURL: URL) async -> WorktreeLineChanges?
+    func repositoryInfo(for worktreeURL: URL) async -> GitRepositoryInfo?
     func isPullRequestAvailable(for repositoryRoot: URL) async -> Bool
     func pullRequests(for repositoryRoot: URL, branches: [String]) async -> [String: PullRequest]
 }
@@ -21,6 +22,11 @@ public struct DefaultWorktreeInfoProvider: WorktreeInfoProvider {
     public func lineChanges(for worktreeURL: URL) async -> WorktreeLineChanges? {
         let client = GitClient(repositoryURL: worktreeURL)
         return try? await client.lineChanges()
+    }
+
+    public func repositoryInfo(for worktreeURL: URL) async -> GitRepositoryInfo? {
+        let client = GitClient(repositoryURL: worktreeURL)
+        return try? await client.repositoryInfo()
     }
 
     public func isPullRequestAvailable(for repositoryRoot: URL) async -> Bool {

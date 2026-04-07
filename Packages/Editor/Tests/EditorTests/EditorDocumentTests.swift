@@ -12,12 +12,17 @@ private struct PreparedDocumentIOService: DocumentIOService {
     let textDocument: TextDocument
     let language: String
 
-    func loadPreview(url _: URL) async throws -> LoadedDocumentPreview {
+    func loadPreview(url _: URL, request: DocumentPreviewRequest) async throws -> LoadedDocumentPreview {
         LoadedDocumentPreview(
-            content: textDocument.snapshot().slice(
-                TextByteRange(0, textDocument.snapshot().utf8Length)
-            ).text,
-            language: language
+            kind: .text(
+                textDocument.snapshot().slice(
+                    TextByteRange(0, textDocument.snapshot().utf8Length)
+                ).text
+            ),
+            language: language,
+            revision: DocumentPreviewRevision(fileSize: nil, contentModificationDate: nil),
+            exceededLimit: false,
+            maxBytes: request.maxBytes
         )
     }
 
@@ -151,6 +156,30 @@ struct EditorDocumentTests {
         #expect(document.snapshot != nil)
         #expect(document.hasLoadedTextDocument)
         #expect(document.content == "let preview = true\n")
+        #expect(document.fileURL == url)
+    }
+
+    @Test("Loaded documents adopt a prepared reload when the version still matches")
+    @MainActor
+    func testLoadedDocumentActivatesPreparedReloadInPlace() async throws {
+        let url = URL(fileURLWithPath: "/tmp/LoadedReload.swift")
+        let document = EditorDocument(
+            content: "let stale = true\n",
+            language: "swift"
+        )
+        document.fileURL = url
+
+        let expectedVersion = document.documentVersion
+        let prepared = try await EditorDocument.prepareTextDocument(content: "let fresh = true\n")
+
+        try await document.activatePreparedTextDocument(
+            prepared,
+            expectedVersion: expectedVersion,
+            fileURL: url
+        )
+
+        #expect(document.hasLoadedTextDocument)
+        #expect(document.content == "let fresh = true\n")
         #expect(document.fileURL == url)
     }
 }

@@ -113,7 +113,7 @@ public enum DevysColors {
     /// Error (errors only)
     public static let error = Color(hex: "#FF3B30")
     
-    // MARK: - Legacy Static Colors (Dark Mode Only)
+    // MARK: - Static Dark Palette
     
     public static let bg0 = darkBg0
     public static let bg1 = darkBg1

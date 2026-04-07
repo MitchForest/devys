@@ -2,6 +2,7 @@
 // Main diff view with unified/split mode support.
 
 import SwiftUI
+import UI
 
 /// Main diff view for displaying file changes.
 @MainActor
@@ -67,11 +68,11 @@ public struct GitDiffView: View {
                 HStack(spacing: 8) {
                     Text("+\(diff.totalAdded)")
                         .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.green)
-                    
+                        .foregroundStyle(DevysColors.success)
+
                     Text("-\(diff.totalRemoved)")
                         .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.red)
+                        .foregroundStyle(DevysColors.error)
                 }
             }
             
@@ -212,7 +213,7 @@ public struct GitDiffView: View {
         VStack(spacing: 12) {
             Image(systemName: "checkmark.circle")
                 .font(.system(size: 32))
-                .foregroundStyle(.green.opacity(0.6))
+                .foregroundStyle(DevysColors.success.opacity(0.6))
             
             Text("No Changes")
                 .font(.headline)

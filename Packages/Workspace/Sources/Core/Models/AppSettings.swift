@@ -6,6 +6,77 @@
 import Foundation
 import Observation
 
+public struct GlobalSettings: Codable, Equatable, Sendable {
+    public var shell: ShellSettings
+    public var explorer: ExplorerSettings
+    public var appearance: AppearanceSettings
+    public var agent: AgentSettings
+    public var notifications: NotificationSettings
+    public var restore: RestoreSettings
+    public var shortcuts: WorkspaceShellShortcutSettings
+
+    private enum CodingKeys: String, CodingKey {
+        case shell
+        case explorer
+        case appearance
+        case agent
+        case notifications
+        case restore
+        case shortcuts
+    }
+
+    public init(
+        shell: ShellSettings = ShellSettings(),
+        explorer: ExplorerSettings = ExplorerSettings(),
+        appearance: AppearanceSettings = AppearanceSettings(),
+        agent: AgentSettings = AgentSettings(),
+        notifications: NotificationSettings = NotificationSettings(),
+        restore: RestoreSettings = RestoreSettings(),
+        shortcuts: WorkspaceShellShortcutSettings = WorkspaceShellShortcutSettings()
+    ) {
+        self.shell = shell
+        self.explorer = explorer
+        self.appearance = appearance
+        self.agent = agent
+        self.notifications = notifications
+        self.restore = restore
+        self.shortcuts = shortcuts
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let legacyShell = try container.decodeIfPresent(LegacyShellSettings.self, forKey: .shell)
+            ?? LegacyShellSettings()
+
+        self.shell = legacyShell.currentSettings
+        self.explorer = try container.decodeIfPresent(ExplorerSettings.self, forKey: .explorer)
+            ?? ExplorerSettings()
+        self.appearance = try container.decodeIfPresent(AppearanceSettings.self, forKey: .appearance)
+            ?? AppearanceSettings()
+        self.agent = try container.decodeIfPresent(AgentSettings.self, forKey: .agent)
+            ?? AgentSettings()
+        self.notifications = try container.decodeIfPresent(NotificationSettings.self, forKey: .notifications)
+            ?? NotificationSettings()
+        self.restore = try container.decodeIfPresent(RestoreSettings.self, forKey: .restore)
+            ?? RestoreSettings(restoreTerminalSessions: legacyShell.preserveTerminalsOnRelaunch ?? false)
+        self.shortcuts = try container.decodeIfPresent(
+            WorkspaceShellShortcutSettings.self,
+            forKey: .shortcuts
+        ) ?? WorkspaceShellShortcutSettings()
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(shell, forKey: .shell)
+        try container.encode(explorer, forKey: .explorer)
+        try container.encode(appearance, forKey: .appearance)
+        try container.encode(agent, forKey: .agent)
+        try container.encode(notifications, forKey: .notifications)
+        try container.encode(restore, forKey: .restore)
+        try container.encode(shortcuts, forKey: .shortcuts)
+    }
+}
+
 /// Central settings model for the Devys application.
 ///
 /// This is the single source of truth for all user preferences.
@@ -19,6 +90,11 @@ import Observation
 @Observable
 public final class AppSettings {
     // MARK: - Settings Categories
+
+    /// Shell-level settings.
+    public var shell: ShellSettings {
+        didSet { save() }
+    }
     
     /// File explorer settings
     public var explorer: ExplorerSettings {
@@ -34,6 +110,21 @@ public final class AppSettings {
     public var agent: AgentSettings {
         didSet { save() }
     }
+
+    /// Workspace notification preferences.
+    public var notifications: NotificationSettings {
+        didSet { save() }
+    }
+
+    /// Session and workspace restore preferences.
+    public var restore: RestoreSettings {
+        didSet { save() }
+    }
+
+    /// User-editable workspace shell shortcuts.
+    public var shortcuts: WorkspaceShellShortcutSettings {
+        didSet { save() }
+    }
     
     // MARK: - Persistence
 
@@ -43,24 +134,108 @@ public final class AppSettings {
     
     public init(persistenceService: SettingsPersistenceService = UserDefaultsSettingsPersistenceService()) {
         self.persistenceService = persistenceService
-        self.explorer = persistenceService.loadExplorerSettings()
-        self.appearance = persistenceService.loadAppearanceSettings()
-        self.agent = persistenceService.loadAgentSettings()
+        let globalSettings = persistenceService.loadGlobalSettings()
+        self.shell = globalSettings.shell
+        self.explorer = globalSettings.explorer
+        self.appearance = globalSettings.appearance
+        self.agent = globalSettings.agent
+        self.notifications = globalSettings.notifications
+        self.restore = globalSettings.restore
+        self.shortcuts = globalSettings.shortcuts
     }
     
     private func save() {
-        persistenceService.saveExplorerSettings(explorer)
-        persistenceService.saveAppearanceSettings(appearance)
-        persistenceService.saveAgentSettings(agent)
+        persistenceService.saveGlobalSettings(
+            GlobalSettings(
+                shell: shell,
+                explorer: explorer,
+                appearance: appearance,
+                agent: agent,
+                notifications: notifications,
+                restore: restore,
+                shortcuts: shortcuts
+            )
+        )
     }
     
     // MARK: - Reset
     
     /// Resets all settings to defaults
     public func resetToDefaults() {
+        shell = ShellSettings()
         explorer = ExplorerSettings()
         appearance = AppearanceSettings()
         agent = AgentSettings()
+        notifications = NotificationSettings()
+        restore = RestoreSettings()
+        shortcuts = WorkspaceShellShortcutSettings()
+    }
+}
+
+// MARK: - Shell Settings
+
+/// Settings for shell-wide behavior.
+public struct ShellSettings: Codable, Equatable, Sendable {
+    /// Optional bundle identifier for the preferred external editor.
+    public var defaultExternalEditorBundleIdentifier: String?
+
+    public init(
+        defaultExternalEditorBundleIdentifier: String? = nil
+    ) {
+        self.defaultExternalEditorBundleIdentifier = defaultExternalEditorBundleIdentifier
+    }
+}
+
+private struct LegacyShellSettings: Codable, Equatable, Sendable {
+    var defaultExternalEditorBundleIdentifier: String?
+    var preserveTerminalsOnRelaunch: Bool?
+
+    init(
+        defaultExternalEditorBundleIdentifier: String? = nil,
+        preserveTerminalsOnRelaunch: Bool? = nil
+    ) {
+        self.defaultExternalEditorBundleIdentifier = defaultExternalEditorBundleIdentifier
+        self.preserveTerminalsOnRelaunch = preserveTerminalsOnRelaunch
+    }
+
+    var currentSettings: ShellSettings {
+        ShellSettings(defaultExternalEditorBundleIdentifier: defaultExternalEditorBundleIdentifier)
+    }
+}
+
+// MARK: - Notification Settings
+
+public struct NotificationSettings: Codable, Equatable, Sendable {
+    public var terminalActivity: Bool
+    public var agentActivity: Bool
+
+    public init(
+        terminalActivity: Bool = true,
+        agentActivity: Bool = true
+    ) {
+        self.terminalActivity = terminalActivity
+        self.agentActivity = agentActivity
+    }
+}
+
+// MARK: - Restore Settings
+
+public struct RestoreSettings: Codable, Equatable, Sendable {
+    public var restoreRepositoriesOnLaunch: Bool
+    public var restoreSelectedWorkspace: Bool
+    public var restoreWorkspaceLayoutAndTabs: Bool
+    public var restoreTerminalSessions: Bool
+
+    public init(
+        restoreRepositoriesOnLaunch: Bool = true,
+        restoreSelectedWorkspace: Bool = true,
+        restoreWorkspaceLayoutAndTabs: Bool = true,
+        restoreTerminalSessions: Bool = false
+    ) {
+        self.restoreRepositoriesOnLaunch = restoreRepositoriesOnLaunch
+        self.restoreSelectedWorkspace = restoreSelectedWorkspace
+        self.restoreWorkspaceLayoutAndTabs = restoreWorkspaceLayoutAndTabs
+        self.restoreTerminalSessions = restoreTerminalSessions
     }
 }
 

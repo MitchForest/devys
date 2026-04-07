@@ -15,14 +15,59 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(path: "../Text"),
-        .package(url: "https://github.com/tree-sitter/swift-tree-sitter.git", from: "0.10.0"),
-        .package(
-            url: "https://github.com/alex-pinkus/tree-sitter-swift.git",
-            revision: "190aedc3042a2a1fcc17838eb05b2b2f2c0b7880"
-        )
+        .package(path: "../Text")
     ],
     targets: [
+        .target(
+            name: "TreeSitter",
+            path: "Vendor/tree-sitter/lib",
+            exclude: [
+                "src/unicode/ICU_SHA",
+                "src/unicode/README.md",
+                "src/unicode/LICENSE",
+                "src/wasm/stdlib-symbols.txt",
+                "src/lib.c"
+            ],
+            sources: ["src"],
+            publicHeadersPath: "include",
+            cSettings: [
+                .headerSearchPath("src"),
+                .define("_POSIX_C_SOURCE", to: "200112L"),
+                .define("_DEFAULT_SOURCE"),
+                .define("_DARWIN_C_SOURCE")
+            ]
+        ),
+        .target(
+            name: "TreeSitterSwift",
+            dependencies: [],
+            path: "Vendor/tree-sitter-swift",
+            sources: [
+                "src/parser.c",
+                "src/scanner.c"
+            ],
+            publicHeadersPath: "bindings/swift",
+            cSettings: [
+                .headerSearchPath("src")
+            ]
+        ),
+        .target(
+            name: "SwiftTreeSitter",
+            dependencies: ["TreeSitter"],
+            path: "Sources/SwiftTreeSitter",
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
+                .enableExperimentalFeature("StrictConcurrency")
+            ]
+        ),
+        .target(
+            name: "SwiftTreeSitterLayer",
+            dependencies: ["SwiftTreeSitter"],
+            path: "Sources/SwiftTreeSitterLayer",
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
+                .enableExperimentalFeature("StrictConcurrency")
+            ]
+        ),
         .target(
             name: "TreeSitterBash",
             dependencies: [],
@@ -285,18 +330,19 @@ let package = Package(
                 "src/scanner.c",
                 "src/schema.core.c",
                 "src/schema.json.c",
-                "src/schema.legacy.c"
+                "src/schema.yaml11.c"
             ],
             publicHeadersPath: "bindings/swift",
             cSettings: [
                 .headerSearchPath("src"),
-                .headerSearchPath("../TreeSitterSupport/include")
+                .headerSearchPath("../TreeSitterSupport/include"),
+                .unsafeFlags(["-fno-modules"])
             ]
         ),
         .target(
             name: "Syntax",
             dependencies: [
-                "Text",
+                .product(name: "Text", package: "Text"),
                 "TreeSitterBash",
                 "TreeSitterC",
                 "TreeSitterCPP",
@@ -321,9 +367,10 @@ let package = Package(
                 "TreeSitterTypeScript",
                 "TreeSitterTSX",
                 "TreeSitterYAML",
-                .product(name: "SwiftTreeSitter", package: "swift-tree-sitter"),
-                .product(name: "SwiftTreeSitterLayer", package: "swift-tree-sitter"),
-                .product(name: "TreeSitterSwift", package: "tree-sitter-swift")
+                "TreeSitter",
+                "TreeSitterSwift",
+                "SwiftTreeSitter",
+                "SwiftTreeSitterLayer"
             ],
             resources: [
                 .process("Resources/TreeSitterThemes"),
@@ -343,4 +390,6 @@ let package = Package(
             ]
         ),
     ]
+    ,
+    cLanguageStandard: .c11
 )

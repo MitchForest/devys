@@ -223,7 +223,7 @@ public struct TerminalDivider: View {
 
 #Preview("Terminal Commands") {
     VStack(alignment: .leading, spacing: 12) {
-        TerminalCommandButton("open folder", icon: "folder") {}
+        TerminalCommandButton("add repository", icon: "folder") {}
         TerminalCommandButton("new chat", icon: "plus.message", isAccent: false) {}
         
         HStack {

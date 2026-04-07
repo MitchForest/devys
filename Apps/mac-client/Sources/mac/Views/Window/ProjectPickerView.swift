@@ -9,9 +9,11 @@ import UI
 struct ProjectPickerView: View {
     @Environment(\.devysTheme) private var theme
 
-    let recentFolders: [URL]
-    let onOpenFolder: () -> Void
-    let onOpenRecent: (URL) -> Void
+    let recentRepositories: [URL]
+    let canRestorePreviousSession: Bool
+    let onAddRepository: () -> Void
+    let onRestorePreviousSession: () -> Void
+    let onOpenRecentRepository: (URL) -> Void
 
     var body: some View {
         VStack(spacing: DevysSpacing.space10) {
@@ -26,7 +28,7 @@ struct ProjectPickerView: View {
                 .padding(.horizontal, DevysSpacing.space8)
 
             // Recent projects or empty state
-            if recentFolders.isEmpty {
+            if recentRepositories.isEmpty {
                 emptyState
             } else {
                 recentList
@@ -38,7 +40,7 @@ struct ProjectPickerView: View {
                 .padding(.horizontal, DevysSpacing.space8)
 
             // Open folder action
-            openFolderSection
+            actionsSection
 
             Spacer()
         }
@@ -48,11 +50,11 @@ struct ProjectPickerView: View {
 
     private var emptyState: some View {
         VStack(spacing: DevysSpacing.space2) {
-            Text("no recent projects")
+            Text("no recent repositories")
                 .font(DevysTypography.sm)
                 .foregroundStyle(theme.textSecondary)
 
-            Text("$ open a folder to get started")
+            Text("$ add a repository to get started")
                 .font(DevysTypography.xs)
                 .foregroundStyle(theme.textTertiary)
         }
@@ -70,12 +72,12 @@ struct ProjectPickerView: View {
 
             // Project list with tree characters
             VStack(spacing: 0) {
-                ForEach(Array(recentFolders.enumerated()), id: \.element) { index, url in
-                    RecentFolderRow(
+                ForEach(Array(recentRepositories.enumerated()), id: \.element) { index, url in
+                    RecentRepositoryRow(
                         url: url,
-                        isLast: index == recentFolders.count - 1
+                        isLast: index == recentRepositories.count - 1
                     ) {
-                        onOpenRecent(url)
+                        onOpenRecentRepository(url)
                     }
                 }
             }
@@ -83,20 +85,36 @@ struct ProjectPickerView: View {
         }
     }
 
-    private var openFolderSection: some View {
-        HStack(spacing: DevysSpacing.space3) {
-            TerminalCommandButton("open folder", icon: "folder", isAccent: true) {
-                onOpenFolder()
+    private var actionsSection: some View {
+        VStack(spacing: DevysSpacing.space3) {
+            HStack(spacing: DevysSpacing.space3) {
+                TerminalCommandButton("add repository", icon: "folder", isAccent: true) {
+                    onAddRepository()
+                }
+                
+                KeyboardShortcutBadge("CMD+O")
             }
-            
-            KeyboardShortcutBadge("CMD+O")
+
+            if canRestorePreviousSession {
+                Button(action: onRestorePreviousSession) {
+                    HStack(spacing: DevysSpacing.space2) {
+                        Text("> restore previous session")
+                            .font(DevysTypography.sm)
+                            .foregroundStyle(theme.accent)
+                        Text("reopen repositories and workspace state")
+                            .font(DevysTypography.xs)
+                            .foregroundStyle(theme.textTertiary)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 }
 
-// MARK: - Recent Folder Row
+// MARK: - Recent Repository Row
 
-private struct RecentFolderRow: View {
+private struct RecentRepositoryRow: View {
     @Environment(\.devysTheme) private var theme
 
     let url: URL

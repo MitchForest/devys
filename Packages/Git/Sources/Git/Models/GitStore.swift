@@ -18,12 +18,15 @@ public final class GitStore {
     
     /// All file changes (staged and unstaged).
     private(set) var changes: [GitFileChange] = []
+
+    /// Whether there are any uncommitted changes.
+    public var hasChanges: Bool { !changes.isEmpty }
     
     /// Whether a refresh is in progress.
     var isLoading: Bool = false
     
     /// Error message if last operation failed.
-    var errorMessage: String?
+    public internal(set) var errorMessage: String?
     
     // MARK: - Selection State
     
@@ -39,6 +42,7 @@ public final class GitStore {
     /// Current diff load task (for cancellation).
     private var diffTask: Task<DiffSnapshot, Never>?
     private var diffRequestID = UUID()
+    @ObservationIgnored public var onChangesDidUpdate: (([GitFileChange]) -> Void)?
     
     // MARK: - View Settings
     
@@ -91,7 +95,26 @@ public final class GitStore {
     
     /// Unstaged changes.
     var unstagedChanges: [GitFileChange] {
-        changes.filter { !$0.isStaged }
+        changes.filter {
+            !$0.isStaged &&
+            $0.status != .untracked &&
+            $0.status != .ignored
+        }
+    }
+
+    /// Untracked changes.
+    var untrackedChanges: [GitFileChange] {
+        changes.filter { !$0.isStaged && $0.status == .untracked }
+    }
+
+    /// Ignored files.
+    var ignoredChanges: [GitFileChange] {
+        changes.filter { !$0.isStaged && $0.status == .ignored }
+    }
+
+    /// All visible changes returned by the default status path.
+    public var allChanges: [GitFileChange] {
+        changes
     }
     
     // MARK: - Services
@@ -101,8 +124,20 @@ public final class GitStore {
     private let fileWatchServiceFactory: (URL) -> FileWatchService
     private var fileWatchService: FileWatchService?
     
+    // MARK: - Error Handling
+
+    /// Sets errorMessage only for real errors, ignoring task cancellation.
+    func setError(_ error: Error, prefix: String? = nil) {
+        guard !(error is CancellationError) else { return }
+        if let prefix {
+            errorMessage = "\(prefix): \(error.localizedDescription)"
+        } else {
+            setError(error)
+        }
+    }
+
     // MARK: - Background Tasks
-    
+
     private var refreshTask: Task<Void, Never>?
     private var pollTask: Task<Void, Never>?
     private var prPollTask: Task<Void, Never>?
@@ -215,6 +250,7 @@ extension GitStore {
             let info = try await gitService.repositoryInfo()
             
             changes = status
+            onChangesDidUpdate?(status)
             repoInfo = info
             
             // Refresh diff for selected file if any
@@ -222,12 +258,12 @@ extension GitStore {
                 await refreshDiff(for: path, staged: isViewingStaged)
             }
         } catch {
-            errorMessage = error.localizedDescription
+            setError(error)
         }
-        
+
         isLoading = false
     }
-    
+
     /// Check if PR functionality is available.
     public func checkPRAvailability() async {
         isPRAvailable = await gitService.isPRAvailable()
@@ -242,7 +278,7 @@ extension GitStore {
     // MARK: - File Selection
     
     /// Select a file and load its diff.
-    func selectFile(_ path: String, isStaged: Bool) async {
+    public func selectFile(_ path: String, isStaged: Bool) async {
         selectedFilePath = path
         isViewingStaged = isStaged
         isShowingHistory = false
@@ -278,7 +314,7 @@ extension GitStore {
             diffTask = nil
         } catch {
             selectedDiff = nil
-            errorMessage = "Failed to load diff: \(error.localizedDescription)"
+            setError(error, prefix: "Failed to load diff")
         }
     }
     
@@ -315,10 +351,10 @@ extension GitStore {
             try await gitService.stage(path)
             await refresh()
         } catch {
-            errorMessage = error.localizedDescription
+            setError(error)
         }
     }
-    
+
     /// Unstage a file.
     func unstage(_ path: String) async {
         guard gitService.hasRepository else { return }
@@ -327,7 +363,7 @@ extension GitStore {
             try await gitService.unstage(path)
             await refresh()
         } catch {
-            errorMessage = error.localizedDescription
+            setError(error)
         }
     }
     
@@ -339,7 +375,7 @@ extension GitStore {
             try await gitService.stageAll()
             await refresh()
         } catch {
-            errorMessage = error.localizedDescription
+            setError(error)
         }
     }
     
@@ -351,7 +387,7 @@ extension GitStore {
             try await gitService.unstageAll()
             await refresh()
         } catch {
-            errorMessage = error.localizedDescription
+            setError(error)
         }
     }
     
@@ -370,7 +406,7 @@ extension GitStore {
             try await gitService.stageHunk(hunk, for: path)
             await refresh()
         } catch {
-            errorMessage = "Failed to accept hunk: \(error.localizedDescription)"
+            setError(error, prefix: "Failed to accept hunk")
         }
     }
     
@@ -395,7 +431,7 @@ extension GitStore {
             try await gitService.discardHunk(hunk, for: path)
             await refresh()
         } catch {
-            errorMessage = "Failed to reject hunk: \(error.localizedDescription)"
+            setError(error, prefix: "Failed to reject hunk")
         }
     }
     
@@ -431,14 +467,14 @@ extension GitStore {
             }
             await refresh()
         } catch {
-            errorMessage = error.localizedDescription
+            setError(error)
         }
     }
     
     // MARK: - Commit
     
     /// Commit staged changes.
-    func commit(message: String, push: Bool = false) async throws {
+    public func commit(message: String, push: Bool = false) async throws {
         guard gitService.hasRepository else {
             throw GitError.notRepository(projectFolder ?? URL(fileURLWithPath: "/"))
         }
@@ -455,7 +491,7 @@ extension GitStore {
             
             await refresh()
         } catch {
-            errorMessage = error.localizedDescription
+            setError(error)
             isLoading = false
             throw error
         }
@@ -465,8 +501,25 @@ extension GitStore {
     
     // MARK: - Remote Operations
     
+    /// Fetch from the remote.
+    public func fetch() async {
+        guard gitService.hasRepository else { return }
+
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            try await gitService.fetch()
+            await refresh()
+        } catch {
+            if !(error is CancellationError) { errorMessage = formatFetchError(error) }
+        }
+
+        isLoading = false
+    }
+
     /// Push to remote.
-    func push() async {
+    public func push() async {
         guard gitService.hasRepository else { return }
         
         isLoading = true
@@ -476,14 +529,14 @@ extension GitStore {
             try await gitService.push()
             await refresh()
         } catch {
-            errorMessage = formatPushError(error)
+            if !(error is CancellationError) { errorMessage = formatPushError(error) }
         }
         
         isLoading = false
     }
     
     /// Pull from remote.
-    func pull() async {
+    public func pull() async {
         guard gitService.hasRepository else { return }
         
         isLoading = true
@@ -493,12 +546,16 @@ extension GitStore {
             try await gitService.pull()
             await refresh()
         } catch {
-            errorMessage = formatPullError(error)
+            if !(error is CancellationError) { errorMessage = formatPullError(error) }
         }
         
         isLoading = false
     }
     
+    private func formatFetchError(_ error: Error) -> String {
+        "Fetch failed: \(error.localizedDescription)"
+    }
+
     private func formatPushError(_ error: Error) -> String {
         let message = error.localizedDescription.lowercased()
         if message.contains("non-fast-forward") || message.contains("fetch first") || message.contains("rejected") {
@@ -524,7 +581,7 @@ extension GitStore {
         do {
             return try await gitService.branches()
         } catch {
-            errorMessage = "Failed to load branches: \(error.localizedDescription)"
+            setError(error, prefix: "Failed to load branches")
             return []
         }
     }
@@ -540,7 +597,7 @@ extension GitStore {
             try await gitService.checkout(branch: branch)
             await refresh()
         } catch {
-            errorMessage = "Checkout failed: \(error.localizedDescription)"
+            setError(error, prefix: "Checkout failed")
         }
         
         isLoading = false
@@ -557,7 +614,7 @@ extension GitStore {
             try await gitService.createBranch(name: name)
             await refresh()
         } catch {
-            errorMessage = "Failed to create branch: \(error.localizedDescription)"
+            setError(error, prefix: "Failed to create branch")
         }
         
         isLoading = false
@@ -574,7 +631,7 @@ extension GitStore {
             try await gitService.deleteBranch(name: name, force: force)
             await refresh()
         } catch {
-            errorMessage = "Failed to delete branch: \(error.localizedDescription)"
+            setError(error, prefix: "Failed to delete branch")
         }
         
         isLoading = false
@@ -592,7 +649,7 @@ extension GitStore {
         do {
             commits = try await gitService.log(count: count)
         } catch {
-            errorMessage = "Failed to load commits: \(error.localizedDescription)"
+            setError(error, prefix: "Failed to load commits")
             commits = []
         }
     }
@@ -604,7 +661,7 @@ extension GitStore {
         do {
             return try await gitService.show(commit: commit.hash)
         } catch {
-            errorMessage = "Failed to load commit diff: \(error.localizedDescription)"
+            setError(error, prefix: "Failed to load commit diff")
             return nil
         }
     }

@@ -197,7 +197,7 @@ extension DevysButton.Size {
 
 #Preview("Button Styles") {
     VStack(spacing: DevysSpacing.space4) {
-        DevysButton("Open Folder", icon: "folder", style: .primary) {}
+        DevysButton("Add Repository", icon: "folder", style: .primary) {}
         DevysButton("New File", icon: "doc", style: .secondary) {}
         DevysButton("Cancel", icon: "xmark", style: .ghost) {}
         DevysButton("Delete", icon: "trash", style: .danger) {}

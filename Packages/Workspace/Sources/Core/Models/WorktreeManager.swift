@@ -44,7 +44,6 @@ public final class WorktreeManager {
         self.repositoryRoot = repositoryRoot
         guard let repositoryRoot else {
             worktrees = []
-            pruneStates(validIds: [])
             updateSelectionIfNeeded()
             return
         }
@@ -83,12 +82,12 @@ public final class WorktreeManager {
 
     /// Returns ordered worktrees excluding archived entries.
     public var orderedWorktrees: [Worktree] {
-        orderedWorktrees(includeArchived: false)
+        visibleWorktrees(from: worktrees)
     }
 
     /// Returns archived worktrees only.
     public var archivedWorktrees: [Worktree] {
-        orderedWorktrees(includeArchived: true).filter { statesById[$0.id]?.isArchived == true }
+        archivedWorktrees(from: worktrees)
     }
 
     /// Updates the selected worktree.
@@ -131,9 +130,55 @@ public final class WorktreeManager {
         }
     }
 
-    private func orderedWorktrees(includeArchived: Bool) -> [Worktree] {
+    /// Updates the display name override for a worktree.
+    public func setDisplayNameOverride(_ value: String?, for worktreeId: Worktree.ID) {
+        updateState(worktreeId: worktreeId) { state in
+            let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+            state.displayNameOverride = (trimmed?.isEmpty == false) ? trimmed : nil
+        }
+    }
+
+    /// Returns persisted state for a worktree, if any.
+    public func state(for worktreeId: Worktree.ID) -> WorktreeState? {
+        statesById[worktreeId]
+    }
+
+    /// Returns the user-visible display name for a worktree.
+    public func displayName(for worktree: Worktree) -> String {
+        let override = statesById[worktree.id]?.displayNameOverride?.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        if let override, !override.isEmpty {
+            return override
+        }
+        return worktree.name
+    }
+
+    /// Returns ordered visible worktrees for any repository slice.
+    public func visibleWorktrees(from worktrees: [Worktree]) -> [Worktree] {
+        orderedWorktrees(from: worktrees, includeArchived: false)
+    }
+
+    /// Returns ordered archived worktrees for any repository slice.
+    public func archivedWorktrees(from worktrees: [Worktree]) -> [Worktree] {
+        orderedWorktrees(from: worktrees, includeArchived: true).filter {
+            statesById[$0.id]?.isArchived == true
+        }
+    }
+
+    /// Removes persisted state for a worktree.
+    public func removeState(for worktreeId: Worktree.ID) {
+        statesById.removeValue(forKey: worktreeId)
+        if selection.selectedWorktreeId == worktreeId {
+            selection.selectedWorktreeId = nil
+            persistenceService.saveSelection(selection)
+        }
+        persistStates()
+    }
+
+    private func orderedWorktrees(from worktrees: [Worktree], includeArchived: Bool) -> [Worktree] {
         let entries = worktrees.compactMap { worktree -> (Worktree, WorktreeState)? in
-            guard let state = statesById[worktree.id] else { return nil }
+            let state = statesById[worktree.id] ?? WorktreeState(worktreeId: worktree.id)
             if !includeArchived && state.isArchived { return nil }
             return (worktree, state)
         }
@@ -158,34 +203,28 @@ public final class WorktreeManager {
         let pinned = state.isPinned ? 0 : 1
         let order = state.order ?? Int.max
         let lastFocused = state.lastFocused?.timeIntervalSince1970 ?? 0
-        return (pinned: pinned, order: order, lastFocused: lastFocused, name: worktree.name)
+        return (pinned: pinned, order: order, lastFocused: lastFocused, name: displayName(for: worktree))
     }
 
     private func mergeStates() {
-        var merged: [Worktree.ID: WorktreeState] = [:]
+        var merged = statesById
         for worktree in worktrees {
-            if let existing = statesById[worktree.id] {
-                merged[worktree.id] = existing
-            } else {
-                merged[worktree.id] = WorktreeState(worktreeId: worktree.id)
-            }
+            merged[worktree.id] = merged[worktree.id] ?? WorktreeState(worktreeId: worktree.id)
         }
         statesById = merged
-        persistStates()
-    }
-
-    private func pruneStates(validIds: [Worktree.ID]) {
-        let valid = Set(validIds)
-        statesById = statesById.filter { valid.contains($0.key) }
         persistStates()
     }
 
     private func updateSelectionIfNeeded() {
         let validIds = Set(worktrees.map(\Worktree.id))
         if let selected = selection.selectedWorktreeId, validIds.contains(selected) {
+            if statesById[selected]?.isArchived == true {
+                selection.selectedWorktreeId = visibleWorktrees(from: worktrees).first?.id
+                persistenceService.saveSelection(selection)
+            }
             return
         }
-        let defaultId = orderedWorktrees.first?.id
+        let defaultId = visibleWorktrees(from: worktrees).first?.id
         selection.selectedWorktreeId = defaultId
         persistenceService.saveSelection(selection)
     }

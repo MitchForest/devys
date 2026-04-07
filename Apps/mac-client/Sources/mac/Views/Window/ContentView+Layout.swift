@@ -11,7 +11,7 @@ import Workspace
 @MainActor
 extension ContentView {
     func saveDefaultLayout() {
-        guard windowState.hasFolder else { return }
+        guard workspaceCatalog.hasRepositories else { return }
         let tree = controller.treeSnapshot()
         let layout = PanelLayout(tree: panelNode(from: tree))
         layoutPersistenceService.saveDefaultLayout(layout)
@@ -59,12 +59,9 @@ extension ContentView {
         case .pane:
             return .pane(.empty)
         case .split(let split):
-            let orientation: Workspace.SplitOrientation = split.orientation == "horizontal"
-                ? .horizontal
-                : .vertical
             let ratio = CGFloat(split.dividerPosition)
             return .split(
-                orientation: orientation,
+                orientation: split.orientation == "horizontal" ? .horizontal : .vertical,
                 children: [panelNode(from: split.first), panelNode(from: split.second)],
                 ratios: [ratio, max(0, 1 - ratio)]
             )

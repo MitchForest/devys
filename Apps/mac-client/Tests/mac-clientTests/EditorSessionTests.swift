@@ -35,9 +35,11 @@ struct EditorSessionTests {
         #expect(firstSession === secondSession)
         #expect(pool.sessionsByURL.count == 1)
 
-        try await Task.sleep(for: .milliseconds(200))
-
-        #expect(firstSession.document?.content == "let shared = true\n")
+        #expect(
+            await waitUntil {
+                firstSession.document?.content == "let shared = true\n"
+            }
+        )
 
         pool.release(url: url)
         #expect(pool.session(for: url) === firstSession)
@@ -62,24 +64,28 @@ struct EditorSessionTests {
             },
             documentBuilder: { _, preview in
                 try await Task.sleep(for: .milliseconds(120))
-                return try await EditorDocument.prepareTextDocument(content: preview.content)
+                return try await EditorDocument.prepareTextDocument(content: preview.content ?? "")
             }
         )
 
         session.open(url)
 
-        try await Task.sleep(for: .milliseconds(60))
-
-        #expect(session.preview?.content == "let preview = true")
-        #expect(session.document?.content == "let preview = true")
-        #expect(session.isLoading)
+        #expect(
+            await waitUntil {
+                session.preview?.content == "let preview = true" &&
+                    session.document?.content == "let preview = true" &&
+                    session.isLoading
+            }
+        )
 
         let previewDocument = session.document
 
-        try await Task.sleep(for: .milliseconds(140))
-
-        #expect(session.document?.content == "let preview = true")
-        #expect(session.isLoading == false)
+        #expect(
+            await waitUntil {
+                session.document?.content == "let preview = true" &&
+                    session.isLoading == false
+            }
+        )
         #expect(session.document === previewDocument)
     }
 
@@ -163,7 +169,7 @@ struct EditorSessionTests {
                 } else {
                     try await Task.sleep(for: .milliseconds(20))
                 }
-                return try await EditorDocument.prepareTextDocument(content: preview.content)
+                return try await EditorDocument.prepareTextDocument(content: preview.content ?? "")
             }
         )
 
@@ -180,4 +186,123 @@ struct EditorSessionTests {
         #expect(session.url == secondURL)
         #expect(session.document?.content == "let file = \"second-preview\"")
     }
+
+    @Test("Too-large preview short-circuits before full document build")
+    @MainActor
+    func shortCircuitsTooLargePreview() async throws {
+        let url = URL(fileURLWithPath: "/tmp/LargePreview.swift")
+        let builderCalls = LoadCounter()
+        let session = EditorSession(
+            url: url,
+            previewLoader: { _ in
+                EditorSessionPreview(
+                    kind: .tooLarge,
+                    language: "swift",
+                    revision: DocumentPreviewRevision(
+                        fileSize: 8_192,
+                        contentModificationDate: nil
+                    ),
+                    exceededLimit: true,
+                    maxBytes: 1_024
+                )
+            },
+            documentBuilder: { _, _ in
+                await builderCalls.recordCall()
+                return try await EditorDocument.prepareTextDocument(content: "should not load")
+            }
+        )
+
+        session.open(url)
+
+        try await Task.sleep(for: .milliseconds(40))
+
+        #expect(session.preview?.isTooLarge == true)
+        #expect(session.document == nil)
+        #expect(session.isLoading == false)
+        #expect(await builderCalls.value() == 0)
+    }
+
+    @Test("Reopening the same file only reloads when its revision changes")
+    @MainActor
+    func reloadsOnlyWhenRevisionChanges() async throws {
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let url = tempDirectory.appendingPathComponent("Tracked.swift")
+        try "let value = 1\n".write(to: url, atomically: true, encoding: .utf8)
+
+        let previewCalls = LoadCounter()
+        let builderCalls = LoadCounter()
+        let session = EditorSession(
+            url: url,
+            previewLoader: { url in
+                await previewCalls.recordCall()
+                let content = try String(contentsOf: url, encoding: .utf8)
+                return EditorSessionPreview(
+                    kind: .text(content),
+                    language: "swift",
+                    revision: try DocumentPreviewRevision.current(for: url),
+                    exceededLimit: false,
+                    maxBytes: DocumentPreviewRequest.default.maxBytes
+                )
+            },
+            documentBuilder: { _, preview in
+                await builderCalls.recordCall()
+                return try await EditorDocument.prepareTextDocument(content: preview.content ?? "")
+            }
+        )
+
+        session.open(url)
+
+        #expect(
+            await waitUntil {
+                session.document?.content == "let value = 1\n" &&
+                    session.isLoading == false
+            }
+        )
+        #expect(await previewCalls.value() == 1)
+        #expect(await builderCalls.value() == 1)
+
+        session.open(url)
+
+        try await Task.sleep(for: .milliseconds(50))
+
+        #expect(await previewCalls.value() == 1)
+        #expect(await builderCalls.value() == 1)
+
+        try await Task.sleep(for: .milliseconds(20))
+        try "let value = 22\n".write(to: url, atomically: true, encoding: .utf8)
+
+        session.open(url)
+
+        #expect(
+            await waitUntil {
+                session.document?.content == "let value = 22\n" &&
+                    session.isLoading == false
+            }
+        )
+        #expect(await previewCalls.value() == 2)
+        #expect(await builderCalls.value() == 2)
+    }
+}
+
+@MainActor
+private func waitUntil(
+    timeout: Duration = .seconds(2),
+    interval: Duration = .milliseconds(20),
+    condition: @escaping @MainActor () -> Bool
+) async -> Bool {
+    let clock = ContinuousClock()
+    let deadline = clock.now + timeout
+
+    while clock.now < deadline {
+        if condition() {
+            return true
+        }
+        try? await Task.sleep(for: interval)
+    }
+
+    return condition()
 }

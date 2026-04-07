@@ -235,7 +235,6 @@ public final class EditorDocument {
         let contentForActivation = content
         let currentVersion = documentVersion
         let shouldAdoptPrepared =
-            textSnapshot == nil &&
             currentVersion == expectedVersion &&
             !isDirty
 

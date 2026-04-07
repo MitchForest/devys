@@ -25,6 +25,9 @@ public struct WorktreeState: Codable, Equatable, Sendable {
     /// Assigned agent name for multi-agent workflows.
     public var assignedAgentName: String?
 
+    /// Optional user-visible display name override.
+    public var displayNameOverride: String?
+
     /// Creates a new worktree state record.
     /// - Parameters:
     ///   - worktreeId: Worktree identifier.
@@ -38,7 +41,8 @@ public struct WorktreeState: Codable, Equatable, Sendable {
         isArchived: Bool = false,
         order: Int? = nil,
         lastFocused: Date? = nil,
-        assignedAgentName: String? = nil
+        assignedAgentName: String? = nil,
+        displayNameOverride: String? = nil
     ) {
         self.worktreeId = worktreeId
         self.isPinned = isPinned
@@ -46,5 +50,6 @@ public struct WorktreeState: Codable, Equatable, Sendable {
         self.order = order
         self.lastFocused = lastFocused
         self.assignedAgentName = assignedAgentName
+        self.displayNameOverride = displayNameOverride
     }
 }

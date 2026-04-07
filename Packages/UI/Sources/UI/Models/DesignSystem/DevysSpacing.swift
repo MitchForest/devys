@@ -70,9 +70,18 @@ public enum DevysSpacing {
     
     /// Sidebar collapsed width (icon rail)
     public static let sidebarCollapsed: CGFloat = 48
-    
+
     /// Sidebar expanded width
     public static let sidebarExpanded: CGFloat = 240
+
+    /// Navigator sidebar constraints
+    public static let navigatorDefaultWidth: CGFloat = 180
+    public static let navigatorMinWidth: CGFloat = 180
+    public static let navigatorMaxWidth: CGFloat = 480
+
+    /// Workspace sidebar constraints
+    public static let sidebarMinWidth: CGFloat = 180
+    public static let sidebarMaxWidth: CGFloat = 480
     
     /// Tab bar height
     public static let tabBarHeight: CGFloat = 36

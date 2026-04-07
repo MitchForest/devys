@@ -171,7 +171,8 @@ extension ContentView {
     
     /// Create an editor tab from a dropped file
     private func openEditorTabFromDrop(url: URL, inPane paneId: PaneID) -> TabID? {
-        let content = TabContent.editor(url: url)
+        guard let workspaceID = workspaceCatalog.selectedWorkspaceID else { return nil }
+        let content = TabContent.editor(workspaceID: workspaceID, url: url)
         
         // Check if already open
         if let existingTabId = findExistingTab(for: content) {
@@ -188,8 +189,13 @@ extension ContentView {
         guard let transfer = try? JSONDecoder().decode(GitDiffTransfer.self, from: data) else {
             return nil
         }
-        
-        let content = TabContent.gitDiff(path: transfer.path, isStaged: transfer.isStaged)
+        guard let workspaceID = workspaceCatalog.selectedWorkspaceID else { return nil }
+
+        let content = TabContent.gitDiff(
+            workspaceID: workspaceID,
+            path: transfer.path,
+            isStaged: transfer.isStaged
+        )
         
         // Check if already open
         if let existingTabId = findExistingTab(for: content) {

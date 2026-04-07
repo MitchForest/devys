@@ -4,6 +4,7 @@
 // Copyright © 2026 Devys. All rights reserved.
 
 import Foundation
+import CoreServices
 import Testing
 @testable import Workspace
 
@@ -25,5 +26,14 @@ struct RecursiveFileWatchServiceTests {
         let pointer = Unmanaged.passUnretained(cfArray).toOpaque()
         let decoded = RecursiveFileWatchService.decodePaths(count: 2, pointer: pointer)
         #expect(decoded == Array(paths.prefix(2)))
+    }
+
+    @Test("overflow-related FSEvent flags map to overflow")
+    func overflowFlagsMapToOverflow() {
+        let flags = FSEventStreamEventFlags(
+            kFSEventStreamEventFlagMustScanSubDirs
+            | kFSEventStreamEventFlagKernelDropped
+        )
+        #expect(RecursiveFileWatchService.changeType(from: flags) == .overflow)
     }
 }

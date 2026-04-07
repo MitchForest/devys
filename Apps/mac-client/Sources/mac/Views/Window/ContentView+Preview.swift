@@ -11,8 +11,9 @@ import SwiftUI
         .frame(width: 1200, height: 800)
         .environment(container)
         .environment(container.appSettings)
-        .environment(container.recentFoldersService)
+        .environment(container.recentRepositoriesService)
         .environment(container.layoutPersistenceService)
+        .environment(container.repositorySettingsStore)
 }
 
 #Preview("Dark Mode") {
@@ -25,8 +26,9 @@ import SwiftUI
                 .preferredColorScheme(.dark)
                 .environment(container)
                 .environment(container.appSettings)
-                .environment(container.recentFoldersService)
+                .environment(container.recentRepositoriesService)
                 .environment(container.layoutPersistenceService)
+                .environment(container.repositorySettingsStore)
         }
     }
     return DarkPreview()

@@ -10,17 +10,27 @@ import UI
 /// Worktree-aware bottom status bar for branch and repo context.
 struct StatusBar: View {
     @Environment(\.devysTheme) private var theme
-    
+
+    let repositoryName: String?
     let branchName: String?
+    let repositoryInfo: GitRepositoryInfo?
     let worktreeDetail: String?
     let lineChanges: WorktreeLineChanges?
     let pullRequest: PullRequest?
     let prAvailability: Bool?
+    let portSummary: WorkspacePortSummary?
+    let hasStagedChanges: Bool
+    let onFetch: (() -> Void)?
+    let onPull: (() -> Void)?
+    let onPush: (() -> Void)?
+    let onCommit: (() -> Void)?
+    let onCreatePR: (() -> Void)?
+    let onOpenPR: (() -> Void)?
     let runIsActive: Bool
     let onRun: (() -> Void)?
     let onStop: (() -> Void)?
-    let onEditRunCommand: (() -> Void)?
-    let onClearRunCommand: (() -> Void)?
+    let onOpenRunSettings: (() -> Void)?
+    let onToggleNavigator: (() -> Void)?
     
     static var height: CGFloat { 24 }
     
@@ -30,20 +40,46 @@ struct StatusBar: View {
                 .fill(theme.surface)
 
             HStack(spacing: DevysSpacing.space3) {
-                if let branchLabel = branchName {
+                // Repository and branch context (clickable to toggle navigator)
+                Button {
+                    onToggleNavigator?()
+                } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "arrow.triangle.branch")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(theme.textSecondary)
+                        if let repositoryName {
+                            Image(systemName: "shippingbox")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(theme.textSecondary)
 
-                        Text(branchLabel)
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(theme.text)
+                            Text(repositoryName)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(theme.text)
+                                .lineLimit(1)
+
+                            Text("/")
+                                .font(.system(size: 10))
+                                .foregroundStyle(theme.textTertiary)
+                        }
+
+                        if let branchLabel = branchName {
+                            Image(systemName: "arrow.triangle.branch")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(theme.textSecondary)
+
+                            Text(branchLabel)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(theme.text)
+                                .lineLimit(1)
+                        } else if repositoryName == nil {
+                            Text("NO WORKTREE")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(theme.textTertiary)
+                        }
                     }
-                } else {
-                    Text("NO WORKTREE")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(theme.textTertiary)
+                }
+                .buttonStyle(.plain)
+
+                if let repositoryInfo {
+                    remoteBadge(repositoryInfo)
                 }
 
                 if let detail = worktreeDetail, !detail.isEmpty {
@@ -65,7 +101,15 @@ struct StatusBar: View {
                     prBadge(pullRequest)
                 }
 
+                if let portSummary, portSummary.hasPorts {
+                    portsBadge(portSummary)
+                }
+
                 Spacer()
+
+                if showsGitMenu {
+                    gitActionsMenu
+                }
 
                 if let onRun {
                     HStack(spacing: 6) {
@@ -75,8 +119,7 @@ struct StatusBar: View {
                                 label: "Stop",
                                 tint: DevysColors.error,
                                 action: onStop,
-                                onEdit: onEditRunCommand,
-                                onClear: onClearRunCommand
+                                onOpenSettings: onOpenRunSettings
                             )
                         } else {
                             actionButton(
@@ -84,8 +127,7 @@ struct StatusBar: View {
                                 label: "Run",
                                 tint: DevysColors.success,
                                 action: onRun,
-                                onEdit: onEditRunCommand,
-                                onClear: onClearRunCommand
+                                onOpenSettings: onOpenRunSettings
                             )
                         }
                     }
@@ -95,6 +137,15 @@ struct StatusBar: View {
         }
         .frame(height: Self.height)
         .overlay(topBorder, alignment: .top)
+    }
+
+    private var showsGitMenu: Bool {
+        onFetch != nil ||
+        onPull != nil ||
+        onPush != nil ||
+        onCommit != nil ||
+        onCreatePR != nil ||
+        onOpenPR != nil
     }
 
     private var topBorder: some View {
@@ -111,6 +162,16 @@ struct StatusBar: View {
                 .foregroundStyle(DevysColors.error)
         }
         .font(.system(size: 10, weight: .semibold))
+    }
+
+    private func remoteBadge(_ repositoryInfo: GitRepositoryInfo) -> some View {
+        Text(repositoryInfo.remoteStatusLabel)
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(remoteBadgeForeground(for: repositoryInfo))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(theme.elevated)
+            .clipShape(RoundedRectangle(cornerRadius: 4))
     }
 
     private func prBadge(_ pr: PullRequest) -> some View {
@@ -140,6 +201,71 @@ struct StatusBar: View {
             .clipShape(RoundedRectangle(cornerRadius: 4))
     }
 
+    private func portsBadge(_ summary: WorkspacePortSummary) -> some View {
+        let label = summary.totalCount == 1 ? "1 PORT" : "\(summary.totalCount) PORTS"
+        let foreground = summary.hasConflicts ? DevysColors.warning : theme.textSecondary
+
+        return Text(label)
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(foreground)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(theme.elevated)
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+    }
+
+    private var gitActionsMenu: some View {
+        Menu {
+            Button(action: onFetch ?? {}) {
+                Label("Fetch", systemImage: "arrow.trianglehead.clockwise")
+            }
+            .disabled(onFetch == nil)
+
+            Button(action: onPull ?? {}) {
+                Label("Pull", systemImage: "arrow.down.circle")
+            }
+            .disabled(onPull == nil)
+
+            Button(action: onPush ?? {}) {
+                Label("Push", systemImage: "arrow.up.circle")
+            }
+            .disabled(onPush == nil)
+
+            Divider()
+
+            Button(action: onCommit ?? {}) {
+                Label("Commit", systemImage: "checkmark.circle")
+            }
+            .disabled(onCommit == nil || !hasStagedChanges)
+
+            Divider()
+
+            Button(action: onCreatePR ?? {}) {
+                Label("Create Pull Request", systemImage: "arrow.triangle.pull")
+            }
+            .disabled(onCreatePR == nil)
+
+            Button(action: onOpenPR ?? {}) {
+                Label("Open Pull Request", systemImage: "arrow.up.forward.app")
+            }
+            .disabled(onOpenPR == nil)
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.triangle.branch")
+                    .font(.system(size: 9, weight: .semibold))
+                Text("GIT")
+                    .font(.system(size: 9, weight: .semibold))
+            }
+            .foregroundStyle(theme.textSecondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(theme.elevated)
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+    }
+
     private func checksColor(_ status: ChecksStatus) -> Color {
         switch status {
         case .passing:
@@ -151,13 +277,25 @@ struct StatusBar: View {
         }
     }
 
+    private func remoteBadgeForeground(for repositoryInfo: GitRepositoryInfo) -> Color {
+        if !repositoryInfo.hasUpstream {
+            return theme.textTertiary
+        }
+        if repositoryInfo.behindCount > 0 {
+            return DevysColors.warning
+        }
+        if repositoryInfo.aheadCount > 0 {
+            return theme.textSecondary
+        }
+        return DevysColors.success
+    }
+
     private func actionButton(
         icon: String,
         label: String,
         tint: Color,
         action: @escaping () -> Void,
-        onEdit: (() -> Void)?,
-        onClear: (() -> Void)?
+        onOpenSettings: (() -> Void)?
     ) -> some View {
         Button(action: action) {
             HStack(spacing: 4) {
@@ -174,14 +312,9 @@ struct StatusBar: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
-            if let onEdit {
-                Button("Edit Run Command") {
-                    onEdit()
-                }
-            }
-            if let onClear {
-                Button("Clear Run Command") {
-                    onClear()
+            if let onOpenSettings {
+                Button("Edit Startup Profiles") {
+                    onOpenSettings()
                 }
             }
         }
@@ -202,16 +335,26 @@ struct StatusBar: View {
         .frame(height: 300)
 
         StatusBar(
+            repositoryName: "devys",
             branchName: "main",
+            repositoryInfo: GitRepositoryInfo(currentBranch: "main", upstreamBranch: "origin/main"),
             worktreeDetail: ".",
             lineChanges: WorktreeLineChanges(added: 12, removed: 3),
             pullRequest: nil,
             prAvailability: true,
+            portSummary: WorkspacePortSummary(totalCount: 2, conflictCount: 0),
+            hasStagedChanges: true,
+            onFetch: {},
+            onPull: {},
+            onPush: {},
+            onCommit: {},
+            onCreatePR: {},
+            onOpenPR: nil,
             runIsActive: false,
             onRun: {},
             onStop: {},
-            onEditRunCommand: {},
-            onClearRunCommand: {}
+            onOpenRunSettings: {},
+            onToggleNavigator: {}
         )
     }
     .frame(width: 800)
@@ -230,16 +373,26 @@ struct StatusBar: View {
         .frame(height: 300)
 
         StatusBar(
+            repositoryName: "devys",
             branchName: "feature/worktree-ui",
+            repositoryInfo: GitRepositoryInfo(currentBranch: "feature/worktree-ui"),
             worktreeDetail: "../feature/worktree-ui",
             lineChanges: WorktreeLineChanges(added: 0, removed: 0),
             pullRequest: nil,
             prAvailability: false,
+            portSummary: WorkspacePortSummary(totalCount: 1, conflictCount: 1),
+            hasStagedChanges: false,
+            onFetch: {},
+            onPull: {},
+            onPush: {},
+            onCommit: nil,
+            onCreatePR: nil,
+            onOpenPR: nil,
             runIsActive: true,
             onRun: {},
             onStop: {},
-            onEditRunCommand: {},
-            onClearRunCommand: {}
+            onOpenRunSettings: {},
+            onToggleNavigator: {}
         )
     }
     .frame(width: 800)

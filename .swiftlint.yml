@@ -14,6 +14,8 @@ excluded:
   - Packages/*/Tests
   - .derivedData
   - DerivedData
+  - Packages/Syntax/Sources/SwiftTreeSitter
+  - Packages/Syntax/Sources/SwiftTreeSitterLayer
 
 # Rules configuration
 disabled_rules:

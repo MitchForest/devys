@@ -29,6 +29,9 @@ public struct EditorView: NSViewRepresentable {
 
     /// Callback for document URL changes (Save As)
     private let onDocumentURLChange: ((URL) -> Void)?
+
+    /// Focus request counter - when incremented, the editor requests keyboard focus
+    private let focusRequestID: Int
     
     /// Configuration from environment
     @Environment(\.editorConfiguration) private var baseConfiguration
@@ -45,8 +48,9 @@ public struct EditorView: NSViewRepresentable {
         self.initialContent = nil
         self.language = nil
         self.onDocumentURLChange = nil
+        self.focusRequestID = 0
     }
-    
+
     /// Create editor with initial content
     public init(content: String, language: String = "plaintext") {
         self.url = nil
@@ -54,15 +58,21 @@ public struct EditorView: NSViewRepresentable {
         self.initialContent = content
         self.language = language
         self.onDocumentURLChange = nil
+        self.focusRequestID = 0
     }
 
     /// Create editor from an existing document
-    public init(document: EditorDocument, onDocumentURLChange: ((URL) -> Void)? = nil) {
+    public init(
+        document: EditorDocument,
+        onDocumentURLChange: ((URL) -> Void)? = nil,
+        focusRequestID: Int = 0
+    ) {
         self.url = nil
         self.document = document
         self.initialContent = nil
         self.language = nil
         self.onDocumentURLChange = onDocumentURLChange
+        self.focusRequestID = focusRequestID
     }
     
     /// Effective configuration with system color scheme applied
@@ -114,6 +124,20 @@ public struct EditorView: NSViewRepresentable {
             nsView.observedDocumentLoadStateRevision = document.loadStateRevision
             nsView.document = document
         }
+
+        // Handle focus requests
+        if focusRequestID > 0, focusRequestID != context.coordinator.lastFocusRequestID {
+            context.coordinator.lastFocusRequestID = focusRequestID
+            nsView.requestKeyboardFocus()
+        }
+    }
+
+    public func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    public final class Coordinator {
+        var lastFocusRequestID: Int = 0
     }
 }
 

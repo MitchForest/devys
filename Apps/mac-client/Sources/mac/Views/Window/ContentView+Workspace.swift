@@ -6,50 +6,60 @@
 import SwiftUI
 import Split
 import GhosttyTerminal
+import Workspace
 
 @MainActor
 extension ContentView {
     var workspace: some View {
-        DevysSplitView(
+        ContentViewWorkspaceSurface(
+            workspaceCatalog: workspaceCatalog,
+            runtimeRegistry: runtimeRegistry,
             controller: controller,
-            content: { tab, paneId in
-                let content = tabContents[tab.id]
-                let terminalSession = terminalSessionForContent(content)
-                let editorSession = editorSessionForContent(content, tabId: tab.id)
-                TabContentView(
-                    tab: tab,
-                    content: content,
-                    gitStore: gitStore,
-                    terminalSession: terminalSession,
-                    editorSession: editorSession,
-                    onFocus: { controller.focusPane(paneId) },
-                    onEditorURLChange: { newURL in
-                        updateEditorTabURL(tabId: tab.id, newURL: newURL)
-                    }
-                )
-                .id(content?.stableId ?? "empty")
+            tabContents: tabContents,
+            terminalSessionForContent: terminalSessionForContent,
+            editorSessionForContent: { content, tabID in
+                editorSessionForContent(content, tabId: tabID)
             },
-            emptyPane: { _ in
-                Color.clear
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            onFocusPane: { paneID in
+                controller.focusPane(paneID)
+            },
+            onAttentionAcknowledged: { content in
+                if case .some(.terminal(_, let terminalID)) = content {
+                    markTerminalNotificationRead(terminalID)
+                }
+            },
+            onPresentationChange: {
+                syncTabMetadataFromSessions()
+            },
+            onEditorURLChange: { tabID, newURL in
+                updateEditorTabURL(tabId: tabID, newURL: newURL)
+            },
+            onEditorPresentationChange: { tabID, snapshot in
+                recordEditorOpenPresentation(tabId: tabID, snapshot: snapshot)
             }
         )
     }
 
     func terminalSessionForContent(_ content: TabContent?) -> GhosttyTerminalSession? {
-        guard case .terminal(let id) = content else { return nil }
-        return terminalSessions[id]
+        guard case .terminal(let workspaceID, let id) = content else { return nil }
+        return workspaceTerminalRegistry.session(id: id, in: workspaceID)
     }
 
     func createTerminalSession(
+        in workspaceID: Workspace.ID,
         workingDirectory: URL? = nil,
-        requestedCommand: String? = nil
+        requestedCommand: String? = nil,
+        stagedCommand: String? = nil,
+        attachCommand: String? = nil,
+        id: UUID = UUID()
     ) -> GhosttyTerminalSession {
-        let session = GhosttyTerminalSession(
+        workspaceTerminalRegistry.createSession(
+            in: workspaceID,
             workingDirectory: workingDirectory,
-            requestedCommand: requestedCommand
+            requestedCommand: requestedCommand,
+            stagedCommand: stagedCommand,
+            attachCommand: attachCommand,
+            id: id
         )
-        terminalSessions[session.id] = session
-        return session
     }
 }

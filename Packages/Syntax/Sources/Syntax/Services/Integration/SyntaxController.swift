@@ -4,7 +4,6 @@
 // periphery:ignore:all - syntax scheduling surfaces are exercised through runtime callbacks and package tests
 import Foundation
 import SwiftTreeSitter
-import SwiftTreeSitterLayer
 import Text
 
 // swiftlint:disable file_length

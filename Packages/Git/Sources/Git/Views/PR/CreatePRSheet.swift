@@ -6,7 +6,7 @@ import UI
 
 /// Sheet for creating new pull requests.
 @MainActor
-struct CreatePRSheet: View {
+public struct CreatePRSheet: View {
     @Environment(\.devysTheme) private var theme
     @Bindable var store: GitStore
     let onCreated: (Int) -> Void
@@ -24,12 +24,12 @@ struct CreatePRSheet: View {
     
     @FocusState private var isTitleFocused: Bool
     
-    init(store: GitStore, onCreated: @escaping (Int) -> Void) {
+    public init(store: GitStore, onCreated: @escaping (Int) -> Void) {
         self.store = store
         self.onCreated = onCreated
     }
     
-    var body: some View {
+    public var body: some View {
         VStack(spacing: 0) {
             // Header
             headerView

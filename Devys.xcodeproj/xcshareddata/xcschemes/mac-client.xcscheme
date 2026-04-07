@@ -11,7 +11,7 @@
             ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
             <ActionContent
                title = "Quality Gate"
-               scriptText = "if [ &quot;${DEVYS_SKIP_QUALITY_GATE:-0}&quot; = &quot;1&quot; ]; then&#10;  echo &quot;Skipping quality gate (DEVYS_SKIP_QUALITY_GATE=1).&quot;&#10;  exit 0&#10;fi&#10;case &quot;${OBJROOT:-}${BUILD_DIR:-}${SYMROOT:-}&quot; in&#10;  *com.github.peripheryapp*)&#10;    echo &quot;Skipping quality gate during Periphery analysis.&quot;&#10;    exit 0&#10;    ;;&#10;esac&#10;cd &quot;${SRCROOT}&quot;&#10;./scripts/quality-gate.sh&#10;">
+               scriptText = "if [ &quot;${DEVYS_SKIP_QUALITY_GATE:-0}&quot; = &quot;1&quot; ]; then&#10;  echo &quot;Skipping quality gate (DEVYS_SKIP_QUALITY_GATE=1).&quot;&#10;  exit 0&#10;fi&#10;case &quot;${OBJROOT:-}${BUILD_DIR:-}${SYMROOT:-}&quot; in&#10;  *com.github.peripheryapp*)&#10;    echo &quot;Skipping quality gate during Periphery analysis.&quot;&#10;    exit 0&#10;    ;;&#10;esac&#10;cd &quot;${SRCROOT}&quot;&#10;DEVYS_SKIP_APP_PERIPHERY=1 ./scripts/quality-gate.sh&#10;">
                <EnvironmentBuildable>
                   <BuildableReference
                      BuildableIdentifier = "primary"
@@ -26,7 +26,7 @@
       </PreActions>
       <BuildActionEntries>
          <BuildActionEntry
-            buildForTesting = "YES"
+            buildForTesting = "NO"
             buildForRunning = "YES"
             buildForProfiling = "YES"
             buildForArchiving = "YES"

@@ -134,8 +134,15 @@ extension MetalEditorView {
         let cursorY = Float(lineBuffer.viewportY(forLine: cursor.position.line)) * scale
         let cursorX = gutterWidth + Float(cursor.position.column) * cellWidth
 
-        let blinkPhase = fmod(uniforms.time * uniforms.cursorBlinkRate, 1.0)
-        let cursorAlpha: Float = blinkPhase < 0.5 ? cursorColor.w : 0.0
+        let cursorAlpha: Float
+        if hasFocus {
+            // Focused: blink the cursor
+            let blinkPhase = fmod(uniforms.time * uniforms.cursorBlinkRate, 1.0)
+            cursorAlpha = blinkPhase < 0.5 ? cursorColor.w : 0.0
+        } else {
+            // Unfocused: no cursor
+            cursorAlpha = 0.0
+        }
 
         if cursorAlpha > 0 {
             overlayBuffer.addQuad(

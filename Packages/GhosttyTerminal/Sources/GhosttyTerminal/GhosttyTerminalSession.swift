@@ -12,6 +12,8 @@ public final class GhosttyTerminalSession: Identifiable {
     public var focusRequestID: Int
     public var workingDirectory: URL?
     public var requestedCommand: String?
+    public var stagedCommand: String?
+    public var attachCommand: String?
     public var currentDirectory: URL?
     public var lastErrorDescription: String?
 
@@ -24,7 +26,9 @@ public final class GhosttyTerminalSession: Identifiable {
     public init(
         id: UUID = UUID(),
         workingDirectory: URL? = nil,
-        requestedCommand: String? = nil
+        requestedCommand: String? = nil,
+        stagedCommand: String? = nil,
+        attachCommand: String? = nil
     ) {
         self.id = id
         self.tabTitle = "Terminal"
@@ -34,6 +38,8 @@ public final class GhosttyTerminalSession: Identifiable {
         self.focusRequestID = 0
         self.workingDirectory = workingDirectory?.standardizedFileURL
         self.requestedCommand = requestedCommand?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        self.stagedCommand = stagedCommand?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        self.attachCommand = attachCommand?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         self.currentDirectory = workingDirectory?.standardizedFileURL
         self.lastErrorDescription = nil
     }

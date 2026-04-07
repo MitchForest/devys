@@ -12,6 +12,7 @@ struct PlaceholderSidebarView: View {
 
     let title: String
     let icon: String
+    var showsTrailingBorder: Bool = true
 
     var body: some View {
         HStack(spacing: 0) {
@@ -48,10 +49,11 @@ struct PlaceholderSidebarView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
-            // Right border
-            Rectangle()
-                .fill(theme.borderSubtle)
-                .frame(width: 1)
+            if showsTrailingBorder {
+                Rectangle()
+                    .fill(theme.borderSubtle)
+                    .frame(width: 1)
+            }
         }
         .background(theme.surface)
     }
@@ -138,7 +140,7 @@ struct TerminalRewritePlaceholderView: View {
             }
 
             Text(
-                "The legacy terminal is intentionally disabled on this branch "
+                "The old terminal path is intentionally disabled on this branch "
                     + "while the new Ghostty-backed terminal is built from scratch."
             )
                 .font(DevysTypography.sm)

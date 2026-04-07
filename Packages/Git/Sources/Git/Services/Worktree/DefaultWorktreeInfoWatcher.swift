@@ -16,7 +16,7 @@ public final class DefaultWorktreeInfoWatcher: WorktreeInfoWatcher, @unchecked S
         let worktree: Worktree
         let headWatcher: DispatchSourceFileSystemObject?
         let indexWatcher: DispatchSourceFileSystemObject?
-        let fileStream: FileEventStream?
+        var fileStream: FileEventStream?
 
         func stop() {
             headWatcher?.cancel()
@@ -82,6 +82,7 @@ public final class DefaultWorktreeInfoWatcher: WorktreeInfoWatcher, @unchecked S
     private var watches: [Worktree.ID: WorktreeWatch] = [:]
     private var debounceItems: [DebounceKey: DispatchWorkItem] = [:]
     private var pullRequestTrackingEnabled = false
+    private var selectedWorktreeId: Worktree.ID?
     private var isStopped = false
 
     public init() {}
@@ -110,8 +111,9 @@ public final class DefaultWorktreeInfoWatcher: WorktreeInfoWatcher, @unchecked S
         switch command {
         case .setWorktrees(let worktrees):
             updateWorktrees(worktrees)
-        case .setSelectedWorktreeId:
-            break
+        case .setSelectedWorktreeId(let worktreeId):
+            selectedWorktreeId = worktreeId
+            updateSelectedWorktreeWatch()
         case .setPullRequestTrackingEnabled(let enabled):
             let wasEnabled = pullRequestTrackingEnabled
             pullRequestTrackingEnabled = enabled
@@ -156,24 +158,41 @@ public final class DefaultWorktreeInfoWatcher: WorktreeInfoWatcher, @unchecked S
             }
         }
 
-        let fileStream: FileEventStream?
-        if FileManager.default.fileExists(atPath: worktree.workingDirectory.path) {
-            fileStream = FileEventStream(
-                path: worktree.workingDirectory.path,
-                queue: queue
-            ) { [weak self] in
-                self?.schedule(.filesChanged(worktreeId: worktree.id), key: .files(worktree.id))
-            }
-        } else {
-            fileStream = nil
-        }
-
         watches[worktree.id] = WorktreeWatch(
             worktree: worktree,
             headWatcher: headWatcher,
             indexWatcher: indexWatcher,
-            fileStream: fileStream
+            fileStream: makeFileStream(for: worktree.id, worktree: worktree)
         )
+    }
+
+    private func updateSelectedWorktreeWatch() {
+        for (worktreeId, watch) in watches {
+            var updatedWatch = watch
+            if worktreeId == selectedWorktreeId {
+                if updatedWatch.fileStream == nil {
+                    updatedWatch.fileStream = makeFileStream(for: worktreeId, worktree: watch.worktree)
+                }
+            } else if let fileStream = updatedWatch.fileStream {
+                fileStream.stop()
+                updatedWatch.fileStream = nil
+            }
+            watches[worktreeId] = updatedWatch
+        }
+    }
+
+    private func makeFileStream(for worktreeId: Worktree.ID, worktree: Worktree) -> FileEventStream? {
+        guard worktreeId == selectedWorktreeId,
+              FileManager.default.fileExists(atPath: worktree.workingDirectory.path) else {
+            return nil
+        }
+
+        return FileEventStream(
+            path: worktree.workingDirectory.path,
+            queue: queue
+        ) { [weak self] in
+            self?.schedule(.filesChanged(worktreeId: worktreeId), key: .files(worktreeId))
+        }
     }
 
     private func removeWatch(for id: Worktree.ID) {
@@ -231,11 +250,18 @@ public final class DefaultWorktreeInfoWatcher: WorktreeInfoWatcher, @unchecked S
 
     private func schedule(_ event: WorktreeInfoEvent, key: DebounceKey) {
         debounceItems[key]?.cancel()
+        let delay: TimeInterval
+        switch key {
+        case .branch:
+            delay = 0.25
+        case .files:
+            delay = 1.0
+        }
         let item = DispatchWorkItem { [weak self] in
             self?.emit(event)
         }
         debounceItems[key] = item
-        queue.asyncAfter(deadline: .now() + 0.25, execute: item)
+        queue.asyncAfter(deadline: .now() + delay, execute: item)
     }
 
     private func emit(_ event: WorktreeInfoEvent) {

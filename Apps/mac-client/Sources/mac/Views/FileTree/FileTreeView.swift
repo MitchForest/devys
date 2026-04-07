@@ -20,6 +20,7 @@ public struct FileTreeView: View {
     
     @Environment(AppSettings.self) private var appSettings
     let model: FileTreeModel
+    let gitStatusIndex: WorkspaceFileTreeGitStatusIndex?
     let onPreviewFile: ((URL) -> Void)?   // Single-click: preview tab
     let onOpenFile: (URL) -> Void          // Double-click: permanent tab
     let onAddToChat: ((URL) -> Void)?      // Context menu: add to chat
@@ -31,11 +32,13 @@ public struct FileTreeView: View {
     
     init(
         model: FileTreeModel,
+        gitStatusIndex: WorkspaceFileTreeGitStatusIndex? = nil,
         onPreviewFile: ((URL) -> Void)? = nil,
         onOpenFile: @escaping (URL) -> Void,
         onAddToChat: ((URL) -> Void)? = nil
     ) {
         self.model = model
+        self.gitStatusIndex = gitStatusIndex
         self.onPreviewFile = onPreviewFile
         self.onOpenFile = onOpenFile
         self.onAddToChat = onAddToChat
@@ -54,7 +57,7 @@ public struct FileTreeView: View {
             }
         }
         .task {
-            await model.loadTree()
+            await model.loadTreeIfNeeded()
         }
         .onChange(of: explorerSettings) { _, _ in
             // Refresh tree when explorer settings change (e.g., show hidden files)
@@ -99,6 +102,7 @@ public struct FileTreeView: View {
                 ForEach(model.flattenedNodes) { flatNode in
                     FileTreeRow(
                         flatNode: flatNode,
+                        gitStatusSummary: gitStatusIndex?.summary(for: flatNode.node),
                         isSelected: model.selectedNode?.id == flatNode.id,
                         onSelect: {
                             model.selectedNode = flatNode.node
