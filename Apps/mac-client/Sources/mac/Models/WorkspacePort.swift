@@ -21,14 +21,6 @@ struct WorkspacePort: Identifiable, Equatable, Sendable {
     var id: String {
         "\(workspaceID):\(port)"
     }
-
-    var primaryProcessName: String? {
-        processNames.first
-    }
-
-    var localhostURL: URL? {
-        URL(string: "http://localhost:\(port)")
-    }
 }
 
 struct WorkspacePortSummary: Equatable, Sendable {

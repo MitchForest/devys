@@ -137,11 +137,6 @@ extension ContentView {
         syncCatalogMetadataState()
     }
 
-    func refreshAllRepositoryCatalogs() async {
-        await workspaceCatalog.refreshRepositories()
-        syncCatalogMetadataState()
-    }
-
     func scheduleDeferredRepositoryRefresh(
         repositoryID: Repository.ID,
         workspaceID: Worktree.ID?,

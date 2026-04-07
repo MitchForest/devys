@@ -72,7 +72,6 @@ struct WorkspaceAttentionNotification: Identifiable, Equatable, Sendable {
 struct WorkspaceAttentionSummary: Equatable, Sendable {
     let unreadCount: Int
     let waitingCount: Int
-    let latestUnreadAt: Date?
     let latestWaitingSource: WorkspaceAttentionSource?
 
     var hasAttention: Bool {

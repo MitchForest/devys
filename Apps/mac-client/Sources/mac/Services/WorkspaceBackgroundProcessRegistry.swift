@@ -8,28 +8,16 @@ import Workspace
 @MainActor
 final class ManagedBackgroundProcess: Identifiable {
     let id: UUID
-    let workspaceID: Workspace.ID
-    let stepID: StartupProfileStep.ID
     let displayName: String
-    let command: String
-    let workingDirectory: URL
     let process: Process
 
     init(
         id: UUID = UUID(),
-        workspaceID: Workspace.ID,
-        stepID: StartupProfileStep.ID,
         displayName: String,
-        command: String,
-        workingDirectory: URL,
         process: Process
     ) {
         self.id = id
-        self.workspaceID = workspaceID
-        self.stepID = stepID
         self.displayName = displayName
-        self.command = command
-        self.workingDirectory = workingDirectory
         self.process = process
     }
 }
@@ -41,7 +29,7 @@ final class WorkspaceBackgroundProcessRegistry {
 
     func launch(
         in workspaceID: Workspace.ID,
-        stepID: StartupProfileStep.ID,
+        stepID _: StartupProfileStep.ID,
         displayName: String,
         workingDirectory: URL,
         command: String,
@@ -60,11 +48,7 @@ final class WorkspaceBackgroundProcessRegistry {
         process.environment = mergedEnvironment
 
         let managedProcess = ManagedBackgroundProcess(
-            workspaceID: workspaceID,
-            stepID: stepID,
             displayName: displayName,
-            command: command,
-            workingDirectory: workingDirectory,
             process: process
         )
         let managedProcessID = managedProcess.id
@@ -82,11 +66,6 @@ final class WorkspaceBackgroundProcessRegistry {
         workspaceProcesses[managedProcess.id] = managedProcess
         processesByWorkspace[workspaceID] = workspaceProcesses
         return managedProcess
-    }
-
-    func process(id: UUID, in workspaceID: Workspace.ID?) -> ManagedBackgroundProcess? {
-        guard let workspaceID else { return nil }
-        return processesByWorkspace[workspaceID]?[id]
     }
 
     func shutdown(id: UUID, in workspaceID: Workspace.ID) {

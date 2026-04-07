@@ -28,7 +28,6 @@ final class WorktreeInfoStore {
 
     struct UpdateResult {
         let immediateRefreshWorktreeIds: [Worktree.ID]
-        let deferredHydrationWorktreeIds: [Worktree.ID]
     }
 
     enum RefreshReason: String {
@@ -49,6 +48,7 @@ final class WorktreeInfoStore {
     private let configuration: Configuration
     private var watchTask: Task<Void, Never>?
     private var refreshTask: Task<Void, Never>?
+    private var refreshTaskToken: UUID?
     private var selectedPeriodicTask: Task<Void, Never>?
     private var backgroundPeriodicTask: Task<Void, Never>?
     private var deferredHydrationTask: Task<Void, Never>?
@@ -122,8 +122,7 @@ extension WorktreeInfoStore {
         guard isActiveRepository else {
             pendingHydrationWorktreeIds = []
             return UpdateResult(
-                immediateRefreshWorktreeIds: [],
-                deferredHydrationWorktreeIds: []
+                immediateRefreshWorktreeIds: []
             )
         }
 
@@ -142,8 +141,7 @@ extension WorktreeInfoStore {
         }
         enqueueDeferredHydration(worktreeIds: deferredHydrationWorktreeIds)
         return UpdateResult(
-            immediateRefreshWorktreeIds: immediateRefreshWorktreeIds,
-            deferredHydrationWorktreeIds: deferredHydrationWorktreeIds
+            immediateRefreshWorktreeIds: immediateRefreshWorktreeIds
         )
     }
 
@@ -164,8 +162,10 @@ extension WorktreeInfoStore {
             entriesById = [:]
             return
         }
+        let taskToken = UUID()
+        refreshTaskToken = taskToken
         refreshTask = Task { [weak self] in
-            await self?.refresh(worktrees: worktrees, reason: .manual)
+            await self?.refresh(worktrees: worktrees, reason: .manual, taskToken: taskToken)
         }
     }
 
@@ -192,8 +192,10 @@ extension WorktreeInfoStore {
             }
         }
 
+        let taskToken = UUID()
+        refreshTaskToken = taskToken
         refreshTask = Task { [weak self] in
-            await self?.refresh(worktrees: worktrees, reason: reason)
+            await self?.refresh(worktrees: worktrees, reason: reason, taskToken: taskToken)
         }
     }
 
@@ -232,6 +234,7 @@ extension WorktreeInfoStore {
         watchTask = nil
         refreshTask?.cancel()
         refreshTask = nil
+        refreshTaskToken = nil
         selectedPeriodicTask?.cancel()
         selectedPeriodicTask = nil
         backgroundPeriodicTask?.cancel()
@@ -262,10 +265,20 @@ extension WorktreeInfoStore {
 
 @MainActor
 extension WorktreeInfoStore {
-    private func refresh(worktrees: [Worktree], reason: RefreshReason) async {
+    private func refresh(
+        worktrees: [Worktree],
+        reason: RefreshReason,
+        taskToken: UUID
+    ) async {
         guard !worktrees.isEmpty else { return }
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            isLoading = false
+            if refreshTaskToken == taskToken {
+                refreshTask = nil
+                refreshTaskToken = nil
+            }
+        }
         let now = Date()
         for worktree in worktrees {
             lastRefreshById[worktree.id] = now
@@ -302,6 +315,7 @@ extension WorktreeInfoStore {
             }
             return collected
         }
+        guard !Task.isCancelled else { return }
 
         var updated = entriesById
         for (id, entry) in results {

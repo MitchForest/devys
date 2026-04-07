@@ -7,58 +7,6 @@ import SwiftUI
 import GhosttyTerminal
 import UI
 
-struct PlaceholderSidebarView: View {
-    @Environment(\.devysTheme) private var theme
-
-    let title: String
-    let icon: String
-    var showsTrailingBorder: Bool = true
-
-    var body: some View {
-        HStack(spacing: 0) {
-            VStack(spacing: 0) {
-                // Header - terminal style
-                HStack {
-                    Text(title.uppercased().replacingOccurrences(of: " ", with: "_"))
-                        .font(DevysTypography.heading)
-                        .tracking(DevysTypography.headerTracking)
-                        .foregroundStyle(theme.textSecondary)
-                    Spacer()
-                }
-                .padding(.horizontal, DevysSpacing.space3)
-                .padding(.vertical, DevysSpacing.space2)
-
-                // Content
-                VStack(spacing: DevysSpacing.space3) {
-                    Spacer()
-                    
-                    Text("[ \(icon) ]")
-                        .font(DevysTypography.xl)
-                        .foregroundStyle(theme.textTertiary)
-                    
-                    Text(title.lowercased())
-                        .font(DevysTypography.md)
-                        .foregroundStyle(theme.text)
-                    
-                    Text("$ coming_soon...")
-                        .font(DevysTypography.sm)
-                        .foregroundStyle(theme.textSecondary)
-                    
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-
-            if showsTrailingBorder {
-                Rectangle()
-                    .fill(theme.borderSubtle)
-                    .frame(width: 1)
-            }
-        }
-        .background(theme.surface)
-    }
-}
-
 struct PlaceholderView: View {
     @Environment(\.devysTheme) private var theme
 

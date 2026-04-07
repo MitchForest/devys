@@ -21,9 +21,6 @@ final class AppContainer {
     private let fileTreeService: FileTreeService
     private let fileWatchServiceFactory: (URL) -> FileWatchService
     private let gitStoreFactory: (URL?) -> GitStore
-    private let worktreeListingServiceFactory: () -> any WorktreeListingService
-    private let worktreeInfoProviderFactory: () -> WorktreeInfoProvider
-    private let worktreeInfoWatcherFactory: () -> WorktreeInfoWatcher
     @ObservationIgnored private var fileTreeModelsByRoot: [URL: FileTreeModel] = [:]
 
     init(
@@ -36,16 +33,7 @@ final class AppContainer {
         fileTreeService: FileTreeService = DefaultFileTreeService(),
         sharedFileWatchRegistry: SharedFileWatchRegistry = SharedFileWatchRegistry(),
         fileWatchServiceFactory: ((URL) -> FileWatchService)? = nil,
-        gitStoreFactory: @escaping (URL?) -> GitStore = { GitStore(projectFolder: $0) },
-        worktreeListingServiceFactory: @escaping () -> any WorktreeListingService = {
-            DefaultGitWorktreeService()
-        },
-        worktreeInfoProviderFactory: @escaping () -> WorktreeInfoProvider = {
-            DefaultWorktreeInfoProvider()
-        },
-        worktreeInfoWatcherFactory: @escaping () -> WorktreeInfoWatcher = {
-            DefaultWorktreeInfoWatcher()
-        }
+        gitStoreFactory: @escaping (URL?) -> GitStore = { GitStore(projectFolder: $0) }
     ) {
         self.appSettings = appSettings
         self.recentRepositoriesService = recentRepositoriesService
@@ -58,9 +46,6 @@ final class AppContainer {
             sharedFileWatchRegistry.makeService(rootURL: $0)
         }
         self.gitStoreFactory = gitStoreFactory
-        self.worktreeListingServiceFactory = worktreeListingServiceFactory
-        self.worktreeInfoProviderFactory = worktreeInfoProviderFactory
-        self.worktreeInfoWatcherFactory = worktreeInfoWatcherFactory
     }
 
     func makeFileTreeModel(rootURL: URL) -> FileTreeModel {
@@ -79,23 +64,7 @@ final class AppContainer {
         return model
     }
 
-    func releaseFileTreeModel(rootURL: URL) {
-        let normalizedRootURL = rootURL.standardizedFileURL
-        fileTreeModelsByRoot[normalizedRootURL]?.deactivate()
-    }
-
     func makeGitStore(projectFolder: URL?) -> GitStore {
         gitStoreFactory(projectFolder)
-    }
-
-    func makeWorktreeManager() -> WorktreeManager {
-        WorktreeManager(listingService: worktreeListingServiceFactory())
-    }
-
-    func makeWorktreeInfoStore() -> WorktreeInfoStore {
-        WorktreeInfoStore(
-            infoProvider: worktreeInfoProviderFactory(),
-            infoWatcher: worktreeInfoWatcherFactory()
-        )
     }
 }

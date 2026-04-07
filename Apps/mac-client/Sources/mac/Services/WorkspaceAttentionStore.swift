@@ -37,12 +37,10 @@ final class WorkspaceAttentionStore {
         let notifications = notificationsByWorkspace[workspaceID] ?? []
         let waitingNotifications = notifications.filter { $0.kind == .waiting }
         let latestWaitingNotification = waitingNotifications.max { $0.updatedAt < $1.updatedAt }
-        let latestUnreadAt = notifications.map(\.updatedAt).max()
 
         return WorkspaceAttentionSummary(
             unreadCount: notifications.count,
             waitingCount: waitingNotifications.count,
-            latestUnreadAt: latestUnreadAt,
             latestWaitingSource: latestWaitingNotification?.source
         )
     }
@@ -290,6 +288,9 @@ final class WorkspaceAttentionStore {
         }
         if lhs.updatedAt != rhs.updatedAt {
             return lhs.updatedAt > rhs.updatedAt
+        }
+        if lhs.createdAt != rhs.createdAt {
+            return lhs.createdAt > rhs.createdAt
         }
         return lhs.id.uuidString < rhs.id.uuidString
     }

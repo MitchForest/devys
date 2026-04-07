@@ -9,7 +9,6 @@ import GhosttyTerminal
 import Workspace
 
 struct WorkspaceTerminalState {
-    let workspaceID: Workspace.ID
     var sessionsByID: [UUID: GhosttyTerminalSession] = [:]
     var lastSeenBellCounts: [UUID: Int] = [:]
     var unreadTerminalIds: Set<UUID> = []
@@ -67,7 +66,7 @@ final class WorkspaceTerminalRegistry {
             stagedCommand: stagedCommand,
             attachCommand: attachCommand
         )
-        var state = stateForWorkspace(workspaceID)
+        var state = statesByWorkspace[workspaceID] ?? WorkspaceTerminalState()
         state.sessionsByID[session.id] = session
         statesByWorkspace[workspaceID] = state
         return session
@@ -122,11 +121,6 @@ final class WorkspaceTerminalRegistry {
         }
         statesByWorkspace.removeValue(forKey: workspaceID)
     }
-
-    private func stateForWorkspace(_ workspaceID: Workspace.ID) -> WorkspaceTerminalState {
-        statesByWorkspace[workspaceID] ?? WorkspaceTerminalState(workspaceID: workspaceID)
-    }
-
     private func cleanupWorkspaceIfEmpty(_ workspaceID: Workspace.ID) {
         guard let state = statesByWorkspace[workspaceID] else { return }
         guard state.sessionsByID.isEmpty else { return }

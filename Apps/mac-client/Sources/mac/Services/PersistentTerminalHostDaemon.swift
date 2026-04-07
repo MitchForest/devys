@@ -22,12 +22,10 @@ final class PersistentTerminalHostDaemon: @unchecked Sendable {
     }
 
     private final class HostAttachedClient {
-        let fd: Int32
         let fileHandle: FileHandle
         var readSource: DispatchSourceRead?
 
-        init(fd: Int32, fileHandle: FileHandle) {
-            self.fd = fd
+        init(fileHandle: FileHandle) {
             self.fileHandle = fileHandle
         }
     }
@@ -36,7 +34,6 @@ final class PersistentTerminalHostDaemon: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.devys.terminal-host")
 
     private var listenerFD: Int32 = -1
-    private var listenerSource: DispatchSourceRead?
     private var sessionsByID: [UUID: HostedSession] = [:]
 
     init(socketPath: String) {
@@ -56,10 +53,11 @@ final class PersistentTerminalHostDaemon: @unchecked Sendable {
                 Darwin.close(listenerFD)
             }
         }
-        listenerSource = source
         source.resume()
 
-        dispatchMain()
+        withExtendedLifetime(source) {
+            dispatchMain()
+        }
     }
 }
 
@@ -338,7 +336,7 @@ private extension PersistentTerminalHostDaemon {
         }
 
         resize(session: session, cols: cols, rows: rows)
-        let client = HostAttachedClient(fd: fd, fileHandle: handle)
+        let client = HostAttachedClient(fileHandle: handle)
         session.clients[fd] = client
         sendControlResponse(.attached, to: handle)
 

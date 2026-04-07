@@ -30,7 +30,6 @@ struct WorkspacePortRefreshRecord: Equatable {
     let reason: WorkspacePortStore.RefreshReason
     let workspaceIDs: [Workspace.ID]
     let workspaceCount: Int
-    let durationMilliseconds: Int
 }
 
 extension URL {

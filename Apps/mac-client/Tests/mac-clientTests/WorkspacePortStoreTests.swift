@@ -231,24 +231,6 @@ struct WorkspacePortStoreTests {
     }
 
     @MainActor
-    private func waitForPorts(
-        in store: WorkspacePortStore,
-        workspaceID: Workspace.ID,
-        expectedCount: Int,
-        attempts: Int,
-        sleepNanoseconds: UInt64
-    ) async {
-        for _ in 0..<attempts {
-            if store.ports(for: workspaceID).count == expectedCount {
-                return
-            }
-            await Task.yield()
-            try? await Task.sleep(nanoseconds: sleepNanoseconds)
-        }
-        Issue.record("Timed out waiting for workspace ports")
-    }
-
-    @MainActor
     private func waitForWorkspaceCount(
         in store: WorkspacePortStore,
         expectedCount: Int

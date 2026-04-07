@@ -27,6 +27,10 @@ struct WorkspaceCreationPresentationRequest: Identifiable {
 struct NavigatorRevealRequest: Equatable {
     let workspaceID: Workspace.ID
     let token: UUID
+
+    static func == (lhs: NavigatorRevealRequest, rhs: NavigatorRevealRequest) -> Bool {
+        lhs.workspaceID == rhs.workspaceID && lhs.token == rhs.token
+    }
 }
 
 struct EditorOpenTraceState {
@@ -102,28 +106,8 @@ struct ContentView: View {
         themeManager.theme
     }
     
-    var worktreeList: [Worktree] {
-        workspaceCatalog.selectedRepositoryWorktrees
-    }
-
-    var worktreeSelectionId: Worktree.ID? {
-        workspaceCatalog.selectedWorkspaceID
-    }
-
-    var selectedRepository: Repository? {
-        workspaceCatalog.selectedRepository
-    }
-
     var selectedCatalogWorktree: Worktree? {
         workspaceCatalog.selectedWorktree
-    }
-
-    var selectedRepositoryRootURL: URL? {
-        workspaceCatalog.selectedRepositoryRootURL
-    }
-
-    var selectedRepositoryDisplayName: String? {
-        selectedRepository?.displayName
     }
 
     var activeRuntime: WorktreeRuntimeHandle? {
@@ -146,20 +130,8 @@ struct ContentView: View {
         runtimeRegistry.metadataCoordinator.activeStore
     }
 
-    var activePortStore: WorkspacePortStore? {
-        runtimeRegistry.portCoordinator.activeStore
-    }
-
     var navigatorWorktreesByRepository: [Repository.ID: [Worktree]] {
         workspaceCatalog.worktreesByRepository
-    }
-
-    var workspaceStatesByID: [Worktree.ID: WorktreeState] {
-        workspaceCatalog.workspaceStatesByID
-    }
-
-    var visibleTerminalSessions: [UUID: GhosttyTerminalSession] {
-        workspaceTerminalRegistry.sessions(for: visibleWorkspaceID)
     }
 
     var terminalBellSnapshot: String {
@@ -176,14 +148,6 @@ struct ContentView: View {
         ]
         .map { $0 ? "1" : "0" }
         .joined(separator: "|")
-    }
-
-    var selectedRepositoryCountSnapshot: String {
-        [
-            "\(workspaceCatalog.repositories.count)",
-            workspaceCatalog.selectedRepositoryID ?? "none",
-            workspaceCatalog.selectedWorkspaceID ?? "none"
-        ].joined(separator: "|")
     }
 
     var notificationSettingsSnapshot: String {

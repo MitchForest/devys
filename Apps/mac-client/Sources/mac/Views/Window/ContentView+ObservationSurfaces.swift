@@ -37,7 +37,6 @@ struct ContentViewNavigatorSurface: View {
             workspaceStatesByID: workspaceCatalog.workspaceStatesByID,
             infoEntriesByWorkspaceID: runtimeRegistry.metadataCoordinator.activeStore?.entriesById ?? [:],
             attentionSummariesByWorkspaceID: workspaceAttentionStore.summariesByWorkspace,
-            portSummariesByWorkspaceID: runtimeRegistry.portCoordinator.activeSummariesByWorkspace,
             onAddRepository: onAddRepository,
             onCreateWorkspace: onCreateWorkspace,
             onSelectRepository: onSelectRepository,
@@ -59,7 +58,6 @@ struct ContentViewSidebarSurface: View {
     let repositorySettingsStore: RepositorySettingsStore
     let onPreviewFile: (Workspace.ID, URL) -> Void
     let onOpenFile: (Workspace.ID, URL) -> Void
-    let onOpenRepository: () -> Void
     let onOpenDiff: (Workspace.ID, String, Bool, Bool) -> Void
     let onOpenPort: (WorkspacePort, RepositoryPortLabel?) -> Void
     let onCopyPortURL: (WorkspacePort, RepositoryPortLabel?) -> Void
@@ -88,7 +86,6 @@ struct ContentViewSidebarSurface: View {
                     guard let selectedWorkspaceID else { return }
                     onOpenFile(selectedWorkspaceID, url)
                 },
-                onOpenRepository: onOpenRepository,
                 onAddToChat: nil,
                 showsTrailingBorder: false
             )
@@ -466,7 +463,6 @@ struct ContentViewNotificationsPanelSurface: View {
             }
             return WorkspaceNotificationPanelItem(
                 notification: notification,
-                repositoryID: context.repository.id,
                 repositoryName: context.repository.displayName,
                 workspaceName: context.worktree.name
             )

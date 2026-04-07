@@ -4,7 +4,6 @@
 // Copyright © 2026 Devys. All rights reserved.
 
 import SwiftUI
-import Workspace
 
 @MainActor
 extension ContentView {

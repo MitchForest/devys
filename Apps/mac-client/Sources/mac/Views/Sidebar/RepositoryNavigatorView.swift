@@ -19,7 +19,6 @@ struct RepositoryNavigatorView: View {
     let workspaceStatesByID: [Worktree.ID: WorktreeState]
     let infoEntriesByWorkspaceID: [Worktree.ID: WorktreeInfoEntry]
     let attentionSummariesByWorkspaceID: [Worktree.ID: WorkspaceAttentionSummary]
-    let portSummariesByWorkspaceID: [Worktree.ID: WorkspacePortSummary]
     let onAddRepository: () -> Void
     let onCreateWorkspace: (Repository.ID) -> Void
     let onSelectRepository: (Repository.ID) -> Void
@@ -143,11 +142,11 @@ private extension RepositoryNavigatorView {
         let isCollapsed = collapsedRepos.contains(repository.id)
 
         return VStack(alignment: .leading, spacing: 0) {
-            repoHeader(repository, worktreeCount: visible.count, isCollapsed: isCollapsed)
+            repoHeader(repository, isCollapsed: isCollapsed)
 
             if !isCollapsed {
                 worktreeList(visible, repositoryID: repository.id)
-                addWorkspaceLink(repositoryID: repository.id)
+                addWorkspaceLink()
                 archivedSection(archived, repositoryID: repository.id)
             }
         }
@@ -162,13 +161,11 @@ private extension RepositoryNavigatorView {
     func workspaceRow(_ worktree: Worktree, repositoryID: Repository.ID) -> WorkspaceRow {
         WorkspaceRow(
             worktree: worktree,
-            repositoryID: repositoryID,
             isSelected: selectedWorkspaceID == worktree.id,
             isCompact: isCompact,
             state: workspaceStatesByID[worktree.id],
             entry: infoEntriesByWorkspaceID[worktree.id],
             attentionSummary: attentionSummariesByWorkspaceID[worktree.id],
-            portSummary: portSummariesByWorkspaceID[worktree.id],
             onSelect: {
                 onSelectWorkspace(repositoryID, worktree.id)
             },
@@ -194,7 +191,7 @@ private extension RepositoryNavigatorView {
     }
 
     @ViewBuilder
-    func addWorkspaceLink(repositoryID: Repository.ID) -> some View {
+    func addWorkspaceLink() -> some View {
         EmptyView()
     }
 
@@ -221,7 +218,6 @@ private extension RepositoryNavigatorView {
 
     func repoHeader(
         _ repository: Repository,
-        worktreeCount: Int,
         isCollapsed: Bool
     ) -> some View {
         HStack(spacing: DevysSpacing.space1) {
@@ -278,13 +274,11 @@ private struct WorkspaceRow: View {
     @Environment(\.devysTheme) private var theme
 
     let worktree: Worktree
-    let repositoryID: Repository.ID
     let isSelected: Bool
     let isCompact: Bool
     let state: WorktreeState?
     let entry: WorktreeInfoEntry?
     let attentionSummary: WorkspaceAttentionSummary?
-    let portSummary: WorkspacePortSummary?
     let onSelect: () -> Void
     let onSetPinned: (Bool) -> Void
     let onSetArchived: (Bool) -> Void

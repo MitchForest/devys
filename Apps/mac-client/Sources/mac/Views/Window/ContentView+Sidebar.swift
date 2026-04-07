@@ -62,7 +62,6 @@ extension ContentView {
             onOpenFile: { workspaceID, url in
                 openInPermanentTab(content: .editor(workspaceID: workspaceID, url: url))
             },
-            onOpenRepository: { requestOpenRepository() },
             onOpenDiff: { workspaceID, path, isStaged, permanent in
                 let content = TabContent.gitDiff(
                     workspaceID: workspaceID,

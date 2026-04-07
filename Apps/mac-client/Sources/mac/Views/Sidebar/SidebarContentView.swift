@@ -22,7 +22,6 @@ struct SidebarContentView: View {
     let gitStatusIndex: WorkspaceFileTreeGitStatusIndex?
     let onPreviewFile: (URL) -> Void   // Single-click: preview tab
     let onOpenFile: (URL) -> Void      // Double-click: permanent tab
-    let onOpenRepository: () -> Void
     let onAddToChat: ((URL) -> Void)?  // Context menu: add file to chat
     let showsTrailingBorder: Bool
 
@@ -103,7 +102,6 @@ private struct SingleFolderTreeView: View {
         gitStatusIndex: nil,
         onPreviewFile: { _ in },
         onOpenFile: { _ in },
-        onOpenRepository: {},
         onAddToChat: { _ in },
         showsTrailingBorder: true
     )

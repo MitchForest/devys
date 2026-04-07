@@ -13,7 +13,6 @@ struct WorkspaceShortcutCaptureSheet: View {
     @Environment(\.devysTheme) private var theme
 
     let action: WorkspaceShellShortcutAction
-    let currentBinding: ShortcutBinding
     let onSave: (ShortcutBinding) -> Void
 
     @State private var draftBinding: ShortcutBinding
@@ -26,7 +25,6 @@ struct WorkspaceShortcutCaptureSheet: View {
         onSave: @escaping (ShortcutBinding) -> Void
     ) {
         self.action = action
-        self.currentBinding = currentBinding
         self.onSave = onSave
         _draftBinding = State(initialValue: currentBinding)
     }

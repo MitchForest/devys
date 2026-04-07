@@ -84,11 +84,6 @@ extension WorktreeMetadataCoordinator {
         }
     }
 
-    func refreshSelectedWorkspace() {
-        guard let selectedWorktreeID = activeStore?.selectedWorktreeId else { return }
-        activeStore?.refresh(worktreeIds: [selectedWorktreeID])
-    }
-
     func refresh(
         worktreeIds: [Worktree.ID],
         in repositoryID: Repository.ID? = nil,
@@ -100,13 +95,6 @@ extension WorktreeMetadataCoordinator {
             return
         }
         store.refresh(worktreeIds: worktreeIds, reason: reason)
-    }
-
-    func clearRepository(_ repositoryID: Repository.ID) {
-        storesByRepositoryID.removeValue(forKey: repositoryID)
-        if activeRepositoryID == repositoryID {
-            activeRepositoryID = nil
-        }
     }
 }
 

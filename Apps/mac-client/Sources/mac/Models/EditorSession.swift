@@ -7,7 +7,6 @@ import Split
 import Foundation
 import Observation
 import Editor
-import Syntax
 import Text
 
 struct EditorSessionPreview: Sendable, Equatable {

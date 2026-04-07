@@ -16,7 +16,6 @@ struct WorkspaceAttentionIngressPayload: Codable, Equatable, Sendable {
 }
 
 struct WorkspaceAttentionHookInput: Codable, Equatable, Sendable {
-    let hookEventName: String
     let message: String?
     let title: String?
     let notificationType: String?
@@ -24,7 +23,6 @@ struct WorkspaceAttentionHookInput: Codable, Equatable, Sendable {
     let errorType: String?
 
     private enum CodingKeys: String, CodingKey {
-        case hookEventName = "hook_event_name"
         case message
         case title
         case notificationType = "notification_type"

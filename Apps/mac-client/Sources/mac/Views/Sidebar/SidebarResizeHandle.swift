@@ -18,11 +18,6 @@ struct SidebarResizeHandle: View {
     @State private var isHovered = false
     @State private var isDragging = false
     @State private var dragStartWidth: CGFloat = 0
-    @State private var proposedWidth: CGFloat?
-
-    private var effectiveWidth: CGFloat {
-        proposedWidth ?? width
-    }
 
     var body: some View {
         Rectangle()
@@ -61,7 +56,6 @@ struct SidebarResizeHandle: View {
                         if !isHovered {
                             NSCursor.pop()
                         }
-                        proposedWidth = nil
                         UserDefaults.standard.set(Double(width), forKey: persistenceKey)
                     }
             )

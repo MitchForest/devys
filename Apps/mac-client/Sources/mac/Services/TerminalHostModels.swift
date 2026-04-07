@@ -153,7 +153,7 @@ struct PersistedWorkspaceLayoutState: Codable, Equatable, Sendable, Identifiable
     }
 }
 
-struct TerminalRelaunchSnapshot: Codable, Equatable, Sendable {
+struct TerminalRelaunchSnapshot: Codable, Sendable {
     var repositoryRootURLs: [URL]
     var selectedRepositoryID: Repository.ID?
     var selectedWorkspaceID: Workspace.ID?
@@ -171,4 +171,12 @@ struct TerminalRelaunchSnapshot: Codable, Equatable, Sendable {
         hostedSessions: [],
         workspaceStates: []
     )
+
+    static func == (lhs: TerminalRelaunchSnapshot, rhs: TerminalRelaunchSnapshot) -> Bool {
+        lhs.repositoryRootURLs == rhs.repositoryRootURLs
+            && lhs.selectedRepositoryID == rhs.selectedRepositoryID
+            && lhs.selectedWorkspaceID == rhs.selectedWorkspaceID
+            && lhs.hostedSessions == rhs.hostedSessions
+            && lhs.workspaceStates == rhs.workspaceStates
+    }
 }

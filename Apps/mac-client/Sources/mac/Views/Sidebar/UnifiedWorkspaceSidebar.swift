@@ -5,7 +5,6 @@
 
 import SwiftUI
 import Git
-import Workspace
 import UI
 
 struct UnifiedWorkspaceSidebar<

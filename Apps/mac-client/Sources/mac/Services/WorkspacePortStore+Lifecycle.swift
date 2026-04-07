@@ -218,8 +218,7 @@ extension WorkspacePortStore {
         let record = WorkspacePortRefreshRecord(
             reason: reason,
             workspaceIDs: workspaceIDs,
-            workspaceCount: workspaceIDs.count,
-            durationMilliseconds: durationMilliseconds
+            workspaceCount: workspaceIDs.count
         )
         refreshRecords.append(record)
         let message =

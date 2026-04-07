@@ -59,10 +59,6 @@ final class WorkspaceRunStore {
         statesByWorktree.removeValue(forKey: worktreeId)
     }
 
-    func clear() {
-        statesByWorktree.removeAll()
-    }
-
     private func updateStatesRemovingResource(_ mutation: (inout WorkspaceRunState) -> Void) {
         var updatedStates: [Worktree.ID: WorkspaceRunState] = [:]
         for (worktreeId, var state) in statesByWorktree {

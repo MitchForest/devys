@@ -53,11 +53,6 @@ extension WindowWorkspaceCatalogStore {
         return worktreesByRepository[selectedRepositoryID]?.first { $0.id == selectedWorkspaceID }
     }
 
-    var selectedRepositoryWorktrees: [Worktree] {
-        guard let selectedRepositoryID else { return [] }
-        return worktreesByRepository[selectedRepositoryID] ?? []
-    }
-
     var workspaceStatesByID: [Worktree.ID: WorktreeState] {
         managersByRepositoryID.values.reduce(into: [:]) { partialResult, manager in
             for (workspaceID, state) in manager.statesById {

@@ -98,12 +98,6 @@ extension WorkspacePortOwnershipCoordinator {
         }
     }
 
-    func clearRepository(_ repositoryID: Repository.ID) {
-        storesByRepositoryID.removeValue(forKey: repositoryID)
-        if activeRepositoryID == repositoryID {
-            activeRepositoryID = nil
-        }
-    }
 }
 
 @MainActor

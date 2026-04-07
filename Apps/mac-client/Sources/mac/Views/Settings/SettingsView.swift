@@ -318,34 +318,6 @@ struct SettingsTextFieldRow: View {
     }
 }
 
-struct SettingsActionRow: View {
-    @Environment(\.devysTheme) private var theme
-
-    let title: String
-    let description: String
-    let actionTitle: String
-    let action: () -> Void
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(DevysTypography.label)
-                    .foregroundStyle(theme.text)
-
-                Text(description)
-                    .font(DevysTypography.xs)
-                    .foregroundStyle(theme.textSecondary)
-            }
-
-            Spacer()
-
-            Button(actionTitle, action: action)
-                .buttonStyle(.bordered)
-        }
-    }
-}
-
 // MARK: - Explorer Settings Section
 
 struct ExplorerSettingsSection: View {

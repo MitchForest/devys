@@ -59,10 +59,6 @@ extension WorktreeRuntimeRegistry {
         activeRuntime?.gitStatusIndex
     }
 
-    var activeFileTreeModel: FileTreeModel? {
-        activeRuntime?.fileTreeModel
-    }
-
     var storedShellStates: [Workspace.ID: WorkspaceShellState] {
         runtimesByWorkspaceID.reduce(into: [:]) { partialResult, entry in
             partialResult[entry.key] = entry.value.shellState
@@ -121,12 +117,6 @@ extension WorktreeRuntimeRegistry {
     func persistShellState(_ state: WorkspaceShellState) {
         guard let runtime = runtimesByWorkspaceID[state.workspaceID] else { return }
         runtime.shellState = state
-    }
-
-    func fileTreeModel(for worktree: Worktree) -> FileTreeModel? {
-        let runtime = ensureRuntime(for: worktree)
-        runtime.ensureFileTreeModel(using: makeFileTreeModel)
-        return runtime.fileTreeModel
     }
 
     func hydrateGitRuntimeIfNeeded(for workspaceID: Workspace.ID) async {

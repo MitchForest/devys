@@ -23,10 +23,6 @@ actor PersistentTerminalHostController {
         self.executablePathProvider = executablePathProvider
     }
 
-    var hostSocketPath: String {
-        socketPath
-    }
-
     func isAvailable() -> Bool {
         if case .pong = try? send(.ping) {
             return true

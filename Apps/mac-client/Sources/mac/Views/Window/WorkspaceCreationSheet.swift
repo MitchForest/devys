@@ -24,7 +24,6 @@ struct WorkspaceCreationSheet: View {
     let repository: Repository
     let defaults: WorkspaceCreationDefaults
     let creationService: WorkspaceCreationService
-    let initialMode: WorkspaceCreationMode
     let onComplete: @MainActor ([Workspace]) async -> Void
 
     @State private var selectedMode: WorkspaceCreationMode
@@ -50,7 +49,6 @@ struct WorkspaceCreationSheet: View {
         self.repository = repository
         self.defaults = defaults
         self.creationService = creationService
-        self.initialMode = initialMode
         self.onComplete = onComplete
         _selectedMode = State(initialValue: initialMode)
     }

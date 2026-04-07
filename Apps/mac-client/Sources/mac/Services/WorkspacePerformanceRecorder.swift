@@ -12,7 +12,6 @@ struct WorkspacePerformanceTrace {
 }
 
 struct WorkspacePerformanceCheckpoint {
-    let name: String
     let markedAt: Date
 }
 
@@ -43,7 +42,7 @@ enum WorkspacePerformanceRecorder {
         context: [String: String] = [:],
         outcome: String? = nil
     ) -> WorkspacePerformanceCheckpoint {
-        let checkpoint = WorkspacePerformanceCheckpoint(name: name, markedAt: Date())
+        let checkpoint = WorkspacePerformanceCheckpoint(markedAt: Date())
         let elapsedMilliseconds = milliseconds(since: trace.startedAt, to: checkpoint.markedAt)
         let deltaMilliseconds = previous.map { milliseconds(since: $0.markedAt, to: checkpoint.markedAt) }
         var resolvedContext = context

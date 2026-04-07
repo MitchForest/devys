@@ -9,7 +9,6 @@ import Workspace
 
 struct WorkspaceNotificationPanelItem: Identifiable {
     let notification: WorkspaceAttentionNotification
-    let repositoryID: Repository.ID
     let repositoryName: String
     let workspaceName: String
 

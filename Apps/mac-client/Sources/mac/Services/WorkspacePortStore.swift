@@ -514,10 +514,6 @@ extension WorkspacePortStore {
         )
     }
 
-    func refreshAll() {
-        refresh(workspaceIDs: Array(worktreesByID.keys), reason: .manual)
-    }
-
     func clearWorkspace(_ workspaceID: Workspace.ID) {
         portsByWorkspace.removeValue(forKey: workspaceID)
         lastRefreshByWorkspace.removeValue(forKey: workspaceID)

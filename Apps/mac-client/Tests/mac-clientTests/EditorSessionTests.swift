@@ -167,7 +167,7 @@ struct EditorSessionTests {
                 if url == firstURL {
                     try await Task.sleep(for: .milliseconds(120))
                 } else {
-                    try await Task.sleep(for: .milliseconds(20))
+                    try await Task.sleep(for: .milliseconds(80))
                 }
                 return try await EditorDocument.prepareTextDocument(content: preview.content ?? "")
             }
@@ -176,10 +176,12 @@ struct EditorSessionTests {
         session.open(firstURL)
         session.open(secondURL)
 
-        try await Task.sleep(for: .milliseconds(15))
-
-        #expect(session.preview?.content == "let file = \"second-preview\"")
-        #expect(session.url == secondURL)
+        #expect(
+            await waitUntil(interval: .milliseconds(5)) {
+                session.preview?.content == "let file = \"second-preview\"" &&
+                    session.url == secondURL
+            }
+        )
 
         try await Task.sleep(for: .milliseconds(200))
 
