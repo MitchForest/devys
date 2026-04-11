@@ -13,6 +13,7 @@ struct WorkspaceCanvasToolbar: View {
     let workspaceName: String?
     let isSidebarVisible: Bool
     let onToggleSidebar: () -> Void
+    let onAgents: (() -> Void)?
     let onShell: (() -> Void)?
     let onClaude: (() -> Void)?
     let onCodex: (() -> Void)?
@@ -35,6 +36,7 @@ struct WorkspaceCanvasToolbar: View {
             Spacer()
 
             HStack(spacing: DevysSpacing.space2) {
+                actionButton("Agents", icon: "message.badge.waveform", action: onAgents)
                 actionButton("Shell", icon: "terminal", action: onShell)
                 actionButton("Claude", icon: "brain", action: onClaude)
                 actionButton("Codex", icon: "chevron.left.forwardslash.chevron.right", action: onCodex)

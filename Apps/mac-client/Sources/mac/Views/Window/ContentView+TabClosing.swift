@@ -146,20 +146,18 @@ extension ContentView {
     }
     
     /// Handle external content dropped onto a pane
-    private func handleExternalDrop(content: DropContent, inPane paneId: PaneID, zone _: DropZone) -> TabID? {
+    private func handleExternalDrop(content: DropContent, inPane paneId: PaneID, zone: DropZone) -> TabID? {
         // DevysSplit owns zone-specific placement (including edge split behavior).
         // The delegate only creates content in the provided pane and returns the tab.
         let targetPaneId = paneId
 
         switch content {
         case .files(let urls):
-            // Open first file as editor tab
-            guard let url = urls.first else { return nil }
-            return openEditorTabFromDrop(url: url, inPane: targetPaneId)
+            return handleFileDrop(urls: urls, inPane: targetPaneId, zone: zone)
             
         case .custom(let utType, let data):
             if utType == .devysGitDiff {
-                return handleGitDiffDrop(data: data, inPane: targetPaneId)
+                return handleGitDiffDrop(data: data, inPane: targetPaneId, zone: zone)
             }
             return nil
             
@@ -182,14 +180,121 @@ extension ContentView {
         
         return createTab(in: paneId, content: content)
     }
+
+    private func handleFileDrop(
+        urls: [URL],
+        inPane paneId: PaneID,
+        zone: DropZone
+    ) -> TabID? {
+        guard let firstURL = urls.first else { return nil }
+
+        if let agentTabID = selectedAgentTabID(inPane: paneId) {
+            let attachments = urls.map(agentAttachment(from:))
+            if case .agentSession(let workspaceID, let sessionID)? = tabContents[agentTabID],
+               let session = runtimeRegistry
+                .runtimeHandle(for: workspaceID)?
+                .agentRuntimeRegistry
+                .session(id: sessionID) {
+                session.addAttachments(attachments)
+            }
+            return agentTabID
+        }
+
+        if case .edge = zone,
+           let workspaceID = workspaceCatalog.selectedWorkspaceID {
+            let attachments = urls.map(agentAttachment(from:))
+            if let configuredHarness = appSettings.agent.defaultHarness,
+               let kind = agentKind(forHarness: configuredHarness),
+               let prepared = preparePendingAgentSessionLaunch(
+                    workspaceID: workspaceID,
+                    preferredPaneID: paneId,
+                    initialAttachments: attachments,
+                    preferredKind: kind
+               ) {
+                launchPreparedAgentSession(
+                    kind,
+                    workspaceID: workspaceID,
+                    sessionID: prepared.runtime.sessionID
+                )
+                return prepared.tabID
+            }
+
+            if let prepared = preparePendingAgentSessionLaunch(
+                workspaceID: workspaceID,
+                preferredPaneID: paneId,
+                initialAttachments: attachments,
+                preferredKind: nil
+            ) {
+                agentLaunchRequest = AgentLaunchPresentationRequest(
+                    workspaceID: workspaceID,
+                    initialAttachments: [],
+                    preferredPaneID: paneId,
+                    pendingSessionID: prepared.runtime.sessionID,
+                    pendingTabID: prepared.tabID
+                )
+                return prepared.tabID
+            }
+            return nil
+        }
+
+        return openEditorTabFromDrop(url: firstURL, inPane: paneId)
+    }
     
-    /// Handle a git diff dropped from the sidebar
-    private func handleGitDiffDrop(data: Data, inPane paneId: PaneID) -> TabID? {
+    // Handle a git diff dropped from the sidebar.
+    // swiftlint:disable:next function_body_length
+    private func handleGitDiffDrop(
+        data: Data,
+        inPane paneId: PaneID,
+        zone: DropZone
+    ) -> TabID? {
         // Decode the GitDiffTransfer from the data
         guard let transfer = try? JSONDecoder().decode(GitDiffTransfer.self, from: data) else {
             return nil
         }
         guard let workspaceID = workspaceCatalog.selectedWorkspaceID else { return nil }
+
+        if let agentTabID = selectedAgentTabID(inPane: paneId),
+           case .agentSession(_, let sessionID)? = tabContents[agentTabID],
+           let session = runtimeRegistry.runtimeHandle(for: workspaceID)?.agentRuntimeRegistry.session(id: sessionID) {
+            session.addAttachment(.gitDiff(path: transfer.path, isStaged: transfer.isStaged))
+            return agentTabID
+        }
+
+        if case .edge = zone {
+            let attachment = AgentAttachment.gitDiff(path: transfer.path, isStaged: transfer.isStaged)
+            if let configuredHarness = appSettings.agent.defaultHarness,
+               let kind = agentKind(forHarness: configuredHarness),
+               let prepared = preparePendingAgentSessionLaunch(
+                    workspaceID: workspaceID,
+                    preferredPaneID: paneId,
+                    initialAttachments: [attachment],
+                    preferredKind: kind
+               ) {
+                launchPreparedAgentSession(
+                    kind,
+                    workspaceID: workspaceID,
+                    sessionID: prepared.runtime.sessionID
+                )
+                return prepared.tabID
+            }
+
+            if let prepared = preparePendingAgentSessionLaunch(
+                workspaceID: workspaceID,
+                preferredPaneID: paneId,
+                initialAttachments: [attachment],
+                preferredKind: nil
+            ) {
+                agentLaunchRequest = AgentLaunchPresentationRequest(
+                    workspaceID: workspaceID,
+                    initialAttachments: [],
+                    preferredPaneID: paneId,
+                    pendingSessionID: prepared.runtime.sessionID,
+                    pendingTabID: prepared.tabID
+                )
+                return prepared.tabID
+            }
+            return nil
+        }
 
         let content = TabContent.gitDiff(
             workspaceID: workspaceID,
@@ -204,6 +309,22 @@ extension ContentView {
         }
         
         return createTab(in: paneId, content: content)
+    }
+
+    private func selectedAgentTabID(inPane paneId: PaneID) -> TabID? {
+        guard let selectedTab = controller.selectedTab(inPane: paneId),
+              case .agentSession = tabContents[selectedTab.id] else {
+            return nil
+        }
+        return selectedTab.id
+    }
+
+    private func agentAttachment(from url: URL) -> AgentAttachment {
+        let type = UTType(filenameExtension: url.pathExtension)
+        if let type, type.conforms(to: .image) {
+            return .image(url: url)
+        }
+        return .file(url: url)
     }
 
     private func handleTabCloseRequest(tab: Tab, paneId: PaneID) -> Bool {

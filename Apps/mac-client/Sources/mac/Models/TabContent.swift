@@ -4,6 +4,7 @@
 // Copyright © 2026 Devys. All rights reserved.
 
 import Foundation
+import ACPClientKit
 import Workspace
 
 /// Identifier for tab content.
@@ -13,6 +14,7 @@ import Workspace
 enum TabContent: Equatable {
     case welcome
     case terminal(workspaceID: Workspace.ID, id: UUID)
+    case agentSession(workspaceID: Workspace.ID, sessionID: AgentSessionID)
     case editor(workspaceID: Workspace.ID, url: URL)
     case gitDiff(workspaceID: Workspace.ID, path: String, isStaged: Bool)
     case settings
@@ -20,6 +22,7 @@ enum TabContent: Equatable {
     var workspaceID: Workspace.ID? {
         switch self {
         case .terminal(let workspaceID, _),
+             .agentSession(let workspaceID, _),
              .editor(let workspaceID, _),
              .gitDiff(let workspaceID, _, _):
             return workspaceID
@@ -33,6 +36,7 @@ enum TabContent: Equatable {
         case .welcome: return "Welcome"
         case .gitDiff(_, let path, _): return (path as NSString).lastPathComponent
         case .terminal: return "Terminal"
+        case .agentSession: return "Agent"
         case .settings: return "Settings"
         case .editor(_, let url): return url.lastPathComponent
         }
@@ -43,6 +47,7 @@ enum TabContent: Equatable {
         case .welcome: return "hand.wave"
         case .gitDiff: return "plus.forwardslash.minus"
         case .terminal: return "terminal"
+        case .agentSession: return "message"
         case .settings: return "gearshape"
         case .editor(_, let url): return CEWorkspaceFileNode.fileTypeIcon(for: url.pathExtension)
         }
@@ -55,6 +60,8 @@ enum TabContent: Equatable {
             return "gitDiff:\(workspaceID):\(path):\(isStaged)"
         case .terminal(let workspaceID, let id):
             return "terminal:\(workspaceID):\(id.uuidString)"
+        case .agentSession(let workspaceID, let sessionID):
+            return "agentSession:\(workspaceID):\(sessionID.rawValue)"
         case .settings: return "settings"
         case .editor(let workspaceID, let url):
             return "editor:\(workspaceID):\(url.absoluteString)"

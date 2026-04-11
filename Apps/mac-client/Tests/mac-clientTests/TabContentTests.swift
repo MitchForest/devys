@@ -41,6 +41,7 @@ struct TabContentTests {
     @Test("Terminal and diff tabs stay isolated by workspace")
     func nonEditorWorkspaceScopedIdentity() {
         let sharedTerminalID = UUID()
+        let sharedAgentSessionID = AgentSessionID(rawValue: "agent-session")
         let firstTerminal = TabContent.terminal(
             workspaceID: "/tmp/devys/worktrees/a",
             id: sharedTerminalID
@@ -59,11 +60,22 @@ struct TabContentTests {
             path: "Sources/Feature/Thing.swift",
             isStaged: false
         )
+        let firstAgent = TabContent.agentSession(
+            workspaceID: "/tmp/devys/worktrees/a",
+            sessionID: sharedAgentSessionID
+        )
+        let secondAgent = TabContent.agentSession(
+            workspaceID: "/tmp/devys/worktrees/b",
+            sessionID: sharedAgentSessionID
+        )
 
         #expect(firstTerminal.stableId != secondTerminal.stableId)
         #expect(firstDiff.stableId != secondDiff.stableId)
+        #expect(firstAgent.stableId != secondAgent.stableId)
         #expect(firstTerminal.workspaceID == "/tmp/devys/worktrees/a")
         #expect(secondDiff.workspaceID == "/tmp/devys/worktrees/b")
+        #expect(firstAgent.fallbackTitle == "Agent")
+        #expect(secondAgent.fallbackIcon == "message")
     }
 
     @Test("Welcome and settings tabs use stable built-in identifiers")

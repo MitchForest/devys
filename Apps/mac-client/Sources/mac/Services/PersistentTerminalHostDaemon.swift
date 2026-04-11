@@ -13,6 +13,7 @@ final class PersistentTerminalHostDaemon: @unchecked Sendable {
         var readSource: DispatchSourceRead?
         var clients: [Int32: HostAttachedClient] = [:]
         var isRunning = true
+        var exitFrame = TerminalHostExitFrame(exitCode: nil, signal: nil)
 
         init(record: HostedTerminalSessionRecord, pid: pid_t, primaryFD: Int32) {
             self.record = record
@@ -246,14 +247,20 @@ private extension PersistentTerminalHostDaemon {
         session.readSource?.cancel()
         session.readSource = nil
 
+        var status: Int32 = 0
+        _ = waitpid(session.pid, &status, 0)
+        session.exitFrame = decodeExitFrame(from: status)
+
+        let exitPayload = (try? JSONEncoder().encode(session.exitFrame)) ?? Data()
         for client in session.clients.values {
-            try? TerminalHostSocketIO.writeFrame(type: .close, payload: Data(), to: client.fileHandle)
+            try? TerminalHostSocketIO.writeFrame(
+                type: .close,
+                payload: exitPayload,
+                to: client.fileHandle
+            )
             client.readSource?.cancel()
             try? client.fileHandle.close()
         }
-
-        var status: Int32 = 0
-        _ = waitpid(session.pid, &status, WNOHANG)
     }
 
     private func detachClient(_ clientFD: Int32, from sessionID: UUID) {
@@ -344,7 +351,8 @@ private extension PersistentTerminalHostDaemon {
             try? TerminalHostSocketIO.writeFrame(type: .output, payload: session.outputBuffer, to: handle)
         }
         if !session.isRunning {
-            try? TerminalHostSocketIO.writeFrame(type: .close, payload: Data(), to: handle)
+            let exitPayload = (try? JSONEncoder().encode(session.exitFrame)) ?? Data()
+            try? TerminalHostSocketIO.writeFrame(type: .close, payload: exitPayload, to: handle)
         }
 
         let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
@@ -356,6 +364,25 @@ private extension PersistentTerminalHostDaemon {
         }
         client.readSource = source
         source.resume()
+    }
+
+    private func decodeExitFrame(from status: Int32) -> TerminalHostExitFrame {
+        let terminationStatus = Int(status) & 0o177
+        if terminationStatus == 0 {
+            return TerminalHostExitFrame(
+                exitCode: (Int(status) >> 8) & 0xFF,
+                signal: nil
+            )
+        }
+
+        if terminationStatus != 0o177 {
+            return TerminalHostExitFrame(
+                exitCode: nil,
+                signal: String(terminationStatus)
+            )
+        }
+
+        return TerminalHostExitFrame(exitCode: nil, signal: nil)
     }
 }
 

@@ -57,6 +57,7 @@ final class WorkspaceTerminalRegistry {
         requestedCommand: String? = nil,
         stagedCommand: String? = nil,
         attachCommand: String? = nil,
+        terminateHostedSessionOnClose: Bool = true,
         id: UUID = UUID()
     ) -> GhosttyTerminalSession {
         let session = GhosttyTerminalSession(
@@ -64,7 +65,8 @@ final class WorkspaceTerminalRegistry {
             workingDirectory: workingDirectory,
             requestedCommand: requestedCommand,
             stagedCommand: stagedCommand,
-            attachCommand: attachCommand
+            attachCommand: attachCommand,
+            terminateHostedSessionOnClose: terminateHostedSessionOnClose
         )
         var state = statesByWorkspace[workspaceID] ?? WorkspaceTerminalState()
         state.sessionsByID[session.id] = session

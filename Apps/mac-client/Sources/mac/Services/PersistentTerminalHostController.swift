@@ -6,7 +6,7 @@ import Workspace
 
 actor PersistentTerminalHostController {
     private let fileManager: FileManager
-    private let socketPath: String
+    nonisolated let socketPath: String
     private let executablePathProvider: @Sendable () -> String?
     private let jsonEncoder = JSONEncoder()
     private let jsonDecoder = JSONDecoder()
@@ -35,6 +35,10 @@ actor PersistentTerminalHostController {
             return
         }
 
+        // Unix domain socket paths have a small fixed limit. Fail fast here so callers
+        // see the real startup problem instead of a generic timeout from the child process.
+        _ = try TerminalHostSocketIO.makeSocketAddress(for: socketPath)
+
         let socketURL = URL(fileURLWithPath: socketPath)
         try fileManager.createDirectory(
             at: socketURL.deletingLastPathComponent(),
@@ -50,25 +54,26 @@ actor PersistentTerminalHostController {
         }
 
         let process = Process()
+        let errorPipe = Pipe()
         process.executableURL = URL(fileURLWithPath: executablePath)
         process.arguments = ["--terminal-host", "--socket", socketPath]
+        process.environment = sanitizedHostEnvironment()
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
+        process.standardError = errorPipe
         try process.run()
 
         for _ in 0..<60 {
             if isAvailable() {
                 return
             }
+            if !process.isRunning {
+                throw startupFailure(process: process, errorPipe: errorPipe)
+            }
             try await Task.sleep(for: .milliseconds(50))
         }
 
-        throw NSError(
-            domain: "PersistentTerminalHostController",
-            code: 2,
-            userInfo: [NSLocalizedDescriptionKey: "Timed out waiting for the terminal host to start."]
-        )
+        throw startupTimeout(errorPipe: errorPipe)
     }
 
     func listSessions() throws -> [HostedTerminalSessionRecord] {
@@ -119,15 +124,23 @@ actor PersistentTerminalHostController {
     }
 
     func attachCommand(for sessionID: UUID) -> String {
+        let config = attachProcessConfiguration(for: sessionID)
+        return ([shellEscape(config.executablePath)] + config.arguments.map(shellEscape))
+            .joined(separator: " ")
+    }
+
+    func attachProcessConfiguration(for sessionID: UUID) -> (executablePath: String, arguments: [String]) {
         let executablePath = executablePathProvider() ?? ""
-        return [
-            shellEscape(executablePath),
-            "--terminal-attach",
-            "--socket",
-            shellEscape(socketPath),
-            "--session-id",
-            shellEscape(sessionID.uuidString)
-        ].joined(separator: " ")
+        return (
+            executablePath: executablePath,
+            arguments: [
+                "--terminal-attach",
+                "--socket",
+                socketPath,
+                "--session-id",
+                sessionID.uuidString
+            ]
+        )
     }
 
     static func defaultSocketPath() -> String {
@@ -156,6 +169,56 @@ actor PersistentTerminalHostController {
             code: 3,
             userInfo: [NSLocalizedDescriptionKey: message]
         )
+    }
+
+    private func startupFailure(process: Process, errorPipe: Pipe) -> NSError {
+        let details = readStartupDiagnostics(from: errorPipe)
+        var message = "The terminal host exited before it became available."
+        if !details.isEmpty {
+            message += " \(details)"
+        } else {
+            message += " Exit status: \(process.terminationStatus)."
+        }
+        return NSError(
+            domain: "PersistentTerminalHostController",
+            code: 2,
+            userInfo: [NSLocalizedDescriptionKey: message]
+        )
+    }
+
+    private func startupTimeout(errorPipe: Pipe) -> NSError {
+        let details = readStartupDiagnostics(from: errorPipe)
+        var message = "Timed out waiting for the terminal host to start."
+        if !details.isEmpty {
+            message += " \(details)"
+        }
+        return NSError(
+            domain: "PersistentTerminalHostController",
+            code: 2,
+            userInfo: [NSLocalizedDescriptionKey: message]
+        )
+    }
+
+    private func readStartupDiagnostics(from errorPipe: Pipe) -> String {
+        let data = errorPipe.fileHandleForReading.readDataToEndOfFile()
+        guard let text = String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !text.isEmpty
+        else {
+            return ""
+        }
+        return "Host output: \(text)"
+    }
+
+    private func sanitizedHostEnvironment() -> [String: String] {
+        var environment = ProcessInfo.processInfo.environment
+        for key in environment.keys where
+            key.hasPrefix("XCTest")
+            || key.hasPrefix("XCInject")
+            || key == "DYLD_INSERT_LIBRARIES" {
+            environment.removeValue(forKey: key)
+        }
+        return environment
     }
 }
 private func shellEscape(_ value: String) -> String {

@@ -16,6 +16,8 @@ extension ContentView {
             case .terminal(let workspaceID, let terminalId):
                 markTerminalNotificationRead(terminalId)
                 workspaceTerminalRegistry.session(id: terminalId, in: workspaceID)?.requestKeyboardFocus()
+            case .agentSession:
+                break
             case .editor:
                 editorSessions[tabId]?.requestKeyboardFocus()
             case .gitDiff(_, let path, let isStaged):
@@ -34,6 +36,14 @@ extension ContentView {
         switch content {
         case .terminal(let workspaceID, let id):
             if let session = workspaceTerminalRegistry.session(id: id, in: workspaceID) {
+                title = session.tabTitle
+                icon = session.tabIcon
+            }
+        case .agentSession(let workspaceID, let sessionID):
+            if let session = runtimeRegistry
+                .runtimeHandle(for: workspaceID)?
+                .agentRuntimeRegistry
+                .session(id: sessionID) {
                 title = session.tabTitle
                 icon = session.tabIcon
             }
@@ -159,6 +169,8 @@ extension ContentView {
             return workspaceA == workspaceB && pathA == pathB && stagedA == stagedB
         case (.terminal(let workspaceA, let idA), .terminal(let workspaceB, let idB)):
             return workspaceA == workspaceB && idA == idB
+        case (.agentSession(let workspaceA, let sessionA), .agentSession(let workspaceB, let sessionB)):
+            return workspaceA == workspaceB && sessionA == sessionB
         case (.settings, .settings):
             return true
         default:

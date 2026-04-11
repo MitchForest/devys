@@ -20,6 +20,7 @@ struct RepositoryDomainTests {
         #expect(repository.rootURL.path == "/tmp/devys/repo")
         #expect(repository.displayName == "Devys")
         #expect(repository.settingsReference == repository.id)
+        #expect(repository.sourceControl == .none)
     }
 
     @Test("Repository is Codable")
@@ -27,7 +28,8 @@ struct RepositoryDomainTests {
         let original = Repository(
             rootURL: URL(fileURLWithPath: "/tmp/devys/repo"),
             displayName: "Devys",
-            settingsReference: "repo-settings"
+            settingsReference: "repo-settings",
+            sourceControl: .git
         )
 
         let data = try JSONEncoder().encode(original)

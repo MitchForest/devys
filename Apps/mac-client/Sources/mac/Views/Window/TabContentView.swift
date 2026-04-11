@@ -9,6 +9,7 @@ import Editor
 import Git
 import GhosttyTerminal
 import UI
+import Workspace
 
 struct WelcomeTabContent: View {
     var body: some View {
@@ -24,6 +25,11 @@ struct TabContentView: View {
     let content: TabContent?
     let gitStore: GitStore?
     let terminalSession: GhosttyTerminalSession?
+    let agentSession: AgentSessionRuntime?
+    let agentComposerSpeechService: any AgentComposerSpeechService
+    let onOpenAgentInlineTerminal: (Workspace.ID, UUID) -> Void
+    let onOpenAgentFollowTarget: (Workspace.ID, AgentFollowTarget, Bool) -> Void
+    let onOpenAgentDiffArtifact: (Workspace.ID, AgentDiffContent, Bool) -> Void
     let editorSession: EditorSession?
     let selectedRepositoryRootURL: URL?
     let selectedRepositoryDisplayName: String?
@@ -43,6 +49,29 @@ struct TabContentView: View {
                     GhosttyTerminalView(session: terminalSession)
                 } else {
                     TerminalRewritePlaceholderView(workingDirectory: nil, requestedCommand: nil)
+                }
+            case .agentSession:
+                if let agentSession {
+                    let openInlineTerminal: (UUID) -> Void = { terminalID in
+                        onOpenAgentInlineTerminal(agentSession.workspaceID, terminalID)
+                    }
+                    AgentSessionView(
+                        session: agentSession,
+                        speechService: agentComposerSpeechService,
+                        onOpenTerminalTab: openInlineTerminal,
+                        onOpenLocationTarget: { target, prefersPreview in
+                            onOpenAgentFollowTarget(agentSession.workspaceID, target, prefersPreview)
+                        },
+                        onOpenDiffArtifact: { diff, prefersPreview in
+                            onOpenAgentDiffArtifact(agentSession.workspaceID, diff, prefersPreview)
+                        }
+                    )
+                } else {
+                    PlaceholderView(
+                        icon: "message",
+                        title: "Agent session unavailable",
+                        subtitle: "The selected agent session could not be restored."
+                    )
                 }
             case .gitDiff:
                 if let store = gitStore {
@@ -126,6 +155,14 @@ struct TabContentView: View {
             [
                 terminalSession?.tabTitle ?? "",
                 terminalSession?.tabIcon ?? ""
+            ]
+            .joined(separator: "|")
+        case .agentSession:
+            [
+                agentSession?.tabTitle ?? "",
+                agentSession?.tabIcon ?? "",
+                agentSession?.tabSubtitle ?? "",
+                String(agentSession?.tabIsBusy == true)
             ]
             .joined(separator: "|")
         case .editor:

@@ -3,6 +3,45 @@ import Testing
 import Workspace
 @testable import mac_client
 
+@Suite("App Container Agent Launch Tests")
+struct AppContainerAgentLaunchTests {
+    @Test("Default agent launch options include explicit fallback search directories")
+    @MainActor
+    func defaultLaunchOptionsIncludeFallbackSearchDirectories() {
+        let options = AppContainer().defaultAgentAdapterLaunchOptions()
+        let paths = Set(options.fallbackSearchDirectories.map(normalizedPath(for:)))
+        let homeDirectory = FileManager.default.homeDirectoryForCurrentUser
+        let environmentPath = options.environment["PATH"] ?? ""
+
+        #expect(
+            paths.contains(
+                normalizedPath(homeDirectory.appending(path: ".local/bin", directoryHint: .isDirectory).path)
+            )
+        )
+        #expect(
+            paths.contains(
+                normalizedPath(homeDirectory.appending(path: ".cargo/bin", directoryHint: .isDirectory).path)
+            )
+        )
+        #expect(paths.contains(normalizedPath("/opt/homebrew/bin")))
+        #expect(paths.contains(normalizedPath("/usr/local/bin")))
+        #expect(paths.contains(normalizedPath("/usr/bin")))
+        #expect(paths.contains(normalizedPath("/bin")))
+        #expect(environmentPath.contains("/opt/homebrew/bin"))
+        #expect(environmentPath.contains("/usr/local/bin"))
+    }
+
+    private func normalizedPath(for url: URL) -> String {
+        normalizedPath(url.path(percentEncoded: false))
+    }
+
+    private func normalizedPath(_ path: String) -> String {
+        let trimmed = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !trimmed.isEmpty else { return "/" }
+        return "/" + trimmed
+    }
+}
+
 @Suite("Window Workspace Catalog Store Tests")
 struct WindowWorkspaceCatalogStoreTests {
     @Test("Catalog keeps repository-scoped workspace state and navigator ordering")
@@ -68,6 +107,34 @@ struct WindowWorkspaceCatalogStoreTests {
         #expect(catalog.selectedRepositoryID == nil)
         #expect(catalog.selectedWorkspaceID == nil)
         #expect(!catalog.hasRepositories)
+    }
+
+    @Test("Moving repositories updates navigator order without changing selection")
+    @MainActor
+    func movingRepositoriesUpdatesOrder() {
+        let firstRepository = Repository(rootURL: URL(fileURLWithPath: "/tmp/devys/catalog-order-a"))
+        let secondRepository = Repository(rootURL: URL(fileURLWithPath: "/tmp/devys/catalog-order-b"))
+        let thirdRepository = Repository(rootURL: URL(fileURLWithPath: "/tmp/devys/catalog-order-c"))
+        let catalog = WindowWorkspaceCatalogStore {
+            WorktreeManager(listingService: NoopWorktreeListingService())
+        }
+
+        catalog.importRepository(firstRepository)
+        catalog.importRepository(secondRepository)
+        catalog.importRepository(thirdRepository)
+
+        #expect(catalog.repositories.map(\.id) == [firstRepository.id, secondRepository.id, thirdRepository.id])
+        #expect(catalog.selectedRepositoryID == thirdRepository.id)
+
+        catalog.moveRepository(thirdRepository.id, by: -1)
+
+        #expect(catalog.repositories.map(\.id) == [firstRepository.id, thirdRepository.id, secondRepository.id])
+        #expect(catalog.selectedRepositoryID == thirdRepository.id)
+
+        catalog.moveRepository(firstRepository.id, by: 10)
+
+        #expect(catalog.repositories.map(\.id) == [thirdRepository.id, secondRepository.id, firstRepository.id])
+        #expect(catalog.selectedRepositoryID == thirdRepository.id)
     }
 
     @Test("Catalog distinguishes cached selections from unresolved repositories")
@@ -158,17 +225,23 @@ struct WorktreeRuntimeRegistryTests {
 
         registry.activate(worktree: firstWorktree, filesSidebarVisible: true)
 
-        let firstRuntime = try? #require(registry.activeRuntime)
-        #expect(firstRuntime?.workspaceID == firstWorktree.id)
-        #expect(firstRuntime?.worktree.id == firstWorktree.id)
-        #expect(firstRuntime?.shellState.workspaceID == firstWorktree.id)
+        guard let firstRuntime = registry.activeRuntime else {
+            Issue.record("Expected an active runtime for the first worktree")
+            return
+        }
+        #expect(firstRuntime.workspaceID == firstWorktree.id)
+        #expect(firstRuntime.worktree.id == firstWorktree.id)
+        #expect(firstRuntime.shellState.workspaceID == firstWorktree.id)
         #expect(registry.runtimeHandle(for: firstWorktree.id)?.worktree.id == firstWorktree.id)
 
         registry.activate(worktree: secondWorktree, filesSidebarVisible: false)
 
-        let secondRuntime = try? #require(registry.activeRuntime)
-        #expect(secondRuntime?.workspaceID == secondWorktree.id)
-        #expect(secondRuntime?.worktree.id == secondWorktree.id)
+        guard let secondRuntime = registry.activeRuntime else {
+            Issue.record("Expected an active runtime for the second worktree")
+            return
+        }
+        #expect(secondRuntime.workspaceID == secondWorktree.id)
+        #expect(secondRuntime.worktree.id == secondWorktree.id)
         #expect(registry.runtimeHandle(for: firstWorktree.id)?.worktree.id == firstWorktree.id)
     }
 

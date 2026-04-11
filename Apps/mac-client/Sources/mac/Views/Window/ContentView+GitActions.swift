@@ -3,6 +3,7 @@
 
 import AppKit
 import Git
+import Workspace
 
 @MainActor
 extension ContentView {
@@ -12,7 +13,7 @@ extension ContentView {
     }
 
     func fetchSelectedWorkspaceRemote() {
-        guard let gitStore else { return }
+        guard let gitStore, gitStore.isRepositoryAvailable else { return }
         Task { @MainActor in
             await gitStore.fetch()
             presentGitActionErrorIfNeeded(title: "Fetch Failed")
@@ -20,7 +21,7 @@ extension ContentView {
     }
 
     func pullSelectedWorkspaceRemote() {
-        guard let gitStore else { return }
+        guard let gitStore, gitStore.isRepositoryAvailable else { return }
         Task { @MainActor in
             await gitStore.pull()
             presentGitActionErrorIfNeeded(title: "Pull Failed")
@@ -28,7 +29,7 @@ extension ContentView {
     }
 
     func pushSelectedWorkspaceRemote() {
-        guard let gitStore else { return }
+        guard let gitStore, gitStore.isRepositoryAvailable else { return }
         Task { @MainActor in
             await gitStore.push()
             presentGitActionErrorIfNeeded(title: "Push Failed")
@@ -48,7 +49,7 @@ extension ContentView {
             )
             return
         }
-        guard gitStore != nil else { return }
+        guard gitStore?.isRepositoryAvailable == true else { return }
         isCreatePullRequestSheetPresented = true
     }
 
@@ -85,5 +86,36 @@ extension ContentView {
         guard let message = gitStore?.errorMessage,
               !message.isEmpty else { return }
         showLauncherUnavailableAlert(title: title, message: message)
+    }
+
+    func initializeRepository(_ repositoryID: Repository.ID) async {
+        guard let repository = workspaceCatalog.repository(for: repositoryID) else { return }
+
+        let store: GitStore
+        if workspaceCatalog.selectedRepositoryID == repositoryID,
+           let activeStore = gitStore {
+            store = activeStore
+        } else {
+            store = GitStore(projectFolder: repository.rootURL)
+        }
+
+        await store.initializeRepository()
+
+        if let message = store.errorMessage, !message.isEmpty {
+            showLauncherUnavailableAlert(title: "Initialize Git Failed", message: message)
+            return
+        }
+
+        workspaceCatalog.setRepositorySourceControl(.git, for: repositoryID)
+        await refreshRepositoryCatalog(repositoryID: repositoryID)
+
+        if workspaceCatalog.selectedRepositoryID == repositoryID,
+           let selectedWorktree = selectedCatalogWorktree,
+           visibleWorkspaceID == selectedWorktree.id {
+            runtimeRegistry.metadataCoordinator.refresh(
+                worktreeIds: [selectedWorktree.id],
+                in: repositoryID
+            )
+        }
     }
 }

@@ -1,23 +1,23 @@
 // GitRepositoryDiscoveryService.swift
-// Resolve repository roots from user-selected filesystem paths.
+// Resolve project roots from user-selected filesystem paths.
 //
 // Copyright © 2026 Devys. All rights reserved.
 
 import Foundation
 
 public enum GitRepositoryDiscoveryError: LocalizedError, Sendable {
-    case notRepository(URL)
-    case commandFailed(URL, message: String)
-    case invalidOutput(URL)
+    case selectionMissing(URL)
+    case selectionNotDirectory(URL)
+    case selectionUnavailable(URL, message: String)
 
     public var errorDescription: String? {
         switch self {
-        case .notRepository(let url):
-            return "No Git repository found at \(url.path)."
-        case .commandFailed(let url, let message):
-            return "Failed to inspect repository at \(url.path): \(message)"
-        case .invalidOutput(let url):
-            return "Git returned an invalid repository root for \(url.path)."
+        case .selectionMissing(let url):
+            return "No project was found at \(url.path)."
+        case .selectionNotDirectory(let url):
+            return "Devys can only open folders. \(url.path) is not a directory."
+        case .selectionUnavailable(let url, let message):
+            return "Failed to open \(url.path): \(message)"
         }
     }
 }
@@ -27,9 +27,29 @@ public struct GitRepositoryDiscoveryService: Sendable {
 
     public func resolveRepository(from selectedURL: URL) async throws -> Repository {
         let normalizedSelection = selectedURL.standardizedFileURL
+        try validateSelection(normalizedSelection)
+
+        guard let repositoryRoot = try inspectGitRoot(for: normalizedSelection) else {
+            return Repository(rootURL: normalizedSelection, sourceControl: .none)
+        }
+
+        return Repository(rootURL: repositoryRoot, sourceControl: .git)
+    }
+
+    private func validateSelection(_ selectedURL: URL) throws {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: selectedURL.path, isDirectory: &isDirectory) else {
+            throw GitRepositoryDiscoveryError.selectionMissing(selectedURL)
+        }
+        guard isDirectory.boolValue else {
+            throw GitRepositoryDiscoveryError.selectionNotDirectory(selectedURL)
+        }
+    }
+
+    private func inspectGitRoot(for selectedURL: URL) throws -> URL? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["git", "-C", normalizedSelection.path, "rev-parse", "--show-toplevel"]
+        process.arguments = ["git", "-C", selectedURL.path, "rev-parse", "--show-toplevel"]
 
         let stdout = Pipe()
         let stderr = Pipe()
@@ -39,32 +59,28 @@ public struct GitRepositoryDiscoveryService: Sendable {
         do {
             try process.run()
         } catch {
-            throw GitRepositoryDiscoveryError.commandFailed(normalizedSelection, message: error.localizedDescription)
+            return nil
         }
 
         process.waitUntilExit()
 
-        let outputData = stdout.fileHandleForReading.readDataToEndOfFile()
-        let errorData = stderr.fileHandleForReading.readDataToEndOfFile()
-        let output = String(bytes: outputData, encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let errorOutput = String(bytes: errorData, encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let output = String(
+            bytes: stdout.fileHandleForReading.readDataToEndOfFile(),
+            encoding: .utf8
+        )?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let errorOutput = String(
+            bytes: stderr.fileHandleForReading.readDataToEndOfFile(),
+            encoding: .utf8
+        )?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
         guard process.terminationStatus == 0 else {
-            if errorOutput.contains("not a git repository") {
-                throw GitRepositoryDiscoveryError.notRepository(normalizedSelection)
+            if errorOutput.localizedCaseInsensitiveContains("not a git repository") || errorOutput.isEmpty {
+                return nil
             }
-            throw GitRepositoryDiscoveryError.commandFailed(
-                normalizedSelection,
-                message: errorOutput.isEmpty ? "git rev-parse failed" : errorOutput
-            )
+            throw GitRepositoryDiscoveryError.selectionUnavailable(selectedURL, message: errorOutput)
         }
 
-        guard !output.isEmpty else {
-            throw GitRepositoryDiscoveryError.invalidOutput(normalizedSelection)
-        }
-
-        return Repository(rootURL: URL(fileURLWithPath: output))
+        guard !output.isEmpty else { return nil }
+        return URL(fileURLWithPath: output).standardizedFileURL
     }
 }

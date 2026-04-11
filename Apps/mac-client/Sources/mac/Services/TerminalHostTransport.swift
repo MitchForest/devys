@@ -160,6 +160,11 @@ struct TerminalHostResizeFrame: Codable, Sendable {
     let rows: Int
 }
 
+struct TerminalHostExitFrame: Codable, Sendable {
+    let exitCode: Int?
+    let signal: String?
+}
+
 enum TerminalHostSocketError: LocalizedError {
     case invalidSocketPath
     case socketCreationFailed(Int32)
@@ -281,6 +286,7 @@ enum TerminalHostSocketIO {
         guard fd >= 0 else {
             throw TerminalHostSocketError.acceptFailed(errno)
         }
+        setBlocking(fd)
         return fd
     }
 
@@ -335,11 +341,16 @@ enum TerminalHostSocketIO {
             throw TerminalHostSocketError.invalidResponse
         }
 
-        let lengthData = header.suffix(4)
-        let length = lengthData.withUnsafeBytes { pointer in
-            pointer.load(as: UInt32.self).bigEndian
+        let length = header.dropFirst().reduce(UInt32(0)) { partial, byte in
+            (partial << 8) | UInt32(byte)
         }
         let payload = try readExact(count: Int(length), from: fileHandle)
         return (type, payload)
     }
+}
+
+private func setBlocking(_ fd: Int32) {
+    let flags = fcntl(fd, F_GETFL)
+    guard flags >= 0 else { return }
+    _ = fcntl(fd, F_SETFL, flags & ~O_NONBLOCK)
 }

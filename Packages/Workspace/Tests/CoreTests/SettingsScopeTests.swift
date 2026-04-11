@@ -36,7 +36,8 @@ struct GlobalSettingsPersistenceTests {
                 restoreRepositoriesOnLaunch: true,
                 restoreSelectedWorkspace: true,
                 restoreWorkspaceLayoutAndTabs: false,
-                restoreTerminalSessions: true
+                restoreTerminalSessions: true,
+                restoreAgentSessions: false
             ),
             shortcuts: WorkspaceShellShortcutSettings(
                 bindingsByAction: [
@@ -108,7 +109,26 @@ struct GlobalSettingsPersistenceTests {
         #expect(loaded.restore.restoreSelectedWorkspace)
         #expect(loaded.restore.restoreTerminalSessions)
         #expect(loaded.restore.restoreWorkspaceLayoutAndTabs)
+        #expect(loaded.restore.restoreAgentSessions)
         #expect(loaded.shortcuts == WorkspaceShellShortcutSettings())
+    }
+
+    @Test("Restore settings default agent restore when the persisted field is absent")
+    func restoreSettingsDecodeDefaultsAgentRestore() throws {
+        let data = try JSONSerialization.data(withJSONObject: [
+            "restoreRepositoriesOnLaunch": true,
+            "restoreSelectedWorkspace": false,
+            "restoreWorkspaceLayoutAndTabs": true,
+            "restoreTerminalSessions": true
+        ])
+
+        let decoded = try JSONDecoder().decode(RestoreSettings.self, from: data)
+
+        #expect(decoded.restoreRepositoriesOnLaunch)
+        #expect(!decoded.restoreSelectedWorkspace)
+        #expect(decoded.restoreWorkspaceLayoutAndTabs)
+        #expect(decoded.restoreTerminalSessions)
+        #expect(decoded.restoreAgentSessions)
     }
 }
 

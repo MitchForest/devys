@@ -28,6 +28,10 @@ extension ContentView {
             Task { @MainActor in
                 await selectRepository(repositoryID)
             }
+        case .initializeRepository(let repositoryID):
+            Task { @MainActor in
+                await initializeRepository(repositoryID)
+            }
         case .createWorkspace(let repositoryID):
             presentWorkspaceCreation(for: repositoryID)
         case .importWorktrees(let repositoryID):
@@ -36,6 +40,11 @@ extension ContentView {
             Task { @MainActor in
                 await selectWorkspace(workspaceID, in: repositoryID)
             }
+        case .openAgents:
+            openDefaultOrPromptAgentForSelectedWorkspace()
+        case .focusAgentSession(let sessionID):
+            guard let workspaceID = visibleWorkspaceID else { return }
+            focusAgentSession(workspaceID: workspaceID, sessionID: sessionID)
         case .launchShell:
             openShellForSelectedWorkspace()
         case .launchClaude:

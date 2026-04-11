@@ -1,6 +1,7 @@
 // TerminalHostModels.swift
 // Devys - Persistent terminal host models and relaunch snapshots.
 
+import ACPClientKit
 import Foundation
 import Workspace
 
@@ -29,14 +30,35 @@ struct HostedTerminalSessionRecord: Codable, Equatable, Sendable, Identifiable {
     }
 }
 
+struct PersistedAgentSessionRecord: Codable, Equatable, Sendable {
+    let sessionID: String
+    let kind: ACPAgentKind
+    let title: String?
+    let subtitle: String?
+
+    init(
+        sessionID: String,
+        kind: ACPAgentKind,
+        title: String? = nil,
+        subtitle: String? = nil
+    ) {
+        self.sessionID = sessionID
+        self.kind = kind
+        self.title = title
+        self.subtitle = subtitle
+    }
+}
+
 enum PersistedWorkspaceTabRecord: Codable, Equatable, Sendable {
     case terminal(hostedSessionID: UUID)
+    case agent(PersistedAgentSessionRecord)
     case editor(fileURL: URL)
     case gitDiff(path: String, isStaged: Bool)
 
     private enum CodingKeys: String, CodingKey {
         case kind
         case hostedSessionID
+        case agentSession
         case fileURL
         case path
         case isStaged
@@ -44,6 +66,7 @@ enum PersistedWorkspaceTabRecord: Codable, Equatable, Sendable {
 
     private enum Kind: String, Codable {
         case terminal
+        case agent
         case editor
         case gitDiff
     }
@@ -54,6 +77,10 @@ enum PersistedWorkspaceTabRecord: Codable, Equatable, Sendable {
         case .terminal:
             self = .terminal(
                 hostedSessionID: try container.decode(UUID.self, forKey: .hostedSessionID)
+            )
+        case .agent:
+            self = .agent(
+                try container.decode(PersistedAgentSessionRecord.self, forKey: .agentSession)
             )
         case .editor:
             self = .editor(
@@ -73,6 +100,9 @@ enum PersistedWorkspaceTabRecord: Codable, Equatable, Sendable {
         case .terminal(let hostedSessionID):
             try container.encode(Kind.terminal, forKey: .kind)
             try container.encode(hostedSessionID, forKey: .hostedSessionID)
+        case .agent(let record):
+            try container.encode(Kind.agent, forKey: .kind)
+            try container.encode(record, forKey: .agentSession)
         case .editor(let fileURL):
             try container.encode(Kind.editor, forKey: .kind)
             try container.encode(fileURL, forKey: .fileURL)

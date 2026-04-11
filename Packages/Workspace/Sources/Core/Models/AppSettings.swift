@@ -225,17 +225,61 @@ public struct RestoreSettings: Codable, Equatable, Sendable {
     public var restoreSelectedWorkspace: Bool
     public var restoreWorkspaceLayoutAndTabs: Bool
     public var restoreTerminalSessions: Bool
+    public var restoreAgentSessions: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case restoreRepositoriesOnLaunch
+        case restoreSelectedWorkspace
+        case restoreWorkspaceLayoutAndTabs
+        case restoreTerminalSessions
+        case restoreAgentSessions
+    }
 
     public init(
         restoreRepositoriesOnLaunch: Bool = true,
         restoreSelectedWorkspace: Bool = true,
         restoreWorkspaceLayoutAndTabs: Bool = true,
-        restoreTerminalSessions: Bool = false
+        restoreTerminalSessions: Bool = false,
+        restoreAgentSessions: Bool = true
     ) {
         self.restoreRepositoriesOnLaunch = restoreRepositoriesOnLaunch
         self.restoreSelectedWorkspace = restoreSelectedWorkspace
         self.restoreWorkspaceLayoutAndTabs = restoreWorkspaceLayoutAndTabs
         self.restoreTerminalSessions = restoreTerminalSessions
+        self.restoreAgentSessions = restoreAgentSessions
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        restoreRepositoriesOnLaunch = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .restoreRepositoriesOnLaunch
+        ) ?? true
+        restoreSelectedWorkspace = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .restoreSelectedWorkspace
+        ) ?? true
+        restoreWorkspaceLayoutAndTabs = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .restoreWorkspaceLayoutAndTabs
+        ) ?? true
+        restoreTerminalSessions = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .restoreTerminalSessions
+        ) ?? false
+        restoreAgentSessions = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .restoreAgentSessions
+        ) ?? true
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(restoreRepositoriesOnLaunch, forKey: .restoreRepositoriesOnLaunch)
+        try container.encode(restoreSelectedWorkspace, forKey: .restoreSelectedWorkspace)
+        try container.encode(restoreWorkspaceLayoutAndTabs, forKey: .restoreWorkspaceLayoutAndTabs)
+        try container.encode(restoreTerminalSessions, forKey: .restoreTerminalSessions)
+        try container.encode(restoreAgentSessions, forKey: .restoreAgentSessions)
     }
 }
 

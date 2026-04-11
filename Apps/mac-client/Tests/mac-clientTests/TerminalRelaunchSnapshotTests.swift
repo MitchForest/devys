@@ -1,3 +1,4 @@
+import ACPClientKit
 import Foundation
 import Testing
 import Workspace
@@ -5,7 +6,7 @@ import Workspace
 
 @Suite("Terminal Relaunch Snapshot Tests")
 struct TerminalRelaunchSnapshotTests {
-    @Test("Workspace relaunch snapshots round-trip editor, diff, and terminal tabs")
+    @Test("Workspace relaunch snapshots round-trip editor, diff, terminal, and agent tabs")
     func snapshotRoundTrip() throws {
         let repositoryURL = URL(fileURLWithPath: "/tmp/devys/repo")
         let editorURL = URL(fileURLWithPath: "/tmp/devys/repo/README.md")
@@ -29,11 +30,19 @@ struct TerminalRelaunchSnapshotTests {
                     workspaceID: workspaceID,
                     sidebarMode: .changes,
                     tree: .pane(
-                        selectedTabIndex: 1,
+                        selectedTabIndex: 2,
                         tabs: [
                             .editor(fileURL: editorURL),
                             .gitDiff(path: "README.md", isStaged: false),
-                            .terminal(hostedSessionID: terminalID)
+                            .terminal(hostedSessionID: terminalID),
+                            .agent(
+                                PersistedAgentSessionRecord(
+                                    sessionID: "session-1",
+                                    kind: .codex,
+                                    title: "Codex",
+                                    subtitle: "Restored"
+                                )
+                            )
                         ]
                     )
                 )
@@ -156,7 +165,15 @@ struct TerminalRelaunchSnapshotTests {
                 tabs: [
                     .editor(fileURL: editorURL),
                     .gitDiff(path: "Sources/App.swift", isStaged: diffIsStaged),
-                    .terminal(hostedSessionID: terminalID)
+                    .terminal(hostedSessionID: terminalID),
+                    .agent(
+                        PersistedAgentSessionRecord(
+                            sessionID: "session-\(workspaceID)",
+                            kind: .claude,
+                            title: "Claude",
+                            subtitle: "Connected"
+                        )
+                    )
                 ]
             )
         )

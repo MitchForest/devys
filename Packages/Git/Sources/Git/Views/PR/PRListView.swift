@@ -27,7 +27,9 @@ struct PRListView: View {
             Divider()
             
             // Content
-            if !store.isPRAvailable {
+            if !store.isRepositoryAvailable {
+                gitUnavailableView
+            } else if !store.isPRAvailable {
                 ghNotAvailableView
             } else if isLoading && prs.isEmpty {
                 loadingView
@@ -49,7 +51,7 @@ struct PRListView: View {
             }
         }
     }
-    
+
     // MARK: - Header
     
     private var headerView: some View {
@@ -355,5 +357,38 @@ struct PRListView: View {
         isLoading = true
         prs = await store.loadPRs(state: stateFilter)
         isLoading = false
+    }
+}
+
+private extension PRListView {
+    var gitUnavailableView: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "arrow.triangle.branch")
+                .font(.system(size: 32))
+                .foregroundStyle(.tertiary)
+
+            Text("Git Not Initialized")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+
+            Text("Initialize Git for this project before using pull requests.")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+
+            Button("Initialize Git") {
+                Task {
+                    await store.initializeRepository()
+                    await store.checkPRAvailability()
+                    if store.isPRAvailable {
+                        await loadPRs()
+                    }
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

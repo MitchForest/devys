@@ -136,6 +136,15 @@ struct RestoreSettingsSection: View {
                         set: { appSettings.restore.restoreTerminalSessions = $0 }
                     )
                 )
+
+                SettingsToggle(
+                    title: "restore_agent_sessions",
+                    description: "Reopen persisted Agents tabs and attempt ACP session restore when supported",
+                    isOn: Binding(
+                        get: { appSettings.restore.restoreAgentSessions },
+                        set: { appSettings.restore.restoreAgentSessions = $0 }
+                    )
+                )
             }
         }
     }

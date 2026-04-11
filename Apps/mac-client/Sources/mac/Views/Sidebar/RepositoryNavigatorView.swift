@@ -20,6 +20,9 @@ struct RepositoryNavigatorView: View {
     let infoEntriesByWorkspaceID: [Worktree.ID: WorktreeInfoEntry]
     let attentionSummariesByWorkspaceID: [Worktree.ID: WorkspaceAttentionSummary]
     let onAddRepository: () -> Void
+    let onMoveRepository: (Repository.ID, Int) -> Void
+    let onRemoveRepository: (Repository.ID) -> Void
+    let onInitializeRepository: (Repository.ID) -> Void
     let onCreateWorkspace: (Repository.ID) -> Void
     let onSelectRepository: (Repository.ID) -> Void
     let onSelectWorkspace: (Repository.ID, Worktree.ID) -> Void
@@ -33,6 +36,7 @@ struct RepositoryNavigatorView: View {
     /// Width-responsive: compact when narrow.
     @State private var isCompact = false
     @State private var collapsedRepos: Set<Repository.ID> = []
+    @State private var isManagingRepositories = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -48,6 +52,15 @@ struct RepositoryNavigatorView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(theme.surface)
+        .sheet(isPresented: $isManagingRepositories) {
+            RepositoryManagementSheet(
+                repositories: repositories,
+                selectedRepositoryID: selectedRepositoryID,
+                onMoveRepository: onMoveRepository,
+                onRemoveRepository: onRemoveRepository
+            )
+            .frame(minWidth: 520, minHeight: 320)
+        }
         .overlay(alignment: .trailing) {
             Rectangle()
                 .fill(theme.borderSubtle)
@@ -65,7 +78,11 @@ struct RepositoryNavigatorView: View {
     }
 
     private var navigatorFooter: some View {
-        addRepositoryButton
+        HStack(spacing: DevysSpacing.space2) {
+            addRepositoryButton
+            Spacer(minLength: 0)
+            manageRepositoriesButton
+        }
             .padding(.horizontal, DevysSpacing.space3)
             .padding(.vertical, DevysSpacing.space2)
             .overlay(alignment: .top) {
@@ -80,14 +97,12 @@ struct RepositoryNavigatorView: View {
             HStack(spacing: 4) {
                 Image(systemName: "plus")
                     .font(.system(size: 9, weight: .semibold))
-                Text("Add repository")
+                Text("Add repo")
                     .font(.system(size: 10, weight: .semibold))
-                Spacer()
             }
             .foregroundStyle(theme.textSecondary)
             .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .frame(maxWidth: .infinity)
+            .padding(.vertical, 4)
             .background(theme.elevated)
             .overlay {
                 RoundedRectangle(cornerRadius: DevysSpacing.radiusSm)
@@ -96,6 +111,26 @@ struct RepositoryNavigatorView: View {
             .clipShape(RoundedRectangle(cornerRadius: DevysSpacing.radiusSm))
         }
         .buttonStyle(.plain)
+    }
+
+    private var manageRepositoriesButton: some View {
+        Button {
+            isManagingRepositories = true
+        } label: {
+            Image(systemName: "arrow.up.arrow.down.circle")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(theme.textSecondary)
+                .frame(width: 26, height: 24)
+                .background(theme.elevated)
+                .overlay {
+                    RoundedRectangle(cornerRadius: DevysSpacing.radiusSm)
+                        .strokeBorder(theme.border, lineWidth: 1)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: DevysSpacing.radiusSm))
+        }
+        .buttonStyle(.plain)
+        .disabled(repositories.isEmpty)
+        .help("Manage repositories")
     }
 
     private var emptyState: some View {
@@ -221,43 +256,12 @@ private extension RepositoryNavigatorView {
         isCollapsed: Bool
     ) -> some View {
         HStack(spacing: DevysSpacing.space1) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    if isCollapsed {
-                        collapsedRepos.remove(repository.id)
-                    } else {
-                        collapsedRepos.insert(repository.id)
-                    }
-                }
-            } label: {
-                Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(theme.textTertiary)
-                    .frame(width: 12)
-            }
-            .buttonStyle(.plain)
-
-            Button {
-                onSelectRepository(repository.id)
-            } label: {
-                Text(repository.displayName)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(theme.text)
-                    .lineLimit(1)
-            }
-            .buttonStyle(.plain)
+            collapseButton(for: repository, isCollapsed: isCollapsed)
+            titleButton(for: repository)
 
             Spacer(minLength: 0)
 
-            Button {
-                onCreateWorkspace(repository.id)
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(theme.textTertiary)
-            }
-            .buttonStyle(.plain)
-            .help("Add workspace")
+            repositoryActionButton(for: repository)
         }
         .padding(.horizontal, DevysSpacing.space3)
         .padding(.vertical, 5)
@@ -265,6 +269,55 @@ private extension RepositoryNavigatorView {
             RoundedRectangle(cornerRadius: DevysSpacing.radiusSm)
                 .fill(selectedRepositoryID == repository.id ? theme.elevated : Color.clear)
         )
+    }
+
+    func collapseButton(
+        for repository: Repository,
+        isCollapsed: Bool
+    ) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                if isCollapsed {
+                    collapsedRepos.remove(repository.id)
+                } else {
+                    collapsedRepos.insert(repository.id)
+                }
+            }
+        } label: {
+            Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(theme.textTertiary)
+                .frame(width: 12)
+        }
+        .buttonStyle(.plain)
+    }
+
+    func titleButton(for repository: Repository) -> some View {
+        Button {
+            onSelectRepository(repository.id)
+        } label: {
+            Text(repository.displayName)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(theme.text)
+                .lineLimit(1)
+        }
+        .buttonStyle(.plain)
+    }
+
+    func repositoryActionButton(for repository: Repository) -> some View {
+        Button {
+            if repository.isGitRepository {
+                onCreateWorkspace(repository.id)
+            } else {
+                onInitializeRepository(repository.id)
+            }
+        } label: {
+            Image(systemName: repository.isGitRepository ? "plus" : "arrow.triangle.branch")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(theme.textTertiary)
+        }
+        .buttonStyle(.plain)
+        .help(repository.isGitRepository ? "Add workspace" : "Initialize Git")
     }
 }
 

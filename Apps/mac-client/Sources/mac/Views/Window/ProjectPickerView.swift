@@ -50,11 +50,11 @@ struct ProjectPickerView: View {
 
     private var emptyState: some View {
         VStack(spacing: DevysSpacing.space2) {
-            Text("no recent repositories")
+            Text("no recent projects")
                 .font(DevysTypography.sm)
                 .foregroundStyle(theme.textSecondary)
 
-            Text("$ add a repository to get started")
+            Text("$ add a project to get started")
                 .font(DevysTypography.xs)
                 .foregroundStyle(theme.textTertiary)
         }

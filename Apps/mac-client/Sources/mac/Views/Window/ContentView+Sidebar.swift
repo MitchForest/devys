@@ -14,6 +14,19 @@ extension ContentView {
             workspaceAttentionStore: workspaceAttentionStore,
             navigatorRevealRequest: navigatorRevealRequest,
             onAddRepository: { requestOpenRepository() },
+            onMoveRepository: { repositoryID, offset in
+                moveRepository(repositoryID, by: offset)
+            },
+            onRemoveRepository: { repositoryID in
+                Task { @MainActor in
+                    await removeRepository(repositoryID)
+                }
+            },
+            onInitializeRepository: { repositoryID in
+                Task { @MainActor in
+                    await initializeRepository(repositoryID)
+                }
+            },
             onCreateWorkspace: { repositoryID in
                 presentWorkspaceCreation(for: repositoryID)
             },
@@ -62,6 +75,9 @@ extension ContentView {
             onOpenFile: { workspaceID, url in
                 openInPermanentTab(content: .editor(workspaceID: workspaceID, url: url))
             },
+            onAddFileToAgent: { workspaceID, url in
+                addAttachmentToAgent(.file(url: url), workspaceID: workspaceID)
+            },
             onOpenDiff: { workspaceID, path, isStaged, permanent in
                 let content = TabContent.gitDiff(
                     workspaceID: workspaceID,
@@ -74,6 +90,23 @@ extension ContentView {
                 } else {
                     openInPreviewTab(content: content)
                 }
+            },
+            onAddDiffToAgent: { workspaceID, path, isStaged in
+                addAttachmentToAgent(.gitDiff(path: path, isStaged: isStaged), workspaceID: workspaceID)
+            },
+            onCreateAgentSession: { workspaceID in
+                if visibleWorkspaceID != workspaceID,
+                   let context = workspaceCatalog.workspaceContext(for: workspaceID) {
+                    Task { @MainActor in
+                        await selectWorkspace(workspaceID, in: context.repository.id)
+                        openDefaultOrPromptAgentForSelectedWorkspace()
+                    }
+                } else {
+                    openDefaultOrPromptAgentForSelectedWorkspace()
+                }
+            },
+            onOpenAgentSession: { workspaceID, sessionID in
+                focusAgentSession(workspaceID: workspaceID, sessionID: sessionID)
             },
             onOpenPort: openPort,
             onCopyPortURL: copyPortURL,

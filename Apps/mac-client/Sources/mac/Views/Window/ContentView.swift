@@ -24,6 +24,21 @@ struct WorkspaceCreationPresentationRequest: Identifiable {
     }
 }
 
+struct AgentLaunchPresentationRequest: Identifiable {
+    let workspaceID: Workspace.ID
+    let initialAttachments: [AgentAttachment]
+    let preferredPaneID: PaneID?
+    let pendingSessionID: AgentSessionID?
+    let pendingTabID: TabID?
+
+    var id: Workspace.ID {
+        if let pendingSessionID {
+            return "\(workspaceID)|\(pendingSessionID.rawValue)"
+        }
+        return workspaceID
+    }
+}
+
 struct NavigatorRevealRequest: Equatable {
     let workspaceID: Workspace.ID
     let token: UUID
@@ -64,6 +79,7 @@ struct ContentView: View {
     @State var workspaceBackgroundProcessRegistry = WorkspaceBackgroundProcessRegistry()
     @State var workspaceRunStore = WorkspaceRunStore()
     @State var workspaceCreationRequest: WorkspaceCreationPresentationRequest?
+    @State var agentLaunchRequest: AgentLaunchPresentationRequest?
     @State var navigatorRevealRequest: NavigatorRevealRequest?
     @State var isCommandPalettePresented = false
     @State var isNotificationsPanelPresented = false
@@ -144,7 +160,8 @@ struct ContentView: View {
             restore.restoreRepositoriesOnLaunch,
             restore.restoreSelectedWorkspace,
             restore.restoreWorkspaceLayoutAndTabs,
-            restore.restoreTerminalSessions
+            restore.restoreTerminalSessions,
+            restore.restoreAgentSessions
         ]
         .map { $0 ? "1" : "0" }
         .joined(separator: "|")
@@ -179,6 +196,35 @@ struct ContentView: View {
             ) { workspaces in
                 await handleCreatedWorkspaces(workspaces, in: request.repository)
             }
+        }
+        .sheet(item: $agentLaunchRequest) { request in
+            AgentHarnessPickerSheet(onSelect: { kind in
+                agentLaunchRequest = nil
+                if let pendingSessionID = request.pendingSessionID {
+                    launchPreparedAgentSession(
+                        kind,
+                        workspaceID: request.workspaceID,
+                        sessionID: pendingSessionID
+                    )
+                } else {
+                    openAgentSession(
+                        kind,
+                        workspaceID: request.workspaceID,
+                        initialAttachments: request.initialAttachments,
+                        preferredPaneID: request.preferredPaneID
+                    )
+                }
+            }, onCancel: {
+                agentLaunchRequest = nil
+                if let pendingSessionID = request.pendingSessionID,
+                   let pendingTabID = request.pendingTabID {
+                    cancelPreparedAgentSessionLaunch(
+                        workspaceID: request.workspaceID,
+                        sessionID: pendingSessionID,
+                        tabID: pendingTabID
+                    )
+                }
+            })
         }
         .sheet(isPresented: $isCommandPalettePresented) {
             commandPaletteSheetContent

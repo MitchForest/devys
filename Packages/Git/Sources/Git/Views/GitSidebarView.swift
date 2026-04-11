@@ -12,13 +12,13 @@ import UI
 /// - Double click: Opens in permanent tab via `onOpenDiff`
 @MainActor
 public struct GitSidebarView: View {
-    @Environment(\.devysTheme) private var theme
+    @Environment(\.devysTheme) var theme
     @Bindable var store: GitStore
     let onPreviewDiff: ((String, Bool) -> Void)?  // Single-click: preview tab
     let onOpenDiff: ((String, Bool) -> Void)?     // Double-click: permanent tab
     let onAddDiffToChat: ((String, Bool) -> Void)? // Context menu: add diff to chat
     
-    @State private var showingCommitSheet = false
+    @State var showingCommitSheet = false
     @State private var expandedSections: Set<String> = ["staged", "unstaged"]
     @State private var hoveredSection: String?
     
@@ -41,7 +41,9 @@ public struct GitSidebarView: View {
                 errorBanner(errorMessage)
             }
             
-            if store.isLoading && store.changes.isEmpty {
+            if !store.isRepositoryAvailable {
+                nonRepositoryStateView
+            } else if store.isLoading && store.changes.isEmpty {
                 loadingView
             } else if store.changes.isEmpty {
                 emptyStateView
@@ -98,12 +100,6 @@ public struct GitSidebarView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .sheet(isPresented: $showingCommitSheet) {
             CommitSheet(store: store)
-        }
-        .onAppear {
-            store.startWatching()
-        }
-        .onDisappear {
-            store.stopWatching()
         }
     }
     
@@ -238,101 +234,6 @@ public struct GitSidebarView: View {
         )
     }
     
-}
-
-// MARK: - Empty States & Footer
-
-extension GitSidebarView {
-    var loadingView: some View {
-        VStack(spacing: 8) {
-            ProgressView()
-            Text("Loading...")
-                .font(.caption)
-                .foregroundStyle(theme.textSecondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    var emptyStateView: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "checkmark.circle")
-                .font(.system(size: 24))
-                .foregroundStyle(DevysColors.success.opacity(0.6))
-
-            Text("No Changes")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(theme.textSecondary)
-
-            Text("Working tree is clean")
-                .font(.caption)
-                .foregroundStyle(theme.textTertiary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    var actionsFooter: some View {
-        HStack(spacing: 8) {
-            Button {
-                showingCommitSheet = true
-            } label: {
-                HStack(spacing: 4) {
-                    Text(">")
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(theme.accent)
-                    Text("commit")
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(theme.elevated)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4)
-                        .strokeBorder(
-                            store.stagedChanges.isEmpty ? theme.border : theme.accent,
-                            lineWidth: 1
-                        )
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 4))
-            }
-            .buttonStyle(.plain)
-            .disabled(store.stagedChanges.isEmpty)
-            .opacity(store.stagedChanges.isEmpty ? 0.5 : 1.0)
-
-            Spacer()
-
-            Button {
-                Task { await store.fetch() }
-            } label: {
-                Image(systemName: "arrow.trianglehead.clockwise")
-                    .font(.system(size: 12))
-            }
-            .buttonStyle(.plain)
-            .help("Fetch")
-            .disabled(store.isLoading)
-
-            Button {
-                Task { await store.pull() }
-            } label: {
-                Image(systemName: "arrow.down.circle")
-                    .font(.system(size: 12))
-            }
-            .buttonStyle(.plain)
-            .help("Pull")
-            .disabled(store.isLoading)
-
-            Button {
-                Task { await store.push() }
-            } label: {
-                Image(systemName: "arrow.up.circle")
-                    .font(.system(size: 12))
-            }
-            .buttonStyle(.plain)
-            .help("Push")
-            .disabled(store.isLoading)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-    }
 }
 
 // MARK: - File Row View

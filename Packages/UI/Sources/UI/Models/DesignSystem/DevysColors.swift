@@ -186,6 +186,24 @@ public enum AccentColor: String, CaseIterable, Codable, Sendable {
         case .lavender: return "🟣"
         }
     }
+
+    /// Whether this accent is perceptually light (needs dark text on it).
+    /// Uses WCAG 2.1 relative luminance from the hex raw value.
+    public var isPerceptuallyLight: Bool {
+        let hex = rawValue.dropFirst() // drop "#"
+        guard hex.count == 6,
+              let r = UInt8(hex.prefix(2), radix: 16),
+              let g = UInt8(hex.dropFirst(2).prefix(2), radix: 16),
+              let b = UInt8(hex.dropFirst(4).prefix(2), radix: 16)
+        else { return false }
+
+        func linearize(_ component: UInt8) -> Double {
+            let s = Double(component) / 255.0
+            return s <= 0.03928 ? s / 12.92 : pow((s + 0.055) / 1.055, 2.4)
+        }
+        let luminance = 0.2126 * linearize(r) + 0.7152 * linearize(g) + 0.0722 * linearize(b)
+        return luminance > 0.5
+    }
 }
 
 // MARK: - Adaptive Theme Colors
@@ -287,6 +305,11 @@ public struct DevysTheme: Sendable {
     /// Accent muted for subtle highlights
     public var accentMuted: Color {
         accentColor.muted
+    }
+
+    /// Foreground color that ensures contrast on the accent background.
+    public var accentForeground: Color {
+        accentColor.isPerceptuallyLight ? DevysColors.darkBg0 : DevysColors.lightBg0
     }
 }
 

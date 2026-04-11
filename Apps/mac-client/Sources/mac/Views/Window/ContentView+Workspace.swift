@@ -17,6 +17,25 @@ extension ContentView {
             controller: controller,
             tabContents: tabContents,
             terminalSessionForContent: terminalSessionForContent,
+            agentSessionForContent: agentSessionForContent,
+            agentComposerSpeechService: container.agentComposerSpeechService,
+            onOpenAgentInlineTerminal: { workspaceID, terminalID in
+                openInPermanentTab(content: .terminal(workspaceID: workspaceID, id: terminalID))
+            },
+            onOpenAgentFollowTarget: { workspaceID, target, prefersPreview in
+                openAgentLocationTarget(
+                    workspaceID: workspaceID,
+                    target: target,
+                    prefersPreview: prefersPreview
+                )
+            },
+            onOpenAgentDiffArtifact: { workspaceID, diff, prefersPreview in
+                _ = openAgentDiffArtifact(
+                    workspaceID: workspaceID,
+                    diff: diff,
+                    prefersPreview: prefersPreview
+                )
+            },
             editorSessionForContent: { content, tabID in
                 editorSessionForContent(content, tabId: tabID)
             },
@@ -43,6 +62,14 @@ extension ContentView {
     func terminalSessionForContent(_ content: TabContent?) -> GhosttyTerminalSession? {
         guard case .terminal(let workspaceID, let id) = content else { return nil }
         return workspaceTerminalRegistry.session(id: id, in: workspaceID)
+    }
+
+    func agentSessionForContent(_ content: TabContent?) -> AgentSessionRuntime? {
+        guard case .agentSession(let workspaceID, let sessionID) = content else { return nil }
+        return runtimeRegistry
+            .runtimeHandle(for: workspaceID)?
+            .agentRuntimeRegistry
+            .session(id: sessionID)
     }
 
     func createTerminalSession(

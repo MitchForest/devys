@@ -19,6 +19,10 @@ struct WorktreeRuntimeHandle {
     var gitStore: GitStore? {
         shellState.gitStore
     }
+
+    var agentRuntimeRegistry: WorkspaceAgentRuntimeRegistry {
+        shellState.agentRuntimeRegistry
+    }
 }
 
 @MainActor
@@ -84,10 +88,17 @@ extension WorktreeRuntimeRegistry {
         worktree: Worktree,
         filesSidebarVisible: Bool
     ) {
+        if let activeWorkspaceID,
+           let activeRuntime = runtimesByWorkspaceID[activeWorkspaceID],
+           activeWorkspaceID != worktree.id {
+            activeRuntime.shellState.gitStore?.stopWatching()
+        }
+
         let runtime = ensureRuntime(for: worktree)
         activeWorkspaceID = worktree.id
         self.filesSidebarVisible = filesSidebarVisible
         runtime.ensureGitStore(using: makeGitStore)
+        runtime.shellState.gitStore?.startWatching()
         runtime.setFilesSidebarVisible(filesSidebarVisible, makeFileTreeModel: makeFileTreeModel)
     }
 
@@ -95,6 +106,7 @@ extension WorktreeRuntimeRegistry {
         if let activeWorkspaceID,
            let runtime = runtimesByWorkspaceID[activeWorkspaceID] {
             runtime.setFilesSidebarVisible(false, makeFileTreeModel: makeFileTreeModel)
+            runtime.shellState.gitStore?.stopWatching()
         }
         activeWorkspaceID = nil
     }
@@ -133,6 +145,7 @@ extension WorktreeRuntimeRegistry {
     ) {
         guard let runtime = runtimesByWorkspaceID.removeValue(forKey: workspaceID) else { return }
         runtime.setFilesSidebarVisible(false, makeFileTreeModel: makeFileTreeModel)
+        runtime.shellState.gitStore?.stopWatching()
         runtime.shellState.gitStore?.cleanup()
         cleanupShellState?(runtime.shellState)
         if activeWorkspaceID == workspaceID {

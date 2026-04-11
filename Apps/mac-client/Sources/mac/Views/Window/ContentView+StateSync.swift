@@ -32,6 +32,19 @@ extension ContentView {
         switch content {
         case .terminal(let workspaceID, let id):
             shutdownWorkspaceTerminalSession(id: id, in: workspaceID)
+        case .agentSession(let workspaceID, let sessionID):
+            if let session = runtimeRegistry
+                .runtimeHandle(for: workspaceID)?
+                .agentRuntimeRegistry
+                .session(id: sessionID) {
+                Task {
+                    await session.teardown()
+                }
+            }
+            runtimeRegistry
+                .runtimeHandle(for: workspaceID)?
+                .agentRuntimeRegistry
+                .removeSession(id: sessionID)
         case .editor:
             if let tabId {
                 removeEditorSession(tabId: tabId)
@@ -264,6 +277,29 @@ extension ContentView {
         await refreshRepositoryCatalog(repositoryID: repositoryID)
 
         _ = restoreSelectedWorkspaceOrReset()
+    }
+
+    func moveRepository(_ repositoryID: Repository.ID, by offset: Int) {
+        workspaceCatalog.moveRepository(repositoryID, by: offset)
+    }
+
+    func removeRepository(_ repositoryID: Repository.ID) async {
+        guard let repository = workspaceCatalog.repository(for: repositoryID) else { return }
+
+        let isActiveRepository = workspaceCatalog.selectedRepositoryID == repositoryID
+        if isActiveRepository {
+            guard await confirmCloseCurrentRepository() else { return }
+            persistVisibleWorkspaceState()
+            resetWorkspaceState()
+        }
+
+        recentRepositoriesService.remove(repository.rootURL)
+        workspaceCatalog.removeRepository(repositoryID)
+        syncCatalogRuntimeState()
+
+        if let selectedWorktree = selectedCatalogWorktree {
+            restoreWorkspaceState(for: selectedWorktree)
+        }
     }
 
     func selectWorkspace(_ workspaceID: Worktree.ID, in repositoryID: Repository.ID) async {

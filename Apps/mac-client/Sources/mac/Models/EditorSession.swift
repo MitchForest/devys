@@ -7,6 +7,7 @@ import Split
 import Foundation
 import Observation
 import Editor
+import Syntax
 import Text
 
 struct EditorSessionPreview: Sendable, Equatable {
@@ -95,6 +96,7 @@ struct EditorSessionPreview: Sendable, Equatable {
 
 @MainActor
 @Observable
+// swiftlint:disable:next type_body_length
 final class EditorSession: Identifiable {
     enum Phase {
         case idle
@@ -397,6 +399,29 @@ final class EditorSession: Identifiable {
         }
         url = canonicalURL
         document?.fileURL = canonicalURL
+    }
+
+    func replaceDocumentContent(
+        with content: String,
+        fileURL: URL,
+        markDirty: Bool
+    ) async throws {
+        loadRevision &+= 1
+        loadTask?.cancel()
+        loadTask = nil
+
+        let canonicalURL = fileURL.standardizedFileURL
+        let replacement = try await EditorDocument.makeLoadedDocument(
+            content: content,
+            language: LanguageDetector.detect(from: canonicalURL),
+            fileURL: canonicalURL
+        )
+        replacement.isDirty = markDirty
+
+        url = canonicalURL
+        document = replacement
+        activeRevision = try? DocumentPreviewRevision.current(for: canonicalURL)
+        phase = .loaded(replacement)
     }
 
     private func shouldReload(for canonicalURL: URL) -> Bool {

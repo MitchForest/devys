@@ -133,6 +133,29 @@ extension WindowWorkspaceCatalogStore {
         normalizeSelection()
     }
 
+    func moveRepository(_ repositoryID: Repository.ID, by offset: Int) {
+        guard let currentIndex = repositories.firstIndex(where: { $0.id == repositoryID }) else {
+            return
+        }
+
+        let destinationIndex = max(0, min(repositories.count - 1, currentIndex + offset))
+        guard destinationIndex != currentIndex else { return }
+
+        let repository = repositories.remove(at: currentIndex)
+        repositories.insert(repository, at: destinationIndex)
+        normalizeSelection()
+    }
+
+    func setRepositorySourceControl(
+        _ sourceControl: RepositorySourceControl,
+        for repositoryID: Repository.ID
+    ) {
+        guard let index = repositories.firstIndex(where: { $0.id == repositoryID }) else {
+            return
+        }
+        repositories[index].sourceControl = sourceControl
+    }
+
     func selectRepository(_ repositoryID: Repository.ID?) {
         selectedRepositoryID = repositoryID
         if let repositoryID {

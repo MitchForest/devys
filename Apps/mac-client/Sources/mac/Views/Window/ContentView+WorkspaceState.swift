@@ -11,6 +11,7 @@ extension ContentView {
             workspaceID: workspaceID,
             sidebarMode: activeSidebarItem ?? .files,
             gitStore: gitStore,
+            agentRuntimeRegistry: activeRuntime?.agentRuntimeRegistry ?? WorkspaceAgentRuntimeRegistry(),
             editorSessions: editorSessions,
             editorSessionPool: editorSessionPool,
             controller: controller,
@@ -67,6 +68,7 @@ extension ContentView {
             worktree: worktree,
             filesSidebarVisible: activeSidebarItem == .files
         )
+        bindRepositoryCapability(for: worktree)
 
         configureSplitDelegate()
         syncTabMetadataFromSessions()
@@ -104,12 +106,34 @@ extension ContentView {
         workspaceBackgroundProcessRegistry.shutdownAll(in: state.workspaceID)
         syncCatalogStructure()
         workspaceRunStore.clearWorktree(state.workspaceID)
+        for session in state.agentRuntimeRegistry.allSessions {
+            Task {
+                await session.teardown()
+            }
+        }
+        state.agentRuntimeRegistry.removeAll()
 
         for tabID in state.editorSessions.keys {
             if let session = state.editorSessions[tabID] {
                 state.editorSessionPool.release(url: session.url)
             }
             EditorSessionRegistry.shared.unregister(tabId: tabID)
+        }
+    }
+
+    private func bindRepositoryCapability(for worktree: Worktree) {
+        guard let gitStore = runtimeRegistry.runtimeHandle(for: worktree.id)?.gitStore else { return }
+        gitStore.onRepositoryAvailabilityDidUpdate = { [weak workspaceCatalog, weak runtimeRegistry] isAvailable in
+            Task { @MainActor in
+                workspaceCatalog?.setRepositorySourceControl(
+                    isAvailable ? .git : .none,
+                    for: worktree.repositoryRootURL.standardizedFileURL.path
+                )
+                runtimeRegistry?.metadataCoordinator.refresh(
+                    worktreeIds: [worktree.id],
+                    in: worktree.repositoryRootURL.standardizedFileURL.path
+                )
+            }
         }
     }
 }

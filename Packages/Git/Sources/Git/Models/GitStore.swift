@@ -14,10 +14,13 @@ public final class GitStore {
     // MARK: - Repository State
     
     /// Current repository info (branch, ahead/behind).
-    private(set) var repoInfo: GitRepositoryInfo?
+    var repoInfo: GitRepositoryInfo?
+
+    /// Whether the current project folder is backed by Git.
+    public internal(set) var isRepositoryAvailable: Bool = false
     
     /// All file changes (staged and unstaged).
-    private(set) var changes: [GitFileChange] = []
+    var changes: [GitFileChange] = []
 
     /// Whether there are any uncommitted changes.
     public var hasChanges: Bool { !changes.isEmpty }
@@ -31,18 +34,19 @@ public final class GitStore {
     // MARK: - Selection State
     
     /// Currently selected file path.
-    private(set) var selectedFilePath: String?
+    var selectedFilePath: String?
     
     /// Diff snapshot for the selected file.
-    private(set) var selectedDiff: DiffSnapshot?
+    var selectedDiff: DiffSnapshot?
     
     /// Whether viewing staged or unstaged diff.
-    private(set) var isViewingStaged: Bool = false
+    var isViewingStaged: Bool = false
 
     /// Current diff load task (for cancellation).
     private var diffTask: Task<DiffSnapshot, Never>?
     private var diffRequestID = UUID()
     @ObservationIgnored public var onChangesDidUpdate: (([GitFileChange]) -> Void)?
+    @ObservationIgnored public var onRepositoryAvailabilityDidUpdate: ((Bool) -> Void)?
     
     // MARK: - View Settings
     
@@ -50,10 +54,10 @@ public final class GitStore {
     var diffViewMode: DiffViewMode = .unified
     
     /// Whether to ignore whitespace in diffs.
-    private(set) var ignoreWhitespace: Bool = false
+    var ignoreWhitespace: Bool = false
     
     /// Currently focused hunk index for keyboard navigation.
-    private(set) var focusedHunkIndex: Int?
+    var focusedHunkIndex: Int?
     
     /// Context lines per file path.
     private var diffContextLinesByPath: [String: Int] = [:]
@@ -64,12 +68,12 @@ public final class GitStore {
     var isShowingHistory: Bool = false
     
     /// Commit history.
-    private(set) var commits: [GitCommit] = []
+    var commits: [GitCommit] = []
     
     // MARK: - PR State
     
     /// Whether GitHub CLI is available.
-    private(set) var isPRAvailable: Bool = false
+    var isPRAvailable: Bool = false
     
     /// Selected PR for detail view.
     var selectedPR: PullRequest?
@@ -123,18 +127,6 @@ public final class GitStore {
     private let projectFolder: URL?
     private let fileWatchServiceFactory: (URL) -> FileWatchService
     private var fileWatchService: FileWatchService?
-    
-    // MARK: - Error Handling
-
-    /// Sets errorMessage only for real errors, ignoring task cancellation.
-    func setError(_ error: Error, prefix: String? = nil) {
-        guard !(error is CancellationError) else { return }
-        if let prefix {
-            errorMessage = "\(prefix): \(error.localizedDescription)"
-        } else {
-            setError(error)
-        }
-    }
 
     // MARK: - Background Tasks
 
@@ -195,8 +187,10 @@ extension GitStore {
             // Ignore changes inside .git/ directory — git CLI operations
             // (status, diff, etc.) modify .git/index and other internal files,
             // which would otherwise create a refresh → file-change → refresh loop.
+            // Keep the top-level `.git` entry visible so terminal-side `git init`
+            // or repository removal can flip source-control capability live.
             let pathString = url.path
-            guard !pathString.contains("/.git/") && !pathString.hasSuffix("/.git") else {
+            guard !pathString.contains("/.git/") else {
                 return
             }
             Task { @MainActor in
@@ -226,10 +220,11 @@ extension GitStore {
     
     /// Refresh git status.
     public func refresh() async {
-        guard gitService.hasRepository else {
-            errorMessage = "No project folder configured"
+        guard projectFolder != nil else {
+            applyRepositoryAvailability(false)
             return
         }
+        guard await syncRepositoryAvailability() else { return }
         
         // Prevent concurrent refreshes — overlapping calls cause rapid
         // isLoading toggling (blinking) and duplicate diff reads.
@@ -266,7 +261,30 @@ extension GitStore {
 
     /// Check if PR functionality is available.
     public func checkPRAvailability() async {
+        guard await ensureRepositoryAvailability() else {
+            isPRAvailable = false
+            return
+        }
         isPRAvailable = await gitService.isPRAvailable()
+    }
+
+    /// Initialize Git in the current project folder.
+    public func initializeRepository() async {
+        guard projectFolder != nil else { return }
+
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            try await gitService.initializeRepository()
+            _ = await syncRepositoryAvailability()
+            await refresh()
+            await checkPRAvailability()
+        } catch {
+            setError(error, prefix: "Failed to initialize Git")
+        }
+
+        isLoading = false
     }
 
     /// Stop background polling.
@@ -285,6 +303,20 @@ extension GitStore {
         isShowingPRDetail = false
         focusedHunkIndex = nil
         await refreshDiff(for: path, staged: isStaged)
+    }
+
+    public func diffText(
+        for path: String,
+        isStaged: Bool,
+        contextLines: Int = 3,
+        ignoreWhitespace: Bool = false
+    ) async throws -> String {
+        try await gitService.diff(
+            for: path,
+            staged: isStaged,
+            contextLines: contextLines,
+            ignoreWhitespace: ignoreWhitespace
+        )
     }
 
     func setFocusedHunkIndex(_ index: Int?) {
@@ -345,7 +377,7 @@ extension GitStore {
     
     /// Stage a file.
     func stage(_ path: String) async {
-        guard gitService.hasRepository else { return }
+        guard await ensureRepositoryAvailability() else { return }
         
         do {
             try await gitService.stage(path)
@@ -357,7 +389,7 @@ extension GitStore {
 
     /// Unstage a file.
     func unstage(_ path: String) async {
-        guard gitService.hasRepository else { return }
+        guard await ensureRepositoryAvailability() else { return }
         
         do {
             try await gitService.unstage(path)
@@ -369,7 +401,7 @@ extension GitStore {
     
     /// Stage all changes.
     func stageAll() async {
-        guard gitService.hasRepository else { return }
+        guard await ensureRepositoryAvailability() else { return }
         
         do {
             try await gitService.stageAll()
@@ -381,7 +413,7 @@ extension GitStore {
     
     /// Unstage all changes.
     func unstageAll() async {
-        guard gitService.hasRepository else { return }
+        guard await ensureRepositoryAvailability() else { return }
         
         do {
             try await gitService.unstageAll()
@@ -397,7 +429,8 @@ extension GitStore {
     /// - Unstaged hunk: Stage it (include in next commit)
     /// - Staged hunk: No-op (already accepted)
     func acceptHunk(_ hunk: DiffHunk) async {
-        guard gitService.hasRepository, let path = selectedFilePath else { return }
+        guard await ensureRepositoryAvailability(),
+              let path = selectedFilePath else { return }
         
         // If already staged, nothing to do
         if isViewingStaged { return }
@@ -420,7 +453,8 @@ extension GitStore {
     /// - Unstaged hunk: Discard (revert to HEAD)
     /// - Staged hunk: Unstage + discard (revert to HEAD)
     func rejectHunk(_ hunk: DiffHunk) async {
-        guard gitService.hasRepository, let path = selectedFilePath else { return }
+        guard await ensureRepositoryAvailability(),
+              let path = selectedFilePath else { return }
         
         do {
             if isViewingStaged {
@@ -457,7 +491,7 @@ extension GitStore {
     
     /// Discard changes to a file.
     func discard(_ change: GitFileChange) async {
-        guard gitService.hasRepository else { return }
+        guard await ensureRepositoryAvailability() else { return }
         
         do {
             if change.status == .untracked {
@@ -475,7 +509,7 @@ extension GitStore {
     
     /// Commit staged changes.
     public func commit(message: String, push: Bool = false) async throws {
-        guard gitService.hasRepository else {
+        guard await ensureRepositoryAvailability() else {
             throw GitError.notRepository(projectFolder ?? URL(fileURLWithPath: "/"))
         }
         
@@ -503,7 +537,7 @@ extension GitStore {
     
     /// Fetch from the remote.
     public func fetch() async {
-        guard gitService.hasRepository else { return }
+        guard await ensureRepositoryAvailability() else { return }
 
         isLoading = true
         errorMessage = nil
@@ -512,7 +546,11 @@ extension GitStore {
             try await gitService.fetch()
             await refresh()
         } catch {
-            if !(error is CancellationError) { errorMessage = formatFetchError(error) }
+            if isNotRepositoryError(error) {
+                applyRepositoryAvailability(false)
+            } else if !(error is CancellationError) {
+                errorMessage = formatFetchError(error)
+            }
         }
 
         isLoading = false
@@ -520,7 +558,7 @@ extension GitStore {
 
     /// Push to remote.
     public func push() async {
-        guard gitService.hasRepository else { return }
+        guard await ensureRepositoryAvailability() else { return }
         
         isLoading = true
         errorMessage = nil
@@ -529,7 +567,11 @@ extension GitStore {
             try await gitService.push()
             await refresh()
         } catch {
-            if !(error is CancellationError) { errorMessage = formatPushError(error) }
+            if isNotRepositoryError(error) {
+                applyRepositoryAvailability(false)
+            } else if !(error is CancellationError) {
+                errorMessage = formatPushError(error)
+            }
         }
         
         isLoading = false
@@ -537,7 +579,7 @@ extension GitStore {
     
     /// Pull from remote.
     public func pull() async {
-        guard gitService.hasRepository else { return }
+        guard await ensureRepositoryAvailability() else { return }
         
         isLoading = true
         errorMessage = nil
@@ -546,7 +588,11 @@ extension GitStore {
             try await gitService.pull()
             await refresh()
         } catch {
-            if !(error is CancellationError) { errorMessage = formatPullError(error) }
+            if isNotRepositoryError(error) {
+                applyRepositoryAvailability(false)
+            } else if !(error is CancellationError) {
+                errorMessage = formatPullError(error)
+            }
         }
         
         isLoading = false
@@ -576,7 +622,7 @@ extension GitStore {
     
     /// Load all branches.
     func loadBranches() async -> [GitBranch] {
-        guard gitService.hasRepository else { return [] }
+        guard await ensureRepositoryAvailability() else { return [] }
         
         do {
             return try await gitService.branches()
@@ -588,7 +634,7 @@ extension GitStore {
     
     /// Checkout a branch.
     func checkout(branch: String) async {
-        guard gitService.hasRepository else { return }
+        guard await ensureRepositoryAvailability() else { return }
         
         isLoading = true
         errorMessage = nil
@@ -605,7 +651,7 @@ extension GitStore {
     
     /// Create a new branch.
     func createBranch(name: String) async {
-        guard gitService.hasRepository else { return }
+        guard await ensureRepositoryAvailability() else { return }
         
         isLoading = true
         errorMessage = nil
@@ -622,7 +668,7 @@ extension GitStore {
     
     /// Delete a branch.
     func deleteBranch(name: String, force: Bool = false) async {
-        guard gitService.hasRepository else { return }
+        guard await ensureRepositoryAvailability() else { return }
         
         isLoading = true
         errorMessage = nil
@@ -641,7 +687,7 @@ extension GitStore {
     
     /// Load commit history.
     func loadCommitHistory(count: Int = 50) async {
-        guard gitService.hasRepository else { return }
+        guard await ensureRepositoryAvailability() else { return }
         
         isShowingHistory = true
         isShowingPRDetail = false
@@ -656,7 +702,7 @@ extension GitStore {
     
     /// Show diff for a commit.
     func showCommit(_ commit: GitCommit) async -> String? {
-        guard gitService.hasRepository else { return nil }
+        guard await ensureRepositoryAvailability() else { return nil }
         
         do {
             return try await gitService.show(commit: commit.hash)

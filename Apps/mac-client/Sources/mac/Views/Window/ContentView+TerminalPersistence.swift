@@ -143,7 +143,8 @@ extension ContentView {
     ) {
         if terminateHostedSession,
            let session = workspaceTerminalRegistry.session(id: id, in: workspaceID),
-           session.attachCommand != nil {
+           session.attachCommand != nil,
+           session.terminateHostedSessionOnClose {
             Task {
                 try? await persistentTerminalHostController.terminateSession(id: id)
             }
@@ -342,6 +343,24 @@ extension ContentView {
                 return nil
             }
             return .terminal(hostedSessionID: terminalID)
+        case .agentSession(let tabWorkspaceID, let sessionID):
+            guard tabWorkspaceID == workspaceID,
+                  appSettings.restore.restoreAgentSessions,
+                  let session = runtimeRegistry
+                    .runtimeHandle(for: workspaceID)?
+                    .agentRuntimeRegistry
+                    .session(id: sessionID),
+                  session.launchState == .connected else {
+                return nil
+            }
+            return .agent(
+                PersistedAgentSessionRecord(
+                    sessionID: sessionID.rawValue,
+                    kind: session.descriptor.kind,
+                    title: session.tabTitle,
+                    subtitle: session.tabSubtitle
+                )
+            )
         case .editor(let tabWorkspaceID, let url):
             guard tabWorkspaceID == workspaceID else { return nil }
             return .editor(fileURL: canonicalEditorSessionURL(url))
@@ -428,6 +447,13 @@ extension ContentView {
                 return nil
             }
             return .terminal(workspaceID: workspaceID, id: hostedSessionID)
+        case .agent(let record):
+            guard appSettings.restore.restoreAgentSessions else {
+                return nil
+            }
+            let sessionID = AgentSessionID(rawValue: record.sessionID)
+            restoreAgentSession(record, workspaceID: workspaceID)
+            return .agentSession(workspaceID: workspaceID, sessionID: sessionID)
         case .editor(let fileURL):
             return .editor(workspaceID: workspaceID, url: fileURL)
         case .gitDiff(let path, let isStaged):

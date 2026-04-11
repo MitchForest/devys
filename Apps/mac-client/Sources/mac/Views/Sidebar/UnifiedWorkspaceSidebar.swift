@@ -10,19 +10,23 @@ import UI
 struct UnifiedWorkspaceSidebar<
     FilesContent: View,
     ChangesContent: View,
-    PortsContent: View
+    PortsContent: View,
+    AgentsContent: View
 >: View {
     @Environment(\.devysTheme) private var theme
 
     let hasChanges: Bool
     let portCount: Int
+    let agentCount: Int
     @ViewBuilder let filesContent: () -> FilesContent
     @ViewBuilder let changesContent: () -> ChangesContent
     @ViewBuilder let portsContent: () -> PortsContent
+    @ViewBuilder let agentsContent: () -> AgentsContent
 
     @State private var isFilesExpanded = true
     @State private var isChangesExpanded = true
     @State private var isPortsExpanded = false
+    @State private var isAgentsExpanded = true
 
     var body: some View {
         ScrollView {
@@ -58,6 +62,17 @@ struct UnifiedWorkspaceSidebar<
                         portsContent()
                     }
                 }
+
+                sectionDivider
+
+                sidebarSection(
+                    title: "Agents",
+                    systemImage: "message.badge.waveform",
+                    isExpanded: $isAgentsExpanded,
+                    badge: agentCount > 0 ? "\(agentCount)" : nil
+                ) {
+                    agentsContent()
+                }
             }
         }
         .background(theme.surface)
@@ -72,6 +87,13 @@ struct UnifiedWorkspaceSidebar<
             if hasChanges, !isChangesExpanded {
                 withAnimation(.easeInOut(duration: 0.15)) {
                     isChangesExpanded = true
+                }
+            }
+        }
+        .onChange(of: agentCount) { _, agentCount in
+            if agentCount > 0, !isAgentsExpanded {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    isAgentsExpanded = true
                 }
             }
         }

@@ -7,8 +7,9 @@ import Foundation
 
 @MainActor
 protocol GitService {
-    var hasRepository: Bool { get }
     var hasPRClient: Bool { get }
+    func isRepositoryAvailable() async -> Bool
+    func initializeRepository() async throws
 
     func status() async throws -> [GitFileChange]
     // periphery:ignore - explicit opt-in status path kept for ignored-aware explorer workflows
@@ -66,7 +67,6 @@ struct DefaultGitService: GitService {
     private let githubClient: GitHubClient?
     private let repositoryURL: URL?
 
-    var hasRepository: Bool { gitClient != nil }
     var hasPRClient: Bool { githubClient != nil }
 
     init(repositoryURL: URL?) {
@@ -78,6 +78,20 @@ struct DefaultGitService: GitService {
             self.gitClient = nil
             self.githubClient = nil
         }
+    }
+
+    func isRepositoryAvailable() async -> Bool {
+        guard let gitClient else { return false }
+        do {
+            _ = try await gitClient.repositoryRoot()
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func initializeRepository() async throws {
+        try await requireGitClient().initializeRepository()
     }
 
     func status() async throws -> [GitFileChange] {
@@ -199,6 +213,7 @@ struct DefaultGitService: GitService {
     }
 
     func isPRAvailable() async -> Bool {
+        guard await isRepositoryAvailable() else { return false }
         guard let githubClient else { return false }
         return await githubClient.isAvailable()
     }

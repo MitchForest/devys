@@ -27,7 +27,7 @@ DevysApp (Entry Point)
     +-- AppContainer (@Observable, dependency injection)
     |       - Factory for services and sessions
     |       - Injects: AppSettings, RecentFoldersService, LayoutPersistenceService
-    |       - Creates: FileTreeModel, ChatStore, ChatSession, GitStore, TerminalSession
+    |       - Creates: FileTreeModel, AgentSessionRuntime, GitStore, Ghostty terminal sessions
     |
     +-- ContentView (Main window content)
             |
@@ -64,7 +64,7 @@ The Devys app depends on a monorepo of Swift packages located in `/Packages/`:
 | **DevysCore** | Shared models, settings, file tree service, workspace file nodes, layout persistence |
 | **DevysUI** | Design system: themes (`DevysTheme`), spacing constants (`DevysSpacing`), typography (`DevysTypography`), reusable components |
 | **DevysSplit** | Split-pane tab management system (VS Code-style panes with tabs, drag-drop, welcome tabs) |
-| **DevysAgents** | AI agent harness for Claude Code and OpenAI Codex CLIs, chat sessions, logging |
+| **ACPClientKit** | Native Swift ACP transport, launcher, and protocol client for Codex and Claude adapters |
 | **DevysEditor** | Metal-accelerated code editor with syntax highlighting |
 | **DevysSyntax** | Syntax highlighting and language detection |
 | **DevysTerminal** | Terminal emulator with Metal rendering, PTY management |
@@ -100,7 +100,7 @@ Apps/Devys/
 |       |   |-- ContentView+Tabs.swift         # Tab creation, preview tabs
 |       |   |-- ContentView+TabClosing.swift   # Tab close handling, dirty prompts
 |       |   |-- ContentView+Sidebar.swift      # Sidebar content switching
-|       |   |-- ContentView+Chat.swift         # Chat session management
+|       |   |-- ContentView+Agents.swift       # Agent session launch, restore, and routing
 |       |   |-- ContentView+StateSync.swift    # Session metadata sync
 |       |   |-- ContentView+EditorTabs.swift   # Editor URL updates
 |       |   |-- ContentView+StatusBar.swift     # Bottom status bar rendering
@@ -113,7 +113,7 @@ Apps/Devys/
 |       |   |-- TerminalViewWrapper.swift      # Terminal session wrapper
 |       |
 |       |-- Sidebar/
-|       |   |-- FeatureRail.swift              # Vertical icon rail (Files, Chat, Git, etc.)
+|       |   |-- FeatureRail.swift              # Workspace sidebar mode identifiers
 |       |   |-- SidebarContentView.swift       # Expandable sidebar content
 |       |
 |       |-- FileTree/
@@ -156,15 +156,11 @@ Enum identifying what content a tab displays:
 ```swift
 enum TabContent: Equatable {
     case welcome
-    case chat
-    case chatSession(id: UUID)
-    case files
-    case search
-    case git
-    case gitDiff(path: String, isStaged: Bool)
-    case terminal(id: UUID)
+    case terminal(workspaceID: Workspace.ID, id: UUID)
+    case agentSession(workspaceID: Workspace.ID, sessionID: AgentSessionID)
+    case gitDiff(workspaceID: Workspace.ID, path: String, isStaged: Bool)
     case settings
-    case editor(url: URL)
+    case editor(workspaceID: Workspace.ID, url: URL)
 }
 ```
 
@@ -219,13 +215,15 @@ final class ThemeManager {
 }
 ```
 
-### SidebarItem
+### WorkspaceSidebarMode
 
-Enum for feature rail items:
+The workspace sidebar is section-based and persisted per workspace:
 
 ```swift
-enum SidebarItem: CaseIterable {
-    case chat, files, worktrees, search, git, canvas, browser, terminal, theme, settings
+enum WorkspaceSidebarMode: String, CaseIterable, Codable, Sendable {
+    case files
+    case changes
+    case ports
 }
 ```
 
@@ -257,16 +255,12 @@ The main `ContentView` holds significant state:
 ```swift
 @State var windowState = WindowState()
 @State var themeManager = ThemeManager()
-@State var activeSidebarItem: SidebarItem? = .files
+@State var activeSidebarItem: WorkspaceSidebarMode? = .files
 @State var sidebarWidth: CGFloat = 240
 
 // Stores and services
-@State var gitStore: GitStore?
-@State var chatStore: ChatStore?
-
-// Session dictionaries
-@State var activeChatSessions: [UUID: ChatSession] = [:]
-@State var terminalSessions: [UUID: TerminalSession] = [:]
+@State var runtimeRegistry = WorktreeRuntimeRegistry()
+@State var workspaceTerminalRegistry = WorkspaceTerminalRegistry()
 @State var editorSessions: [TabID: EditorSession] = [:]
 
 // DevysSplit
@@ -285,9 +279,9 @@ The main `ContentView` holds significant state:
 - Each tab has a `TabID` (UUID) assigned by `DevysSplitController`
 - `tabContents[TabID]` maps to a `TabContent` enum
 - For session-based content:
-  - `chatSession(id: UUID)` -> `activeChatSessions[UUID]`
-  - `terminal(id: UUID)` -> `terminalSessions[UUID]`
-  - `editor(url: URL)` -> `editorSessions[TabID]`
+  - `agentSession(workspaceID:sessionID:)` -> `WorkspaceAgentRuntimeRegistry.session(id:)`
+  - `terminal(workspaceID:id:)` -> `WorkspaceTerminalRegistry.session(id:in:)`
+  - `editor(workspaceID:url:)` -> `editorSessions[TabID]`
 
 ### Preview Tab Pattern (VS Code-style)
 
@@ -380,12 +374,7 @@ nonisolated func splitTabBar(
 ```swift
 @ViewBuilder
 var sidebarContent: some View {
-    switch activeSidebarItem {
-    case .files: SidebarContentView(...)
-    case .git: GitSidebarView(...)
-    case .chat: ChatSidebarView(...)
-    default: EmptyView()
-    }
+    ContentViewSidebarSurface(...)
 }
 ```
 
@@ -394,7 +383,7 @@ var sidebarContent: some View {
 ```swift
 .onChange(of: windowState.folder) { _, newFolder in
     updateGitStore(for: newFolder)
-    updateChatStore(for: newFolder)
+    restoreWorkspaceState(for: selectedWorktree)
 }
 
 .onChange(of: themeManager.isDarkMode) { _, _ in
@@ -417,11 +406,7 @@ var sidebarContent: some View {
 ### Bindings from State
 
 ```swift
-FeatureRail(
-    activeItem: $activeSidebarItem,
-    isDarkMode: $themeManager.isDarkMode,
-    ...
-)
+ContentViewToolbarSurface(...)
 ```
 
 ---
@@ -488,7 +473,6 @@ Commands are defined in `DevysApp.body` using `CommandGroup`.
 Defined in `Info.plist` for drag-drop support:
 
 - `com.devys.git-diff` - Git diff content
-- `com.devys.chat-item` - Chat session reference
 
 These enable dragging items from sidebars to split panes.
 
@@ -555,7 +539,7 @@ The app follows a terminal-inspired design language:
 - `ContentView+Tabs.swift` - Tab management
 - `ContentView+TabClosing.swift` - Close flow
 - `ContentView+Sidebar.swift` - Sidebar content
-- `ContentView+Chat.swift` - Chat operations
+- `ContentView+Agents.swift` - Agent launch, restore, and workflow routing
 - `ContentView+StateSync.swift` - Session sync
 - `ContentView+EditorTabs.swift` - Editor updates
 - `ContentView+StatusBar.swift` - Bottom status bar

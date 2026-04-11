@@ -11,9 +11,12 @@ import Workspace
 enum WorkspaceCommandPaletteAction: Equatable {
     case addRepository
     case selectRepository(Repository.ID)
+    case initializeRepository(Repository.ID)
     case createWorkspace(Repository.ID)
     case importWorktrees(Repository.ID)
     case selectWorkspace(repositoryID: Repository.ID, workspaceID: Workspace.ID)
+    case openAgents
+    case focusAgentSession(AgentSessionID)
     case launchShell
     case launchClaude
     case launchCodex
@@ -36,12 +39,18 @@ struct WorkspaceCommandPaletteItem: Identifiable, Equatable {
             "add-repository"
         case .selectRepository(let repositoryID):
             "select-repository:\(repositoryID)"
+        case .initializeRepository(let repositoryID):
+            "initialize-repository:\(repositoryID)"
         case .createWorkspace(let repositoryID):
             "create-workspace:\(repositoryID)"
         case .importWorktrees(let repositoryID):
             "import-worktrees:\(repositoryID)"
         case .selectWorkspace(let repositoryID, let workspaceID):
             "select-workspace:\(repositoryID):\(workspaceID)"
+        case .openAgents:
+            "open-agents"
+        case .focusAgentSession(let sessionID):
+            "focus-agent-session:\(sessionID.rawValue)"
         case .launchShell:
             "launch-shell"
         case .launchClaude:

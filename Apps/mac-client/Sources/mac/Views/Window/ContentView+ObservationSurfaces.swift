@@ -3,11 +3,13 @@
 //
 // Copyright © 2026 Devys. All rights reserved.
 
+// swiftlint:disable file_length
 import SwiftUI
 import Split
 import Editor
 import Git
 import GhosttyTerminal
+import UI
 import Workspace
 
 @MainActor
@@ -17,6 +19,9 @@ struct ContentViewNavigatorSurface: View {
     let workspaceAttentionStore: WorkspaceAttentionStore
     let navigatorRevealRequest: NavigatorRevealRequest?
     let onAddRepository: () -> Void
+    let onMoveRepository: (Repository.ID, Int) -> Void
+    let onRemoveRepository: (Repository.ID) -> Void
+    let onInitializeRepository: (Repository.ID) -> Void
     let onCreateWorkspace: (Repository.ID) -> Void
     let onSelectRepository: (Repository.ID) -> Void
     let onSelectWorkspace: (Repository.ID, Worktree.ID) -> Void
@@ -38,6 +43,9 @@ struct ContentViewNavigatorSurface: View {
             infoEntriesByWorkspaceID: runtimeRegistry.metadataCoordinator.activeStore?.entriesById ?? [:],
             attentionSummariesByWorkspaceID: workspaceAttentionStore.summariesByWorkspace,
             onAddRepository: onAddRepository,
+            onMoveRepository: onMoveRepository,
+            onRemoveRepository: onRemoveRepository,
+            onInitializeRepository: onInitializeRepository,
             onCreateWorkspace: onCreateWorkspace,
             onSelectRepository: onSelectRepository,
             onSelectWorkspace: onSelectWorkspace,
@@ -58,7 +66,11 @@ struct ContentViewSidebarSurface: View {
     let repositorySettingsStore: RepositorySettingsStore
     let onPreviewFile: (Workspace.ID, URL) -> Void
     let onOpenFile: (Workspace.ID, URL) -> Void
+    let onAddFileToAgent: (Workspace.ID, URL) -> Void
     let onOpenDiff: (Workspace.ID, String, Bool, Bool) -> Void
+    let onAddDiffToAgent: (Workspace.ID, String, Bool) -> Void
+    let onCreateAgentSession: (Workspace.ID) -> Void
+    let onOpenAgentSession: (Workspace.ID, AgentSessionID) -> Void
     let onOpenPort: (WorkspacePort, RepositoryPortLabel?) -> Void
     let onCopyPortURL: (WorkspacePort, RepositoryPortLabel?) -> Void
     let onStopPortProcess: (WorkspacePort, Int32) -> Void
@@ -69,10 +81,12 @@ struct ContentViewSidebarSurface: View {
         let selectedWorkspaceID = currentRuntime?.workspaceID
         let gitStore = currentRuntime?.gitStore
         let ports = runtimeRegistry.portCoordinator.ports(for: selectedWorkspaceID)
+        let agentSessions = currentRuntime?.agentRuntimeRegistry.allSessions ?? []
 
         UnifiedWorkspaceSidebar(
             hasChanges: gitStore?.hasChanges ?? false,
-            portCount: ports.count
+            portCount: ports.count,
+            agentCount: agentSessions.count
         ) {
             SidebarContentView(
                 model: currentRuntime?.fileTreeModel,
@@ -86,7 +100,10 @@ struct ContentViewSidebarSurface: View {
                     guard let selectedWorkspaceID else { return }
                     onOpenFile(selectedWorkspaceID, url)
                 },
-                onAddToChat: nil,
+                onAddToChat: { url in
+                    guard let selectedWorkspaceID else { return }
+                    onAddFileToAgent(selectedWorkspaceID, url)
+                },
                 showsTrailingBorder: false
             )
         } changesContent: {
@@ -101,7 +118,10 @@ struct ContentViewSidebarSurface: View {
                         guard let selectedWorkspaceID else { return }
                         onOpenDiff(selectedWorkspaceID, path, isStaged, true)
                     },
-                    onAddDiffToChat: nil
+                    onAddDiffToChat: { path, isStaged in
+                        guard let selectedWorkspaceID else { return }
+                        onAddDiffToAgent(selectedWorkspaceID, path, isStaged)
+                    }
                 )
             }
         } portsContent: {
@@ -114,6 +134,18 @@ struct ContentViewSidebarSurface: View {
                 onCopyURL: onCopyPortURL,
                 onStopProcess: onStopPortProcess
             )
+        } agentsContent: {
+            AgentSessionsSidebarSection(
+                sessions: agentSessions,
+                onCreateSession: {
+                    guard let selectedWorkspaceID else { return }
+                    onCreateAgentSession(selectedWorkspaceID)
+                },
+                onOpenSession: { sessionID in
+                    guard let selectedWorkspaceID else { return }
+                    onOpenAgentSession(selectedWorkspaceID, sessionID)
+                }
+            )
         }
     }
 }
@@ -125,6 +157,11 @@ struct ContentViewWorkspaceSurface: View {
     let controller: DevysSplitController
     let tabContents: [TabID: TabContent]
     let terminalSessionForContent: (TabContent?) -> GhosttyTerminalSession?
+    let agentSessionForContent: (TabContent?) -> AgentSessionRuntime?
+    let agentComposerSpeechService: any AgentComposerSpeechService
+    let onOpenAgentInlineTerminal: (Workspace.ID, UUID) -> Void
+    let onOpenAgentFollowTarget: (Workspace.ID, AgentFollowTarget, Bool) -> Void
+    let onOpenAgentDiffArtifact: (Workspace.ID, AgentDiffContent, Bool) -> Void
     let editorSessionForContent: (TabContent?, TabID) -> EditorSession?
     let onFocusPane: (PaneID) -> Void
     let onAttentionAcknowledged: (TabContent?) -> Void
@@ -138,12 +175,18 @@ struct ContentViewWorkspaceSurface: View {
             content: { tab, paneId in
                 let content = tabContents[tab.id]
                 let terminalSession = terminalSessionForContent(content)
+                let agentSession = agentSessionForContent(content)
                 let editorSession = editorSessionForContent(content, tab.id)
                 TabContentView(
                     tab: tab,
                     content: content,
                     gitStore: runtimeRegistry.activeRuntime?.gitStore,
                     terminalSession: terminalSession,
+                    agentSession: agentSession,
+                    agentComposerSpeechService: agentComposerSpeechService,
+                    onOpenAgentInlineTerminal: onOpenAgentInlineTerminal,
+                    onOpenAgentFollowTarget: onOpenAgentFollowTarget,
+                    onOpenAgentDiffArtifact: onOpenAgentDiffArtifact,
                     editorSession: editorSession,
                     selectedRepositoryRootURL: workspaceCatalog.selectedRepositoryRootURL,
                     selectedRepositoryDisplayName: workspaceCatalog.selectedRepository?.displayName,
@@ -170,12 +213,100 @@ struct ContentViewWorkspaceSurface: View {
 }
 
 @MainActor
+private struct AgentSessionsSidebarSection: View {
+    @Environment(\.devysTheme) private var theme
+
+    let sessions: [AgentSessionRuntime]
+    let onCreateSession: () -> Void
+    let onOpenSession: (AgentSessionID) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DevysSpacing.space2) {
+            Button {
+                onCreateSession()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("New Agent Session")
+                        .font(DevysTypography.sm)
+                    Spacer()
+                }
+                .foregroundStyle(theme.text)
+                .padding(.horizontal, DevysSpacing.space3)
+                .padding(.vertical, 8)
+                .background(theme.elevated)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(theme.borderSubtle, lineWidth: 1)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+
+            if sessions.isEmpty {
+                Text("No active sessions in this workspace.")
+                    .font(DevysTypography.xs)
+                    .foregroundStyle(theme.textSecondary)
+                    .padding(.horizontal, DevysSpacing.space3)
+                    .padding(.vertical, 4)
+            } else {
+                ForEach(sessions) { session in
+                    Button {
+                        onOpenSession(session.sessionID)
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: session.tabIcon)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(theme.accent)
+                                .frame(width: 14)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(session.tabTitle)
+                                    .font(DevysTypography.sm)
+                                    .foregroundStyle(theme.text)
+                                    .lineLimit(1)
+
+                                Text(session.stateSummary)
+                                    .font(DevysTypography.xs)
+                                    .foregroundStyle(theme.textSecondary)
+                                    .lineLimit(1)
+                            }
+
+                            Spacer()
+
+                            if session.tabIsBusy {
+                                Circle()
+                                    .fill(theme.accent)
+                                    .frame(width: 8, height: 8)
+                            }
+                        }
+                        .padding(.horizontal, DevysSpacing.space3)
+                        .padding(.vertical, 8)
+                        .background(theme.surface)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(theme.borderSubtle, lineWidth: 1)
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(.horizontal, DevysSpacing.space3)
+        .padding(.bottom, DevysSpacing.space3)
+    }
+}
+
+@MainActor
 struct ContentViewToolbarSurface: View {
     let workspaceCatalog: WindowWorkspaceCatalogStore
     let runtimeRegistry: WorktreeRuntimeRegistry
     let repositorySettingsStore: RepositorySettingsStore
     let isSidebarVisible: Bool
     let onToggleSidebar: () -> Void
+    let onAgents: () -> Void
     let onShell: () -> Void
     let onClaude: () -> Void
     let onCodex: () -> Void
@@ -191,6 +322,7 @@ struct ContentViewToolbarSurface: View {
             workspaceName: currentWorktree?.name,
             isSidebarVisible: isSidebarVisible,
             onToggleSidebar: onToggleSidebar,
+            onAgents: currentWorktree == nil ? nil : onAgents,
             onShell: currentWorktree == nil ? nil : onShell,
             onClaude: currentWorktree == nil ? nil : onClaude,
             onCodex: currentWorktree == nil ? nil : onCodex,
@@ -239,6 +371,7 @@ struct ContentViewStatusBarSurface: View {
         let runState = workspaceRunStore.state(for: currentWorktree?.id)
         let defaultStartupProfile = defaultStartupProfile(for: currentWorktree)
         let portSummary = runtimeRegistry.portCoordinator.summary(for: currentWorktree?.id)
+        let gitAvailable = currentRuntime?.gitStore?.isRepositoryAvailable == true
 
         StatusBar(
             repositoryName: workspaceCatalog.selectedRepository?.displayName,
@@ -250,9 +383,9 @@ struct ContentViewStatusBarSurface: View {
             prAvailability: metadataStore?.isPRAvailable,
             portSummary: portSummary,
             hasStagedChanges: (worktreeInfo?.statusSummary?.staged ?? 0) > 0,
-            onFetch: currentRuntime?.gitStore == nil ? nil : onFetch,
-            onPull: currentRuntime?.gitStore == nil ? nil : onPull,
-            onPush: currentRuntime?.gitStore == nil ? nil : onPush,
+            onFetch: gitAvailable ? onFetch : nil,
+            onPull: gitAvailable ? onPull : nil,
+            onPush: gitAvailable ? onPush : nil,
             onCommit: (worktreeInfo?.statusSummary?.staged ?? 0) > 0 ? onCommit : nil,
             onCreatePR: metadataStore?.isPRAvailable == true ? onCreatePR : nil,
             onOpenPR: worktreeInfo?.pullRequest == nil ? nil : onOpenPR,
@@ -290,9 +423,9 @@ struct ContentViewCommandPaletteSheetSurface: View {
             WorkspaceCommandPaletteItem(
                 action: .addRepository,
                 title: "Add Repository",
-                subtitle: "Import an existing Git repository into this window",
+                subtitle: "Open a local project or import a Git repository",
                 systemImage: "folder.badge.plus",
-                keywords: ["repository", "import", "add", "open"],
+                keywords: ["repository", "project", "import", "add", "open"],
                 shortcut: "⌘O"
             )
         ]
@@ -308,26 +441,39 @@ struct ContentViewCommandPaletteSheetSurface: View {
                     shortcut: nil
                 )
             )
-            items.append(
-                WorkspaceCommandPaletteItem(
-                    action: .createWorkspace(repository.id),
-                    title: "Create Workspace in \(repository.displayName)",
-                    subtitle: "New branch, existing branch, or pull request",
-                    systemImage: "plus.circle",
-                    keywords: ["workspace", "create", "branch", repository.displayName],
-                    shortcut: nil
+            if repository.isGitRepository {
+                items.append(
+                    WorkspaceCommandPaletteItem(
+                        action: .createWorkspace(repository.id),
+                        title: "Create Workspace in \(repository.displayName)",
+                        subtitle: "New branch, existing branch, or pull request",
+                        systemImage: "plus.circle",
+                        keywords: ["workspace", "create", "branch", repository.displayName],
+                        shortcut: nil
+                    )
                 )
-            )
-            items.append(
-                WorkspaceCommandPaletteItem(
-                    action: .importWorktrees(repository.id),
-                    title: "Import Worktrees in \(repository.displayName)",
-                    subtitle: "Attach existing git worktrees to this repository",
-                    systemImage: "square.and.arrow.down",
-                    keywords: ["workspace", "worktree", "import", repository.displayName],
-                    shortcut: nil
+                items.append(
+                    WorkspaceCommandPaletteItem(
+                        action: .importWorktrees(repository.id),
+                        title: "Import Worktrees in \(repository.displayName)",
+                        subtitle: "Attach existing git worktrees to this repository",
+                        systemImage: "square.and.arrow.down",
+                        keywords: ["workspace", "worktree", "import", repository.displayName],
+                        shortcut: nil
+                    )
                 )
-            )
+            } else {
+                items.append(
+                    WorkspaceCommandPaletteItem(
+                        action: .initializeRepository(repository.id),
+                        title: "Initialize Git in \(repository.displayName)",
+                        subtitle: "Create a new Git repository for this local project",
+                        systemImage: "arrow.triangle.branch",
+                        keywords: ["git", "init", "initialize", repository.displayName],
+                        shortcut: nil
+                    )
+                )
+            }
         }
 
         for entry in workspaceCatalog.visibleNavigatorWorkspaces() {
@@ -354,6 +500,34 @@ struct ContentViewCommandPaletteSheetSurface: View {
         }
 
         if let activeWorktree = runtimeRegistry.activeRuntime?.worktree {
+            items.append(
+                WorkspaceCommandPaletteItem(
+                    action: .openAgents,
+                    title: "New Agent Session",
+                    subtitle: activeWorktree.workingDirectory.path,
+                    systemImage: "message.badge.waveform",
+                    keywords: ["agent", "agents", "chat", "assistant", "new"],
+                    shortcut: nil
+                )
+            )
+
+            for session in runtimeRegistry.activeRuntime?.agentRuntimeRegistry.allSessions ?? [] {
+                items.append(
+                    WorkspaceCommandPaletteItem(
+                        action: .focusAgentSession(session.sessionID),
+                        title: "Open \(session.tabTitle)",
+                        subtitle: session.stateSummary,
+                        systemImage: session.tabIcon,
+                        keywords: [
+                            "agent",
+                            "session",
+                            session.tabTitle,
+                            session.stateSummary
+                        ],
+                        shortcut: nil
+                    )
+                )
+            }
             items.append(
                 WorkspaceCommandPaletteItem(
                     action: .launchShell,

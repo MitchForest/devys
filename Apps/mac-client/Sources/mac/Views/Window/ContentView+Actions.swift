@@ -130,8 +130,8 @@ extension ContentView {
             panel.canChooseFiles = false
             panel.canChooseDirectories = true
             panel.allowsMultipleSelection = true
-            panel.message = "Choose one or more repositories to add"
-            panel.prompt = "Add Repository"
+            panel.message = "Choose one or more local projects to add"
+            panel.prompt = "Add Project"
 
             guard panel.runModal() == .OK else { return }
 
@@ -408,8 +408,6 @@ extension ContentView {
         alert.alertStyle = .warning
         alert.messageText = "Some selections could not be added"
         alert.informativeText = """
-        Devys can only add Git repositories.
-
         \(failures.map { "\($0.selectedURL.path)\n\($0.message)" }.joined(separator: "\n\n"))
         """
         alert.addButton(withTitle: "OK")

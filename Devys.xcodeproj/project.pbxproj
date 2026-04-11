@@ -15,6 +15,8 @@
 		APP013 /* Editor in Frameworks */ = {isa = PBXBuildFile; productRef = PKG005 /* Editor */; };
 		APP015 /* Git in Frameworks */ = {isa = PBXBuildFile; productRef = PKG007 /* Git */; };
 		APP017 /* GhosttyTerminal in Frameworks */ = {isa = PBXBuildFile; productRef = PKG015 /* GhosttyTerminal */; };
+		APP018 /* ACPClientKit in Frameworks */ = {isa = PBXBuildFile; productRef = PKG016 /* ACPClientKit */; };
+		APP019 /* ACPClientKit in Frameworks */ = {isa = PBXBuildFile; productRef = PKG016 /* ACPClientKit */; };
 		RES003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = RES004 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -46,6 +48,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				APP019 /* ACPClientKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -61,6 +64,7 @@
 				APP013 /* Editor in Frameworks */,
 				APP015 /* Git in Frameworks */,
 				APP017 /* GhosttyTerminal in Frameworks */,
+				APP018 /* ACPClientKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -126,6 +130,7 @@
 			);
 			name = "mac-clientTests";
 			packageProductDependencies = (
+				PKG016 /* ACPClientKit */,
 			);
 			productName = "mac-clientTests";
 			productReference = A1B2C3D40100000000000001 /* mac-clientTests.xctest */;
@@ -156,6 +161,7 @@
 				PKG005 /* Editor */,
 				PKG007 /* Git */,
 				PKG015 /* GhosttyTerminal */,
+				PKG016 /* ACPClientKit */,
 			);
 			productName = "mac-client";
 			productReference = PRD001 /* mac-client.app */;
@@ -195,6 +201,7 @@
 				PKR007 /* XCLocalSwiftPackageReference "Packages/Git" */,
 				PKR008 /* XCLocalSwiftPackageReference "Packages/Rendering" */,
 				PKR015 /* XCLocalSwiftPackageReference "Packages/GhosttyTerminal" */,
+				PKR016 /* XCLocalSwiftPackageReference "Packages/ACPClientKit" */,
 			);
 			productRefGroup = GRP003 /* Products */;
 			projectDirPath = "";
@@ -564,6 +571,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/GhosttyTerminal;
 		};
+		PKR016 /* XCLocalSwiftPackageReference "Packages/ACPClientKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/ACPClientKit;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -606,6 +617,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = PKR015 /* XCLocalSwiftPackageReference "Packages/GhosttyTerminal" */;
 			productName = GhosttyTerminal;
+		};
+		PKG016 /* ACPClientKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = PKR016 /* XCLocalSwiftPackageReference "Packages/ACPClientKit" */;
+			productName = ACPClientKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

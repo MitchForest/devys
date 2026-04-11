@@ -31,6 +31,7 @@ public struct GitPanelView: View {
             mainContentView
         }
         .task {
+            store.startWatching()
             await store.refresh()
             await store.checkPRAvailability()
         }

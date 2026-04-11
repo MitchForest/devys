@@ -13,6 +13,7 @@ extension ContentView {
             repositorySettingsStore: repositorySettingsStore,
             isSidebarVisible: isSidebarVisible,
             onToggleSidebar: toggleSidebar,
+            onAgents: { openDefaultOrPromptAgentForSelectedWorkspace() },
             onShell: { openShellForSelectedWorkspace() },
             onClaude: { launchClaudeForSelectedWorkspace() },
             onCodex: { launchCodexForSelectedWorkspace() },

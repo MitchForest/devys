@@ -24,6 +24,13 @@ actor GitClient {
 }
 
 extension GitClient {
+    // MARK: - Repository Setup
+
+    /// Initialize a Git repository in the current working directory.
+    func initializeRepository() async throws {
+        _ = try await runGit("init")
+    }
+
     // MARK: - Status
     
     /// Get current working tree status.
