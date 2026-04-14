@@ -14,13 +14,11 @@ public final class DefaultWorktreeInfoWatcher: WorktreeInfoWatcher, @unchecked S
 
     private struct WorktreeWatch {
         let worktree: Worktree
-        let headWatcher: DispatchSourceFileSystemObject?
-        let indexWatcher: DispatchSourceFileSystemObject?
+        let metadataWatcher: (any GitRepositoryMetadataWatcher)?
         var fileStream: FileEventStream?
 
         func stop() {
-            headWatcher?.cancel()
-            indexWatcher?.cancel()
+            metadataWatcher?.stopWatching()
             fileStream?.stop()
         }
     }
@@ -134,7 +132,13 @@ public final class DefaultWorktreeInfoWatcher: WorktreeInfoWatcher, @unchecked S
             removeWatch(for: removedId)
         }
 
-        for (id, worktree) in incoming where watches[id] == nil {
+        for (id, worktree) in incoming {
+            if let existing = watches[id],
+               existing.worktree == worktree,
+               existing.metadataWatcher != nil {
+                continue
+            }
+            removeWatch(for: id)
             startWatch(for: worktree)
         }
 
@@ -145,23 +149,27 @@ public final class DefaultWorktreeInfoWatcher: WorktreeInfoWatcher, @unchecked S
 
     private func startWatch(for worktree: Worktree) {
         guard !isStopped else { return }
-        let gitDir = resolveGitDir(for: worktree)
-        let headWatcher = gitDir.flatMap { gitURL in
-            makeFileWatcher(url: gitURL.appendingPathComponent("HEAD")) { [weak self] in
-                self?.schedule(.branchChanged(worktreeId: worktree.id), key: .branch(worktree.id))
+        let metadataWatcher: (any GitRepositoryMetadataWatcher)?
+        if GitRepositoryReferenceResolver.resolveGitDirectory(for: worktree.workingDirectory) != nil {
+            let watcher = DefaultGitRepositoryMetadataWatcher(repositoryURL: worktree.workingDirectory)
+            watcher.onChange = { [weak self] event in
+                guard let self else { return }
+                switch event {
+                case .headChanged:
+                    self.schedule(.branchChanged(worktreeId: worktree.id), key: .branch(worktree.id))
+                case .indexChanged, .repositoryStateChanged:
+                    self.schedule(.filesChanged(worktreeId: worktree.id), key: .files(worktree.id))
+                }
             }
-        }
-
-        let indexWatcher = gitDir.flatMap { gitURL in
-            makeFileWatcher(url: gitURL.appendingPathComponent("index")) { [weak self] in
-                self?.schedule(.filesChanged(worktreeId: worktree.id), key: .files(worktree.id))
-            }
+            watcher.startWatching()
+            metadataWatcher = watcher
+        } else {
+            metadataWatcher = nil
         }
 
         watches[worktree.id] = WorktreeWatch(
             worktree: worktree,
-            headWatcher: headWatcher,
-            indexWatcher: indexWatcher,
+            metadataWatcher: metadataWatcher,
             fileStream: makeFileStream(for: worktree.id, worktree: worktree)
         )
     }
@@ -202,50 +210,6 @@ public final class DefaultWorktreeInfoWatcher: WorktreeInfoWatcher, @unchecked S
         debounceItems[.files(id)]?.cancel()
         debounceItems.removeValue(forKey: .branch(id))
         debounceItems.removeValue(forKey: .files(id))
-    }
-
-    private func makeFileWatcher(url: URL, handler: @escaping () -> Void) -> DispatchSourceFileSystemObject? {
-        let fd = open(url.path, O_EVTONLY)
-        guard fd != -1 else { return nil }
-        let source = DispatchSource.makeFileSystemObjectSource(
-            fileDescriptor: fd,
-            eventMask: [.write, .delete, .rename, .extend],
-            queue: queue
-        )
-        source.setEventHandler(handler: handler)
-        source.setCancelHandler {
-            close(fd)
-        }
-        source.resume()
-        return source
-    }
-
-    private func resolveGitDir(for worktree: Worktree) -> URL? {
-        let gitURL = worktree.workingDirectory.appendingPathComponent(".git")
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: gitURL.path, isDirectory: &isDirectory) else {
-            return nil
-        }
-
-        if isDirectory.boolValue {
-            return gitURL.standardizedFileURL
-        }
-
-        guard let content = try? String(contentsOf: gitURL, encoding: .utf8) else {
-            return nil
-        }
-
-        for rawLine in content.split(whereSeparator: \.isNewline) {
-            let line = String(rawLine).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard line.hasPrefix("gitdir:") else { continue }
-            let pathValue = line.dropFirst("gitdir:".count)
-            let path = String(pathValue).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !path.isEmpty else { continue }
-            let url = URL(fileURLWithPath: String(path), relativeTo: worktree.workingDirectory)
-            return url.standardizedFileURL
-        }
-
-        return nil
     }
 
     private func schedule(_ event: WorktreeInfoEvent, key: DebounceKey) {

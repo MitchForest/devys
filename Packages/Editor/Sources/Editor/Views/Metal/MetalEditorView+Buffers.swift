@@ -8,6 +8,13 @@ import Rendering
 import Syntax
 
 extension MetalEditorView {
+    private struct OverlayGeometry {
+        let scale: Float
+        let cellWidth: Float
+        let cellHeight: Float
+        let gutterWidth: Float
+    }
+
     // MARK: - Building Buffers
 
     func buildCellBuffer(rows: [PreparedEditorRow]) {
@@ -125,55 +132,121 @@ extension MetalEditorView {
 
         overlayBuffer.clear()
 
-        let scale = Float(scaleFactor)
-        let cellWidth = Float(metrics.cellWidth) * scale
-        let cellHeight = Float(metrics.lineHeight) * scale
-        let gutterWidth = Float(metrics.gutterWidth) * scale
+        let geometry = overlayGeometry()
+        addSearchOverlays(using: geometry, lineBuffer: lineBuffer, document: document)
+        addCursorOverlay(using: geometry, lineBuffer: lineBuffer, document: document)
+        addSelectionOverlay(using: geometry, lineBuffer: lineBuffer, document: document)
+    }
 
+    private func overlayGeometry() -> OverlayGeometry {
+        let scale = Float(scaleFactor)
+        return OverlayGeometry(
+            scale: scale,
+            cellWidth: Float(metrics.cellWidth) * scale,
+            cellHeight: Float(metrics.lineHeight) * scale,
+            gutterWidth: Float(metrics.gutterWidth) * scale
+        )
+    }
+
+    private func addSearchOverlays(
+        using geometry: OverlayGeometry,
+        lineBuffer: LineBuffer,
+        document: EditorDocument
+    ) {
+        for match in searchMatches {
+            let rangeLowerBound = min(match.startLine, match.endLine)
+            let rangeUpperBound = max(match.startLine, match.endLine)
+            guard rangeUpperBound >= lineBuffer.visibleRange.lowerBound,
+                  rangeLowerBound < lineBuffer.visibleRange.upperBound else {
+                continue
+            }
+
+            let color = match.id == activeSearchMatchID ? activeSearchMatchColor : searchMatchColor
+            addOverlay(
+                for: match,
+                color: color,
+                geometry: geometry,
+                lineBuffer: lineBuffer,
+                document: document
+            )
+        }
+    }
+
+    private func addCursorOverlay(
+        using geometry: OverlayGeometry,
+        lineBuffer: LineBuffer,
+        document: EditorDocument
+    ) {
         let cursor = document.cursor
-        let cursorY = Float(lineBuffer.viewportY(forLine: cursor.position.line)) * scale
-        let cursorX = gutterWidth + Float(cursor.position.column) * cellWidth
+        let cursorY = Float(lineBuffer.viewportY(forLine: cursor.position.line)) * geometry.scale
+        let cursorX = geometry.gutterWidth + Float(cursor.position.column) * geometry.cellWidth
 
         let cursorAlpha: Float
         if hasFocus {
-            // Focused: blink the cursor
             let blinkPhase = fmod(uniforms.time * uniforms.cursorBlinkRate, 1.0)
             cursorAlpha = blinkPhase < 0.5 ? cursorColor.w : 0.0
         } else {
-            // Unfocused: no cursor
             cursorAlpha = 0.0
         }
 
-        if cursorAlpha > 0 {
+        guard cursorAlpha > 0 else { return }
+        overlayBuffer.addQuad(
+            x: cursorX,
+            y: cursorY,
+            width: 2 * geometry.scale,
+            height: geometry.cellHeight,
+            color: SIMD4(cursorColor.x, cursorColor.y, cursorColor.z, cursorAlpha)
+        )
+    }
+
+    private func addSelectionOverlay(
+        using geometry: OverlayGeometry,
+        lineBuffer: LineBuffer,
+        document: EditorDocument
+    ) {
+        guard let selection = document.selection else { return }
+        let normalized = selection.normalized
+
+        for line in normalized.start.line...normalized.end.line {
+            let lineY = Float(lineBuffer.viewportY(forLine: line)) * geometry.scale
+            let startColumn = line == normalized.start.line ? normalized.start.column : 0
+            let endColumn = line == normalized.end.line ? normalized.end.column : document.lineLength(at: line)
+            let x = geometry.gutterWidth + Float(startColumn) * geometry.cellWidth
+            let width = Float(endColumn - startColumn) * geometry.cellWidth
+
             overlayBuffer.addQuad(
-                x: cursorX,
-                y: cursorY,
-                width: 2 * scale,
-                height: cellHeight,
-                color: SIMD4(cursorColor.x, cursorColor.y, cursorColor.z, cursorAlpha)
+                x: x,
+                y: lineY,
+                width: width,
+                height: geometry.cellHeight,
+                color: selectionColor
             )
         }
+    }
 
-        if let selection = document.selection {
-            let normalized = selection.normalized
+    private func addOverlay(
+        for match: EditorSearchMatch,
+        color: SIMD4<Float>,
+        geometry: OverlayGeometry,
+        lineBuffer: LineBuffer,
+        document: EditorDocument
+    ) {
+        for line in match.startLine...match.endLine {
+            guard line >= 0, line < document.lineCount else { continue }
+            let lineY = Float(lineBuffer.viewportY(forLine: line)) * geometry.scale
+            let startColumn = line == match.startLine ? match.startColumn : 0
+            let endColumn = line == match.endLine ? match.endColumn : document.lineLength(at: line)
+            guard endColumn > startColumn else { continue }
 
-            for line in normalized.start.line...normalized.end.line {
-                let lineY = Float(lineBuffer.viewportY(forLine: line)) * scale
-
-                let startCol = line == normalized.start.line ? normalized.start.column : 0
-                let endCol = line == normalized.end.line ? normalized.end.column : document.lineLength(at: line)
-
-                let x = gutterWidth + Float(startCol) * cellWidth
-                let width = Float(endCol - startCol) * cellWidth
-
-                overlayBuffer.addQuad(
-                    x: x,
-                    y: lineY,
-                    width: width,
-                    height: cellHeight,
-                    color: selectionColor
-                )
-            }
+            let x = geometry.gutterWidth + Float(startColumn) * geometry.cellWidth
+            let width = Float(endColumn - startColumn) * geometry.cellWidth
+            overlayBuffer.addQuad(
+                x: x,
+                y: lineY,
+                width: width,
+                height: geometry.cellHeight,
+                color: color
+            )
         }
     }
 }

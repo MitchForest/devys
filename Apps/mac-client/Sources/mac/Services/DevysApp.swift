@@ -101,7 +101,7 @@ struct DevysApp: App {
                 .environment(container.layoutPersistenceService)
                 .environment(container.repositorySettingsStore)
         }
-        .windowStyle(.hiddenTitleBar)
+        .windowToolbarStyle(.unifiedCompact(showsTitle: false))
         .defaultSize(width: 1200, height: 800)
         .commands {
             CommandGroup(replacing: .newItem) {
@@ -126,6 +126,25 @@ struct DevysApp: App {
                     NotificationCenter.default.post(name: .devysAddRepository, object: nil)
                 }
                 .keyboardShortcut("o", modifiers: .command)
+            }
+
+            CommandGroup(replacing: .printItem) {
+                Button("Open Quickly...") {
+                    NotificationCenter.default.post(name: .devysOpenFileSearch, object: nil)
+                }
+                .keyboardShortcut("p", modifiers: .command)
+            }
+
+            CommandMenu("Find") {
+                Button("Find") {
+                    NotificationCenter.default.post(name: .devysShowEditorFind, object: nil)
+                }
+                .keyboardShortcut("f", modifiers: .command)
+
+                Button("Find In Files") {
+                    NotificationCenter.default.post(name: .devysOpenTextSearch, object: nil)
+                }
+                .keyboardShortcut("f", modifiers: [.command, .shift])
             }
 
             CommandMenu("Sidebar") {
@@ -313,33 +332,35 @@ struct DevysApp: App {
                 .keyboardShortcut("s", modifiers: [.command, .option])
             }
             
-            CommandMenu("Layout") {
-                Button("Set Default Layout") {
-                    NotificationCenter.default.post(name: .devysSaveDefaultLayout, object: nil)
+            Group {
+                CommandMenu("Layout") {
+                    Button("Set Default Layout") {
+                        NotificationCenter.default.post(name: .devysSaveDefaultLayout, object: nil)
+                    }
                 }
-            }
 
-            CommandMenu("Notifications") {
-                Button("Jump to Latest Unread Workspace") {
-                    NotificationCenter.default.post(
-                        name: .devysJumpToLatestUnreadWorkspace,
-                        object: nil
+                CommandMenu("Notifications") {
+                    Button("Jump to Latest Unread Workspace") {
+                        NotificationCenter.default.post(
+                            name: .devysJumpToLatestUnreadWorkspace,
+                            object: nil
+                        )
+                    }
+                    .applyingKeyboardShortcut(
+                        shortcutSettings.binding(for: .jumpToLatestUnreadWorkspace).keyboardShortcut
                     )
-                }
-                .applyingKeyboardShortcut(
-                    shortcutSettings.binding(for: .jumpToLatestUnreadWorkspace).keyboardShortcut
-                )
 
-                Button("Show Notifications") {
-                    NotificationCenter.default.post(
-                        name: .devysShowWorkspaceNotifications,
-                        object: nil
-                    )
+                    Button("Show Notifications") {
+                        NotificationCenter.default.post(
+                            name: .devysShowWorkspaceNotifications,
+                            object: nil
+                        )
+                    }
+                    .keyboardShortcut("n", modifiers: [.command, .control, .shift])
                 }
-                .keyboardShortcut("n", modifiers: [.command, .control, .shift])
+
+                SidebarCommands()
             }
-            
-            SidebarCommands()
         }
     }
 }

@@ -69,7 +69,7 @@ public struct CreatePRSheet: View {
                 HStack(spacing: 4) {
                     Text(branch)
                         .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundStyle(theme.accent)
+                        .foregroundStyle(theme.visibleAccent)
                     
                     Image(systemName: "arrow.right")
                         .font(.system(size: 9))

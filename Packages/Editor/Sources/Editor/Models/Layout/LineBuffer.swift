@@ -11,6 +11,10 @@ import Rendering
 /// Manages visible line range and viewport calculations.
 @MainActor
 final class LineBuffer {
+    enum ScrollPosition {
+        case top
+        case center
+    }
     
     // MARK: - Properties
     
@@ -100,5 +104,19 @@ final class LineBuffer {
     /// Scroll by delta
     func scroll(by delta: CGFloat) {
         scrollOffset = max(0, min(maxScrollOffset, scrollOffset + delta))
+    }
+
+    func scrollToLine(_ line: Int, position: ScrollPosition = .center) {
+        guard let document else { return }
+        let clampedLine = min(max(line, 0), max(0, document.lineCount - 1))
+        let targetY = metrics.yPosition(forLine: clampedLine)
+
+        switch position {
+        case .top:
+            scrollOffset = max(0, min(maxScrollOffset, targetY))
+        case .center:
+            let centeredOffset = targetY - (viewportHeight / 2) + (metrics.lineHeight / 2)
+            scrollOffset = max(0, min(maxScrollOffset, centeredOffset))
+        }
     }
 }

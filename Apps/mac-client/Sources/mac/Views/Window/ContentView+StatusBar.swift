@@ -6,22 +6,6 @@
 import SwiftUI
 
 extension ContentView {
-    var workspaceCanvasToolbar: some View {
-        ContentViewToolbarSurface(
-            workspaceCatalog: workspaceCatalog,
-            runtimeRegistry: runtimeRegistry,
-            repositorySettingsStore: repositorySettingsStore,
-            isSidebarVisible: isSidebarVisible,
-            onToggleSidebar: toggleSidebar,
-            onAgents: { openDefaultOrPromptAgentForSelectedWorkspace() },
-            onShell: { openShellForSelectedWorkspace() },
-            onClaude: { launchClaudeForSelectedWorkspace() },
-            onCodex: { launchCodexForSelectedWorkspace() },
-            onRun: { runSelectedWorkspaceProfile() },
-            onOpenRepositorySettings: { openRepositorySettings() }
-        )
-    }
-
     var statusBar: some View {
         ContentViewStatusBarSurface(
             workspaceCatalog: workspaceCatalog,

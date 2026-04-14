@@ -146,7 +146,7 @@ struct HunkActionBar: View {
         .overlay(alignment: .leading) {
             if isFocused {
                 Rectangle()
-                    .fill(devysTheme.accent)
+                    .fill(devysTheme.visibleAccent)
                     .frame(width: 3)
             }
         }

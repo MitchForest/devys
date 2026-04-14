@@ -135,7 +135,7 @@ struct UnifiedWorkspaceSidebar<
                     if let badge {
                         Text(badge)
                             .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(theme.accent)
+                            .foregroundStyle(theme.visibleAccent)
                     }
 
                     Spacer()

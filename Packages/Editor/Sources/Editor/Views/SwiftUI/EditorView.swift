@@ -32,6 +32,18 @@ public struct EditorView: NSViewRepresentable {
 
     /// Focus request counter - when incremented, the editor requests keyboard focus
     private let focusRequestID: Int
+
+    /// Search highlights rendered in the editor overlay.
+    private let searchMatches: [EditorSearchMatch]
+
+    /// Active search match to emphasize.
+    private let activeSearchMatchID: EditorSearchMatch.ID?
+
+    /// Navigation request counter - when incremented, the editor scrolls to the target.
+    private let navigationRequestID: Int
+
+    /// Navigation target to apply when the request counter changes.
+    private let navigationTarget: EditorNavigationTarget?
     
     /// Configuration from environment
     @Environment(\.editorConfiguration) private var baseConfiguration
@@ -49,6 +61,10 @@ public struct EditorView: NSViewRepresentable {
         self.language = nil
         self.onDocumentURLChange = nil
         self.focusRequestID = 0
+        self.searchMatches = []
+        self.activeSearchMatchID = nil
+        self.navigationRequestID = 0
+        self.navigationTarget = nil
     }
 
     /// Create editor with initial content
@@ -59,13 +75,21 @@ public struct EditorView: NSViewRepresentable {
         self.language = language
         self.onDocumentURLChange = nil
         self.focusRequestID = 0
+        self.searchMatches = []
+        self.activeSearchMatchID = nil
+        self.navigationRequestID = 0
+        self.navigationTarget = nil
     }
 
     /// Create editor from an existing document
     public init(
         document: EditorDocument,
         onDocumentURLChange: ((URL) -> Void)? = nil,
-        focusRequestID: Int = 0
+        focusRequestID: Int = 0,
+        searchMatches: [EditorSearchMatch] = [],
+        activeSearchMatchID: EditorSearchMatch.ID? = nil,
+        navigationRequestID: Int = 0,
+        navigationTarget: EditorNavigationTarget? = nil
     ) {
         self.url = nil
         self.document = document
@@ -73,6 +97,10 @@ public struct EditorView: NSViewRepresentable {
         self.language = nil
         self.onDocumentURLChange = onDocumentURLChange
         self.focusRequestID = focusRequestID
+        self.searchMatches = searchMatches
+        self.activeSearchMatchID = activeSearchMatchID
+        self.navigationRequestID = navigationRequestID
+        self.navigationTarget = navigationTarget
     }
     
     /// Effective configuration with system color scheme applied
@@ -111,6 +139,9 @@ public struct EditorView: NSViewRepresentable {
                 }
             }
         }
+
+        view.searchMatches = searchMatches
+        view.activeSearchMatchID = activeSearchMatchID
         
         return view
     }
@@ -124,11 +155,20 @@ public struct EditorView: NSViewRepresentable {
             nsView.observedDocumentLoadStateRevision = document.loadStateRevision
             nsView.document = document
         }
+        nsView.searchMatches = searchMatches
+        nsView.activeSearchMatchID = activeSearchMatchID
 
         // Handle focus requests
         if focusRequestID > 0, focusRequestID != context.coordinator.lastFocusRequestID {
             context.coordinator.lastFocusRequestID = focusRequestID
             nsView.requestKeyboardFocus()
+        }
+
+        if navigationRequestID > 0,
+           navigationRequestID != context.coordinator.lastNavigationRequestID,
+           let navigationTarget {
+            context.coordinator.lastNavigationRequestID = navigationRequestID
+            nsView.applyNavigationTarget(navigationTarget)
         }
     }
 
@@ -138,6 +178,7 @@ public struct EditorView: NSViewRepresentable {
 
     public final class Coordinator {
         var lastFocusRequestID: Int = 0
+        var lastNavigationRequestID: Int = 0
     }
 }
 

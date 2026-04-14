@@ -81,7 +81,7 @@ struct ContentView: View {
     @State var workspaceCreationRequest: WorkspaceCreationPresentationRequest?
     @State var agentLaunchRequest: AgentLaunchPresentationRequest?
     @State var navigatorRevealRequest: NavigatorRevealRequest?
-    @State var isCommandPalettePresented = false
+    @State var activeSearchRequest: WorkspaceSearchRequest?
     @State var isNotificationsPanelPresented = false
     @State var isGitCommitSheetPresented = false
     @State var isCreatePullRequestSheetPresented = false
@@ -182,11 +182,27 @@ struct ContentView: View {
     var body: some View {
         applyLifecycleModifiers(
             rootContent
-                .background(theme.base)
+                .background(theme.surface)
                 .environment(\.devysTheme, theme)
                 .preferredColorScheme(themeManager.colorScheme)
-                .tint(theme.accent)
+                .tint(theme.visibleAccent)
+                .background {
+                    WindowTitlebarToolbarHost(
+                        theme: theme,
+                        hasRepositories: workspaceCatalog.hasRepositories,
+                        hasWorktree: activeWorktree != nil,
+                        isSidebarVisible: isSidebarVisible,
+                        onToggleSidebar: { toggleSidebar() },
+                        onAgents: { openDefaultOrPromptAgentForSelectedWorkspace() },
+                        onShell: { openShellForSelectedWorkspace() },
+                        onClaude: { launchClaudeForSelectedWorkspace() },
+                        onCodex: { launchCodexForSelectedWorkspace() }
+                    )
+                }
         )
+        .onReceive(NotificationCenter.default.publisher(for: FileTreeModel.itemsDeletedNotification)) { notification in
+            handleFileTreeDeletionNotification(notification)
+        }
         .sheet(item: $workspaceCreationRequest) { request in
             WorkspaceCreationSheet(
                 repository: request.repository,
@@ -196,6 +212,8 @@ struct ContentView: View {
             ) { workspaces in
                 await handleCreatedWorkspaces(workspaces, in: request.repository)
             }
+            .environment(\.devysTheme, theme)
+            .preferredColorScheme(themeManager.colorScheme)
         }
         .sheet(item: $agentLaunchRequest) { request in
             AgentHarnessPickerSheet(onSelect: { kind in
@@ -225,16 +243,24 @@ struct ContentView: View {
                     )
                 }
             })
+            .environment(\.devysTheme, theme)
+            .preferredColorScheme(themeManager.colorScheme)
         }
-        .sheet(isPresented: $isCommandPalettePresented) {
-            commandPaletteSheetContent
+        .sheet(item: $activeSearchRequest) { request in
+            searchSheetContent(for: request)
+                .environment(\.devysTheme, theme)
+                .preferredColorScheme(themeManager.colorScheme)
         }
         .sheet(isPresented: $isNotificationsPanelPresented) {
             notificationsPanelContent
+                .environment(\.devysTheme, theme)
+                .preferredColorScheme(themeManager.colorScheme)
         }
         .sheet(isPresented: $isGitCommitSheetPresented) {
             if let gitStore {
                 CommitSheet(store: gitStore)
+                    .environment(\.devysTheme, theme)
+                    .preferredColorScheme(themeManager.colorScheme)
             }
         }
         .sheet(isPresented: $isCreatePullRequestSheetPresented) {
@@ -244,6 +270,8 @@ struct ContentView: View {
                         await handleCreatedPullRequest()
                     }
                 }
+                .environment(\.devysTheme, theme)
+                .preferredColorScheme(themeManager.colorScheme)
             }
         }
     }
@@ -312,10 +340,7 @@ extension ContentView {
                     )
                 }
 
-                VStack(spacing: 0) {
-                    workspaceCanvasToolbar
-                    workspace
-                }
+                workspace
             }
             .overlay(alignment: .leading) {
                 NavigatorEdgeHandle(isExpanded: !isNavigatorCollapsed) {

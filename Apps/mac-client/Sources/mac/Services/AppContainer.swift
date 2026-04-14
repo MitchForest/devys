@@ -25,6 +25,7 @@ final class AppContainer {
     private let fileWatchServiceFactory: (URL) -> FileWatchService
     private let gitStoreFactory: (URL?) -> GitStore
     @ObservationIgnored private var fileTreeModelsByRoot: [URL: FileTreeModel] = [:]
+    @ObservationIgnored private var fileIndexesByRoot: [URL: WorkspaceFileIndex] = [:]
 
     init(
         appSettings: AppSettings = AppSettings(),
@@ -73,6 +74,21 @@ final class AppContainer {
 
     func makeGitStore(projectFolder: URL?) -> GitStore {
         gitStoreFactory(projectFolder)
+    }
+
+    func makeWorkspaceFileIndex(rootURL: URL) -> WorkspaceFileIndex {
+        let normalizedRootURL = rootURL.standardizedFileURL
+        if let existingIndex = fileIndexesByRoot[normalizedRootURL] {
+            return existingIndex
+        }
+
+        let index = WorkspaceFileIndex(
+            rootURL: normalizedRootURL
+        ) { [weak self] in
+            self?.appSettings.explorer ?? ExplorerSettings()
+        }
+        fileIndexesByRoot[normalizedRootURL] = index
+        return index
     }
 
     func defaultAgentAdapterLaunchOptions(

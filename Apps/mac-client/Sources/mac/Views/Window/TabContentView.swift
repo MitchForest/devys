@@ -4,6 +4,7 @@
 // Copyright © 2026 Devys. All rights reserved.
 
 import SwiftUI
+import Observation
 import Split
 import Editor
 import Git
@@ -86,38 +87,7 @@ struct TabContentView: View {
                 )
             case .editor(_, let url):
                 if let session = editorSession {
-                    if let document = session.document {
-                        EditorView(
-                            document: document,
-                            onDocumentURLChange: onEditorURLChange,
-                            focusRequestID: session.focusRequestID
-                        )
-                    } else {
-                        switch session.phase {
-                        case .loading, .idle:
-                            PlaceholderView(icon: "doc.text", title: "Loading", subtitle: url.lastPathComponent)
-                        case .failed(let message):
-                            PlaceholderView(
-                                icon: "exclamationmark.triangle",
-                                title: "Failed to load",
-                                subtitle: message
-                            )
-                        case .preview(let preview) where preview.isBinary:
-                            PlaceholderView(
-                                icon: "doc",
-                                title: "Binary file",
-                                subtitle: url.lastPathComponent
-                            )
-                        case .preview(let preview) where preview.isTooLarge:
-                            PlaceholderView(
-                                icon: "doc.text.magnifyingglass",
-                                title: "File too large",
-                                subtitle: tooLargeSubtitle(for: preview, fallback: url.lastPathComponent)
-                            )
-                        case .preview, .loaded:
-                            PlaceholderView(icon: "doc.text", title: "Loading", subtitle: url.lastPathComponent)
-                        }
-                    }
+                    editorContent(for: session, url: url)
                 } else {
                     PlaceholderView(
                         icon: "exclamationmark.triangle",
@@ -184,6 +154,52 @@ struct TabContentView: View {
         return fallback
     }
 
+    @ViewBuilder
+    private func editorContent(for session: EditorSession, url: URL) -> some View {
+        VStack(spacing: 0) {
+            if session.isFindPresented {
+                EditorFindBar(session: session)
+            }
+
+            if let document = session.document {
+                EditorView(
+                    document: document,
+                    onDocumentURLChange: onEditorURLChange,
+                    focusRequestID: session.focusRequestID,
+                    searchMatches: session.findMatches,
+                    activeSearchMatchID: session.activeFindMatchID,
+                    navigationRequestID: session.navigationRequestID,
+                    navigationTarget: session.navigationTarget
+                )
+            } else {
+                switch session.phase {
+                case .loading, .idle:
+                    PlaceholderView(icon: "doc.text", title: "Loading", subtitle: url.lastPathComponent)
+                case .failed(let message):
+                    PlaceholderView(
+                        icon: "exclamationmark.triangle",
+                        title: "Failed to load",
+                        subtitle: message
+                    )
+                case .preview(let preview) where preview.isBinary:
+                    PlaceholderView(
+                        icon: "doc",
+                        title: "Binary file",
+                        subtitle: url.lastPathComponent
+                    )
+                case .preview(let preview) where preview.isTooLarge:
+                    PlaceholderView(
+                        icon: "doc.text.magnifyingglass",
+                        title: "File too large",
+                        subtitle: tooLargeSubtitle(for: preview, fallback: url.lastPathComponent)
+                    )
+                case .preview, .loaded:
+                    PlaceholderView(icon: "doc.text", title: "Loading", subtitle: url.lastPathComponent)
+                }
+            }
+        }
+    }
+
     private var editorPerformanceSnapshot: EditorOpenPerformanceSnapshot? {
         guard case .editor = content,
               let editorSession else {
@@ -206,5 +222,82 @@ struct TabContentView: View {
         case .loaded:
             return .loaded(fileSize: editorSession.currentFileSize)
         }
+    }
+}
+
+@MainActor
+private struct EditorFindBar: View {
+    @Environment(\.devysTheme) private var theme
+    @Bindable var session: EditorSession
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(theme.textSecondary)
+
+            TextField("Find in file", text: $session.findQuery)
+                .textFieldStyle(.plain)
+                .focused($isFocused)
+                .onSubmit {
+                    session.selectNextFindMatch()
+                }
+
+            Text(matchSummary)
+                .font(DevysTypography.xs)
+                .foregroundStyle(theme.textSecondary)
+
+            Button {
+                session.selectPreviousFindMatch()
+            } label: {
+                Image(systemName: "chevron.up")
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(theme.text)
+            .disabled(session.findMatches.isEmpty)
+
+            Button {
+                session.selectNextFindMatch()
+            } label: {
+                Image(systemName: "chevron.down")
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(theme.text)
+            .disabled(session.findMatches.isEmpty)
+
+            Button {
+                session.dismissFind()
+            } label: {
+                Image(systemName: "xmark")
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(theme.textSecondary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(theme.surface)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(theme.borderSubtle)
+                .frame(height: 1)
+        }
+        .onAppear {
+            isFocused = true
+        }
+        .onExitCommand {
+            session.dismissFind()
+        }
+    }
+
+    private var matchSummary: String {
+        guard !session.findQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return "Type to search"
+        }
+        guard !session.findMatches.isEmpty else {
+            return "No results"
+        }
+        let currentIndex = (session.activeFindMatchIndex ?? 0) + 1
+        return "\(currentIndex) of \(session.findMatches.count)"
     }
 }

@@ -76,7 +76,7 @@ struct PRDetailView: View {
             HStack(spacing: 4) {
                 Text(pr.headBranch)
                     .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(theme.accent)
+                    .foregroundStyle(theme.visibleAccent)
                 
                 Image(systemName: "arrow.right")
                     .font(.system(size: 8))

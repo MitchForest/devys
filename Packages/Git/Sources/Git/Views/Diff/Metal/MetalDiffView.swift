@@ -209,7 +209,7 @@ struct MetalDiffView: View {
         HStack(spacing: 10) {
             Image(systemName: "bolt.fill")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(devysTheme.accent)
+                .foregroundStyle(devysTheme.visibleAccent)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Large diff (\(largeContentPolicy.totalLines) lines)")

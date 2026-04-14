@@ -7,10 +7,6 @@ extension GitStore {
     /// Sets errorMessage only for real errors, ignoring task cancellation.
     func setError(_ error: Error, prefix: String? = nil) {
         guard !(error is CancellationError) else { return }
-        if isNotRepositoryError(error) {
-            applyRepositoryAvailability(false)
-            return
-        }
         if let prefix {
             errorMessage = "\(prefix): \(error.localizedDescription)"
         } else {
@@ -50,9 +46,15 @@ extension GitStore {
         onChangesDidUpdate?([])
     }
 
-    func syncRepositoryAvailability() async -> Bool {
+    func reconcileRepositoryAvailability(forceMetadataRestart: Bool = false) async -> Bool {
         let isAvailable = await gitService.isRepositoryAvailable()
         applyRepositoryAvailability(isAvailable)
+        if isAvailable {
+            configureMetadataWatcherIfNeeded(forceRestart: forceMetadataRestart)
+            syncObservedMetadataSnapshot()
+        } else {
+            stopMetadataWatching()
+        }
         return isAvailable
     }
 
@@ -60,6 +62,6 @@ extension GitStore {
         if isRepositoryAvailable {
             return true
         }
-        return await syncRepositoryAvailability()
+        return await reconcileRepositoryAvailability()
     }
 }

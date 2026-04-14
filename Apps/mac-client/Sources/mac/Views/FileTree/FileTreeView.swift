@@ -4,6 +4,7 @@
 // Copyright © 2026 Devys. All rights reserved.
 
 import SwiftUI
+import AppKit
 import Workspace
 import UI
 
@@ -24,6 +25,8 @@ public struct FileTreeView: View {
     let onPreviewFile: ((URL) -> Void)?   // Single-click: preview tab
     let onOpenFile: (URL) -> Void          // Double-click: permanent tab
     let onAddToChat: ((URL) -> Void)?      // Context menu: add to chat
+    let onRenameItem: ((URL) -> Void)?     // Context menu: rename file/folder
+    let onDeleteItems: (([URL]) -> Void)?  // Context menu: delete selected items
     
     // Track settings to trigger refresh on change
     private var explorerSettings: ExplorerSettings {
@@ -35,13 +38,17 @@ public struct FileTreeView: View {
         gitStatusIndex: WorkspaceFileTreeGitStatusIndex? = nil,
         onPreviewFile: ((URL) -> Void)? = nil,
         onOpenFile: @escaping (URL) -> Void,
-        onAddToChat: ((URL) -> Void)? = nil
+        onAddToChat: ((URL) -> Void)? = nil,
+        onRenameItem: ((URL) -> Void)? = nil,
+        onDeleteItems: (([URL]) -> Void)? = nil
     ) {
         self.model = model
         self.gitStatusIndex = gitStatusIndex
         self.onPreviewFile = onPreviewFile
         self.onOpenFile = onOpenFile
         self.onAddToChat = onAddToChat
+        self.onRenameItem = onRenameItem
+        self.onDeleteItems = onDeleteItems
     }
     
     // MARK: - Body
@@ -100,16 +107,15 @@ public struct FileTreeView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0, pinnedViews: []) {
                 ForEach(model.flattenedNodes) { flatNode in
+                    let resolvedRenameTarget = renameTarget(for: flatNode.node.url)
+                    let resolvedDeleteTargets = deleteTargets(for: flatNode.node.url)
                     FileTreeRow(
                         flatNode: flatNode,
                         gitStatusSummary: gitStatusIndex?.summary(for: flatNode.node),
-                        isSelected: model.selectedNode?.id == flatNode.id,
-                        onSelect: {
-                            model.selectedNode = flatNode.node
-                            // Single-click: open in preview tab (VS Code-style)
-                            if !flatNode.node.isDirectory {
-                                onPreviewFile?(flatNode.node.url)
-                            }
+                        isSelected: model.isSelected(flatNode.node.url),
+                        canRename: resolvedRenameTarget != nil,
+                        onSelect: { modifiers in
+                            handleSelection(for: flatNode.node, modifiers: modifiers)
                         },
                         onToggleExpand: {
                             model.toggleExpansion(flatNode.node)
@@ -120,11 +126,72 @@ public struct FileTreeView: View {
                                 onOpenFile(flatNode.node.url)
                             }
                         },
-                        onAddToChat: onAddToChat
+                        onAddToChat: onAddToChat,
+                        onRename: {
+                            guard let resolvedRenameTarget else { return }
+                            onRenameItem?(resolvedRenameTarget)
+                        },
+                        onDelete: {
+                            onDeleteItems?(resolvedDeleteTargets)
+                        }
                     )
                 }
             }
             .padding(.vertical, DevysSpacing.space1)
         }
+    }
+
+    private var visibleURLs: [URL] {
+        model.flattenedNodes.map { $0.node.url.standardizedFileURL }
+    }
+
+    private func handleSelection(for node: CEWorkspaceFileNode, modifiers: NSEvent.ModifierFlags) {
+        let normalizedURL = node.url.standardizedFileURL
+
+        if modifiers.contains(.shift) {
+            model.selectRange(to: normalizedURL, visibleURLs: visibleURLs)
+            return
+        }
+
+        if modifiers.contains(.command) {
+            model.toggleSelection(of: normalizedURL)
+            return
+        }
+
+        model.replaceSelection(with: normalizedURL)
+        if !node.isDirectory {
+            onPreviewFile?(normalizedURL)
+        }
+    }
+
+    private func renameTarget(for clickedURL: URL) -> URL? {
+        let normalizedClickedURL = clickedURL.standardizedFileURL
+        if model.isSelected(normalizedClickedURL) {
+            return model.selectedURLs.count == 1 ? normalizedClickedURL : nil
+        }
+        return normalizedClickedURL
+    }
+
+    private func deleteTargets(for clickedURL: URL) -> [URL] {
+        let normalizedClickedURL = clickedURL.standardizedFileURL
+        let rawTargets: Set<URL>
+        if model.isSelected(normalizedClickedURL) {
+            rawTargets = model.selectedURLs.isEmpty ? [normalizedClickedURL] : model.selectedURLs
+        } else {
+            rawTargets = [normalizedClickedURL]
+        }
+
+        let sortedTargets = Array(rawTargets).sorted { $0.path < $1.path }
+        return sortedTargets.filter { candidate in
+            !sortedTargets.contains { other in
+                other != candidate && isAncestor(other, of: candidate)
+            }
+        }
+    }
+
+    private func isAncestor(_ candidateAncestor: URL, of url: URL) -> Bool {
+        let ancestorPath = candidateAncestor.standardizedFileURL.path
+        let candidatePath = url.standardizedFileURL.path
+        return candidatePath.hasPrefix(ancestorPath + "/")
     }
 }

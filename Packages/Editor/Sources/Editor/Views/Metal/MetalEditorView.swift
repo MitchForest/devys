@@ -51,6 +51,13 @@ public final class MetalEditorView: NSView, MTKViewDelegate {
 
     /// Callback when the document URL changes (Save As)
     var onDocumentURLChange: ((URL) -> Void)?
+
+    var searchMatches: [EditorSearchMatch] = [] {
+        didSet { refreshPreparedFrame() }
+    }
+    var activeSearchMatchID: EditorSearchMatch.ID? {
+        didSet { refreshPreparedFrame() }
+    }
     
     /// Line buffer for viewport
     var lineBuffer: LineBuffer?
@@ -105,6 +112,8 @@ public final class MetalEditorView: NSView, MTKViewDelegate {
     
     /// Selection color (linear sRGB) - white for monochrome terminal aesthetic
     var selectionColor: SIMD4<Float> = hexToLinearColor("#FFFFFF", alpha: 0.12)
+    var searchMatchColor: SIMD4<Float> = hexToLinearColor("#E5C07B", alpha: 0.18)
+    var activeSearchMatchColor: SIMD4<Float> = hexToLinearColor("#E5C07B", alpha: 0.34)
 
     /// Selection anchor for drag/shift selection
     var selectionAnchor: TextPosition?

@@ -74,7 +74,7 @@ struct WorkspaceNotificationsPanel: View {
                 VStack(alignment: .leading, spacing: DevysSpacing.space2) {
                     Text(item.notification.source.displayName.uppercased())
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(theme.accent)
+                        .foregroundStyle(theme.visibleAccent)
 
                     Text(item.notification.title)
                         .font(.system(size: 12, weight: .medium))

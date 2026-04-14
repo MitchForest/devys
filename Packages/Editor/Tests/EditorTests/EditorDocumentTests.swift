@@ -182,4 +182,57 @@ struct EditorDocumentTests {
         #expect(document.content == "let fresh = true\n")
         #expect(document.fileURL == url)
     }
+
+    @Test("Find matches uses smart case and respects limits")
+    @MainActor
+    func testFindMatchesUsesSmartCaseAndRespectsLimits() {
+        let document = EditorDocument(
+            content: """
+            Alpha alpha
+            alpha
+            """,
+            language: "swift"
+        )
+
+        let limitedInsensitiveMatches = document.findMatches(for: "alpha", limit: 2)
+        #expect(limitedInsensitiveMatches.count == 2)
+        #expect(
+            limitedInsensitiveMatches == [
+                EditorSearchMatch(startLine: 0, startColumn: 0, endLine: 0, endColumn: 5),
+                EditorSearchMatch(startLine: 0, startColumn: 6, endLine: 0, endColumn: 11),
+            ]
+        )
+
+        let caseSensitiveMatches = document.findMatches(for: "Alpha")
+        #expect(
+            caseSensitiveMatches == [
+                EditorSearchMatch(startLine: 0, startColumn: 0, endLine: 0, endColumn: 5)
+            ]
+        )
+    }
+
+    @Test("Navigation targets update selection and clamp locations")
+    @MainActor
+    func testApplyNavigationTargetUpdatesSelectionAndClampsLocations() {
+        let document = EditorDocument(
+            content: """
+            Hello
+            World
+            """,
+            language: "swift"
+        )
+
+        let match = EditorSearchMatch(startLine: 1, startColumn: 1, endLine: 1, endColumn: 4)
+        document.applyNavigationTarget(.match(match))
+
+        #expect(document.selectedText == "orl")
+        #expect(document.cursor.position.line == 1)
+        #expect(document.cursor.position.column == 1)
+
+        document.applyNavigationTarget(.location(line: 8, column: 99))
+
+        #expect(document.selectedText == nil)
+        #expect(document.cursor.position.line == 1)
+        #expect(document.cursor.position.column == 5)
+    }
 }

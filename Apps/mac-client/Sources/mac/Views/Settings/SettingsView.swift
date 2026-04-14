@@ -408,7 +408,7 @@ struct ExplorerSettingsSection: View {
                             } label: {
                                 Text("[add]")
                                     .font(DevysTypography.xs)
-                                    .foregroundStyle(theme.accent)
+                                    .foregroundStyle(theme.visibleAccent)
                             }
                             .buttonStyle(.plain)
                         }
@@ -557,7 +557,7 @@ private struct ShortcutBindingRow: View {
 
                 Text(binding.displayString)
                     .font(DevysTypography.sm)
-                    .foregroundStyle(theme.accent)
+                    .foregroundStyle(theme.visibleAccent)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(theme.elevated)

@@ -7,6 +7,14 @@ import Testing
 
 @Suite("Repository launch planner tests")
 struct RepositoryLaunchPlannerTests {
+    @Test("Default Claude launcher bypasses permissions")
+    func resolveDefaultClaudeLauncher() throws {
+        let resolved = try RepositoryLaunchPlanner.resolveLauncher(.claudeDefault, kind: .claude)
+
+        #expect(resolved.command == "claude --dangerously-skip-permissions")
+        #expect(resolved.executionBehavior == .runImmediately)
+    }
+
     @Test("Claude launcher resolution includes model, effort, permissions, and extra arguments")
     func resolveClaudeLauncher() throws {
         let launcher = LauncherTemplate(

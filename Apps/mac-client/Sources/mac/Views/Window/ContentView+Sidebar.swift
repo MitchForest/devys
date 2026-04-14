@@ -78,6 +78,14 @@ extension ContentView {
             onAddFileToAgent: { workspaceID, url in
                 addAttachmentToAgent(.file(url: url), workspaceID: workspaceID)
             },
+            onRenameFile: { workspaceID, url in
+                renameFileTreeItem(url, in: workspaceID)
+            },
+            onDeleteFiles: { workspaceID, urls in
+                Task { @MainActor in
+                    await deleteFileTreeItems(urls, in: workspaceID)
+                }
+            },
             onOpenDiff: { workspaceID, path, isStaged, permanent in
                 let content = TabContent.gitDiff(
                     workspaceID: workspaceID,

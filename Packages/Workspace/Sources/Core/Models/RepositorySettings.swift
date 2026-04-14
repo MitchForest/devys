@@ -92,7 +92,10 @@ public struct LauncherTemplate: Codable, Equatable, Sendable {
         self.executionBehavior = executionBehavior
     }
 
-    public static let claudeDefault = LauncherTemplate(executable: "claude")
+    public static let claudeDefault = LauncherTemplate(
+        executable: "claude",
+        dangerousPermissions: true
+    )
     public static let codexDefault = LauncherTemplate(executable: "codex")
 }
 

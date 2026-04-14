@@ -31,4 +31,30 @@ struct WorkspaceShellShortcutSupportTests {
         #expect(conflicts.messages(for: .previousWorkspace).contains { $0.contains("Next Workspace") })
         #expect(conflicts.messages(for: .launchShell).contains { $0.contains("Open Command Palette") })
     }
+
+    @Test("Search shortcuts are treated as reserved menu bindings")
+    func detectsSearchShortcutConflicts() {
+        let settings = WorkspaceShellShortcutSettings(
+            bindingsByAction: [
+                .launchShell: ShortcutBinding(
+                    key: "p",
+                    modifiers: ShortcutModifierSet(command: true)
+                ),
+                .launchCodex: ShortcutBinding(
+                    key: "f",
+                    modifiers: ShortcutModifierSet(command: true)
+                ),
+                .launchClaude: ShortcutBinding(
+                    key: "f",
+                    modifiers: ShortcutModifierSet(command: true, shift: true)
+                ),
+            ]
+        )
+
+        let conflicts = detectWorkspaceShellShortcutConflicts(in: settings)
+
+        #expect(conflicts.messages(for: .launchShell).contains { $0.contains("Open Quickly") })
+        #expect(conflicts.messages(for: .launchCodex).contains { $0.contains("Find") })
+        #expect(conflicts.messages(for: .launchClaude).contains { $0.contains("Find In Files") })
+    }
 }

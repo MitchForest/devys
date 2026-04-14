@@ -244,6 +244,13 @@ extension MetalEditorView {
         }
     }
 
+    func applyNavigationTarget(_ target: EditorNavigationTarget) {
+        guard let document else { return }
+        document.applyNavigationTarget(target)
+        lineBuffer?.scrollToLine(target.cursorLine, position: .center)
+        refreshPreparedFrame(document: document)
+    }
+
     func beginOpenTracking() {
         openTrackingGeneration += 1
         openTrackingIdentifier = "editor-open-\(openTrackingGeneration)"

@@ -91,6 +91,71 @@ struct FileTreeModelTests {
         #expect(fixture.fileTreeService.buildTreeCallCount == 2)
     }
 
+    @Test("Selection uses normalized URLs and supports replace toggle and range operations")
+    @MainActor
+    func selectionOperationsUseURLs() async throws {
+        let fixture = FileTreeFixture()
+        let model = fixture.makeModel()
+
+        await model.loadTree()
+
+        let docsURL = fixture.rootURL.appendingPathComponent("Docs").standardizedFileURL
+        let sourcesURL = fixture.rootURL.appendingPathComponent("Sources").standardizedFileURL
+        let visibleURLs = model.flattenedNodes.map { $0.node.url.standardizedFileURL }
+
+        model.replaceSelection(with: docsURL)
+        #expect(model.selectedURLs == Set([docsURL]))
+        #expect(model.focusedURL == docsURL)
+        #expect(model.selectionAnchorURL == docsURL)
+
+        model.toggleSelection(of: sourcesURL)
+        #expect(model.selectedURLs == Set([docsURL, sourcesURL]))
+        #expect(model.focusedURL == sourcesURL)
+        #expect(model.selectionAnchorURL == docsURL)
+
+        model.selectRange(to: sourcesURL, visibleURLs: visibleURLs)
+        #expect(model.selectedURLs == Set(visibleURLs))
+        #expect(model.focusedURL == sourcesURL)
+        #expect(model.selectionAnchorURL == docsURL)
+    }
+
+    @Test("Deleting a selected subtree clears selection state for missing URLs")
+    @MainActor
+    func deletingSelectedSubtreeClearsSelectionState() async throws {
+        let fixture = FileTreeFixture()
+        let model = fixture.makeModel()
+        let docsURL = fixture.rootURL.appendingPathComponent("Docs").standardizedFileURL
+
+        await model.loadTree()
+        model.replaceSelection(with: docsURL)
+
+        await model.handleFileChange(.deleted, at: docsURL)
+
+        #expect(model.selectedURLs.isEmpty)
+        #expect(model.focusedURL == nil)
+        #expect(model.selectionAnchorURL == nil)
+    }
+
+    @Test("Directory rename retargets selected URLs under the renamed subtree")
+    @MainActor
+    func directoryRenameRetargetsSelectedURLs() async throws {
+        let fixture = FileTreeFixture()
+        let model = fixture.makeModel()
+        let sourcesURL = fixture.rootURL.appendingPathComponent("Sources").standardizedFileURL
+        let engineURL = fixture.rootURL.appendingPathComponent("Engine").standardizedFileURL
+
+        await model.loadTree()
+        model.replaceSelection(with: sourcesURL)
+        try await expandDirectory(named: "Sources", in: model)
+        fixture.fileTreeService.renameRootDirectory(from: "Sources", to: "Engine")
+
+        await model.handleFileChange(.renamed, at: engineURL)
+
+        #expect(model.selectedURLs == Set([engineURL]))
+        #expect(model.focusedURL == engineURL)
+        #expect(model.selectionAnchorURL == engineURL)
+    }
+
     @MainActor
     private func expandDirectory(named name: String, in model: FileTreeModel) async throws {
         let node = try #require(model.flattenedNodes.first(where: { $0.node.name == name })?.node)

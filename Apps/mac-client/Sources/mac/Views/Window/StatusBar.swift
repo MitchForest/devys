@@ -107,29 +107,22 @@ struct StatusBar: View {
 
                 Spacer()
 
-                if showsGitMenu {
-                    gitActionsMenu
-                }
+                HStack(spacing: 4) {
+                    if showsGitMenu {
+                        gitActionsMenu
+                    }
 
-                if let onRun {
-                    HStack(spacing: 6) {
-                        if runIsActive, let onStop {
-                            actionButton(
-                                icon: "stop.fill",
-                                label: "Stop",
-                                tint: DevysColors.error,
-                                action: onStop,
-                                onOpenSettings: onOpenRunSettings
-                            )
-                        } else {
-                            actionButton(
-                                icon: "play.fill",
-                                label: "Run",
-                                tint: DevysColors.success,
-                                action: onRun,
-                                onOpenSettings: onOpenRunSettings
-                            )
-                        }
+                    if showsPlayButton {
+                        playStopButton
+                    }
+
+                    if let onOpenRunSettings {
+                        statusBarIcon(
+                            "gearshape",
+                            tint: theme.textSecondary,
+                            action: onOpenRunSettings
+                        )
+                        .help("Settings")
                     }
                 }
             }
@@ -138,8 +131,10 @@ struct StatusBar: View {
         .frame(height: Self.height)
         .overlay(topBorder, alignment: .top)
     }
+}
 
-    private var showsGitMenu: Bool {
+private extension StatusBar {
+    var showsGitMenu: Bool {
         onFetch != nil ||
         onPull != nil ||
         onPush != nil ||
@@ -148,7 +143,38 @@ struct StatusBar: View {
         onOpenPR != nil
     }
 
-    private var topBorder: some View {
+    var showsPlayButton: Bool {
+        onRun != nil || onStop != nil || onOpenRunSettings != nil
+    }
+
+    var playStopButton: some View {
+        Group {
+            if runIsActive {
+                statusBarIcon(
+                    "stop.fill",
+                    tint: DevysColors.error,
+                    action: onStop ?? {}
+                )
+                .help("Stop the active startup profile")
+            } else if let onRun {
+                statusBarIcon(
+                    "play.fill",
+                    tint: DevysColors.success,
+                    action: onRun
+                )
+                .help("Run the default startup profile")
+            } else if let onOpenRunSettings {
+                statusBarIcon(
+                    "play.fill",
+                    tint: theme.textTertiary,
+                    action: onOpenRunSettings
+                )
+                .help("Configure a startup profile")
+            }
+        }
+    }
+
+    var topBorder: some View {
         Rectangle()
             .fill(theme.borderSubtle)
             .frame(height: 1)
@@ -214,7 +240,7 @@ struct StatusBar: View {
             .clipShape(RoundedRectangle(cornerRadius: 4))
     }
 
-    private var gitActionsMenu: some View {
+    var gitActionsMenu: some View {
         Menu {
             Button(action: onFetch ?? {}) {
                 Label("Fetch", systemImage: "arrow.trianglehead.clockwise")
@@ -250,20 +276,15 @@ struct StatusBar: View {
             }
             .disabled(onOpenPR == nil)
         } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "arrow.triangle.branch")
-                    .font(.system(size: 9, weight: .semibold))
-                Text("GIT")
-                    .font(.system(size: 9, weight: .semibold))
-            }
-            .foregroundStyle(theme.textSecondary)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(theme.elevated)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
+            Image(systemName: "arrow.triangle.branch")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(theme.textSecondary)
+                .frame(width: 20, height: 18)
+                .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
+        .help("Git actions")
     }
 
     private func checksColor(_ status: ChecksStatus) -> Color {
@@ -290,34 +311,19 @@ struct StatusBar: View {
         return DevysColors.success
     }
 
-    private func actionButton(
-        icon: String,
-        label: String,
+    func statusBarIcon(
+        _ icon: String,
         tint: Color,
-        action: @escaping () -> Void,
-        onOpenSettings: (() -> Void)?
+        action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            HStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 9, weight: .semibold))
-                Text(label.uppercased())
-                    .font(.system(size: 9, weight: .semibold))
-            }
-            .foregroundStyle(tint)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(tint.opacity(0.12))
-            .clipShape(RoundedRectangle(cornerRadius: 4))
+            Image(systemName: icon)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 20, height: 18)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .contextMenu {
-            if let onOpenSettings {
-                Button("Edit Startup Profiles") {
-                    onOpenSettings()
-                }
-            }
-        }
     }
 }
 

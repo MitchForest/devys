@@ -21,7 +21,16 @@ extension ContentView {
                 requestOpenRepository()
             }
             .onReceive(NotificationCenter.default.publisher(for: .devysOpenCommandPalette)) { _ in
-                isCommandPalettePresented = true
+                activeSearchRequest = WorkspaceSearchRequest(mode: .commands)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .devysOpenFileSearch)) { _ in
+                activeSearchRequest = WorkspaceSearchRequest(mode: .files)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .devysOpenTextSearch)) { _ in
+                activeSearchRequest = WorkspaceSearchRequest(mode: .textSearch)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .devysShowEditorFind)) { _ in
+                showFindInActiveEditor()
             }
             .onReceive(NotificationCenter.default.publisher(for: .devysSave)) { _ in
                 saveActiveEditor()

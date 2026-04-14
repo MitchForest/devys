@@ -44,14 +44,149 @@ struct GitStoreTests {
         #expect(store.errorMessage == nil)
         #expect(store.repoInfo?.currentBranch == "main")
     }
+
+    @Test("Git store refreshes changes from external repository metadata events")
+    @MainActor
+    func refreshesOnExternalMetadataChange() async throws {
+        let fixture = try PseudoRepositoryFixture()
+        defer { fixture.cleanup() }
+
+        let watcher = StubGitRepositoryMetadataWatcher()
+        let service = StubGitService(
+            isRepositoryAvailable: true,
+            status: [GitFileChange(path: "Tracked.swift", status: .modified, isStaged: false)],
+            repositoryInfo: GitRepositoryInfo(currentBranch: "main")
+        )
+        let store = GitStore(
+            projectFolder: fixture.repositoryRoot,
+            gitService: service,
+            fileWatchServiceFactory: { _ in NoopFileWatchService() },
+            metadataWatcherFactory: { _ in watcher },
+            refreshDebounceNanoseconds: 1_000_000
+        )
+
+        await store.refresh()
+        store.startWatching()
+
+        service.statusResult = []
+        try fixture.writeIndex(Data("updated-index".utf8))
+        watcher.emit(.indexChanged)
+        await waitUntil("metadata refresh clears changes") {
+            store.allChanges.isEmpty
+        }
+
+        #expect(store.allChanges.isEmpty)
+        #expect(service.repositoryAvailabilityCheckCount == 1)
+    }
+
+    @Test("Git store refreshes branch info from external HEAD changes")
+    @MainActor
+    func refreshesBranchInfoOnExternalHeadChange() async throws {
+        let fixture = try PseudoRepositoryFixture()
+        defer { fixture.cleanup() }
+
+        let watcher = StubGitRepositoryMetadataWatcher()
+        let service = StubGitService(
+            isRepositoryAvailable: true,
+            status: [],
+            repositoryInfo: GitRepositoryInfo(currentBranch: "main")
+        )
+        let store = GitStore(
+            projectFolder: fixture.repositoryRoot,
+            gitService: service,
+            fileWatchServiceFactory: { _ in NoopFileWatchService() },
+            metadataWatcherFactory: { _ in watcher },
+            refreshDebounceNanoseconds: 1_000_000
+        )
+
+        await store.refresh()
+        store.startWatching()
+
+        service.repositoryInfoResult = GitRepositoryInfo(currentBranch: "feature/external")
+        try fixture.setHead(reference: "refs/heads/feature/external", commit: "2222222")
+        watcher.emit(.headChanged)
+        await waitUntil("metadata refresh updates branch info") {
+            store.repoInfo?.currentBranch == "feature/external"
+        }
+
+        #expect(store.repoInfo?.currentBranch == "feature/external")
+    }
+
+    @Test("Git store clears stale selected file state after external commit")
+    @MainActor
+    func clearsSelectedFileStateAfterExternalCommit() async throws {
+        let fixture = try PseudoRepositoryFixture()
+        defer { fixture.cleanup() }
+
+        let watcher = StubGitRepositoryMetadataWatcher()
+        let service = StubGitService(
+            isRepositoryAvailable: true,
+            status: [GitFileChange(path: "Tracked.swift", status: .modified, isStaged: false)],
+            repositoryInfo: GitRepositoryInfo(currentBranch: "main")
+        )
+        let store = GitStore(
+            projectFolder: fixture.repositoryRoot,
+            gitService: service,
+            fileWatchServiceFactory: { _ in NoopFileWatchService() },
+            metadataWatcherFactory: { _ in watcher },
+            refreshDebounceNanoseconds: 1_000_000
+        )
+
+        await store.refresh()
+        await store.selectFile("Tracked.swift", isStaged: false)
+        store.startWatching()
+
+        service.statusResult = []
+        try fixture.writeIndex(Data("committed-index".utf8))
+        watcher.emit(.indexChanged)
+        await waitUntil("metadata refresh clears stale selected file state") {
+            store.selectedFilePath == nil
+        }
+
+        #expect(store.selectedFilePath == nil)
+        #expect(store.selectedDiff == nil)
+    }
+
+    @Test("Git store ignores unchanged metadata events")
+    @MainActor
+    func ignoresUnchangedMetadataEvents() async throws {
+        let fixture = try PseudoRepositoryFixture()
+        defer { fixture.cleanup() }
+
+        let watcher = StubGitRepositoryMetadataWatcher()
+        let service = StubGitService(
+            isRepositoryAvailable: true,
+            status: [],
+            repositoryInfo: GitRepositoryInfo(currentBranch: "main")
+        )
+        let store = GitStore(
+            projectFolder: fixture.repositoryRoot,
+            gitService: service,
+            fileWatchServiceFactory: { _ in NoopFileWatchService() },
+            metadataWatcherFactory: { _ in watcher },
+            refreshDebounceNanoseconds: 1_000_000
+        )
+
+        await store.refresh()
+        store.startWatching()
+
+        watcher.emit(.indexChanged)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        #expect(service.statusCallCount == 1)
+        #expect(service.repositoryAvailabilityCheckCount == 1)
+        #expect(store.isRepositoryAvailable)
+    }
 }
 
 @MainActor
 private final class StubGitService: GitService {
     private(set) var initializeCallCount = 0
+    private(set) var repositoryAvailabilityCheckCount = 0
+    private(set) var statusCallCount = 0
     private var repositoryAvailable: Bool
-    private let statusResult: [GitFileChange]
-    private let repositoryInfoResult: GitRepositoryInfo
+    var statusResult: [GitFileChange]
+    var repositoryInfoResult: GitRepositoryInfo
 
     var hasPRClient: Bool = false
 
@@ -66,7 +201,8 @@ private final class StubGitService: GitService {
     }
 
     func isRepositoryAvailable() async -> Bool {
-        repositoryAvailable
+        repositoryAvailabilityCheckCount += 1
+        return repositoryAvailable
     }
 
     func initializeRepository() async throws {
@@ -75,7 +211,8 @@ private final class StubGitService: GitService {
     }
 
     func status() async throws -> [GitFileChange] {
-        statusResult
+        statusCallCount += 1
+        return statusResult
     }
 
     func statusIncludingIgnored() async throws -> [GitFileChange] {
@@ -219,6 +356,70 @@ private final class StubGitService: GitService {
     }
 }
 
+private final class StubGitRepositoryMetadataWatcher: GitRepositoryMetadataWatcher, @unchecked Sendable {
+    var onChange: (@Sendable (GitRepositoryMetadataEvent) -> Void)?
+
+    func startWatching() {}
+    func stopWatching() {}
+
+    func emit(_ event: GitRepositoryMetadataEvent) {
+        onChange?(event)
+    }
+}
+
+private struct PseudoRepositoryFixture {
+    let repositoryRoot: URL
+    let gitDirectory: URL
+
+    init() throws {
+        repositoryRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("devys-git-store-\(UUID().uuidString)")
+        gitDirectory = repositoryRoot.appendingPathComponent(".git")
+        try FileManager.default.createDirectory(at: gitDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: gitDirectory.appendingPathComponent("refs/heads"),
+            withIntermediateDirectories: true
+        )
+        try "ref: refs/heads/main\n".write(
+            to: gitDirectory.appendingPathComponent("HEAD"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try "1111111\n".write(
+            to: gitDirectory.appendingPathComponent("refs/heads/main"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try Data().write(to: gitDirectory.appendingPathComponent("index"))
+    }
+
+    func writeIndex(_ data: Data) throws {
+        try data.write(to: gitDirectory.appendingPathComponent("index"))
+    }
+
+    func setHead(reference: String, commit: String) throws {
+        let referenceURL = gitDirectory.appendingPathComponent(reference)
+        try FileManager.default.createDirectory(
+            at: referenceURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try "ref: \(reference)\n".write(
+            to: gitDirectory.appendingPathComponent("HEAD"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try "\(commit)\n".write(
+            to: referenceURL,
+            atomically: true,
+            encoding: .utf8
+        )
+    }
+
+    func cleanup() {
+        try? FileManager.default.removeItem(at: repositoryRoot)
+    }
+}
+
 private final class NoopFileWatchService: FileWatchService, @unchecked Sendable {
     var onFileChange: FileChangeHandler?
 
@@ -226,4 +427,23 @@ private final class NoopFileWatchService: FileWatchService, @unchecked Sendable 
     func stopWatching() {}
     func watchDirectory(_ url: URL) { _ = url }
     func unwatchDirectory(_ url: URL) { _ = url }
+}
+
+@MainActor
+private func waitUntil(
+    _ description: String,
+    timeoutNanoseconds: UInt64 = 5_000_000_000,
+    stepNanoseconds: UInt64 = 10_000_000,
+    condition: @escaping @MainActor () -> Bool
+) async {
+    let deadline = DispatchTime.now().uptimeNanoseconds + timeoutNanoseconds
+    while DispatchTime.now().uptimeNanoseconds < deadline {
+        if condition() {
+            return
+        }
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: stepNanoseconds)
+    }
+
+    Issue.record("Timed out waiting for \(description)")
 }

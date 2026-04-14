@@ -29,27 +29,36 @@ struct FileTreeRow: View {
     let flatNode: FlatFileNode
     let gitStatusSummary: WorkspaceFileTreeGitStatusSummary?
     let isSelected: Bool
-    let onSelect: () -> Void
+    let canRename: Bool
+    let onSelect: (NSEvent.ModifierFlags) -> Void
     let onToggleExpand: () -> Void
     let onOpenFile: () -> Void
     let onAddToChat: ((URL) -> Void)?
+    let onRename: () -> Void
+    let onDelete: () -> Void
     
     init(
         flatNode: FlatFileNode,
         gitStatusSummary: WorkspaceFileTreeGitStatusSummary? = nil,
         isSelected: Bool,
-        onSelect: @escaping () -> Void,
+        canRename: Bool = true,
+        onSelect: @escaping (NSEvent.ModifierFlags) -> Void,
         onToggleExpand: @escaping () -> Void,
         onOpenFile: @escaping () -> Void,
-        onAddToChat: ((URL) -> Void)? = nil
+        onAddToChat: ((URL) -> Void)? = nil,
+        onRename: @escaping () -> Void = {},
+        onDelete: @escaping () -> Void = {}
     ) {
         self.flatNode = flatNode
         self.gitStatusSummary = gitStatusSummary
         self.isSelected = isSelected
+        self.canRename = canRename
         self.onSelect = onSelect
         self.onToggleExpand = onToggleExpand
         self.onOpenFile = onOpenFile
         self.onAddToChat = onAddToChat
+        self.onRename = onRename
+        self.onDelete = onDelete
     }
     
     @State private var isHovered = false
@@ -83,9 +92,10 @@ struct FileTreeRow: View {
                 treePrefix
                 
                 // Chevron for directories
+                chevronButton
+                    .frame(width: flatNode.node.isDirectory ? 12 : 0)
+
                 if flatNode.node.isDirectory {
-                    chevronView
-                        .frame(width: 10)
                     Spacer().frame(width: 2)
                 }
                 
@@ -115,10 +125,8 @@ struct FileTreeRow: View {
         .frame(height: rowHeight)
         .contentShape(Rectangle())
         .onTapGesture {
-            onSelect()
-            if flatNode.node.isDirectory {
-                onToggleExpand()
-            }
+            let modifiers = NSApp.currentEvent?.modifierFlags ?? []
+            onSelect(modifiers)
         }
         .simultaneousGesture(
             TapGesture(count: 2).onEnded {
@@ -186,11 +194,16 @@ struct FileTreeRow: View {
     // MARK: - Chevron
     
     @ViewBuilder
-    private var chevronView: some View {
+    private var chevronButton: some View {
         if flatNode.node.isDirectory {
-            Image(systemName: flatNode.isExpanded ? "chevron.down" : "chevron.right")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(.secondary)
+            Button {
+                onToggleExpand()
+            } label: {
+                Image(systemName: flatNode.isExpanded ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
         } else {
             // Empty space for files (maintains alignment)
             Color.clear
@@ -300,8 +313,9 @@ struct FileTreeRow: View {
         
         Divider()
         
-        Button("Rename...") { /* TODO */ }
+        Button("Rename...") { onRename() }
+            .disabled(!canRename)
         
-        Button("Delete", role: .destructive) { /* TODO */ }
+        Button("Delete", role: .destructive) { onDelete() }
     }
 }

@@ -309,6 +309,11 @@ public final class EditorDocument {
         return previewStorage?.content ?? ""
     }
 
+    public var selectedText: String? {
+        guard let selection, !selection.isEmpty else { return nil }
+        return text(in: selection)
+    }
+
     var syntaxWarmCacheIdentity: SyntaxWarmCacheIdentity {
         SyntaxWarmCacheIdentity(
             contentFingerprint: reopenIdentity.contentFingerprint,
@@ -483,6 +488,56 @@ public final class EditorDocument {
         return parts.joined(separator: "\n")
     }
 
+    public func findMatches(
+        for query: String,
+        caseSensitive: Bool? = nil,
+        limit: Int = 500
+    ) -> [EditorSearchMatch] {
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedQuery.isEmpty, limit > 0 else { return [] }
+
+        let shouldUseCaseSensitiveSearch: Bool
+        if let caseSensitive {
+            shouldUseCaseSensitiveSearch = caseSensitive
+        } else {
+            shouldUseCaseSensitiveSearch = trimmedQuery.contains { $0.isUppercase }
+        }
+
+        let compareLine: (String) -> String = shouldUseCaseSensitiveSearch
+            ? { $0 }
+            : { $0.lowercased() }
+
+        let needle = compareLine(trimmedQuery)
+        var matches: [EditorSearchMatch] = []
+        matches.reserveCapacity(min(lineCount, limit))
+
+        for lineIndex in 0..<lineCount {
+            let line = line(at: lineIndex)
+            let haystack = compareLine(line)
+            var searchStartIndex = haystack.startIndex
+
+            while searchStartIndex < haystack.endIndex,
+                  let range = haystack.range(of: needle, range: searchStartIndex..<haystack.endIndex) {
+                let startColumn = haystack.distance(from: haystack.startIndex, to: range.lowerBound)
+                let endColumn = haystack.distance(from: haystack.startIndex, to: range.upperBound)
+                matches.append(
+                    EditorSearchMatch(
+                        startLine: lineIndex,
+                        startColumn: startColumn,
+                        endLine: lineIndex,
+                        endColumn: endColumn
+                    )
+                )
+                if matches.count >= limit {
+                    return matches
+                }
+                searchStartIndex = range.upperBound
+            }
+        }
+
+        return matches
+    }
+
     func delete(_ range: TextRange) {
         let normalized = clamped(range.normalized)
         guard normalized.start != normalized.end else { return }
@@ -542,6 +597,27 @@ public final class EditorDocument {
 
     func moveCursorToLineEnd() {
         cursor.position.column = lineLength(at: cursor.position.line)
+        cursor.preferredColumn = nil
+    }
+
+    public func applyNavigationTarget(_ target: EditorNavigationTarget) {
+        let clampedTargetPosition = clamped(
+            TextPosition(line: target.cursorLine, column: target.cursorColumn)
+        )
+
+        if let selection = target.selection {
+            let selectedRange = TextRange(
+                start: TextPosition(line: selection.startLine, column: selection.startColumn),
+                end: TextPosition(line: selection.endLine, column: selection.endColumn)
+            )
+            let clampedRange = clamped(selectedRange)
+            self.selection = clampedRange
+            cursor.position = clampedRange.start
+        } else {
+            self.selection = nil
+            cursor.position = clampedTargetPosition
+        }
+
         cursor.preferredColumn = nil
     }
 

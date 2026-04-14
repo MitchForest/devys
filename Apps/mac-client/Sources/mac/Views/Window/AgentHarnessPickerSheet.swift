@@ -60,7 +60,7 @@ struct AgentHarnessPickerSheet: View {
             VStack(alignment: .leading, spacing: DevysSpacing.space3) {
                 Image(systemName: icon)
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(theme.accent)
+                    .foregroundStyle(theme.visibleAccent)
 
                 Text(title)
                     .font(DevysTypography.base)

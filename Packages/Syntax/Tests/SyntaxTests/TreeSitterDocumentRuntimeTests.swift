@@ -136,6 +136,41 @@ struct TreeSitterDocumentRuntimeTests {
         #expect(parseResult.invalidation.contains(lineIndex: 4) == false)
         #expect(parseResult.invalidation.lineRanges[0].upperBound - parseResult.invalidation.lineRanges[0].lowerBound < newSnapshot.lineCount)
     }
+
+    @Test("Emoji edits stay parseable across UTF-16 chunk boundaries")
+    func emojiEditsStayParseable() async throws {
+        let originalContent = emojiSource
+        let document = TextDocument(content: originalContent)
+        let runtime = try SyntaxDocumentRuntime(
+            documentSnapshot: document.snapshot(),
+            languageConfiguration: try TreeSitterLanguageConfigurationProvider.swift()
+        )
+
+        let oldSnapshot = document.snapshot()
+        let transaction = EditTransaction(
+            edits: [
+                TextEdit(
+                    range: utf8Range(of: "\"👩🏽‍💻\"", in: originalContent),
+                    replacement: "\"👩🏽‍💻👋\""
+                )
+            ]
+        )
+
+        _ = document.apply(transaction)
+        let newSnapshot = document.snapshot()
+
+        let parseResult = try await runtime.reparse(
+            oldSnapshot: oldSnapshot,
+            newSnapshot: newSnapshot,
+            transaction: transaction
+        )
+        let state = await runtime.currentState()
+
+        #expect(parseResult.strategy == .incremental)
+        #expect(state.documentVersion == newSnapshot.version)
+        #expect(state.tree.rootNode?.nodeType == "source_file")
+        #expect(state.tree.rootNode?.hasError == false)
+    }
 }
 
 private let sampleSource = """
@@ -167,6 +202,16 @@ const value = 42;
 <style>
 body { color: red; }
 </style>
+"""
+
+private let emojiSource = """
+struct EmojiGreeter {
+    let wave = "👩🏽‍💻"
+
+    func greet() {
+        print(wave)
+    }
+}
 """
 
 private func utf8Range(of needle: String, in haystack: String) -> TextByteRange {

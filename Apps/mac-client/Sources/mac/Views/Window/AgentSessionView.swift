@@ -347,7 +347,7 @@ struct AgentSessionView: View {
             HStack(spacing: DevysSpacing.space2) {
                 Image(systemName: icon(forToolKind: item.kind))
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(theme.accent)
+                    .foregroundStyle(theme.visibleAccent)
 
                 Text(item.title)
                     .font(DevysTypography.base)
@@ -399,7 +399,7 @@ struct AgentSessionView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .font(DevysTypography.xs)
-                                .foregroundStyle(theme.accent)
+                                .foregroundStyle(theme.visibleAccent)
                             }
                             if let oldText = diff.oldText {
                                 diffBlock(oldText, tint: Color.red.opacity(0.12))
@@ -656,7 +656,7 @@ struct AgentSessionView: View {
                     HStack(spacing: 8) {
                         Image(systemName: summary.systemImage)
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(theme.accent)
+                            .foregroundStyle(theme.visibleAccent)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(summary.title)
@@ -699,7 +699,7 @@ struct AgentSessionView: View {
             HStack(spacing: DevysSpacing.space2) {
                 Image(systemName: "terminal")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(theme.accent)
+                    .foregroundStyle(theme.visibleAccent)
                 Text(terminal.command)
                     .font(DevysTypography.sm)
                     .foregroundStyle(theme.text)
@@ -724,7 +724,7 @@ struct AgentSessionView: View {
                 }
                 .buttonStyle(.plain)
                 .font(DevysTypography.xs)
-                .foregroundStyle(theme.accent)
+                .foregroundStyle(theme.visibleAccent)
                 .disabled(!terminal.isRunning)
             }
 

@@ -122,7 +122,7 @@ private struct PortRow: View {
             }
             .buttonStyle(.plain)
             .font(.system(size: 10, weight: .medium))
-            .foregroundStyle(theme.accent)
+            .foregroundStyle(theme.visibleAccent)
 
             Button("Copy") {
                 onCopyURL(port, label)

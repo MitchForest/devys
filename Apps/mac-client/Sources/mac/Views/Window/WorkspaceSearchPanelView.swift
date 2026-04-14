@@ -1,101 +1,26 @@
-// WorkspaceCommandPaletteView.swift
-// Keyboard-driven command palette for workspace shell actions.
+// WorkspaceSearchPanelView.swift
+// Shared keyboard-driven workspace search panel.
 //
 // Copyright © 2026 Devys. All rights reserved.
 
 import AppKit
 import SwiftUI
 import UI
-import Workspace
 
-enum WorkspaceCommandPaletteAction: Equatable {
-    case addRepository
-    case selectRepository(Repository.ID)
-    case initializeRepository(Repository.ID)
-    case createWorkspace(Repository.ID)
-    case importWorktrees(Repository.ID)
-    case selectWorkspace(repositoryID: Repository.ID, workspaceID: Workspace.ID)
-    case openAgents
-    case focusAgentSession(AgentSessionID)
-    case launchShell
-    case launchClaude
-    case launchCodex
-    case runDefaultProfile
-    case jumpToLatestUnreadWorkspace
-    case revealCurrentWorkspaceInNavigator
-}
-
-struct WorkspaceCommandPaletteItem: Identifiable, Equatable {
-    let action: WorkspaceCommandPaletteAction
-    let title: String
-    let subtitle: String
-    let systemImage: String
-    let keywords: [String]
-    let shortcut: String?
-
-    var id: String {
-        switch action {
-        case .addRepository:
-            "add-repository"
-        case .selectRepository(let repositoryID):
-            "select-repository:\(repositoryID)"
-        case .initializeRepository(let repositoryID):
-            "initialize-repository:\(repositoryID)"
-        case .createWorkspace(let repositoryID):
-            "create-workspace:\(repositoryID)"
-        case .importWorktrees(let repositoryID):
-            "import-worktrees:\(repositoryID)"
-        case .selectWorkspace(let repositoryID, let workspaceID):
-            "select-workspace:\(repositoryID):\(workspaceID)"
-        case .openAgents:
-            "open-agents"
-        case .focusAgentSession(let sessionID):
-            "focus-agent-session:\(sessionID.rawValue)"
-        case .launchShell:
-            "launch-shell"
-        case .launchClaude:
-            "launch-claude"
-        case .launchCodex:
-            "launch-codex"
-        case .runDefaultProfile:
-            "run-default-profile"
-        case .jumpToLatestUnreadWorkspace:
-            "jump-latest-unread-workspace"
-        case .revealCurrentWorkspaceInNavigator:
-            "reveal-current-workspace"
-        }
-    }
-}
-
-struct WorkspaceCommandPaletteView: View {
+struct WorkspaceSearchPanelView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.devysTheme) private var theme
 
-    let items: [WorkspaceCommandPaletteItem]
-    let onSelect: (WorkspaceCommandPaletteItem) -> Void
+    let presentation: WorkspaceSearchPresentation
+    let query: Binding<String>
+    let items: [WorkspaceSearchItem]
+    let isLoading: Bool
+    let errorMessage: String?
+    let onSelect: (WorkspaceSearchItem) -> Void
 
-    @State private var query = ""
-    @State private var selectedItemID: WorkspaceCommandPaletteItem.ID?
+    @State private var selectedItemID: WorkspaceSearchItem.ID?
     @State private var keyMonitor: Any?
     @FocusState private var isSearchFocused: Bool
-
-    private var filteredItems: [WorkspaceCommandPaletteItem] {
-        let normalizedQuery = query
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased()
-
-        guard !normalizedQuery.isEmpty else { return items }
-
-        return items.filter { item in
-            if item.title.lowercased().contains(normalizedQuery) {
-                return true
-            }
-            if item.subtitle.lowercased().contains(normalizedQuery) {
-                return true
-            }
-            return item.keywords.contains { $0.lowercased().contains(normalizedQuery) }
-        }
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -104,29 +29,32 @@ struct WorkspaceCommandPaletteView: View {
                 .overlay(theme.borderSubtle)
             results
         }
-        .frame(width: 720, height: 520)
+        .frame(width: 760, height: 540)
         .background(theme.base)
         .onAppear {
             isSearchFocused = true
-            selectFirstFilteredItem()
+            selectFirstResult()
             installKeyboardMonitor()
         }
         .onDisappear {
             removeKeyboardMonitor()
         }
-        .onChange(of: query) { _, _ in
-            selectFirstFilteredItem()
+        .onChange(of: query.wrappedValue) { _, _ in
+            selectFirstResult()
+        }
+        .onChange(of: items) { _, _ in
+            selectFirstResult()
         }
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("COMMAND PALETTE")
+            Text(presentation.title)
                 .font(DevysTypography.heading)
                 .tracking(DevysTypography.headerTracking)
                 .foregroundStyle(theme.textSecondary)
 
-            TextField("Search commands", text: $query)
+            TextField(presentation.placeholder, text: query)
                 .textFieldStyle(.roundedBorder)
                 .focused($isSearchFocused)
                 .onSubmit {
@@ -139,10 +67,14 @@ struct WorkspaceCommandPaletteView: View {
     private var results: some View {
         ScrollView {
             LazyVStack(spacing: 6) {
-                if filteredItems.isEmpty {
+                if let errorMessage {
+                    errorState(message: errorMessage)
+                } else if isLoading && items.isEmpty {
+                    loadingState
+                } else if items.isEmpty {
                     emptyState
                 } else {
-                    ForEach(filteredItems) { item in
+                    ForEach(items) { item in
                         button(for: item)
                     }
                 }
@@ -152,29 +84,50 @@ struct WorkspaceCommandPaletteView: View {
     }
 
     private var emptyState: some View {
+        stateCard(
+            title: presentation.emptyTitle,
+            message: presentation.emptySubtitle
+        )
+    }
+
+    private var loadingState: some View {
+        stateCard(
+            title: "Searching",
+            message: "Collecting results for the current workspace."
+        )
+    }
+
+    private func errorState(message: String) -> some View {
+        stateCard(
+            title: "Search unavailable",
+            message: message
+        )
+    }
+
+    private func stateCard(title: String, message: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("No matching commands")
+            Text(title)
                 .font(DevysTypography.base)
                 .foregroundStyle(theme.textSecondary)
 
-            Text("Try a repository, workspace, launch action, or unread command.")
+            Text(message)
                 .font(DevysTypography.xs)
                 .foregroundStyle(theme.textTertiary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(20)
         .background(theme.surface)
-        .cornerRadius(DevysSpacing.radiusMd)
+        .clipShape(.rect(cornerRadius: DevysSpacing.radiusMd))
     }
 
-    private func button(for item: WorkspaceCommandPaletteItem) -> some View {
+    private func button(for item: WorkspaceSearchItem) -> some View {
         Button {
             execute(item)
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: item.systemImage)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(theme.accent)
+                    .foregroundStyle(theme.visibleAccent)
                     .frame(width: 16)
 
                 VStack(alignment: .leading, spacing: 3) {
@@ -189,8 +142,8 @@ struct WorkspaceCommandPaletteView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                if let shortcut = item.shortcut {
-                    Text(shortcut)
+                if let accessory = item.accessory {
+                    Text(accessory)
                         .font(DevysTypography.xs)
                         .foregroundStyle(theme.textTertiary)
                 }
@@ -242,30 +195,30 @@ struct WorkspaceCommandPaletteView: View {
     }
 
     private func moveSelection(by offset: Int) {
-        guard !filteredItems.isEmpty else { return }
+        guard !items.isEmpty else { return }
         guard let selectedItemID,
-              let currentIndex = filteredItems.firstIndex(where: { $0.id == selectedItemID }) else {
-            self.selectedItemID = filteredItems.first?.id
+              let currentIndex = items.firstIndex(where: { $0.id == selectedItemID }) else {
+            self.selectedItemID = items.first?.id
             return
         }
 
-        let nextIndex = max(0, min(filteredItems.count - 1, currentIndex + offset))
-        self.selectedItemID = filteredItems[nextIndex].id
+        let nextIndex = max(0, min(items.count - 1, currentIndex + offset))
+        self.selectedItemID = items[nextIndex].id
     }
 
-    private func selectFirstFilteredItem() {
-        selectedItemID = filteredItems.first?.id
+    private func selectFirstResult() {
+        selectedItemID = items.first?.id
     }
 
     private func executeSelectedItem() {
         guard let selectedItemID,
-              let item = filteredItems.first(where: { $0.id == selectedItemID }) ?? filteredItems.first else {
+              let item = items.first(where: { $0.id == selectedItemID }) ?? items.first else {
             return
         }
         execute(item)
     }
 
-    private func execute(_ item: WorkspaceCommandPaletteItem) {
+    private func execute(_ item: WorkspaceSearchItem) {
         onSelect(item)
         dismiss()
     }

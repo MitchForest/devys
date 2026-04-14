@@ -311,6 +311,16 @@ public struct DevysTheme: Sendable {
     public var accentForeground: Color {
         accentColor.isPerceptuallyLight ? DevysColors.darkBg0 : DevysColors.lightBg0
     }
+
+    /// Accent color guaranteed visible against the current background.
+    /// Non-white accents are returned unchanged. White accent in light mode
+    /// would be invisible, so it falls back to the primary text color.
+    public var visibleAccent: Color {
+        if !isDark && accentColor == .white {
+            return text
+        }
+        return accent
+    }
 }
 
 // MARK: - Environment Key

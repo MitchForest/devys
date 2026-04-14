@@ -15,13 +15,24 @@ import Observation
 @MainActor
 @Observable
 public final class FileTreeModel {
+    public static let itemsDeletedNotification = Notification.Name(
+        "Workspace.FileTreeModel.ItemsDeleted"
+    )
+    public static let deletedURLsUserInfoKey = "deletedURLs"
+
     // MARK: - Properties
     
     /// Flattened nodes for virtualized rendering.
     public private(set) var flattenedNodes: [FlatFileNode] = []
     
-    /// Currently selected node.
-    public var selectedNode: CEWorkspaceFileNode?
+    /// Currently selected URLs in the tree.
+    public private(set) var selectedURLs: Set<URL> = []
+
+    /// Primary focused URL for keyboard/context actions.
+    public private(set) var focusedURL: URL?
+
+    /// Anchor URL used for shift-range selection.
+    public private(set) var selectionAnchorURL: URL?
     
     /// Whether the tree is loading.
     public private(set) var isLoading = false
@@ -171,8 +182,66 @@ public final class FileTreeModel {
             }
         }
         
-        selectedNode = currentNode
+        replaceSelection(with: currentNode.url)
         rebuildFlattenedList()
+    }
+
+    public func isSelected(_ url: URL) -> Bool {
+        selectedURLs.contains(normalize(url))
+    }
+
+    public func replaceSelection(with url: URL) {
+        let normalizedURL = normalize(url)
+        selectedURLs = [normalizedURL]
+        focusedURL = normalizedURL
+        selectionAnchorURL = normalizedURL
+    }
+
+    public func toggleSelection(of url: URL) {
+        let normalizedURL = normalize(url)
+
+        if selectedURLs.contains(normalizedURL) {
+            selectedURLs.remove(normalizedURL)
+            if focusedURL == normalizedURL {
+                focusedURL = selectedURLs.first
+            }
+            if selectionAnchorURL == normalizedURL {
+                selectionAnchorURL = focusedURL
+            }
+            return
+        }
+
+        selectedURLs.insert(normalizedURL)
+        focusedURL = normalizedURL
+        if selectionAnchorURL == nil {
+            selectionAnchorURL = normalizedURL
+        }
+    }
+
+    public func selectRange(to url: URL, visibleURLs: [URL]) {
+        let normalizedURL = normalize(url)
+        let normalizedVisibleURLs = visibleURLs.map(normalize)
+        let anchorURL = selectionAnchorURL ?? focusedURL ?? normalizedURL
+
+        guard let anchorIndex = normalizedVisibleURLs.firstIndex(of: anchorURL),
+              let targetIndex = normalizedVisibleURLs.firstIndex(of: normalizedURL) else {
+            replaceSelection(with: normalizedURL)
+            return
+        }
+
+        let lowerBound = min(anchorIndex, targetIndex)
+        let upperBound = max(anchorIndex, targetIndex)
+        selectedURLs = Set(normalizedVisibleURLs[lowerBound...upperBound])
+        focusedURL = normalizedURL
+        if selectionAnchorURL == nil {
+            selectionAnchorURL = anchorURL
+        }
+    }
+
+    public func clearSelection() {
+        selectedURLs.removeAll()
+        focusedURL = nil
+        selectionAnchorURL = nil
     }
     
     // MARK: - Private Methods
@@ -201,8 +270,9 @@ public final class FileTreeModel {
         if let root = rootNode, let children = root.children {
             flatten(children)
         }
-        
+
         flattenedNodes = result
+        sanitizeSelectionState()
     }
     
     private func startWatching() {
@@ -244,6 +314,7 @@ public final class FileTreeModel {
 
         if changeType == .deleted {
             pruneSubtree(at: normalizedURL)
+            notifyDeletedItems([normalizedURL])
         }
 
         invalidatedDirectories.insert(normalizedDirectoryURL)
@@ -435,10 +506,18 @@ private extension FileTreeModel {
             from: oldBaseURL,
             to: newBaseURL
         )
-
-        if let selectedNode,
-           isWithinPath(oldBaseURL, candidate: normalize(selectedNode.url)) {
-            retargetSubtree(selectedNode, from: oldBaseURL, to: newBaseURL)
+        selectedURLs = retargetURLs(in: selectedURLs, from: oldBaseURL, to: newBaseURL)
+        if let focusedURL,
+           isWithinPath(oldBaseURL, candidate: normalize(focusedURL)) {
+            self.focusedURL = retargetURL(normalize(focusedURL), from: oldBaseURL, to: newBaseURL)
+        }
+        if let selectionAnchorURL,
+           isWithinPath(oldBaseURL, candidate: normalize(selectionAnchorURL)) {
+            self.selectionAnchorURL = retargetURL(
+                normalize(selectionAnchorURL),
+                from: oldBaseURL,
+                to: newBaseURL
+            )
         }
     }
 
@@ -480,11 +559,19 @@ private extension FileTreeModel {
         loadedDirectories = removeSubtreeURLs(from: loadedDirectories, under: url)
         invalidatedDirectories = removeSubtreeURLs(from: invalidatedDirectories, under: url)
         expandedDirectories = removeSubtreeURLs(from: expandedDirectories, under: url)
+        selectedURLs = removeSubtreeURLs(from: selectedURLs, under: url)
 
-        if let currentSelectedNode = selectedNode,
-           isWithinPath(url, candidate: normalize(currentSelectedNode.url)) {
-            selectedNode = nil
+        if let focusedURL,
+           isWithinPath(url, candidate: normalize(focusedURL)) {
+            self.focusedURL = nil
         }
+
+        if let selectionAnchorURL,
+           isWithinPath(url, candidate: normalize(selectionAnchorURL)) {
+            self.selectionAnchorURL = nil
+        }
+
+        sanitizeSelectionState()
     }
 
     func removeSubtreeURLs(from urls: Set<URL>, under baseURL: URL) -> Set<URL> {
@@ -517,5 +604,38 @@ private extension FileTreeModel {
 
     func normalize(_ url: URL) -> URL {
         URL(fileURLWithPath: url.standardizedFileURL.path).standardizedFileURL
+    }
+
+    func sanitizeSelectionState() {
+        selectedURLs = Set(
+            selectedURLs
+                .map(normalize)
+                .filter { selectedURL in
+                    guard rootNode != nil else { return true }
+                    return findNode(for: selectedURL) != nil
+                }
+        )
+
+        if let focusedURL {
+            let normalizedFocusedURL = normalize(focusedURL)
+            self.focusedURL = selectedURLs.contains(normalizedFocusedURL)
+                ? normalizedFocusedURL
+                : selectedURLs.first
+        }
+
+        if let selectionAnchorURL {
+            let normalizedAnchorURL = normalize(selectionAnchorURL)
+            self.selectionAnchorURL = selectedURLs.contains(normalizedAnchorURL)
+                ? normalizedAnchorURL
+                : focusedURL
+        }
+    }
+
+    func notifyDeletedItems(_ urls: [URL]) {
+        NotificationCenter.default.post(
+            name: Self.itemsDeletedNotification,
+            object: self,
+            userInfo: [Self.deletedURLsUserInfoKey: urls]
+        )
     }
 }

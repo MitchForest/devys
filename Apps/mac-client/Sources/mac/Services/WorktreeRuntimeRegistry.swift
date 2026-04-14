@@ -252,6 +252,10 @@ private final class WorktreeRuntimeState {
         defer { isHydratingGitStore = false }
 
         await gitStore.refresh()
+        gitStatusIndex = WorkspaceFileTreeGitStatusIndex(
+            rootURL: worktree.workingDirectory,
+            changes: gitStore.allChanges
+        )
         await gitStore.checkPRAvailability()
         hasHydratedGitStore = true
     }

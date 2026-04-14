@@ -3,6 +3,8 @@
 //
 // Tracks a single editor document and save/reload actions.
 
+// swiftlint:disable file_length
+
 import Split
 import Foundation
 import Observation
@@ -116,6 +118,17 @@ final class EditorSession: Identifiable {
     var phase: Phase = .idle
     var document: EditorDocument?
     var focusRequestID: Int = 0
+    var navigationRequestID: Int = 0
+    var navigationTarget: EditorNavigationTarget?
+    var isFindPresented = false
+    var findQuery = "" {
+        didSet {
+            guard oldValue != findQuery else { return }
+            refreshFindMatches()
+        }
+    }
+    private(set) var findMatches: [EditorSearchMatch] = []
+    private(set) var activeFindMatchIndex: Int?
 
     @ObservationIgnored
     private let loader: Loader?
@@ -134,6 +147,8 @@ final class EditorSession: Identifiable {
 
     @ObservationIgnored
     private var activeRevision: DocumentPreviewRevision?
+    @ObservationIgnored
+    private var pendingNavigationTarget: EditorNavigationTarget?
 
     init(
         url: URL,
@@ -172,6 +187,14 @@ final class EditorSession: Identifiable {
 
     func requestKeyboardFocus() {
         focusRequestID &+= 1
+    }
+
+    var activeFindMatchID: EditorSearchMatch.ID? {
+        guard let activeFindMatchIndex,
+              findMatches.indices.contains(activeFindMatchIndex) else {
+            return nil
+        }
+        return findMatches[activeFindMatchIndex].id
     }
 
     var preview: EditorSessionPreview? {
@@ -306,6 +329,7 @@ final class EditorSession: Identifiable {
                 fileURL: url
             )
             document = previewDocument
+            applyFindState(to: previewDocument, focusEditor: false)
             activeRevision = preview.revision
             phase = .preview(preview)
             return previewDocument.documentVersion
@@ -350,6 +374,7 @@ final class EditorSession: Identifiable {
     ) {
         guard revision == loadRevision else { return }
         document = loadedDocument
+        applyFindState(to: loadedDocument, focusEditor: false)
         activeRevision = nil
         applySuccessfulLoad(revision: revision, document: loadedDocument)
     }
@@ -369,6 +394,8 @@ final class EditorSession: Identifiable {
         document: EditorDocument
     ) {
         guard revision == loadRevision else { return }
+        applyPendingNavigationTargetIfNeeded(to: document)
+        applyFindState(to: document, focusEditor: false)
         loadTask = nil
         phase = .loaded(document)
     }
@@ -420,8 +447,56 @@ final class EditorSession: Identifiable {
 
         url = canonicalURL
         document = replacement
+        applyPendingNavigationTargetIfNeeded(to: replacement)
+        applyFindState(to: replacement, focusEditor: false)
         activeRevision = try? DocumentPreviewRevision.current(for: canonicalURL)
         phase = .loaded(replacement)
+    }
+
+    func presentFind() {
+        if !isFindPresented {
+            isFindPresented = true
+        }
+
+        if findQuery.isEmpty,
+           let seed = selectedTextSearchSeed() {
+            findQuery = seed
+            return
+        }
+
+        refreshFindMatches()
+    }
+
+    func dismissFind() {
+        isFindPresented = false
+        findMatches = []
+        activeFindMatchIndex = nil
+        requestKeyboardFocus()
+    }
+
+    func selectNextFindMatch() {
+        guard !findMatches.isEmpty else { return }
+        let nextIndex = ((activeFindMatchIndex ?? -1) + 1) % findMatches.count
+        setActiveFindMatch(index: nextIndex, focusEditor: false)
+    }
+
+    func selectPreviousFindMatch() {
+        guard !findMatches.isEmpty else { return }
+        let currentIndex = activeFindMatchIndex ?? 0
+        let previousIndex = (currentIndex - 1 + findMatches.count) % findMatches.count
+        setActiveFindMatch(index: previousIndex, focusEditor: false)
+    }
+
+    func navigate(to target: EditorNavigationTarget, focusEditor: Bool = true) {
+        pendingNavigationTarget = target
+        if let document {
+            document.applyNavigationTarget(target)
+        }
+        navigationTarget = target
+        navigationRequestID &+= 1
+        if focusEditor {
+            requestKeyboardFocus()
+        }
     }
 
     private func shouldReload(for canonicalURL: URL) -> Bool {
@@ -451,6 +526,74 @@ final class EditorSession: Identifiable {
         }
 
         return currentRevision != activeRevision
+    }
+
+    private func applyPendingNavigationTargetIfNeeded(to document: EditorDocument) {
+        guard let pendingNavigationTarget else { return }
+        document.applyNavigationTarget(pendingNavigationTarget)
+    }
+
+    private func applyFindState(
+        to document: EditorDocument,
+        focusEditor: Bool
+    ) {
+        guard isFindPresented else { return }
+        let trimmedQuery = findQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedQuery.isEmpty else {
+            findMatches = []
+            activeFindMatchIndex = nil
+            return
+        }
+
+        let previousActiveMatchID = activeFindMatchID
+        let matches = document.findMatches(for: trimmedQuery)
+        findMatches = matches
+
+        if let previousActiveMatchID,
+           let existingIndex = matches.firstIndex(where: { $0.id == previousActiveMatchID }) {
+            setActiveFindMatch(index: existingIndex, focusEditor: focusEditor)
+            return
+        }
+
+        if matches.isEmpty {
+            activeFindMatchIndex = nil
+            return
+        }
+
+        setActiveFindMatch(index: 0, focusEditor: focusEditor)
+    }
+
+    private func refreshFindMatches() {
+        guard let document else {
+            findMatches = []
+            activeFindMatchIndex = nil
+            return
+        }
+        applyFindState(to: document, focusEditor: false)
+    }
+
+    private func setActiveFindMatch(
+        index: Int,
+        focusEditor: Bool
+    ) {
+        guard findMatches.indices.contains(index) else {
+            activeFindMatchIndex = nil
+            return
+        }
+
+        activeFindMatchIndex = index
+        navigate(to: .match(findMatches[index]), focusEditor: focusEditor)
+    }
+
+    private func selectedTextSearchSeed() -> String? {
+        guard let selectedText = document?.selectedText?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+              !selectedText.isEmpty,
+              !selectedText.contains("\n"),
+              selectedText.count <= 200 else {
+            return nil
+        }
+        return selectedText
     }
 }
 

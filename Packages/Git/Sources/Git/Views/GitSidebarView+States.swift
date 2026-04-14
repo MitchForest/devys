@@ -96,7 +96,7 @@ extension GitSidebarView {
                 HStack(spacing: 4) {
                     Text(">")
                         .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(theme.accent)
+                        .foregroundStyle(theme.visibleAccent)
                     Text("commit")
                         .font(.system(size: 11, weight: .medium, design: .monospaced))
                 }

@@ -23,6 +23,8 @@ struct SidebarContentView: View {
     let onPreviewFile: (URL) -> Void   // Single-click: preview tab
     let onOpenFile: (URL) -> Void      // Double-click: permanent tab
     let onAddToChat: ((URL) -> Void)?  // Context menu: add file to chat
+    let onRenameItem: ((URL) -> Void)? // Context menu: rename file/folder
+    let onDeleteItems: (([URL]) -> Void)? // Context menu: delete selected items
     let showsTrailingBorder: Bool
 
     // MARK: - Body
@@ -50,7 +52,9 @@ struct SidebarContentView: View {
                 gitStatusIndex: gitStatusIndex,
                 onPreviewFile: onPreviewFile,
                 onOpenFile: onOpenFile,
-                onAddToChat: onAddToChat
+                onAddToChat: onAddToChat,
+                onRenameItem: onRenameItem,
+                onDeleteItems: onDeleteItems
             )
         } else {
             EmptyView()
@@ -67,6 +71,8 @@ private struct SingleFolderTreeView: View {
     let onPreviewFile: (URL) -> Void   // Single-click
     let onOpenFile: (URL) -> Void       // Double-click
     let onAddToChat: ((URL) -> Void)?   // Context menu: add to chat
+    let onRenameItem: ((URL) -> Void)?
+    let onDeleteItems: (([URL]) -> Void)?
 
     var body: some View {
         Group {
@@ -76,7 +82,9 @@ private struct SingleFolderTreeView: View {
                     gitStatusIndex: gitStatusIndex,
                     onPreviewFile: onPreviewFile,
                     onOpenFile: onOpenFile,
-                    onAddToChat: onAddToChat
+                    onAddToChat: onAddToChat,
+                    onRenameItem: onRenameItem,
+                    onDeleteItems: onDeleteItems
                 )
             } else {
                 ProgressView()
@@ -103,6 +111,8 @@ private struct SingleFolderTreeView: View {
         onPreviewFile: { _ in },
         onOpenFile: { _ in },
         onAddToChat: { _ in },
+        onRenameItem: { _ in },
+        onDeleteItems: { _ in },
         showsTrailingBorder: true
     )
     .frame(width: 240, height: 400)

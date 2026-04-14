@@ -38,7 +38,7 @@ struct NavigatorEdgeHandle: View {
 
     private var indicatorColor: Color {
         if isHovered {
-            return theme.accent.opacity(0.65)
+            return theme.visibleAccent.opacity(0.65)
         }
         if isExpanded {
             return theme.border

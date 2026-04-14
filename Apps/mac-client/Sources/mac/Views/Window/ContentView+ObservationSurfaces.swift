@@ -67,6 +67,8 @@ struct ContentViewSidebarSurface: View {
     let onPreviewFile: (Workspace.ID, URL) -> Void
     let onOpenFile: (Workspace.ID, URL) -> Void
     let onAddFileToAgent: (Workspace.ID, URL) -> Void
+    let onRenameFile: (Workspace.ID, URL) -> Void
+    let onDeleteFiles: (Workspace.ID, [URL]) -> Void
     let onOpenDiff: (Workspace.ID, String, Bool, Bool) -> Void
     let onAddDiffToAgent: (Workspace.ID, String, Bool) -> Void
     let onCreateAgentSession: (Workspace.ID) -> Void
@@ -103,6 +105,14 @@ struct ContentViewSidebarSurface: View {
                 onAddToChat: { url in
                     guard let selectedWorkspaceID else { return }
                     onAddFileToAgent(selectedWorkspaceID, url)
+                },
+                onRenameItem: { url in
+                    guard let selectedWorkspaceID else { return }
+                    onRenameFile(selectedWorkspaceID, url)
+                },
+                onDeleteItems: { urls in
+                    guard let selectedWorkspaceID else { return }
+                    onDeleteFiles(selectedWorkspaceID, urls)
                 },
                 showsTrailingBorder: false
             )
@@ -258,7 +268,7 @@ private struct AgentSessionsSidebarSection: View {
                         HStack(spacing: 10) {
                             Image(systemName: session.tabIcon)
                                 .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(theme.accent)
+                                .foregroundStyle(theme.visibleAccent)
                                 .frame(width: 14)
 
                             VStack(alignment: .leading, spacing: 2) {
@@ -296,51 +306,6 @@ private struct AgentSessionsSidebarSection: View {
         }
         .padding(.horizontal, DevysSpacing.space3)
         .padding(.bottom, DevysSpacing.space3)
-    }
-}
-
-@MainActor
-struct ContentViewToolbarSurface: View {
-    let workspaceCatalog: WindowWorkspaceCatalogStore
-    let runtimeRegistry: WorktreeRuntimeRegistry
-    let repositorySettingsStore: RepositorySettingsStore
-    let isSidebarVisible: Bool
-    let onToggleSidebar: () -> Void
-    let onAgents: () -> Void
-    let onShell: () -> Void
-    let onClaude: () -> Void
-    let onCodex: () -> Void
-    let onRun: () -> Void
-    let onOpenRepositorySettings: () -> Void
-
-    var body: some View {
-        let currentWorktree = runtimeRegistry.activeRuntime?.worktree
-        let defaultStartupProfile = defaultStartupProfile(for: currentWorktree)
-
-        WorkspaceCanvasToolbar(
-            repositoryName: workspaceCatalog.selectedRepository?.displayName,
-            workspaceName: currentWorktree?.name,
-            isSidebarVisible: isSidebarVisible,
-            onToggleSidebar: onToggleSidebar,
-            onAgents: currentWorktree == nil ? nil : onAgents,
-            onShell: currentWorktree == nil ? nil : onShell,
-            onClaude: currentWorktree == nil ? nil : onClaude,
-            onCodex: currentWorktree == nil ? nil : onCodex,
-            onRun: defaultStartupProfile == nil ? nil : onRun,
-            onOpenRepositorySettings: currentWorktree == nil ? nil : onOpenRepositorySettings,
-            runDisabledReason: currentWorktree == nil
-                ? "Select a workspace to launch startup profiles."
-                : (defaultStartupProfile == nil
-                    ? "Run will enable when this repository defines a default startup profile."
-                    : nil)
-        )
-    }
-
-    private func defaultStartupProfile(for worktree: Worktree?) -> StartupProfile? {
-        guard let worktree else { return nil }
-        let settings = repositorySettingsStore.settings(for: worktree.repositoryRootURL)
-        guard let defaultStartupProfileID = settings.defaultStartupProfileID else { return nil }
-        return settings.startupProfiles.first { $0.id == defaultStartupProfileID }
     }
 }
 
@@ -412,65 +377,90 @@ struct ContentViewCommandPaletteSheetSurface: View {
     let repositorySettingsStore: RepositorySettingsStore
     let workspaceAttentionStore: WorkspaceAttentionStore
     let appSettings: AppSettings
-    let onSelect: (WorkspaceCommandPaletteItem) -> Void
+    let initialQuery: String
+    let onSelect: (WorkspaceSearchItem) -> Void
+
+    @State private var query = ""
 
     var body: some View {
-        WorkspaceCommandPaletteView(items: items, onSelect: onSelect)
+        WorkspaceSearchPanelView(
+            presentation: WorkspaceSearchPresentation(mode: .commands),
+            query: $query,
+            items: filteredItems,
+            isLoading: false,
+            errorMessage: nil,
+            onSelect: onSelect
+        )
+        .onAppear {
+            if query != initialQuery {
+                query = initialQuery
+            }
+        }
     }
 
-    private var items: [WorkspaceCommandPaletteItem] {
-        var items: [WorkspaceCommandPaletteItem] = [
-            WorkspaceCommandPaletteItem(
-                action: .addRepository,
+    private var filteredItems: [WorkspaceSearchItem] {
+        let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalizedQuery.isEmpty else { return items }
+        return items.filter { item in
+            item.title.lowercased().contains(normalizedQuery)
+                || item.subtitle.lowercased().contains(normalizedQuery)
+                || item.keywords.contains { $0.lowercased().contains(normalizedQuery) }
+        }
+    }
+
+    private var items: [WorkspaceSearchItem] {
+        var items: [WorkspaceSearchItem] = [
+            WorkspaceSearchItem(
+                action: .command(.addRepository),
                 title: "Add Repository",
                 subtitle: "Open a local project or import a Git repository",
                 systemImage: "folder.badge.plus",
                 keywords: ["repository", "project", "import", "add", "open"],
-                shortcut: "⌘O"
+                accessory: "⌘O"
             )
         ]
 
         for repository in workspaceCatalog.repositories {
             items.append(
-                WorkspaceCommandPaletteItem(
-                    action: .selectRepository(repository.id),
+                WorkspaceSearchItem(
+                    action: .command(.selectRepository(repository.id)),
                     title: "Switch to \(repository.displayName)",
                     subtitle: repository.rootURL.path,
                     systemImage: "shippingbox",
                     keywords: ["repository", "switch", repository.displayName, repository.rootURL.path],
-                    shortcut: nil
+                    accessory: nil
                 )
             )
             if repository.isGitRepository {
                 items.append(
-                    WorkspaceCommandPaletteItem(
-                        action: .createWorkspace(repository.id),
+                    WorkspaceSearchItem(
+                        action: .command(.createWorkspace(repository.id)),
                         title: "Create Workspace in \(repository.displayName)",
                         subtitle: "New branch, existing branch, or pull request",
                         systemImage: "plus.circle",
                         keywords: ["workspace", "create", "branch", repository.displayName],
-                        shortcut: nil
+                        accessory: nil
                     )
                 )
                 items.append(
-                    WorkspaceCommandPaletteItem(
-                        action: .importWorktrees(repository.id),
+                    WorkspaceSearchItem(
+                        action: .command(.importWorktrees(repository.id)),
                         title: "Import Worktrees in \(repository.displayName)",
                         subtitle: "Attach existing git worktrees to this repository",
                         systemImage: "square.and.arrow.down",
                         keywords: ["workspace", "worktree", "import", repository.displayName],
-                        shortcut: nil
+                        accessory: nil
                     )
                 )
             } else {
                 items.append(
-                    WorkspaceCommandPaletteItem(
-                        action: .initializeRepository(repository.id),
+                    WorkspaceSearchItem(
+                        action: .command(.initializeRepository(repository.id)),
                         title: "Initialize Git in \(repository.displayName)",
                         subtitle: "Create a new Git repository for this local project",
                         systemImage: "arrow.triangle.branch",
                         keywords: ["git", "init", "initialize", repository.displayName],
-                        shortcut: nil
+                        accessory: nil
                     )
                 )
             }
@@ -479,10 +469,12 @@ struct ContentViewCommandPaletteSheetSurface: View {
         for entry in workspaceCatalog.visibleNavigatorWorkspaces() {
             let workspaceName = workspaceDisplayName(for: entry.workspace)
             items.append(
-                WorkspaceCommandPaletteItem(
-                    action: .selectWorkspace(
-                        repositoryID: entry.repositoryID,
-                        workspaceID: entry.workspace.id
+                WorkspaceSearchItem(
+                    action: .command(
+                        .selectWorkspace(
+                            repositoryID: entry.repositoryID,
+                            workspaceID: entry.workspace.id
+                        )
                     ),
                     title: "Switch to \(workspaceName)",
                     subtitle: "\(entry.workspace.name) • \(entry.workspace.workingDirectory.path)",
@@ -494,27 +486,27 @@ struct ContentViewCommandPaletteSheetSurface: View {
                         workspaceName,
                         entry.workspace.workingDirectory.path
                     ],
-                    shortcut: nil
+                    accessory: nil
                 )
             )
         }
 
         if let activeWorktree = runtimeRegistry.activeRuntime?.worktree {
             items.append(
-                WorkspaceCommandPaletteItem(
-                    action: .openAgents,
+                WorkspaceSearchItem(
+                    action: .command(.openAgents),
                     title: "New Agent Session",
                     subtitle: activeWorktree.workingDirectory.path,
                     systemImage: "message.badge.waveform",
                     keywords: ["agent", "agents", "chat", "assistant", "new"],
-                    shortcut: nil
+                    accessory: nil
                 )
             )
 
             for session in runtimeRegistry.activeRuntime?.agentRuntimeRegistry.allSessions ?? [] {
                 items.append(
-                    WorkspaceCommandPaletteItem(
-                        action: .focusAgentSession(session.sessionID),
+                    WorkspaceSearchItem(
+                        action: .command(.focusAgentSession(session.sessionID)),
                         title: "Open \(session.tabTitle)",
                         subtitle: session.stateSummary,
                         systemImage: session.tabIcon,
@@ -524,60 +516,60 @@ struct ContentViewCommandPaletteSheetSurface: View {
                             session.tabTitle,
                             session.stateSummary
                         ],
-                        shortcut: nil
+                        accessory: nil
                     )
                 )
             }
             items.append(
-                WorkspaceCommandPaletteItem(
-                    action: .launchShell,
+                WorkspaceSearchItem(
+                    action: .command(.launchShell),
                     title: "Launch Shell",
                     subtitle: activeWorktree.workingDirectory.path,
                     systemImage: "terminal",
                     keywords: ["shell", "terminal", "launch"],
-                    shortcut: appSettings.shortcuts.binding(for: .launchShell).displayString
+                    accessory: appSettings.shortcuts.binding(for: .launchShell).displayString
                 )
             )
             items.append(
-                WorkspaceCommandPaletteItem(
-                    action: .launchClaude,
+                WorkspaceSearchItem(
+                    action: .command(.launchClaude),
                     title: "Launch Claude",
                     subtitle: activeWorktree.workingDirectory.path,
                     systemImage: "sparkles",
                     keywords: ["claude", "agent", "launch"],
-                    shortcut: appSettings.shortcuts.binding(for: .launchClaude).displayString
+                    accessory: appSettings.shortcuts.binding(for: .launchClaude).displayString
                 )
             )
             items.append(
-                WorkspaceCommandPaletteItem(
-                    action: .launchCodex,
+                WorkspaceSearchItem(
+                    action: .command(.launchCodex),
                     title: "Launch Codex",
                     subtitle: activeWorktree.workingDirectory.path,
                     systemImage: "chevron.left.forwardslash.chevron.right",
                     keywords: ["codex", "agent", "launch"],
-                    shortcut: appSettings.shortcuts.binding(for: .launchCodex).displayString
+                    accessory: appSettings.shortcuts.binding(for: .launchCodex).displayString
                 )
             )
             items.append(
-                WorkspaceCommandPaletteItem(
-                    action: .revealCurrentWorkspaceInNavigator,
+                WorkspaceSearchItem(
+                    action: .command(.revealCurrentWorkspaceInNavigator),
                     title: "Reveal Current Workspace in Navigator",
                     subtitle: workspaceDisplayName(for: activeWorktree),
                     systemImage: "sidebar.left",
                     keywords: ["reveal", "navigator", "workspace", "sidebar"],
-                    shortcut: nil
+                    accessory: nil
                 )
             )
 
             if defaultRunProfileAvailable(for: activeWorktree) {
                 items.append(
-                    WorkspaceCommandPaletteItem(
-                        action: .runDefaultProfile,
+                    WorkspaceSearchItem(
+                        action: .command(.runDefaultProfile),
                         title: "Run Default Profile",
                         subtitle: activeWorktree.workingDirectory.path,
                         systemImage: "play.fill",
                         keywords: ["run", "profile", "startup"],
-                        shortcut: nil
+                        accessory: nil
                     )
                 )
             }
@@ -585,13 +577,13 @@ struct ContentViewCommandPaletteSheetSurface: View {
 
         if workspaceAttentionStore.latestUnreadNotification() != nil {
             items.append(
-                WorkspaceCommandPaletteItem(
-                    action: .jumpToLatestUnreadWorkspace,
+                WorkspaceSearchItem(
+                    action: .command(.jumpToLatestUnreadWorkspace),
                     title: "Jump to Latest Unread Workspace",
                     subtitle: "Open the newest workspace attention item",
                     systemImage: "bell.badge",
                     keywords: ["notification", "unread", "attention", "jump"],
-                    shortcut: appSettings.shortcuts.binding(for: .jumpToLatestUnreadWorkspace).displayString
+                    accessory: appSettings.shortcuts.binding(for: .jumpToLatestUnreadWorkspace).displayString
                 )
             )
         }
@@ -612,6 +604,118 @@ struct ContentViewCommandPaletteSheetSurface: View {
         let settings = repositorySettingsStore.settings(for: worktree.repositoryRootURL)
         guard let defaultStartupProfileID = settings.defaultStartupProfileID else { return false }
         return settings.startupProfiles.contains { $0.id == defaultStartupProfileID }
+    }
+}
+
+@MainActor
+struct ContentViewFileSearchSheetSurface: View {
+    let workspaceID: Workspace.ID?
+    let fileIndex: WorkspaceFileIndex?
+    let openURLs: Set<URL>
+    let initialQuery: String
+    let onSelect: (WorkspaceSearchItem) -> Void
+
+    @State private var query = ""
+
+    var body: some View {
+        WorkspaceSearchPanelView(
+            presentation: WorkspaceSearchPresentation(mode: .files),
+            query: $query,
+            items: items,
+            isLoading: fileIndex?.isLoading == true,
+            errorMessage: fileIndex == nil ? "Select a workspace to search files." : fileIndex?.lastError,
+            onSelect: onSelect
+        )
+        .onAppear {
+            if query != initialQuery {
+                query = initialQuery
+            }
+            fileIndex?.activate()
+        }
+        .onDisappear {
+            fileIndex?.deactivate()
+        }
+    }
+
+    private var items: [WorkspaceSearchItem] {
+        guard let workspaceID,
+              let fileIndex else {
+            return []
+        }
+
+        return fileIndex.matches(for: query, openURLs: openURLs).map { result in
+            WorkspaceSearchItem(
+                action: .openFile(workspaceID: workspaceID, url: result.entry.fileURL),
+                title: result.entry.fileName,
+                subtitle: result.entry.relativePath,
+                systemImage: "doc",
+                keywords: [result.entry.relativePath, result.entry.fileName],
+                accessory: nil
+            )
+        }
+    }
+}
+
+@MainActor
+struct ContentViewTextSearchSheetSurface: View {
+    let workspaceID: Workspace.ID?
+    let rootURL: URL?
+    let explorerSettings: ExplorerSettings
+    let initialQuery: String
+    let onSelect: (WorkspaceSearchItem) -> Void
+
+    @State private var query = ""
+    @State private var service: RipgrepTextSearchService?
+
+    var body: some View {
+        WorkspaceSearchPanelView(
+            presentation: WorkspaceSearchPresentation(mode: .textSearch),
+            query: $query,
+            items: items,
+            isLoading: service?.isSearching == true,
+            errorMessage: serviceError,
+            onSelect: onSelect
+        )
+        .onAppear {
+            if service == nil, let workspaceID, let rootURL {
+                service = RipgrepTextSearchService(
+                    workspaceID: workspaceID,
+                    rootURL: rootURL,
+                    explorerSettings: explorerSettings
+                )
+            }
+            if query != initialQuery {
+                query = initialQuery
+            }
+            service?.updateQuery(query)
+        }
+        .onChange(of: query, initial: false) { _, newValue in
+            service?.updateQuery(newValue)
+        }
+        .onDisappear {
+            service?.cancel()
+        }
+    }
+
+    private var serviceError: String? {
+        if workspaceID == nil || rootURL == nil {
+            return "Select a workspace to search file contents."
+        }
+        return service?.lastError
+    }
+
+    private var items: [WorkspaceSearchItem] {
+        guard let results = service?.results else { return [] }
+        return results.map { match in
+            WorkspaceSearchItem(
+                action: .openTextSearchMatch(match),
+                title: match.relativePath,
+                subtitle: match.preview,
+                systemImage: "magnifyingglass",
+                keywords: [match.relativePath, match.preview],
+                accessory: "L\(match.lineNumber):C\(match.columnNumber)"
+            )
+        }
     }
 }
 

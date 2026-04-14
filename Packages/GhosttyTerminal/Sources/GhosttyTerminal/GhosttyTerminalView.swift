@@ -34,10 +34,17 @@ final class GhosttySurfaceHostView: NSView {
 
     var rendererHealthy = true
     var isReadonly = false
-    private var lastHandledFocusRequestID = 0
-    private var hasAppliedInitialStageCommand = false
+    var focused = false
+    var markedText = NSMutableAttributedString()
+    var keyTextAccumulator: [String]?
+    var lastPerformKeyEvent: TimeInterval?
+    var focusTransferState = GhosttyFocusTransferState()
 
-    private let surfaceBox = GhosttySurfaceBox()
+    var lastHandledFocusRequestID = 0
+    var hasAppliedInitialStageCommand = false
+
+    let surfaceBox = GhosttySurfaceBox()
+    var eventMonitor: Any?
 
     override var acceptsFirstResponder: Bool {
         true
@@ -55,6 +62,7 @@ final class GhosttySurfaceHostView: NSView {
             self?.handleFocusRequest(requestID)
         }
 
+        installLocalEventMonitor()
         createSurfaceIfNeeded()
         updateTrackingAreas()
         applyPendingFocusRequest()
@@ -143,10 +151,14 @@ final class GhosttySurfaceHostView: NSView {
         if window == nil {
             session.shutdownHandler = nil
             session.focusRequestHandler = nil
+            invalidateEventMonitor()
             shutdown()
             return
         }
         syncSurfaceMetrics()
+        if window?.firstResponder === self {
+            focusDidChange(true)
+        }
         applyPendingFocusRequest()
     }
 
@@ -173,82 +185,107 @@ final class GhosttySurfaceHostView: NSView {
 
     override func becomeFirstResponder() -> Bool {
         let accepted = super.becomeFirstResponder()
-        if accepted, let surface {
-            ghostty_surface_set_focus(surface, true)
+        if accepted {
+            focusDidChange(true)
         }
         return accepted
     }
 
     override func resignFirstResponder() -> Bool {
         let accepted = super.resignFirstResponder()
-        if accepted, let surface {
-            ghostty_surface_set_focus(surface, false)
+        if accepted {
+            focusDidChange(false)
         }
         return accepted
     }
 
     override func keyDown(with event: NSEvent) {
-        guard let surface else {
-            super.keyDown(with: event)
+        guard surface != nil else {
+            interpretKeyEvents([event])
             return
         }
 
-        let action: ghostty_input_action_e = event.isARepeat ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS
-        _ = sendKeyEvent(surface: surface, event: event, action: action)
+        handleKeyDown(event)
     }
 
     override func keyUp(with event: NSEvent) {
-        guard let surface else {
+        guard surface != nil else {
             super.keyUp(with: event)
             return
         }
 
-        _ = sendKeyEvent(surface: surface, event: event, action: GHOSTTY_ACTION_RELEASE)
+        handleKeyUp(event)
     }
 
     override func flagsChanged(with event: NSEvent) {
-        guard let surface else {
+        guard surface != nil else {
             super.flagsChanged(with: event)
             return
         }
 
-        let action = modifierAction(for: event)
-        _ = sendKeyEvent(surface: surface, event: event, action: action, text: nil)
+        handleFlagsChanged(event)
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        handlePerformKeyEquivalent(event)
+    }
+
+    override func doCommand(by selector: Selector) {
+        handleDoCommand(by: selector)
     }
 
     override func mouseDown(with event: NSEvent) {
-        claimKeyboardFocusIfPossible()
-        sendMouseButton(event, state: GHOSTTY_MOUSE_PRESS, button: GHOSTTY_MOUSE_LEFT)
+        guard surface != nil else {
+            super.mouseDown(with: event)
+            return
+        }
+
+        handleMouseDown(event)
     }
 
     override func mouseUp(with event: NSEvent) {
-        sendMouseButton(event, state: GHOSTTY_MOUSE_RELEASE, button: GHOSTTY_MOUSE_LEFT)
+        guard surface != nil else {
+            super.mouseUp(with: event)
+            return
+        }
+
+        handleMouseUp(event)
     }
 
     override func rightMouseDown(with event: NSEvent) {
-        claimKeyboardFocusIfPossible()
-        sendMouseButton(event, state: GHOSTTY_MOUSE_PRESS, button: GHOSTTY_MOUSE_RIGHT)
+        guard surface != nil else {
+            super.rightMouseDown(with: event)
+            return
+        }
+
+        handleRightMouseDown(event)
     }
 
     override func rightMouseUp(with event: NSEvent) {
-        sendMouseButton(event, state: GHOSTTY_MOUSE_RELEASE, button: GHOSTTY_MOUSE_RIGHT)
+        guard surface != nil else {
+            super.rightMouseUp(with: event)
+            return
+        }
+
+        handleRightMouseUp(event)
     }
 
     override func otherMouseDown(with event: NSEvent) {
-        claimKeyboardFocusIfPossible()
-        sendMouseButton(
-            event,
-            state: GHOSTTY_MOUSE_PRESS,
-            button: ghosttyMouseButton(for: event.buttonNumber)
-        )
+        guard surface != nil else {
+            super.otherMouseDown(with: event)
+            return
+        }
+
+        handleOtherMouseDown(event)
     }
 
     override func otherMouseUp(with event: NSEvent) {
-        sendMouseButton(
-            event,
-            state: GHOSTTY_MOUSE_RELEASE,
-            button: ghosttyMouseButton(for: event.buttonNumber)
-        )
+        guard surface != nil else {
+            super.otherMouseUp(with: event)
+            return
+        }
+
+        handleOtherMouseUp(event)
     }
 
     override func mouseMoved(with event: NSEvent) {
@@ -290,7 +327,7 @@ final class GhosttySurfaceHostView: NSView {
         ghostty_surface_mouse_scroll(surface, event.scrollingDeltaX, event.scrollingDeltaY, mods)
     }
 
-    private func createSurfaceIfNeeded() {
+    func createSurfaceIfNeeded() {
         guard surface == nil else { return }
         let sessionID = self.session.id.uuidString
         let runtimeSummary = GhosttyRuntimeIdentity.summary
@@ -321,7 +358,7 @@ final class GhosttySurfaceHostView: NSView {
         applyPendingStageCommand()
     }
 
-    private func shutdown() {
+    func shutdown() {
         let surface = surfaceBox.prepareForShutdown()
         GhosttyAppBridge.shared.unregister(surfaceBox)
         let sessionID = self.session.id.uuidString
@@ -332,17 +369,17 @@ final class GhosttySurfaceHostView: NSView {
         GhosttyAppBridge.shared.destroySurface(surface)
     }
 
-    private func handleFocusRequest(_ requestID: Int) {
+    func handleFocusRequest(_ requestID: Int) {
         guard requestID > lastHandledFocusRequestID else { return }
         guard claimKeyboardFocusIfPossible() else { return }
         lastHandledFocusRequestID = requestID
     }
 
-    private func applyPendingFocusRequest() {
+    func applyPendingFocusRequest() {
         handleFocusRequest(session.focusRequestID)
     }
 
-    private func applyPendingStageCommand() {
+    func applyPendingStageCommand() {
         guard !hasAppliedInitialStageCommand,
               let stagedCommand = session.stagedCommand,
               !stagedCommand.isEmpty,
@@ -352,13 +389,13 @@ final class GhosttySurfaceHostView: NSView {
         }
         guard claimKeyboardFocusIfPossible() else { return }
 
-        stageCommand(stagedCommand, on: surface)
+        stageCommand(stagedCommand)
         hasAppliedInitialStageCommand = true
         session.stagedCommand = nil
     }
 
     @discardableResult
-    private func claimKeyboardFocusIfPossible() -> Bool {
+    func claimKeyboardFocusIfPossible() -> Bool {
         guard let window else { return false }
         if window.firstResponder === self {
             return true
@@ -368,7 +405,20 @@ final class GhosttySurfaceHostView: NSView {
         return window.firstResponder === self
     }
 
-    private func syncSurfaceMetrics() {
+    func focusDidChange(_ focused: Bool) {
+        guard self.focused != focused else { return }
+        self.focused = focused
+
+        if !focused {
+            focusTransferState.clear()
+        }
+
+        if let surface {
+            ghostty_surface_set_focus(surface, focused)
+        }
+    }
+
+    func syncSurfaceMetrics() {
         guard let surface, !bounds.isEmpty else { return }
 
         let backingBounds = convertToBacking(bounds)
@@ -385,7 +435,7 @@ final class GhosttySurfaceHostView: NSView {
         )
     }
 
-    private func stageCommand(_ command: String, on surface: ghostty_surface_t) {
+    func stageCommand(_ command: String) {
         let preservedClipboard = NSPasteboard.general.string(forType: .string)
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
@@ -426,11 +476,11 @@ final class GhosttySurfaceHostView: NSView {
             return
         }
 
-        _ = sendKeyEvent(surface: surface, event: keyDown, action: GHOSTTY_ACTION_PRESS)
-        _ = sendKeyEvent(surface: surface, event: keyUp, action: GHOSTTY_ACTION_RELEASE)
+        _ = sendKeyAction(GHOSTTY_ACTION_PRESS, event: keyDown)
+        _ = sendKeyAction(GHOSTTY_ACTION_RELEASE, event: keyUp)
     }
 
-    private func sendMouseButton(
+    func sendMouseButton(
         _ event: NSEvent,
         state: ghostty_input_mouse_state_e,
         button: ghostty_input_mouse_button_e
@@ -439,7 +489,7 @@ final class GhosttySurfaceHostView: NSView {
         _ = ghostty_surface_mouse_button(surface, state, button, ghosttyMods(from: event.modifierFlags))
     }
 
-    private func sendMousePosition(_ event: NSEvent) {
+    func sendMousePosition(_ event: NSEvent) {
         guard let surface else { return }
         let location = convert(event.locationInWindow, from: nil)
         ghostty_surface_mouse_pos(
@@ -455,6 +505,12 @@ final class GhosttySurfaceHostView: NSView {
         discardCursorRects()
     }
 
+    func invalidateEventMonitor() {
+        guard let eventMonitor else { return }
+        NSEvent.removeMonitor(eventMonitor)
+        self.eventMonitor = nil
+    }
+
     override func resetCursorRects() {
         if toolTip != nil {
             addCursorRect(bounds, cursor: .pointingHand)
@@ -463,87 +519,11 @@ final class GhosttySurfaceHostView: NSView {
         }
     }
 
-    private var surface: ghostty_surface_t? {
+    var surface: ghostty_surface_t? {
         surfaceBox.surface
     }
 }
 // swiftlint:enable type_body_length
-
-private func sendKeyEvent(
-    surface: ghostty_surface_t,
-    event: NSEvent,
-    action: ghostty_input_action_e,
-    text: String? = nil
-) -> Bool {
-    var keyEvent = ghostty_input_key_s()
-    keyEvent.action = action
-    keyEvent.keycode = UInt32(event.keyCode)
-    keyEvent.mods = ghosttyMods(from: event.modifierFlags)
-    keyEvent.consumed_mods = GHOSTTY_MODS_NONE
-    keyEvent.unshifted_codepoint = event.charactersIgnoringModifiers?.unicodeScalars.first.map(\.value) ?? 0
-    keyEvent.composing = false
-
-    return (text ?? event.characters)?.withCString { characters in
-        keyEvent.text = characters
-        return ghostty_surface_key(surface, keyEvent)
-    } ?? {
-        keyEvent.text = nil
-        return ghostty_surface_key(surface, keyEvent)
-    }()
-}
-
-private func modifierAction(for event: NSEvent) -> ghostty_input_action_e {
-    let rawFlags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-    switch event.keyCode {
-    case 0x39:
-        return rawFlags.contains(.capsLock) ? GHOSTTY_ACTION_PRESS : GHOSTTY_ACTION_RELEASE
-    case 0x38, 0x3C:
-        return rawFlags.contains(.shift) ? GHOSTTY_ACTION_PRESS : GHOSTTY_ACTION_RELEASE
-    case 0x3B, 0x3E:
-        return rawFlags.contains(.control) ? GHOSTTY_ACTION_PRESS : GHOSTTY_ACTION_RELEASE
-    case 0x3A, 0x3D:
-        return rawFlags.contains(.option) ? GHOSTTY_ACTION_PRESS : GHOSTTY_ACTION_RELEASE
-    case 0x37, 0x36:
-        return rawFlags.contains(.command) ? GHOSTTY_ACTION_PRESS : GHOSTTY_ACTION_RELEASE
-    default:
-        return GHOSTTY_ACTION_RELEASE
-    }
-}
-
-private func ghosttyMods(from flags: NSEvent.ModifierFlags) -> ghostty_input_mods_e {
-    var mods = GHOSTTY_MODS_NONE.rawValue
-
-    if flags.contains(.shift) { mods |= GHOSTTY_MODS_SHIFT.rawValue }
-    if flags.contains(.control) { mods |= GHOSTTY_MODS_CTRL.rawValue }
-    if flags.contains(.option) { mods |= GHOSTTY_MODS_ALT.rawValue }
-    if flags.contains(.command) { mods |= GHOSTTY_MODS_SUPER.rawValue }
-    if flags.contains(.capsLock) { mods |= GHOSTTY_MODS_CAPS.rawValue }
-
-    let rawFlags = flags.rawValue
-    if rawFlags & UInt(NX_DEVICERSHIFTKEYMASK) != 0 { mods |= GHOSTTY_MODS_SHIFT_RIGHT.rawValue }
-    if rawFlags & UInt(NX_DEVICERCTLKEYMASK) != 0 { mods |= GHOSTTY_MODS_CTRL_RIGHT.rawValue }
-    if rawFlags & UInt(NX_DEVICERALTKEYMASK) != 0 { mods |= GHOSTTY_MODS_ALT_RIGHT.rawValue }
-    if rawFlags & UInt(NX_DEVICERCMDKEYMASK) != 0 { mods |= GHOSTTY_MODS_SUPER_RIGHT.rawValue }
-
-    return ghostty_input_mods_e(mods)
-}
-
-private func ghosttyMouseButton(for buttonNumber: Int) -> ghostty_input_mouse_button_e {
-    switch buttonNumber {
-    case 0: return GHOSTTY_MOUSE_LEFT
-    case 1: return GHOSTTY_MOUSE_RIGHT
-    case 2: return GHOSTTY_MOUSE_MIDDLE
-    case 3: return GHOSTTY_MOUSE_EIGHT
-    case 4: return GHOSTTY_MOUSE_NINE
-    case 5: return GHOSTTY_MOUSE_SIX
-    case 6: return GHOSTTY_MOUSE_SEVEN
-    case 7: return GHOSTTY_MOUSE_FOUR
-    case 8: return GHOSTTY_MOUSE_FIVE
-    case 9: return GHOSTTY_MOUSE_TEN
-    case 10: return GHOSTTY_MOUSE_ELEVEN
-    default: return GHOSTTY_MOUSE_UNKNOWN
-    }
-}
 
 private extension String {
     var nilIfEmpty: String? {

@@ -3,6 +3,8 @@ import Testing
 import Editor
 @testable import mac_client
 
+// swiftlint:disable type_body_length
+
 private actor LoadCounter {
     private var count = 0
 
@@ -288,6 +290,102 @@ struct EditorSessionTests {
         #expect(await previewCalls.value() == 2)
         #expect(await builderCalls.value() == 2)
     }
+
+    @Test("Present find seeds from the current selection and selects the first match")
+    @MainActor
+    func presentFindSeedsFromSelectionAndSelectsFirstMatch() async throws {
+        let url = URL(fileURLWithPath: "/tmp/FindSeed.swift")
+        let session = EditorSession(url: url) { _ in
+            await MainActor.run {
+                EditorDocument(content: "let value = value\n")
+            }
+        }
+
+        session.open(url)
+
+        #expect(
+            await waitUntil {
+                session.document?.content == "let value = value\n"
+            }
+        )
+
+        session.document?.applyNavigationTarget(
+            .match(EditorSearchMatch(startLine: 0, startColumn: 4, endLine: 0, endColumn: 9))
+        )
+
+        session.presentFind()
+
+        #expect(session.isFindPresented)
+        #expect(session.findQuery == "value")
+        #expect(session.findMatches.count == 2)
+        #expect(session.activeFindMatchIndex == 0)
+        #expect(session.navigationTarget == .match(session.findMatches[0]))
+        #expect(session.navigationRequestID > 0)
+    }
+
+    @Test("Pending navigation is preserved until the document is available")
+    @MainActor
+    func pendingNavigationAppliesWhenDocumentLoads() async throws {
+        let url = URL(fileURLWithPath: "/tmp/PendingNavigation.swift")
+        let session = EditorSession(
+            url: url,
+            previewLoader: { _ in
+                EditorSessionPreview(content: "alpha beta gamma", language: "swift")
+            },
+            documentBuilder: { _, preview in
+                try await Task.sleep(for: .milliseconds(40))
+                return try await EditorDocument.prepareTextDocument(content: preview.content ?? "")
+            }
+        )
+
+        let targetMatch = EditorSearchMatch(
+            startLine: 0,
+            startColumn: 6,
+            endLine: 0,
+            endColumn: 10
+        )
+        session.navigate(to: .match(targetMatch), focusEditor: false)
+        session.open(url)
+
+        #expect(
+            await waitUntil {
+                session.document?.selectedText == "beta" &&
+                    session.navigationTarget == .match(targetMatch)
+            }
+        )
+    }
+
+    @Test("Dismiss find clears match state and refocuses the editor")
+    @MainActor
+    func dismissFindClearsMatchStateAndRequestsFocus() async throws {
+        let url = URL(fileURLWithPath: "/tmp/DismissFind.swift")
+        let session = EditorSession(url: url) { _ in
+            await MainActor.run {
+                EditorDocument(content: "let value = value\n")
+            }
+        }
+
+        session.open(url)
+
+        #expect(
+            await waitUntil {
+                session.document?.content == "let value = value\n"
+            }
+        )
+
+        session.document?.applyNavigationTarget(
+            .match(EditorSearchMatch(startLine: 0, startColumn: 4, endLine: 0, endColumn: 9))
+        )
+        session.presentFind()
+
+        let focusRequestID = session.focusRequestID
+        session.dismissFind()
+
+        #expect(session.isFindPresented == false)
+        #expect(session.findMatches.isEmpty)
+        #expect(session.activeFindMatchIndex == nil)
+        #expect(session.focusRequestID == focusRequestID + 1)
+    }
 }
 
 @MainActor
@@ -308,3 +406,5 @@ private func waitUntil(
 
     return condition()
 }
+
+// swiftlint:enable type_body_length

@@ -100,7 +100,7 @@ struct ProjectPickerView: View {
                     HStack(spacing: DevysSpacing.space2) {
                         Text("> restore previous session")
                             .font(DevysTypography.sm)
-                            .foregroundStyle(theme.accent)
+                            .foregroundStyle(theme.visibleAccent)
                         Text("reopen repositories and workspace state")
                             .font(DevysTypography.xs)
                             .foregroundStyle(theme.textTertiary)

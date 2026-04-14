@@ -120,6 +120,18 @@ private let reservedWorkspaceShellShortcutBindings: [ReservedWorkspaceShellShort
         title: "Open Command Palette"
     ),
     .init(
+        binding: ShortcutBinding(key: "p", modifiers: ShortcutModifierSet(command: true)),
+        title: "Open Quickly"
+    ),
+    .init(
+        binding: ShortcutBinding(key: "f", modifiers: ShortcutModifierSet(command: true)),
+        title: "Find"
+    ),
+    .init(
+        binding: ShortcutBinding(key: "f", modifiers: ShortcutModifierSet(command: true, shift: true)),
+        title: "Find In Files"
+    ),
+    .init(
         binding: ShortcutBinding(
             key: "n",
             modifiers: ShortcutModifierSet(command: true, control: true, shift: true)

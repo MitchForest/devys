@@ -36,6 +36,15 @@ extension Notification.Name {
     /// Present the global command palette
     static let devysOpenCommandPalette = Notification.Name("devys.openCommandPalette")
 
+    /// Present quick-open file search for the active workspace
+    static let devysOpenFileSearch = Notification.Name("devys.openFileSearch")
+
+    /// Present ripgrep-backed text search for the active workspace
+    static let devysOpenTextSearch = Notification.Name("devys.openTextSearch")
+
+    /// Present the active editor find bar
+    static let devysShowEditorFind = Notification.Name("devys.showEditorFind")
+
     /// Select the next visible workspace in navigator order
     static let devysSelectNextWorkspace = Notification.Name("devys.selectNextWorkspace")
 

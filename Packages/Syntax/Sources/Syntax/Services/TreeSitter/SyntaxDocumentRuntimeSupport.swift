@@ -29,16 +29,17 @@ enum SyntaxDocumentRuntimeSupport {
     static func makeLayerContentSnapshot(
         from snapshot: DocumentSnapshot
     ) -> LanguageLayer.ContentSnapshot {
-        LanguageLayer.ContentSnapshot(
+        let utf16CodeUnits = Array(documentText(from: snapshot).utf16)
+        return LanguageLayer.ContentSnapshot(
             readHandler: { byteIndex, _ in
                 readData(
                     atByteIndex: byteIndex,
-                    in: snapshot,
+                    utf16CodeUnits: utf16CodeUnits,
                     chunkUTF16Length: 1024
                 )
             },
             textProvider: { range, _ in
-                text(inUTF16Range: range, snapshot: snapshot)
+                text(inUTF16Range: range, utf16CodeUnits: utf16CodeUnits)
             }
         )
     }
@@ -168,36 +169,33 @@ enum SyntaxDocumentRuntimeSupport {
 
     private static func readData(
         atByteIndex byteIndex: Int,
-        in snapshot: DocumentSnapshot,
+        utf16CodeUnits: [UInt16],
         chunkUTF16Length: Int
     ) -> Data? {
         let startUTF16 = max(0, byteIndex / 2)
-        guard startUTF16 < snapshot.utf16Length else { return nil }
+        guard startUTF16 < utf16CodeUnits.count else { return nil }
 
-        let endUTF16 = min(snapshot.utf16Length, startUTF16 + chunkUTF16Length)
+        let endUTF16 = min(utf16CodeUnits.count, startUTF16 + chunkUTF16Length)
         guard endUTF16 > startUTF16 else { return nil }
 
-        return text(inUTF16Range: NSRange(startUTF16..<endUTF16), snapshot: snapshot)?
-            .data(using: nativeUTF16Encoding)
+        let chunk = Array(utf16CodeUnits[startUTF16..<endUTF16])
+        return chunk.withUnsafeBytes { buffer in
+            Data(buffer)
+        }
     }
 
     private static func text(
         inUTF16Range range: NSRange,
-        snapshot: DocumentSnapshot
+        utf16CodeUnits: [UInt16]
     ) -> String? {
-        let lowerBound = max(0, min(range.location, snapshot.utf16Length))
+        let lowerBound = max(0, min(range.location, utf16CodeUnits.count))
         let upperBound = max(
             lowerBound,
-            min(range.location + range.length, snapshot.utf16Length)
+            min(range.location + range.length, utf16CodeUnits.count)
         )
         guard upperBound > lowerBound else { return "" }
 
-        let startPoint = snapshot.point(at: lowerBound, encoding: .utf16)
-        let endPoint = snapshot.point(at: upperBound, encoding: .utf16)
-        let startUTF8 = snapshot.offset(of: startPoint, encoding: .utf8)
-        let endUTF8 = snapshot.offset(of: endPoint, encoding: .utf8)
-
-        return snapshot.slice(TextByteRange(startUTF8, endUTF8)).text
+        return String(decoding: utf16CodeUnits[lowerBound..<upperBound], as: UTF16.self)
     }
 
     private static func utf16Offset(
@@ -259,11 +257,4 @@ enum SyntaxDocumentRuntimeSupport {
         )
     }
 
-    private static var nativeUTF16Encoding: String.Encoding {
-#if _endian(little)
-        .utf16LittleEndian
-#else
-        .utf16BigEndian
-#endif
-    }
 }

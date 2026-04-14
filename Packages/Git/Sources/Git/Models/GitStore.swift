@@ -126,7 +126,10 @@ public final class GitStore {
     let gitService: any GitService
     private let projectFolder: URL?
     private let fileWatchServiceFactory: (URL) -> FileWatchService
+    private let metadataWatcherFactory: (URL) -> any GitRepositoryMetadataWatcher
     private var fileWatchService: FileWatchService?
+    private var metadataWatcher: (any GitRepositoryMetadataWatcher)?
+    private let refreshDebounceNanoseconds: UInt64
 
     // MARK: - Background Tasks
 
@@ -137,24 +140,34 @@ public final class GitStore {
     
     /// Guard against concurrent refreshes to prevent overlapping UI updates.
     private var isRefreshing = false
+    private var pendingMetadataInvalidation = false
+    private var lastObservedMetadataSnapshot: GitRepositoryMetadataSnapshot?
 
     // MARK: - Initialization
 
     public convenience init(projectFolder: URL?) {
         self.init(
             projectFolder: projectFolder,
-            gitService: DefaultGitService(repositoryURL: projectFolder)
-        ) { RecursiveFileWatchService(rootURL: $0) }
+            gitService: DefaultGitService(repositoryURL: projectFolder),
+            fileWatchServiceFactory: { RecursiveFileWatchService(rootURL: $0) },
+            metadataWatcherFactory: { DefaultGitRepositoryMetadataWatcher(repositoryURL: $0) }
+        )
     }
 
     init(
         projectFolder: URL?,
         gitService: any GitService,
-        fileWatchServiceFactory: @escaping (URL) -> FileWatchService
+        fileWatchServiceFactory: @escaping (URL) -> FileWatchService,
+        metadataWatcherFactory: @escaping (URL) -> any GitRepositoryMetadataWatcher = {
+            DefaultGitRepositoryMetadataWatcher(repositoryURL: $0)
+        },
+        refreshDebounceNanoseconds: UInt64 = 300_000_000
     ) {
         self.projectFolder = projectFolder
         self.gitService = gitService
         self.fileWatchServiceFactory = fileWatchServiceFactory
+        self.metadataWatcherFactory = metadataWatcherFactory
+        self.refreshDebounceNanoseconds = refreshDebounceNanoseconds
     }
 
 }
@@ -173,6 +186,7 @@ extension GitStore {
         diffTask = nil
         refreshDebounceTask?.cancel()
         refreshDebounceTask = nil
+        stopMetadataWatching()
     }
 
     // MARK: - File Watching
@@ -183,21 +197,39 @@ extension GitStore {
         if fileWatchService == nil {
             fileWatchService = fileWatchServiceFactory(projectFolder)
         }
-        fileWatchService?.onFileChange = { [weak self] _, url in
-            // Ignore changes inside .git/ directory — git CLI operations
-            // (status, diff, etc.) modify .git/index and other internal files,
-            // which would otherwise create a refresh → file-change → refresh loop.
-            // Keep the top-level `.git` entry visible so terminal-side `git init`
-            // or repository removal can flip source-control capability live.
-            let pathString = url.path
-            guard !pathString.contains("/.git/") else {
-                return
-            }
-            Task { @MainActor in
-                self?.scheduleRefresh()
+        fileWatchService?.onFileChange = { [weak self] changeType, url in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if self.isRepositoryRootGitEntry(url) {
+                    if self.shouldReconcileRepositoryAvailability(
+                        for: url,
+                        changeType: changeType
+                    ) {
+                        let isRepositoryAvailable = await self.reconcileRepositoryAvailability(
+                            forceMetadataRestart: true
+                        )
+                        if isRepositoryAvailable {
+                            self.scheduleRefresh()
+                        }
+                    }
+                    return
+                }
+
+                // Ignore changes inside .git/ directory — git CLI operations
+                // (status, diff, etc.) modify .git/index and other internal files,
+                // which would otherwise create a refresh → file-change → refresh loop.
+                let pathString = url.path
+                guard !pathString.contains("/.git/"),
+                      !pathString.hasSuffix("/.git") else {
+                    return
+                }
+                self.scheduleRefresh()
             }
         }
         fileWatchService?.startWatching()
+        if isRepositoryAvailable {
+            configureMetadataWatcherIfNeeded()
+        }
     }
 
     /// Stop filesystem watching for repository changes.
@@ -206,13 +238,20 @@ extension GitStore {
         fileWatchService = nil
         refreshDebounceTask?.cancel()
         refreshDebounceTask = nil
+        stopMetadataWatching()
     }
 
     private func scheduleRefresh() {
         refreshDebounceTask?.cancel()
         refreshDebounceTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            await self?.refresh()
+            guard let self else { return }
+            do {
+                try await Task.sleep(nanoseconds: self.refreshDebounceNanoseconds)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            await self.refresh()
         }
     }
     
@@ -224,11 +263,14 @@ extension GitStore {
             applyRepositoryAvailability(false)
             return
         }
-        guard await syncRepositoryAvailability() else { return }
         
-        // Prevent concurrent refreshes — overlapping calls cause rapid
-        // isLoading toggling (blinking) and duplicate diff reads.
-        guard !isRefreshing else { return }
+        // Prevent overlapping refresh work, but let concurrent callers wait
+        // for the in-flight refresh so explicit hydrations cannot race
+        // against watcher-triggered updates and observe stale state.
+        while isRefreshing {
+            await Task.yield()
+        }
+
         isRefreshing = true
         defer { isRefreshing = false }
         
@@ -239,24 +281,156 @@ extension GitStore {
         
         isLoading = true
         errorMessage = nil
+        pendingMetadataInvalidation = false
         
         do {
+            guard await ensureRepositoryAvailability() else {
+                isLoading = false
+                return
+            }
+
             let status = try await gitService.status()
             let info = try await gitService.repositoryInfo()
             
             changes = status
             onChangesDidUpdate?(status)
             repoInfo = info
+            syncObservedMetadataSnapshot()
             
-            // Refresh diff for selected file if any
-            if let path = selectedFilePath {
-                await refreshDiff(for: path, staged: isViewingStaged)
-            }
+            await refreshSelectionAfterStatusUpdate(status)
         } catch {
-            setError(error)
+            if isNotRepositoryError(error) {
+                _ = await reconcileRepositoryAvailability(forceMetadataRestart: true)
+            } else {
+                setError(error)
+            }
         }
 
+        let shouldScheduleFollowUpRefresh = pendingMetadataInvalidation && metadataSnapshotHasChanged()
+        pendingMetadataInvalidation = false
         isLoading = false
+
+        if shouldScheduleFollowUpRefresh {
+            scheduleRefresh()
+        }
+    }
+
+    private func refreshSelectionAfterStatusUpdate(_ status: [GitFileChange]) async {
+        guard let selectedFilePath else { return }
+
+        let matchingChanges = status.filter { $0.path == selectedFilePath }
+        guard !matchingChanges.isEmpty else {
+            clearSelectedFileState()
+            return
+        }
+
+        if !matchingChanges.contains(where: { $0.isStaged == isViewingStaged }),
+           let fallback = matchingChanges.first {
+            isViewingStaged = fallback.isStaged
+        }
+
+        await refreshDiff(for: selectedFilePath, staged: isViewingStaged)
+    }
+
+    private func clearSelectedFileState() {
+        diffTask?.cancel()
+        diffTask = nil
+        selectedFilePath = nil
+        selectedDiff = nil
+        focusedHunkIndex = nil
+        isViewingStaged = false
+    }
+
+    func configureMetadataWatcherIfNeeded(forceRestart: Bool = false) {
+        guard let projectFolder else { return }
+        let hasResolvableGitDirectory =
+            GitRepositoryReferenceResolver.resolveGitDirectory(for: projectFolder) != nil
+
+        if forceRestart || !hasResolvableGitDirectory {
+            stopMetadataWatching()
+        }
+
+        guard hasResolvableGitDirectory, metadataWatcher == nil else { return }
+
+        let watcher = metadataWatcherFactory(projectFolder)
+        watcher.onChange = { [weak self] _ in
+            Task { @MainActor [weak self] in
+                await self?.handleMetadataInvalidation()
+            }
+        }
+        watcher.startWatching()
+        metadataWatcher = watcher
+        syncObservedMetadataSnapshot()
+    }
+
+    func stopMetadataWatching() {
+        metadataWatcher?.stopWatching()
+        metadataWatcher = nil
+        lastObservedMetadataSnapshot = nil
+        pendingMetadataInvalidation = false
+    }
+
+    private func isRepositoryRootGitEntry(_ url: URL) -> Bool {
+        guard let projectFolder else { return false }
+        let normalizedProjectFolder = projectFolder.standardizedFileURL
+        let normalizedURL = url.standardizedFileURL
+        return normalizedURL.deletingLastPathComponent() == normalizedProjectFolder
+            && normalizedURL.lastPathComponent == ".git"
+    }
+
+    private func shouldReconcileRepositoryAvailability(
+        for url: URL,
+        changeType: FileChangeType
+    ) -> Bool {
+        guard isRepositoryRootGitEntry(url) else { return false }
+
+        switch changeType {
+        case .created, .deleted, .renamed, .overflow:
+            return true
+        case .modified:
+            return isRepositoryReferenceFile()
+        }
+    }
+
+    private func isRepositoryReferenceFile() -> Bool {
+        guard let projectFolder else { return false }
+        let gitURL = projectFolder.appendingPathComponent(".git")
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: gitURL.path, isDirectory: &isDirectory) else {
+            return false
+        }
+        return !isDirectory.boolValue
+    }
+
+    private func handleMetadataInvalidation() async {
+        guard isRepositoryAvailable else { return }
+
+        guard let snapshot = currentMetadataSnapshot() else {
+            _ = await reconcileRepositoryAvailability(forceMetadataRestart: true)
+            return
+        }
+
+        guard snapshot != lastObservedMetadataSnapshot else { return }
+
+        if isRefreshing {
+            pendingMetadataInvalidation = true
+            return
+        }
+
+        scheduleRefresh()
+    }
+
+    private func currentMetadataSnapshot() -> GitRepositoryMetadataSnapshot? {
+        guard let projectFolder else { return nil }
+        return GitRepositoryReferenceResolver.metadataSnapshot(for: projectFolder)
+    }
+
+    func syncObservedMetadataSnapshot() {
+        lastObservedMetadataSnapshot = currentMetadataSnapshot()
+    }
+
+    private func metadataSnapshotHasChanged() -> Bool {
+        currentMetadataSnapshot() != lastObservedMetadataSnapshot
     }
 
     /// Check if PR functionality is available.
@@ -277,7 +451,7 @@ extension GitStore {
 
         do {
             try await gitService.initializeRepository()
-            _ = await syncRepositoryAvailability()
+            _ = await reconcileRepositoryAvailability(forceMetadataRestart: true)
             await refresh()
             await checkPRAvailability()
         } catch {
@@ -531,185 +705,6 @@ extension GitStore {
         }
         
         isLoading = false
-    }
-    
-    // MARK: - Remote Operations
-    
-    /// Fetch from the remote.
-    public func fetch() async {
-        guard await ensureRepositoryAvailability() else { return }
-
-        isLoading = true
-        errorMessage = nil
-
-        do {
-            try await gitService.fetch()
-            await refresh()
-        } catch {
-            if isNotRepositoryError(error) {
-                applyRepositoryAvailability(false)
-            } else if !(error is CancellationError) {
-                errorMessage = formatFetchError(error)
-            }
-        }
-
-        isLoading = false
-    }
-
-    /// Push to remote.
-    public func push() async {
-        guard await ensureRepositoryAvailability() else { return }
-        
-        isLoading = true
-        errorMessage = nil
-        
-        do {
-            try await gitService.push()
-            await refresh()
-        } catch {
-            if isNotRepositoryError(error) {
-                applyRepositoryAvailability(false)
-            } else if !(error is CancellationError) {
-                errorMessage = formatPushError(error)
-            }
-        }
-        
-        isLoading = false
-    }
-    
-    /// Pull from remote.
-    public func pull() async {
-        guard await ensureRepositoryAvailability() else { return }
-        
-        isLoading = true
-        errorMessage = nil
-        
-        do {
-            try await gitService.pull()
-            await refresh()
-        } catch {
-            if isNotRepositoryError(error) {
-                applyRepositoryAvailability(false)
-            } else if !(error is CancellationError) {
-                errorMessage = formatPullError(error)
-            }
-        }
-        
-        isLoading = false
-    }
-    
-    private func formatFetchError(_ error: Error) -> String {
-        "Fetch failed: \(error.localizedDescription)"
-    }
-
-    private func formatPushError(_ error: Error) -> String {
-        let message = error.localizedDescription.lowercased()
-        if message.contains("non-fast-forward") || message.contains("fetch first") || message.contains("rejected") {
-            return "Push rejected: remote has new commits. Pull first and resolve any conflicts."
-        }
-        return "Push failed: \(error.localizedDescription)"
-    }
-    
-    private func formatPullError(_ error: Error) -> String {
-        let message = error.localizedDescription.lowercased()
-        if message.contains("conflict") || message.contains("merge") || message.contains("unmerged") {
-            return "Pull resulted in merge conflicts. Resolve conflicts and commit."
-        }
-        return "Pull failed: \(error.localizedDescription)"
-    }
-    
-    // MARK: - Branch Operations
-    
-    /// Load all branches.
-    func loadBranches() async -> [GitBranch] {
-        guard await ensureRepositoryAvailability() else { return [] }
-        
-        do {
-            return try await gitService.branches()
-        } catch {
-            setError(error, prefix: "Failed to load branches")
-            return []
-        }
-    }
-    
-    /// Checkout a branch.
-    func checkout(branch: String) async {
-        guard await ensureRepositoryAvailability() else { return }
-        
-        isLoading = true
-        errorMessage = nil
-        
-        do {
-            try await gitService.checkout(branch: branch)
-            await refresh()
-        } catch {
-            setError(error, prefix: "Checkout failed")
-        }
-        
-        isLoading = false
-    }
-    
-    /// Create a new branch.
-    func createBranch(name: String) async {
-        guard await ensureRepositoryAvailability() else { return }
-        
-        isLoading = true
-        errorMessage = nil
-        
-        do {
-            try await gitService.createBranch(name: name)
-            await refresh()
-        } catch {
-            setError(error, prefix: "Failed to create branch")
-        }
-        
-        isLoading = false
-    }
-    
-    /// Delete a branch.
-    func deleteBranch(name: String, force: Bool = false) async {
-        guard await ensureRepositoryAvailability() else { return }
-        
-        isLoading = true
-        errorMessage = nil
-        
-        do {
-            try await gitService.deleteBranch(name: name, force: force)
-            await refresh()
-        } catch {
-            setError(error, prefix: "Failed to delete branch")
-        }
-        
-        isLoading = false
-    }
-    
-    // MARK: - Commit History
-    
-    /// Load commit history.
-    func loadCommitHistory(count: Int = 50) async {
-        guard await ensureRepositoryAvailability() else { return }
-        
-        isShowingHistory = true
-        isShowingPRDetail = false
-        
-        do {
-            commits = try await gitService.log(count: count)
-        } catch {
-            setError(error, prefix: "Failed to load commits")
-            commits = []
-        }
-    }
-    
-    /// Show diff for a commit.
-    func showCommit(_ commit: GitCommit) async -> String? {
-        guard await ensureRepositoryAvailability() else { return nil }
-        
-        do {
-            return try await gitService.show(commit: commit.hash)
-        } catch {
-            setError(error, prefix: "Failed to load commit diff")
-            return nil
-        }
     }
     
 }

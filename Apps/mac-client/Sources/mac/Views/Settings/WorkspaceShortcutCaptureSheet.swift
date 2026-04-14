@@ -48,7 +48,7 @@ struct WorkspaceShortcutCaptureSheet: View {
 
                 Text(draftBinding.displayString)
                     .font(DevysTypography.xl)
-                    .foregroundStyle(theme.accent)
+                    .foregroundStyle(theme.visibleAccent)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(16)
                     .background(theme.surface)
