@@ -14,8 +14,11 @@ excluded:
   - Packages/*/Tests
   - .derivedData
   - DerivedData
+  - Apps/_archive
+  - Apps/*/_archive
   - Packages/Syntax/Sources/SwiftTreeSitter
   - Packages/Syntax/Sources/SwiftTreeSitterLayer
+  - Packages/_archive
 
 # Rules configuration
 disabled_rules:
@@ -181,3 +184,25 @@ custom_rules:
     message: "Use proper logging instead of print()"
     severity: warning
     excluded: ".*Tests\\.swift"
+
+  no_raw_hex_colors:
+    name: "No raw hex colors in feature views"
+    regex: 'Color\(hex:\s*"#'
+    message: "Use theme tokens instead of raw hex colors. Only Packages/UI may define colors."
+    severity: warning
+    included: "(Apps/mac-client/Sources/mac|Packages/.*/Sources/).+\\.swift"
+    excluded: "(Packages/UI|Apps/.*/_archive|Packages/_archive|Apps/mac-client/Sources/mac/Models/ThemeManager\\.swift)"
+
+  no_raw_system_font:
+    name: "No raw system fonts in migrated shell"
+    regex: '\\.font\(\\.system\(size:'
+    message: "Use Typography tokens (Typography.body, Typography.label, etc.) instead of raw .font(.system(size:))"
+    severity: warning
+    included: "(Apps/mac-client/Sources/mac/Views/Window/ContentView.*\\.swift|Apps/mac-client/Sources/mac/Views/Sidebar/UnifiedWorkspaceSidebar\\.swift|Apps/mac-client/Sources/mac/Views/Sidebar/WorkspacePortsSidebarView\\.swift|Packages/Split/Sources/Split/.*\\.swift|Packages/AppFeatures/Sources/AppFeatures/.*\\.swift)"
+
+  no_terminal_commands_outside_terminal:
+    name: "No terminal UI components outside terminal views"
+    regex: "\\b(TerminalDivider|TerminalCommandButton|TerminalGlow)\\b"
+    message: "Use design system components (Separator, ActionButton) instead."
+    severity: warning
+    included: "Apps/.*/Views/.*\\.swift"

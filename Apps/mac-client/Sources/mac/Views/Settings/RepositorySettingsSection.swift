@@ -25,12 +25,12 @@ struct RepositorySettingsSection: View {
                         .foregroundStyle(theme.text)
 
                     Text(repositoryRootURL.path)
-                        .font(DevysTypography.xs)
+                        .font(DevysTypography.caption)
                         .foregroundStyle(theme.textSecondary)
                         .textSelection(.enabled)
                 }
 
-                TerminalDivider()
+                Separator()
 
                 WorkspaceCreationDefaultsEditorView(
                     defaults: Binding(
@@ -41,21 +41,21 @@ struct RepositorySettingsSection: View {
                     )
                 )
 
-                TerminalDivider()
+                Separator()
 
                 LauncherTemplateEditorView(
                     title: "Claude",
                     template: launcherBinding(\.claudeLauncher)
                 )
 
-                TerminalDivider()
+                Separator()
 
                 LauncherTemplateEditorView(
                     title: "Codex",
                     template: launcherBinding(\.codexLauncher)
                 )
 
-                TerminalDivider()
+                Separator()
 
                 StartupProfilesEditorView(
                     profiles: Binding(
@@ -78,7 +78,7 @@ struct RepositorySettingsSection: View {
                     )
                 )
 
-                TerminalDivider()
+                Separator()
 
                 RepositoryPortLabelsEditorView(
                     labels: Binding(
@@ -125,8 +125,7 @@ private struct WorkspaceCreationDefaultsEditorView: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 labeledField("default_base_branch") {
-                    TextField("main", text: $defaults.defaultBaseBranch)
-                        .textFieldStyle(.roundedBorder)
+                    TextInput("main", text: $defaults.defaultBaseBranch)
                 }
 
                 Toggle(isOn: $defaults.copyIgnoredFiles) {
@@ -135,7 +134,7 @@ private struct WorkspaceCreationDefaultsEditorView: View {
                             .font(DevysTypography.label)
                             .foregroundStyle(theme.text)
                         Text("Include ignored files when creating a new workspace copy")
-                            .font(DevysTypography.xs)
+                            .font(DevysTypography.caption)
                             .foregroundStyle(theme.textSecondary)
                     }
                 }
@@ -147,7 +146,7 @@ private struct WorkspaceCreationDefaultsEditorView: View {
                             .font(DevysTypography.label)
                             .foregroundStyle(theme.text)
                         Text("Include untracked files when creating a new workspace copy")
-                            .font(DevysTypography.xs)
+                            .font(DevysTypography.caption)
                             .foregroundStyle(theme.textSecondary)
                     }
                 }
@@ -183,18 +182,15 @@ private struct LauncherTemplateEditorView: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 labeledField("base_command") {
-                    TextField("claude", text: $template.executable)
-                        .textFieldStyle(.roundedBorder)
+                    TextInput("claude", text: $template.executable)
                 }
 
                 labeledField("model_override") {
-                    TextField("optional", text: optionalBinding(\.model))
-                        .textFieldStyle(.roundedBorder)
+                    TextInput("optional", text: optionalBinding(\.model))
                 }
 
                 labeledField("reasoning_level") {
-                    TextField("optional", text: optionalBinding(\.reasoningLevel))
-                        .textFieldStyle(.roundedBorder)
+                    TextInput("optional", text: optionalBinding(\.reasoningLevel))
                 }
 
                 Toggle(isOn: $template.dangerousPermissions) {
@@ -203,7 +199,7 @@ private struct LauncherTemplateEditorView: View {
                             .font(DevysTypography.label)
                             .foregroundStyle(theme.text)
                         Text("Use the CLI's no-approval / bypass-permissions mode when available")
-                            .font(DevysTypography.xs)
+                            .font(DevysTypography.caption)
                             .foregroundStyle(theme.textSecondary)
                     }
                 }
@@ -221,14 +217,13 @@ private struct LauncherTemplateEditorView: View {
                 labeledField("extra_arguments") {
                     VStack(alignment: .leading, spacing: 6) {
                         TextEditor(text: argumentsBinding)
-                            .font(DevysTypography.sm)
+                            .font(DevysTypography.body)
                             .frame(minHeight: 72)
                             .padding(8)
-                            .background(theme.elevated)
-                            .clipShape(RoundedRectangle(cornerRadius: DevysSpacing.radiusSm))
+                            .inputChrome(.overlay)
 
                         Text("One argument per line. These are appended after model, reasoning, and permissions flags.")
-                            .font(DevysTypography.xs)
+                            .font(DevysTypography.caption)
                             .foregroundStyle(theme.textSecondary)
                     }
                 }
@@ -285,13 +280,13 @@ private struct StartupProfilesEditorView: View {
                         .font(DevysTypography.label)
                         .foregroundStyle(theme.text)
                     Text("Define multi-service startup profiles and choose the default Run behavior for a workspace.")
-                        .font(DevysTypography.xs)
+                        .font(DevysTypography.caption)
                         .foregroundStyle(theme.textSecondary)
                 }
 
                 Spacer()
 
-                Button("Add Profile") {
+                ActionButton("Add Profile", style: .ghost) {
                     let newProfile = StartupProfile(
                         displayName: "New Profile",
                         description: "",
@@ -304,7 +299,6 @@ private struct StartupProfilesEditorView: View {
                         defaultProfileID = newProfile.id
                     }
                 }
-                .buttonStyle(.bordered)
             }
 
             VStack(alignment: .leading, spacing: 6) {
@@ -314,7 +308,7 @@ private struct StartupProfilesEditorView: View {
 
                 if profiles.isEmpty {
                     Text("Add a startup profile to enable the toolbar Run action.")
-                        .font(DevysTypography.xs)
+                        .font(DevysTypography.caption)
                         .foregroundStyle(theme.textSecondary)
                 } else {
                     Picker("default_run_profile", selection: $defaultProfileID) {
@@ -326,42 +320,40 @@ private struct StartupProfilesEditorView: View {
                     .pickerStyle(.menu)
 
                     Text("The Run button launches this profile in the selected workspace.")
-                        .font(DevysTypography.xs)
+                        .font(DevysTypography.caption)
                         .foregroundStyle(theme.textSecondary)
                 }
             }
 
             if profiles.isEmpty {
                 Text("No startup profiles yet.")
-                    .font(DevysTypography.sm)
+                    .font(DevysTypography.body)
                     .foregroundStyle(theme.textSecondary)
             } else {
                 ForEach(Array(profiles.enumerated()), id: \.element.id) { index, profile in
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            TextField("Profile name", text: profileBinding(profile.id, \.displayName))
-                                .textFieldStyle(.roundedBorder)
+                            TextInput("Profile name", text: profileBinding(profile.id, \.displayName))
 
-                            Button(defaultProfileID == profile.id ? "Default" : "Set Default") {
+                            ActionButton(
+                                defaultProfileID == profile.id ? "Default" : "Set Default",
+                                style: defaultProfileID == profile.id ? .primary : .ghost
+                            ) {
                                 defaultProfileID = profile.id
                             }
-                            .buttonStyle(.bordered)
 
-                            Button("Remove") {
+                            ActionButton("Remove", style: .ghost, tone: .destructive) {
                                 profiles.removeAll { $0.id == profile.id }
                                 if defaultProfileID == profile.id {
                                     defaultProfileID = profiles.first?.id
                                 }
                             }
-                            .buttonStyle(.borderless)
-                            .foregroundStyle(DevysColors.error)
                         }
 
-                        TextField(
+                        TextInput(
                             "Description",
                             text: profileBinding(profile.id, \.description)
                         )
-                        .textFieldStyle(.roundedBorder)
 
                         VStack(alignment: .leading, spacing: 10) {
                             ForEach(Array(profile.steps.enumerated()), id: \.element.id) { stepIndex, step in
@@ -372,28 +364,22 @@ private struct StartupProfilesEditorView: View {
                                 }
 
                                 if stepIndex < profile.steps.count - 1 {
-                                    TerminalDivider()
+                                    Separator()
                                 }
                             }
 
-                            Button("Add Step") {
+                            ActionButton("Add Step", style: .ghost) {
                                 appendStep(to: profile.id, count: profile.steps.count + 1)
                             }
-                            .buttonStyle(.bordered)
                         }
                         .padding(12)
-                        .background(theme.elevated)
-                        .clipShape(RoundedRectangle(cornerRadius: DevysSpacing.radiusSm))
+                        .elevation(.popover)
                     }
                     .padding(12)
-                    .background(theme.surface)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: DevysSpacing.radiusMd)
-                            .strokeBorder(theme.borderSubtle, lineWidth: 1)
-                    }
+                    .elevation(.card)
 
                     if index < profiles.count - 1 {
-                        TerminalDivider()
+                        Separator()
                     }
                 }
             }
@@ -457,21 +443,16 @@ private struct StartupProfileStepEditorView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                TextField("Step name", text: $step.displayName)
-                    .textFieldStyle(.roundedBorder)
+                TextInput("Step name", text: $step.displayName)
 
-                Button("Remove") {
+                ActionButton("Remove", style: .ghost, tone: .destructive) {
                     onRemove()
                 }
-                .buttonStyle(.borderless)
-                .foregroundStyle(DevysColors.error)
             }
 
-            TextField("Command", text: $step.command)
-                .textFieldStyle(.roundedBorder)
+            TextInput("Command", text: $step.command)
 
-            TextField("Working directory (relative to workspace)", text: $step.workingDirectory)
-                .textFieldStyle(.roundedBorder)
+            TextInput("Working directory (relative to workspace)", text: $step.workingDirectory)
 
             Picker("launch_mode", selection: $step.launchMode) {
                 ForEach(StartupProfileLaunchMode.allCases, id: \.self) { launchMode in
@@ -486,14 +467,13 @@ private struct StartupProfileStepEditorView: View {
                     .foregroundStyle(theme.text)
 
                 TextEditor(text: environmentBinding)
-                    .font(DevysTypography.sm)
+                    .font(DevysTypography.body)
                     .frame(minHeight: 64)
                     .padding(8)
-                    .background(theme.base)
-                    .clipShape(RoundedRectangle(cornerRadius: DevysSpacing.radiusSm))
+                    .inputChrome(.base)
 
                 Text("One KEY=value pair per line.")
-                    .font(DevysTypography.xs)
+                    .font(DevysTypography.caption)
                     .foregroundStyle(theme.textSecondary)
             }
         }

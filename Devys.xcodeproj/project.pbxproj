@@ -32,7 +32,7 @@
 
 /* Begin PBXFileReference section */
 		A1B2C3D40100000000000001 /* mac-clientTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "mac-clientTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
-		PRD001 /* mac-client.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "mac-client.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		PRD001 /* Devys.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Devys.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		RES001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		RES002 /* Devys.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Devys.entitlements; sourceTree = "<group>"; };
 		RES004 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -92,7 +92,7 @@
 		GRP003 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				PRD001 /* mac-client.app */,
+				PRD001 /* Devys.app */,
 				A1B2C3D40100000000000001 /* mac-clientTests.xctest */,
 			);
 			name = Products;
@@ -153,6 +153,7 @@
 			);
 			name = "mac-client";
 			packageProductDependencies = (
+				PKG017 /* AppFeatures */,
 				PKG001 /* Workspace */,
 				PKG002 /* Syntax */,
 				PKG003 /* UI */,
@@ -163,8 +164,8 @@
 				PKG015 /* GhosttyTerminal */,
 				PKG016 /* ACPClientKit */,
 			);
-			productName = "mac-client";
-			productReference = PRD001 /* mac-client.app */;
+			productName = Devys;
+			productReference = PRD001 /* Devys.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -202,6 +203,7 @@
 				PKR008 /* XCLocalSwiftPackageReference "Packages/Rendering" */,
 				PKR015 /* XCLocalSwiftPackageReference "Packages/GhosttyTerminal" */,
 				PKR016 /* XCLocalSwiftPackageReference "Packages/ACPClientKit" */,
+				PKR017 /* XCLocalSwiftPackageReference "Packages/AppFeatures" */,
 			);
 			productRefGroup = GRP003 /* Products */;
 			projectDirPath = "";
@@ -277,7 +279,7 @@
 				SWIFT_VERSION = 6.0;
 				SWIFT_WARN_CONCURRENCY = YES;
 				SWIFT_WARN_STRICT_CONCURRENCY = YES;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/mac-client.app/Contents/MacOS/mac-client";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Devys.app/Contents/MacOS/Devys";
 			};
 			name = Debug;
 		};
@@ -300,7 +302,7 @@
 				SWIFT_VERSION = 6.0;
 				SWIFT_WARN_CONCURRENCY = YES;
 				SWIFT_WARN_STRICT_CONCURRENCY = YES;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/mac-client.app/Contents/MacOS/mac-client";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Devys.app/Contents/MacOS/Devys";
 			};
 			name = Release;
 		};
@@ -448,6 +450,7 @@
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Apps/mac-client/Resources/Info.plist";
+				INFOPLIST_KEY_CFBundleName = Devys;
 				INFOPLIST_KEY_CFBundleDisplayName = Devys;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Devys. All rights reserved.";
@@ -456,8 +459,9 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0.0;
+				PRODUCT_MODULE_NAME = mac_client;
 				PRODUCT_BUNDLE_IDENTIFIER = com.devys.mac;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Devys;
 				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_STRICT_CONCURRENCY = complete;
@@ -483,6 +487,7 @@
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Apps/mac-client/Resources/Info.plist";
+				INFOPLIST_KEY_CFBundleName = Devys;
 				INFOPLIST_KEY_CFBundleDisplayName = Devys;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Devys. All rights reserved.";
@@ -491,8 +496,9 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0.0;
+				PRODUCT_MODULE_NAME = mac_client;
 				PRODUCT_BUNDLE_IDENTIFIER = com.devys.mac;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Devys;
 				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_STRICT_CONCURRENCY = complete;
@@ -575,6 +581,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/ACPClientKit;
 		};
+		PKR017 /* XCLocalSwiftPackageReference "Packages/AppFeatures" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/AppFeatures;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -622,6 +632,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = PKR016 /* XCLocalSwiftPackageReference "Packages/ACPClientKit" */;
 			productName = ACPClientKit;
+		};
+		PKG017 /* AppFeatures */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = PKR017 /* XCLocalSwiftPackageReference "Packages/AppFeatures" */;
+			productName = AppFeatures;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

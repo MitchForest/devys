@@ -234,7 +234,7 @@ struct WorktreeManagerTests {
     }
 }
 
-private final class InMemoryWorktreePersistenceService: WorktreePersistenceService {
+private final class InMemoryWorktreePersistenceService: WorktreePersistenceService, @unchecked Sendable {
     private var storedStates: [WorktreeState] = []
     private var storedSelection = WorktreeSelection.empty
 

@@ -38,11 +38,11 @@ struct NavigatorEdgeHandle: View {
 
     private var indicatorColor: Color {
         if isHovered {
-            return theme.visibleAccent.opacity(0.65)
+            return theme.accent.opacity(0.65)
         }
         if isExpanded {
             return theme.border
         }
-        return theme.borderSubtle.opacity(0.9)
+        return theme.border.opacity(0.9)
     }
 }

@@ -1,5 +1,6 @@
 // swiftlint:disable type_body_length
 import ACPClientKit
+import AppFeatures
 import Foundation
 import Testing
 import Workspace

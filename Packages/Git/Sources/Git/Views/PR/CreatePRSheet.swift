@@ -69,7 +69,7 @@ public struct CreatePRSheet: View {
                 HStack(spacing: 4) {
                     Text(branch)
                         .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundStyle(theme.visibleAccent)
+                        .foregroundStyle(theme.accent)
                     
                     Image(systemName: "arrow.right")
                         .font(.system(size: 9))
@@ -145,7 +145,7 @@ public struct CreatePRSheet: View {
                 .scrollContentBackground(.hidden)
                 .padding(8)
                 .background(Color.secondary.opacity(0.06))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
                 .frame(height: 150)
         }
     }

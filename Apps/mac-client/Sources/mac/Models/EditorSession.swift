@@ -650,8 +650,7 @@ final class EditorSessionPool {
 @MainActor
 @Observable
 final class EditorSessionRegistry {
-    static let shared = EditorSessionRegistry()
-    private init() {}
+    init() {}
 
     private(set) var sessions: [TabID: EditorSession] = [:]
 

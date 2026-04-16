@@ -3,6 +3,7 @@
 //
 // Copyright © 2026 Devys. All rights reserved.
 
+import AppFeatures
 import Foundation
 import Observation
 import Workspace
@@ -29,19 +30,27 @@ extension WorktreeMetadataCoordinator {
         return storesByRepositoryID[activeRepositoryID]
     }
 
+    var entriesByWorkspaceID: [Workspace.ID: WorktreeInfoEntry] {
+        storesByRepositoryID.values.reduce(into: [:]) { partialResult, store in
+            partialResult.merge(store.entriesById) { _, new in
+                new
+            }
+        }
+    }
+
     /// Cheap structural sync: prunes removed repos, ensures stores exist,
     /// updates activeRepositoryID. Does NOT call store.update() so no
     /// git operations are triggered.
-    func syncCatalogStructure(_ catalog: WindowWorkspaceCatalogStore) {
-        let repositoryIDs = Set(catalog.repositories.map(\.id))
+    func syncCatalogStructure(_ snapshot: WindowCatalogRuntimeSnapshot) {
+        let repositoryIDs = Set(snapshot.repositories.map(\.id))
 
         for repositoryID in Set(storesByRepositoryID.keys).subtracting(repositoryIDs) {
             storesByRepositoryID.removeValue(forKey: repositoryID)
         }
 
-        activeRepositoryID = catalog.selectedRepositoryID
+        activeRepositoryID = snapshot.selectedRepositoryID
 
-        for repository in catalog.repositories {
+        for repository in snapshot.repositories {
             _ = ensureStore(for: repository.id)
         }
     }
@@ -50,25 +59,25 @@ extension WorktreeMetadataCoordinator {
     /// which triggers git operations (branch, log, diff, status).
     /// Debounced at 200ms to coalesce rapid-fire calls during workspace
     /// switch/restore sequences.
-    func syncCatalog(_ catalog: WindowWorkspaceCatalogStore) {
+    func syncCatalog(_ snapshot: WindowCatalogRuntimeSnapshot) {
         // Always apply structural changes immediately (cheap)
-        syncCatalogStructure(catalog)
+        syncCatalogStructure(snapshot)
 
         // Debounce the expensive store.update() calls
         syncDebounceTask?.cancel()
         syncDebounceTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(200))
             guard !Task.isCancelled, let self else { return }
-            self.executeSyncCatalog(catalog)
+            self.executeSyncCatalog(snapshot)
         }
     }
 
-    private func executeSyncCatalog(_ catalog: WindowWorkspaceCatalogStore) {
-        for repository in catalog.repositories {
+    private func executeSyncCatalog(_ snapshot: WindowCatalogRuntimeSnapshot) {
+        for repository in snapshot.repositories {
             let store = ensureStore(for: repository.id)
-            let isActiveRepository = repository.id == catalog.selectedRepositoryID
-            let worktrees = catalog.worktreesByRepository[repository.id] ?? []
-            let selectedWorktreeID = isActiveRepository ? catalog.selectedWorkspaceID : nil
+            let isActiveRepository = repository.id == snapshot.selectedRepositoryID
+            let worktrees = snapshot.worktreesByRepository[repository.id] ?? []
+            let selectedWorktreeID = isActiveRepository ? snapshot.selectedWorkspaceID : nil
             let updateResult = store.update(
                 worktrees: worktrees,
                 repositoryRootURL: repository.rootURL,

@@ -3,11 +3,17 @@
 //
 // Copyright © 2026 Devys. All rights reserved.
 
+import AppFeatures
+import ComposableArchitecture
 import SwiftUI
 
 #Preview("Light Mode") {
     let container = AppContainer()
-    return ContentView()
+    let store = Store(initialState: WindowFeature.State()) {
+        WindowFeature()
+    }
+
+    return ContentView(store: store)
         .frame(width: 1200, height: 800)
         .environment(container)
         .environment(container.appSettings)
@@ -19,9 +25,12 @@ import SwiftUI
 #Preview("Dark Mode") {
     struct DarkPreview: View {
         let container = AppContainer()
+        let store = Store(initialState: WindowFeature.State()) {
+            WindowFeature()
+        }
 
         var body: some View {
-            ContentView()
+            ContentView(store: store)
                 .frame(width: 1200, height: 800)
                 .preferredColorScheme(.dark)
                 .environment(container)

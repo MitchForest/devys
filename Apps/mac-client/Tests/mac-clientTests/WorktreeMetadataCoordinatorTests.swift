@@ -10,8 +10,14 @@ struct WorktreeMetadataCoordinatorTests {
     @MainActor
     func keepsInactiveRepositoriesColdUntilSelected() async throws {
         let fixture = await makeFixture()
-        fixture.catalog.selectWorkspace(fixture.firstWorktree.id, in: fixture.firstRepository.id)
-        fixture.coordinator.syncCatalog(fixture.catalog)
+        fixture.coordinator.syncCatalog(
+            runtimeSnapshot(
+                repositories: fixture.repositories,
+                worktreesByRepository: fixture.worktreesByRepository,
+                selectedRepositoryID: fixture.firstRepository.id,
+                selectedWorkspaceID: fixture.firstWorktree.id
+            )
+        )
 
         let activeFirstStore = try #require(fixture.coordinator.activeStore)
         await waitForEntry(in: activeFirstStore, worktreeID: fixture.firstWorktree.id)
@@ -25,8 +31,14 @@ struct WorktreeMetadataCoordinatorTests {
         #expect(await fixture.provider.requestedWorktreeIDs() == [fixture.firstWorktree.id])
         #expect(await fixture.statusProvider.requestedWorktreeIDs() == [fixture.firstWorktree.id])
 
-        fixture.catalog.selectWorkspace(fixture.secondWorktree.id, in: fixture.secondRepository.id)
-        fixture.coordinator.syncCatalog(fixture.catalog)
+        fixture.coordinator.syncCatalog(
+            runtimeSnapshot(
+                repositories: fixture.repositories,
+                worktreesByRepository: fixture.worktreesByRepository,
+                selectedRepositoryID: fixture.secondRepository.id,
+                selectedWorkspaceID: fixture.secondWorktree.id
+            )
+        )
 
         let activeSecondStore = try #require(fixture.coordinator.activeStore)
         await waitForEntry(in: activeSecondStore, worktreeID: fixture.secondWorktree.id)
@@ -61,11 +73,6 @@ struct WorktreeMetadataCoordinatorTests {
         let secondRepository = repositories.second
         let firstWorktree = makeWorktree(name: "feature/a", repository: firstRepository, path: "feature-a")
         let secondWorktree = makeWorktree(name: "feature/b", repository: secondRepository, path: "feature-b")
-        let listingService = StubCatalogWorktreeListingService(worktreesByRepositoryRoot: [
-            firstRepository.id: [firstWorktree],
-            secondRepository.id: [secondWorktree],
-        ])
-        let catalog = WindowWorkspaceCatalogStore { WorktreeManager(listingService: listingService) }
         let provider = RecordingMetadataProvider()
         let statusProvider = RecordingMetadataStatusProvider()
         let stores = WorktreeInfoStoreRecorder()
@@ -74,32 +81,21 @@ struct WorktreeMetadataCoordinatorTests {
             statusProvider: statusProvider,
             stores: stores
         )
-        await prepareCatalog(
-            catalog,
-            repositories: [firstRepository, secondRepository]
-        )
         return MetadataCoordinatorFixture(
-            catalog: catalog,
             coordinator: coordinator,
             stores: stores,
             provider: provider,
             statusProvider: statusProvider,
+            repositories: [firstRepository, secondRepository],
+            worktreesByRepository: [
+                firstRepository.id: [firstWorktree],
+                secondRepository.id: [secondWorktree],
+            ],
             firstRepository: firstRepository,
             secondRepository: secondRepository,
             firstWorktree: firstWorktree,
             secondWorktree: secondWorktree
         )
-    }
-
-    @MainActor
-    private func prepareCatalog(
-        _ catalog: WindowWorkspaceCatalogStore,
-        repositories: [Repository]
-    ) async {
-        for repository in repositories {
-            catalog.importRepository(repository)
-        }
-        await catalog.refreshRepositories()
     }
 
     private func makeWorktree(
@@ -148,12 +144,28 @@ struct WorktreeMetadataCoordinatorTests {
     }
 }
 
+@MainActor
+private func runtimeSnapshot(
+    repositories: [Repository],
+    worktreesByRepository: [Repository.ID: [Worktree]],
+    selectedRepositoryID: Repository.ID?,
+    selectedWorkspaceID: Workspace.ID?
+) -> WindowCatalogRuntimeSnapshot {
+    WindowCatalogRuntimeSnapshot(
+        repositories: repositories,
+        worktreesByRepository: worktreesByRepository,
+        selectedRepositoryID: selectedRepositoryID,
+        selectedWorkspaceID: selectedWorkspaceID
+    )
+}
+
 private struct MetadataCoordinatorFixture {
-    let catalog: WindowWorkspaceCatalogStore
     let coordinator: WorktreeMetadataCoordinator
     let stores: WorktreeInfoStoreRecorder
     let provider: RecordingMetadataProvider
     let statusProvider: RecordingMetadataStatusProvider
+    let repositories: [Repository]
+    let worktreesByRepository: [Repository.ID: [Worktree]]
     let firstRepository: Repository
     let secondRepository: Repository
     let firstWorktree: Worktree

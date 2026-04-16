@@ -5,7 +5,7 @@
 
 import Foundation
 
-public protocol WorktreePersistenceService {
+public protocol WorktreePersistenceService: Sendable {
     func loadStates() -> [WorktreeState]
     func saveStates(_ states: [WorktreeState])
 
@@ -13,7 +13,7 @@ public protocol WorktreePersistenceService {
     func saveSelection(_ selection: WorktreeSelection)
 }
 
-public struct UserDefaultsWorktreePersistenceService: WorktreePersistenceService {
+public struct UserDefaultsWorktreePersistenceService: WorktreePersistenceService, @unchecked Sendable {
     private enum Keys {
         static let states = "com.devys.worktrees.state"
         static let selection = "com.devys.worktrees.selection"

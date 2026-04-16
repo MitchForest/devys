@@ -33,11 +33,11 @@ struct WorkspaceShortcutCaptureSheet: View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 8) {
                 Text(action.title)
-                    .font(DevysTypography.xl)
+                    .font(DevysTypography.display)
                     .foregroundStyle(theme.text)
 
                 Text("Press the shortcut you want to use. Include at least one modifier key.")
-                    .font(DevysTypography.sm)
+                    .font(DevysTypography.body)
                     .foregroundStyle(theme.textSecondary)
             }
 
@@ -47,21 +47,21 @@ struct WorkspaceShortcutCaptureSheet: View {
                     .foregroundStyle(theme.textSecondary)
 
                 Text(draftBinding.displayString)
-                    .font(DevysTypography.xl)
-                    .foregroundStyle(theme.visibleAccent)
+                    .font(DevysTypography.display)
+                    .foregroundStyle(theme.accent)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(16)
-                    .background(theme.surface)
-                    .cornerRadius(DevysSpacing.radiusMd)
+                    .background(theme.card)
+                    .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: DevysSpacing.radiusMd)
-                            .strokeBorder(theme.borderSubtle, lineWidth: 1)
+                        RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
+                            .strokeBorder(theme.border, lineWidth: 1)
                     )
             }
 
             if let errorMessage {
                 Text(errorMessage)
-                    .font(DevysTypography.xs)
+                    .font(DevysTypography.caption)
                     .foregroundStyle(.red)
             }
 

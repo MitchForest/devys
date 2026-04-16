@@ -10,26 +10,22 @@ struct SettingsToggle: View {
 
     var body: some View {
         HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Spacing.space1) {
                 Text(title)
-                    .font(DevysTypography.label)
+                    .font(Typography.body)
                     .foregroundStyle(theme.text)
 
                 Text(description)
-                    .font(DevysTypography.xs)
+                    .font(Typography.caption)
                     .foregroundStyle(theme.textSecondary)
             }
 
             Spacer()
 
-            Button {
-                isOn.toggle()
-            } label: {
-                Text(isOn ? "[ON ]" : "[OFF]")
-                    .font(DevysTypography.sm)
-                    .foregroundStyle(isOn ? theme.accent : theme.textTertiary)
-            }
-            .buttonStyle(.plain)
+            Toggle("", isOn: $isOn)
+                .toggleStyle(.switch)
+                .tint(theme.accent)
+                .labelsHidden()
         }
     }
 }

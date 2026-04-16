@@ -1,4 +1,5 @@
 import SwiftUI
+import UI
 
 /// Main entry point for the DevysSplit library
 ///
@@ -80,12 +81,10 @@ public struct DefaultEmptyPaneView: View {
 
     public var body: some View {
         VStack(spacing: 16) {
-            Image(systemName: "doc.text")
-                .font(.system(size: 48))
-                .foregroundStyle(.tertiary)
+            Icon("doc.text", size: .custom(48), color: .secondary)
 
             Text("No Open Tabs")
-                .font(.headline)
+                .font(Typography.title)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

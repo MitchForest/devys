@@ -77,9 +77,20 @@ scan_scheme() {
     local output_file="$2"
 
     if [[ "$JSON_OUTPUT" -eq 1 ]]; then
-        run_periphery "$APP_PERIPHERY_CONFIG" --project Devys.xcodeproj --schemes "$scheme" --format json >"$output_file"
+        run_periphery \
+            "$APP_PERIPHERY_CONFIG" \
+            --project Devys.xcodeproj \
+            --schemes "$scheme" \
+            --format json \
+            -- \
+            -skipMacroValidation >"$output_file"
     else
-        run_periphery "$APP_PERIPHERY_CONFIG" --project Devys.xcodeproj --schemes "$scheme" >"$output_file"
+        run_periphery \
+            "$APP_PERIPHERY_CONFIG" \
+            --project Devys.xcodeproj \
+            --schemes "$scheme" \
+            -- \
+            -skipMacroValidation >"$output_file"
     fi
 }
 

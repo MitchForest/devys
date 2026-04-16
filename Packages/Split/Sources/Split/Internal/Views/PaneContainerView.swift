@@ -18,10 +18,12 @@ enum PaneDropZone: Equatable {
         }
     }
 
-    var insertsFirst: Bool {
+    var insertion: SplitInsertionPosition {
         switch self {
-        case .left, .top: return true
-        default: return false
+        case .left, .top:
+            return .before
+        default:
+            return .after
         }
     }
 }
@@ -63,6 +65,14 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(colors.contentBackground)
+        .clipShape(RoundedRectangle(cornerRadius: colors.paneCornerRadius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: colors.paneCornerRadius, style: .continuous)
+                .strokeBorder(colors.separator, lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.06), radius: 4, y: 1)
+        .padding(colors.paneGap / 2)
+        .background(colors.baseBackground)
     }
 
     // MARK: - Content Area with Drop Zones
@@ -134,10 +144,10 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
 
         let frame = dropPlaceholderFrame(for: zone, in: size, padding: padding)
 
-        RoundedRectangle(cornerRadius: 8)
+        RoundedRectangle(cornerRadius: colors.paneCornerRadius, style: .continuous)
             .fill(placeholderColor)
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: colors.paneCornerRadius, style: .continuous)
                     .stroke(borderColor, lineWidth: 2)
             )
             .frame(width: frame.width, height: frame.height)
@@ -262,9 +272,15 @@ struct UnifiedPaneDropDelegate: DropDelegate {
         case .center:
             return .center
         case .left, .right:
-            return .edge(.horizontal)
+            return .edge(
+                orientation: .horizontal,
+                insertion: zone.insertion
+            )
         case .top, .bottom:
-            return .edge(.vertical)
+            return .edge(
+                orientation: .vertical,
+                insertion: zone.insertion
+            )
         }
     }
 
@@ -307,25 +323,39 @@ struct UnifiedPaneDropDelegate: DropDelegate {
 
                 if zone == .center {
                     // Drop in center - move tab to this pane
-                    withAnimation(.spring(duration: 0.3, bounce: 0.15)) {
-                        controller.moveTab(transfer.tab, from: sourcePaneId, to: pane.id, atIndex: nil)
+                    guard let sourcePane = controller.rootNode.findPane(sourcePaneId),
+                          let sourceIndex = sourcePane.tabs.firstIndex(where: { $0.id == transfer.tab.id }) else {
+                        return
+                    }
+                    _ = withAnimation(.spring(duration: 0.3, bounce: 0.15)) {
+                        splitController.dispatchGestureIntent(
+                            .moveTab(
+                                tabID: TabID(id: transfer.tab.id),
+                                sourcePaneID: sourcePaneId,
+                                sourceIndex: sourceIndex,
+                                destinationPaneID: pane.id,
+                                destinationIndex: nil
+                            )
+                        )
                     }
                 } else if let orientation = zone.orientation {
-                    // Drop on edge - create a split
-                    if let sourcePane = controller.rootNode.findPane(sourcePaneId) {
-                        sourcePane.removeTab(transfer.tab.id)
-
-                        if sourcePane.tabs.isEmpty && controller.rootNode.allPaneIds.count > 1 {
-                            controller.closePane(sourcePaneId)
-                        }
+                    // Drop on edge - create a split with the dragged tab.
+                    guard let sourcePane = controller.rootNode.findPane(sourcePaneId),
+                          let sourceIndex = sourcePane.tabs.firstIndex(where: { $0.id == transfer.tab.id }) else {
+                        return
                     }
-
-                    controller.splitPaneWithTab(
-                        pane.id,
-                        orientation: orientation,
-                        tab: transfer.tab,
-                        insertFirst: zone.insertsFirst
-                    )
+                    _ = withAnimation(.spring(duration: 0.3, bounce: 0.15)) {
+                        splitController.dispatchGestureIntent(
+                            .splitTab(
+                                tabID: TabID(id: transfer.tab.id),
+                                sourcePaneID: sourcePaneId,
+                                sourceIndex: sourceIndex,
+                                targetPaneID: pane.id,
+                                orientation: orientation,
+                                insertion: zone.insertion
+                            )
+                        )
+                    }
                 }
             }
         }
@@ -361,7 +391,6 @@ struct UnifiedPaneDropDelegate: DropDelegate {
         if info.hasItemsConforming(to: [.fileURL]) {
             return handleFileURLDrop(
                 info: info,
-                zone: zone,
                 publicPaneId: publicPaneId,
                 publicZone: publicZone
             )
@@ -373,7 +402,6 @@ struct UnifiedPaneDropDelegate: DropDelegate {
                 return handleCustomTypeDrop(
                     info: info,
                     type: customType,
-                    zone: zone,
                     publicPaneId: publicPaneId,
                     publicZone: publicZone
                 )
@@ -385,7 +413,6 @@ struct UnifiedPaneDropDelegate: DropDelegate {
     
     private func handleFileURLDrop(
         info: DropInfo,
-        zone: PaneDropZone,
         publicPaneId: PaneID,
         publicZone: DropZone
     ) -> Bool {
@@ -417,7 +444,6 @@ struct UnifiedPaneDropDelegate: DropDelegate {
             let content = DropContent.files(loadedURLs)
             self.deliverDropToDelegate(
                 content: content,
-                zone: zone,
                 publicPaneId: publicPaneId,
                 publicZone: publicZone
             )
@@ -429,7 +455,6 @@ struct UnifiedPaneDropDelegate: DropDelegate {
     private func handleCustomTypeDrop(
         info: DropInfo,
         type: UTType,
-        zone: PaneDropZone,
         publicPaneId: PaneID,
         publicZone: DropZone
     ) -> Bool {
@@ -442,7 +467,6 @@ struct UnifiedPaneDropDelegate: DropDelegate {
                 let content = DropContent.custom(type: type, data: data)
                 self.deliverDropToDelegate(
                     content: content,
-                    zone: zone,
                     publicPaneId: publicPaneId,
                     publicZone: publicZone
                 )
@@ -454,46 +478,15 @@ struct UnifiedPaneDropDelegate: DropDelegate {
     
     private func deliverDropToDelegate(
         content: DropContent,
-        zone: PaneDropZone,
         publicPaneId: PaneID,
         publicZone: DropZone
     ) {
-        // Call delegate to handle the drop and get a TabID back
-        guard let tabId = splitController.delegate?.splitView(
+        _ = splitController.delegate?.splitView(
             splitController,
             didReceiveDrop: content,
             inPane: publicPaneId,
             zone: publicZone
-        ) else {
-            return
-        }
-        
-        // If dropped on an edge, we need to create a split with the new tab
-        if let orientation = zone.orientation {
-            // Get the tab that was just created
-            guard let tab = splitController.tab(tabId) else { return }
-            
-            // Remove the tab from current pane (it was added to the target pane by the delegate)
-            if let currentPane = controller.rootNode.findPane(pane.id) {
-                currentPane.removeTab(tabId.id)
-            }
-            
-            // Create a split with the tab
-            let tabItem = TabItem(
-                id: tabId.id,
-                title: tab.title,
-                icon: tab.icon,
-                isDirty: tab.isDirty,
-                activityIndicator: tab.activityIndicator
-            )
-            controller.splitPaneWithTab(
-                pane.id,
-                orientation: orientation,
-                tab: tabItem,
-                insertFirst: zone.insertsFirst
-            )
-        }
-        // If center drop, the delegate already created the tab in the pane
+        )
     }
 
     func dropEntered(info: DropInfo) {

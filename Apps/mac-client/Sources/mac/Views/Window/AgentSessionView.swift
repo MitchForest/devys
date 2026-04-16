@@ -1,5 +1,6 @@
 // swiftlint:disable file_length
 import AppKit
+import AppFeatures
 import SwiftUI
 import UI
 import UniformTypeIdentifiers
@@ -60,39 +61,39 @@ struct AgentSessionView: View {
 
             if let speechMessage = session.speechState.message {
                 Text(speechMessage)
-                    .font(DevysTypography.sm)
+                    .font(DevysTypography.body)
                     .foregroundStyle(session.speechState.isRecording ? theme.accent : theme.textSecondary)
             }
 
             if let selectedCommand = session.selectedCommand {
                 HStack(spacing: DevysSpacing.space2) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: Spacing.tight) {
                         Image(systemName: "command")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(Typography.micro)
                         Text("/\(selectedCommand.name)")
-                            .font(DevysTypography.sm)
+                            .font(DevysTypography.body)
                         if let hint = selectedCommand.input?.hint {
                             Text(hint)
-                                .font(DevysTypography.xs)
+                                .font(DevysTypography.caption)
                                 .foregroundStyle(theme.textSecondary)
                         }
                     }
                     .foregroundStyle(theme.text)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .background(theme.surface)
+                    .padding(.horizontal, Spacing.normal)
+                    .padding(.vertical, Spacing.normal)
+                    .background(theme.card)
                     .overlay {
-                        RoundedRectangle(cornerRadius: 8)
+                        RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
                             .stroke(theme.border, lineWidth: 1)
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
 
                     Button("Clear") {
                         session.clearSelectedSlashCommand()
                         isComposerFocused = true
                     }
                     .buttonStyle(.plain)
-                    .font(DevysTypography.xs)
+                    .font(DevysTypography.caption)
                     .foregroundStyle(theme.textSecondary)
                 }
             }
@@ -107,20 +108,20 @@ struct AgentSessionView: View {
                             } label: {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("/\(command.name)")
-                                        .font(DevysTypography.sm)
+                                        .font(DevysTypography.body)
                                         .foregroundStyle(theme.text)
                                     Text(command.description)
-                                        .font(DevysTypography.xs)
+                                        .font(DevysTypography.caption)
                                         .foregroundStyle(theme.textSecondary)
                                 }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 8)
-                                .background(theme.surface)
+                                .padding(.horizontal, Spacing.normal)
+                                .padding(.vertical, Spacing.normal)
+                                .background(theme.card)
                                 .overlay {
-                                    RoundedRectangle(cornerRadius: 8)
+                                    RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
                                         .stroke(theme.border, lineWidth: 1)
                                 }
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
                             }
                             .buttonStyle(.plain)
                         }
@@ -136,21 +137,21 @@ struct AgentSessionView: View {
                                 session.insertMention(suggestion)
                                 isComposerFocused = true
                             } label: {
-                                HStack(spacing: 6) {
+                                HStack(spacing: Spacing.tight) {
                                     Image(systemName: "at")
-                                        .font(.system(size: 10, weight: .semibold))
+                                        .font(Typography.micro)
                                     Text(suggestion.displayPath)
-                                        .font(DevysTypography.sm)
+                                        .font(DevysTypography.body)
                                 }
                                 .foregroundStyle(theme.text)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 8)
-                                .background(theme.surface)
+                                .padding(.horizontal, Spacing.normal)
+                                .padding(.vertical, Spacing.normal)
+                                .background(theme.card)
                                 .overlay {
-                                    RoundedRectangle(cornerRadius: 8)
+                                    RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
                                         .stroke(theme.border, lineWidth: 1)
                                 }
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
                             }
                             .buttonStyle(.plain)
                         }
@@ -171,11 +172,11 @@ struct AgentSessionView: View {
                         isComposerFocused = true
                     } label: {
                         Image(systemName: session.speechState.isRecording ? "stop.circle.fill" : "mic.fill")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(Typography.heading)
                             .frame(width: 32, height: 32)
                             .foregroundStyle(session.speechState.isRecording ? theme.accentForeground : theme.text)
-                            .background(session.speechState.isRecording ? theme.accent : theme.surface)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .background(session.speechState.isRecording ? theme.accent : theme.card)
+                            .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
                     }
                     .buttonStyle(.plain)
 
@@ -188,19 +189,19 @@ struct AgentSessionView: View {
                         isComposerFocused = true
                     } label: {
                         Image(systemName: session.isSendingPrompt ? "stop.fill" : "arrow.up")
-                            .font(.system(size: 14, weight: .bold))
+                            .font(Typography.heading)
                             .frame(width: 32, height: 32)
                             .foregroundStyle(
                                 session.canSendDraft || session.isSendingPrompt
                                     ? theme.accentForeground
-                                    : Color.white
+                                    : theme.base
                             )
                             .background(
                                 session.canSendDraft || session.isSendingPrompt
                                     ? theme.accent
                                     : theme.textTertiary
                             )
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
                     }
                     .buttonStyle(.plain)
                     .disabled(!session.canSendDraft && !session.isSendingPrompt)
@@ -212,10 +213,10 @@ struct AgentSessionView: View {
             }
         }
         .padding(DevysSpacing.space4)
-        .background(theme.surface)
+        .background(theme.card)
         .overlay(alignment: .top) {
             Rectangle()
-                .fill(theme.borderSubtle)
+                .fill(theme.border)
                 .frame(height: 1)
         }
     }
@@ -223,12 +224,12 @@ struct AgentSessionView: View {
     private var composerConfigRow: some View {
         HStack(spacing: DevysSpacing.space3) {
             if session.isSendingPrompt {
-                HStack(spacing: 4) {
+                HStack(spacing: Spacing.tight) {
                     ProgressView()
                         .scaleEffect(0.5)
                         .frame(width: 12, height: 12)
                     Text("Running")
-                        .font(DevysTypography.xs)
+                        .font(DevysTypography.caption)
                         .foregroundStyle(theme.textSecondary)
                 }
             }
@@ -245,11 +246,11 @@ struct AgentSessionView: View {
                         }
                     }
                 } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: Spacing.tight) {
                         Image(systemName: icon(for: option))
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(Typography.micro)
                         Text(selectedValueName(for: option))
-                            .font(DevysTypography.xs)
+                            .font(DevysTypography.caption)
                     }
                     .foregroundStyle(theme.textSecondary)
                 }
@@ -263,22 +264,22 @@ struct AgentSessionView: View {
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: DevysSpacing.space3) {
             Text("Agents")
-                .font(DevysTypography.lg)
+                .font(DevysTypography.title)
                 .foregroundStyle(theme.text)
 
             Text(emptyStateMessage)
-                .font(DevysTypography.base)
+                .font(DevysTypography.body)
                 .foregroundStyle(theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(DevysSpacing.space4)
-        .background(theme.surface)
+        .background(theme.card)
         .overlay {
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(theme.borderSubtle, lineWidth: 1)
+            RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
+                .stroke(theme.border, lineWidth: 1)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
     }
 
     @ViewBuilder
@@ -303,24 +304,24 @@ struct AgentSessionView: View {
                 Spacer(minLength: 80)
             }
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: Spacing.tight) {
                 Text(roleLabel(for: item.role))
-                    .font(DevysTypography.xs)
+                    .font(DevysTypography.caption)
                     .foregroundStyle(theme.textSecondary)
 
                 Text(item.text)
-                    .font(DevysTypography.base)
+                    .font(DevysTypography.body)
                     .foregroundStyle(theme.text)
                     .textSelection(.enabled)
             }
             .frame(maxWidth: 720, alignment: .leading)
-            .padding(12)
+            .padding(Spacing.comfortable)
             .background(messageBackground(for: item.role))
             .overlay {
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(theme.borderSubtle, lineWidth: 1)
+                RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
+                    .stroke(theme.border, lineWidth: 1)
             }
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
             .contextMenu {
                 Button("Copy") {
                     copyText(item.text)
@@ -346,11 +347,11 @@ struct AgentSessionView: View {
         VStack(alignment: .leading, spacing: DevysSpacing.space3) {
             HStack(spacing: DevysSpacing.space2) {
                 Image(systemName: icon(forToolKind: item.kind))
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(theme.visibleAccent)
+                    .font(Typography.caption)
+                    .foregroundStyle(theme.accent)
 
                 Text(item.title)
-                    .font(DevysTypography.base)
+                    .font(DevysTypography.body)
                     .foregroundStyle(theme.text)
 
                 if let status = item.status {
@@ -375,7 +376,7 @@ struct AgentSessionView: View {
                             } label: {
                                 pill(
                                     location.line.map { "\(location.path):\($0)" } ?? location.path,
-                                    tint: theme.surface
+                                    tint: theme.card
                                 )
                             }
                             .buttonStyle(.plain)
@@ -388,18 +389,18 @@ struct AgentSessionView: View {
                 switch content.kind {
                 case .diff:
                     if let diff = content.diff {
-                        VStack(alignment: .leading, spacing: 6) {
+                        VStack(alignment: .leading, spacing: Spacing.tight) {
                             HStack(spacing: DevysSpacing.space2) {
                                 Text(diff.path)
-                                    .font(DevysTypography.sm)
+                                    .font(DevysTypography.body)
                                     .foregroundStyle(theme.text)
                                 Spacer()
                                 Button("Open Diff") {
                                     onOpenDiffArtifact(diff, false)
                                 }
                                 .buttonStyle(.plain)
-                                .font(DevysTypography.xs)
-                                .foregroundStyle(theme.visibleAccent)
+                                .font(DevysTypography.caption)
+                                .foregroundStyle(theme.accent)
                             }
                             if let oldText = diff.oldText {
                                 diffBlock(oldText, tint: Color.red.opacity(0.12))
@@ -413,25 +414,25 @@ struct AgentSessionView: View {
                         terminalRow(terminal)
                     } else {
                         Text(content.summary)
-                            .font(DevysTypography.sm)
+                            .font(DevysTypography.body)
                             .foregroundStyle(theme.textSecondary)
                             .textSelection(.enabled)
                     }
                 default:
                     Text(content.summary)
-                        .font(DevysTypography.sm)
+                        .font(DevysTypography.body)
                         .foregroundStyle(theme.textSecondary)
                         .textSelection(.enabled)
                 }
             }
         }
         .padding(DevysSpacing.space3)
-        .background(theme.surface)
+        .background(theme.card)
         .overlay {
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
                 .stroke(theme.border, lineWidth: 1)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
         .contextMenu {
             Button("Copy") {
                 copyText(copyText(for: item))
@@ -458,11 +459,11 @@ struct AgentSessionView: View {
     private func approvalRow(_ item: AgentApprovalTimelineItem) -> some View {
         VStack(alignment: .leading, spacing: DevysSpacing.space3) {
             Text(item.title)
-                .font(DevysTypography.base)
+                .font(DevysTypography.body)
                 .foregroundStyle(theme.text)
 
             Text(item.toolCallId)
-                .font(DevysTypography.xs)
+                .font(DevysTypography.caption)
                 .foregroundStyle(theme.textSecondary)
 
             HStack(spacing: DevysSpacing.space2) {
@@ -474,27 +475,27 @@ struct AgentSessionView: View {
                         )
                     }
                     .buttonStyle(.plain)
-                    .font(DevysTypography.sm)
+                    .font(DevysTypography.body)
                     .foregroundStyle(buttonTextColor(for: item, option: option))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, Spacing.normal)
+                    .padding(.vertical, Spacing.tight)
                     .background(buttonBackground(for: item, option: option))
                     .overlay {
-                        RoundedRectangle(cornerRadius: 8)
+                        RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
                             .stroke(theme.border, lineWidth: 1)
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
                     .disabled(item.isResolved)
                 }
             }
         }
         .padding(DevysSpacing.space3)
-        .background(theme.surface)
+        .background(theme.card)
         .overlay {
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
                 .stroke(theme.border, lineWidth: 1)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
         .contextMenu {
             Button("Copy") {
                 copyText(copyText(for: item))
@@ -505,32 +506,32 @@ struct AgentSessionView: View {
     private func planRow(_ item: AgentPlanTimelineItem) -> some View {
         VStack(alignment: .leading, spacing: DevysSpacing.space2) {
             Text("Plan")
-                .font(DevysTypography.base)
+                .font(DevysTypography.body)
                 .foregroundStyle(theme.text)
 
             ForEach(Array(item.entries.enumerated()), id: \.offset) { index, entry in
                 HStack(alignment: .top, spacing: DevysSpacing.space2) {
                     Text("\(index + 1).")
-                        .font(DevysTypography.sm)
+                        .font(DevysTypography.body)
                         .foregroundStyle(theme.textSecondary)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(entry.content)
-                            .font(DevysTypography.sm)
+                            .font(DevysTypography.body)
                             .foregroundStyle(theme.text)
                         Text("\(entry.status) • \(entry.priority)")
-                            .font(DevysTypography.xs)
+                            .font(DevysTypography.caption)
                             .foregroundStyle(theme.textSecondary)
                     }
                 }
             }
         }
         .padding(DevysSpacing.space3)
-        .background(theme.surface)
+        .background(theme.card)
         .overlay {
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(theme.borderSubtle, lineWidth: 1)
+            RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
+                .stroke(theme.border, lineWidth: 1)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
         .contextMenu {
             Button("Copy") {
                 copyText(copyText(for: item))
@@ -542,14 +543,14 @@ struct AgentSessionView: View {
         HStack {
             Spacer()
             Text(item.text)
-                .font(DevysTypography.sm)
+                .font(DevysTypography.body)
                 .foregroundStyle(statusColor(for: item.style))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(theme.surface)
+                .padding(.horizontal, Spacing.normal)
+                .padding(.vertical, Spacing.tight)
+                .background(theme.card)
                 .overlay {
                     Capsule()
-                        .stroke(theme.borderSubtle, lineWidth: 1)
+                        .stroke(theme.border, lineWidth: 1)
                 }
             Spacer()
         }
@@ -618,28 +619,28 @@ struct AgentSessionView: View {
             session.sendDraft()
             isComposerFocused = true
         }
-        .font(DevysTypography.base)
+        .font(DevysTypography.body)
         .foregroundStyle(theme.text)
         .frame(minHeight: 92, maxHeight: 160)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(theme.content)
+        .padding(.horizontal, Spacing.normal)
+        .padding(.vertical, Spacing.normal)
+        .background(theme.card)
         .overlay {
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
                 .stroke(theme.border, lineWidth: 1)
         }
         .overlay(alignment: .topLeading) {
             if let hint = session.commandInputHint,
                session.draft.isEmpty {
                 Text(hint)
-                    .font(DevysTypography.base)
+                    .font(DevysTypography.body)
                     .foregroundStyle(theme.textTertiary)
                     .padding(.horizontal, 14)
-                    .padding(.vertical, 16)
+                    .padding(.vertical, Spacing.relaxed)
                     .allowsHitTesting(false)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
         .dropDestination(for: URL.self) { items, _ in
             handleDroppedURLs(items)
         }
@@ -653,41 +654,41 @@ struct AgentSessionView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: DevysSpacing.space2) {
                 ForEach(session.attachmentSummaries) { summary in
-                    HStack(spacing: 8) {
+                    HStack(spacing: Spacing.normal) {
                         Image(systemName: summary.systemImage)
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(theme.visibleAccent)
+                            .font(Typography.caption)
+                            .foregroundStyle(theme.accent)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(summary.title)
-                                .font(DevysTypography.sm)
+                                .font(DevysTypography.body)
                                 .foregroundStyle(theme.text)
                             if let subtitle = summary.subtitle {
                                 Text(subtitle)
-                                    .font(DevysTypography.xs)
+                                    .font(DevysTypography.caption)
                                     .foregroundStyle(theme.textSecondary)
                             }
                         }
 
-                        pill(summary.delivery.rawValue.capitalized, tint: theme.content)
+                        pill(summary.delivery.rawValue.capitalized, tint: theme.card)
 
                         Button {
                             session.removeAttachment(id: summary.id)
                         } label: {
                             Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 12))
+                                .font(Typography.label)
                                 .foregroundStyle(theme.textTertiary)
                         }
                         .buttonStyle(.plain)
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .background(theme.surface)
+                    .padding(.horizontal, Spacing.normal)
+                    .padding(.vertical, Spacing.normal)
+                    .background(theme.card)
                     .overlay {
-                        RoundedRectangle(cornerRadius: 10)
+                        RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
                             .stroke(theme.border, lineWidth: 1)
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
                 }
             }
         }
@@ -698,19 +699,19 @@ struct AgentSessionView: View {
         VStack(alignment: .leading, spacing: DevysSpacing.space2) {
             HStack(spacing: DevysSpacing.space2) {
                 Image(systemName: "terminal")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(theme.visibleAccent)
+                    .font(Typography.caption)
+                    .foregroundStyle(theme.accent)
                 Text(terminal.command)
-                    .font(DevysTypography.sm)
+                    .font(DevysTypography.body)
                     .foregroundStyle(theme.text)
                     .lineLimit(1)
                 Spacer()
                 if terminal.isRunning {
                     pill("Running", tint: theme.active)
                 } else if let exitCode = terminal.exitCode {
-                    pill("Exit \(exitCode)", tint: theme.content)
+                    pill("Exit \(exitCode)", tint: theme.card)
                 } else if let signal = terminal.signal {
-                    pill("Signal \(signal)", tint: theme.content)
+                    pill("Signal \(signal)", tint: theme.card)
                 }
                 Button("Open Terminal") {
                     Task {
@@ -723,30 +724,30 @@ struct AgentSessionView: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .font(DevysTypography.xs)
-                .foregroundStyle(theme.visibleAccent)
+                .font(DevysTypography.caption)
+                .foregroundStyle(theme.accent)
                 .disabled(!terminal.isRunning)
             }
 
             ScrollView(.vertical, showsIndicators: true) {
                 Text(terminal.output.isEmpty ? "Waiting for output…" : terminal.output)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(Typography.Code.gutter)
                     .foregroundStyle(theme.textSecondary)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(8)
+                    .padding(Spacing.normal)
             }
             .frame(minHeight: 84, maxHeight: 180)
             .background(theme.base)
             .overlay {
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(theme.borderSubtle, lineWidth: 1)
+                RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
+                    .stroke(theme.border, lineWidth: 1)
             }
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
 
             if terminal.truncated {
                 Text("Output truncated to the retained byte limit.")
-                    .font(DevysTypography.xs)
+                    .font(DevysTypography.caption)
                     .foregroundStyle(theme.textSecondary)
             }
         }
@@ -768,9 +769,9 @@ struct AgentSessionView: View {
         case .user:
             theme.active
         case .assistant:
-            theme.surface
+            theme.card
         case .thought:
-            theme.content
+            theme.card
         }
     }
 
@@ -813,7 +814,7 @@ struct AgentSessionView: View {
         if item.selectedOptionID == option.optionId {
             return theme.accent
         }
-        return theme.content
+        return theme.card
     }
 
     private func buttonTextColor(
@@ -853,14 +854,14 @@ struct AgentSessionView: View {
         tint: Color
     ) -> some View {
         Text(text)
-            .font(DevysTypography.xs)
+            .font(DevysTypography.caption)
             .foregroundStyle(theme.textSecondary)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, Spacing.normal)
+            .padding(.vertical, Spacing.tight)
             .background(tint)
             .overlay {
                 Capsule()
-                    .stroke(theme.borderSubtle, lineWidth: 1)
+                    .stroke(theme.border, lineWidth: 1)
             }
             .clipShape(Capsule())
     }
@@ -870,17 +871,17 @@ struct AgentSessionView: View {
         tint: Color
     ) -> some View {
         Text(text)
-            .font(DevysTypography.sm)
+            .font(DevysTypography.body)
             .foregroundStyle(theme.textSecondary)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(8)
+            .padding(Spacing.normal)
             .background(tint)
             .overlay {
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(theme.borderSubtle, lineWidth: 1)
+                RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
+                    .stroke(theme.border, lineWidth: 1)
             }
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
     }
 
     private func handleDroppedURLs(_ items: [URL]) -> Bool {

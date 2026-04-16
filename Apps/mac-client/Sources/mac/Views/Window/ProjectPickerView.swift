@@ -16,16 +16,23 @@ struct ProjectPickerView: View {
     let onOpenRecentRepository: (URL) -> Void
 
     var body: some View {
-        VStack(spacing: DevysSpacing.space10) {
+        VStack(spacing: Spacing.space8) {
             Spacer()
 
-            // ASCII Logo with tagline
-            DevysLogoBlock(showTypewriter: true)
+            // Welcome heading
+            VStack(spacing: Spacing.space2) {
+                Image(systemName: "hand.wave")
+                    .font(Typography.display.weight(.light))
+                    .foregroundStyle(theme.textTertiary)
 
-            // Divider
-            TerminalDivider()
+                Text("Welcome to Devys")
+                    .font(Typography.title)
+                    .foregroundStyle(theme.text)
+            }
+
+            Separator()
                 .frame(maxWidth: 500)
-                .padding(.horizontal, DevysSpacing.space8)
+                .padding(.horizontal, Spacing.space8)
 
             // Recent projects or empty state
             if recentRepositories.isEmpty {
@@ -34,12 +41,10 @@ struct ProjectPickerView: View {
                 recentList
             }
 
-            // Divider
-            TerminalDivider()
+            Separator()
                 .frame(maxWidth: 500)
-                .padding(.horizontal, DevysSpacing.space8)
+                .padding(.horizontal, Spacing.space8)
 
-            // Open folder action
             actionsSection
 
             Spacer()
@@ -49,34 +54,28 @@ struct ProjectPickerView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: DevysSpacing.space2) {
-            Text("no recent projects")
-                .font(DevysTypography.sm)
+        VStack(spacing: Spacing.space2) {
+            Text("No recent projects")
+                .font(Typography.body)
                 .foregroundStyle(theme.textSecondary)
 
-            Text("$ add a project to get started")
-                .font(DevysTypography.xs)
+            Text("Add a project to get started")
+                .font(Typography.caption)
                 .foregroundStyle(theme.textTertiary)
         }
-        .padding(.vertical, DevysSpacing.space4)
+        .padding(.vertical, Spacing.space4)
     }
 
     private var recentList: some View {
-        VStack(alignment: .leading, spacing: DevysSpacing.space3) {
-            // Section header
-            Text("RECENT_PROJECTS")
-                .font(DevysTypography.heading)
-                .tracking(DevysTypography.headerTracking)
+        VStack(alignment: .leading, spacing: Spacing.space3) {
+            Text("Recent Projects")
+                .font(Typography.heading)
                 .foregroundStyle(theme.textSecondary)
-                .padding(.leading, DevysSpacing.space4)
+                .padding(.leading, Spacing.space4)
 
-            // Project list with tree characters
             VStack(spacing: 0) {
-                ForEach(Array(recentRepositories.enumerated()), id: \.element) { index, url in
-                    RecentRepositoryRow(
-                        url: url,
-                        isLast: index == recentRepositories.count - 1
-                    ) {
+                ForEach(recentRepositories, id: \.self) { url in
+                    RecentRepositoryRow(url: url) {
                         onOpenRecentRepository(url)
                     }
                 }
@@ -86,23 +85,20 @@ struct ProjectPickerView: View {
     }
 
     private var actionsSection: some View {
-        VStack(spacing: DevysSpacing.space3) {
-            HStack(spacing: DevysSpacing.space3) {
-                TerminalCommandButton("add repository", icon: "folder", isAccent: true) {
-                    onAddRepository()
-                }
-                
-                KeyboardShortcutBadge("CMD+O")
+        VStack(spacing: Spacing.space3) {
+            ActionButton("Add Repository", icon: "folder.badge.plus", style: .primary) {
+                onAddRepository()
             }
+            .keyboardShortcut("o", modifiers: .command)
 
             if canRestorePreviousSession {
                 Button(action: onRestorePreviousSession) {
-                    HStack(spacing: DevysSpacing.space2) {
-                        Text("> restore previous session")
-                            .font(DevysTypography.sm)
-                            .foregroundStyle(theme.visibleAccent)
-                        Text("reopen repositories and workspace state")
-                            .font(DevysTypography.xs)
+                    HStack(spacing: Spacing.space2) {
+                        Text("Restore previous session")
+                            .font(Typography.body)
+                            .foregroundStyle(theme.accent)
+                        Text("Reopen repositories and workspace state")
+                            .font(Typography.caption)
                             .foregroundStyle(theme.textTertiary)
                     }
                 }
@@ -118,44 +114,42 @@ private struct RecentRepositoryRow: View {
     @Environment(\.devysTheme) private var theme
 
     let url: URL
-    let isLast: Bool
     let onOpen: () -> Void
 
     @State private var isHovered = false
 
     var body: some View {
         Button(action: onOpen) {
-            HStack(spacing: DevysSpacing.space2) {
-                // Tree drawing characters
-                Text(isLast ? "└──" : "├──")
-                    .font(DevysTypography.sm)
-                    .foregroundStyle(theme.textTertiary)
+            HStack(spacing: Spacing.space2) {
+                Image(systemName: "folder")
+                    .font(Typography.heading)
+                    .foregroundStyle(theme.textSecondary)
 
-                // Folder name
                 Text(url.lastPathComponent)
-                    .font(DevysTypography.base)
+                    .font(Typography.body)
                     .fontWeight(.medium)
                     .foregroundStyle(isHovered ? theme.accent : theme.text)
 
                 Spacer()
 
-                // Path (shortened)
                 Text(shortenedPath)
-                    .font(DevysTypography.xs)
+                    .font(Typography.caption)
                     .foregroundStyle(theme.textTertiary)
                     .lineLimit(1)
             }
-            .padding(.horizontal, DevysSpacing.space4)
-            .padding(.vertical, DevysSpacing.space2)
+            .padding(.horizontal, Spacing.space4)
+            .padding(.vertical, Spacing.space2)
             .background(
-                RoundedRectangle(cornerRadius: DevysSpacing.radiusSm)
-                    .fill(isHovered ? theme.elevated : Color.clear)
+                RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
+                    .fill(isHovered ? theme.hover : Color.clear)
             )
         }
         .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
+        .onHover { hovering in
+            withAnimation(Animations.micro) { isHovered = hovering }
+        }
     }
-    
+
     private var shortenedPath: String {
         url.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
     }

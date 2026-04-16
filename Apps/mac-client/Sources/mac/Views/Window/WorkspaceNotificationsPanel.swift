@@ -37,28 +37,28 @@ struct WorkspaceNotificationsPanel: View {
     private var header: some View {
         HStack {
             Text("Notifications")
-                .font(.system(size: 14, weight: .semibold))
+                .font(Typography.heading)
                 .foregroundStyle(theme.text)
 
             Spacer()
 
             Text("\(items.count)")
-                .font(.system(size: 11, weight: .medium))
+                .font(Typography.caption.weight(.medium))
                 .foregroundStyle(theme.textSecondary)
         }
         .padding(.horizontal, DevysSpacing.space4)
         .padding(.vertical, DevysSpacing.space3)
-        .background(theme.surface)
+        .background(theme.card)
     }
 
     private var emptyState: some View {
         VStack(spacing: DevysSpacing.space2) {
             Text("No pending notifications")
-                .font(.system(size: 13, weight: .medium))
+                .font(Typography.body.weight(.medium))
                 .foregroundStyle(theme.textSecondary)
 
             Text("Workspace attention will appear here when terminals or agents need input.")
-                .font(.system(size: 11))
+                .font(Typography.caption)
                 .foregroundStyle(theme.textTertiary)
                 .multilineTextAlignment(.center)
         }
@@ -73,41 +73,35 @@ struct WorkspaceNotificationsPanel: View {
             } label: {
                 VStack(alignment: .leading, spacing: DevysSpacing.space2) {
                     Text(item.notification.source.displayName.uppercased())
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(theme.visibleAccent)
+                        .font(Typography.micro.weight(.semibold))
+                        .foregroundStyle(theme.accent)
 
                     Text(item.notification.title)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(Typography.label)
                         .foregroundStyle(theme.text)
                         .multilineTextAlignment(.leading)
 
                     if let subtitle = item.notification.subtitle, !subtitle.isEmpty {
                         Text(subtitle)
-                            .font(.system(size: 11))
+                            .font(Typography.caption)
                             .foregroundStyle(theme.textSecondary)
                             .multilineTextAlignment(.leading)
                     }
 
                     Text("\(item.repositoryName) / \(item.workspaceName)")
-                        .font(.system(size: 10))
+                        .font(Typography.micro)
                         .foregroundStyle(theme.textTertiary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)
 
-            Button("Clear") {
+            ActionButton("Clear", style: .ghost) {
                 onClear(item)
             }
-            .buttonStyle(.plain)
-            .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(theme.textSecondary)
             .padding(.top, 2)
         }
         .padding(DevysSpacing.space3)
-        .background(
-            RoundedRectangle(cornerRadius: DevysSpacing.radiusMd)
-                .fill(theme.surface)
-        )
+        .elevation(.card)
     }
 }

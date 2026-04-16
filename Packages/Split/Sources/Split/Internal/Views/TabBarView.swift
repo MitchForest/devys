@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import UI
 
 /// Tab bar view with scrollable tabs, drag/drop support, and split buttons
 struct TabBarView: View {
@@ -122,13 +123,12 @@ struct TabBarView: View {
         .onDrag {
             createItemProvider(for: tab)
         } preview: {
-            TabDragPreview(tab: tab)
-                .environment(\.splitColors, colors)
+            TabDragPreview(tab: tab, layoutMetrics: layoutMetrics)
         }
         .onDrop(of: [.text], delegate: TabDropDelegate(
             targetIndex: index,
             pane: pane,
-            controller: splitViewController,
+            splitController: controller,
             dropTargetIndex: $dropTargetIndex
         ))
         .overlay(alignment: .leading) {
@@ -164,7 +164,7 @@ struct TabBarView: View {
             .onDrop(of: [.text], delegate: TabDropDelegate(
                 targetIndex: pane.tabs.count,
                 pane: pane,
-                controller: splitViewController,
+                splitController: controller,
                 dropTargetIndex: $dropTargetIndex
             ))
             .overlay(alignment: .leading) {
@@ -178,9 +178,7 @@ struct TabBarView: View {
 
     @ViewBuilder
     private var dropIndicator: some View {
-        Capsule()
-            .fill(colors.accent)
-            .frame(width: TabBarMetrics.dropIndicatorWidth, height: TabBarMetrics.dropIndicatorHeight)
+        InsertionIndicator(color: colors.accent)
             .offset(x: -1)
             .transition(.scale.combined(with: .opacity))
     }
@@ -192,20 +190,30 @@ struct TabBarView: View {
         HStack(spacing: 4) {
             Button {
                 // 120fps animation handled by SplitAnimator
-                controller.splitPane(pane.id, orientation: .horizontal)
+                controller.dispatchGestureIntent(
+                    .splitPane(
+                        paneID: pane.id,
+                        orientation: .horizontal,
+                        insertion: .after
+                    )
+                )
             } label: {
-                Image(systemName: "square.split.2x1")
-                    .font(.system(size: 12))
+                Icon("square.split.2x1", size: .sm)
             }
             .buttonStyle(.borderless)
             .help("Split Right")
 
             Button {
                 // 120fps animation handled by SplitAnimator
-                controller.splitPane(pane.id, orientation: .vertical)
+                controller.dispatchGestureIntent(
+                    .splitPane(
+                        paneID: pane.id,
+                        orientation: .vertical,
+                        insertion: .after
+                    )
+                )
             } label: {
-                Image(systemName: "square.split.1x2")
-                    .font(.system(size: 12))
+                Icon("square.split.1x2", size: .sm)
             }
             .buttonStyle(.borderless)
             .help("Split Down")
@@ -265,7 +273,7 @@ struct TabBarView: View {
 struct TabDropDelegate: DropDelegate {
     let targetIndex: Int
     let pane: PaneState
-    let controller: SplitViewController
+    let splitController: DevysSplitController
     @Binding var dropTargetIndex: Int?
 
     func performDrop(info: DropInfo) -> Bool {
@@ -317,36 +325,48 @@ struct TabDropDelegate: DropDelegate {
         guard let sourceIndex = pane.tabs.firstIndex(where: { $0.id == transfer.tab.id }) else {
             return
         }
-        withAnimation(.spring(
+        _ = withAnimation(.spring(
             duration: TabBarMetrics.reorderDuration,
             bounce: TabBarMetrics.reorderBounce
         )) {
-            pane.moveTab(from: sourceIndex, to: targetIndex)
+            splitController.dispatchGestureIntent(
+                .reorderTab(
+                    tabID: TabID(id: transfer.tab.id),
+                    paneID: pane.id,
+                    sourceIndex: sourceIndex,
+                    destinationIndex: targetIndex
+                )
+            )
         }
     }
 
     private func transferTab(_ transfer: TabTransferData) {
-        guard let sourcePaneId = controller.rootNode.allPaneIds.first(
-            where: { $0.id == transfer.sourcePaneId }
-        ) else {
+        guard let sourcePane = splitController.internalController.rootNode.findPane(
+            PaneID(id: transfer.sourcePaneId)
+        ),
+        let sourceIndex = sourcePane.tabs.firstIndex(where: { $0.id == transfer.tab.id }) else {
             return
         }
-        withAnimation(.spring(
+        let sourcePaneID = sourcePane.id
+        _ = withAnimation(.spring(
             duration: TabBarMetrics.reorderDuration,
             bounce: TabBarMetrics.reorderBounce
         )) {
-            controller.moveTab(
-                transfer.tab,
-                from: sourcePaneId,
-                to: pane.id,
-                atIndex: targetIndex
+            splitController.dispatchGestureIntent(
+                .moveTab(
+                    tabID: TabID(id: transfer.tab.id),
+                    sourcePaneID: sourcePaneID,
+                    sourceIndex: sourceIndex,
+                    destinationPaneID: pane.id,
+                    destinationIndex: targetIndex
+                )
             )
         }
     }
 
     private func clearDragState() {
-        controller.draggingTab = nil
-        controller.dragSourcePaneId = nil
+        splitController.internalController.draggingTab = nil
+        splitController.internalController.dragSourcePaneId = nil
     }
 
     func dropEntered(info: DropInfo) {

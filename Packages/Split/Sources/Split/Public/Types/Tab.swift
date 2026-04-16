@@ -11,6 +11,7 @@ public struct Tab: Identifiable, Hashable, Sendable {
     public let id: TabID
     public let title: String
     public let icon: String?
+    public let isPreview: Bool
     public let isDirty: Bool
     public let activityIndicator: TabActivityIndicator?
 
@@ -18,12 +19,14 @@ public struct Tab: Identifiable, Hashable, Sendable {
         id: TabID = TabID(),
         title: String,
         icon: String? = nil,
+        isPreview: Bool = false,
         isDirty: Bool = false,
         activityIndicator: TabActivityIndicator? = nil
     ) {
         self.id = id
         self.title = title
         self.icon = icon
+        self.isPreview = isPreview
         self.isDirty = isDirty
         self.activityIndicator = activityIndicator
     }
@@ -32,6 +35,7 @@ public struct Tab: Identifiable, Hashable, Sendable {
         self.id = TabID(id: tabItem.id)
         self.title = tabItem.title
         self.icon = tabItem.icon
+        self.isPreview = tabItem.isPreview
         self.isDirty = tabItem.isDirty
         self.activityIndicator = tabItem.activityIndicator
     }

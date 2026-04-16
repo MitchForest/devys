@@ -3,6 +3,8 @@
 //
 // Copyright © 2026 Devys. All rights reserved.
 
+import AppFeatures
+import ComposableArchitecture
 import SwiftUI
 import Split
 import UI
@@ -14,30 +16,6 @@ import Workspace
 import UniformTypeIdentifiers
 
 // MARK: - Content View
-
-struct WorkspaceCreationPresentationRequest: Identifiable {
-    let repository: Repository
-    let mode: WorkspaceCreationMode
-
-    var id: String {
-        "\(repository.id)|\(mode.rawValue)"
-    }
-}
-
-struct AgentLaunchPresentationRequest: Identifiable {
-    let workspaceID: Workspace.ID
-    let initialAttachments: [AgentAttachment]
-    let preferredPaneID: PaneID?
-    let pendingSessionID: AgentSessionID?
-    let pendingTabID: TabID?
-
-    var id: Workspace.ID {
-        if let pendingSessionID {
-            return "\(workspaceID)|\(pendingSessionID.rawValue)"
-        }
-        return workspaceID
-    }
-}
 
 struct NavigatorRevealRequest: Equatable {
     let workspaceID: Workspace.ID
@@ -56,7 +34,9 @@ struct EditorOpenTraceState {
 
 struct ContentView: View {
     // MARK: - State
-    
+
+    let store: StoreOf<WindowFeature>
+
     @Environment(AppContainer.self) var container
     @Environment(AppSettings.self) var appSettings
     @Environment(RecentRepositoriesService.self) var recentRepositoriesService
@@ -64,35 +44,21 @@ struct ContentView: View {
     @Environment(RepositorySettingsStore.self) var repositorySettingsStore
     let persistentTerminalHostController = PersistentTerminalHostController()
     let terminalRelaunchPersistenceStore = TerminalRelaunchPersistenceStore()
-    @State var workspaceCatalog = WindowWorkspaceCatalogStore()
     @State var runtimeRegistry = WorktreeRuntimeRegistry()
+    @State var hostedContentBridge = HostedWorkspaceContentBridge()
     @State var themeManager = ThemeManager()
-    @State var activeSidebarItem: WorkspaceSidebarMode? = .files
-    @State var isSidebarVisible: Bool = true
-    @State var isNavigatorCollapsed: Bool = {
-        UserDefaults.standard.bool(forKey: "com.devys.navigator.collapsed")
-    }()
     @State var sidebarWidth: CGFloat = 240
-    let navigatorWidth: CGFloat = DevysSpacing.navigatorDefaultWidth
-    @State var workspaceTerminalRegistry = WorkspaceTerminalRegistry()
-    @State var workspaceAttentionStore = WorkspaceAttentionStore()
-    @State var workspaceBackgroundProcessRegistry = WorkspaceBackgroundProcessRegistry()
-    @State var workspaceRunStore = WorkspaceRunStore()
-    @State var workspaceCreationRequest: WorkspaceCreationPresentationRequest?
-    @State var agentLaunchRequest: AgentLaunchPresentationRequest?
-    @State var navigatorRevealRequest: NavigatorRevealRequest?
-    @State var activeSearchRequest: WorkspaceSearchRequest?
-    @State var isNotificationsPanelPresented = false
-    @State var isGitCommitSheetPresented = false
-    @State var isCreatePullRequestSheetPresented = false
+    /// Legacy navigator width — replaced by the always-visible 48pt repo rail.
+    /// Kept briefly for any residual references during migration.
+    let navigatorWidth: CGFloat = Spacing.repoRailWidth
+    @State var isCapsuleExpanded = false
     @State var availableRelaunchSnapshot: TerminalRelaunchSnapshot?
-    @State var pendingTerminalRelaunchSnapshot: TerminalRelaunchSnapshot?
     @State var rehydratableHostedSessionsByID: [UUID: HostedTerminalSessionRecord] = [:]
     @State var rehydratableAttachCommandsBySessionID: [UUID: String] = [:]
     
     @State var editorSessions: [TabID: EditorSession] = [:]
-    @State var editorSessionPool = EditorSessionPool()
     @State var editorOpenTraceStates: [TabID: EditorOpenTraceState] = [:]
+    @State var workspaceViewStatesByID: [Workspace.ID: WorkspaceViewState] = [:]
     
     /// Delegate for DevysSplit tab lifecycle hooks (close/save prompts)
     @State var splitDelegate = DevysSplitCloseDelegate()
@@ -105,53 +71,161 @@ struct ContentView: View {
     
     // DevysSplit
     @State var controller = ContentView.makeSplitController()
-    @State var tabContents: [TabID: TabContent] = [:]
     @State var tabPresentationById: [TabID: TabPresentationState] = [:]
     @State var hasInitialized = false
-    
-    /// Currently selected/focused tab ID
-    /// Updated when tabs are selected via controller.selectTab()
-    @State var selectedTabId: TabID?
-    
-    /// Preview tab ID - only one preview tab exists at a time (VS Code behavior)
-    /// Single-click opens in preview (reusable), double-click opens permanently
-    @State var previewTabId: TabID?
     
     /// Computed theme from manager
     var theme: DevysTheme {
         themeManager.theme
     }
-    
-    var selectedCatalogWorktree: Worktree? {
-        workspaceCatalog.selectedWorktree
+
+    var activeSidebarItem: WorkspaceSidebarMode? {
+        store.activeSidebar?.workspaceSidebarMode
     }
 
-    var activeRuntime: WorktreeRuntimeHandle? {
-        runtimeRegistry.activeRuntime
+    var workspaceOperationalController: WorkspaceOperationalController {
+        container.workspaceOperationalController
+    }
+
+    var workspaceTerminalRegistry: WorkspaceTerminalRegistry {
+        workspaceOperationalController.terminalRegistry
+    }
+
+    var workspaceBackgroundProcessRegistry: WorkspaceBackgroundProcessRegistry {
+        workspaceOperationalController.backgroundProcessRegistry
+    }
+
+    var editorSessionRegistry: EditorSessionRegistry {
+        container.editorSessionRegistry
+    }
+
+    var reducerFilesSidebarVisible: Bool {
+        isSidebarVisible && activeSidebarItem == .files
+    }
+
+    var isSidebarVisible: Bool {
+        store.isSidebarVisible
+    }
+
+    var isNavigatorCollapsed: Bool {
+        store.isNavigatorCollapsed
+    }
+
+    var selectedTabId: TabID? {
+        store.selectedTabID
+    }
+
+    var workspaceShell: WindowFeature.WorkspaceShell? {
+        guard let selectedWorkspaceID else { return nil }
+        return store.workspaceShells[selectedWorkspaceID]
+    }
+
+    var workspaceLayout: WindowFeature.WorkspaceLayout? {
+        workspaceShell?.layout
+    }
+
+    var focusedPaneId: PaneID? {
+        workspaceShell?.focusedPaneID ?? workspaceLayout?.focusedFallbackPaneID
+    }
+
+    var tabContents: [TabID: WorkspaceTabContent] {
+        guard let selectedWorkspaceID else { return [:] }
+        return store.workspaceShells[selectedWorkspaceID]?.tabContents ?? [:]
+    }
+
+    var navigatorRevealRequest: NavigatorRevealRequest? {
+        guard let request = store.navigatorRevealRequest else { return nil }
+        return NavigatorRevealRequest(
+            workspaceID: request.workspaceID,
+            token: request.token
+        )
+    }
+
+    func storedSidebarMode(for workspaceID: Workspace.ID) -> WorkspaceSidebarMode {
+        store.workspaceShells[workspaceID]?.activeSidebar?.workspaceSidebarMode ?? .files
+    }
+
+    func paneLayout(for paneID: PaneID) -> WindowFeature.WorkspacePaneLayout? {
+        workspaceLayout?.paneLayout(for: paneID)
+    }
+
+    func previewTabID(in paneID: PaneID) -> TabID? {
+        paneLayout(for: paneID)?.previewTabID
+    }
+
+    func paneID(for tabID: TabID, workspaceID: Workspace.ID? = nil) -> PaneID? {
+        let workspaceID = workspaceID ?? selectedWorkspaceID
+        guard let workspaceID,
+              let layout = store.workspaceShells[workspaceID]?.layout else {
+            return nil
+        }
+        return layout.allPaneIDs.first { paneID in
+            layout.paneLayout(for: paneID)?.tabIDs.contains(tabID) == true
+        }
+    }
+
+    var selectedRepositoryID: Repository.ID? {
+        store.selectedRepositoryID
+    }
+
+    var selectedWorkspaceID: Workspace.ID? {
+        store.selectedWorkspaceID
+    }
+
+    var selectedRepository: Repository? {
+        store.selectedRepository
+    }
+
+    var selectedRepositoryRootURL: URL? {
+        selectedRepository?.rootURL
+    }
+
+    var selectedCatalogWorktree: Worktree? {
+        guard let selectedRepositoryID,
+              let selectedWorkspaceID else {
+            return nil
+        }
+        return store.worktreesByRepository[selectedRepositoryID]?
+            .first { $0.id == selectedWorkspaceID }
     }
 
     var activeWorktree: Worktree? {
-        activeRuntime?.worktree
+        runtimeRegistry.activeWorktree
+    }
+
+    var workspaceOperationalState: WorkspaceOperationalState {
+        store.operational
+    }
+
+    var hostedWorkspaceContent: HostedWorkspaceContentState {
+        guard let selectedWorkspaceID else { return HostedWorkspaceContentState() }
+        return store.hostedWorkspaceContentByID[selectedWorkspaceID] ?? HostedWorkspaceContentState()
+    }
+
+    var hostedAgentSessions: [HostedAgentSessionSummary] {
+        hostedWorkspaceContent.agentSessions
+    }
+
+    var hostedEditorDocuments: [HostedEditorDocumentSummary] {
+        hostedWorkspaceContent.editorDocuments
     }
 
     var visibleWorkspaceID: Workspace.ID? {
-        activeRuntime?.workspaceID
+        runtimeRegistry.activeWorkspaceID
     }
 
     var gitStore: GitStore? {
-        activeRuntime?.gitStore
+        guard let workspaceID = visibleWorkspaceID else { return nil }
+        return runtimeRegistry.gitStore(for: workspaceID)
     }
 
-    var activeMetadataStore: WorktreeInfoStore? {
-        runtimeRegistry.metadataCoordinator.activeStore
+    func editorSessionPool(for workspaceID: Workspace.ID?) -> EditorSessionPool? {
+        guard let workspaceID else { return nil }
+        return runtimeRegistry.editorSessionPool(for: workspaceID)
     }
 
     var navigatorWorktreesByRepository: [Repository.ID: [Worktree]] {
-        workspaceCatalog.worktreesByRepository
-    }
-
-    var terminalBellSnapshot: String {
-        workspaceTerminalRegistry.bellSnapshot
+        store.worktreesByRepository
     }
 
     var restoreSettingsSnapshot: String {
@@ -180,106 +254,191 @@ struct ContentView: View {
     // MARK: - Body
     
     var body: some View {
-        applyLifecycleModifiers(
-            rootContent
-                .background(theme.surface)
-                .environment(\.devysTheme, theme)
-                .preferredColorScheme(themeManager.colorScheme)
-                .tint(theme.visibleAccent)
-                .background {
-                    WindowTitlebarToolbarHost(
-                        theme: theme,
-                        hasRepositories: workspaceCatalog.hasRepositories,
-                        hasWorktree: activeWorktree != nil,
-                        isSidebarVisible: isSidebarVisible,
-                        onToggleSidebar: { toggleSidebar() },
-                        onAgents: { openDefaultOrPromptAgentForSelectedWorkspace() },
-                        onShell: { openShellForSelectedWorkspace() },
-                        onClaude: { launchClaudeForSelectedWorkspace() },
-                        onCodex: { launchCodexForSelectedWorkspace() }
-                    )
-                }
-        )
-        .onReceive(NotificationCenter.default.publisher(for: FileTreeModel.itemsDeletedNotification)) { notification in
-            handleFileTreeDeletionNotification(notification)
-        }
-        .sheet(item: $workspaceCreationRequest) { request in
-            WorkspaceCreationSheet(
-                repository: request.repository,
-                defaults: repositorySettingsStore.settings(for: request.repository.rootURL).workspaceCreation,
-                creationService: container.workspaceCreationService,
-                initialMode: request.mode
-            ) { workspaces in
-                await handleCreatedWorkspaces(workspaces, in: request.repository)
-            }
-            .environment(\.devysTheme, theme)
-            .preferredColorScheme(themeManager.colorScheme)
-        }
-        .sheet(item: $agentLaunchRequest) { request in
-            AgentHarnessPickerSheet(onSelect: { kind in
-                agentLaunchRequest = nil
-                if let pendingSessionID = request.pendingSessionID {
-                    launchPreparedAgentSession(
-                        kind,
-                        workspaceID: request.workspaceID,
-                        sessionID: pendingSessionID
-                    )
-                } else {
-                    openAgentSession(
-                        kind,
-                        workspaceID: request.workspaceID,
-                        initialAttachments: request.initialAttachments,
-                        preferredPaneID: request.preferredPaneID
-                    )
-                }
-            }, onCancel: {
-                agentLaunchRequest = nil
-                if let pendingSessionID = request.pendingSessionID,
-                   let pendingTabID = request.pendingTabID {
-                    cancelPreparedAgentSessionLaunch(
-                        workspaceID: request.workspaceID,
-                        sessionID: pendingSessionID,
-                        tabID: pendingTabID
-                    )
-                }
-            })
-            .environment(\.devysTheme, theme)
-            .preferredColorScheme(themeManager.colorScheme)
-        }
-        .sheet(item: $activeSearchRequest) { request in
-            searchSheetContent(for: request)
-                .environment(\.devysTheme, theme)
-                .preferredColorScheme(themeManager.colorScheme)
-        }
-        .sheet(isPresented: $isNotificationsPanelPresented) {
-            notificationsPanelContent
-                .environment(\.devysTheme, theme)
-                .preferredColorScheme(themeManager.colorScheme)
-        }
-        .sheet(isPresented: $isGitCommitSheetPresented) {
-            if let gitStore {
-                CommitSheet(store: gitStore)
-                    .environment(\.devysTheme, theme)
-                    .preferredColorScheme(themeManager.colorScheme)
-            }
-        }
-        .sheet(isPresented: $isCreatePullRequestSheetPresented) {
-            if let gitStore {
-                CreatePRSheet(store: gitStore) { _ in
-                    Task { @MainActor in
-                        await handleCreatedPullRequest()
-                    }
-                }
-                .environment(\.devysTheme, theme)
-                .preferredColorScheme(themeManager.colorScheme)
-            }
-        }
+        let lifecycleContent = applyLifecycleModifiers(themedRootContent)
+        let observedContent = applyShellObservation(lifecycleContent)
+        return applyWindowPresentations(observedContent)
     }
-
 }
 
 @MainActor
 extension ContentView {
+    var themedRootContent: some View {
+        rootContent
+            .background(theme.base)
+            .environment(\.devysTheme, theme)
+            .preferredColorScheme(themeManager.colorScheme)
+            .tint(theme.accent)
+            .background {
+                WindowTitlebarToolbarHost(
+                    theme: theme,
+                    hasRepositories: store.hasRepositories,
+                    hasWorktree: activeWorktree != nil,
+                    isSidebarVisible: isSidebarVisible,
+                    repoName: selectedRepository?.displayName,
+                    branchName: selectedCatalogWorktree?.name,
+                    onToggleSidebar: { toggleSidebar() },
+                    onAgents: { openDefaultOrPromptAgentForSelectedWorkspace() },
+                    onShell: { openShellForSelectedWorkspace() },
+                    onClaude: { launchClaudeForSelectedWorkspace() },
+                    onCodex: { launchCodexForSelectedWorkspace() }
+                )
+            }
+    }
+
+    var searchPresentationBinding: Binding<WindowFeature.SearchPresentation?> {
+        Binding(
+            get: { store.searchPresentation },
+            set: { store.send(.setSearchPresentation($0)) }
+        )
+    }
+
+    var workspaceCreationPresentationBinding: Binding<WorkspaceCreationPresentation?> {
+        Binding(
+            get: { store.workspaceCreationPresentation },
+            set: { store.send(.setWorkspaceCreationPresentation($0)) }
+        )
+    }
+
+    var agentLaunchPresentationBinding: Binding<AgentLaunchPresentation?> {
+        Binding(
+            get: { store.agentLaunchPresentation },
+            set: { store.send(.setAgentLaunchPresentation($0)) }
+        )
+    }
+
+    var gitCommitSheetBinding: Binding<Bool> {
+        Binding(
+            get: { store.isGitCommitSheetPresented },
+            set: { store.send(.setGitCommitSheetPresented($0)) }
+        )
+    }
+
+    var createPullRequestSheetBinding: Binding<Bool> {
+        Binding(
+            get: { store.isCreatePullRequestSheetPresented },
+            set: { store.send(.setCreatePullRequestSheetPresented($0)) }
+        )
+    }
+
+    var notificationsPanelBinding: Binding<Bool> {
+        Binding(
+            get: { store.isNotificationsPanelPresented },
+            set: { store.send(.setNotificationsPanelPresented($0)) }
+        )
+    }
+
+    func applyShellObservation<V: View>(_ view: V) -> some View {
+        view
+            .onChange(of: reducerFilesSidebarVisible) { _, _ in
+                syncFilesSidebarVisibilityFromReducer()
+            }
+            .onChange(of: store.lastErrorMessage) { _, message in
+                guard let message else { return }
+                showLauncherUnavailableAlert(title: "Action Failed", message: message)
+                store.send(.clearErrorMessage)
+            }
+            .onReceive(
+                NotificationCenter.default.publisher(for: FileTreeModel.itemsDeletedNotification)
+            ) { notification in
+                handleFileTreeDeletionNotification(notification)
+            }
+    }
+
+    func applyWindowPresentations<V: View>(_ view: V) -> some View {
+        applyGitPresentations(
+            applySearchAndNotificationsPresentations(
+                applyPrimarySheetPresentations(view)
+            )
+        )
+    }
+
+    func applyPrimarySheetPresentations<V: View>(_ view: V) -> some View {
+        view
+            .sheet(item: workspaceCreationPresentationBinding) { request in
+                presentedSheetContent(
+                    WorkspaceCreationSheet(
+                    repository: request.repository,
+                    defaults: repositorySettingsStore.settings(for: request.repository.rootURL)
+                        .workspaceCreation,
+                    creationService: container.workspaceCreationService,
+                    initialMode: request.mode
+                    ) { workspaces in
+                        await handleCreatedWorkspaces(workspaces, in: request.repository)
+                    }
+                )
+            }
+            .sheet(item: agentLaunchPresentationBinding) { request in
+                presentedSheetContent(
+                    AgentHarnessPickerSheet(
+                    onSelect: { kind in
+                        store.send(.setAgentLaunchPresentation(nil))
+                        if let pendingSessionID = request.pendingSessionID {
+                            launchPreparedAgentSession(
+                                kind,
+                                workspaceID: request.workspaceID,
+                                sessionID: pendingSessionID
+                            )
+                        } else {
+                            openAgentSession(
+                                kind,
+                                workspaceID: request.workspaceID,
+                                initialAttachments: request.initialAttachments,
+                                preferredPaneID: request.preferredPaneID
+                            )
+                        }
+                    },
+                    onCancel: {
+                        store.send(.setAgentLaunchPresentation(nil))
+                        if let pendingSessionID = request.pendingSessionID,
+                           let pendingTabID = request.pendingTabID {
+                            cancelPreparedAgentSessionLaunch(
+                                workspaceID: request.workspaceID,
+                                sessionID: pendingSessionID,
+                                tabID: pendingTabID
+                            )
+                        }
+                    }
+                    )
+                )
+            }
+    }
+
+    func applySearchAndNotificationsPresentations<V: View>(_ view: V) -> some View {
+        view
+            .sheet(item: searchPresentationBinding) { presentation in
+                presentedSheetContent(searchSheetContent(for: presentation))
+            }
+            .sheet(isPresented: notificationsPanelBinding) {
+                presentedSheetContent(notificationsPanelContent)
+            }
+    }
+
+    func applyGitPresentations<V: View>(_ view: V) -> some View {
+        view
+            .sheet(isPresented: gitCommitSheetBinding) {
+                if let gitStore {
+                    presentedSheetContent(CommitSheet(store: gitStore))
+                }
+            }
+            .sheet(isPresented: createPullRequestSheetBinding) {
+                if let gitStore {
+                    presentedSheetContent(
+                        CreatePRSheet(store: gitStore) { _ in
+                            Task { @MainActor in
+                                await handleCreatedPullRequest()
+                            }
+                        }
+                    )
+                }
+            }
+    }
+
+    func presentedSheetContent<V: View>(_ view: V) -> some View {
+        view
+            .environment(\.devysTheme, theme)
+            .preferredColorScheme(themeManager.colorScheme)
+    }
+
     static func makeSplitController() -> DevysSplitController {
         DevysSplitController(
             configuration: DevysSplitConfiguration(
@@ -291,7 +450,6 @@ extension ContentView {
                 autoCloseEmptyPanes: true,  // Auto-close empty panes
                 contentViewLifecycle: .keepAllAlive,
                 newTabPosition: .current,
-                welcomeTabBehavior: .autoCreateAndClosePane,  // Create welcome tab, closing it closes pane
                 acceptedDropTypes: [.fileURL, .devysGitDiff],
                 appearance: .init(
                     tabBarHeight: 36,
@@ -310,23 +468,23 @@ extension ContentView {
     func splitColorsFromTheme(_ theme: DevysTheme) -> DevysSplitConfiguration.Colors {
         DevysSplitConfiguration.Colors(
             accent: theme.accent,
-            tabBarBackground: theme.surface,
-            activeTabBackground: theme.elevated,
+            tabBarBackground: theme.card,
+            activeTabBackground: theme.base,
             inactiveText: theme.textSecondary,
             activeText: theme.text,
             separator: theme.border,
-            contentBackground: theme.base
+            contentBackground: theme.card,
+            baseBackground: theme.base,
+            paneCornerRadius: Spacing.radius,
+            paneGap: Spacing.paneGap
         )
     }
 
-    var workspaceShell: some View {
+    var workspaceShellView: some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
-                if !isNavigatorCollapsed {
-                    navigatorSurface
-                        .frame(width: navigatorWidth)
-                        .transition(.move(edge: .leading).combined(with: .opacity))
-                }
+                // Repo rail — always visible, slim 48pt strip
+                repoRailSurface
 
                 if isSidebarVisible {
                     sidebarContent
@@ -341,15 +499,24 @@ extension ContentView {
                 }
 
                 workspace
+                    .overlay(alignment: .bottom) {
+                        // Keep the floating status capsule centered in the workspace region,
+                        // not the full window shell that includes the rail and sidebar.
+                        statusCapsuleOverlay
+                            .padding(.bottom, DevysSpacing.space2)
+                    }
             }
-            .overlay(alignment: .leading) {
-                NavigatorEdgeHandle(isExpanded: !isNavigatorCollapsed) {
-                    toggleNavigator()
-                }
-                .frame(maxHeight: .infinity, alignment: .leading)
-            }
+        }
+    }
+}
 
-            statusBar
+private extension WindowFeature.Sidebar {
+    var workspaceSidebarMode: WorkspaceSidebarMode {
+        switch self {
+        case .files:
+            .files
+        case .agents:
+            .agents
         }
     }
 }

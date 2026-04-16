@@ -4,6 +4,7 @@
 // Copyright © 2026 Devys. All rights reserved.
 
 import AppKit
+import AppFeatures
 import UniformTypeIdentifiers
 @preconcurrency import Split
 import Workspace
@@ -14,10 +15,10 @@ final class DevysSplitCloseDelegate: DevysSplitDelegate {
     var onShouldCloseTab: ((Tab, PaneID) -> Bool)?
     var onDidCloseTab: ((TabID, PaneID) -> Void)?
     var onDidCreateTab: ((Tab, PaneID) -> Void)?
-    
-    // Callbacks for new DevysSplit extensions
-    var onWelcomeTabForPane: ((PaneID) -> Tab?)?
-    var onIsWelcomeTab: ((TabID, PaneID) -> Bool)?
+    var onDidSelectTab: ((Tab, PaneID) -> Void)?
+    var onDidRequestGestureIntent: ((SplitGestureIntent) -> Bool)?
+    var onDidFocusPane: ((PaneID) -> Void)?
+    var onDidResizeSplit: ((UUID, Double) -> Void)?
     var onDidReceiveDrop: ((DropContent, PaneID, DropZone) -> TabID?)?
     var onShouldAcceptDrop: (([UTType], PaneID) -> Bool)?
 
@@ -52,25 +53,23 @@ final class DevysSplitCloseDelegate: DevysSplitDelegate {
             onDidCreateTab?(tab, pane)
         }
     }
-    
-    // MARK: - New DevysSplit extension methods (splitView prefix)
-    
-    nonisolated func splitView(
+
+    nonisolated func splitTabBar(
         _ _: DevysSplitController,
-        welcomeTabForPane pane: PaneID
-    ) -> Tab? {
+        didSelectTab tab: Tab,
+        inPane pane: PaneID
+    ) {
         MainActor.assumeIsolated {
-            onWelcomeTabForPane?(pane)
+            onDidSelectTab?(tab, pane)
         }
     }
-    
-    nonisolated func splitView(
+
+    nonisolated func splitTabBar(
         _ _: DevysSplitController,
-        isWelcomeTab tabId: TabID,
-        inPane pane: PaneID
-    ) -> Bool {
+        didFocusPane pane: PaneID
+    ) {
         MainActor.assumeIsolated {
-            onIsWelcomeTab?(tabId, pane) ?? false
+            onDidFocusPane?(pane)
         }
     }
     
@@ -94,6 +93,25 @@ final class DevysSplitCloseDelegate: DevysSplitDelegate {
             onShouldAcceptDrop?(types, pane) ?? true
         }
     }
+
+    nonisolated func splitView(
+        _ _: DevysSplitController,
+        didResizeSplit splitID: UUID,
+        position: Double
+    ) {
+        MainActor.assumeIsolated {
+            onDidResizeSplit?(splitID, position)
+        }
+    }
+
+    nonisolated func splitView(
+        _ _: DevysSplitController,
+        didRequest intent: SplitGestureIntent
+    ) -> Bool {
+        MainActor.assumeIsolated {
+            onDidRequestGestureIntent?(intent) ?? false
+        }
+    }
 }
 
 @MainActor
@@ -102,24 +120,11 @@ extension ContentView {
         splitDelegate.onShouldCloseTab = { tab, paneId in
             handleTabCloseRequest(tab: tab, paneId: paneId)
         }
-        splitDelegate.onDidCloseTab = { tabId, _ in
-            handleTabDidClose(tabId)
+        splitDelegate.onDidCloseTab = { tabId, paneId in
+            handleTabDidClose(tabId, paneId: paneId)
         }
-        splitDelegate.onDidCreateTab = { tab, _ in
-            // Track welcome tabs when they're created by the controller
-            // Check if this is a welcome tab by checking if we don't already have content for it
-            if tabContents[tab.id] == nil && tab.title == "Welcome" {
-                tabContents[tab.id] = .welcome
-            }
-        }
-        splitDelegate.onWelcomeTabForPane = { _ in
-            // Return welcome tab metadata
-            Tab(title: "Welcome", icon: "hand.wave", isDirty: false)
-        }
-        splitDelegate.onIsWelcomeTab = { tabId, _ in
-            // Check if this is a welcome tab by content type
-            guard let content = tabContents[tabId] else { return false }
-            return content == .welcome
+        splitDelegate.onDidCreateTab = { _, _ in
+            syncTabMetadataFromSessions()
         }
         splitDelegate.onDidReceiveDrop = { content, paneId, zone in
             handleExternalDrop(content: content, inPane: paneId, zone: zone)
@@ -128,36 +133,45 @@ extension ContentView {
             types.contains(.fileURL)
                 || types.contains(.devysGitDiff)
         }
+        configureSplitObservationCallbacks()
         controller.delegate = splitDelegate
-        
+
         // Set initial colors from theme
         controller.updateColors(splitColorsFromTheme(themeManager.theme))
-        
-        // Populate content for existing welcome tabs created before delegate was set.
-        // The initial welcome tab is created during controller initialization (before onAppear),
-        // so onDidCreateTab callback never fires for it. We retroactively register it here.
-        for tabId in controller.allTabIds {
-            if tabContents[tabId] == nil,
-               let tab = controller.tab(tabId),
-               tab.title == "Welcome" {
-                tabContents[tabId] = .welcome
-            }
+    }
+
+    private func configureSplitObservationCallbacks() {
+        splitDelegate.onDidSelectTab = { tab, _ in
+            selectTab(tab.id)
+        }
+        splitDelegate.onDidRequestGestureIntent = { intent in
+            handleSplitGestureIntent(intent)
+        }
+        splitDelegate.onDidFocusPane = { pane in
+            guard let workspaceID = selectedWorkspaceID else { return }
+            store.send(.setWorkspaceFocusedPaneID(workspaceID: workspaceID, paneID: pane))
+        }
+        splitDelegate.onDidResizeSplit = { splitID, position in
+            guard let workspaceID = selectedWorkspaceID else { return }
+            store.send(
+                .setWorkspaceSplitDividerPosition(
+                    workspaceID: workspaceID,
+                    splitID: splitID,
+                    position: position
+                )
+            )
         }
     }
     
     /// Handle external content dropped onto a pane
     private func handleExternalDrop(content: DropContent, inPane paneId: PaneID, zone: DropZone) -> TabID? {
-        // DevysSplit owns zone-specific placement (including edge split behavior).
-        // The delegate only creates content in the provided pane and returns the tab.
-        let targetPaneId = paneId
-
         switch content {
         case .files(let urls):
-            return handleFileDrop(urls: urls, inPane: targetPaneId, zone: zone)
+            return handleFileDrop(urls: urls, inPane: paneId, zone: zone)
             
         case .custom(let utType, let data):
             if utType == .devysGitDiff {
-                return handleGitDiffDrop(data: data, inPane: targetPaneId, zone: zone)
+                return handleGitDiffDrop(data: data, inPane: paneId, zone: zone)
             }
             return nil
             
@@ -169,8 +183,8 @@ extension ContentView {
     
     /// Create an editor tab from a dropped file
     private func openEditorTabFromDrop(url: URL, inPane paneId: PaneID) -> TabID? {
-        guard let workspaceID = workspaceCatalog.selectedWorkspaceID else { return nil }
-        let content = TabContent.editor(workspaceID: workspaceID, url: url)
+        guard let workspaceID = selectedWorkspaceID else { return nil }
+        let content = WorkspaceTabContent.editor(workspaceID: workspaceID, url: url)
         
         // Check if already open
         if let existingTabId = findExistingTab(for: content) {
@@ -187,57 +201,107 @@ extension ContentView {
         zone: DropZone
     ) -> TabID? {
         guard let firstURL = urls.first else { return nil }
+        let attachments = urls.map(agentAttachment(from:))
 
-        if let agentTabID = selectedAgentTabID(inPane: paneId) {
-            let attachments = urls.map(agentAttachment(from:))
-            if case .agentSession(let workspaceID, let sessionID)? = tabContents[agentTabID],
-               let session = runtimeRegistry
-                .runtimeHandle(for: workspaceID)?
-                .agentRuntimeRegistry
-                .session(id: sessionID) {
-                session.addAttachments(attachments)
-            }
+        if let agentTabID = handleAgentFileDrop(
+            attachments: attachments,
+            inPane: paneId,
+            zone: zone
+        ) {
             return agentTabID
         }
 
-        if case .edge = zone,
-           let workspaceID = workspaceCatalog.selectedWorkspaceID {
-            let attachments = urls.map(agentAttachment(from:))
-            if let configuredHarness = appSettings.agent.defaultHarness,
-               let kind = agentKind(forHarness: configuredHarness),
-               let prepared = preparePendingAgentSessionLaunch(
-                    workspaceID: workspaceID,
-                    preferredPaneID: paneId,
-                    initialAttachments: attachments,
-                    preferredKind: kind
-               ) {
-                launchPreparedAgentSession(
-                    kind,
-                    workspaceID: workspaceID,
-                    sessionID: prepared.runtime.sessionID
-                )
-                return prepared.tabID
-            }
-
-            if let prepared = preparePendingAgentSessionLaunch(
+        if case let .edge(orientation, insertion) = zone,
+           let workspaceID = selectedWorkspaceID {
+            return handleEdgeFileDrop(
+                attachments: attachments,
+                sourcePaneID: paneId,
                 workspaceID: workspaceID,
-                preferredPaneID: paneId,
-                initialAttachments: attachments,
-                preferredKind: nil
-            ) {
-                agentLaunchRequest = AgentLaunchPresentationRequest(
-                    workspaceID: workspaceID,
-                    initialAttachments: [],
-                    preferredPaneID: paneId,
-                    pendingSessionID: prepared.runtime.sessionID,
-                    pendingTabID: prepared.tabID
-                )
-                return prepared.tabID
-            }
-            return nil
+                orientation: orientation,
+                insertion: insertion
+            )
         }
 
         return openEditorTabFromDrop(url: firstURL, inPane: paneId)
+    }
+
+    private func handleAgentFileDrop(
+        attachments: [AgentAttachment],
+        inPane paneID: PaneID,
+        zone: DropZone
+    ) -> TabID? {
+        guard let agentTabID = selectedAgentTabID(inPane: paneID) else {
+            return nil
+        }
+
+        if case .agentSession(let workspaceID, let sessionID)? = tabContents[agentTabID],
+           let session = runtimeRegistry.agentSession(id: sessionID, in: workspaceID) {
+            session.addAttachments(attachments)
+        }
+
+        if case let .edge(orientation, insertion) = zone {
+            splitSelectedTabIfNeeded(
+                agentTabID,
+                from: paneID,
+                orientation: orientation,
+                insertion: insertion
+            )
+        }
+
+        return agentTabID
+    }
+
+    private func handleEdgeFileDrop(
+        attachments: [AgentAttachment],
+        sourcePaneID: PaneID,
+        workspaceID: Workspace.ID,
+        orientation: Split.SplitOrientation,
+        insertion: SplitInsertionPosition
+    ) -> TabID? {
+        guard let targetPaneID = splitPane(
+            sourcePaneID,
+            orientation: orientation,
+            insertion: insertion.windowInsertionPosition,
+            workspaceID: workspaceID
+        ) else {
+            return nil
+        }
+
+        if let configuredHarness = appSettings.agent.defaultHarness,
+           let kind = agentKind(forHarness: configuredHarness),
+           let prepared = preparePendingAgentSessionLaunch(
+                workspaceID: workspaceID,
+                preferredPaneID: targetPaneID,
+                initialAttachments: attachments,
+                preferredKind: kind
+           ) {
+            launchPreparedAgentSession(
+                kind,
+                workspaceID: workspaceID,
+                sessionID: prepared.runtime.sessionID
+            )
+            return prepared.tabID
+        }
+
+        if let prepared = preparePendingAgentSessionLaunch(
+            workspaceID: workspaceID,
+            preferredPaneID: targetPaneID,
+            initialAttachments: attachments,
+            preferredKind: nil
+        ) {
+            store.send(.setAgentLaunchPresentation(AgentLaunchPresentation(
+                workspaceID: workspaceID,
+                initialAttachments: [],
+                preferredPaneID: targetPaneID,
+                pendingSessionID: prepared.runtime.sessionID,
+                pendingTabID: prepared.tabID
+            )))
+            return prepared.tabID
+        }
+
+        store.send(.closeWorkspacePane(workspaceID: workspaceID, paneID: targetPaneID))
+        renderWorkspaceLayout(for: workspaceID)
+        return nil
     }
     
     // Handle a git diff dropped from the sidebar.
@@ -251,22 +315,44 @@ extension ContentView {
         guard let transfer = try? JSONDecoder().decode(GitDiffTransfer.self, from: data) else {
             return nil
         }
-        guard let workspaceID = workspaceCatalog.selectedWorkspaceID else { return nil }
+        guard let workspaceID = selectedWorkspaceID else { return nil }
+
+        if case let .edge(orientation, insertion) = zone,
+           let agentTabID = selectedAgentTabID(inPane: paneId),
+           case .agentSession(_, let sessionID)? = tabContents[agentTabID],
+           let session = runtimeRegistry.agentSession(id: sessionID, in: workspaceID) {
+            session.addAttachment(.gitDiff(path: transfer.path, isStaged: transfer.isStaged))
+            splitSelectedTabIfNeeded(
+                agentTabID,
+                from: paneId,
+                orientation: orientation,
+                insertion: insertion
+            )
+            return agentTabID
+        }
 
         if let agentTabID = selectedAgentTabID(inPane: paneId),
            case .agentSession(_, let sessionID)? = tabContents[agentTabID],
-           let session = runtimeRegistry.runtimeHandle(for: workspaceID)?.agentRuntimeRegistry.session(id: sessionID) {
+           let session = runtimeRegistry.agentSession(id: sessionID, in: workspaceID) {
             session.addAttachment(.gitDiff(path: transfer.path, isStaged: transfer.isStaged))
             return agentTabID
         }
 
-        if case .edge = zone {
+        if case let .edge(orientation, insertion) = zone {
             let attachment = AgentAttachment.gitDiff(path: transfer.path, isStaged: transfer.isStaged)
+            guard let targetPaneID = splitPane(
+                paneId,
+                orientation: orientation,
+                insertion: insertion.windowInsertionPosition,
+                workspaceID: workspaceID
+            ) else {
+                return nil
+            }
             if let configuredHarness = appSettings.agent.defaultHarness,
                let kind = agentKind(forHarness: configuredHarness),
                let prepared = preparePendingAgentSessionLaunch(
                     workspaceID: workspaceID,
-                    preferredPaneID: paneId,
+                    preferredPaneID: targetPaneID,
                     initialAttachments: [attachment],
                     preferredKind: kind
                ) {
@@ -280,23 +366,25 @@ extension ContentView {
 
             if let prepared = preparePendingAgentSessionLaunch(
                 workspaceID: workspaceID,
-                preferredPaneID: paneId,
+                preferredPaneID: targetPaneID,
                 initialAttachments: [attachment],
                 preferredKind: nil
             ) {
-                agentLaunchRequest = AgentLaunchPresentationRequest(
+                store.send(.setAgentLaunchPresentation(AgentLaunchPresentation(
                     workspaceID: workspaceID,
                     initialAttachments: [],
-                    preferredPaneID: paneId,
+                    preferredPaneID: targetPaneID,
                     pendingSessionID: prepared.runtime.sessionID,
                     pendingTabID: prepared.tabID
-                )
+                )))
                 return prepared.tabID
             }
+            store.send(.closeWorkspacePane(workspaceID: workspaceID, paneID: targetPaneID))
+            renderWorkspaceLayout(for: workspaceID)
             return nil
         }
 
-        let content = TabContent.gitDiff(
+        let content = WorkspaceTabContent.gitDiff(
             workspaceID: workspaceID,
             path: transfer.path,
             isStaged: transfer.isStaged
@@ -312,11 +400,30 @@ extension ContentView {
     }
 
     private func selectedAgentTabID(inPane paneId: PaneID) -> TabID? {
-        guard let selectedTab = controller.selectedTab(inPane: paneId),
-              case .agentSession = tabContents[selectedTab.id] else {
+        guard let selectedTabID = paneLayout(for: paneId)?.selectedTabID,
+              case .agentSession = tabContents[selectedTabID] else {
             return nil
         }
-        return selectedTab.id
+        return selectedTabID
+    }
+
+    private func splitSelectedTabIfNeeded(
+        _ tabID: TabID,
+        from paneID: PaneID,
+        orientation: Split.SplitOrientation,
+        insertion: SplitInsertionPosition
+    ) {
+        guard let sourceIndex = paneLayout(for: paneID)?.tabIDs.firstIndex(of: tabID) else {
+            return
+        }
+        _ = splitTab(
+            tabID,
+            from: paneID,
+            sourceIndex: sourceIndex,
+            into: paneID,
+            orientation: orientation,
+            insertion: insertion.windowInsertionPosition
+        )
     }
 
     private func agentAttachment(from url: URL) -> AgentAttachment {
@@ -337,24 +444,50 @@ extension ContentView {
             return false
         }
 
-        guard let content = tabContents[tab.id] else { return true }
-        guard case .editor = content,
-              let session = editorSessions[tab.id],
-              session.isDirty else {
+        guard let content = tabContents[tab.id],
+              let request = workspaceTabCloseRequest(
+                tabID: tab.id,
+                paneID: paneId,
+                content: content
+              ) else {
             return true
         }
 
-        let response = showSaveDialog(fileName: content.fallbackTitle)
-        switch response {
-        case .alertFirstButtonReturn:
-            closeInFlight.insert(tab.id)
-            saveAndClose(tabId: tab.id, paneId: paneId, session: session)
-            return false
-        case .alertSecondButtonReturn:
+        switch request.strategy {
+        case .closeImmediately:
             return true
-        default:
-            return false
+
+        case .confirmDirtyEditor(let fileName):
+            guard let session = editorSessions[tab.id] else { return false }
+            let response = showSaveDialog(fileName: fileName)
+            switch response {
+            case .alertFirstButtonReturn:
+                closeInFlight.insert(tab.id)
+                saveAndClose(tabId: tab.id, paneId: paneId, session: session)
+                return false
+            case .alertSecondButtonReturn:
+                return true
+            default:
+                return false
+            }
         }
+    }
+
+    private func workspaceTabCloseRequest(
+        tabID: TabID,
+        paneID: PaneID,
+        content: WorkspaceTabContent
+    ) -> WindowFeature.WorkspaceTabCloseRequest? {
+        let context = WindowFeature.WorkspaceTabCloseContext(
+            tabID: tabID,
+            paneID: paneID,
+            content: content,
+            isDirtyEditor: editorSessions[tabID]?.isDirty == true
+        )
+        store.send(.requestWorkspaceTabClose(context))
+        let request = store.workspaceTabCloseRequest
+        store.send(.setWorkspaceTabCloseRequest(nil))
+        return request
     }
 
     private func saveAndClose(tabId: TabID, paneId: PaneID, session: EditorSession) {
@@ -363,7 +496,7 @@ extension ContentView {
                 try await session.save()
                 closeInFlight.remove(tabId)
                 closeBypass.insert(tabId)
-                _ = controller.closeTab(tabId, inPane: paneId)
+                closeTab(tabId, in: paneId)
             } catch {
                 closeInFlight.remove(tabId)
                 showErrorAlert(title: "Save Failed", message: error.localizedDescription)
@@ -371,18 +504,27 @@ extension ContentView {
         }
     }
 
-    private func handleTabDidClose(_ id: TabID) {
+    private func handleTabDidClose(_ id: TabID, paneId: PaneID) {
         guard let content = tabContents[id] else { return }
-        let wasPreview = previewTabId == id
+        let wasPreview = content.workspaceID.flatMap { workspaceID in
+            paneID(for: id, workspaceID: workspaceID)
+                .flatMap { paneID in
+                    store.workspaceShells[workspaceID]?.layout?.paneLayout(for: paneID)?.previewTabID
+                }
+        } == id
+        if let workspaceID = selectedWorkspaceID {
+            store.send(.closeWorkspaceTab(workspaceID: workspaceID, paneID: paneId, tabID: id))
+        }
         removeTabState(id: id, content: content, wasPreview: wasPreview)
+        renderWorkspaceLayout()
     }
 
     /// Removes all state associated with a tab ID
-    private func removeTabState(id: TabID, content: TabContent, wasPreview: Bool) {
-        tabContents.removeValue(forKey: id)
+    private func removeTabState(id: TabID, content: WorkspaceTabContent, wasPreview: Bool) {
+        removeTabContent(for: id, content: content)
 
         if wasPreview {
-            previewTabId = nil
+            clearPreviewTabID(id, workspaceID: content.workspaceID)
         }
 
         cleanupSession(for: content, tabId: id)

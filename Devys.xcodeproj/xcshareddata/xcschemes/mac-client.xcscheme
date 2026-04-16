@@ -16,7 +16,7 @@
                   <BuildableReference
                      BuildableIdentifier = "primary"
                      BlueprintIdentifier = "TGT001"
-                     BuildableName = "mac-client.app"
+                     BuildableName = "Devys.app"
                      BlueprintName = "mac-client"
                      ReferencedContainer = "container:Devys.xcodeproj">
                   </BuildableReference>
@@ -34,7 +34,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "TGT001"
-               BuildableName = "mac-client.app"
+               BuildableName = "Devys.app"
                BlueprintName = "mac-client"
                ReferencedContainer = "container:Devys.xcodeproj">
             </BuildableReference>
@@ -47,15 +47,6 @@
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES"
       shouldAutocreateTestPlan = "YES">
-      <MacroExpansion>
-         <BuildableReference
-            BuildableIdentifier = "primary"
-            BlueprintIdentifier = "TGT001"
-            BuildableName = "mac-client.app"
-            BlueprintName = "mac-client"
-            ReferencedContainer = "container:Devys.xcodeproj">
-         </BuildableReference>
-      </MacroExpansion>
       <Testables>
          <TestableReference
             skipped = "NO"
@@ -76,7 +67,7 @@
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       launchStyle = "0"
       useCustomWorkingDirectory = "NO"
-      ignoresPersistentStateOnLaunch = "NO"
+      ignoresPersistentStateOnLaunch = "YES"
       debugDocumentVersioning = "YES"
       debugServiceExtension = "internal"
       allowLocationSimulation = "YES">
@@ -85,17 +76,11 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "TGT001"
-            BuildableName = "mac-client.app"
+            BuildableName = "Devys.app"
             BlueprintName = "mac-client"
             ReferencedContainer = "container:Devys.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
-      <CommandLineArguments>
-         <CommandLineArgument
-            argument = ""
-            isEnabled = "YES">
-         </CommandLineArgument>
-      </CommandLineArguments>
       <EnvironmentVariables>
          <EnvironmentVariable
             key = "DEVYS_TERMINAL_SCROLL_TEST"
@@ -115,7 +100,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "TGT001"
-            BuildableName = "mac-client.app"
+            BuildableName = "Devys.app"
             BlueprintName = "mac-client"
             ReferencedContainer = "container:Devys.xcodeproj">
          </BuildableReference>

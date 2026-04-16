@@ -1,4 +1,5 @@
 import ACPClientKit
+import AppFeatures
 import Editor
 import Foundation
 import Git
@@ -331,7 +332,7 @@ private func testExecutablePath() -> String? {
     for bundle in bundles {
         if let executablePath = bundle.executableURL?.path,
            FileManager.default.isExecutableFile(atPath: executablePath),
-           executablePath.hasSuffix("/mac-client") {
+           executablePath.hasSuffix("/Devys") {
             return executablePath
         }
     }
@@ -344,10 +345,10 @@ private func testExecutablePath() -> String? {
 
     if let builtProductsDirectory = environment["BUILT_PRODUCTS_DIR"] {
         let candidate = URL(fileURLWithPath: builtProductsDirectory, isDirectory: true)
-            .appendingPathComponent("mac-client.app", isDirectory: true)
+            .appendingPathComponent("Devys.app", isDirectory: true)
             .appendingPathComponent("Contents", isDirectory: true)
             .appendingPathComponent("MacOS", isDirectory: true)
-            .appendingPathComponent("mac-client", isDirectory: false)
+            .appendingPathComponent("Devys", isDirectory: false)
         if FileManager.default.isExecutableFile(atPath: candidate.path) {
             return candidate.path
         }

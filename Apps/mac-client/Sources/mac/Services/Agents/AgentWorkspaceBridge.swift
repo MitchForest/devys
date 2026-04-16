@@ -1,5 +1,6 @@
 // swiftlint:disable file_length
 import ACPClientKit
+import AppFeatures
 import Editor
 import Foundation
 import GhosttyTerminal

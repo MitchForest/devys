@@ -4,6 +4,7 @@
 // Copyright © 2026 Devys. All rights reserved.
 
 import AppKit
+import AppFeatures
 import Split
 import SwiftUI
 import Workspace
@@ -53,9 +54,10 @@ extension ContentView {
     func saveActiveEditorAs() {
         guard let activeTabId = selectedTabId,
               let content = tabContents[activeTabId],
-              case .editor = content,
+              case .editor(let workspaceID, _) = content,
               let session = editorSessions[activeTabId],
-              let document = session.document else {
+              let document = session.document,
+              let editorSessionPool = editorSessionPool(for: workspaceID) else {
             NSApp.sendAction(#selector(MetalEditorView.saveDocumentAs(_:)), to: nil, from: nil)
             return
         }
@@ -103,25 +105,39 @@ extension ContentView {
     }
 
     @discardableResult
-    func createTab(in paneId: PaneID, content: TabContent) -> TabID? {
+    func createTab(
+        in paneId: PaneID,
+        content: WorkspaceTabContent,
+        isPreview: Bool = false
+    ) -> TabID? {
+        guard let workspaceID = selectedWorkspaceID else { return nil }
         // Get title and icon from session if available, otherwise use fallbacks
         let title = tabMetadata(for: content).title
         let icon = tabMetadata(for: content).icon
         let activityIndicator = tabActivityIndicator()
+        let tabId = TabID()
+        let insertIndex = insertionIndexForNewTab(in: paneId, workspaceID: workspaceID)
 
-        if let tabId = controller.createTab(
+        store.send(
+            .insertWorkspaceTab(
+                workspaceID: workspaceID,
+                paneID: paneId,
+                tabID: tabId,
+                index: insertIndex,
+                isPreview: isPreview
+            )
+        )
+        setTabContent(content, for: tabId)
+        tabPresentationById[tabId] = TabPresentationState(
             title: title,
             icon: icon,
-            activityIndicator: activityIndicator,
-            inPane: paneId
-        ) {
-            setTabContent(content, for: tabId)
-            tabPresentationById[tabId] = currentTabPresentation(for: content, tabId: tabId)
-            selectTab(tabId)
-            return tabId
-        }
-
-        return nil
+            isPreview: isPreview,
+            isDirty: false,
+            activityIndicator: activityIndicator
+        )
+        renderWorkspaceLayout(for: workspaceID)
+        selectTab(tabId)
+        return tabId
     }
 
     func requestOpenRepository() {
@@ -162,82 +178,35 @@ extension ContentView {
         for repositoryID: Repository.ID,
         mode: WorkspaceCreationMode = .newBranch
     ) {
-        guard let repository = workspaceCatalog.repository(for: repositoryID) else {
-            return
-        }
-        workspaceCreationRequest = WorkspaceCreationPresentationRequest(
-            repository: repository,
-            mode: mode
-        )
+        store.send(.presentWorkspaceCreation(repositoryID: repositoryID, mode: mode))
     }
 
     // MARK: - Sidebar + Workspace Actions
 
     func showSidebarItem(_ item: WorkspaceSidebarMode) {
-        withAnimation(.easeInOut(duration: 0.2)) {
-            activeSidebarItem = item
+        _ = withAnimation(.easeInOut(duration: 0.2)) {
+            store.send(.showSidebar(item.windowSidebar))
         }
-        runtimeRegistry.activeShellState?.sidebarMode = item
-        runtimeRegistry.setFilesSidebarVisible(item == .files)
     }
 
     func toggleSidebar() {
-        withAnimation(.easeInOut(duration: 0.25)) {
-            isSidebarVisible.toggle()
+        _ = withAnimation(.easeInOut(duration: 0.25)) {
+            store.send(.toggleSidebarVisibility)
         }
-        runtimeRegistry.setFilesSidebarVisible(isSidebarVisible)
     }
 
     func toggleNavigator() {
-        withAnimation(.easeInOut(duration: 0.25)) {
-            isNavigatorCollapsed.toggle()
-        }
-        UserDefaults.standard.set(isNavigatorCollapsed, forKey: "com.devys.navigator.collapsed")
-    }
-
-    func selectWorkspace(at index: Int) {
-        let workspaces = visibleNavigatorWorkspaces
-        guard index >= 0, index < workspaces.count else { return }
-
-        let target = workspaces[index]
-        Task { @MainActor in
-            await selectWorkspace(target.workspace.id, in: target.repositoryID)
+        _ = withAnimation(.easeInOut(duration: 0.25)) {
+            store.send(.toggleNavigatorCollapsed)
         }
     }
 
-    func selectAdjacentWorkspace(offset: Int) {
-        let workspaces = visibleNavigatorWorkspaces
-        guard !workspaces.isEmpty else { return }
-
-        guard let visibleWorkspaceID,
-              let currentIndex = workspaces.firstIndex(where: { $0.workspace.id == visibleWorkspaceID }) else {
-            let fallbackIndex = offset >= 0 ? 0 : max(0, workspaces.count - 1)
-            let target = workspaces[fallbackIndex]
-            Task { @MainActor in
-                await selectWorkspace(target.workspace.id, in: target.repositoryID)
-            }
-            return
-        }
-
-        let nextIndex = max(0, min(workspaces.count - 1, currentIndex + offset))
-        guard nextIndex != currentIndex else { return }
-
-        let target = workspaces[nextIndex]
-        Task { @MainActor in
-            await selectWorkspace(target.workspace.id, in: target.repositoryID)
-        }
-    }
-
-    func revealCurrentWorkspaceInNavigator() {
-        guard let visibleWorkspaceID else { return }
-        navigatorRevealRequest = NavigatorRevealRequest(
-            workspaceID: visibleWorkspaceID,
-            token: UUID()
-        )
-    }
-
-    func openShellForSelectedWorkspace() {
+    func openShellForSelectedWorkspace(preferredPaneID: PaneID? = nil) {
         guard let worktree = activeWorktree else { return }
+        if let preferredPaneID {
+            store.send(.setWorkspaceFocusedPaneID(workspaceID: worktree.id, paneID: preferredPaneID))
+            renderWorkspaceLayout(for: worktree.id)
+        }
         Task { @MainActor in
             let trace = WorkspacePerformanceRecorder.begin(
                 "terminal-launch",
@@ -251,7 +220,12 @@ extension ContentView {
                     in: worktree.id,
                     workingDirectory: worktree.workingDirectory
                 )
-                openInPermanentTab(content: .terminal(workspaceID: worktree.id, id: session.id))
+                let content = WorkspaceTabContent.terminal(workspaceID: worktree.id, id: session.id)
+                if let preferredPaneID {
+                    _ = createTab(in: preferredPaneID, content: content)
+                } else {
+                    openInPermanentTab(content: content)
+                }
                 persistTerminalRelaunchSnapshotIfNeeded()
                 WorkspacePerformanceRecorder.end(trace)
             } catch {
@@ -269,8 +243,38 @@ extension ContentView {
         openInPermanentTab(content: .settings)
     }
 
+    func openFilePickerForSelectedWorkspace(in paneID: PaneID) {
+        guard let workspaceID = selectedWorkspaceID,
+              let workingDirectory = activeWorktree?.workingDirectory else {
+            return
+        }
+
+        store.send(.setWorkspaceFocusedPaneID(workspaceID: workspaceID, paneID: paneID))
+        renderWorkspaceLayout(for: workspaceID)
+
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = workingDirectory
+        panel.message = "Choose a file to open in this pane"
+        panel.prompt = "Open"
+
+        guard panel.runModal() == .OK,
+              let url = panel.url?.standardizedFileURL else {
+            return
+        }
+
+        openInPermanentTab(content: .editor(workspaceID: workspaceID, url: url))
+    }
+
     var visibleNavigatorWorkspaces: [(repositoryID: Repository.ID, workspace: Worktree)] {
-        workspaceCatalog.visibleNavigatorWorkspaces()
+        store.repositories.flatMap { repository in
+            (store.worktreesByRepository[repository.id] ?? []).compactMap { worktree in
+                let isArchived = store.workspaceStatesByID[worktree.id]?.isArchived == true
+                return isArchived ? nil : (repository.id, worktree)
+            }
+        }
     }
 
     func showLauncherUnavailableAlert(title: String, message: String) {
@@ -349,10 +353,11 @@ extension ContentView {
         }
         guard let lastRepository = uniqueRepositories.last else { return }
 
-        let shouldSwitchActiveRepository = workspaceCatalog.selectedRepositoryID != lastRepository.id
+        let shouldSwitchActiveRepository = selectedRepositoryID != lastRepository.id
+        let previousSelectedRepositoryID = selectedRepositoryID
 
         if shouldSwitchActiveRepository {
-            if workspaceCatalog.selectedRepositoryID != nil {
+            if selectedRepositoryID != nil {
                 let shouldReplace = await confirmCloseCurrentRepository()
                 guard shouldReplace else { return }
             }
@@ -360,14 +365,10 @@ extension ContentView {
             resetWorkspaceState()
         }
 
-        for repository in uniqueRepositories {
-            workspaceCatalog.importRepository(repository)
-            recentRepositoriesService.add(repository.rootURL)
-        }
-        await workspaceCatalog.refreshRepositories(uniqueRepositories.map(\.id))
-        syncCatalogRuntimeState()
+        await store.send(.openResolvedRepositories(repositories)).finish()
+        await refreshRepositoryCatalogs(uniqueRepositories.map(\.id))
 
-        if shouldSwitchActiveRepository,
+        if previousSelectedRepositoryID != selectedRepositoryID,
            let selectedWorktree = selectedCatalogWorktree {
             restoreWorkspaceState(for: selectedWorktree)
         }
@@ -415,26 +416,23 @@ extension ContentView {
     }
 
     func resetWorkspaceState() {
-        tabContents.removeAll()
+        clearVisibleWorkspaceTabContents()
         tabPresentationById.removeAll()
         editorSessions.removeAll()
-        editorSessionPool = EditorSessionPool()
-        selectedTabId = nil
-        previewTabId = nil
+        store.send(.selectWorkspace(nil))
         closeBypass.removeAll()
         closeInFlight.removeAll()
 
         controller = ContentView.makeSplitController()
         configureSplitDelegate()
         applyDefaultLayout()
-        controller.populateEmptyPanesWithWelcomeTabs()
-        activeSidebarItem = .files
+        store.send(.setActiveSidebar(.files))
         runtimeRegistry.deactivateActiveWorkspace()
     }
 
-    func applyDefaultLayout() {
+    func applyDefaultLayout(workspaceID: Workspace.ID? = nil) {
         let layout = layoutPersistenceService.loadDefaultLayout()
-        applyLayout(layout)
+        applyLayout(layout, workspaceID: workspaceID)
     }
 
     func handleCreatedWorkspaces(
@@ -449,5 +447,16 @@ extension ContentView {
         }
 
         await selectRepository(repository.id)
+    }
+}
+
+extension WorkspaceSidebarMode {
+    var windowSidebar: WindowFeature.Sidebar {
+        switch self {
+        case .files:
+            .files
+        case .agents:
+            .agents
+        }
     }
 }

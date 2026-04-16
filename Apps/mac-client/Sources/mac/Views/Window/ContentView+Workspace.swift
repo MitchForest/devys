@@ -3,6 +3,8 @@
 //
 // Copyright © 2026 Devys. All rights reserved.
 
+import AppFeatures
+import Git
 import SwiftUI
 import Split
 import GhosttyTerminal
@@ -12,10 +14,11 @@ import Workspace
 extension ContentView {
     var workspace: some View {
         ContentViewWorkspaceSurface(
-            workspaceCatalog: workspaceCatalog,
-            runtimeRegistry: runtimeRegistry,
+            selectedRepositoryRootURL: selectedRepositoryRootURL,
+            selectedRepositoryDisplayName: selectedRepository?.displayName,
             controller: controller,
             tabContents: tabContents,
+            gitStoreForContent: gitStoreForContent,
             terminalSessionForContent: terminalSessionForContent,
             agentSessionForContent: agentSessionForContent,
             agentComposerSpeechService: container.agentComposerSpeechService,
@@ -40,7 +43,16 @@ extension ContentView {
                 editorSessionForContent(content, tabId: tabID)
             },
             onFocusPane: { paneID in
-                controller.focusPane(paneID)
+                focusPane(paneID)
+            },
+            onOpenTerminalInPane: { paneID in
+                openShellForSelectedWorkspace(preferredPaneID: paneID)
+            },
+            onOpenAgentInPane: { paneID in
+                openDefaultOrPromptAgentForSelectedWorkspace(preferredPaneID: paneID)
+            },
+            onOpenFileInPane: { paneID in
+                openFilePickerForSelectedWorkspace(in: paneID)
             },
             onAttentionAcknowledged: { content in
                 if case .some(.terminal(_, let terminalID)) = content {
@@ -59,17 +71,19 @@ extension ContentView {
         )
     }
 
-    func terminalSessionForContent(_ content: TabContent?) -> GhosttyTerminalSession? {
+    func terminalSessionForContent(_ content: WorkspaceTabContent?) -> GhosttyTerminalSession? {
         guard case .terminal(let workspaceID, let id) = content else { return nil }
         return workspaceTerminalRegistry.session(id: id, in: workspaceID)
     }
 
-    func agentSessionForContent(_ content: TabContent?) -> AgentSessionRuntime? {
+    func gitStoreForContent(_ content: WorkspaceTabContent?) -> GitStore? {
+        guard let workspaceID = content?.workspaceID else { return nil }
+        return runtimeRegistry.gitStore(for: workspaceID)
+    }
+
+    func agentSessionForContent(_ content: WorkspaceTabContent?) -> AgentSessionRuntime? {
         guard case .agentSession(let workspaceID, let sessionID) = content else { return nil }
-        return runtimeRegistry
-            .runtimeHandle(for: workspaceID)?
-            .agentRuntimeRegistry
-            .session(id: sessionID)
+        return runtimeRegistry.agentSession(id: sessionID, in: workspaceID)
     }
 
     func createTerminalSession(
@@ -80,7 +94,7 @@ extension ContentView {
         attachCommand: String? = nil,
         id: UUID = UUID()
     ) -> GhosttyTerminalSession {
-        workspaceTerminalRegistry.createSession(
+        workspaceOperationalController.createTerminalSession(
             in: workspaceID,
             workingDirectory: workingDirectory,
             requestedCommand: requestedCommand,

@@ -3,6 +3,7 @@
 //
 // Copyright © 2026 Devys. All rights reserved.
 
+import AppFeatures
 import SwiftUI
 import Observation
 import Split
@@ -12,18 +13,11 @@ import GhosttyTerminal
 import UI
 import Workspace
 
-struct WelcomeTabContent: View {
-    var body: some View {
-        Color.clear
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
 struct TabContentView: View {
     @Environment(\.devysTheme) private var theme
 
     let tab: Split.Tab
-    let content: TabContent?
+    let content: WorkspaceTabContent?
     let gitStore: GitStore?
     let terminalSession: GhosttyTerminalSession?
     let agentSession: AgentSessionRuntime?
@@ -43,8 +37,6 @@ struct TabContentView: View {
     var body: some View {
         ZStack {
             switch content {
-            case .welcome:
-                WelcomeTabContent()
             case .terminal:
                 if let terminalSession {
                     GhosttyTerminalView(session: terminalSession)
@@ -234,18 +226,20 @@ private struct EditorFindBar: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 11, weight: .semibold))
+                .font(DevysTypography.caption.weight(.semibold))
                 .foregroundStyle(theme.textSecondary)
 
             TextField("Find in file", text: $session.findQuery)
                 .textFieldStyle(.plain)
+                .font(DevysTypography.body)
+                .foregroundStyle(theme.text)
                 .focused($isFocused)
                 .onSubmit {
                     session.selectNextFindMatch()
                 }
 
             Text(matchSummary)
-                .font(DevysTypography.xs)
+                .font(DevysTypography.caption)
                 .foregroundStyle(theme.textSecondary)
 
             Button {
@@ -276,10 +270,10 @@ private struct EditorFindBar: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(theme.surface)
+        .inputChrome(.card, isFocused: isFocused)
         .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(theme.borderSubtle)
+                .fill(theme.border)
                 .frame(height: 1)
         }
         .onAppear {

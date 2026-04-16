@@ -14,6 +14,9 @@ final class SplitColors: @unchecked Sendable {
     var activeText: Color
     var separator: Color
     var contentBackground: Color
+    var baseBackground: Color
+    var paneCornerRadius: CGFloat
+    var paneGap: CGFloat
 
     init(
         accent: Color = .accentColor,
@@ -22,7 +25,10 @@ final class SplitColors: @unchecked Sendable {
         inactiveText: Color = .secondary,
         activeText: Color = .primary,
         separator: Color = Color(nsColor: .separatorColor),
-        contentBackground: Color = Color(nsColor: .textBackgroundColor)
+        contentBackground: Color = Color(nsColor: .textBackgroundColor),
+        baseBackground: Color = Color(nsColor: .windowBackgroundColor),
+        paneCornerRadius: CGFloat = 12,
+        paneGap: CGFloat = 6
     ) {
         self.accent = accent
         self.tabBarBackground = tabBarBackground
@@ -31,6 +37,9 @@ final class SplitColors: @unchecked Sendable {
         self.activeText = activeText
         self.separator = separator
         self.contentBackground = contentBackground
+        self.baseBackground = baseBackground
+        self.paneCornerRadius = paneCornerRadius
+        self.paneGap = paneGap
     }
 
     /// Update all colors from configuration
@@ -42,6 +51,9 @@ final class SplitColors: @unchecked Sendable {
         self.activeText = config.activeText
         self.separator = config.separator
         self.contentBackground = config.contentBackground
+        self.baseBackground = config.baseBackground
+        self.paneCornerRadius = config.paneCornerRadius
+        self.paneGap = config.paneGap
     }
 }
 

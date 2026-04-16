@@ -27,9 +27,9 @@ final class SplitViewController {
         if let rootNode {
             self.rootNode = rootNode
         } else {
-            // Initialize with a single pane containing a welcome tab
-            let welcomeTab = TabItem(title: "Welcome", icon: "star")
-            let initialPane = PaneState(tabs: [welcomeTab])
+            // Initialize with a single empty pane. Empty-pane presentation is owned
+            // by the caller's view layer rather than synthetic placeholder tabs.
+            let initialPane = PaneState(tabs: [])
             self.rootNode = .pane(initialPane)
             self.focusedPaneId = initialPane.id
         }

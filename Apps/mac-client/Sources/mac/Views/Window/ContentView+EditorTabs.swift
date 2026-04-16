@@ -3,18 +3,25 @@
 //
 // Copyright © 2026 Devys. All rights reserved.
 
+import AppFeatures
 import Foundation
 import Split
+import Workspace
 
 @MainActor
 extension ContentView {
+    func workspaceTabContents(for workspaceID: Workspace.ID) -> [TabID: WorkspaceTabContent] {
+        store.workspaceShells[workspaceID]?.tabContents ?? [:]
+    }
+
     func canonicalEditorSessionURL(_ url: URL) -> URL {
         url.standardizedFileURL
     }
 
-    func setTabContent(_ content: TabContent, for tabId: TabID) {
-        let previousContent = tabContents[tabId]
-        tabContents[tabId] = content
+    func setTabContent(_ content: WorkspaceTabContent, for tabId: TabID) {
+        guard let workspaceID = content.workspaceID ?? selectedWorkspaceID else { return }
+        let previousContent = workspaceTabContents(for: workspaceID)[tabId]
+        store.send(.setWorkspaceTabContent(workspaceID: workspaceID, tabID: tabId, content: content))
 
         if let previousContent,
            previousContent != content {
@@ -32,15 +39,21 @@ extension ContentView {
 
     func updateEditorTabURL(tabId: TabID, newURL: URL) {
         guard let workspaceID = tabContents[tabId]?.workspaceID else { return }
-        tabContents[tabId] = .editor(workspaceID: workspaceID, url: newURL)
+        let content = WorkspaceTabContent.editor(workspaceID: workspaceID, url: newURL)
+        store.send(.setWorkspaceTabContent(workspaceID: workspaceID, tabID: tabId, content: content))
         ensureEditorSession(tabId: tabId, url: newURL, reloadIfNeeded: false)
-        let content = TabContent.editor(workspaceID: workspaceID, url: newURL)
         let presentation = currentTabPresentation(for: content, tabId: tabId)
         tabPresentationById[tabId] = presentation
-        controller.updateTab(tabId, title: presentation.title, icon: presentation.icon)
+        controller.updateTab(
+            tabId,
+            title: presentation.title,
+            icon: presentation.icon,
+            isPreview: presentation.isPreview,
+            isDirty: presentation.isDirty
+        )
     }
 
-    func editorSessionForContent(_ content: TabContent?, tabId: TabID) -> EditorSession? {
+    func editorSessionForContent(_ content: WorkspaceTabContent?, tabId: TabID) -> EditorSession? {
         guard case .editor = content else { return nil }
         return editorSessions[tabId]
     }
@@ -48,65 +61,57 @@ extension ContentView {
     func removeEditorSession(tabId: TabID) {
         endEditorOpenTrace(tabId: tabId, outcome: "cancelled")
         guard let session = editorSessions.removeValue(forKey: tabId) else { return }
-        editorSessionPool.release(url: session.url)
-        EditorSessionRegistry.shared.unregister(tabId: tabId)
+        let workspaceID = tabContents[tabId]?.workspaceID ?? visibleWorkspaceID
+        if let workspaceID {
+            hostedContentBridge.detachEditorSession(session, workspaceID: workspaceID)
+        }
+        editorSessionPool(for: workspaceID)?.release(url: session.url)
+        editorSessionRegistry.unregister(tabId: tabId)
     }
 
-    private func ensureEditorSession(
+    func removeTabContent(for tabId: TabID, content: WorkspaceTabContent) {
+        guard let workspaceID = content.workspaceID ?? selectedWorkspaceID else { return }
+        store.send(.removeWorkspaceTabContent(workspaceID: workspaceID, tabID: tabId))
+    }
+
+    func clearVisibleWorkspaceTabContents() {
+        guard let selectedWorkspaceID else { return }
+        store.send(.clearWorkspaceTabContents(selectedWorkspaceID))
+    }
+
+    func ensureEditorSession(
         tabId: TabID,
         url: URL,
         reloadIfNeeded: Bool = true
     ) {
+        let workspaceID = tabContents[tabId]?.workspaceID ?? selectedWorkspaceID
+        guard let editorSessionPool = editorSessionPool(for: workspaceID) else { return }
         let canonicalURL = canonicalEditorSessionURL(url)
         if let session = editorSessions[tabId] {
             if session.url != canonicalURL {
-                if let sharedSession = editorSessionPool.session(for: canonicalURL),
-                   sharedSession !== session {
-                    editorSessionPool.release(url: session.url)
-                    editorSessions[tabId] = sharedSession
-                    EditorSessionRegistry.shared.register(tabId: tabId, session: sharedSession)
-                    if reloadIfNeeded {
-                        sharedSession.open(canonicalURL)
-                    } else {
-                        sharedSession.updateURL(canonicalURL)
-                    }
-                    return
-                }
-
-                if !reloadIfNeeded {
-                    editorSessionPool.move(session: session, from: session.url, to: canonicalURL)
-                    session.updateURL(canonicalURL)
-                    EditorSessionRegistry.shared.register(tabId: tabId, session: session)
-                    return
-                }
-
-                editorSessionPool.release(url: session.url)
-                EditorSessionRegistry.shared.unregister(tabId: tabId)
-                let reboundSession = editorSessionPool.acquire(url: canonicalURL)
-                editorSessions[tabId] = reboundSession
-                EditorSessionRegistry.shared.register(tabId: tabId, session: reboundSession)
+                rebindEditorSession(
+                    tabId: tabId,
+                    session: session,
+                    to: canonicalURL,
+                    workspaceID: workspaceID,
+                    editorSessionPool: editorSessionPool,
+                    reloadIfNeeded: reloadIfNeeded
+                )
                 return
             }
 
-            if reloadIfNeeded {
-                session.open(canonicalURL)
-            } else {
-                session.updateURL(canonicalURL)
-            }
+            refreshEditorSession(session, canonicalURL: canonicalURL, reloadIfNeeded: reloadIfNeeded)
             return
         }
 
         let session = editorSessionPool.acquire(url: canonicalURL)
-        editorSessions[tabId] = session
-        EditorSessionRegistry.shared.register(tabId: tabId, session: session)
-        if !reloadIfNeeded {
-            session.updateURL(canonicalURL)
-        }
+        trackEditorSession(session, tabId: tabId, workspaceID: workspaceID)
+        refreshEditorSession(session, canonicalURL: canonicalURL, reloadIfNeeded: reloadIfNeeded)
     }
 
-    private func cleanupReplacedTabContent(
-        _ previousContent: TabContent,
-        newContent: TabContent,
+    func cleanupReplacedTabContent(
+        _ previousContent: WorkspaceTabContent,
+        newContent: WorkspaceTabContent,
         tabId: TabID
     ) {
         switch (previousContent, newContent) {
@@ -114,6 +119,71 @@ extension ContentView {
             break
         default:
             cleanupSession(for: previousContent, tabId: tabId)
+        }
+    }
+
+    private func rebindEditorSession(
+        tabId: TabID,
+        session: EditorSession,
+        to canonicalURL: URL,
+        workspaceID: Workspace.ID?,
+        editorSessionPool: EditorSessionPool,
+        reloadIfNeeded: Bool
+    ) {
+        if let sharedSession = editorSessionPool.session(for: canonicalURL),
+           sharedSession !== session {
+            untrackEditorSession(session, tabId: tabId, workspaceID: workspaceID)
+            editorSessionPool.release(url: session.url)
+            trackEditorSession(sharedSession, tabId: tabId, workspaceID: workspaceID)
+            refreshEditorSession(sharedSession, canonicalURL: canonicalURL, reloadIfNeeded: reloadIfNeeded)
+            return
+        }
+
+        if !reloadIfNeeded {
+            editorSessionPool.move(session: session, from: session.url, to: canonicalURL)
+            refreshEditorSession(session, canonicalURL: canonicalURL, reloadIfNeeded: false)
+            editorSessionRegistry.register(tabId: tabId, session: session)
+            return
+        }
+
+        editorSessionPool.release(url: session.url)
+        untrackEditorSession(session, tabId: tabId, workspaceID: workspaceID)
+        let reboundSession = editorSessionPool.acquire(url: canonicalURL)
+        trackEditorSession(reboundSession, tabId: tabId, workspaceID: workspaceID)
+    }
+
+    private func refreshEditorSession(
+        _ session: EditorSession,
+        canonicalURL: URL,
+        reloadIfNeeded: Bool
+    ) {
+        if reloadIfNeeded {
+            session.open(canonicalURL)
+        } else {
+            session.updateURL(canonicalURL)
+        }
+    }
+
+    private func trackEditorSession(
+        _ session: EditorSession,
+        tabId: TabID,
+        workspaceID: Workspace.ID?
+    ) {
+        editorSessions[tabId] = session
+        editorSessionRegistry.register(tabId: tabId, session: session)
+        if let workspaceID {
+            hostedContentBridge.attachEditorSession(session, workspaceID: workspaceID)
+        }
+    }
+
+    private func untrackEditorSession(
+        _ session: EditorSession,
+        tabId: TabID,
+        workspaceID: Workspace.ID?
+    ) {
+        editorSessionRegistry.unregister(tabId: tabId)
+        if let workspaceID {
+            hostedContentBridge.detachEditorSession(session, workspaceID: workspaceID)
         }
     }
 }

@@ -111,21 +111,21 @@ public protocol DevysSplitDelegate: AnyObject {
         inPane pane: PaneID
     ) -> Bool
 
-    // MARK: - Welcome Tabs
-
-    /// Called to get the welcome tab for an empty pane.
-    /// Return nil to not create a welcome tab.
+    /// Called when a split divider is resized by the user.
     func splitView(
         _ controller: DevysSplitController,
-        welcomeTabForPane pane: PaneID
-    ) -> Tab?
+        didResizeSplit splitID: UUID,
+        position: Double
+    )
 
-    /// Called to check if a tab is a welcome tab (for auto-close behavior).
+    /// Called when a live split gesture requests a topology mutation.
+    /// Return `true` if the consumer handled the intent and will drive rendering
+    /// from its own source of truth.
     func splitView(
         _ controller: DevysSplitController,
-        isWelcomeTab tabId: TabID,
-        inPane pane: PaneID
+        didRequest intent: SplitGestureIntent
     ) -> Bool
+
 }
 
 // MARK: - Default Implementations (all methods optional)
@@ -211,12 +211,13 @@ public extension DevysSplitDelegate {
 
     func splitView(
         _ _: DevysSplitController,
-        welcomeTabForPane pane: PaneID
-    ) -> Tab? { nil }
+        didResizeSplit splitID: UUID,
+        position: Double
+    ) {}
 
     func splitView(
         _ _: DevysSplitController,
-        isWelcomeTab tabId: TabID,
-        inPane pane: PaneID
+        didRequest intent: SplitGestureIntent
     ) -> Bool { false }
+
 }

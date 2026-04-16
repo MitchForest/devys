@@ -81,7 +81,7 @@ struct HunkActionBar: View {
                     .buttonStyle(.plain)
                     .background(unstageButtonBackground)
                     .foregroundStyle(DevysColors.warning)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                    .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
                     .disabled(isProcessing)
                     .help("Unstage this hunk")
                 } else {
@@ -107,7 +107,7 @@ struct HunkActionBar: View {
                     .buttonStyle(.plain)
                     .background(stageButtonBackground)
                     .foregroundStyle(DevysColors.success)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                    .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
                     .disabled(isProcessing)
                     .help("Stage this hunk")
 
@@ -133,7 +133,7 @@ struct HunkActionBar: View {
                     .buttonStyle(.plain)
                     .background(discardButtonBackground)
                     .foregroundStyle(DevysColors.error)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                    .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
                     .disabled(isProcessing)
                     .help("Discard this hunk")
                 }
@@ -146,7 +146,7 @@ struct HunkActionBar: View {
         .overlay(alignment: .leading) {
             if isFocused {
                 Rectangle()
-                    .fill(devysTheme.visibleAccent)
+                    .fill(devysTheme.accent)
                     .frame(width: 3)
             }
         }
@@ -156,7 +156,7 @@ struct HunkActionBar: View {
     // MARK: - Styling
     
     private var headerBackground: Color {
-        devysTheme.elevated
+        devysTheme.overlay
     }
     
     private var stageButtonBackground: Color {

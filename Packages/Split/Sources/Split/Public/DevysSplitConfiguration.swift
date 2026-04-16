@@ -54,9 +54,6 @@ public struct DevysSplitConfiguration: Sendable {
     /// Controls where new tabs are inserted in the tab list
     public var newTabPosition: NewTabPosition
 
-    /// Controls welcome tab behavior for empty panes
-    public var welcomeTabBehavior: WelcomeTabBehavior
-
     /// UTTypes accepted for external drag & drop
     public var acceptedDropTypes: [UTType]
 
@@ -95,7 +92,6 @@ public struct DevysSplitConfiguration: Sendable {
         autoCloseEmptyPanes: Bool = true,
         contentViewLifecycle: ContentViewLifecycle = .recreateOnSwitch,
         newTabPosition: NewTabPosition = .current,
-        welcomeTabBehavior: WelcomeTabBehavior = .none,
         acceptedDropTypes: [UTType] = [],
         appearance: Appearance = .default,
         colors: Colors = .default
@@ -108,7 +104,6 @@ public struct DevysSplitConfiguration: Sendable {
         self.autoCloseEmptyPanes = autoCloseEmptyPanes
         self.contentViewLifecycle = contentViewLifecycle
         self.newTabPosition = newTabPosition
-        self.welcomeTabBehavior = welcomeTabBehavior
         self.acceptedDropTypes = acceptedDropTypes
         self.appearance = appearance
         self.colors = colors
@@ -203,31 +198,40 @@ public extension DevysSplitConfiguration {
     struct Colors: Sendable {
         /// Accent color for active tab indicator, drop zones, focus rings
         var accent: Color
-        
+
         /// Tab bar background
         var tabBarBackground: Color
-        
+
         /// Active tab background
         var activeTabBackground: Color
-        
+
         /// Inactive tab text
         var inactiveText: Color
-        
+
         /// Active tab text
         var activeText: Color
-        
+
         /// Border/separator color
         var separator: Color
-        
-        /// Content area background
+
+        /// Content area background (card surface)
         var contentBackground: Color
-        
+
+        /// Base surface behind pane cards (visible in gaps between panes)
+        var baseBackground: Color
+
+        /// Corner radius for pane cards
+        var paneCornerRadius: CGFloat
+
+        /// Gap between adjacent pane cards
+        var paneGap: CGFloat
+
         // MARK: - Presets
-        
+
         public static let `default` = Colors()
-        
+
         // MARK: - Initializer
-        
+
         public init(
             accent: Color = .accentColor,
             tabBarBackground: Color = Color(nsColor: .windowBackgroundColor),
@@ -235,7 +239,10 @@ public extension DevysSplitConfiguration {
             inactiveText: Color = .secondary,
             activeText: Color = .primary,
             separator: Color = Color(nsColor: .separatorColor),
-            contentBackground: Color = Color(nsColor: .textBackgroundColor)
+            contentBackground: Color = Color(nsColor: .textBackgroundColor),
+            baseBackground: Color = Color(nsColor: .windowBackgroundColor),
+            paneCornerRadius: CGFloat = 12,
+            paneGap: CGFloat = 6
         ) {
             self.accent = accent
             self.tabBarBackground = tabBarBackground
@@ -244,6 +251,9 @@ public extension DevysSplitConfiguration {
             self.activeText = activeText
             self.separator = separator
             self.contentBackground = contentBackground
+            self.baseBackground = baseBackground
+            self.paneCornerRadius = paneCornerRadius
+            self.paneGap = paneGap
         }
     }
 }

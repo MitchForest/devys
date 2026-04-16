@@ -48,6 +48,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
     func makeCoordinator() -> Coordinator {
         Coordinator(
             splitState: splitState,
+            devysController: devysController,
             layoutMetrics: devysController.configuration.appearance.layoutMetrics
         )
     }
@@ -217,6 +218,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
     @MainActor
     class Coordinator: NSObject, NSSplitViewDelegate {
         let splitState: SplitState
+        weak var devysController: DevysSplitController?
         var isAnimating = false
         var layoutMetrics: TabBarLayoutMetrics
         /// Track last applied position to detect external changes
@@ -226,9 +228,11 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
 
         init(
             splitState: SplitState,
+            devysController: DevysSplitController,
             layoutMetrics: TabBarLayoutMetrics
         ) {
             self.splitState = splitState
+            self.devysController = devysController
             self.layoutMetrics = layoutMetrics
             self.lastAppliedPosition = splitState.dividerPosition
         }
@@ -285,6 +289,15 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 Task { @MainActor in
                     self.splitState.dividerPosition = normalizedPosition
                     self.lastAppliedPosition = normalizedPosition
+                    guard let devysController = self.devysController,
+                          devysController.internalController.isExternalUpdateInProgress != true else {
+                        return
+                    }
+                    devysController.delegate?.splitView(
+                        devysController,
+                        didResizeSplit: self.splitState.id,
+                        position: Double(normalizedPosition)
+                    )
                 }
             }
         }

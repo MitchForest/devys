@@ -3,6 +3,7 @@
 //
 // Copyright © 2026 Devys. All rights reserved.
 
+import AppFeatures
 import Foundation
 import Workspace
 import Editor
@@ -164,19 +165,5 @@ struct WorkspaceSearchItem: Identifiable, Equatable {
         case .openTextSearchMatch(let match):
             "text:\(match.id)"
         }
-    }
-}
-
-struct WorkspaceSearchPresentation {
-    let title: String
-    let placeholder: String
-    let emptyTitle: String
-    let emptySubtitle: String
-
-    init(mode: WorkspaceSearchMode) {
-        self.title = mode.title
-        self.placeholder = mode.placeholder
-        self.emptyTitle = mode.emptyTitle
-        self.emptySubtitle = mode.emptySubtitle
     }
 }

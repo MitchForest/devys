@@ -3,6 +3,7 @@
 //
 // Copyright © 2026 Devys. All rights reserved.
 
+import AppFeatures
 import Foundation
 import SwiftUI
 import Workspace
@@ -21,8 +22,7 @@ struct WorkspaceNotificationPanelItem: Identifiable {
 extension ContentView {
     var notificationsPanelContent: some View {
         ContentViewNotificationsPanelSurface(
-            workspaceCatalog: workspaceCatalog,
-            workspaceAttentionStore: workspaceAttentionStore,
+            items: workspaceNotificationPanelItems,
             onOpen: { item in
                 Task { @MainActor in
                     await openNotification(item.notification)
@@ -34,31 +34,36 @@ extension ContentView {
         )
     }
 
-    func shouldDisplayAttentionPayload(_ payload: WorkspaceAttentionIngressPayload) -> Bool {
-        switch payload.source {
-        case .terminal:
-            return appSettings.notifications.terminalActivity
-        case .claude, .codex, .run, .build:
-            return appSettings.notifications.agentActivity
+    var workspaceNotificationPanelItems: [WorkspaceNotificationPanelItem] {
+        workspaceOperationalState.pendingNotifications.compactMap { notification in
+            guard let context = windowWorkspaceContext(for: notification.workspaceID) else {
+                return nil
+            }
+
+            return WorkspaceNotificationPanelItem(
+                notification: notification,
+                repositoryName: context.repository.displayName,
+                workspaceName: context.worktree.name
+            )
         }
     }
 
     func jumpToLatestUnreadWorkspace() async {
-        guard let notification = workspaceAttentionStore.latestUnreadNotification() else { return }
+        guard let notification = workspaceOperationalState.latestUnreadNotification() else { return }
         await openNotification(notification)
     }
 
     func openNotification(_ notification: WorkspaceAttentionNotification) async {
-        guard let context = workspaceContext(for: notification.workspaceID) else {
-            workspaceAttentionStore.clearNotification(notification.id)
+        guard let context = windowWorkspaceContext(for: notification.workspaceID) else {
+            store.send(.clearAttentionNotification(notification.id))
             return
         }
 
-        isNotificationsPanelPresented = false
+        store.send(.setNotificationsPanelPresented(false))
         await selectWorkspace(notification.workspaceID, in: context.repository.id)
 
         if let terminalID = notification.terminalID {
-            let content = TabContent.terminal(workspaceID: notification.workspaceID, id: terminalID)
+            let content = WorkspaceTabContent.terminal(workspaceID: notification.workspaceID, id: terminalID)
             if let existingTabID = findExistingTab(for: content) {
                 selectTab(existingTabID)
             } else if workspaceTerminalRegistry.session(id: terminalID, in: notification.workspaceID) != nil {
@@ -68,7 +73,7 @@ extension ContentView {
             return
         }
 
-        workspaceAttentionStore.clearNotification(notification.id)
+        store.send(.clearAttentionNotification(notification.id))
     }
 
     func clearNotification(_ notification: WorkspaceAttentionNotification) {
@@ -76,12 +81,6 @@ extension ContentView {
             markTerminalNotificationRead(terminalID)
             return
         }
-        workspaceAttentionStore.clearNotification(notification.id)
-    }
-
-    private func workspaceContext(
-        for workspaceID: Workspace.ID
-    ) -> (repository: Repository, worktree: Worktree)? {
-        workspaceCatalog.workspaceContext(for: workspaceID)
+        store.send(.clearAttentionNotification(notification.id))
     }
 }

@@ -1,4 +1,5 @@
 import ACPClientKit
+import AppFeatures
 import Foundation
 import Testing
 import Workspace
@@ -28,7 +29,7 @@ struct TerminalRelaunchSnapshotTests {
             workspaceStates: [
                 PersistedWorkspaceLayoutState(
                     workspaceID: workspaceID,
-                    sidebarMode: .changes,
+                    sidebarMode: .files,
                     tree: .pane(
                         selectedTabIndex: 2,
                         tabs: [
@@ -78,8 +79,78 @@ struct TerminalRelaunchSnapshotTests {
         )
         #expect(
             decoded.workspaceStates.first { $0.workspaceID == "/tmp/devys/repo/worktrees/feature-b" }?.sidebarMode ==
-                .changes
+                .agents
         )
+    }
+
+    @Test("Nested split workspace layout snapshots round-trip reducer-owned topology")
+    func nestedSplitWorkspaceLayoutRoundTrip() throws {
+        let repositoryURL = URL(fileURLWithPath: "/tmp/devys/repo")
+        let workspaceID = "/tmp/devys/repo/worktrees/feature"
+        let terminalID = UUID()
+        let state = PersistedWorkspaceLayoutState(
+            workspaceID: workspaceID,
+            sidebarMode: .files,
+            tree: .split(
+                orientation: "horizontal",
+                dividerPosition: 0.64,
+                first: .pane(
+                    selectedTabIndex: 0,
+                    tabs: [.editor(fileURL: repositoryURL.appendingPathComponent("README.md"))]
+                ),
+                second: .split(
+                    orientation: "vertical",
+                    dividerPosition: 0.35,
+                    first: .pane(
+                        selectedTabIndex: 0,
+                        tabs: [.terminal(hostedSessionID: terminalID)]
+                    ),
+                    second: .pane(
+                        selectedTabIndex: 1,
+                        tabs: [
+                            .gitDiff(path: "README.md", isStaged: false),
+                            .agent(
+                                PersistedAgentSessionRecord(
+                                    sessionID: "session-nested",
+                                    kind: .codex,
+                                    title: "Nested",
+                                    subtitle: "Reducer Layout"
+                                )
+                            )
+                        ]
+                    )
+                )
+            )
+        )
+
+        let data = try JSONEncoder().encode(state)
+        let decoded = try JSONDecoder().decode(PersistedWorkspaceLayoutState.self, from: data)
+
+        #expect(decoded == state)
+    }
+
+    @Test("Legacy changes and ports sidebar snapshots restore into the files tab")
+    func legacySidebarModesDecodeIntoFilesTab() throws {
+        let changesData = try JSONEncoder().encode(
+            LegacyPersistedWorkspaceLayoutState(
+                workspaceID: "/tmp/devys/repo/worktrees/feature-a",
+                sidebarMode: "changes",
+                tree: .pane(selectedTabIndex: 0, tabs: [])
+            )
+        )
+        let portsData = try JSONEncoder().encode(
+            LegacyPersistedWorkspaceLayoutState(
+                workspaceID: "/tmp/devys/repo/worktrees/feature-b",
+                sidebarMode: "ports",
+                tree: .pane(selectedTabIndex: 0, tabs: [])
+            )
+        )
+
+        let decodedChanges = try JSONDecoder().decode(PersistedWorkspaceLayoutState.self, from: changesData)
+        let decodedPorts = try JSONDecoder().decode(PersistedWorkspaceLayoutState.self, from: portsData)
+
+        #expect(decodedChanges.sidebarMode == .files)
+        #expect(decodedPorts.sidebarMode == .files)
     }
 
     private func makeWorkspaceIsolationSnapshot() -> TerminalRelaunchSnapshot {
@@ -116,7 +187,7 @@ struct TerminalRelaunchSnapshotTests {
             ),
             workspaceLayoutState(
                 workspaceID: secondWorkspaceID,
-                sidebarMode: .changes,
+                sidebarMode: .agents,
                 editorURL: sharedEditorURL,
                 diffIsStaged: true,
                 terminalID: secondTerminalID,
@@ -151,7 +222,7 @@ struct TerminalRelaunchSnapshotTests {
 
     private func workspaceLayoutState(
         workspaceID: Workspace.ID,
-        sidebarMode: WorkspaceSidebarMode,
+        sidebarMode: PersistedWorkspaceSidebarMode,
         editorURL: URL,
         diffIsStaged: Bool,
         terminalID: UUID,
@@ -177,5 +248,11 @@ struct TerminalRelaunchSnapshotTests {
                 ]
             )
         )
+    }
+
+    private struct LegacyPersistedWorkspaceLayoutState: Codable {
+        let workspaceID: Workspace.ID
+        let sidebarMode: String
+        let tree: PersistedWorkspaceLayoutTree
     }
 }

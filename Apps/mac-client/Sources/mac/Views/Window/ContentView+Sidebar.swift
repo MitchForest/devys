@@ -3,20 +3,29 @@
 //
 // Copyright © 2026 Devys. All rights reserved.
 
+import AppFeatures
 import SwiftUI
 import Git
+import UI
+import Workspace
 
 extension ContentView {
-    var navigatorSurface: some View {
-        ContentViewNavigatorSurface(
-            workspaceCatalog: workspaceCatalog,
-            runtimeRegistry: runtimeRegistry,
-            workspaceAttentionStore: workspaceAttentionStore,
-            navigatorRevealRequest: navigatorRevealRequest,
+    var repoRailSurface: some View {
+        let infoEntries = workspaceOperationalState.metadataEntriesByWorkspaceID
+        let attentionSummaries = workspaceOperationalState.attentionSummariesByWorkspace
+
+        return ContentViewRepoRailSurface(
+            repositories: store.repositories,
+            selectedRepositoryID: selectedRepositoryID,
+            selectedWorkspaceID: selectedWorkspaceID,
+            worktreesByRepository: store.worktreesByRepository,
+            workspaceStatesByID: store.workspaceStatesByID,
+            worktreeStatusHints: computeWorktreeStatusHints(
+                worktreesByRepository: store.worktreesByRepository,
+                infoEntries: infoEntries,
+                attentionSummaries: attentionSummaries
+            ),
             onAddRepository: { requestOpenRepository() },
-            onMoveRepository: { repositoryID, offset in
-                moveRepository(repositoryID, by: offset)
-            },
             onRemoveRepository: { repositoryID in
                 Task { @MainActor in
                     await removeRepository(repositoryID)
@@ -30,15 +39,19 @@ extension ContentView {
             onCreateWorkspace: { repositoryID in
                 presentWorkspaceCreation(for: repositoryID)
             },
-            onSelectRepository: { repositoryID in
-                Task { @MainActor in
-                    await selectRepository(repositoryID)
-                }
-            },
             onSelectWorkspace: { repositoryID, workspaceID in
                 Task { @MainActor in
                     await selectWorkspace(workspaceID, in: repositoryID)
                 }
+            },
+            onReorderRepository: { repositoryID, toIndex in
+                store.send(.reorderRepository(repositoryID, toIndex: toIndex))
+            },
+            onSetRepositoryDisplayInitials: { repositoryID, initials in
+                store.send(.setRepositoryDisplayInitials(repositoryID, initials))
+            },
+            onSetRepositoryDisplaySymbol: { repositoryID, symbol in
+                store.send(.setRepositoryDisplaySymbol(repositoryID, symbol))
             },
             onSetWorkspacePinned: { repositoryID, workspaceID, isPinned in
                 setWorkspacePinned(workspaceID, in: repositoryID, isPinned: isPinned)
@@ -59,16 +72,41 @@ extension ContentView {
             },
             onOpenWorkspaceInExternalEditor: { repositoryID, workspaceID in
                 openWorkspaceInExternalEditor(workspaceID, in: repositoryID)
+            },
+            onRevealRepositoryInFinder: { repositoryID in
+                guard let repo = store.repositories.first(where: { $0.id == repositoryID }) else {
+                    return
+                }
+                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: repo.rootURL.path)
             }
         )
     }
 
     @ViewBuilder
     var sidebarContent: some View {
+        let activeWorkspaceID = visibleWorkspaceID
+        let selectedWorkspaceInfo = selectedWorkspaceID.flatMap {
+            workspaceOperationalState.metadataEntriesByWorkspaceID[$0]
+        }
+        let changeSummary = selectedWorkspaceInfo?.statusSummary
+        let changeCount = (changeSummary?.staged ?? 0)
+            + (changeSummary?.unstaged ?? 0)
+            + (changeSummary?.untracked ?? 0)
+            + (changeSummary?.conflicts ?? 0)
+
         ContentViewSidebarSurface(
-            workspaceCatalog: workspaceCatalog,
-            runtimeRegistry: runtimeRegistry,
+            activeSidebar: activeSidebarItem ?? .files,
+            selectedRepositoryRootURL: selectedRepositoryRootURL,
+            currentWorktree: activeWorkspaceID.flatMap(runtimeRegistry.worktree(for:)),
+            selectedWorkspaceID: activeWorkspaceID,
+            fileTreeModel: activeWorkspaceID.flatMap(runtimeRegistry.fileTreeModel(for:)),
+            gitStatusIndex: activeWorkspaceID.flatMap(runtimeRegistry.gitStatusIndex(for:)),
+            gitStore: activeWorkspaceID.flatMap(runtimeRegistry.gitStore(for:)),
+            changeCount: changeCount,
+            agentSessions: hostedAgentSessions,
+            portsByWorkspaceID: workspaceOperationalState.portsByWorkspaceID,
             repositorySettingsStore: repositorySettingsStore,
+            onSelectSidebar: showSidebarItem,
             onPreviewFile: { workspaceID, url in
                 openInPreviewTab(content: .editor(workspaceID: workspaceID, url: url))
             },
@@ -87,7 +125,7 @@ extension ContentView {
                 }
             },
             onOpenDiff: { workspaceID, path, isStaged, permanent in
-                let content = TabContent.gitDiff(
+                let content = WorkspaceTabContent.gitDiff(
                     workspaceID: workspaceID,
                     path: path,
                     isStaged: isStaged
@@ -104,7 +142,7 @@ extension ContentView {
             },
             onCreateAgentSession: { workspaceID in
                 if visibleWorkspaceID != workspaceID,
-                   let context = workspaceCatalog.workspaceContext(for: workspaceID) {
+                   let context = windowWorkspaceContext(for: workspaceID) {
                     Task { @MainActor in
                         await selectWorkspace(workspaceID, in: context.repository.id)
                         openDefaultOrPromptAgentForSelectedWorkspace()

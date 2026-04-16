@@ -3,17 +3,9 @@
 //
 // Copyright © 2026 Devys. All rights reserved.
 
+import AppFeatures
 import Foundation
 import Workspace
-
-struct WorkspaceAttentionIngressPayload: Codable, Equatable, Sendable {
-    let workspaceID: Workspace.ID
-    let source: WorkspaceAttentionSource
-    let kind: WorkspaceAttentionKind
-    let terminalID: UUID?
-    let title: String
-    let subtitle: String?
-}
 
 struct WorkspaceAttentionHookInput: Codable, Equatable, Sendable {
     let message: String?

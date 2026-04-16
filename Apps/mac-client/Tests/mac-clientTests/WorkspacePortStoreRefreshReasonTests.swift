@@ -1,4 +1,5 @@
 import Foundation
+import AppFeatures
 import Testing
 import Workspace
 @testable import mac_client

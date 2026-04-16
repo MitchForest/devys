@@ -1,6 +1,7 @@
 // WorkspacePortManagedProcessCatalog.swift
 // Devys - Merge direct ownership signals for workspace port attribution.
 
+import AppFeatures
 import Foundation
 import Workspace
 

@@ -19,7 +19,7 @@ struct RepositoryPortLabelsEditorView: View {
 
             if drafts.isEmpty {
                 Text("No static port labels yet.")
-                    .font(DevysTypography.sm)
+                    .font(DevysTypography.body)
                     .foregroundStyle(theme.textSecondary)
             } else {
                 ForEach($drafts) { $draft in
@@ -50,17 +50,16 @@ struct RepositoryPortLabelsEditorView: View {
                     .font(DevysTypography.label)
                     .foregroundStyle(theme.text)
                 Text("Static labels augment detected workspace ports and update immediately when valid.")
-                    .font(DevysTypography.xs)
+                    .font(DevysTypography.caption)
                     .foregroundStyle(theme.textSecondary)
             }
 
             Spacer()
 
-            Button("Add Label") {
+            ActionButton("Add Label", style: .ghost) {
                 drafts.append(RepositoryPortLabelDraft())
                 persistDraftsIfValid()
             }
-            .buttonStyle(.bordered)
         }
     }
 
@@ -133,35 +132,29 @@ private struct PortLabelDraftRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                TextField("Label", text: $draft.label)
-                    .textFieldStyle(.roundedBorder)
+                TextInput("Label", text: $draft.label)
                     .onChange(of: draft.label) { _, _ in
                         onChange()
                     }
 
-                TextField("Port", text: $draft.portText)
-                    .textFieldStyle(.roundedBorder)
+                TextInput("Port", text: $draft.portText)
                     .frame(width: 96)
                     .onChange(of: draft.portText) { _, _ in
                         onChange()
                     }
 
-                Button("Remove") {
+                ActionButton("Remove", style: .ghost, tone: .destructive) {
                     onRemove()
                 }
-                .buttonStyle(.borderless)
-                .foregroundStyle(DevysColors.error)
             }
 
             HStack {
-                TextField("Scheme", text: $draft.scheme)
-                    .textFieldStyle(.roundedBorder)
+                TextInput("Scheme", text: $draft.scheme)
                     .onChange(of: draft.scheme) { _, _ in
                         onChange()
                     }
 
-                TextField("Optional path", text: $draft.path)
-                    .textFieldStyle(.roundedBorder)
+                TextInput("Optional path", text: $draft.path)
                     .onChange(of: draft.path) { _, _ in
                         onChange()
                     }
@@ -169,13 +162,12 @@ private struct PortLabelDraftRow: View {
 
             if let validationMessage {
                 Text(validationMessage)
-                    .font(DevysTypography.xs)
+                    .font(DevysTypography.caption)
                     .foregroundStyle(DevysColors.warning)
             }
         }
         .padding(12)
-        .background(theme.elevated)
-        .clipShape(RoundedRectangle(cornerRadius: DevysSpacing.radiusSm))
+        .elevation(.popover)
     }
 }
 

@@ -1,6 +1,7 @@
 // periphery:ignore:all - ACP wire models are retained for Codable protocol compatibility and UI state mapping.
 // swiftlint:disable file_length
 import ACPClientKit
+import AppFeatures
 import Foundation
 
 protocol AgentSessionScopedRequest {

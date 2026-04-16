@@ -12,6 +12,8 @@ struct WindowTitlebarToolbarHost: NSViewRepresentable {
     let hasRepositories: Bool
     let hasWorktree: Bool
     let isSidebarVisible: Bool
+    let repoName: String?
+    let branchName: String?
     let onToggleSidebar: () -> Void
     let onAgents: () -> Void
     let onShell: () -> Void
@@ -46,6 +48,8 @@ struct WindowTitlebarToolbarHost: NSViewRepresentable {
             hasRepositories: hasRepositories,
             hasWorktree: hasWorktree,
             isSidebarVisible: isSidebarVisible,
+            repoName: repoName,
+            branchName: branchName,
             onToggleSidebar: onToggleSidebar,
             onAgents: onAgents,
             onShell: onShell,
@@ -73,6 +77,8 @@ final class Coordinator: NSObject, NSToolbarDelegate {
         let hasRepositories: Bool
         let hasWorktree: Bool
         let isSidebarVisible: Bool
+        let repoName: String?
+        let branchName: String?
         let onToggleSidebar: () -> Void
         let onAgents: () -> Void
         let onShell: () -> Void
@@ -83,13 +89,16 @@ final class Coordinator: NSObject, NSToolbarDelegate {
     private enum Identifiers {
         static let toolbar = NSToolbar.Identifier("com.devys.window.titlebar-toolbar")
         static let sidebar = NSToolbarItem.Identifier("com.devys.window.sidebar")
+        static let breadcrumb = NSToolbarItem.Identifier("com.devys.window.breadcrumb")
         static let launchers = NSToolbarItem.Identifier("com.devys.window.launchers")
     }
 
     private let toolbar = NSToolbar(identifier: Identifiers.toolbar)
     private let sidebarItem = NSToolbarItem(itemIdentifier: Identifiers.sidebar)
+    private let breadcrumbItem = NSToolbarItem(itemIdentifier: Identifiers.breadcrumb)
     private let launchersItem = NSToolbarItem(itemIdentifier: Identifiers.launchers)
     private let sidebarHostingView = NSHostingView(rootView: AnyView(EmptyView()))
+    private let breadcrumbHostingView = NSHostingView(rootView: AnyView(EmptyView()))
     private let launchersHostingView = NSHostingView(rootView: AnyView(EmptyView()))
 
     private weak var window: NSWindow?
@@ -107,11 +116,14 @@ final class Coordinator: NSObject, NSToolbarDelegate {
         toolbar.showsBaselineSeparator = false
 
         sidebarHostingView.sizingOptions = [.intrinsicContentSize]
+        breadcrumbHostingView.sizingOptions = [.intrinsicContentSize]
         launchersHostingView.sizingOptions = [.intrinsicContentSize]
 
         sidebarItem.view = sidebarHostingView
+        breadcrumbItem.view = breadcrumbHostingView
         launchersItem.view = launchersHostingView
         sidebarItem.label = "Sidebar"
+        breadcrumbItem.label = "Location"
         launchersItem.label = "Launchers"
     }
 
@@ -131,11 +143,11 @@ final class Coordinator: NSObject, NSToolbarDelegate {
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [Identifiers.sidebar, .flexibleSpace, Identifiers.launchers]
+        [Identifiers.sidebar, .flexibleSpace, Identifiers.breadcrumb, .flexibleSpace, Identifiers.launchers]
     }
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [Identifiers.sidebar, .flexibleSpace, Identifiers.launchers]
+        [Identifiers.sidebar, .flexibleSpace, Identifiers.breadcrumb, .flexibleSpace, Identifiers.launchers]
     }
 
     func toolbar(
@@ -146,6 +158,8 @@ final class Coordinator: NSObject, NSToolbarDelegate {
         switch itemIdentifier {
         case Identifiers.sidebar:
             return sidebarItem
+        case Identifiers.breadcrumb:
+            return breadcrumbItem
         case Identifiers.launchers:
             return launchersItem
         default:
@@ -156,13 +170,15 @@ final class Coordinator: NSObject, NSToolbarDelegate {
     private func refreshViews() {
         apply(
             rootView: AnyView(sidebarRootView),
-            to: sidebarHostingView,
-            item: sidebarItem
+            to: sidebarHostingView
+        )
+        apply(
+            rootView: AnyView(breadcrumbRootView),
+            to: breadcrumbHostingView
         )
         apply(
             rootView: AnyView(launchersRootView),
-            to: launchersHostingView,
-            item: launchersItem
+            to: launchersHostingView
         )
     }
 
@@ -181,10 +197,25 @@ final class Coordinator: NSObject, NSToolbarDelegate {
         .environment(\.devysTheme, configuration.theme)
     }
 
+    private var breadcrumbRootView: some View {
+        Group {
+            if let repoName = configuration.repoName {
+                TitlebarBreadcrumb(
+                    repoName: repoName,
+                    branchName: configuration.branchName
+                )
+            } else {
+                Color.clear
+                    .frame(width: 1, height: 1)
+            }
+        }
+        .environment(\.devysTheme, configuration.theme)
+    }
+
     private var launchersRootView: some View {
         Group {
             if configuration.hasRepositories {
-                TitlebarActionButtons(
+                TitlebarFABButton(
                     hasWorktree: configuration.hasWorktree,
                     onAgents: configuration.onAgents,
                     onShell: configuration.onShell,
@@ -201,16 +232,12 @@ final class Coordinator: NSObject, NSToolbarDelegate {
 
     private func apply(
         rootView: AnyView,
-        to hostingView: NSHostingView<AnyView>,
-        item: NSToolbarItem
+        to hostingView: NSHostingView<AnyView>
     ) {
         hostingView.rootView = rootView
         hostingView.layoutSubtreeIfNeeded()
         hostingView.invalidateIntrinsicContentSize()
-
-        let size = hostingView.fittingSize
-        item.minSize = size
-        item.maxSize = size
+        hostingView.setFrameSize(hostingView.fittingSize)
     }
 }
 
@@ -223,7 +250,7 @@ private struct SidebarToolbarButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: isSidebarVisible ? "sidebar.right" : "sidebar.left")
-                .font(.system(size: 12, weight: .medium))
+                .font(Typography.label)
                 .foregroundStyle(theme.textSecondary)
                 .frame(width: 18, height: 18)
         }
@@ -232,7 +259,11 @@ private struct SidebarToolbarButton: View {
     }
 }
 
-private struct TitlebarActionButtons: View {
+/// Single (+) FAB button that opens a popover menu with launch actions.
+///
+/// Replaces the four separate titlebar buttons (Shell, Agents, Codex, Claude)
+/// with one clean creation entry point.
+private struct TitlebarFABButton: View {
     @Environment(\.devysTheme) private var theme
 
     let hasWorktree: Bool
@@ -241,49 +272,129 @@ private struct TitlebarActionButtons: View {
     let onClaude: () -> Void
     let onCodex: () -> Void
 
+    @State private var showMenu = false
+    @State private var isHovered = false
+
     var body: some View {
-        HStack(spacing: 6) {
-            titlebarButton("Shell", icon: "terminal", enabled: hasWorktree, action: onShell)
-            titlebarButton("Agents", icon: "message.badge.waveform", enabled: hasWorktree, action: onAgents)
-            titlebarButton(
+        Button {
+            showMenu.toggle()
+        } label: {
+            Image(systemName: "plus")
+                .font(Typography.label.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 24, height: 24)
+                .background(theme.accent, in: Circle())
+                .scaleEffect(isHovered ? 1.05 : 1.0)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(Animations.micro) { isHovered = hovering }
+        }
+        .help("New tab (⌘T)")
+        .popover(isPresented: $showMenu, arrowEdge: .bottom) {
+            fabMenuContent
+                .environment(\.devysTheme, theme)
+        }
+    }
+
+    private var fabMenuContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            fabMenuItem(
+                "Terminal",
+                icon: "terminal",
+                shortcut: "⌘T",
+                enabled: hasWorktree,
+                action: onShell
+            )
+            fabMenuItem(
+                "Agent Session",
+                icon: "sparkles",
+                shortcut: "⌘⇧A",
+                enabled: hasWorktree,
+                action: onAgents
+            )
+            fabMenuItem(
+                "Claude Code",
+                icon: "brain",
+                shortcut: "⌘⇧C",
+                enabled: hasWorktree,
+                action: onClaude
+            )
+            fabMenuItem(
                 "Codex",
                 icon: "chevron.left.forwardslash.chevron.right",
+                shortcut: "⌘⇧X",
                 enabled: hasWorktree,
                 action: onCodex
             )
-            titlebarButton("Claude", icon: "brain", enabled: hasWorktree, action: onClaude)
         }
-        .fixedSize()
+        .padding(.vertical, Spacing.space1)
+        .frame(width: 220)
+        .elevation(.popover)
     }
 
-    private func titlebarButton(
+    private func fabMenuItem(
         _ title: String,
         icon: String,
+        shortcut: String,
         enabled: Bool,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
+        Button {
+            showMenu = false
+            action()
+        } label: {
+            HStack(spacing: Spacing.space2) {
                 Image(systemName: icon)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(Typography.body)
+                    .foregroundStyle(enabled ? theme.textSecondary : theme.textTertiary)
+                    .frame(width: 18)
+
                 Text(title)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(Typography.body)
+                    .foregroundStyle(enabled ? theme.text : theme.textTertiary)
+
+                Spacer()
+
+                ShortcutBadge(shortcut)
+                    .opacity(enabled ? 1 : 0.7)
             }
-            .foregroundStyle(enabled ? theme.textSecondary : theme.textTertiary)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(enabled ? theme.elevated : theme.surface)
-            .overlay {
-                RoundedRectangle(cornerRadius: 5)
-                    .strokeBorder(
-                        enabled ? theme.border : theme.borderSubtle,
-                        lineWidth: 1
-                    )
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 5))
+            .padding(.horizontal, Spacing.space3)
+            .padding(.vertical, Spacing.space2)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
-        .help(enabled ? title : "Open a workspace to enable \(title)")
+    }
+}
+
+/// Centered titlebar breadcrumb showing the current repo and branch.
+private struct TitlebarBreadcrumb: View {
+    @Environment(\.devysTheme) private var theme
+
+    let repoName: String
+    let branchName: String?
+
+    var body: some View {
+        HStack(spacing: Spacing.space1) {
+            Text(repoName)
+                .font(Typography.caption.weight(.semibold))
+                .foregroundStyle(theme.textSecondary)
+
+            if let branchName {
+                Image(systemName: "chevron.right")
+                    .font(Typography.micro.weight(.semibold))
+                    .foregroundStyle(theme.textTertiary)
+
+                Image(systemName: "arrow.triangle.branch")
+                    .font(Typography.micro)
+                    .foregroundStyle(theme.textTertiary)
+
+                Text(branchName)
+                    .font(Typography.caption)
+                    .foregroundStyle(theme.textSecondary)
+            }
+        }
+        .lineLimit(1)
     }
 }

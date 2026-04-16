@@ -18,11 +18,11 @@ struct PlaceholderView: View {
         VStack(spacing: DevysSpacing.space4) {
             // Icon as text representation
             Image(systemName: icon)
-                .font(.system(size: 28, weight: .light))
+                .font(DevysTypography.display.weight(.light))
                 .foregroundStyle(theme.textTertiary)
             
             Text(title.lowercased().replacingOccurrences(of: " ", with: "_"))
-                .font(DevysTypography.lg)
+                .font(DevysTypography.title)
                 .foregroundStyle(theme.text)
             
             if !subtitle.isEmpty {
@@ -32,7 +32,7 @@ struct PlaceholderView: View {
                     Text(subtitle.lowercased())
                         .foregroundStyle(theme.textSecondary)
                 }
-                .font(DevysTypography.sm)
+                .font(DevysTypography.body)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -62,11 +62,11 @@ struct TerminalRewritePlaceholderView: View {
         VStack(alignment: .leading, spacing: DevysSpacing.space4) {
             VStack(alignment: .leading, spacing: DevysSpacing.space2) {
                 Text("terminal_unavailable")
-                    .font(DevysTypography.lg)
+                    .font(DevysTypography.title)
                     .foregroundStyle(theme.text)
 
                 Text("$ rebuilding_on_libghostty")
-                    .font(DevysTypography.sm)
+                    .font(DevysTypography.body)
                     .foregroundStyle(theme.textSecondary)
             }
 
@@ -91,7 +91,7 @@ struct TerminalRewritePlaceholderView: View {
                 "The old terminal path is intentionally disabled on this branch "
                     + "while the new Ghostty-backed terminal is built from scratch."
             )
-                .font(DevysTypography.sm)
+                .font(DevysTypography.body)
                 .foregroundStyle(theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -108,7 +108,7 @@ struct TerminalRewritePlaceholderView: View {
             Text(value.lowercased().replacingOccurrences(of: " ", with: "_"))
                 .foregroundStyle(theme.textSecondary)
         }
-        .font(DevysTypography.sm)
+        .font(DevysTypography.body)
     }
 }
 

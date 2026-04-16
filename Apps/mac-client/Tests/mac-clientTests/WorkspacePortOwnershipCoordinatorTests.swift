@@ -1,3 +1,4 @@
+import AppFeatures
 import Foundation
 import Testing
 import Workspace
@@ -9,8 +10,15 @@ struct WorkspacePortOwnershipCoordinatorTests {
     @MainActor
     func keepsInactiveRepositoriesColdUntilSelected() async throws {
         let fixture = await makeFixture()
-        fixture.catalog.selectWorkspace(fixture.firstWorktree.id, in: fixture.firstRepository.id)
-        fixture.coordinator.syncCatalog(fixture.catalog, managedProcessesByWorkspace: [:])
+        fixture.coordinator.syncCatalog(
+            runtimeSnapshot(
+                repositories: fixture.repositories,
+                worktreesByRepository: fixture.worktreesByRepository,
+                selectedRepositoryID: fixture.firstRepository.id,
+                selectedWorkspaceID: fixture.firstWorktree.id
+            ),
+            managedProcessesByWorkspace: [:]
+        )
         let firstStore = try #require(fixture.stores.items.first)
         await waitForPorts(in: firstStore, workspaceID: fixture.firstWorktree.id)
         let secondStore = try #require(fixture.stores.items.last)
@@ -24,8 +32,15 @@ struct WorkspacePortOwnershipCoordinatorTests {
         #expect(fixture.coordinator.summary(for: fixture.secondWorktree.id) == nil)
         #expect(secondStore.summariesByWorkspace.isEmpty)
 
-        fixture.catalog.selectWorkspace(fixture.secondWorktree.id, in: fixture.secondRepository.id)
-        fixture.coordinator.syncCatalog(fixture.catalog, managedProcessesByWorkspace: [:])
+        fixture.coordinator.syncCatalog(
+            runtimeSnapshot(
+                repositories: fixture.repositories,
+                worktreesByRepository: fixture.worktreesByRepository,
+                selectedRepositoryID: fixture.secondRepository.id,
+                selectedWorkspaceID: fixture.secondWorktree.id
+            ),
+            managedProcessesByWorkspace: [:]
+        )
         let refreshedSecondStore = try #require(fixture.stores.items.last)
         await waitForPorts(in: refreshedSecondStore, workspaceID: fixture.secondWorktree.id)
 
@@ -42,56 +57,37 @@ struct WorkspacePortOwnershipCoordinatorTests {
     @Test("Managed process sync updates the active repository immediately")
     @MainActor
     func managedProcessSyncRefreshesActiveRepositoryWithoutDebounce() async throws {
-        let repository = Repository(rootURL: URL(fileURLWithPath: "/tmp/devys/ports-managed"))
-        let selectedWorktree = Worktree(
-            workingDirectory: repository.rootURL.appendingPathComponent("selected"),
-            repositoryRootURL: repository.rootURL
-        )
-        let managedWorktree = Worktree(
-            workingDirectory: repository.rootURL.appendingPathComponent("managed"),
-            repositoryRootURL: repository.rootURL
-        )
-        let listingService = StubCatalogWorktreeListingService(
-            worktreesByRepositoryRoot: [repository.id: [selectedWorktree, managedWorktree]]
-        )
-        let catalog = WindowWorkspaceCatalogStore { WorktreeManager(listingService: listingService) }
-        catalog.importRepository(repository)
-        await catalog.refreshRepositories()
-        catalog.selectWorkspace(selectedWorktree.id, in: repository.id)
+        let fixture = await makeManagedProcessFixture()
 
-        let provider = SequencedWorkspacePortSnapshotProvider(
-            snapshots: [
-                [selectedWorktree.id: [ownedPort(workspaceID: selectedWorktree.id, port: 3001, processID: 111)]],
-                [managedWorktree.id: [ownedPort(workspaceID: managedWorktree.id, port: 3002, processID: 222)]],
-            ]
+        fixture.coordinator.syncCatalog(
+            runtimeSnapshot(
+                repositories: fixture.repositories,
+                worktreesByRepository: fixture.worktreesByRepository,
+                selectedRepositoryID: fixture.repository.id,
+                selectedWorkspaceID: fixture.selectedWorktree.id
+            ),
+            managedProcessesByWorkspace: [:]
         )
-        let coordinator = WorkspacePortOwnershipCoordinator {
-            WorkspacePortStore(
-                snapshotProvider: provider,
-                configuration: .init(
-                    selectedRefreshInterval: 60,
-                    backgroundRefreshInterval: 60,
-                    refreshDedupInterval: 0
-                )
-            )
-        }
-
-        coordinator.syncCatalog(catalog, managedProcessesByWorkspace: [:])
-        let activeStore = try #require(coordinator.activeStore)
-        await waitForPorts(in: activeStore, workspaceID: selectedWorktree.id)
+        let activeStore = try #require(fixture.coordinator.activeStore)
+        await waitForPorts(in: activeStore, workspaceID: fixture.selectedWorktree.id)
 
         let start = ContinuousClock.now
-        coordinator.syncCatalog(
-            catalog,
+        fixture.coordinator.syncCatalog(
+            runtimeSnapshot(
+                repositories: fixture.repositories,
+                worktreesByRepository: fixture.worktreesByRepository,
+                selectedRepositoryID: fixture.repository.id,
+                selectedWorkspaceID: fixture.selectedWorktree.id
+            ),
             managedProcessesByWorkspace: [
-                managedWorktree.id: [ManagedWorkspaceProcess(processID: 222, displayName: "vite")]
+                fixture.managedWorktree.id: [ManagedWorkspaceProcess(processID: 222, displayName: "vite")]
             ]
         )
-        await waitForPorts(in: activeStore, workspaceID: managedWorktree.id)
+        await waitForPorts(in: activeStore, workspaceID: fixture.managedWorktree.id)
         let elapsed = start.duration(to: .now)
 
         #expect(
-            coordinator.summary(for: managedWorktree.id) ==
+            fixture.coordinator.summary(for: fixture.managedWorktree.id) ==
             WorkspacePortSummary(totalCount: 1, conflictCount: 0)
         )
         #expect(elapsed < .milliseconds(250))
@@ -119,13 +115,6 @@ struct WorkspacePortOwnershipCoordinatorTests {
             workingDirectory: secondRepository.rootURL.appendingPathComponent("feature-b"),
             repositoryRootURL: secondRepository.rootURL
         )
-        let listingService = StubCatalogWorktreeListingService(
-            worktreesByRepositoryRoot: [
-                firstRepository.id: [firstWorktree],
-                secondRepository.id: [secondWorktree],
-            ]
-        )
-        let catalog = WindowWorkspaceCatalogStore { WorktreeManager(listingService: listingService) }
         let snapshots: [[Workspace.ID: [WorkspacePort]]] = [
             [firstWorktree.id: [ownedPort(workspaceID: firstWorktree.id, port: 3001, processID: 111)]],
             [secondWorktree.id: [ownedPort(workspaceID: secondWorktree.id, port: 3002, processID: 222)]],
@@ -145,17 +134,56 @@ struct WorkspacePortOwnershipCoordinatorTests {
             stores.items.append(store)
             return store
         }
-        catalog.importRepository(firstRepository)
-        catalog.importRepository(secondRepository)
-        await catalog.refreshRepositories()
         return PortCoordinatorFixture(
-            catalog: catalog,
             coordinator: coordinator,
             stores: stores,
+            repositories: [firstRepository, secondRepository],
+            worktreesByRepository: [
+                firstRepository.id: [firstWorktree],
+                secondRepository.id: [secondWorktree],
+            ],
             firstRepository: firstRepository,
             secondRepository: secondRepository,
             firstWorktree: firstWorktree,
             secondWorktree: secondWorktree
+        )
+    }
+
+    @MainActor
+    private func makeManagedProcessFixture() async -> ManagedProcessPortFixture {
+        let repository = Repository(rootURL: URL(fileURLWithPath: "/tmp/devys/ports-managed"))
+        let selectedWorktree = Worktree(
+            workingDirectory: repository.rootURL.appendingPathComponent("selected"),
+            repositoryRootURL: repository.rootURL
+        )
+        let managedWorktree = Worktree(
+            workingDirectory: repository.rootURL.appendingPathComponent("managed"),
+            repositoryRootURL: repository.rootURL
+        )
+        let provider = SequencedWorkspacePortSnapshotProvider(
+            snapshots: [
+                [selectedWorktree.id: [ownedPort(workspaceID: selectedWorktree.id, port: 3001, processID: 111)]],
+                [managedWorktree.id: [ownedPort(workspaceID: managedWorktree.id, port: 3002, processID: 222)]],
+            ]
+        )
+        let coordinator = WorkspacePortOwnershipCoordinator {
+            WorkspacePortStore(
+                snapshotProvider: provider,
+                configuration: .init(
+                    selectedRefreshInterval: 60,
+                    backgroundRefreshInterval: 60,
+                    refreshDedupInterval: 0
+                )
+            )
+        }
+
+        return ManagedProcessPortFixture(
+            repository: repository,
+            selectedWorktree: selectedWorktree,
+            managedWorktree: managedWorktree,
+            repositories: [repository],
+            worktreesByRepository: [repository.id: [selectedWorktree, managedWorktree]],
+            coordinator: coordinator
         )
     }
 
@@ -174,14 +202,39 @@ struct WorkspacePortOwnershipCoordinatorTests {
     }
 }
 
+@MainActor
+private func runtimeSnapshot(
+    repositories: [Repository],
+    worktreesByRepository: [Repository.ID: [Worktree]],
+    selectedRepositoryID: Repository.ID?,
+    selectedWorkspaceID: Workspace.ID?
+) -> WindowCatalogRuntimeSnapshot {
+    WindowCatalogRuntimeSnapshot(
+        repositories: repositories,
+        worktreesByRepository: worktreesByRepository,
+        selectedRepositoryID: selectedRepositoryID,
+        selectedWorkspaceID: selectedWorkspaceID
+    )
+}
+
 private struct PortCoordinatorFixture {
-    let catalog: WindowWorkspaceCatalogStore
     let coordinator: WorkspacePortOwnershipCoordinator
     let stores: WorkspacePortStoreRecorder
+    let repositories: [Repository]
+    let worktreesByRepository: [Repository.ID: [Worktree]]
     let firstRepository: Repository
     let secondRepository: Repository
     let firstWorktree: Worktree
     let secondWorktree: Worktree
+}
+
+private struct ManagedProcessPortFixture {
+    let repository: Repository
+    let selectedWorktree: Worktree
+    let managedWorktree: Worktree
+    let repositories: [Repository]
+    let worktreesByRepository: [Repository.ID: [Worktree]]
+    let coordinator: WorkspacePortOwnershipCoordinator
 }
 
 @MainActor

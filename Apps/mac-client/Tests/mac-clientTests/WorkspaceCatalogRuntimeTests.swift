@@ -1,4 +1,8 @@
+import AppFeatures
+import Dependencies
 import Foundation
+import Git
+import Split
 import Testing
 import Workspace
 @testable import mac_client
@@ -42,143 +46,102 @@ struct AppContainerAgentLaunchTests {
     }
 }
 
-@Suite("Window Workspace Catalog Store Tests")
-struct WindowWorkspaceCatalogStoreTests {
-    @Test("Catalog keeps repository-scoped workspace state and navigator ordering")
+@Suite("Workspace Catalog Client Tests")
+struct WorkspaceCatalogClientTests {
+    @Test("Refresh client rebuilds repository worktrees from git service")
     @MainActor
-    func repositoryScopedWorkspaceState() async throws {
+    func refreshClientRebuildsRepositorySnapshot() async {
         let repository = Repository(rootURL: URL(fileURLWithPath: "/tmp/devys/catalog-repo"))
-        let primary = Worktree(
-            name: "main",
-            detail: ".",
-            workingDirectory: repository.rootURL,
-            repositoryRootURL: repository.rootURL
-        )
         let feature = Worktree(
             name: "feature/perf",
             detail: "feature/perf",
             workingDirectory: repository.rootURL.appendingPathComponent("feature-perf"),
             repositoryRootURL: repository.rootURL
         )
-        let listingService = StubCatalogWorktreeListingService(
-            worktreesByRepositoryRoot: [repository.id: [primary, feature]]
+        let client = WorkspaceCatalogRefreshClient.live(
+            gitWorktreeService: StubGitWorktreeService(
+                worktreesByRepositoryRoot: [repository.id: [feature]]
+            )
         )
-        let catalog = WindowWorkspaceCatalogStore {
-            WorktreeManager(listingService: listingService)
-        }
+        let snapshot = WindowFeature.RepositoryCatalogSnapshot(
+            repositories: [repository],
+            worktreesByRepository: [repository.id: []],
+            workspaceStatesByID: [
+                feature.id: WorktreeState(worktreeId: feature.id, isPinned: true)
+            ]
+        )
+        let refreshed = await client.refreshRepositories(snapshot, [repository.id])
 
-        catalog.importRepository(repository)
-        await catalog.refreshRepository(repositoryID: repository.id)
-        catalog.selectWorkspace(feature.id, in: repository.id)
-        catalog.setWorkspacePinned(feature.id, in: repository.id, isPinned: true)
-        catalog.setWorkspaceDisplayName("Perf Branch", for: feature.id, in: repository.id)
-        catalog.setWorkspaceArchived(primary.id, in: repository.id, isArchived: true)
-
-        let visibleWorkspaceIDs = catalog.visibleNavigatorWorkspaces().map(\.workspace.id)
-        let featureContext = try #require(catalog.workspaceContext(for: feature.id))
-
-        #expect(catalog.selectedRepositoryID == repository.id)
-        #expect(catalog.selectedWorkspaceID == feature.id)
-        #expect(catalog.displayName(for: feature) == "Perf Branch")
-        #expect(visibleWorkspaceIDs == [feature.id])
-        #expect(catalog.worktreeState(for: feature.id)?.isPinned == true)
-        #expect(featureContext.repository.id == repository.id)
-        #expect(featureContext.worktree.id == feature.id)
+        #expect(refreshed.repositories == [repository])
+        #expect(refreshed.worktreesByRepository[repository.id] == [feature])
+        #expect(refreshed.workspaceStatesByID[feature.id]?.isPinned == true)
     }
 
-    @Test("Removing the active repository falls back to the remaining repository")
+    @Test("Refresh client falls back to a repository-root worktree when git returns none")
     @MainActor
-    func removingActiveRepositoryFallsBackToRemainingSelection() {
-        let firstRepository = Repository(rootURL: URL(fileURLWithPath: "/tmp/devys/catalog-a"))
-        let secondRepository = Repository(rootURL: URL(fileURLWithPath: "/tmp/devys/catalog-b"))
-        let catalog = WindowWorkspaceCatalogStore {
-            WorktreeManager(listingService: NoopWorktreeListingService())
-        }
+    func refreshClientFallsBackToRepositoryRoot() async {
+        let repository = Repository(rootURL: URL(fileURLWithPath: "/tmp/devys/catalog-empty"))
+        let client = WorkspaceCatalogRefreshClient.live(
+            gitWorktreeService: StubGitWorktreeService(worktreesByRepositoryRoot: [repository.id: []])
+        )
 
-        catalog.importRepository(firstRepository)
-        catalog.importRepository(secondRepository)
-        catalog.removeRepository(secondRepository.id)
+        let refreshed = await client.refreshRepositories(
+            WindowFeature.RepositoryCatalogSnapshot(repositories: [repository]),
+            [repository.id]
+        )
 
-        #expect(catalog.selectedRepositoryID == firstRepository.id)
-        #expect(catalog.hasRepositories)
-
-        catalog.removeRepository(firstRepository.id)
-
-        #expect(catalog.selectedRepositoryID == nil)
-        #expect(catalog.selectedWorkspaceID == nil)
-        #expect(!catalog.hasRepositories)
+        #expect(refreshed.worktreesByRepository[repository.id] == [
+            Worktree(
+                workingDirectory: repository.rootURL,
+                repositoryRootURL: repository.rootURL,
+                name: repository.rootURL.lastPathComponent,
+                detail: "."
+            )
+        ])
     }
 
-    @Test("Moving repositories updates navigator order without changing selection")
+    @Test("Persistence client writes repositories and worktree states through workspace services")
     @MainActor
-    func movingRepositoriesUpdatesOrder() {
-        let firstRepository = Repository(rootURL: URL(fileURLWithPath: "/tmp/devys/catalog-order-a"))
-        let secondRepository = Repository(rootURL: URL(fileURLWithPath: "/tmp/devys/catalog-order-b"))
-        let thirdRepository = Repository(rootURL: URL(fileURLWithPath: "/tmp/devys/catalog-order-c"))
-        let catalog = WindowWorkspaceCatalogStore {
-            WorktreeManager(listingService: NoopWorktreeListingService())
+    func persistenceClientWritesThroughWorkspaceServices() {
+        let suiteName = "com.devys.tests.catalog-client.\(UUID().uuidString)"
+        guard let userDefaults = UserDefaults(suiteName: suiteName) else {
+            Issue.record("Unable to create UserDefaults suite")
+            return
+        }
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
         }
 
-        catalog.importRepository(firstRepository)
-        catalog.importRepository(secondRepository)
-        catalog.importRepository(thirdRepository)
-
-        #expect(catalog.repositories.map(\.id) == [firstRepository.id, secondRepository.id, thirdRepository.id])
-        #expect(catalog.selectedRepositoryID == thirdRepository.id)
-
-        catalog.moveRepository(thirdRepository.id, by: -1)
-
-        #expect(catalog.repositories.map(\.id) == [firstRepository.id, thirdRepository.id, secondRepository.id])
-        #expect(catalog.selectedRepositoryID == thirdRepository.id)
-
-        catalog.moveRepository(firstRepository.id, by: 10)
-
-        #expect(catalog.repositories.map(\.id) == [thirdRepository.id, secondRepository.id, firstRepository.id])
-        #expect(catalog.selectedRepositoryID == thirdRepository.id)
-    }
-
-    @Test("Catalog distinguishes cached selections from unresolved repositories")
-    @MainActor
-    func cachedSelectionResolution() async {
-        let repository = Repository(rootURL: URL(fileURLWithPath: "/tmp/devys/catalog-known"))
-        let primary = Worktree(
-            name: "main",
-            detail: ".",
-            workingDirectory: repository.rootURL,
-            repositoryRootURL: repository.rootURL
+        let repository = Repository(rootURL: URL(fileURLWithPath: "/tmp/devys/catalog-persist"))
+        let workspaceState = WorktreeState(
+            worktreeId: "/tmp/devys/catalog-persist/feature",
+            isPinned: true,
+            displayNameOverride: "Perf Branch"
         )
-        let feature = Worktree(
-            name: "feature/instant",
-            detail: "feature/instant",
-            workingDirectory: repository.rootURL.appendingPathComponent("feature-instant"),
-            repositoryRootURL: repository.rootURL
+        let repositoryPersistenceService = UserDefaultsRepositoryPersistenceService(
+            userDefaults: userDefaults
         )
-        let listingService = StubCatalogWorktreeListingService(
-            worktreesByRepositoryRoot: [repository.id: [primary, feature]]
+        let worktreePersistenceService = UserDefaultsWorktreePersistenceService(
+            userDefaults: userDefaults
         )
-        let catalog = WindowWorkspaceCatalogStore {
-            WorktreeManager(listingService: listingService)
-        }
+        let client = WorkspaceCatalogPersistenceClient.live(
+            repositoryPersistenceService: repositoryPersistenceService,
+            worktreePersistenceService: worktreePersistenceService
+        )
 
-        catalog.importRepository(repository)
+        client.saveRepositories([repository])
+        client.saveWorkspaceStates([workspaceState])
 
-        #expect(!catalog.hasResolvedRepository(repository.id))
-        #expect(!catalog.canResolveWorkspaceSelection(feature.id, in: repository.id))
-
-        await catalog.refreshRepository(repositoryID: repository.id)
-        catalog.selectWorkspace(feature.id, in: repository.id)
-
-        #expect(catalog.hasResolvedRepository(repository.id))
-        #expect(catalog.canResolveWorkspaceSelection(feature.id, in: repository.id))
-        #expect(!catalog.canResolveWorkspaceSelection("/tmp/devys/catalog-known/missing", in: repository.id))
+        #expect(repositoryPersistenceService.loadRepositories() == [repository])
+        #expect(client.loadWorkspaceStates() == [workspaceState])
     }
 }
 
 @Suite("Worktree Runtime Registry Tests")
 struct WorktreeRuntimeRegistryTests {
-    @Test("Runtime registry preserves per-workspace shell state across activation changes")
+    @Test("Runtime registry preserves per-workspace runtimes across activation changes")
     @MainActor
-    func preservesWorkspaceShellStateAcrossActivationChanges() {
+    func preservesRuntimeAcrossActivationChanges() throws {
         let firstWorktree = Worktree(
             workingDirectory: URL(fileURLWithPath: "/tmp/devys/runtime-a"),
             repositoryRootURL: URL(fileURLWithPath: "/tmp/devys/runtime-repo")
@@ -190,9 +153,8 @@ struct WorktreeRuntimeRegistryTests {
         let registry = WorktreeRuntimeRegistry()
 
         registry.activate(worktree: firstWorktree, filesSidebarVisible: false)
-        let firstShellState = registry.shellState(for: firstWorktree)
-        firstShellState.sidebarMode = .ports
-        registry.persistShellState(firstShellState)
+        let firstPool = try #require(registry.editorSessionPool(for: firstWorktree.id))
+        let firstPoolIdentity = ObjectIdentifier(firstPool)
 
         registry.activate(worktree: secondWorktree, filesSidebarVisible: false)
         #expect(registry.activeWorkspaceID == secondWorktree.id)
@@ -201,17 +163,18 @@ struct WorktreeRuntimeRegistryTests {
 
         registry.activate(worktree: firstWorktree, filesSidebarVisible: false)
         #expect(registry.activeWorkspaceID == firstWorktree.id)
-        #expect(registry.activeShellState?.sidebarMode == .ports)
+        let activePool = try #require(registry.editorSessionPool(for: firstWorktree.id))
+        #expect(ObjectIdentifier(activePool) == firstPoolIdentity)
 
         registry.discardWorkspace(firstWorktree.id)
         #expect(!registry.containsRuntime(for: firstWorktree.id))
         #expect(registry.activeWorkspaceID == nil)
-        #expect(registry.storedShellStates[secondWorktree.id] != nil)
+        #expect(registry.worktree(for: secondWorktree.id)?.id == secondWorktree.id)
     }
 
-    @Test("Runtime registry exposes the active runtime handle without catalog lookups")
+    @Test("Runtime registry exposes focused active workspace accessors without catalog lookups")
     @MainActor
-    func exposesActiveRuntimeHandle() {
+    func exposesFocusedActiveWorkspaceAccessors() {
         let firstWorktree = Worktree(
             workingDirectory: URL(fileURLWithPath: "/tmp/devys/runtime-handle-a"),
             repositoryRootURL: URL(fileURLWithPath: "/tmp/devys/runtime-handle-repo")
@@ -221,56 +184,107 @@ struct WorktreeRuntimeRegistryTests {
             repositoryRootURL: URL(fileURLWithPath: "/tmp/devys/runtime-handle-repo")
         )
         let registry = WorktreeRuntimeRegistry()
-        registry.configure(container: AppContainer())
+        let container = AppContainer()
+        registry.configure(
+            makeGitStore: { workingDirectory in
+                guard let workingDirectory else { return nil }
+                return container.makeGitStore(projectFolder: workingDirectory)
+            },
+            makeFileTreeModel: { rootURL in
+                container.makeFileTreeModel(rootURL: rootURL)
+            }
+        )
 
         registry.activate(worktree: firstWorktree, filesSidebarVisible: true)
 
-        guard let firstRuntime = registry.activeRuntime else {
-            Issue.record("Expected an active runtime for the first worktree")
-            return
-        }
-        #expect(firstRuntime.workspaceID == firstWorktree.id)
-        #expect(firstRuntime.worktree.id == firstWorktree.id)
-        #expect(firstRuntime.shellState.workspaceID == firstWorktree.id)
-        #expect(registry.runtimeHandle(for: firstWorktree.id)?.worktree.id == firstWorktree.id)
+        #expect(registry.activeWorkspaceID == firstWorktree.id)
+        #expect(registry.activeWorktree?.id == firstWorktree.id)
+        #expect(registry.worktree(for: firstWorktree.id)?.id == firstWorktree.id)
+        #expect(registry.editorSessionPool(for: firstWorktree.id) != nil)
+        #expect(registry.activeGitStore != nil)
 
         registry.activate(worktree: secondWorktree, filesSidebarVisible: false)
 
-        guard let secondRuntime = registry.activeRuntime else {
-            Issue.record("Expected an active runtime for the second worktree")
-            return
-        }
-        #expect(secondRuntime.workspaceID == secondWorktree.id)
-        #expect(secondRuntime.worktree.id == secondWorktree.id)
-        #expect(registry.runtimeHandle(for: firstWorktree.id)?.worktree.id == firstWorktree.id)
+        #expect(registry.activeWorkspaceID == secondWorktree.id)
+        #expect(registry.activeWorktree?.id == secondWorktree.id)
+        #expect(registry.worktree(for: firstWorktree.id)?.id == firstWorktree.id)
     }
 
     @Test("Runtime registry caches file-tree Git status index outside view render")
     @MainActor
     func cachesFileTreeGitStatusIndex() async throws {
-        let fixture = try TestWorkspaceRuntimeRepositoryFixture()
-        defer { fixture.cleanup() }
+        try await withDependencies {
+            $0.date.now = Date(timeIntervalSince1970: 1_234_567)
+        } operation: {
+            let fixture = try TestWorkspaceRuntimeRepositoryFixture()
+            defer { fixture.cleanup() }
 
-        let worktree = Worktree(
-            workingDirectory: fixture.repositoryRoot,
-            repositoryRootURL: fixture.repositoryRoot
+            let worktree = Worktree(
+                workingDirectory: fixture.repositoryRoot,
+                repositoryRootURL: fixture.repositoryRoot
+            )
+            let registry = WorktreeRuntimeRegistry()
+            let container = AppContainer()
+            registry.configure(
+                makeGitStore: { workingDirectory in
+                    guard let workingDirectory else { return nil }
+                    return container.makeGitStore(projectFolder: workingDirectory)
+                },
+                makeFileTreeModel: { rootURL in
+                    container.makeFileTreeModel(rootURL: rootURL)
+                }
+            )
+            registry.activate(worktree: worktree, filesSidebarVisible: false)
+
+            let fileNode = CEWorkspaceFileNode(
+                url: fixture.repositoryRoot.appendingPathComponent("notes.txt"),
+                isDirectory: false
+            )
+
+            #expect(registry.activeGitStore != nil)
+            #expect(registry.activeGitStatusIndex?.summary(for: fileNode) == nil)
+
+            await registry.hydrateGitRuntimeIfNeeded(for: worktree.id)
+
+            let index = try #require(registry.activeGitStatusIndex)
+            #expect(index.summary(for: fileNode)?.label == "?")
+        }
+    }
+}
+
+private struct StubGitWorktreeService: GitWorktreeService {
+    let worktreesByRepositoryRoot: [Repository.ID: [Worktree]]
+
+    func repositoryRoot(for url: URL) async throws -> URL {
+        url.standardizedFileURL
+    }
+
+    func listWorktrees(for repositoryRoot: URL) async throws -> [Worktree] {
+        worktreesByRepositoryRoot[repositoryRoot.standardizedFileURL.path] ?? []
+    }
+
+    func createWorktree(
+        at path: URL,
+        branchName: String,
+        baseRef: String?,
+        in repositoryRoot: URL
+    ) async throws -> Worktree {
+        _ = baseRef
+        return Worktree(
+            name: branchName,
+            detail: ".",
+            workingDirectory: path,
+            repositoryRootURL: repositoryRoot
         )
-        let registry = WorktreeRuntimeRegistry()
-        registry.configure(container: AppContainer())
-        registry.activate(worktree: worktree, filesSidebarVisible: false)
+    }
 
-        let fileNode = CEWorkspaceFileNode(
-            url: fixture.repositoryRoot.appendingPathComponent("notes.txt"),
-            isDirectory: false
-        )
+    func removeWorktree(_ worktree: Worktree, force: Bool) async throws {
+        _ = worktree
+        _ = force
+    }
 
-        #expect(registry.activeGitStore != nil)
-        #expect(registry.activeGitStatusIndex?.summary(for: fileNode) == nil)
-
-        await registry.hydrateGitRuntimeIfNeeded(for: worktree.id)
-
-        let index = try #require(registry.activeGitStatusIndex)
-        #expect(index.summary(for: fileNode)?.label == "?")
+    func pruneWorktrees(in repositoryRoot: URL) async throws {
+        _ = repositoryRoot
     }
 }
 

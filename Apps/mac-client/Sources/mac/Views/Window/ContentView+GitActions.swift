@@ -1,6 +1,7 @@
 // ContentView+GitActions.swift
 // Devys - Active workspace Git actions.
 
+import AppFeatures
 import AppKit
 import Git
 import Workspace
@@ -9,7 +10,7 @@ import Workspace
 extension ContentView {
     var activeWorktreeInfo: WorktreeInfoEntry? {
         guard let activeWorktree else { return nil }
-        return activeMetadataStore?.entriesById[activeWorktree.id]
+        return workspaceOperationalState.metadataEntriesByWorkspaceID[activeWorktree.id]
     }
 
     func fetchSelectedWorkspaceRemote() {
@@ -38,19 +39,12 @@ extension ContentView {
 
     func commitSelectedWorkspaceChanges() {
         guard (activeWorktreeInfo?.statusSummary?.staged ?? 0) > 0 else { return }
-        isGitCommitSheetPresented = true
+        store.send(.setGitCommitSheetPresented(true))
     }
 
     func createPullRequestForSelectedWorkspace() {
-        guard activeMetadataStore?.isPRAvailable == true else {
-            showLauncherUnavailableAlert(
-                title: "Pull Request Unavailable",
-                message: "GitHub CLI integration is not available for this repository."
-            )
-            return
-        }
         guard gitStore?.isRepositoryAvailable == true else { return }
-        isCreatePullRequestSheetPresented = true
+        store.send(.setCreatePullRequestSheetPresented(true))
     }
 
     func openSelectedWorkspacePullRequest() {
@@ -78,7 +72,12 @@ extension ContentView {
     func handleCreatedPullRequest() async {
         await gitStore?.refresh()
         if let activeWorktreeID = activeWorktree?.id {
-            runtimeRegistry.metadataCoordinator.refresh(worktreeIds: [activeWorktreeID])
+            store.send(
+                .requestWorkspaceOperationalMetadataRefresh(
+                    worktreeIDs: [activeWorktreeID],
+                    repositoryID: selectedRepositoryID
+                )
+            )
         }
     }
 
@@ -89,10 +88,10 @@ extension ContentView {
     }
 
     func initializeRepository(_ repositoryID: Repository.ID) async {
-        guard let repository = workspaceCatalog.repository(for: repositoryID) else { return }
+        guard let repository = store.repositories.first(where: { $0.id == repositoryID }) else { return }
 
         let store: GitStore
-        if workspaceCatalog.selectedRepositoryID == repositoryID,
+        if selectedRepositoryID == repositoryID,
            let activeStore = gitStore {
             store = activeStore
         } else {
@@ -106,15 +105,17 @@ extension ContentView {
             return
         }
 
-        workspaceCatalog.setRepositorySourceControl(.git, for: repositoryID)
+        await self.store.send(.setRepositorySourceControl(.git, for: repositoryID)).finish()
         await refreshRepositoryCatalog(repositoryID: repositoryID)
 
-        if workspaceCatalog.selectedRepositoryID == repositoryID,
+        if selectedRepositoryID == repositoryID,
            let selectedWorktree = selectedCatalogWorktree,
            visibleWorkspaceID == selectedWorktree.id {
-            runtimeRegistry.metadataCoordinator.refresh(
-                worktreeIds: [selectedWorktree.id],
-                in: repositoryID
+            self.store.send(
+                .requestWorkspaceOperationalMetadataRefresh(
+                    worktreeIDs: [selectedWorktree.id],
+                    repositoryID: repositoryID
+                )
             )
         }
     }

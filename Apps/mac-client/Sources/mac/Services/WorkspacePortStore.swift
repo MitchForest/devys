@@ -3,15 +3,11 @@
 //
 // Copyright © 2026 Devys. All rights reserved.
 
+import AppFeatures
 import Foundation
 import Observation
 import OSLog
 import Workspace
-
-struct ManagedWorkspaceProcess: Equatable, Sendable {
-    let processID: Int32
-    let displayName: String
-}
 
 struct WorkspacePortObservationContext: Sendable {
     let worktreesByID: [Workspace.ID: Worktree]

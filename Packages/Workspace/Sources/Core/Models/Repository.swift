@@ -31,6 +31,14 @@ public struct Repository: Identifiable, Codable, Equatable, Hashable, Sendable {
     /// Current source-control capability for the project root.
     public var sourceControl: RepositorySourceControl
 
+    /// Custom 2-letter initials override for the repo rail tile.
+    /// When nil, auto-derived from `displayName`.
+    public var displayInitials: String?
+
+    /// SF Symbol name for the repo rail tile.
+    /// When set, renders a symbol instead of initials.
+    public var displaySymbol: String?
+
     /// Whether the project root is currently backed by Git.
     public var isGitRepository: Bool {
         sourceControl == .git
@@ -56,5 +64,28 @@ public struct Repository: Identifiable, Codable, Equatable, Hashable, Sendable {
         self.displayName = displayName ?? normalizedRootURL.lastPathComponent
         self.settingsReference = settingsReference ?? stableID
         self.sourceControl = sourceControl
+        self.displayInitials = nil
+        self.displaySymbol = nil
+    }
+
+    /// Creates a new project record with custom rail display options.
+    public init(
+        rootURL: URL,
+        displayName: String? = nil,
+        settingsReference: String? = nil,
+        sourceControl: RepositorySourceControl = .none,
+        displayInitials: String?,
+        displaySymbol: String?
+    ) {
+        let normalizedRootURL = rootURL.standardizedFileURL
+        let stableID = normalizedRootURL.path
+
+        self.id = stableID
+        self.rootURL = normalizedRootURL
+        self.displayName = displayName ?? normalizedRootURL.lastPathComponent
+        self.settingsReference = settingsReference ?? stableID
+        self.sourceControl = sourceControl
+        self.displayInitials = displayInitials
+        self.displaySymbol = displaySymbol
     }
 }

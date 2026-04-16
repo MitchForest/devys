@@ -10,8 +10,8 @@ import SwiftUI
 extension ContentView {
     @ViewBuilder
     var rootContent: some View {
-        if workspaceCatalog.hasRepositories {
-            workspaceShell
+        if store.hasRepositories {
+            workspaceShellView
         } else {
             ProjectPickerView(
                 recentRepositories: Array(recentRepositoriesService.load().prefix(5)),
@@ -32,35 +32,18 @@ extension ContentView {
     }
 
     func applyLifecycleModifiers<V: View>(_ view: V) -> some View {
-        applyNotificationModifiers(
-            applySessionModifiers(
-                applyAppearanceModifiers(view)
-            )
+        applyShellCommandRequestModifiers(
+            applyAppearanceModifiers(view)
         )
     }
 
     private func applyAppearanceModifiers<V: View>(_ view: V) -> some View {
         view
             .onAppear {
-                configureSplitDelegate()
-                if !hasInitialized {
-                    hasInitialized = true
-                    themeManager.isDarkMode = appSettings.appearance.isDarkMode
-                    themeManager.setAccentColor(from: appSettings.appearance.accentColor)
-                    themeManager.applyAppearance()
-                    GhosttyTerminalThemeController.apply(themeManager.ghosttyAppearance)
-                    runtimeRegistry.configure(container: container)
-                    syncCatalogRuntimeState()
-                    Task {
-                        refreshAvailableRelaunchSnapshot()
-                        await warmPersistentTerminalHostIfNeeded()
-                        await restorePersistentTerminalRelaunchStateIfNeeded()
-                    }
-                }
+                handleRootContentAppear()
             }
             .onChange(of: themeManager.isDarkMode) { _, _ in
-                themeManager.applyAppearance()
-                GhosttyTerminalThemeController.apply(themeManager.ghosttyAppearance)
+                applyCurrentAppearance()
             }
             .onChange(of: appSettings.appearance.accentColor) { _, newValue in
                 themeManager.setAccentColor(from: newValue)
@@ -78,14 +61,54 @@ extension ContentView {
                 refreshAvailableRelaunchSnapshot()
             }
             .onChange(of: notificationSettingsSnapshot) { _, _ in
-                syncAttentionPreferences()
+                store.send(
+                    .setWorkspaceNotificationPreferences(
+                        terminalActivity: appSettings.notifications.terminalActivity,
+                        agentActivity: appSettings.notifications.agentActivity
+                    )
+                )
             }
     }
 
-    private func applySessionModifiers<V: View>(_ view: V) -> some View {
-        view
-            .onChange(of: terminalBellSnapshot) { _, _ in
-                syncTerminalNotifications()
+    private func handleRootContentAppear() {
+        configureSplitDelegate()
+        hostedContentBridge.setPublishHandler { workspaceID, content in
+            store.send(.setHostedWorkspaceContent(workspaceID, content))
+        }
+        guard !hasInitialized else { return }
+
+        hasInitialized = true
+        themeManager.isDarkMode = appSettings.appearance.isDarkMode
+        themeManager.setAccentColor(from: appSettings.appearance.accentColor)
+        applyCurrentAppearance()
+        configureRuntimeRegistryFactories()
+        store.send(
+            .setWorkspaceNotificationPreferences(
+                terminalActivity: appSettings.notifications.terminalActivity,
+                agentActivity: appSettings.notifications.agentActivity
+            )
+        )
+        Task {
+            refreshAvailableRelaunchSnapshot()
+            await warmPersistentTerminalHostIfNeeded()
+            await requestWindowRelaunchRestore(force: false)
+        }
+    }
+
+    private func applyCurrentAppearance() {
+        themeManager.applyAppearance()
+        GhosttyTerminalThemeController.apply(themeManager.ghosttyAppearance)
+    }
+
+    private func configureRuntimeRegistryFactories() {
+        runtimeRegistry.configure(
+            makeGitStore: { workingDirectory in
+                guard let workingDirectory else { return nil }
+                return container.makeGitStore(projectFolder: workingDirectory)
+            },
+            makeFileTreeModel: { rootURL in
+                container.makeFileTreeModel(rootURL: rootURL)
             }
+        )
     }
 }

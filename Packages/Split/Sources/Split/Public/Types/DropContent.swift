@@ -22,7 +22,7 @@ public enum DropZone: Equatable, Sendable {
     case center
     
     /// Edge of pane - create split in that direction
-    case edge(SplitOrientation)
+    case edge(orientation: SplitOrientation, insertion: SplitInsertionPosition)
     
     /// Specific position in tab bar
     case tabBar(index: Int)

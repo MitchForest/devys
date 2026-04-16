@@ -21,12 +21,12 @@ struct SidebarResizeHandle: View {
 
     var body: some View {
         Rectangle()
-            .fill(theme.surface)
+            .fill(theme.card)
             .frame(width: 6)
             .overlay {
                 if isHovered || isDragging {
                     Rectangle()
-                        .fill(theme.visibleAccent.opacity(0.4))
+                        .fill(theme.accent.opacity(0.4))
                         .frame(width: 2)
                 }
             }

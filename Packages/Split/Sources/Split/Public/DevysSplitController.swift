@@ -23,9 +23,6 @@ public final class DevysSplitController {
     /// Observable colors for theming (injected into view hierarchy)
     var splitColors: SplitColors
     
-    /// Tracks which tabs are welcome tabs (for auto-close behavior)
-    internal var welcomeTabIds: Set<UUID> = []
-
     // MARK: - Initialization
 
     /// Create a new controller with the specified configuration
@@ -40,11 +37,6 @@ public final class DevysSplitController {
     public func updateColors(_ colors: DevysSplitConfiguration.Colors) {
         self.configuration.colors = colors
         self.splitColors.update(from: colors)
-    }
-    
-    /// Check if a tab is a welcome tab
-    public func isWelcomeTab(_ tabId: TabID) -> Bool {
-        welcomeTabIds.contains(tabId.id)
     }
 }
 
@@ -63,6 +55,7 @@ public extension DevysSplitController {
     func createTab(
         title: String,
         icon: String? = "doc.text",
+        isPreview: Bool = false,
         isDirty: Bool = false,
         activityIndicator: TabActivityIndicator? = nil,
         inPane pane: PaneID? = nil
@@ -72,6 +65,7 @@ public extension DevysSplitController {
             id: tabId,
             title: title,
             icon: icon,
+            isPreview: isPreview,
             isDirty: isDirty,
             activityIndicator: activityIndicator
         )
@@ -107,6 +101,7 @@ public extension DevysSplitController {
             id: tabId.id,
             title: title,
             icon: icon,
+            isPreview: isPreview,
             isDirty: isDirty,
             activityIndicator: activityIndicator
         )
@@ -128,6 +123,7 @@ public extension DevysSplitController {
         _ tabId: TabID,
         title: String? = nil,
         icon: String?? = nil,
+        isPreview: Bool? = nil,
         isDirty: Bool? = nil,
         activityIndicator: TabActivityIndicator?? = nil
     ) {
@@ -138,6 +134,9 @@ public extension DevysSplitController {
         }
         if let icon = icon {
             pane.tabs[tabIndex].icon = icon
+        }
+        if let isPreview = isPreview {
+            pane.tabs[tabIndex].isPreview = isPreview
         }
         if let isDirty = isDirty {
             pane.tabs[tabIndex].isDirty = isDirty
@@ -177,31 +176,15 @@ public extension DevysSplitController {
         let tab = Tab(from: tabItem)
         let paneId = pane.id
         
-        // Check if this is a welcome tab
-        let isWelcome = welcomeTabIds.contains(tabId.id)
-            || (delegate?.splitView(self, isWelcomeTab: tabId, inPane: paneId) ?? false)
-
         // Check with delegate
         if delegate?.splitTabBar(self, shouldCloseTab: tab, inPane: paneId) == false {
             return false
         }
 
         internalController.closeTab(tabId.id, inPane: pane.id)
-        
-        // Remove from welcome tab tracking
-        welcomeTabIds.remove(tabId.id)
 
         // Notify delegate
         delegate?.splitTabBar(self, didCloseTab: tabId, fromPane: paneId)
-        
-        // If this was a welcome tab and behavior is autoCreateAndClosePane, close the pane
-        if isWelcome
-            && configuration.welcomeTabBehavior == .autoCreateAndClosePane
-            && pane.tabs.isEmpty
-            && internalController.rootNode.allPaneIds.count > 1 {
-            // Close the now-empty pane
-            _ = closePane(paneId)
-        }
 
         return true
     }
@@ -288,50 +271,54 @@ public extension DevysSplitController {
         // Notify delegate
         delegate?.splitTabBar(self, didSplitPane: targetPaneId, newPane: resolvedPaneId, orientation: orientation)
 
-        // If no tab was provided and welcome tab behavior is enabled, create a welcome tab
-        if tab == nil && configuration.welcomeTabBehavior != .none {
-            createWelcomeTabIfNeeded(inPane: resolvedPaneId)
-        }
-
         return resolvedPaneId
     }
-    
-    /// Create a welcome tab in the pane if delegate provides one
-    private func createWelcomeTabIfNeeded(inPane paneId: PaneID) {
-        guard configuration.welcomeTabBehavior != .none,
-              let pane = internalController.rootNode.findPane(paneId),
-              pane.tabs.isEmpty else {
-            return
+
+    /// Split a pane with an existing tab, optionally inserting the new pane first.
+    @discardableResult
+    func splitPaneWithTab(
+        _ paneId: PaneID,
+        orientation: SplitOrientation,
+        tab: Tab,
+        insertFirst: Bool,
+        from sourcePaneId: PaneID? = nil
+    ) -> PaneID? {
+        if let sourcePaneId,
+           let sourcePane = internalController.rootNode.findPane(PaneID(id: sourcePaneId.id)) {
+            sourcePane.removeTab(tab.id.id)
         }
-        
-        // Ask delegate for welcome tab
-        if let welcomeTab = delegate?.splitView(self, welcomeTabForPane: paneId) {
-            // Create the tab internally
-            let tabItem = TabItem(
-                id: welcomeTab.id.id,
-                title: welcomeTab.title,
-                icon: welcomeTab.icon,
-                isDirty: welcomeTab.isDirty,
-                activityIndicator: welcomeTab.activityIndicator
-            )
-            internalController.addTab(tabItem, toPane: paneId, atIndex: nil)
-            
-            // Track as welcome tab
-            welcomeTabIds.insert(welcomeTab.id.id)
-            
-            // Notify delegate
-            delegate?.splitTabBar(self, didCreateTab: welcomeTab, inPane: paneId)
+
+        let preSplitPaneIds = Set(internalController.rootNode.allPaneIds.map(\.id))
+        let internalTab = TabItem(
+            id: tab.id.id,
+            title: tab.title,
+            icon: tab.icon,
+            isDirty: tab.isDirty,
+            activityIndicator: tab.activityIndicator
+        )
+
+        internalController.splitPaneWithTab(
+            PaneID(id: paneId.id),
+            orientation: orientation,
+            tab: internalTab,
+            insertFirst: insertFirst
+        )
+        let postSplitPaneIds = Set(internalController.rootNode.allPaneIds.map(\.id))
+        let createdPaneId = postSplitPaneIds.subtracting(preSplitPaneIds).first
+        let newPaneId = createdPaneId.map(PaneID.init(id:))
+
+        if let sourcePaneId,
+           sourcePaneId != paneId,
+           let sourcePane = internalController.rootNode.findPane(PaneID(id: sourcePaneId.id)),
+           sourcePane.tabs.isEmpty,
+           internalController.rootNode.allPaneIds.count > 1 {
+            internalController.closePane(PaneID(id: sourcePaneId.id))
         }
-    }
-    
-    /// Create welcome tabs for all empty panes.
-    /// Call this after operations that may leave panes empty (like opening a new folder).
-    func populateEmptyPanesWithWelcomeTabs() {
-        guard configuration.welcomeTabBehavior != .none else { return }
-        
-        for paneId in allPaneIds {
-            createWelcomeTabIfNeeded(inPane: paneId)
+
+        if let newPaneId {
+            delegate?.splitTabBar(self, didSplitPane: paneId, newPane: newPaneId, orientation: orientation)
         }
+        return newPaneId
     }
 
     /// Close a specific pane
@@ -357,6 +344,50 @@ public extension DevysSplitController {
         return true
     }
 
+}
+
+public extension DevysSplitController {
+
+    /// Move a tab between panes and notify the delegate.
+    func moveTab(
+        _ tab: Tab,
+        from sourcePaneId: PaneID,
+        to targetPaneId: PaneID,
+        atIndex index: Int? = nil
+    ) {
+        let tabItem = TabItem(
+            id: tab.id.id,
+            title: tab.title,
+            icon: tab.icon,
+            isPreview: tab.isPreview,
+            isDirty: tab.isDirty,
+            activityIndicator: tab.activityIndicator
+        )
+        internalController.moveTab(
+            tabItem,
+            from: PaneID(id: sourcePaneId.id),
+            to: PaneID(id: targetPaneId.id),
+            atIndex: index
+        )
+        delegate?.splitTabBar(self, didMoveTab: tab, fromPane: sourcePaneId, toPane: targetPaneId)
+    }
+
+    /// Reorder a tab within a pane and notify the delegate.
+    func reorderTab(
+        _ tabId: TabID,
+        inPane paneId: PaneID,
+        toIndex destinationIndex: Int
+    ) {
+        guard let pane = internalController.rootNode.findPane(PaneID(id: paneId.id)),
+              let sourceIndex = pane.tabs.firstIndex(where: { $0.id == tabId.id }),
+              pane.tabs.indices.contains(sourceIndex) else {
+            return
+        }
+
+        pane.moveTab(from: sourceIndex, to: destinationIndex)
+        let movedTab = Tab(from: pane.tabs[min(destinationIndex, max(0, pane.tabs.count - 1))])
+        delegate?.splitTabBar(self, didMoveTab: movedTab, fromPane: paneId, toPane: paneId)
+    }
 }
 
 public extension DevysSplitController {
@@ -436,6 +467,22 @@ public extension DevysSplitController {
         return buildExternalTree(from: internalController.rootNode, containerFrame: containerFrame)
     }
 
+    /// Rebuild the controller from an external tree snapshot.
+    /// This is intended for restoring app-owned layout state.
+    func restoreTreeSnapshot(
+        _ snapshot: ExternalTreeNode,
+        focusedPaneId: PaneID? = nil
+    ) {
+        internalController = SplitViewController(rootNode: internalTreeNode(from: snapshot))
+
+        if let focusedPaneId,
+           internalController.rootNode.findPane(focusedPaneId) != nil {
+            internalController.focusPane(focusedPaneId)
+        } else {
+            internalController.focusedPaneId = internalController.rootNode.allPaneIds.first
+        }
+    }
+
     private func buildExternalTree(
         from node: SplitNode,
         containerFrame: CGRect,
@@ -501,6 +548,39 @@ public extension DevysSplitController {
                 containerFrame: containerFrame,
                 bounds: secondBounds
             )
+        )
+    }
+
+    private func internalTreeNode(from node: ExternalTreeNode) -> SplitNode {
+        switch node {
+        case .pane(let pane):
+            .pane(internalPaneState(from: pane))
+        case .split(let split):
+            .split(
+                SplitState(
+                    id: UUID(uuidString: split.id) ?? UUID(),
+                    orientation: split.orientation == "horizontal" ? .horizontal : .vertical,
+                    first: internalTreeNode(from: split.first),
+                    second: internalTreeNode(from: split.second),
+                    dividerPosition: CGFloat(split.dividerPosition)
+                )
+            )
+        }
+    }
+
+    private func internalPaneState(from pane: ExternalPaneNode) -> PaneState {
+        let tabs = pane.tabs.map { tab in
+            TabItem(
+                id: UUID(uuidString: tab.id) ?? UUID(),
+                title: tab.title,
+                icon: "doc.text"
+            )
+        }
+
+        return PaneState(
+            id: PaneID(id: UUID(uuidString: pane.id) ?? UUID()),
+            tabs: tabs,
+            selectedTabId: pane.selectedTabId.flatMap(UUID.init(uuidString:))
         )
     }
 
@@ -578,9 +658,6 @@ public extension DevysSplitController {
 }
 
 extension DevysSplitController {
-
-    // MARK: - Private Helpers
-
     private func findTabInternal(_ tabId: TabID) -> (PaneState, Int)? {
         for pane in internalController.rootNode.allPanes {
             if let index = pane.tabs.firstIndex(where: { $0.id == tabId.id }) {

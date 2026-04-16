@@ -72,12 +72,12 @@ extension GitSidebarView {
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
-                .background(theme.elevated)
+                .background(theme.overlay)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 4)
+                    RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
                         .strokeBorder(theme.border, lineWidth: 1)
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
             }
             .buttonStyle(.plain)
             .disabled(store.isLoading)
@@ -96,21 +96,21 @@ extension GitSidebarView {
                 HStack(spacing: 4) {
                     Text(">")
                         .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(theme.visibleAccent)
+                        .foregroundStyle(theme.accent)
                     Text("commit")
                         .font(.system(size: 11, weight: .medium, design: .monospaced))
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
-                .background(theme.elevated)
+                .background(theme.overlay)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 4)
+                    RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
                         .strokeBorder(
                             store.stagedChanges.isEmpty ? theme.border : theme.accent,
                             lineWidth: 1
                         )
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
             }
             .buttonStyle(.plain)
             .disabled(store.stagedChanges.isEmpty)

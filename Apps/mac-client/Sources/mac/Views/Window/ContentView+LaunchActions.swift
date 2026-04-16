@@ -3,6 +3,7 @@
 //
 // Copyright © 2026 Devys. All rights reserved.
 
+import AppFeatures
 import Foundation
 import Split
 import Workspace
@@ -23,29 +24,7 @@ extension ContentView {
     }
 
     func runSelectedWorkspaceProfile() {
-        guard let worktree = activeWorktree else { return }
-
-        let resolvedProfile = resolveDefaultStartupProfile(for: worktree)
-        guard let resolvedProfile else { return }
-
-        Task { @MainActor in
-            let launchResult = await launchStartupProfile(resolvedProfile, in: worktree)
-
-            workspaceRunStore.setRunning(
-                worktreeId: worktree.id,
-                profileID: resolvedProfile.profile.id,
-                terminalIDs: launchResult.terminalIDs,
-                backgroundProcessIDs: launchResult.backgroundProcessIDs
-            )
-            persistTerminalRelaunchSnapshotIfNeeded()
-
-            if !launchResult.failures.isEmpty {
-                showLauncherUnavailableAlert(
-                    title: "Run Profile Started With Failures",
-                    message: launchResult.failures.joined(separator: "\n")
-                )
-            }
-        }
+        store.send(.requestWorkspaceCommand(.runWorkspaceProfile))
     }
 
     func editSelectedWorkspaceProfiles() {
@@ -53,19 +32,7 @@ extension ContentView {
     }
 
     func stopSelectedWorkspaceProfile() {
-        guard let worktree = activeWorktree else { return }
-
-        if let state = workspaceRunStore.state(for: worktree.id) {
-            for terminalID in state.terminalIDs {
-                shutdownWorkspaceTerminalSession(id: terminalID, in: worktree.id)
-            }
-            for processID in state.backgroundProcessIDs {
-                workspaceBackgroundProcessRegistry.shutdown(id: processID, in: worktree.id)
-            }
-        }
-        workspaceRunStore.clearWorktree(worktree.id)
-        syncCatalogPortState()
-        persistTerminalRelaunchSnapshotIfNeeded()
+        store.send(.requestStopWorkspaceRun(activeWorktree?.id))
     }
 
     private func launchSelectedWorkspaceTerminal(
@@ -147,21 +114,43 @@ extension ContentView {
         return ResolvedWorkspaceTerminalLaunch(launch: launch, resolvedCommand: resolvedCommand)
     }
 
-    private func resolveDefaultStartupProfile(for worktree: Worktree) -> ResolvedStartupProfile? {
-        let settings = repositorySettingsStore.settings(for: worktree.repositoryRootURL)
-        do {
-            return try RepositoryLaunchPlanner.resolveDefaultStartupProfile(
-                in: settings,
-                workspaceRoot: worktree.workingDirectory
+    func executeRunProfileLaunch(_ request: WindowFeature.RunProfileLaunchRequest) async {
+        guard let worktree = windowWorkspaceContext(for: request.workspaceID)?.worktree else { return }
+
+        let launchResult = await launchStartupProfile(
+            request.resolvedProfile,
+            in: worktree
+        )
+        store.send(
+            .runProfileLaunchCompleted(
+                WindowFeature.RunProfileLaunchResult(
+                    workspaceID: worktree.id,
+                    profileID: request.resolvedProfile.profile.id,
+                    terminalIDs: launchResult.terminalIDs,
+                    backgroundProcessIDs: launchResult.backgroundProcessIDs,
+                    failures: launchResult.failures
+                )
             )
-        } catch {
+        )
+        persistTerminalRelaunchSnapshotIfNeeded()
+
+        if !launchResult.failures.isEmpty {
             showLauncherUnavailableAlert(
-                title: "Run Profile Not Available",
-                message: error.localizedDescription
+                title: "Run Profile Started With Failures",
+                message: launchResult.failures.joined(separator: "\n")
             )
-            openRepositorySettings()
-            return nil
         }
+    }
+
+    func executeRunProfileStop(_ request: WindowFeature.RunProfileStopRequest) async {
+        for terminalID in request.terminalIDs {
+            shutdownWorkspaceTerminalSession(id: terminalID, in: request.workspaceID)
+        }
+        for processID in request.backgroundProcessIDs {
+            workspaceBackgroundProcessRegistry.shutdown(id: processID, in: request.workspaceID)
+        }
+        store.send(.runProfileStopCompleted(request.workspaceID))
+        persistTerminalRelaunchSnapshotIfNeeded()
     }
 
     private func launchStartupProfile(
@@ -171,8 +160,7 @@ extension ContentView {
         var launchedTerminalIDs: [UUID] = []
         var launchedProcessIDs: [UUID] = []
         var failures: [String] = []
-        var shouldRefreshPorts = false
-        let targetPane = controller.focusedPaneId ?? controller.allPaneIds.first
+        let targetPane = targetPaneID(workspaceID: worktree.id)
 
         for step in resolvedProfile.steps {
             do {
@@ -196,19 +184,13 @@ extension ContentView {
                         command: step.command,
                         environment: step.environment
                     ) { processID, _ in
-                        workspaceRunStore.removeBackgroundProcess(processID)
-                        syncCatalogPortState()
+                        store.send(.removeWorkspaceRunBackgroundProcess(processID))
                     }
                     launchedProcessIDs.append(backgroundProcess.id)
-                    shouldRefreshPorts = true
                 }
             } catch {
                 failures.append("\(step.displayName): \(error.localizedDescription)")
             }
-        }
-
-        if shouldRefreshPorts {
-            syncCatalogPortState()
         }
 
         return (launchedTerminalIDs, launchedProcessIDs, failures)
@@ -224,8 +206,8 @@ extension ContentView {
             workingDirectory: step.workingDirectory,
             requestedCommand: step.shellCommand
         )
-        let content = TabContent.terminal(workspaceID: workspaceID, id: session.id)
-        let targetPane = paneID ?? controller.focusedPaneId ?? controller.allPaneIds.first
+        let content = WorkspaceTabContent.terminal(workspaceID: workspaceID, id: session.id)
+        let targetPane = paneID ?? targetPaneID(workspaceID: workspaceID)
         guard let targetPane else {
             shutdownWorkspaceTerminalSession(id: session.id, in: workspaceID)
             throw NSError(domain: "DevysStartupProfiles", code: 1, userInfo: [
@@ -246,9 +228,9 @@ extension ContentView {
         _ step: ResolvedStartupProfileStep,
         in workspaceID: Workspace.ID
     ) async throws -> UUID {
-        let sourcePane = controller.focusedPaneId ?? controller.allPaneIds.first
+        let sourcePane = targetPaneID(workspaceID: workspaceID)
         guard let sourcePane,
-              let splitPane = controller.splitPane(sourcePane, orientation: .horizontal)
+              let splitPane = splitPane(sourcePane, orientation: .horizontal, workspaceID: workspaceID)
         else {
             throw NSError(domain: "DevysStartupProfiles", code: 2, userInfo: [
                 NSLocalizedDescriptionKey: "Could not create a split for \(step.displayName)."

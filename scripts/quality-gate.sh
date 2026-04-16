@@ -12,6 +12,7 @@ fi
 cd "$(dirname "$0")/.."
 
 ./scripts/lint.sh
+./scripts/check-design-system.sh
 unused_args=()
 if [[ "${DEVYS_SKIP_APP_PERIPHERY:-0}" == "1" ]]; then
     unused_args+=(--skip-apps)

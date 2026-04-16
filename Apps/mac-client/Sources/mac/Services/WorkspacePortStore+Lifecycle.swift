@@ -1,6 +1,7 @@
 // WorkspacePortStore+Lifecycle.swift
 // Devys - Lifecycle and logging helpers for scoped workspace port refreshes.
 
+import AppFeatures
 import Foundation
 import Workspace
 

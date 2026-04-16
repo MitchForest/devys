@@ -1,10 +1,9 @@
 // UnifiedWorkspaceSidebar.swift
-// Devys - Unified workspace sidebar with collapsible sections.
+// Devys - Canonical two-tab content sidebar.
 //
 // Copyright © 2026 Devys. All rights reserved.
 
 import SwiftUI
-import Git
 import UI
 
 struct UnifiedWorkspaceSidebar<
@@ -15,7 +14,9 @@ struct UnifiedWorkspaceSidebar<
 >: View {
     @Environment(\.devysTheme) private var theme
 
-    let hasChanges: Bool
+    let selection: WorkspaceSidebarMode
+    let onSelect: (WorkspaceSidebarMode) -> Void
+    let changeCount: Int
     let portCount: Int
     let agentCount: Int
     @ViewBuilder let filesContent: () -> FilesContent
@@ -27,55 +28,30 @@ struct UnifiedWorkspaceSidebar<
     @State private var isChangesExpanded = true
     @State private var isPortsExpanded = false
     @State private var isAgentsExpanded = true
+    @State private var isWorkflowsExpanded = true
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                sidebarSection(
-                    title: "Files",
-                    systemImage: "folder",
-                    isExpanded: $isFilesExpanded
-                ) {
-                    filesContent()
-                }
+        VStack(spacing: 0) {
+            SegmentedControl(
+                options: ["Files", "Agents"],
+                selectedIndex: selectionIndex
+            )
+            .padding(.horizontal, DevysSpacing.space3)
+            .padding(.vertical, DevysSpacing.space3)
 
-                sectionDivider
+            Separator()
 
-                sidebarSection(
-                    title: "Changes",
-                    systemImage: "arrow.triangle.branch",
-                    isExpanded: $isChangesExpanded,
-                    badge: hasChanges ? "" : nil
-                ) {
-                    changesContent()
-                }
-
-                if portCount > 0 {
-                    sectionDivider
-
-                    sidebarSection(
-                        title: "Ports",
-                        systemImage: "point.3.connected.trianglepath.dotted",
-                        isExpanded: $isPortsExpanded,
-                        badge: "\(portCount)"
-                    ) {
-                        portsContent()
-                    }
-                }
-
-                sectionDivider
-
-                sidebarSection(
-                    title: "Agents",
-                    systemImage: "message.badge.waveform",
-                    isExpanded: $isAgentsExpanded,
-                    badge: agentCount > 0 ? "\(agentCount)" : nil
-                ) {
-                    agentsContent()
+            Group {
+                switch selection {
+                case .files:
+                    filesTab
+                case .agents:
+                    agentsTab
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .background(theme.surface)
+        .background(theme.card)
         .onChange(of: portCount) { _, newCount in
             if newCount > 0, !isPortsExpanded {
                 withAnimation(.easeInOut(duration: 0.15)) {
@@ -83,71 +59,95 @@ struct UnifiedWorkspaceSidebar<
                 }
             }
         }
-        .onChange(of: hasChanges) { _, hasChanges in
-            if hasChanges, !isChangesExpanded {
+        .onChange(of: changeCount) { _, newCount in
+            if newCount > 0, !isChangesExpanded {
                 withAnimation(.easeInOut(duration: 0.15)) {
                     isChangesExpanded = true
                 }
             }
         }
-        .onChange(of: agentCount) { _, agentCount in
-            if agentCount > 0, !isAgentsExpanded {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    isAgentsExpanded = true
+    }
+
+    private var selectionIndex: Binding<Int> {
+        Binding(
+            get: {
+                switch selection {
+                case .files:
+                    return 0
+                case .agents:
+                    return 1
+                }
+            },
+            set: { newValue in
+                onSelect(newValue == 0 ? .files : .agents)
+            }
+        )
+    }
+
+    private var filesTab: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                SidebarSection(
+                    "Files",
+                    icon: "folder",
+                    isExpanded: $isFilesExpanded
+                ) {
+                    filesContent()
+                }
+
+                Separator()
+
+                SidebarSection(
+                    "Changes",
+                    icon: "arrow.triangle.branch",
+                    count: changeCount > 0 ? changeCount : nil,
+                    isExpanded: $isChangesExpanded
+                ) {
+                    changesContent()
+                }
+
+                if portCount > 0 {
+                    Separator()
+
+                    SidebarSection(
+                        "Ports",
+                        icon: "point.3.connected.trianglepath.dotted",
+                        count: portCount,
+                        isExpanded: $isPortsExpanded
+                    ) {
+                        portsContent()
+                    }
                 }
             }
         }
     }
 
-    private var sectionDivider: some View {
-        Rectangle()
-            .fill(theme.borderSubtle)
-            .frame(height: 1)
-    }
-
-    private func sidebarSection<Content: View>(
-        title: String,
-        systemImage: String,
-        isExpanded: Binding<Bool>,
-        badge: String? = nil,
-        @ViewBuilder content: @escaping () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    isExpanded.wrappedValue.toggle()
+    private var agentsTab: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                SidebarSection(
+                    "Agents",
+                    icon: "message.badge.waveform",
+                    count: agentCount > 0 ? agentCount : nil,
+                    isExpanded: $isAgentsExpanded
+                ) {
+                    agentsContent()
                 }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: isExpanded.wrappedValue ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(theme.textTertiary)
-                        .frame(width: 10)
 
-                    Image(systemName: systemImage)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(theme.textSecondary)
+                Separator()
 
-                    Text(title)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(theme.textSecondary)
-
-                    if let badge {
-                        Text(badge)
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(theme.visibleAccent)
-                    }
-
-                    Spacer()
+                SidebarSection(
+                    "Workflows",
+                    icon: "sparkles",
+                    isExpanded: $isWorkflowsExpanded
+                ) {
+                    EmptyState(
+                        icon: "sparkles",
+                        title: "Workflows coming soon",
+                        description: "Multi-step automated agent pipelines will live here."
+                    )
+                    .frame(maxHeight: 220)
                 }
-                .padding(.horizontal, DevysSpacing.space3)
-                .padding(.vertical, 6)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            if isExpanded.wrappedValue {
-                content()
             }
         }
     }

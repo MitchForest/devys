@@ -8,7 +8,24 @@ public struct TabID: Hashable, Codable, Sendable {
         self.id = UUID()
     }
 
+    public init(uuid: UUID) {
+        self.id = uuid
+    }
+
+    public init?(uuidString: String) {
+        guard let uuid = UUID(uuidString: uuidString) else { return nil }
+        self.id = uuid
+    }
+
     internal init(id: UUID) {
         self.id = id
+    }
+
+    public var uuid: UUID {
+        id
+    }
+
+    public var uuidString: String {
+        id.uuidString
     }
 }

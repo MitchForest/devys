@@ -27,7 +27,10 @@ SplitNode (indirect enum)
         +-- dividerPosition: 0.0-1.0
 ```
 
-This design allows unlimited nesting of splits. Each leaf (`PaneState`) manages its own collection of tabs, selected tab, and unique identifier.
+This design allows unlimited nesting of splits. Within DevysSplit itself, each leaf (`PaneState`) manages rendering-time tab collections, selected tab presentation, and unique identifiers.
+In the app architecture, reducer-owned shell state in `Packages/AppFeatures` is the canonical pane/tab/layout model.
+Phase 4 is complete; `Packages/Split` remains a render and gesture boundary while phase 5 focuses on catalog-bridge collapse.
+Do not reintroduce topology ownership or snapshot-driven shell synchronization into `Packages/Split`.
 
 ### Controller Architecture
 
@@ -84,7 +87,6 @@ Sources/DevysSplit/
   |           +-- SplitOrientation.swift # .horizontal | .vertical
   |           +-- NavigationDirection.swift # .left/.right/.up/.down
   |           +-- DropContent.swift      # External drag-drop content
-  |           +-- WelcomeTabBehavior.swift # Empty pane behavior
   |           +-- LayoutSnapshot.swift   # Geometry query types
   |
   +-- Internal/
@@ -142,7 +144,7 @@ DevysSplitView(controller: controller) { tab, paneId in
 
 #### `DevysSplitConfiguration`
 Comprehensive configuration struct with nested types:
-- **Behavior:** `allowSplits`, `allowCloseTabs`, `autoCloseEmptyPanes`, `contentViewLifecycle`, `welcomeTabBehavior`
+- **Behavior:** `allowSplits`, `allowCloseTabs`, `autoCloseEmptyPanes`, `contentViewLifecycle`
 - **Appearance:** `tabBarHeight`, `tabMinWidth`, `minimumPaneWidth`, `showSplitButtons`
 - **Colors:** `accent`, `tabBarBackground`, `activeTabBackground`, `separator`
 - **Presets:** `.default`, `.singlePane`, `.readOnly`, `.compact`, `.spacious`
@@ -153,7 +155,7 @@ Protocol for receiving callbacks (all methods optional via default implementatio
 - Notifications: `didCreateTab`, `didCloseTab`, `didSelectTab`, `didSplitPane`, `didFocusPane`
 - Geometry: `didChangeGeometry(snapshot:)`
 - Drag-drop: `didReceiveDrop`, `shouldAcceptDrop`
-- Welcome tabs: `welcomeTabForPane`, `isWelcomeTab`
+- Empty panes are rendered by the caller-provided `emptyPane` builder
 
 #### `Tab` / `TabID` / `PaneID`
 Public immutable types for identifying and querying tabs/panes. Internal UUIDs are wrapped in opaque structs for type safety.
@@ -268,7 +270,6 @@ var allPaneIds: [PaneID]
 func tab(_: TabID) -> Tab?
 func tabs(inPane: PaneID) -> [Tab]
 func selectedTab(inPane: PaneID) -> Tab?
-func isWelcomeTab(_: TabID) -> Bool
 
 // Geometry
 func layoutSnapshot() -> LayoutSnapshot
@@ -352,10 +353,7 @@ Two modes controlled by `configuration.contentViewLifecycle`:
 2. **`.keepAllAlive`**: All tab contents remain in hierarchy, hidden when not selected. Preserves scroll position, @State, focus, etc.
 
 ### Empty Pane Handling
-Controlled by `configuration.welcomeTabBehavior`:
-- `.none`: No automatic welcome tabs
-- `.autoCreateOnly`: Create welcome tab via delegate
-- `.autoCreateAndClosePane`: Create welcome tab; closing it closes the pane
+Empty panes are rendered by the caller-provided `emptyPaneBuilder`. DevysSplit does not synthesize welcome tabs or own app-domain empty-state policy.
 
 ### Auto-Close Empty Panes
 When `configuration.autoCloseEmptyPanes` is true (default), panes with no tabs are automatically closed (except the last pane).

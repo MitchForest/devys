@@ -18,7 +18,7 @@ final class ThemeManager {
     var isDarkMode: Bool = true
     
     /// Current accent color (default: white/monochrome for pure terminal look)
-    var accentColor: AccentColor = .white
+    var accentColor: AccentColor = .violet
 
     var colorScheme: ColorScheme {
         isDarkMode ? .dark : .light
@@ -34,9 +34,9 @@ final class ThemeManager {
     }
 
     var ghosttyAppearance: GhosttyTerminalAppearance {
-        let background = GhosttyTerminalColor(hex: isDarkMode ? "#000000" : "#FFFFFF")
-        let foreground = GhosttyTerminalColor(hex: isDarkMode ? "#EFEFEF" : "#1A1A1A")
-        let fallbackSelection = GhosttyTerminalColor(hex: isDarkMode ? "#2E2E2E" : "#DDDDDD")
+        let background = GhosttyTerminalColor(hex: isDarkMode ? "#0C0B0A" : "#FAF8F5")
+        let foreground = GhosttyTerminalColor(hex: isDarkMode ? "#EDE8E0" : "#1C1A17")
+        let fallbackSelection = GhosttyTerminalColor(hex: isDarkMode ? "#2E2C28" : "#DDD9D1")
         let accent = GhosttyTerminalColor(hex: accentColor.rawValue)
 
         let cursorColor = accent.contrastRatio(with: background) >= 2.5 ? accent : foreground

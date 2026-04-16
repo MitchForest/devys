@@ -1,37 +1,29 @@
 // ContentView+WorkspaceState.swift
-// Devys - Workspace-owned shell runtime swapping.
+// Devys - Phase 4 topology/runtime bridge during migration.
 
+import AppFeatures
 import Foundation
 import Workspace
 
 @MainActor
 extension ContentView {
-    private func makeWorkspaceShellStateSnapshot(_ workspaceID: Workspace.ID) -> WorkspaceShellState {
-        WorkspaceShellState(
-            workspaceID: workspaceID,
-            sidebarMode: activeSidebarItem ?? .files,
-            gitStore: gitStore,
-            agentRuntimeRegistry: activeRuntime?.agentRuntimeRegistry ?? WorkspaceAgentRuntimeRegistry(),
+    func persistVisibleWorkspaceState() {
+        guard let visibleWorkspaceID else { return }
+        workspaceViewStatesByID[visibleWorkspaceID] = WorkspaceViewState(
             editorSessions: editorSessions,
-            editorSessionPool: editorSessionPool,
-            controller: controller,
-            tabContents: tabContents,
-            selectedTabId: selectedTabId,
-            previewTabId: previewTabId,
             closeBypass: closeBypass,
             closeInFlight: closeInFlight
         )
-    }
-
-    func persistVisibleWorkspaceState() {
-        guard let visibleWorkspaceID else { return }
-        runtimeRegistry.persistShellState(makeWorkspaceShellStateSnapshot(visibleWorkspaceID))
         persistTerminalRelaunchSnapshotIfNeeded()
     }
 
     func restoreWorkspaceState(for worktree: Worktree) {
         let workspaceID = worktree.id
-        let hadSavedState = runtimeRegistry.containsRuntime(for: workspaceID)
+        if store.selectedWorkspaceID != workspaceID {
+            store.send(.selectWorkspace(workspaceID))
+        }
+        let hadSavedState = workspaceViewStatesByID[workspaceID] != nil
+            || store.workspaceShells[workspaceID]?.layout != nil
         let trace = WorkspacePerformanceRecorder.begin(
             "workspace-restore",
             context: [
@@ -43,34 +35,20 @@ extension ContentView {
             WorkspacePerformanceRecorder.end(trace)
         }
 
-        let state = runtimeRegistry.shellState(for: worktree)
-
-        activeSidebarItem = state.sidebarMode
-        editorSessions = state.editorSessions
-        editorSessionPool = state.editorSessionPool
-        controller = state.controller
-        tabContents = state.tabContents
-        selectedTabId = state.selectedTabId
-        previewTabId = state.previewTabId
-        closeBypass = state.closeBypass
-        closeInFlight = state.closeInFlight
-
-        if !hadSavedState {
-            if !restoreWorkspaceStateFromRelaunchSnapshotIfNeeded(for: workspaceID) {
-                controller = ContentView.makeSplitController()
-                applyDefaultLayout()
-                controller.populateEmptyPanesWithWelcomeTabs()
-            }
-            runtimeRegistry.persistShellState(makeWorkspaceShellStateSnapshot(workspaceID))
-        }
-
         runtimeRegistry.activate(
             worktree: worktree,
-            filesSidebarVisible: activeSidebarItem == .files
+            filesSidebarVisible: reducerFilesSidebarVisible
         )
+
+        let state = persistedWorkspaceViewState(for: workspaceID)
+
+        editorSessions = state.editorSessions
+        closeBypass = state.closeBypass
+        closeInFlight = state.closeInFlight
+        restoreWorkspaceController(for: workspaceID, hadSavedState: hadSavedState)
+
         bindRepositoryCapability(for: worktree)
 
-        configureSplitDelegate()
         syncTabMetadataFromSessions()
         Task { @MainActor in
             await Task.yield()
@@ -82,56 +60,94 @@ extension ContentView {
         }
     }
 
-    func discardWorkspaceState(_ workspaceID: Workspace.ID) {
-        let wasVisibleWorkspace = visibleWorkspaceID == workspaceID
-        runtimeRegistry.portCoordinator.clearWorkspace(workspaceID)
-        runtimeRegistry.discardWorkspace(workspaceID) { state in
-            disposeWorkspaceState(state)
+    private func restoreWorkspaceController(
+        for workspaceID: Workspace.ID,
+        hadSavedState: Bool
+    ) {
+        controller = ContentView.makeSplitController()
+        configureSplitDelegate()
+
+        if !hadSavedState {
+            ensureWorkspaceLayout(for: workspaceID)
+            applyDefaultLayout(workspaceID: workspaceID)
+            return
         }
 
-        workspaceAttentionStore.clearWorkspace(workspaceID)
+        if store.workspaceShells[workspaceID]?.layout != nil {
+            renderWorkspaceLayout(for: workspaceID)
+            return
+        }
+
+        ensureWorkspaceLayout(for: workspaceID)
+        applyDefaultLayout(workspaceID: workspaceID)
+    }
+
+    func discardWorkspaceState(_ workspaceID: Workspace.ID) {
+        let wasVisibleWorkspace = visibleWorkspaceID == workspaceID
+        workspaceOperationalController.clearWorkspace(workspaceID)
+        let agentSessions = runtimeRegistry.allAgentSessions(for: workspaceID)
+        let editorSessionPool = runtimeRegistry.editorSessionPool(for: workspaceID)
+        runtimeRegistry.discardWorkspace(workspaceID)
+        disposeWorkspaceState(
+            workspaceID,
+            editorSessionPool: editorSessionPool,
+            agentSessions: agentSessions
+        )
+        hostedContentBridge.discardWorkspace(workspaceID)
+        workspaceViewStatesByID.removeValue(forKey: workspaceID)
+        store.send(.removeHostedWorkspaceContent(workspaceID))
         if wasVisibleWorkspace {
             resetWorkspaceState()
         }
     }
 
-    private func disposeWorkspaceState(_ state: WorkspaceShellState) {
-        for terminalID in workspaceTerminalRegistry.sessions(for: state.workspaceID).keys {
+    private func disposeWorkspaceState(
+        _ workspaceID: Workspace.ID,
+        editorSessionPool: EditorSessionPool?,
+        agentSessions: [AgentSessionRuntime]
+    ) {
+        let state = persistedWorkspaceViewState(for: workspaceID)
+
+        for terminalID in workspaceTerminalRegistry.sessions(for: workspaceID).keys {
             shutdownWorkspaceTerminalSession(
                 id: terminalID,
-                in: state.workspaceID,
+                in: workspaceID,
                 terminateHostedSession: true
             )
         }
-        workspaceBackgroundProcessRegistry.shutdownAll(in: state.workspaceID)
-        syncCatalogStructure()
-        workspaceRunStore.clearWorktree(state.workspaceID)
-        for session in state.agentRuntimeRegistry.allSessions {
+        workspaceBackgroundProcessRegistry.shutdownAll(in: workspaceID)
+        store.send(.setWorkspaceRunState(workspaceID: workspaceID, nil))
+        for session in agentSessions {
             Task {
                 await session.teardown()
             }
         }
-        state.agentRuntimeRegistry.removeAll()
+        runtimeRegistry.removeAllAgentSessions(in: workspaceID)
 
         for tabID in state.editorSessions.keys {
             if let session = state.editorSessions[tabID] {
-                state.editorSessionPool.release(url: session.url)
+                editorSessionPool?.release(url: session.url)
             }
-            EditorSessionRegistry.shared.unregister(tabId: tabID)
+            editorSessionRegistry.unregister(tabId: tabID)
         }
     }
 
     private func bindRepositoryCapability(for worktree: Worktree) {
-        guard let gitStore = runtimeRegistry.runtimeHandle(for: worktree.id)?.gitStore else { return }
-        gitStore.onRepositoryAvailabilityDidUpdate = { [weak workspaceCatalog, weak runtimeRegistry] isAvailable in
+        guard let gitStore = runtimeRegistry.gitStore(for: worktree.id) else { return }
+        let windowStore = store
+        gitStore.onRepositoryAvailabilityDidUpdate = { isAvailable in
             Task { @MainActor in
-                workspaceCatalog?.setRepositorySourceControl(
-                    isAvailable ? .git : .none,
-                    for: worktree.repositoryRootURL.standardizedFileURL.path
+                windowStore.send(
+                    .setRepositorySourceControl(
+                        isAvailable ? .git : .none,
+                        for: worktree.repositoryRootURL.standardizedFileURL.path
+                    )
                 )
-                runtimeRegistry?.metadataCoordinator.refresh(
-                    worktreeIds: [worktree.id],
-                    in: worktree.repositoryRootURL.standardizedFileURL.path
+                windowStore.send(
+                    .requestWorkspaceOperationalMetadataRefresh(
+                        worktreeIDs: [worktree.id],
+                        repositoryID: worktree.repositoryRootURL.standardizedFileURL.path
+                    )
                 )
             }
         }

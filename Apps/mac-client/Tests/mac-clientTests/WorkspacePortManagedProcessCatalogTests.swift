@@ -1,3 +1,4 @@
+import AppFeatures
 import Foundation
 import Testing
 import Workspace

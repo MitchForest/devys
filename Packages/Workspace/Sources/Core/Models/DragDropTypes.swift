@@ -13,10 +13,14 @@ public extension UTType {
     /// Custom UTType for git diff attachments in drag and drop.
     /// Format: JSON-encoded GitDiffTransfer
     static let devysGitDiff = UTType(exportedAs: "com.devys.git-diff")
-    
+
     /// Custom UTType for chat items in drag and drop.
     /// Format: UUID string of the chat item
     static let devysChatItem = UTType(exportedAs: "com.devys.chat-item")
+
+    /// Custom UTType for repo rail reorder drag and drop.
+    /// Format: JSON-encoded RepoRailTransfer
+    static let devysRepoRailItem = UTType(exportedAs: "com.devys.repo-rail-item")
 }
 
 // MARK: - Git Diff Transfer
@@ -39,5 +43,21 @@ public struct GitDiffTransfer: Codable, Sendable, Transferable {
     
     public static var transferRepresentation: some TransferRepresentation {
         CodableRepresentation(for: GitDiffTransfer.self, contentType: .devysGitDiff)
+    }
+}
+
+// MARK: - Repo Rail Transfer
+
+/// Transferable data for reordering repositories via drag-and-drop in the rail.
+public struct RepoRailTransfer: Codable, Sendable, Transferable {
+    /// The stable repository identifier.
+    public let repositoryID: String
+
+    public init(repositoryID: String) {
+        self.repositoryID = repositoryID
+    }
+
+    public static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(for: RepoRailTransfer.self, contentType: .devysRepoRailItem)
     }
 }

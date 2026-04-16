@@ -1,4 +1,5 @@
 import ACPClientKit
+import AppFeatures
 import Foundation
 import Git
 import Split
@@ -10,25 +11,11 @@ extension ContentView {
         initialAttachments: [AgentAttachment] = [],
         preferredPaneID: PaneID? = nil
     ) {
-        guard let worktree = activeWorktree else { return }
-
-        if let configuredHarness = appSettings.agent.defaultHarness,
-           let kind = agentKind(forHarness: configuredHarness) {
-            openAgentSession(
-                kind,
-                workspaceID: worktree.id,
-                initialAttachments: initialAttachments,
-                preferredPaneID: preferredPaneID
-            )
-            return
-        }
-
-        agentLaunchRequest = AgentLaunchPresentationRequest(
-            workspaceID: worktree.id,
+        guard let workspaceID = activeWorktree?.id else { return }
+        requestAgentSessionLaunch(
+            workspaceID: workspaceID,
             initialAttachments: initialAttachments,
-            preferredPaneID: preferredPaneID,
-            pendingSessionID: nil,
-            pendingTabID: nil
+            preferredPaneID: preferredPaneID
         )
     }
 
@@ -60,23 +47,10 @@ extension ContentView {
             return
         }
 
-        if let configuredHarness = appSettings.agent.defaultHarness,
-           let kind = agentKind(forHarness: configuredHarness) {
-            openAgentSession(
-                kind,
-                workspaceID: workspaceID,
-                initialAttachments: attachments,
-                preferredPaneID: preferredPaneID
-            )
-            return
-        }
-
-        agentLaunchRequest = AgentLaunchPresentationRequest(
+        requestAgentSessionLaunch(
             workspaceID: workspaceID,
             initialAttachments: attachments,
-            preferredPaneID: preferredPaneID,
-            pendingSessionID: nil,
-            pendingTabID: nil
+            preferredPaneID: preferredPaneID
         )
     }
 
@@ -108,18 +82,18 @@ extension ContentView {
         _ record: PersistedAgentSessionRecord,
         workspaceID: Workspace.ID
     ) {
-        guard let runtime = runtimeRegistry.runtimeHandle(for: workspaceID) else { return }
+        guard let worktree = runtimeRegistry.worktree(for: workspaceID) else { return }
 
         let descriptor = ACPAgentDescriptor.descriptor(for: record.kind)
         let sessionID = AgentSessionID(rawValue: record.sessionID)
-        let sessionRuntime = runtime
-            .shellState
-            .agentRuntimeRegistry
-            .ensureSession(
-                workspaceID: workspaceID,
-                sessionID: sessionID,
-                descriptor: descriptor
-            )
+        guard let sessionRuntime = runtimeRegistry.ensureAgentSession(
+            in: workspaceID,
+            sessionID: sessionID,
+            descriptor: descriptor
+        ) else {
+            return
+        }
+        hostedContentBridge.attachAgentSession(sessionRuntime, workspaceID: workspaceID)
 
         guard sessionRuntime.connection == nil,
               sessionRuntime.launchState != .launching else {
@@ -135,7 +109,7 @@ extension ContentView {
 
         Task { @MainActor in
             let launchOptions = container.defaultAgentAdapterLaunchOptions(
-                currentDirectoryURL: runtime.worktree.workingDirectory
+                currentDirectoryURL: worktree.workingDirectory
             )
 
             do {
@@ -156,7 +130,7 @@ extension ContentView {
                     method: "session/load",
                     params: AgentSessionLoadRequest(
                         sessionId: sessionID,
-                        cwd: runtime.worktree.workingDirectory.path
+                        cwd: worktree.workingDirectory.path
                     ),
                     as: AgentSessionLoadResponse.self
                 )
@@ -225,13 +199,10 @@ extension ContentView {
         }
 
         Task { @MainActor in
-            await runtimeRegistry
-                .runtimeHandle(for: workspaceID)?
-                .fileTreeModel?
-                .revealURL(fileURL)
+            await runtimeRegistry.fileTreeModel(for: workspaceID)?.revealURL(fileURL)
         }
 
-        let content = TabContent.editor(workspaceID: workspaceID, url: fileURL)
+        let content = WorkspaceTabContent.editor(workspaceID: workspaceID, url: fileURL)
         if prefersPreview {
             openInPreviewTab(content: content)
         } else {
@@ -246,18 +217,14 @@ extension ContentView {
         prefersPreview: Bool,
         fallbackToEditor: Bool = true
     ) -> Bool {
-        let allChanges: [GitFileChange] = runtimeRegistry
-            .runtimeHandle(for: workspaceID)?
-            .gitStore?
-            .allChanges
-            ?? []
+        let allChanges: [GitFileChange] = runtimeRegistry.gitStore(for: workspaceID)?.allChanges ?? []
         var matchingChange: GitFileChange?
         for change in allChanges where change.path == diff.path {
             matchingChange = change
             break
         }
         if let change = matchingChange {
-            let content = TabContent.gitDiff(
+            let content = WorkspaceTabContent.gitDiff(
                 workspaceID: workspaceID,
                 path: change.path,
                 isStaged: change.isStaged
@@ -275,7 +242,7 @@ extension ContentView {
             return false
         }
 
-        let content = TabContent.editor(workspaceID: workspaceID, url: fileURL)
+        let content = WorkspaceTabContent.editor(workspaceID: workspaceID, url: fileURL)
         if prefersPreview {
             openInPreviewTab(content: content)
         } else {
@@ -295,24 +262,42 @@ extension ContentView {
         }
     }
 
+    func requestAgentSessionLaunch(
+        workspaceID: Workspace.ID,
+        initialAttachments: [AgentAttachment] = [],
+        preferredPaneID: PaneID? = nil,
+        preferredKind: ACPAgentKind? = nil
+    ) {
+        store.send(
+            .requestAgentSessionLaunch(
+                WindowFeature.AgentSessionLaunchIntent(
+                    workspaceID: workspaceID,
+                    initialAttachments: initialAttachments,
+                    preferredPaneID: preferredPaneID,
+                    preferredKind: preferredKind
+                )
+            )
+        )
+    }
+
     private func targetAgentSession(
         workspaceID: Workspace.ID,
         preferredPaneID: PaneID?
     ) -> AgentSessionRuntime? {
         if let preferredPaneID,
-           let selectedTab = controller.selectedTab(inPane: preferredPaneID),
-           case .agentSession(let selectedWorkspaceID, let sessionID)? = tabContents[selectedTab.id],
+           let selectedTabID = paneLayout(for: preferredPaneID)?.selectedTabID,
+           case .agentSession(let selectedWorkspaceID, let sessionID)? = tabContents[selectedTabID],
            selectedWorkspaceID == workspaceID {
-            return runtimeRegistry.runtimeHandle(for: workspaceID)?.agentRuntimeRegistry.session(id: sessionID)
+            return runtimeRegistry.agentSession(id: sessionID, in: workspaceID)
         }
 
         if let selectedTabId,
            case .agentSession(let selectedWorkspaceID, let sessionID)? = tabContents[selectedTabId],
            selectedWorkspaceID == workspaceID {
-            return runtimeRegistry.runtimeHandle(for: workspaceID)?.agentRuntimeRegistry.session(id: sessionID)
+            return runtimeRegistry.agentSession(id: sessionID, in: workspaceID)
         }
 
-        return runtimeRegistry.runtimeHandle(for: workspaceID)?.agentRuntimeRegistry.allSessions.first
+        return runtimeRegistry.allAgentSessions(for: workspaceID).first
     }
 
     func preparePendingAgentSessionLaunch(
@@ -321,7 +306,7 @@ extension ContentView {
         initialAttachments: [AgentAttachment],
         preferredKind: ACPAgentKind?
     ) -> (runtime: AgentSessionRuntime, tabID: TabID)? {
-        guard let runtime = runtimeRegistry.runtimeHandle(for: workspaceID) else { return nil }
+        guard runtimeRegistry.worktree(for: workspaceID) != nil else { return nil }
 
         let descriptor: ACPAgentDescriptor
         if let preferredKind {
@@ -335,14 +320,14 @@ extension ContentView {
         }
 
         let pendingSessionID = AgentSessionID(rawValue: "pending-\(UUID().uuidString)")
-        let sessionRuntime = runtime
-            .shellState
-            .agentRuntimeRegistry
-            .ensureSession(
-                workspaceID: workspaceID,
-                sessionID: pendingSessionID,
-                descriptor: descriptor
-            )
+        guard let sessionRuntime = runtimeRegistry.ensureAgentSession(
+            in: workspaceID,
+            sessionID: pendingSessionID,
+            descriptor: descriptor
+        ) else {
+            return nil
+        }
+        hostedContentBridge.attachAgentSession(sessionRuntime, workspaceID: workspaceID)
         sessionRuntime.launchState = .launching
         sessionRuntime.updatePresentation(
             title: preferredKind?.displayName ?? "Agents",
@@ -357,7 +342,7 @@ extension ContentView {
             sessionID: pendingSessionID,
             preferredPaneID: preferredPaneID
         ) else {
-            runtime.shellState.agentRuntimeRegistry.removeSession(id: pendingSessionID)
+            runtimeRegistry.removeAgentSession(id: pendingSessionID, in: workspaceID)
             return nil
         }
 
@@ -365,19 +350,20 @@ extension ContentView {
         return (sessionRuntime, tabID)
     }
 
+    // swiftlint:disable:next function_body_length
     func launchPreparedAgentSession(
         _ kind: ACPAgentKind,
         workspaceID: Workspace.ID,
         sessionID: AgentSessionID
     ) {
-        guard let runtime = runtimeRegistry.runtimeHandle(for: workspaceID),
-              let sessionRuntime = runtime.shellState.agentRuntimeRegistry.session(id: sessionID) else {
+        guard let worktree = runtimeRegistry.worktree(for: workspaceID),
+              let sessionRuntime = runtimeRegistry.agentSession(id: sessionID, in: workspaceID) else {
             return
         }
 
         Task { @MainActor in
             let launchOptions = container.defaultAgentAdapterLaunchOptions(
-                currentDirectoryURL: runtime.worktree.workingDirectory
+                currentDirectoryURL: worktree.workingDirectory
             )
 
             do {
@@ -387,13 +373,14 @@ extension ContentView {
                 )
                 let sessionResponse: AgentSessionNewResponse = try await launched.connection.sendRequest(
                     method: "session/new",
-                    params: AgentSessionNewRequest(cwd: runtime.worktree.workingDirectory.path),
+                    params: AgentSessionNewRequest(cwd: worktree.workingDirectory.path),
                     as: AgentSessionNewResponse.self
                 )
 
                 let previousSessionID = sessionRuntime.sessionID
-                runtime.shellState.agentRuntimeRegistry.rekeySession(
+                runtimeRegistry.rekeyAgentSession(
                     sessionRuntime,
+                    in: workspaceID,
                     to: sessionResponse.sessionId,
                     descriptor: launched.descriptor
                 )
@@ -430,11 +417,13 @@ extension ContentView {
         sessionID: AgentSessionID,
         tabID: TabID
     ) {
-        controller.closeTab(tabID)
-        runtimeRegistry
-            .runtimeHandle(for: workspaceID)?
-            .agentRuntimeRegistry
-            .removeSession(id: sessionID)
+        if let paneID = paneID(for: tabID, workspaceID: workspaceID) {
+            closeTab(tabID, in: paneID, workspaceID: workspaceID)
+        }
+        if let runtime = runtimeRegistry.agentSession(id: sessionID, in: workspaceID) {
+            hostedContentBridge.detachAgentSession(runtime, workspaceID: workspaceID)
+        }
+        runtimeRegistry.removeAgentSession(id: sessionID, in: workspaceID)
     }
 
     private func migratePreparedAgentSessionReferences(
@@ -448,9 +437,13 @@ extension ContentView {
                   existingSessionID == previousSessionID else {
                 continue
             }
-            tabContents[tabID] = .agentSession(workspaceID: workspaceID, sessionID: sessionID)
+            let nextContent = WorkspaceTabContent.agentSession(
+                workspaceID: workspaceID,
+                sessionID: sessionID
+            )
+            setTabContent(nextContent, for: tabID)
             let presentation = currentTabPresentation(
-                for: .agentSession(workspaceID: workspaceID, sessionID: sessionID),
+                for: nextContent,
                 tabId: tabID
             )
             tabPresentationById[tabID] = presentation
@@ -472,7 +465,7 @@ extension ContentView {
         sessionID: AgentSessionID,
         preferredPaneID: PaneID? = nil
     ) -> TabID? {
-        let content = TabContent.agentSession(
+        let content = WorkspaceTabContent.agentSession(
             workspaceID: workspaceID,
             sessionID: sessionID
         )
@@ -494,23 +487,22 @@ extension ContentView {
         for sessionRuntime: AgentSessionRuntime,
         workspaceID: Workspace.ID
     ) {
-        guard let runtime = runtimeRegistry.runtimeHandle(for: workspaceID) else { return }
-        sessionRuntime.configureWorkspaceBridge(
-            makeWorkspaceBridge(for: runtime.worktree, shellState: runtime.shellState)
-        )
+        guard let bridge = makeWorkspaceBridge(for: workspaceID) else { return }
+        sessionRuntime.configureWorkspaceBridge(bridge)
     }
 
-    private func makeWorkspaceBridge(
-        for worktree: Worktree,
-        shellState: WorkspaceShellState
-    ) -> AgentWorkspaceBridge {
+    private func makeWorkspaceBridge(for workspaceID: Workspace.ID) -> AgentWorkspaceBridge? {
+        guard let worktree = runtimeRegistry.worktree(for: workspaceID),
+              let editorSessionPool = runtimeRegistry.editorSessionPool(for: workspaceID) else {
+            return nil
+        }
         let gitStoreProvider: @MainActor @Sendable () -> GitStore? = {
-            shellState.gitStore
+            self.runtimeRegistry.gitStore(for: workspaceID)
         }
         return AgentWorkspaceBridge(
             workspaceID: worktree.id,
             workingDirectoryURL: worktree.workingDirectory,
-            editorSessionPool: shellState.editorSessionPool,
+            editorSessionPool: editorSessionPool,
             workspaceTerminalRegistry: workspaceTerminalRegistry,
             persistentTerminalHostController: persistentTerminalHostController,
             gitStoreProvider: gitStoreProvider
@@ -524,7 +516,7 @@ extension ContentView {
         if path.hasPrefix("/") {
             return URL(fileURLWithPath: path)
         }
-        guard let worktree = runtimeRegistry.runtimeHandle(for: workspaceID)?.worktree else {
+        guard let worktree = runtimeRegistry.worktree(for: workspaceID) else {
             return nil
         }
         return worktree.workingDirectory.appendingPathComponent(path)

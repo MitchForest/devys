@@ -15,7 +15,7 @@ extension ContentView {
         isPinned: Bool
     ) {
         guard navigatorWorktree(workspaceID, in: repositoryID) != nil else { return }
-        workspaceCatalog.setWorkspacePinned(workspaceID, in: repositoryID, isPinned: isPinned)
+        store.send(.setWorkspacePinned(workspaceID, repositoryID: repositoryID, isPinned: isPinned))
     }
 
     func setWorkspaceArchived(
@@ -24,16 +24,17 @@ extension ContentView {
         isArchived: Bool
     ) {
         guard let worktree = navigatorWorktree(workspaceID, in: repositoryID) else { return }
+        let previousWorkspaceID = selectedWorkspaceID
+        let wasSelectedWorkspace = selectedRepositoryID == repositoryID
+            && selectedWorkspaceID == worktree.id
 
-        workspaceCatalog.setWorkspaceArchived(worktree.id, in: repositoryID, isArchived: isArchived)
-        syncCatalogStructure()
+        if wasSelectedWorkspace {
+            persistVisibleWorkspaceState()
+        }
+        store.send(.setWorkspaceArchived(worktree.id, repositoryID: repositoryID, isArchived: isArchived))
         if isArchived,
-           workspaceCatalog.selectedRepositoryID == repositoryID,
-           let replacementWorkspaceID = workspaceCatalog.selectedWorkspaceID,
-           replacementWorkspaceID != worktree.id {
-            Task { @MainActor in
-                await selectWorkspace(replacementWorkspaceID, in: repositoryID)
-            }
+           previousWorkspaceID != selectedWorkspaceID {
+            _ = restoreSelectedWorkspaceOrReset()
         }
     }
 
@@ -43,7 +44,8 @@ extension ContentView {
     ) {
         guard let worktree = navigatorWorktree(workspaceID, in: repositoryID) else { return }
 
-        let existingDisplayName = workspaceCatalog.displayName(for: worktree)
+        let existingDisplayName = store.workspaceStatesByID[worktree.id]?.displayNameOverride
+            ?? worktree.name
         let updatedDisplayName = promptForWorkspaceDisplayName(
             currentValue: existingDisplayName,
             branchName: worktree.name
@@ -51,7 +53,13 @@ extension ContentView {
         guard let updatedDisplayName else { return }
 
         let normalizedDisplayName = updatedDisplayName == worktree.name ? nil : updatedDisplayName
-        workspaceCatalog.setWorkspaceDisplayName(normalizedDisplayName, for: worktree.id, in: repositoryID)
+        store.send(
+            .setWorkspaceDisplayName(
+                worktree.id,
+                repositoryID: repositoryID,
+                displayName: normalizedDisplayName
+            )
+        )
     }
 
     func deleteWorkspace(
@@ -73,13 +81,7 @@ extension ContentView {
 
         do {
             try await DefaultGitWorktreeService().removeWorktree(worktree, force: false)
-            discardWorkspaceState(worktree.id)
-            workspaceCatalog.removeWorkspaceState(worktree.id, in: repositoryID)
-            await refreshRepositoryCatalog(repositoryID: repositoryID)
-            if let selectedWorkspaceID = workspaceCatalog.selectedWorkspaceID,
-               workspaceCatalog.selectedRepositoryID == repositoryID {
-                await selectWorkspace(selectedWorkspaceID, in: repositoryID)
-            }
+            store.send(.requestWorkspaceDiscard(workspaceID: worktree.id, repositoryID: repositoryID))
         } catch {
             showSimpleAlert(
                 style: .critical,

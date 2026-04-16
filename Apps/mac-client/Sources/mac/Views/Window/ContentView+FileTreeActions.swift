@@ -11,8 +11,7 @@ import Workspace
 @MainActor
 extension ContentView {
     func handleFileTreeDeletionNotification(_ notification: Notification) {
-        guard let activeRuntime,
-              let activeModel = activeRuntime.fileTreeModel,
+        guard let activeModel = runtimeRegistry.activeFileTreeModel,
               let sourceModel = notification.object as? FileTreeModel,
               sourceModel === activeModel,
               let deletedURLs = notification.userInfo?[FileTreeModel.deletedURLsUserInfoKey] as? [URL] else {
@@ -58,8 +57,8 @@ extension ContentView {
             try FileManager.default.moveItem(at: normalizedURL, to: destinationURL)
             retargetEditorTabs(from: normalizedURL, to: destinationURL)
             Task {
-                await runtimeRegistry.runtimeHandle(for: workspaceID)?.fileTreeModel?.refresh()
-                await runtimeRegistry.runtimeHandle(for: workspaceID)?.fileTreeModel?.revealURL(destinationURL)
+                await runtimeRegistry.fileTreeModel(for: workspaceID)?.refresh()
+                await runtimeRegistry.fileTreeModel(for: workspaceID)?.revealURL(destinationURL)
             }
         } catch {
             showFileTreeAlert(
@@ -92,7 +91,7 @@ extension ContentView {
             }
         }
 
-        await runtimeRegistry.runtimeHandle(for: workspaceID)?.fileTreeModel?.refresh()
+        await runtimeRegistry.fileTreeModel(for: workspaceID)?.refresh()
 
         if !failures.isEmpty {
             let failedNames = failures.map { $0.0.lastPathComponent }.joined(separator: ", ")
@@ -126,16 +125,8 @@ private extension ContentView {
         for tabID in tabIDs {
             guard let paneID = paneID(for: tabID) else { continue }
             closeBypass.insert(tabID)
-            _ = controller.closeTab(tabID, inPane: paneID)
+            closeTab(tabID, in: paneID)
         }
-    }
-
-    func paneID(for tabID: TabID) -> PaneID? {
-        for paneID in controller.allPaneIds
-        where controller.tabs(inPane: paneID).contains(where: { $0.id == tabID }) {
-            return paneID
-        }
-        return nil
     }
 
     func retargetEditorTabs(from oldBaseURL: URL, to newBaseURL: URL) {

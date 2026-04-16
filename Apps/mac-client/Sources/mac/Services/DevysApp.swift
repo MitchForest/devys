@@ -5,12 +5,17 @@
 
 import SwiftUI
 import AppKit
+import AppFeatures
+import ComposableArchitecture
 import Workspace
 
-/// App delegate to handle activation when running from a Swift Package
+// App delegate to handle activation when running from a Swift Package.
+// periphery:ignore - retained through @NSApplicationDelegateAdaptor runtime wiring
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var distributedAttentionObserver: NSObjectProtocol?
+    var editorSessionRegistry: EditorSessionRegistry?
+    var windowStore: StoreOf<WindowFeature>?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Activate the app and bring it to the foreground
@@ -45,8 +50,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        let dirtySessions = EditorSessionRegistry.shared.dirtySessions
-        guard !dirtySessions.isEmpty else {
+        let hasDirtyHostedEditors = windowStore?.withState { state in
+            state.hostedWorkspaceContentByID.values.contains { $0.dirtyEditorCount > 0 }
+        } ?? false
+        guard hasDirtyHostedEditors else {
             return .terminateNow
         }
 
@@ -61,7 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         switch alert.runModal() {
         case .alertFirstButtonReturn:
             Task { @MainActor in
-                let success = await EditorSessionRegistry.shared.saveAll()
+                let success = await (editorSessionRegistry?.saveAll() ?? true)
                 if success {
                     sender.reply(toApplicationShouldTerminate: true)
                 } else {
@@ -84,8 +91,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 struct DevysApp: App {
+    // periphery:ignore - retained through @NSApplicationDelegateAdaptor runtime wiring
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @State private var container = AppContainer()
+    @State private var container: AppContainer
+    @State private var appStore: StoreOf<AppFeature>
+
+    init() {
+        let container = AppContainer()
+        _container = State(initialValue: container)
+        _appStore = State(initialValue: AppFeaturesBootstrap.makeStore(container: container))
+    }
 
     private var shortcutSettings: WorkspaceShellShortcutSettings {
         container.appSettings.shortcuts
@@ -93,20 +108,26 @@ struct DevysApp: App {
     
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .frame(minWidth: 900, minHeight: 600)
-                .environment(container)
-                .environment(container.appSettings)
-                .environment(container.recentRepositoriesService)
-                .environment(container.layoutPersistenceService)
-                .environment(container.repositorySettingsStore)
+            AppFeatureHost(store: appStore) {
+                ContentView(store: appStore.scope(state: \.window, action: \.window))
+                    .frame(minWidth: 900, minHeight: 600)
+                    .onAppear {
+                        appDelegate.editorSessionRegistry = container.editorSessionRegistry
+                        appDelegate.windowStore = appStore.scope(state: \.window, action: \.window)
+                    }
+                    .environment(container)
+                    .environment(container.appSettings)
+                    .environment(container.recentRepositoriesService)
+                    .environment(container.layoutPersistenceService)
+                    .environment(container.repositorySettingsStore)
+            }
         }
         .windowToolbarStyle(.unifiedCompact(showsTitle: false))
         .defaultSize(width: 1200, height: 800)
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("Open Command Palette") {
-                    NotificationCenter.default.post(name: .devysOpenCommandPalette, object: nil)
+                    appStore.send(.window(.openSearch(.commands, initialQuery: "")))
                 }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
 
@@ -123,57 +144,52 @@ struct DevysApp: App {
 
             CommandGroup(after: .newItem) {
                 Button("Add Repository...") {
-                    NotificationCenter.default.post(name: .devysAddRepository, object: nil)
+                    appStore.send(.window(.requestOpenRepository))
                 }
                 .keyboardShortcut("o", modifiers: .command)
             }
 
             CommandGroup(replacing: .printItem) {
                 Button("Open Quickly...") {
-                    NotificationCenter.default.post(name: .devysOpenFileSearch, object: nil)
+                    appStore.send(.window(.openSearch(.files, initialQuery: "")))
                 }
                 .keyboardShortcut("p", modifiers: .command)
             }
 
             CommandMenu("Find") {
                 Button("Find") {
-                    NotificationCenter.default.post(name: .devysShowEditorFind, object: nil)
+                    appStore.send(.window(.requestEditorCommand(.find)))
                 }
                 .keyboardShortcut("f", modifiers: .command)
 
                 Button("Find In Files") {
-                    NotificationCenter.default.post(name: .devysOpenTextSearch, object: nil)
+                    appStore.send(.window(.openSearch(.textSearch, initialQuery: "")))
                 }
                 .keyboardShortcut("f", modifiers: [.command, .shift])
             }
 
             CommandMenu("Sidebar") {
                 Button("Show Files") {
-                    NotificationCenter.default.post(name: .devysShowFilesSidebar, object: nil)
+                    appStore.send(.window(.showSidebar(.files)))
                 }
                 .keyboardShortcut("1", modifiers: .command)
 
-                Button("Show Changes") {
-                    NotificationCenter.default.post(name: .devysShowChangesSidebar, object: nil)
+                Button("Show Agents") {
+                    appStore.send(.window(.showSidebar(.agents)))
                 }
                 .keyboardShortcut("2", modifiers: .command)
-
-                Button("Show Ports") {
-                    NotificationCenter.default.post(name: .devysShowPortsSidebar, object: nil)
-                }
-                .keyboardShortcut("3", modifiers: .command)
 
                 Divider()
 
                 Button("Toggle Sidebar") {
-                    NotificationCenter.default.post(name: .devysToggleSidebar, object: nil)
+                    appStore.send(.window(.toggleSidebarVisibility))
                 }
                 .applyingKeyboardShortcut(
                     shortcutSettings.binding(for: .toggleSidebar).keyboardShortcut
                 )
 
                 Button("Toggle Navigator") {
-                    NotificationCenter.default.post(name: .devysToggleNavigator, object: nil)
+                    appStore.send(.window(.toggleNavigatorCollapsed))
                 }
                 .applyingKeyboardShortcut(
                     shortcutSettings.binding(for: .toggleNavigator).keyboardShortcut
@@ -182,14 +198,14 @@ struct DevysApp: App {
 
             CommandMenu("Workspace") {
                 Button("Previous Workspace") {
-                    NotificationCenter.default.post(name: .devysSelectPreviousWorkspace, object: nil)
+                    appStore.send(.window(.requestAdjacentWorkspaceSelection(-1)))
                 }
                 .applyingKeyboardShortcut(
                     shortcutSettings.binding(for: .previousWorkspace).keyboardShortcut
                 )
 
                 Button("Next Workspace") {
-                    NotificationCenter.default.post(name: .devysSelectNextWorkspace, object: nil)
+                    appStore.send(.window(.requestAdjacentWorkspaceSelection(1)))
                 }
                 .applyingKeyboardShortcut(
                     shortcutSettings.binding(for: .nextWorkspace).keyboardShortcut
@@ -198,136 +214,97 @@ struct DevysApp: App {
                 Divider()
 
                 Button("Launch Shell") {
-                    NotificationCenter.default.post(name: .devysLaunchShell, object: nil)
+                    appStore.send(.window(.requestWorkspaceCommand(.launchShell)))
                 }
                 .applyingKeyboardShortcut(
                     shortcutSettings.binding(for: .launchShell).keyboardShortcut
                 )
 
                 Button("Launch Claude") {
-                    NotificationCenter.default.post(name: .devysLaunchClaude, object: nil)
+                    appStore.send(.window(.requestWorkspaceCommand(.launchClaude)))
                 }
                 .applyingKeyboardShortcut(
                     shortcutSettings.binding(for: .launchClaude).keyboardShortcut
                 )
 
                 Button("Launch Codex") {
-                    NotificationCenter.default.post(name: .devysLaunchCodex, object: nil)
+                    appStore.send(.window(.requestWorkspaceCommand(.launchCodex)))
                 }
                 .applyingKeyboardShortcut(
                     shortcutSettings.binding(for: .launchCodex).keyboardShortcut
                 )
 
                 Button("Run Default Profile") {
-                    NotificationCenter.default.post(name: .devysRunWorkspaceProfile, object: nil)
+                    appStore.send(.window(.requestWorkspaceCommand(.runWorkspaceProfile)))
                 }
 
                 Divider()
 
                 Button("Reveal Current Workspace in Navigator") {
-                    NotificationCenter.default.post(
-                        name: .devysRevealCurrentWorkspaceInNavigator,
-                        object: nil
-                    )
+                    appStore.send(.window(.revealCurrentWorkspaceInNavigator))
                 }
             }
 
             CommandMenu("Workspaces") {
                 Button("Select Workspace 1") {
-                    NotificationCenter.default.post(
-                        name: .devysSelectWorkspaceIndex,
-                        object: nil,
-                        userInfo: ["index": 0]
-                    )
+                    appStore.send(.window(.requestWorkspaceSelectionAtIndex(0)))
                 }
                 .keyboardShortcut("1", modifiers: [.command, .control])
 
                 Button("Select Workspace 2") {
-                    NotificationCenter.default.post(
-                        name: .devysSelectWorkspaceIndex,
-                        object: nil,
-                        userInfo: ["index": 1]
-                    )
+                    appStore.send(.window(.requestWorkspaceSelectionAtIndex(1)))
                 }
                 .keyboardShortcut("2", modifiers: [.command, .control])
 
                 Button("Select Workspace 3") {
-                    NotificationCenter.default.post(
-                        name: .devysSelectWorkspaceIndex,
-                        object: nil,
-                        userInfo: ["index": 2]
-                    )
+                    appStore.send(.window(.requestWorkspaceSelectionAtIndex(2)))
                 }
                 .keyboardShortcut("3", modifiers: [.command, .control])
 
                 Button("Select Workspace 4") {
-                    NotificationCenter.default.post(
-                        name: .devysSelectWorkspaceIndex,
-                        object: nil,
-                        userInfo: ["index": 3]
-                    )
+                    appStore.send(.window(.requestWorkspaceSelectionAtIndex(3)))
                 }
                 .keyboardShortcut("4", modifiers: [.command, .control])
 
                 Button("Select Workspace 5") {
-                    NotificationCenter.default.post(
-                        name: .devysSelectWorkspaceIndex,
-                        object: nil,
-                        userInfo: ["index": 4]
-                    )
+                    appStore.send(.window(.requestWorkspaceSelectionAtIndex(4)))
                 }
                 .keyboardShortcut("5", modifiers: [.command, .control])
 
                 Button("Select Workspace 6") {
-                    NotificationCenter.default.post(
-                        name: .devysSelectWorkspaceIndex,
-                        object: nil,
-                        userInfo: ["index": 5]
-                    )
+                    appStore.send(.window(.requestWorkspaceSelectionAtIndex(5)))
                 }
                 .keyboardShortcut("6", modifiers: [.command, .control])
 
                 Button("Select Workspace 7") {
-                    NotificationCenter.default.post(
-                        name: .devysSelectWorkspaceIndex,
-                        object: nil,
-                        userInfo: ["index": 6]
-                    )
+                    appStore.send(.window(.requestWorkspaceSelectionAtIndex(6)))
                 }
                 .keyboardShortcut("7", modifiers: [.command, .control])
 
                 Button("Select Workspace 8") {
-                    NotificationCenter.default.post(
-                        name: .devysSelectWorkspaceIndex,
-                        object: nil,
-                        userInfo: ["index": 7]
-                    )
+                    appStore.send(.window(.requestWorkspaceSelectionAtIndex(7)))
                 }
                 .keyboardShortcut("8", modifiers: [.command, .control])
 
                 Button("Select Workspace 9") {
-                    NotificationCenter.default.post(
-                        name: .devysSelectWorkspaceIndex,
-                        object: nil,
-                        userInfo: ["index": 8]
-                    )
+                    appStore.send(.window(.requestWorkspaceSelectionAtIndex(8)))
                 }
                 .keyboardShortcut("9", modifiers: [.command, .control])
             }
 
             CommandGroup(replacing: .saveItem) {
                 Button("Save") {
-                    NotificationCenter.default.post(name: .devysSave, object: nil)
+                    appStore.send(.window(.requestEditorCommand(.save)))
                 }
                 .keyboardShortcut("s", modifiers: .command)
 
                 Button("Save As...") {
-                    NotificationCenter.default.post(name: .devysSaveAs, object: nil)
+                    appStore.send(.window(.requestEditorCommand(.saveAs)))
                 }
                 .keyboardShortcut("s", modifiers: [.command, .shift])
 
                 Button("Save All") {
-                    NotificationCenter.default.post(name: .devysSaveAll, object: nil)
+                    appStore.send(.window(.requestEditorCommand(.saveAll)))
                 }
                 .keyboardShortcut("s", modifiers: [.command, .option])
             }
@@ -335,32 +312,32 @@ struct DevysApp: App {
             Group {
                 CommandMenu("Layout") {
                     Button("Set Default Layout") {
-                        NotificationCenter.default.post(name: .devysSaveDefaultLayout, object: nil)
+                        appStore.send(.window(.requestSaveDefaultLayout))
                     }
                 }
 
                 CommandMenu("Notifications") {
                     Button("Jump to Latest Unread Workspace") {
-                        NotificationCenter.default.post(
-                            name: .devysJumpToLatestUnreadWorkspace,
-                            object: nil
-                        )
+                        appStore.send(.window(.requestWorkspaceCommand(.jumpToLatestUnreadWorkspace)))
                     }
                     .applyingKeyboardShortcut(
                         shortcutSettings.binding(for: .jumpToLatestUnreadWorkspace).keyboardShortcut
                     )
 
                     Button("Show Notifications") {
-                        NotificationCenter.default.post(
-                            name: .devysShowWorkspaceNotifications,
-                            object: nil
-                        )
+                        appStore.send(.window(.setNotificationsPanelPresented(true)))
                     }
                     .keyboardShortcut("n", modifiers: [.command, .control, .shift])
                 }
 
                 SidebarCommands()
             }
+        }
+
+        Settings {
+            SettingsSceneRoot(store: appStore.scope(state: \.window, action: \.window))
+                .environment(container.appSettings)
+                .environment(container.repositorySettingsStore)
         }
     }
 }

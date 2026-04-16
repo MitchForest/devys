@@ -1,39 +1,15 @@
 // swiftlint:disable file_length
 import ACPClientKit
+import AppFeatures
 import Foundation
 import Observation
 import Workspace
-
-typealias AgentSessionID = ACPSessionID
 
 enum AgentSessionLaunchState: Equatable, Sendable {
     case idle
     case launching
     case connected
     case failed(String)
-}
-
-enum AgentAttachment: Equatable, Sendable, Identifiable {
-    case file(url: URL)
-    case gitDiff(path: String, isStaged: Bool)
-    case image(url: URL)
-    case url(URL)
-    case snippet(language: String?, content: String)
-
-    var id: String {
-        switch self {
-        case .file(let url):
-            "file:\(url.absoluteString)"
-        case .gitDiff(let path, let isStaged):
-            "gitDiff:\(path):\(isStaged)"
-        case .image(let url):
-            "image:\(url.absoluteString)"
-        case .url(let url):
-            "url:\(url.absoluteString)"
-        case .snippet(let language, let content):
-            "snippet:\(language ?? "plain"):\(content)"
-        }
-    }
 }
 
 enum AgentMessageRole: String, Sendable, Equatable {
@@ -1572,60 +1548,5 @@ final class AgentSessionRuntime: Identifiable, TabContentProvider {
         case .claude:
             "brain"
         }
-    }
-}
-
-@MainActor
-final class WorkspaceAgentRuntimeRegistry {
-    private var sessionsByID: [AgentSessionID: AgentSessionRuntime] = [:]
-
-    var allSessions: [AgentSessionRuntime] {
-        sessionsByID.values.sorted {
-            if $0.lastActivityAt == $1.lastActivityAt {
-                return $0.createdAt > $1.createdAt
-            }
-            return $0.lastActivityAt > $1.lastActivityAt
-        }
-    }
-
-    @discardableResult
-    func ensureSession(
-        workspaceID: Workspace.ID,
-        sessionID: AgentSessionID,
-        descriptor: ACPAgentDescriptor
-    ) -> AgentSessionRuntime {
-        if let existing = sessionsByID[sessionID] {
-            return existing
-        }
-
-        let runtime = AgentSessionRuntime(
-            workspaceID: workspaceID,
-            sessionID: sessionID,
-            descriptor: descriptor
-        )
-        sessionsByID[sessionID] = runtime
-        return runtime
-    }
-
-    func rekeySession(
-        _ runtime: AgentSessionRuntime,
-        to sessionID: AgentSessionID,
-        descriptor: ACPAgentDescriptor
-    ) {
-        sessionsByID.removeValue(forKey: runtime.sessionID)
-        runtime.updateSessionIdentity(sessionID: sessionID, descriptor: descriptor)
-        sessionsByID[sessionID] = runtime
-    }
-
-    func session(id: AgentSessionID) -> AgentSessionRuntime? {
-        sessionsByID[id]
-    }
-
-    func removeSession(id: AgentSessionID) {
-        sessionsByID.removeValue(forKey: id)
-    }
-
-    func removeAll() {
-        sessionsByID.removeAll()
     }
 }

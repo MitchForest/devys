@@ -21,26 +21,18 @@ struct WorkspaceTerminalRegistryTests {
         #expect(registry.sessions(for: secondWorkspace)[second.id] === second)
     }
 
-    @Test("Unread state is tracked per workspace and can be cleared")
+    @Test("Shutting down the last session removes the workspace entry")
     @MainActor
-    func unreadState() {
+    func shutdownLastSessionCleansUpWorkspace() {
         let registry = WorkspaceTerminalRegistry()
         let workspaceID = "/tmp/devys/worktrees/a"
         let session = registry.createSession(in: workspaceID)
 
-        session.bellCount = 2
-        registry.syncUnreadState()
+        registry.shutdownSession(id: session.id, in: workspaceID)
 
-        #expect(registry.unreadTerminalIds(for: workspaceID) == Set([session.id]))
-
-        registry.markRead(terminalId: session.id, in: workspaceID)
-
-        #expect(registry.unreadTerminalIds(for: workspaceID).isEmpty)
-
-        session.bellCount = 3
-        registry.syncUnreadState()
-
-        #expect(registry.unreadTerminalIds(for: workspaceID) == Set([session.id]))
+        #expect(registry.workspaceID(for: session.id) == nil)
+        #expect(registry.sessions(for: workspaceID).isEmpty)
+        #expect(registry.statesByWorkspace[workspaceID] == nil)
     }
 
     @Test("Shutting down one workspace does not remove sessions from another")

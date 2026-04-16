@@ -3,6 +3,7 @@
 //
 // Copyright © 2026 Devys. All rights reserved.
 
+import AppFeatures
 import SwiftUI
 import Workspace
 import UI
@@ -18,21 +19,12 @@ struct WorkspacePortsSidebarView: View {
 
     var body: some View {
         if ports.isEmpty {
-            VStack(spacing: DevysSpacing.space3) {
-                Spacer()
-
-                Image(systemName: "point.3.connected.trianglepath.dotted")
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(theme.textTertiary)
-
-                Text("No listening ports")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(theme.textSecondary)
-
-                Spacer()
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(theme.surface)
+            EmptyState(
+                icon: "point.3.connected.trianglepath.dotted",
+                title: "No listening ports",
+                description: "Start a server in the active workspace and it will appear here."
+            )
+            .background(theme.card)
         } else {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -46,7 +38,7 @@ struct WorkspacePortsSidebarView: View {
                         )
 
                         if port.id != ports.last?.id {
-                            Divider()
+                            Separator()
                                 .padding(.horizontal, DevysSpacing.space3)
                         }
                     }
@@ -72,11 +64,11 @@ private struct PortRow: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Text(label?.label ?? "Port")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(DevysTypography.label)
                     .foregroundStyle(theme.text)
 
                 Text(":\(port.port)")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(DevysTypography.micro)
                     .foregroundStyle(theme.textSecondary)
 
                 if port.ownership == .conflicted {
@@ -95,13 +87,13 @@ private struct PortRow: View {
 
             if isHovered {
                 Text(urlString)
-                    .font(.system(size: 10))
+                    .font(DevysTypography.micro)
                     .foregroundStyle(theme.textTertiary)
                     .textSelection(.enabled)
 
                 if !port.processDescriptions.isEmpty {
                     Text(port.processDescriptions.joined(separator: " \u{2022} "))
-                        .font(.system(size: 10))
+                        .font(DevysTypography.micro)
                         .foregroundStyle(theme.textTertiary)
                 }
             }
@@ -121,14 +113,14 @@ private struct PortRow: View {
                 onOpen(port, label)
             }
             .buttonStyle(.plain)
-            .font(.system(size: 10, weight: .medium))
-            .foregroundStyle(theme.visibleAccent)
+            .font(DevysTypography.micro)
+            .foregroundStyle(theme.accent)
 
             Button("Copy") {
                 onCopyURL(port, label)
             }
             .buttonStyle(.plain)
-            .font(.system(size: 10, weight: .medium))
+            .font(DevysTypography.micro)
             .foregroundStyle(theme.textSecondary)
 
             if !port.processIDs.isEmpty {
@@ -143,7 +135,7 @@ private struct PortRow: View {
                     }
                 } label: {
                     Text("Stop")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(DevysTypography.micro)
                         .foregroundStyle(DevysColors.error)
                 }
                 .menuStyle(.borderlessButton)

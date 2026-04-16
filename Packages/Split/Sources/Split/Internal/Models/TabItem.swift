@@ -18,6 +18,7 @@ struct TabItem: Identifiable, Hashable, Codable {
     let id: UUID
     var title: String
     var icon: String?
+    var isPreview: Bool
     var isDirty: Bool
     var activityIndicator: TabActivityIndicator?
 
@@ -25,12 +26,14 @@ struct TabItem: Identifiable, Hashable, Codable {
         id: UUID = UUID(),
         title: String,
         icon: String? = "doc.text",
+        isPreview: Bool = false,
         isDirty: Bool = false,
         activityIndicator: TabActivityIndicator? = nil
     ) {
         self.id = id
         self.title = title
         self.icon = icon
+        self.isPreview = isPreview
         self.isDirty = isDirty
         self.activityIndicator = activityIndicator
     }

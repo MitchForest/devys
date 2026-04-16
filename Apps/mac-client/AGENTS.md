@@ -10,6 +10,20 @@ The application is designed with a terminal-inspired aesthetic featuring monospa
 **Swift Version:** 6.0 with strict concurrency enabled
 **Copyright:** 2026 Devys. All rights reserved.
 
+## Migration Note
+
+The architecture guidance below predates the active TCA migration and is not authoritative when it conflicts with the current repo docs.
+
+For active work:
+
+- `Packages/AppFeatures` is the app-domain home for reducer-owned shell and feature logic.
+- `AppContainer` is a temporary live service composition root and factory, not the intended long-term owner of app-domain behavior.
+- legacy runtime registries, mirrored shell state, and app-domain `NotificationCenter` routing are migration targets.
+- phase 1 through 7 are complete enough that reducer-owned shell topology, catalog state, workspace operational summaries, and hosted-content metadata are the active architecture story.
+- phase 8 is complete: reducer-owned tab intent, dirty-tab close policy, workspace transition policy, default-agent launch policy, focused hosted-content publication, and explicit runtime factory boundaries now belong to the migration baseline.
+- phase 9 is complete: relaunch snapshot models, relaunch persistence effects, and relaunch restore planning now belong to `Packages/AppFeatures`, while `ContentView` only executes repository import and engine-backed session rehydration.
+- the canonical references are `.docs/reference/architecture.md`, `.docs/reference/ui-ux.md`, and `.docs/plan/implementation-plan.md`.
+
 ---
 
 ## Architecture
@@ -20,38 +34,45 @@ The application is designed with a terminal-inspired aesthetic featuring monospa
 DevysApp (Entry Point)
     |
     +-- AppDelegate (NSApplicationDelegate)
-    |       - Bootstraps logging (AgentLogging)
     |       - Manages app activation and termination
     |       - Handles dirty session save prompts on quit
     |
-    +-- AppContainer (@Observable, dependency injection)
-    |       - Factory for services and sessions
-    |       - Injects: AppSettings, RecentFoldersService, LayoutPersistenceService
-    |       - Creates: FileTreeModel, AgentSessionRuntime, GitStore, Ghostty terminal sessions
+    +-- AppContainer (temporary live service composition root)
+    |       - Supplies app settings and engine-facing factories
+    |       - Creates low-level file tree, git, terminal, and launcher services
     |
-    +-- ContentView (Main window content)
+    +-- StoreOf<AppFeature>
+    |       - Root reducer store created by AppFeaturesBootstrap
+    |       - AppFeature owns lifecycle state
+    |       - WindowFeature owns reducer-first shell and catalog state
+    |
+    +-- ContentView (migration-era composition layer)
             |
-            +-- WindowState (per-window folder state)
-            +-- ThemeManager (dark/light mode, accent colors)
-            +-- DevysSplitController (split pane management)
-            +-- Tab and Session Management
+            +-- store-driven shell presentation and command routing
+            +-- legacy runtime registries and split controller
+            +-- engine-backed editor / terminal / agent session hosting
 ```
 
 ### Dependency Injection Pattern
 
-The app uses SwiftUI's environment for dependency injection:
+The app currently uses two layers:
+
+- SwiftUI environment for live services and UI support objects
+- TCA dependencies for app-domain reducer behavior
 
 ```swift
 WindowGroup {
-    ContentView()
+    AppFeatureHost(store: appStore) {
+        ContentView(store: appStore.scope(state: \.window, action: \.window))
+    }
         .environment(container)
         .environment(container.appSettings)
-        .environment(container.recentFoldersService)
+        .environment(container.recentRepositoriesService)
         .environment(container.layoutPersistenceService)
 }
 ```
 
-`AppContainer` acts as a service locator with factory methods for creating domain-specific objects with proper dependencies.
+`AppContainer` remains a temporary live factory layer. New app-domain behavior should enter through `Packages/AppFeatures` reducers and explicit dependency clients.
 
 ---
 
@@ -63,7 +84,7 @@ The Devys app depends on a monorepo of Swift packages located in `/Packages/`:
 |---------|---------|
 | **DevysCore** | Shared models, settings, file tree service, workspace file nodes, layout persistence |
 | **DevysUI** | Design system: themes (`DevysTheme`), spacing constants (`DevysSpacing`), typography (`DevysTypography`), reusable components |
-| **DevysSplit** | Split-pane tab management system (VS Code-style panes with tabs, drag-drop, welcome tabs) |
+| **DevysSplit** | Split-pane tab management system (VS Code-style panes with tabs, drag-drop, and empty-pane CTA surfaces) |
 | **ACPClientKit** | Native Swift ACP transport, launcher, and protocol client for Codex and Claude adapters |
 | **DevysEditor** | Metal-accelerated code editor with syntax highlighting |
 | **DevysSyntax** | Syntax highlighting and language detection |
@@ -101,24 +122,23 @@ Apps/Devys/
 |       |   |-- ContentView+TabClosing.swift   # Tab close handling, dirty prompts
 |       |   |-- ContentView+Sidebar.swift      # Sidebar content switching
 |       |   |-- ContentView+Agents.swift       # Agent session launch, restore, and routing
-|       |   |-- ContentView+StateSync.swift    # Session metadata sync
+|       |   |-- ContentView+StateSync.swift    # Reducer-first catalog/runtime bridge
 |       |   |-- ContentView+EditorTabs.swift   # Editor URL updates
-|       |   |-- ContentView+StatusBar.swift     # Bottom status bar rendering
+|       |   |-- ContentView+StatusBar.swift     # Floating status capsule rendering
 |       |   |-- ContentView+Preview.swift      # SwiftUI previews
 |       |   |-- TabContentView.swift           # Renders tab content by type
-|       |   |-- StatusBar.swift                 # Bottom status bar (branch, PR, run controls)
 |       |   |-- ProjectPickerView.swift        # Initial folder picker
 |       |   |-- PlaceholderViews.swift         # Placeholder/loading views
 |       |   |-- HarnessPickerSheet.swift       # AI harness selection sheet
 |       |   |-- TerminalViewWrapper.swift      # Terminal session wrapper
 |       |
 |       |-- Sidebar/
-|       |   |-- FeatureRail.swift              # Workspace sidebar mode identifiers
+|       |   |-- FeatureRail.swift              # Content sidebar tab identifiers
 |       |   |-- SidebarContentView.swift       # Expandable sidebar content
 |       |
 |       |-- FileTree/
 |       |   |-- FileTreeView.swift             # Virtualized file tree (LazyVStack)
-|       |   |-- FileTreeRow.swift              # File tree row with tree characters
+|       |   |-- FileTreeRow.swift              # File tree row with connector lines and git indicators
 |       |
 |       |-- Settings/
 |           |-- SettingsView.swift             # Settings tab with sections
@@ -129,33 +149,41 @@ Apps/Devys/
 |   |-- Info.plist                            # App configuration, UTI declarations
 |
 |-- _deprecated/
-    |-- WelcomeTab.swift                      # Deprecated welcome implementation
+    |-- WelcomeTab.swift                      # Legacy welcome-tab experiment, not part of the active shell model
 ```
 
 ---
 
 ## Key Types and Protocols
 
-### WindowState
+### AppFeature / WindowFeature
 
-Per-window state tracking which folder is open:
+Reducer-owned app and window state:
 
 ```swift
-@MainActor @Observable
-public final class WindowState {
-    public private(set) var folder: URL?
-    public var hasFolder: Bool { folder != nil }
-    public func openFolder(_ url: URL)
+@Reducer
+public struct AppFeature {
+    public struct State: Equatable {
+        public var lifecycle: Lifecycle
+        public var window: WindowFeature.State
+    }
 }
 ```
 
-### TabContent
+`WindowFeature` is the current reducer-first home for:
 
-Enum identifying what content a tab displays:
+- repository and workspace selection
+- shell presentation state
+- command request routing
+- semantic workspace tab content
+- workspace shell snapshots used during the migration
+
+### WorkspaceTabContent
+
+Semantic tab identity now lives in `Packages/AppFeatures`:
 
 ```swift
-enum TabContent: Equatable {
-    case welcome
+public enum WorkspaceTabContent: Equatable, Sendable {
     case terminal(workspaceID: Workspace.ID, id: UUID)
     case agentSession(workspaceID: Workspace.ID, sessionID: AgentSessionID)
     case gitDiff(workspaceID: Workspace.ID, path: String, isStaged: Bool)
@@ -164,7 +192,7 @@ enum TabContent: Equatable {
 }
 ```
 
-Design principle: `TabContent` is an identifier only. Dynamic metadata (title, icon) comes from the associated session.
+Design principle: `WorkspaceTabContent` is semantic identity only. Dynamic metadata still comes from the hosted editor, terminal, git, and agent session state.
 
 ### EditorSession
 
@@ -187,12 +215,12 @@ final class EditorSession: Identifiable {
 
 ### EditorSessionRegistry
 
-Singleton tracking all open editor sessions for save-all and quit-with-dirty-files handling:
+Host-scoped registry tracking open editor sessions for save-all execution. Dirty-session policy is reducer-owned after phase 7:
 
 ```swift
 @MainActor @Observable
 final class EditorSessionRegistry {
-    static let shared: EditorSessionRegistry
+    init()
     func register(tabId: TabID, session: EditorSession)
     func unregister(tabId: TabID)
     var dirtySessions: [EditorSession]
@@ -217,13 +245,12 @@ final class ThemeManager {
 
 ### WorkspaceSidebarMode
 
-The workspace sidebar is section-based and persisted per workspace:
+The content sidebar is a two-tab Files/Agents surface and persists that tab per workspace:
 
 ```swift
 enum WorkspaceSidebarMode: String, CaseIterable, Codable, Sendable {
     case files
-    case changes
-    case ports
+    case agents
 }
 ```
 
@@ -237,8 +264,6 @@ final class DevysSplitCloseDelegate: DevysSplitDelegate {
     var onShouldCloseTab: ((Tab, PaneID) -> Bool)?
     var onDidCloseTab: ((TabID, PaneID) -> Void)?
     var onDidCreateTab: ((Tab, PaneID) -> Void)?
-    var onWelcomeTabForPane: ((PaneID) -> Tab?)?
-    var onIsWelcomeTab: ((TabID, PaneID) -> Bool)?
     var onDidReceiveDrop: ((DropContent, PaneID, DropZone) -> TabID?)?
     var onShouldAcceptDrop: (([UTType], PaneID) -> Bool)?
 }
@@ -279,7 +304,7 @@ The main `ContentView` holds significant state:
 - Each tab has a `TabID` (UUID) assigned by `DevysSplitController`
 - `tabContents[TabID]` maps to a `TabContent` enum
 - For session-based content:
-  - `agentSession(workspaceID:sessionID:)` -> `WorkspaceAgentRuntimeRegistry.session(id:)`
+  - `agentSession(workspaceID:sessionID:)` -> `WorktreeRuntimeRegistry.agentSession(id:in:)`
   - `terminal(workspaceID:id:)` -> `WorkspaceTerminalRegistry.session(id:in:)`
   - `editor(workspaceID:url:)` -> `editorSessions[TabID]`
 
@@ -391,17 +416,16 @@ var sidebarContent: some View {
 }
 ```
 
-### onReceive for NotificationCenter
+### NotificationCenter Usage
 
 ```swift
-.onReceive(NotificationCenter.default.publisher(for: .devysOpenFolder)) { _ in
-    requestOpenFolder()
-}
-
-.onReceive(NotificationCenter.default.publisher(for: .devysSave)) { _ in
-    saveActiveEditor()
+// Allowed: external integration ingress and engine/framework observation.
+.onReceive(NotificationCenter.default.publisher(for: .devysWorkspaceAttentionIngress)) { notification in
+    ingestExternalAttention(notification)
 }
 ```
+
+Do not add new app-domain command routing through `NotificationCenter`. Reducer actions and explicit dependency clients are the expected path.
 
 ### Bindings from State
 
@@ -434,7 +458,7 @@ ContentViewToolbarSurface(...)
 4. Open new folder in `WindowState`
 5. Add to recent folders
 6. Apply default layout from persistence
-7. Populate empty panes with welcome tabs
+7. Show empty panes with CTA buttons
 8. Show files sidebar
 
 ### Tab Lifecycle
@@ -480,51 +504,44 @@ These enable dragging items from sidebars to split panes.
 
 ## Design System
 
+Dia-browser-modeled. See `Packages/UI/CLAUDE.md` and `.docs/reference/ui-ux-v2.md` for full spec.
+
 ### Theme
 
-`DevysTheme` from DevysUI provides semantic colors:
+`Theme` (via `@Environment(\.theme)`) provides adaptive colors:
 
-- `base`, `surface`, `elevated` - Background hierarchy
-- `text`, `textSecondary`, `textTertiary` - Text hierarchy
-- `accent`, `accentMuted` - Accent colors
-- `border`, `borderSubtle` - Borders
-- `hover` - Hover states
+- `base`, `card`, `overlay` — Three surface levels
+- `text`, `textSecondary`, `textTertiary` — Text hierarchy
+- `accent`, `accentMuted`, `accentSubtle` — Theme accent
+- `primaryFill`, `primaryFillForeground` — Primary button colors
+- `border`, `borderFocus` — Two border levels
+- `hover`, `active`, `cardHover` — Interaction states
 
 ### Typography
 
-`DevysTypography` provides monospace-based font scales:
+SF Pro (proportional) for UI, SF Mono for code:
 
-- `xs`, `sm`, `base`, `md`, `lg`, `xl` - Size variants
-- `label`, `heading` - Semantic styles
-- `headerTracking` - Letter spacing for headers
+- `Typography.display/title/heading/body/label/caption/micro` — 7 UI sizes
+- `Typography.Code.base/sm/lg/gutter` — 4 code sizes
+- `Typography.Chat.body/heading/caption/code` — 4 chat sizes
 
 ### Spacing
 
-`DevysSpacing` provides consistent spacing values:
+4px grid. `Spacing.tight/normal/comfortable/relaxed/spacious`.
 
-- `space1` through `space10` - Spacing scale
-- `radiusSm`, `radiusMd`, `radiusLg` - Border radii
-- `sidebarCollapsed` - Rail width (48pt)
+- `Spacing.radius` (12pt) — the one radius for everything
+- `Spacing.radiusMicro` (4pt) — tiny elements only
+- `Spacing.radiusFull` (9999pt) — circles only
+- All `RoundedRectangle` must use `style: .continuous`
+
+### Elevation
+
+`.elevation(.base/.card/.popover/.overlay)` — sets background + border + shadow + radius in one call.
 
 ### Animations
 
-`DevysAnimation` provides standard animation curves:
-
-- `default` - Standard transitions
-- `hover` - Hover state changes
-
----
-
-## Terminal Aesthetic Conventions
-
-The app follows a terminal-inspired design language:
-
-1. **Tree Characters**: File trees use `|`, `+--`, `\`-- for hierarchy
-2. **Monospace Typography**: Code and technical content uses monospace fonts
-3. **Prompt Styling**: `$ ` prefix for command-like text
-4. **Bracket Syntax**: `[ON]`, `[OFF]`, `[x]` for controls
-5. **Snake Case Labels**: `show_hidden_files`, `accent_color`
-6. **Uppercase Headers**: `EXPLORER`, `SETTINGS`, `RECENT_PROJECTS`
+- `Animations.spring` — all structural transitions
+- `Animations.micro` — all micro-interactions (120ms ease-out)
 
 ---
 
@@ -540,9 +557,9 @@ The app follows a terminal-inspired design language:
 - `ContentView+TabClosing.swift` - Close flow
 - `ContentView+Sidebar.swift` - Sidebar content
 - `ContentView+Agents.swift` - Agent launch, restore, and workflow routing
-- `ContentView+StateSync.swift` - Session sync
+- `ContentView+StateSync.swift` - Reducer-first catalog/runtime bridge
 - `ContentView+EditorTabs.swift` - Editor updates
-- `ContentView+StatusBar.swift` - Bottom status bar
+- `ContentView+StatusBar.swift` - Floating status capsule
 - `ContentView+Preview.swift` - SwiftUI previews
 
 This keeps the main file focused on state declarations while organizing behavior into logical units.

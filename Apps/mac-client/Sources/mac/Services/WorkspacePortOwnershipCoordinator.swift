@@ -3,6 +3,7 @@
 //
 // Copyright © 2026 Devys. All rights reserved.
 
+import AppFeatures
 import Foundation
 import Observation
 import Workspace
@@ -28,15 +29,31 @@ extension WorkspacePortOwnershipCoordinator {
         return storesByRepositoryID[activeRepositoryID]
     }
 
+    var portsByWorkspaceID: [Workspace.ID: [WorkspacePort]] {
+        storesByRepositoryID.values.reduce(into: [:]) { partialResult, store in
+            partialResult.merge(store.portsByWorkspace) { _, new in
+                new
+            }
+        }
+    }
+
+    var summariesByWorkspaceID: [Workspace.ID: WorkspacePortSummary] {
+        storesByRepositoryID.values.reduce(into: [:]) { partialResult, store in
+            partialResult.merge(store.summariesByWorkspace) { _, new in
+                new
+            }
+        }
+    }
+
     /// Cheap structural sync: prunes removed repos, ensures stores exist,
     /// updates activeRepositoryID. Does NOT call store.update() so no
     /// lsof/ps commands are triggered.
     func syncCatalogStructure(
-        _ catalog: WindowWorkspaceCatalogStore,
+        _ snapshot: WindowCatalogRuntimeSnapshot,
         managedProcessesByWorkspace: [Workspace.ID: [ManagedWorkspaceProcess]]
     ) {
         synchronizeStores(
-            catalog,
+            snapshot,
             managedProcessesByWorkspace: managedProcessesByWorkspace,
             activeMode: .structureOnly
         )
@@ -45,11 +62,11 @@ extension WorkspacePortOwnershipCoordinator {
     /// Full sync: updates store context for every repository and lets the
     /// active repository decide whether it needs an immediate ownership scan.
     func syncCatalog(
-        _ catalog: WindowWorkspaceCatalogStore,
+        _ snapshot: WindowCatalogRuntimeSnapshot,
         managedProcessesByWorkspace: [Workspace.ID: [ManagedWorkspaceProcess]]
     ) {
         synchronizeStores(
-            catalog,
+            snapshot,
             managedProcessesByWorkspace: managedProcessesByWorkspace,
             activeMode: .refreshIfNeeded
         )
@@ -103,31 +120,31 @@ extension WorkspacePortOwnershipCoordinator {
 @MainActor
 private extension WorkspacePortOwnershipCoordinator {
     func synchronizeStores(
-        _ catalog: WindowWorkspaceCatalogStore,
+        _ snapshot: WindowCatalogRuntimeSnapshot,
         managedProcessesByWorkspace: [Workspace.ID: [ManagedWorkspaceProcess]],
         activeMode: WorkspacePortStore.UpdateMode
     ) {
-        let repositoryIDs = Set(catalog.repositories.map(\.id))
+        let repositoryIDs = Set(snapshot.repositories.map(\.id))
 
         for repositoryID in Set(storesByRepositoryID.keys).subtracting(repositoryIDs) {
             storesByRepositoryID.removeValue(forKey: repositoryID)
         }
 
-        activeRepositoryID = catalog.selectedRepositoryID
+        activeRepositoryID = snapshot.selectedRepositoryID
 
-        for repository in catalog.repositories {
+        for repository in snapshot.repositories {
             let store = ensureStore(for: repository.id)
-            let worktrees = catalog.worktreesByRepository[repository.id] ?? []
+            let worktrees = snapshot.worktreesByRepository[repository.id] ?? []
             let activeWorktreeIDs = Set(worktrees.map(\.id))
             let filteredManagedProcesses = managedProcessesByWorkspace.filter {
                 activeWorktreeIDs.contains($0.key)
             }
-            let isActiveRepository = repository.id == catalog.selectedRepositoryID
+            let isActiveRepository = repository.id == snapshot.selectedRepositoryID
 
             store.update(
                 worktrees: worktrees,
                 managedProcessesByWorkspace: filteredManagedProcesses,
-                selectedWorktreeId: isActiveRepository ? catalog.selectedWorkspaceID : nil,
+                selectedWorktreeId: isActiveRepository ? snapshot.selectedWorkspaceID : nil,
                 isActiveRepository: isActiveRepository,
                 mode: isActiveRepository ? activeMode : .structureOnly
             )

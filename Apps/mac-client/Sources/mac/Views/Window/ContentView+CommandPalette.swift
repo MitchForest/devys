@@ -4,6 +4,7 @@
 // Copyright © 2026 Devys. All rights reserved.
 
 import AppKit
+import AppFeatures
 import Foundation
 import SwiftUI
 import Editor
@@ -12,14 +13,28 @@ import Workspace
 @MainActor
 extension ContentView {
     @ViewBuilder
+    func searchSheetContent(for presentation: WindowFeature.SearchPresentation) -> some View {
+        searchSheetContent(
+            for: WorkspaceSearchRequest(
+                mode: presentation.mode.workspaceSearchMode,
+                initialQuery: presentation.initialQuery,
+                token: presentation.id
+            )
+        )
+    }
+
+    @ViewBuilder
     func searchSheetContent(for request: WorkspaceSearchRequest) -> some View {
         switch request.mode {
         case .commands:
             ContentViewCommandPaletteSheetSurface(
-                workspaceCatalog: workspaceCatalog,
-                runtimeRegistry: runtimeRegistry,
+                repositories: store.repositories,
+                visibleNavigatorWorkspaces: visibleNavigatorWorkspaces,
+                workspaceStatesByID: store.workspaceStatesByID,
+                activeWorktree: activeWorktree,
+                agentSessions: hostedAgentSessions,
                 repositorySettingsStore: repositorySettingsStore,
-                workspaceAttentionStore: workspaceAttentionStore,
+                operationalState: workspaceOperationalState,
                 appSettings: appSettings,
                 initialQuery: request.initialQuery,
                 onSelect: performSearchAction
@@ -65,42 +80,33 @@ extension ContentView {
     func performCommandPaletteAction(_ action: WorkspaceCommandPaletteAction) {
         switch action {
         case .addRepository:
-            requestOpenRepository()
+            store.send(.requestOpenRepository)
         case .selectRepository(let repositoryID):
-            Task { @MainActor in
-                await selectRepository(repositoryID)
-            }
+            store.send(.requestRepositorySelection(repositoryID))
         case .initializeRepository(let repositoryID):
-            Task { @MainActor in
-                await initializeRepository(repositoryID)
-            }
+            store.send(.requestInitializeRepository(repositoryID))
         case .createWorkspace(let repositoryID):
-            presentWorkspaceCreation(for: repositoryID)
+            store.send(.presentWorkspaceCreation(repositoryID: repositoryID, mode: .newBranch))
         case .importWorktrees(let repositoryID):
-            presentWorkspaceCreation(for: repositoryID, mode: .importedWorktree)
+            store.send(.presentWorkspaceCreation(repositoryID: repositoryID, mode: .importedWorktree))
         case .selectWorkspace(let repositoryID, let workspaceID):
-            Task { @MainActor in
-                await selectWorkspace(workspaceID, in: repositoryID)
-            }
+            store.send(.requestWorkspaceSelection(repositoryID: repositoryID, workspaceID: workspaceID))
         case .openAgents:
-            openDefaultOrPromptAgentForSelectedWorkspace()
+            store.send(.requestWorkspaceCommand(.openAgents))
         case .focusAgentSession(let sessionID):
-            guard let workspaceID = visibleWorkspaceID else { return }
-            focusAgentSession(workspaceID: workspaceID, sessionID: sessionID)
+            store.send(.requestFocusAgentSession(sessionID))
         case .launchShell:
-            openShellForSelectedWorkspace()
+            store.send(.requestWorkspaceCommand(.launchShell))
         case .launchClaude:
-            launchClaudeForSelectedWorkspace()
+            store.send(.requestWorkspaceCommand(.launchClaude))
         case .launchCodex:
-            launchCodexForSelectedWorkspace()
+            store.send(.requestWorkspaceCommand(.launchCodex))
         case .runDefaultProfile:
-            runSelectedWorkspaceProfile()
+            store.send(.requestWorkspaceCommand(.runWorkspaceProfile))
         case .jumpToLatestUnreadWorkspace:
-            Task { @MainActor in
-                await jumpToLatestUnreadWorkspace()
-            }
+            store.send(.requestWorkspaceCommand(.jumpToLatestUnreadWorkspace))
         case .revealCurrentWorkspaceInNavigator:
-            revealCurrentWorkspaceInNavigator()
+            store.send(.revealCurrentWorkspaceInNavigator)
         }
     }
 
@@ -119,7 +125,7 @@ extension ContentView {
         url: URL,
         navigationTarget: EditorNavigationTarget?
     ) {
-        let content = TabContent.editor(workspaceID: workspaceID, url: url)
+        let content = WorkspaceTabContent.editor(workspaceID: workspaceID, url: url)
         openInPermanentTab(content: content)
 
         if let tabId = findExistingTab(for: content),
@@ -132,7 +138,20 @@ extension ContentView {
         }
 
         Task { @MainActor in
-            await runtimeRegistry.runtimeHandle(for: workspaceID)?.fileTreeModel?.revealURL(url)
+            await runtimeRegistry.fileTreeModel(for: workspaceID)?.revealURL(url)
+        }
+    }
+}
+
+private extension WindowFeature.SearchMode {
+    var workspaceSearchMode: WorkspaceSearchMode {
+        switch self {
+        case .commands:
+            .commands
+        case .files:
+            .files
+        case .textSearch:
+            .textSearch
         }
     }
 }

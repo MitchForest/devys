@@ -81,7 +81,7 @@ public struct FileTreeView: View {
             ProgressView()
                 .scaleEffect(0.8)
             Text("Loading files...")
-                .font(.system(size: 12))
+                .font(Typography.label)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -92,10 +92,10 @@ public struct FileTreeView: View {
     private var emptyView: some View {
         VStack(spacing: DevysSpacing.space2) {
             Image(systemName: "folder")
-                .font(.system(size: 24, weight: .light))
+                .font(Typography.display.weight(.light))
                 .foregroundStyle(.tertiary)
             Text("Empty folder")
-                .font(.system(size: 12))
+                .font(Typography.label)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

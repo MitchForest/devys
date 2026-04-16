@@ -12,11 +12,11 @@ struct AgentHarnessPickerSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DevysSpacing.space4) {
             Text("Open Agents")
-                .font(DevysTypography.lg)
+                .font(DevysTypography.title)
                 .foregroundStyle(theme.text)
 
             Text("Choose which ACP adapter should back this Agents tab.")
-                .font(DevysTypography.base)
+                .font(DevysTypography.body)
                 .foregroundStyle(theme.textSecondary)
 
             HStack(spacing: DevysSpacing.space3) {
@@ -36,7 +36,7 @@ struct AgentHarnessPickerSheet: View {
 
             HStack {
                 Spacer()
-                Button("Cancel") {
+                ActionButton("Cancel", style: .ghost) {
                     onCancel()
                     dismiss()
                 }
@@ -44,7 +44,7 @@ struct AgentHarnessPickerSheet: View {
         }
         .padding(DevysSpacing.space5)
         .frame(width: 460)
-        .background(theme.base)
+        .elevation(.overlay)
     }
 
     private func pickerButton(
@@ -59,25 +59,20 @@ struct AgentHarnessPickerSheet: View {
         } label: {
             VStack(alignment: .leading, spacing: DevysSpacing.space3) {
                 Image(systemName: icon)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(theme.visibleAccent)
+                    .font(DevysTypography.title)
+                    .foregroundStyle(theme.accent)
 
                 Text(title)
-                    .font(DevysTypography.base)
+                    .font(DevysTypography.body)
                     .foregroundStyle(theme.text)
 
                 Text(subtitle)
-                    .font(DevysTypography.sm)
+                    .font(DevysTypography.body)
                     .foregroundStyle(theme.textSecondary)
             }
             .frame(maxWidth: .infinity, minHeight: 120, alignment: .leading)
             .padding(DevysSpacing.space4)
-            .background(theme.surface)
-            .overlay {
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(theme.border, lineWidth: 1)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .elevation(.card)
         }
         .buttonStyle(.plain)
     }

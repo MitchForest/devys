@@ -1,8 +1,9 @@
 // ContentView+StateSync.swift
-// Devys - Targeted catalog/runtime synchronization helpers.
+// Devys - Reducer-first catalog/runtime bridge helpers.
 //
 // Copyright © 2026 Devys. All rights reserved.
 
+import AppFeatures
 import Foundation
 import Split
 import SwiftUI
@@ -11,11 +12,39 @@ import Workspace
 struct TabPresentationState: Equatable {
     let title: String
     let icon: String
+    let isPreview: Bool
+    let isDirty: Bool
     let activityIndicator: TabActivityIndicator?
 }
 
 @MainActor
 extension ContentView {
+    func windowWorkspaceContext(
+        for workspaceID: Workspace.ID
+    ) -> (repository: Repository, worktree: Worktree)? {
+        guard let repository = store.repositories.first(where: { repository in
+            store.worktreesByRepository[repository.id]?.contains { $0.id == workspaceID } == true
+        }),
+        let worktree = store.worktreesByRepository[repository.id]?.first(where: { $0.id == workspaceID }) else {
+            return nil
+        }
+
+        return (repository, worktree)
+    }
+
+    func syncFilesSidebarVisibilityFromReducer() {
+        runtimeRegistry.setFilesSidebarVisible(reducerFilesSidebarVisible)
+    }
+
+    var reducerCatalogRuntimeSnapshot: WindowCatalogRuntimeSnapshot {
+        WindowCatalogRuntimeSnapshot(
+            repositories: store.repositories,
+            worktreesByRepository: store.worktreesByRepository,
+            selectedRepositoryID: selectedRepositoryID,
+            selectedWorkspaceID: selectedWorkspaceID
+        )
+    }
+
     var uniqueEditorSessions: [EditorSession] {
         var seen: Set<ObjectIdentifier> = []
         var result: [EditorSession] = []
@@ -28,23 +57,18 @@ extension ContentView {
         return result
     }
 
-    func cleanupSession(for content: TabContent, tabId: TabID?) {
+    func cleanupSession(for content: WorkspaceTabContent, tabId: TabID?) {
         switch content {
         case .terminal(let workspaceID, let id):
             shutdownWorkspaceTerminalSession(id: id, in: workspaceID)
         case .agentSession(let workspaceID, let sessionID):
-            if let session = runtimeRegistry
-                .runtimeHandle(for: workspaceID)?
-                .agentRuntimeRegistry
-                .session(id: sessionID) {
+            if let session = runtimeRegistry.agentSession(id: sessionID, in: workspaceID) {
+                hostedContentBridge.detachAgentSession(session, workspaceID: workspaceID)
                 Task {
                     await session.teardown()
                 }
             }
-            runtimeRegistry
-                .runtimeHandle(for: workspaceID)?
-                .agentRuntimeRegistry
-                .removeSession(id: sessionID)
+            runtimeRegistry.removeAgentSession(id: sessionID, in: workspaceID)
         case .editor:
             if let tabId {
                 removeEditorSession(tabId: tabId)
@@ -64,90 +88,37 @@ extension ContentView {
                 tabId,
                 title: presentation.title,
                 icon: presentation.icon,
+                isPreview: presentation.isPreview,
+                isDirty: presentation.isDirty,
                 activityIndicator: presentation.activityIndicator
             )
         }
         tabPresentationById = nextPresentationById
     }
 
-    func currentTabPresentation(for content: TabContent, tabId: TabID) -> TabPresentationState {
-        let (title, icon) = tabMetadata(for: content, tabId: tabId)
+    func currentTabPresentation(for content: WorkspaceTabContent, tabId: TabID) -> TabPresentationState {
+        let (title, icon) = tabMetadata(for: content)
+        let isPreview = content.workspaceID.flatMap { workspaceID in
+            paneID(for: tabId, workspaceID: workspaceID)
+                .flatMap { paneID in
+                    store.workspaceShells[workspaceID]?.layout?.paneLayout(for: paneID)?.previewTabID
+                }
+        } == tabId
         return TabPresentationState(
             title: title,
             icon: icon,
+            isPreview: isPreview,
+            isDirty: editorSessions[tabId]?.isDirty == true,
             activityIndicator: tabActivityIndicator()
         )
     }
 
-    /// Cheap structural sync: updates which repos/worktrees exist in coordinators.
-    /// Does NOT trigger port scanning (lsof/ps) or git metadata refresh.
-    /// Use for operations that only change structural state (terminal create/destroy,
-    /// workspace selection within a loaded repo, archive/discard).
-    func syncCatalogStructure() {
-        runtimeRegistry.configure(container: container)
-        runtimeRegistry.metadataCoordinator.syncCatalogStructure(workspaceCatalog)
-        runtimeRegistry.portCoordinator.syncCatalogStructure(
-            workspaceCatalog,
-            managedProcessesByWorkspace: currentManagedProcessesByWorkspace()
-        )
-    }
-
-    /// Port-only sync: updates port ownership data. Triggers lsof/ps but NOT
-    /// git metadata refresh. Use when managed processes start/stop.
-    func syncCatalogPortState() {
-        runtimeRegistry.configure(container: container)
-        runtimeRegistry.metadataCoordinator.syncCatalogStructure(workspaceCatalog)
-        runtimeRegistry.portCoordinator.syncCatalog(
-            workspaceCatalog,
-            managedProcessesByWorkspace: currentManagedProcessesByWorkspace()
-        )
-    }
-
-    /// Full expensive sync: triggers both port scanning AND git metadata refresh
-    /// for all repositories. Only use for major structural changes (app startup,
-    /// repository import, catalog refresh).
-    func syncCatalogRuntimeState() {
-        runtimeRegistry.configure(container: container)
-        runtimeRegistry.metadataCoordinator.syncCatalog(workspaceCatalog)
-        runtimeRegistry.portCoordinator.syncCatalog(
-            workspaceCatalog,
-            managedProcessesByWorkspace: currentManagedProcessesByWorkspace()
-        )
-    }
-
-    func currentManagedProcessesByWorkspace() -> [Workspace.ID: [ManagedWorkspaceProcess]] {
-        let backgroundManagedProcesses = workspaceBackgroundProcessRegistry
-            .processesByWorkspace
-            .mapValues { processes in
-                processes.values.map { process in
-                    ManagedWorkspaceProcess(
-                        processID: process.process.processIdentifier,
-                        displayName: process.displayName
-                    )
-                }
-            }
-
-        return WorkspacePortManagedProcessCatalog.makeManagedProcesses(
-            backgroundProcessesByWorkspace: backgroundManagedProcesses,
-            hostedSessionsByID: rehydratableHostedSessionsByID
-        )
-    }
-
-    /// Metadata-only sync: updates git metadata (branch, status, diff) for
-    /// worktrees but does NOT trigger port scanning. Port state will update
-    /// on its periodic timer or when managed processes change.
-    func syncCatalogMetadataState() {
-        runtimeRegistry.configure(container: container)
-        runtimeRegistry.metadataCoordinator.syncCatalog(workspaceCatalog)
-        runtimeRegistry.portCoordinator.syncCatalogStructure(
-            workspaceCatalog,
-            managedProcessesByWorkspace: currentManagedProcessesByWorkspace()
-        )
-    }
-
     func refreshRepositoryCatalog(repositoryID: Repository.ID) async {
-        await workspaceCatalog.refreshRepository(repositoryID: repositoryID)
-        syncCatalogMetadataState()
+        await refreshRepositoryCatalogs([repositoryID])
+    }
+
+    func refreshRepositoryCatalogs(_ repositoryIDs: [Repository.ID]) async {
+        await store.send(.refreshRepositories(repositoryIDs)).finish()
     }
 
     func scheduleDeferredRepositoryRefresh(
@@ -158,9 +129,9 @@ extension ContentView {
         Task { @MainActor in
             await Task.yield()
 
-            guard workspaceCatalog.selectedRepositoryID == repositoryID else { return }
+            guard selectedRepositoryID == repositoryID else { return }
             if let workspaceID,
-               workspaceCatalog.selectedWorkspaceID != workspaceID {
+               selectedWorkspaceID != workspaceID {
                 return
             }
 
@@ -182,10 +153,10 @@ extension ContentView {
 
             await refreshRepositoryCatalog(repositoryID: repositoryID)
 
-            guard workspaceCatalog.selectedRepositoryID == repositoryID else { return }
+            guard selectedRepositoryID == repositoryID else { return }
 
             if let workspaceID,
-               workspaceCatalog.selectedWorkspaceID != workspaceID,
+               selectedWorkspaceID != workspaceID,
                let selectedWorktree = selectedCatalogWorktree {
                 persistVisibleWorkspaceState()
                 resetWorkspaceState()
@@ -194,43 +165,14 @@ extension ContentView {
         }
     }
 
-    func syncTerminalNotifications() {
-        workspaceTerminalRegistry.syncUnreadState()
-        guard appSettings.notifications.terminalActivity else {
-            workspaceAttentionStore.clearNotifications(from: .terminal)
-            return
-        }
-        workspaceAttentionStore.syncFromTerminalRegistry(workspaceTerminalRegistry)
-    }
-
     func markTerminalNotificationRead(_ terminalId: UUID) {
-        workspaceTerminalRegistry.markRead(
-            terminalId: terminalId,
-            in: visibleWorkspaceID
-        )
-        workspaceAttentionStore.markTerminalRead(terminalId, in: visibleWorkspaceID)
-    }
-
-    func syncAttentionPreferences() {
-        if appSettings.notifications.terminalActivity {
-            syncTerminalNotifications()
-        } else {
-            workspaceAttentionStore.clearNotifications(from: .terminal)
-        }
-
-        if !appSettings.notifications.agentActivity {
-            workspaceAttentionStore.clearNotifications(
-                from: [.claude, .codex, .run, .build]
+        store.send(
+            .markTerminalAttentionRead(
+                workspaceID: workspaceTerminalRegistry.workspaceID(for: terminalId)
+                    ?? visibleWorkspaceID,
+                terminalID: terminalId
             )
-        }
-    }
-
-    func confirmRepositorySwitchIfNeeded(to repositoryID: Repository.ID) async -> Bool {
-        guard let selectedRepositoryID = workspaceCatalog.selectedRepositoryID,
-              selectedRepositoryID != repositoryID else {
-            return true
-        }
-        return await confirmCloseCurrentRepository()
+        )
     }
 
     func restoreSelectedWorkspaceOrReset() -> Worktree? {
@@ -251,42 +193,20 @@ extension ContentView {
         defer {
             WorkspacePerformanceRecorder.end(trace)
         }
-
-        if workspaceCatalog.selectedRepositoryID == repositoryID,
-           let selectedWorktree = selectedCatalogWorktree,
-           visibleWorkspaceID == selectedWorktree.id {
-            return
-        }
-
-        guard await confirmRepositorySwitchIfNeeded(to: repositoryID) else { return }
-
-        persistVisibleWorkspaceState()
-        resetWorkspaceState()
-        workspaceCatalog.selectRepository(repositoryID)
-        syncCatalogStructure()
-
-        if let selectedWorktree = restoreSelectedWorkspaceOrReset() {
-            scheduleDeferredRepositoryRefresh(
-                repositoryID: repositoryID,
-                workspaceID: selectedWorktree.id,
-                reason: "repository-select"
-            )
-            return
-        }
-
-        await refreshRepositoryCatalog(repositoryID: repositoryID)
-
-        _ = restoreSelectedWorkspaceOrReset()
+        store.send(.requestRepositorySelection(repositoryID))
+        guard let request = store.workspaceTransitionRequest else { return }
+        store.send(.setWorkspaceTransitionRequest(nil))
+        await executeWorkspaceTransition(request)
     }
 
     func moveRepository(_ repositoryID: Repository.ID, by offset: Int) {
-        workspaceCatalog.moveRepository(repositoryID, by: offset)
+        store.send(.moveRepository(repositoryID, by: offset))
     }
 
     func removeRepository(_ repositoryID: Repository.ID) async {
-        guard let repository = workspaceCatalog.repository(for: repositoryID) else { return }
+        guard let repository = store.repositories.first(where: { $0.id == repositoryID }) else { return }
 
-        let isActiveRepository = workspaceCatalog.selectedRepositoryID == repositoryID
+        let isActiveRepository = selectedRepositoryID == repositoryID
         if isActiveRepository {
             guard await confirmCloseCurrentRepository() else { return }
             persistVisibleWorkspaceState()
@@ -294,8 +214,7 @@ extension ContentView {
         }
 
         recentRepositoriesService.remove(repository.rootURL)
-        workspaceCatalog.removeRepository(repositoryID)
-        syncCatalogRuntimeState()
+        store.send(.removeRepository(repositoryID))
 
         if let selectedWorktree = selectedCatalogWorktree {
             restoreWorkspaceState(for: selectedWorktree)
@@ -313,44 +232,9 @@ extension ContentView {
         defer {
             WorkspacePerformanceRecorder.end(trace)
         }
-
-        let didSwitchRepository = workspaceCatalog.selectedRepositoryID != repositoryID
-        let requiresBlockingRefresh = !workspaceCatalog.canResolveWorkspaceSelection(
-            workspaceID,
-            in: repositoryID
-        )
-
-        if workspaceCatalog.selectedRepositoryID == repositoryID,
-           visibleWorkspaceID == workspaceID {
-            workspaceCatalog.selectWorkspace(workspaceID, in: repositoryID)
-            syncCatalogStructure()
-            return
-        }
-
-        guard await confirmRepositorySwitchIfNeeded(to: repositoryID) else { return }
-
-        persistVisibleWorkspaceState()
-        if didSwitchRepository {
-            resetWorkspaceState()
-        }
-
-        if requiresBlockingRefresh {
-            workspaceCatalog.selectRepository(repositoryID)
-            await refreshRepositoryCatalog(repositoryID: repositoryID)
-        }
-
-        workspaceCatalog.selectWorkspace(workspaceID, in: repositoryID)
-        syncCatalogStructure()
-
-        guard let selectedWorktree = restoreSelectedWorkspaceOrReset() else { return }
-
-        if didSwitchRepository,
-           !requiresBlockingRefresh {
-            scheduleDeferredRepositoryRefresh(
-                repositoryID: repositoryID,
-                workspaceID: selectedWorktree.id,
-                reason: "workspace-select"
-            )
-        }
+        store.send(.requestWorkspaceSelection(repositoryID: repositoryID, workspaceID: workspaceID))
+        guard let request = store.workspaceTransitionRequest else { return }
+        store.send(.setWorkspaceTransitionRequest(nil))
+        await executeWorkspaceTransition(request)
     }
 }

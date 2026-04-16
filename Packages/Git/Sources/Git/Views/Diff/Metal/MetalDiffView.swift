@@ -209,7 +209,7 @@ struct MetalDiffView: View {
         HStack(spacing: 10) {
             Image(systemName: "bolt.fill")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(devysTheme.visibleAccent)
+                .foregroundStyle(devysTheme.accent)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Large diff (\(largeContentPolicy.totalLines) lines)")
@@ -231,12 +231,12 @@ struct MetalDiffView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(devysTheme.elevated)
+        .background(devysTheme.overlay)
         .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(devysTheme.borderSubtle, lineWidth: 1)
+            RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
+                .stroke(devysTheme.border, lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
         .frame(maxWidth: 420, alignment: .leading)
     }
 

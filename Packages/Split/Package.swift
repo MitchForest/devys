@@ -13,10 +13,15 @@ let package = Package(
             targets: ["Split"]
         ),
     ],
+    dependencies: [
+        .package(path: "../UI")
+    ],
     targets: [
         .target(
             name: "Split",
-            dependencies: [],
+            dependencies: [
+                .product(name: "UI", package: "UI")
+            ],
             path: "Sources/Split",
             swiftSettings: [
                 .swiftLanguageMode(.v6),

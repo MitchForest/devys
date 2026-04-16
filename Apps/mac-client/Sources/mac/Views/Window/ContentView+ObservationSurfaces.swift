@@ -3,7 +3,7 @@
 //
 // Copyright © 2026 Devys. All rights reserved.
 
-// swiftlint:disable file_length
+import AppFeatures
 import SwiftUI
 import Split
 import Editor
@@ -13,57 +13,70 @@ import UI
 import Workspace
 
 @MainActor
-struct ContentViewNavigatorSurface: View {
-    let workspaceCatalog: WindowWorkspaceCatalogStore
-    let runtimeRegistry: WorktreeRuntimeRegistry
-    let workspaceAttentionStore: WorkspaceAttentionStore
-    let navigatorRevealRequest: NavigatorRevealRequest?
+struct ContentViewRepoRailSurface: View {
+    let repositories: [Repository]
+    let selectedRepositoryID: Repository.ID?
+    let selectedWorkspaceID: Workspace.ID?
+    let worktreesByRepository: [Repository.ID: [Worktree]]
+    let workspaceStatesByID: [Worktree.ID: WorktreeState]
+    let worktreeStatusHints: [Worktree.ID: StatusHint]
     let onAddRepository: () -> Void
-    let onMoveRepository: (Repository.ID, Int) -> Void
     let onRemoveRepository: (Repository.ID) -> Void
     let onInitializeRepository: (Repository.ID) -> Void
     let onCreateWorkspace: (Repository.ID) -> Void
-    let onSelectRepository: (Repository.ID) -> Void
     let onSelectWorkspace: (Repository.ID, Worktree.ID) -> Void
+    let onReorderRepository: (Repository.ID, Int) -> Void
+    let onSetRepositoryDisplayInitials: (Repository.ID, String?) -> Void
+    let onSetRepositoryDisplaySymbol: (Repository.ID, String?) -> Void
     let onSetWorkspacePinned: (Repository.ID, Worktree.ID, Bool) -> Void
     let onSetWorkspaceArchived: (Repository.ID, Worktree.ID, Bool) -> Void
     let onRenameWorkspace: (Repository.ID, Worktree.ID) -> Void
     let onDeleteWorkspace: (Repository.ID, Worktree.ID) -> Void
     let onRevealWorkspaceInFinder: (Repository.ID, Worktree.ID) -> Void
     let onOpenWorkspaceInExternalEditor: (Repository.ID, Worktree.ID) -> Void
+    let onRevealRepositoryInFinder: (Repository.ID) -> Void
 
     var body: some View {
-        RepositoryNavigatorView(
-            repositories: workspaceCatalog.repositories,
-            selectedRepositoryID: workspaceCatalog.selectedRepositoryID,
-            selectedWorkspaceID: workspaceCatalog.selectedWorkspaceID,
-            worktreesByRepository: workspaceCatalog.worktreesByRepository,
-            revealedWorkspaceRequest: navigatorRevealRequest,
-            workspaceStatesByID: workspaceCatalog.workspaceStatesByID,
-            infoEntriesByWorkspaceID: runtimeRegistry.metadataCoordinator.activeStore?.entriesById ?? [:],
-            attentionSummariesByWorkspaceID: workspaceAttentionStore.summariesByWorkspace,
+        RepoRailView(
+            repositories: repositories,
+            selectedRepositoryID: selectedRepositoryID,
+            selectedWorkspaceID: selectedWorkspaceID,
+            worktreesByRepository: worktreesByRepository,
+            workspaceStatesByID: workspaceStatesByID,
+            worktreeStatusHints: worktreeStatusHints,
             onAddRepository: onAddRepository,
-            onMoveRepository: onMoveRepository,
             onRemoveRepository: onRemoveRepository,
             onInitializeRepository: onInitializeRepository,
             onCreateWorkspace: onCreateWorkspace,
-            onSelectRepository: onSelectRepository,
             onSelectWorkspace: onSelectWorkspace,
+            onReorderRepository: onReorderRepository,
+            onSetRepositoryDisplayInitials: onSetRepositoryDisplayInitials,
+            onSetRepositoryDisplaySymbol: onSetRepositoryDisplaySymbol,
             onSetWorkspacePinned: onSetWorkspacePinned,
             onSetWorkspaceArchived: onSetWorkspaceArchived,
             onRenameWorkspace: onRenameWorkspace,
             onDeleteWorkspace: onDeleteWorkspace,
             onRevealWorkspaceInFinder: onRevealWorkspaceInFinder,
-            onOpenWorkspaceInExternalEditor: onOpenWorkspaceInExternalEditor
+            onOpenWorkspaceInExternalEditor: onOpenWorkspaceInExternalEditor,
+            onRevealRepositoryInFinder: onRevealRepositoryInFinder
         )
     }
 }
 
 @MainActor
 struct ContentViewSidebarSurface: View {
-    let workspaceCatalog: WindowWorkspaceCatalogStore
-    let runtimeRegistry: WorktreeRuntimeRegistry
+    let activeSidebar: WorkspaceSidebarMode
+    let selectedRepositoryRootURL: URL?
+    let currentWorktree: Worktree?
+    let selectedWorkspaceID: Workspace.ID?
+    let fileTreeModel: FileTreeModel?
+    let gitStatusIndex: WorkspaceFileTreeGitStatusIndex?
+    let gitStore: GitStore?
+    let changeCount: Int
+    let agentSessions: [HostedAgentSessionSummary]
+    let portsByWorkspaceID: [Workspace.ID: [WorkspacePort]]
     let repositorySettingsStore: RepositorySettingsStore
+    let onSelectSidebar: (WorkspaceSidebarMode) -> Void
     let onPreviewFile: (Workspace.ID, URL) -> Void
     let onOpenFile: (Workspace.ID, URL) -> Void
     let onAddFileToAgent: (Workspace.ID, URL) -> Void
@@ -78,22 +91,19 @@ struct ContentViewSidebarSurface: View {
     let onStopPortProcess: (WorkspacePort, Int32) -> Void
 
     var body: some View {
-        let currentRuntime = runtimeRegistry.activeRuntime
-        let currentWorktree = currentRuntime?.worktree
-        let selectedWorkspaceID = currentRuntime?.workspaceID
-        let gitStore = currentRuntime?.gitStore
-        let ports = runtimeRegistry.portCoordinator.ports(for: selectedWorkspaceID)
-        let agentSessions = currentRuntime?.agentRuntimeRegistry.allSessions ?? []
+        let ports = selectedWorkspaceID.flatMap { portsByWorkspaceID[$0] } ?? []
 
         UnifiedWorkspaceSidebar(
-            hasChanges: gitStore?.hasChanges ?? false,
+            selection: activeSidebar,
+            onSelect: onSelectSidebar,
+            changeCount: changeCount,
             portCount: ports.count,
             agentCount: agentSessions.count
         ) {
             SidebarContentView(
-                model: currentRuntime?.fileTreeModel,
-                activeDirectory: currentWorktree?.workingDirectory ?? workspaceCatalog.selectedRepositoryRootURL,
-                gitStatusIndex: currentRuntime?.gitStatusIndex,
+                model: fileTreeModel,
+                activeDirectory: currentWorktree?.workingDirectory ?? selectedRepositoryRootURL,
+                gitStatusIndex: gitStatusIndex,
                 onPreviewFile: { url in
                     guard let selectedWorkspaceID else { return }
                     onPreviewFile(selectedWorkspaceID, url)
@@ -162,19 +172,23 @@ struct ContentViewSidebarSurface: View {
 
 @MainActor
 struct ContentViewWorkspaceSurface: View {
-    let workspaceCatalog: WindowWorkspaceCatalogStore
-    let runtimeRegistry: WorktreeRuntimeRegistry
+    let selectedRepositoryRootURL: URL?
+    let selectedRepositoryDisplayName: String?
     let controller: DevysSplitController
-    let tabContents: [TabID: TabContent]
-    let terminalSessionForContent: (TabContent?) -> GhosttyTerminalSession?
-    let agentSessionForContent: (TabContent?) -> AgentSessionRuntime?
+    let tabContents: [TabID: WorkspaceTabContent]
+    let gitStoreForContent: (WorkspaceTabContent?) -> GitStore?
+    let terminalSessionForContent: (WorkspaceTabContent?) -> GhosttyTerminalSession?
+    let agentSessionForContent: (WorkspaceTabContent?) -> AgentSessionRuntime?
     let agentComposerSpeechService: any AgentComposerSpeechService
     let onOpenAgentInlineTerminal: (Workspace.ID, UUID) -> Void
     let onOpenAgentFollowTarget: (Workspace.ID, AgentFollowTarget, Bool) -> Void
     let onOpenAgentDiffArtifact: (Workspace.ID, AgentDiffContent, Bool) -> Void
-    let editorSessionForContent: (TabContent?, TabID) -> EditorSession?
+    let editorSessionForContent: (WorkspaceTabContent?, TabID) -> EditorSession?
     let onFocusPane: (PaneID) -> Void
-    let onAttentionAcknowledged: (TabContent?) -> Void
+    let onOpenTerminalInPane: (PaneID) -> Void
+    let onOpenAgentInPane: (PaneID) -> Void
+    let onOpenFileInPane: (PaneID) -> Void
+    let onAttentionAcknowledged: (WorkspaceTabContent?) -> Void
     let onPresentationChange: () -> Void
     let onEditorURLChange: (TabID, URL) -> Void
     let onEditorPresentationChange: (TabID, EditorOpenPerformanceSnapshot?) -> Void
@@ -184,13 +198,14 @@ struct ContentViewWorkspaceSurface: View {
             controller: controller,
             content: { tab, paneId in
                 let content = tabContents[tab.id]
+                let gitStore = gitStoreForContent(content)
                 let terminalSession = terminalSessionForContent(content)
                 let agentSession = agentSessionForContent(content)
                 let editorSession = editorSessionForContent(content, tab.id)
                 TabContentView(
                     tab: tab,
                     content: content,
-                    gitStore: runtimeRegistry.activeRuntime?.gitStore,
+                    gitStore: gitStore,
                     terminalSession: terminalSession,
                     agentSession: agentSession,
                     agentComposerSpeechService: agentComposerSpeechService,
@@ -198,8 +213,8 @@ struct ContentViewWorkspaceSurface: View {
                     onOpenAgentFollowTarget: onOpenAgentFollowTarget,
                     onOpenAgentDiffArtifact: onOpenAgentDiffArtifact,
                     editorSession: editorSession,
-                    selectedRepositoryRootURL: workspaceCatalog.selectedRepositoryRootURL,
-                    selectedRepositoryDisplayName: workspaceCatalog.selectedRepository?.displayName,
+                    selectedRepositoryRootURL: selectedRepositoryRootURL,
+                    selectedRepositoryDisplayName: selectedRepositoryDisplayName,
                     onFocus: { onFocusPane(paneId) },
                     onAttentionAcknowledged: {
                         onAttentionAcknowledged(content)
@@ -214,9 +229,14 @@ struct ContentViewWorkspaceSurface: View {
                 )
                 .id(content?.stableId ?? "empty")
             },
-            emptyPane: { _ in
-                Color.clear
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            emptyPane: { paneID in
+                WorkspaceEmptyPaneView(
+                    paneID: paneID,
+                    onFocusPane: onFocusPane,
+                    onOpenTerminal: onOpenTerminalInPane,
+                    onOpenAgent: onOpenAgentInPane,
+                    onOpenFile: onOpenFileInPane
+                )
             }
         )
     }
@@ -226,37 +246,20 @@ struct ContentViewWorkspaceSurface: View {
 private struct AgentSessionsSidebarSection: View {
     @Environment(\.devysTheme) private var theme
 
-    let sessions: [AgentSessionRuntime]
+    let sessions: [HostedAgentSessionSummary]
     let onCreateSession: () -> Void
     let onOpenSession: (AgentSessionID) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: DevysSpacing.space2) {
-            Button {
+            ActionButton("New Agent Session", icon: "plus.circle.fill") {
                 onCreateSession()
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 11, weight: .semibold))
-                    Text("New Agent Session")
-                        .font(DevysTypography.sm)
-                    Spacer()
-                }
-                .foregroundStyle(theme.text)
-                .padding(.horizontal, DevysSpacing.space3)
-                .padding(.vertical, 8)
-                .background(theme.elevated)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(theme.borderSubtle, lineWidth: 1)
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 8))
             }
-            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             if sessions.isEmpty {
                 Text("No active sessions in this workspace.")
-                    .font(DevysTypography.xs)
+                    .font(DevysTypography.caption)
                     .foregroundStyle(theme.textSecondary)
                     .padding(.horizontal, DevysSpacing.space3)
                     .padding(.vertical, 4)
@@ -267,18 +270,18 @@ private struct AgentSessionsSidebarSection: View {
                     } label: {
                         HStack(spacing: 10) {
                             Image(systemName: session.tabIcon)
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(theme.visibleAccent)
+                                .font(DevysTypography.caption.weight(.semibold))
+                                .foregroundStyle(theme.accent)
                                 .frame(width: 14)
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(session.tabTitle)
-                                    .font(DevysTypography.sm)
+                                    .font(DevysTypography.body)
                                     .foregroundStyle(theme.text)
                                     .lineLimit(1)
 
                                 Text(session.stateSummary)
-                                    .font(DevysTypography.xs)
+                                    .font(DevysTypography.caption)
                                     .foregroundStyle(theme.textSecondary)
                                     .lineLimit(1)
                             }
@@ -286,19 +289,17 @@ private struct AgentSessionsSidebarSection: View {
                             Spacer()
 
                             if session.tabIsBusy {
-                                Circle()
-                                    .fill(theme.accent)
-                                    .frame(width: 8, height: 8)
+                                StatusDot(.running)
                             }
                         }
                         .padding(.horizontal, DevysSpacing.space3)
                         .padding(.vertical, 8)
-                        .background(theme.surface)
+                        .background(theme.card)
                         .overlay {
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(theme.borderSubtle, lineWidth: 1)
+                            RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
+                                .stroke(theme.border, lineWidth: 1)
                         }
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
                     }
                     .buttonStyle(.plain)
                 }
@@ -310,300 +311,81 @@ private struct AgentSessionsSidebarSection: View {
 }
 
 @MainActor
-struct ContentViewStatusBarSurface: View {
-    let workspaceCatalog: WindowWorkspaceCatalogStore
-    let runtimeRegistry: WorktreeRuntimeRegistry
-    let repositorySettingsStore: RepositorySettingsStore
-    let workspaceRunStore: WorkspaceRunStore
-    let onFetch: () -> Void
-    let onPull: () -> Void
-    let onPush: () -> Void
-    let onCommit: () -> Void
-    let onCreatePR: () -> Void
-    let onOpenPR: () -> Void
-    let onRun: () -> Void
-    let onStop: () -> Void
-    let onOpenRunSettings: () -> Void
-    let onToggleNavigator: () -> Void
-
-    var body: some View {
-        let currentRuntime = runtimeRegistry.activeRuntime
-        let currentWorktree = currentRuntime?.worktree
-        let metadataStore = runtimeRegistry.metadataCoordinator.activeStore
-        let worktreeInfo = currentWorktree.flatMap { worktree in
-            metadataStore?.entriesById[worktree.id]
-        }
-        let runState = workspaceRunStore.state(for: currentWorktree?.id)
-        let defaultStartupProfile = defaultStartupProfile(for: currentWorktree)
-        let portSummary = runtimeRegistry.portCoordinator.summary(for: currentWorktree?.id)
-        let gitAvailable = currentRuntime?.gitStore?.isRepositoryAvailable == true
-
-        StatusBar(
-            repositoryName: workspaceCatalog.selectedRepository?.displayName,
-            branchName: worktreeInfo?.branchName ?? currentWorktree?.name,
-            repositoryInfo: worktreeInfo?.repositoryInfo,
-            worktreeDetail: currentWorktree?.detail,
-            lineChanges: worktreeInfo?.lineChanges,
-            pullRequest: worktreeInfo?.pullRequest,
-            prAvailability: metadataStore?.isPRAvailable,
-            portSummary: portSummary,
-            hasStagedChanges: (worktreeInfo?.statusSummary?.staged ?? 0) > 0,
-            onFetch: gitAvailable ? onFetch : nil,
-            onPull: gitAvailable ? onPull : nil,
-            onPush: gitAvailable ? onPush : nil,
-            onCommit: (worktreeInfo?.statusSummary?.staged ?? 0) > 0 ? onCommit : nil,
-            onCreatePR: metadataStore?.isPRAvailable == true ? onCreatePR : nil,
-            onOpenPR: worktreeInfo?.pullRequest == nil ? nil : onOpenPR,
-            runIsActive: runState?.isRunning == true,
-            onRun: defaultStartupProfile == nil ? nil : onRun,
-            onStop: runState?.isRunning == true ? onStop : nil,
-            onOpenRunSettings: currentWorktree == nil ? nil : onOpenRunSettings,
-            onToggleNavigator: onToggleNavigator
-        )
-    }
-
-    private func defaultStartupProfile(for worktree: Worktree?) -> StartupProfile? {
-        guard let worktree else { return nil }
-        let settings = repositorySettingsStore.settings(for: worktree.repositoryRootURL)
-        guard let defaultStartupProfileID = settings.defaultStartupProfileID else { return nil }
-        return settings.startupProfiles.first { $0.id == defaultStartupProfileID }
-    }
-}
-
-@MainActor
 struct ContentViewCommandPaletteSheetSurface: View {
-    let workspaceCatalog: WindowWorkspaceCatalogStore
-    let runtimeRegistry: WorktreeRuntimeRegistry
+    @Environment(\.dismiss) private var dismiss
+
+    let repositories: [Repository]
+    let visibleNavigatorWorkspaces: [(repositoryID: Repository.ID, workspace: Worktree)]
+    let workspaceStatesByID: [Worktree.ID: WorktreeState]
+    let activeWorktree: Worktree?
+    let agentSessions: [HostedAgentSessionSummary]
     let repositorySettingsStore: RepositorySettingsStore
-    let workspaceAttentionStore: WorkspaceAttentionStore
+    let operationalState: WorkspaceOperationalState
     let appSettings: AppSettings
     let initialQuery: String
     let onSelect: (WorkspaceSearchItem) -> Void
 
     @State private var query = ""
+    @State private var selectedIndex = 0
 
     var body: some View {
-        WorkspaceSearchPanelView(
-            presentation: WorkspaceSearchPresentation(mode: .commands),
+        CommandPalette(
             query: $query,
-            items: filteredItems,
-            isLoading: false,
-            errorMessage: nil,
-            onSelect: onSelect
-        )
+            sections: filteredSections,
+            homeSections: homeSections,
+            selectedIndex: $selectedIndex,
+            onSelect: selectItem(at:)
+        ) {
+            dismiss()
+        }
         .onAppear {
             if query != initialQuery {
                 query = initialQuery
             }
+            resetSelection()
+        }
+        .onChange(of: query) { _, _ in
+            resetSelection()
         }
     }
 
-    private var filteredItems: [WorkspaceSearchItem] {
-        let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !normalizedQuery.isEmpty else { return items }
-        return items.filter { item in
-            item.title.lowercased().contains(normalizedQuery)
-                || item.subtitle.lowercased().contains(normalizedQuery)
-                || item.keywords.contains { $0.lowercased().contains(normalizedQuery) }
-        }
+    private var catalog: ContentViewCommandPaletteCatalog {
+        ContentViewCommandPaletteCatalog(
+            repositories: repositories,
+            visibleNavigatorWorkspaces: visibleNavigatorWorkspaces,
+            workspaceStatesByID: workspaceStatesByID,
+            activeWorktree: activeWorktree,
+            agentSessions: agentSessions,
+            repositorySettingsStore: repositorySettingsStore,
+            operationalState: operationalState,
+            appSettings: appSettings
+        )
     }
 
-    private var items: [WorkspaceSearchItem] {
-        var items: [WorkspaceSearchItem] = [
-            WorkspaceSearchItem(
-                action: .command(.addRepository),
-                title: "Add Repository",
-                subtitle: "Open a local project or import a Git repository",
-                systemImage: "folder.badge.plus",
-                keywords: ["repository", "project", "import", "add", "open"],
-                accessory: "⌘O"
-            )
-        ]
-
-        for repository in workspaceCatalog.repositories {
-            items.append(
-                WorkspaceSearchItem(
-                    action: .command(.selectRepository(repository.id)),
-                    title: "Switch to \(repository.displayName)",
-                    subtitle: repository.rootURL.path,
-                    systemImage: "shippingbox",
-                    keywords: ["repository", "switch", repository.displayName, repository.rootURL.path],
-                    accessory: nil
-                )
-            )
-            if repository.isGitRepository {
-                items.append(
-                    WorkspaceSearchItem(
-                        action: .command(.createWorkspace(repository.id)),
-                        title: "Create Workspace in \(repository.displayName)",
-                        subtitle: "New branch, existing branch, or pull request",
-                        systemImage: "plus.circle",
-                        keywords: ["workspace", "create", "branch", repository.displayName],
-                        accessory: nil
-                    )
-                )
-                items.append(
-                    WorkspaceSearchItem(
-                        action: .command(.importWorktrees(repository.id)),
-                        title: "Import Worktrees in \(repository.displayName)",
-                        subtitle: "Attach existing git worktrees to this repository",
-                        systemImage: "square.and.arrow.down",
-                        keywords: ["workspace", "worktree", "import", repository.displayName],
-                        accessory: nil
-                    )
-                )
-            } else {
-                items.append(
-                    WorkspaceSearchItem(
-                        action: .command(.initializeRepository(repository.id)),
-                        title: "Initialize Git in \(repository.displayName)",
-                        subtitle: "Create a new Git repository for this local project",
-                        systemImage: "arrow.triangle.branch",
-                        keywords: ["git", "init", "initialize", repository.displayName],
-                        accessory: nil
-                    )
-                )
-            }
-        }
-
-        for entry in workspaceCatalog.visibleNavigatorWorkspaces() {
-            let workspaceName = workspaceDisplayName(for: entry.workspace)
-            items.append(
-                WorkspaceSearchItem(
-                    action: .command(
-                        .selectWorkspace(
-                            repositoryID: entry.repositoryID,
-                            workspaceID: entry.workspace.id
-                        )
-                    ),
-                    title: "Switch to \(workspaceName)",
-                    subtitle: "\(entry.workspace.name) • \(entry.workspace.workingDirectory.path)",
-                    systemImage: "arrow.triangle.branch",
-                    keywords: [
-                        "workspace",
-                        "switch",
-                        entry.workspace.name,
-                        workspaceName,
-                        entry.workspace.workingDirectory.path
-                    ],
-                    accessory: nil
-                )
-            )
-        }
-
-        if let activeWorktree = runtimeRegistry.activeRuntime?.worktree {
-            items.append(
-                WorkspaceSearchItem(
-                    action: .command(.openAgents),
-                    title: "New Agent Session",
-                    subtitle: activeWorktree.workingDirectory.path,
-                    systemImage: "message.badge.waveform",
-                    keywords: ["agent", "agents", "chat", "assistant", "new"],
-                    accessory: nil
-                )
-            )
-
-            for session in runtimeRegistry.activeRuntime?.agentRuntimeRegistry.allSessions ?? [] {
-                items.append(
-                    WorkspaceSearchItem(
-                        action: .command(.focusAgentSession(session.sessionID)),
-                        title: "Open \(session.tabTitle)",
-                        subtitle: session.stateSummary,
-                        systemImage: session.tabIcon,
-                        keywords: [
-                            "agent",
-                            "session",
-                            session.tabTitle,
-                            session.stateSummary
-                        ],
-                        accessory: nil
-                    )
-                )
-            }
-            items.append(
-                WorkspaceSearchItem(
-                    action: .command(.launchShell),
-                    title: "Launch Shell",
-                    subtitle: activeWorktree.workingDirectory.path,
-                    systemImage: "terminal",
-                    keywords: ["shell", "terminal", "launch"],
-                    accessory: appSettings.shortcuts.binding(for: .launchShell).displayString
-                )
-            )
-            items.append(
-                WorkspaceSearchItem(
-                    action: .command(.launchClaude),
-                    title: "Launch Claude",
-                    subtitle: activeWorktree.workingDirectory.path,
-                    systemImage: "sparkles",
-                    keywords: ["claude", "agent", "launch"],
-                    accessory: appSettings.shortcuts.binding(for: .launchClaude).displayString
-                )
-            )
-            items.append(
-                WorkspaceSearchItem(
-                    action: .command(.launchCodex),
-                    title: "Launch Codex",
-                    subtitle: activeWorktree.workingDirectory.path,
-                    systemImage: "chevron.left.forwardslash.chevron.right",
-                    keywords: ["codex", "agent", "launch"],
-                    accessory: appSettings.shortcuts.binding(for: .launchCodex).displayString
-                )
-            )
-            items.append(
-                WorkspaceSearchItem(
-                    action: .command(.revealCurrentWorkspaceInNavigator),
-                    title: "Reveal Current Workspace in Navigator",
-                    subtitle: workspaceDisplayName(for: activeWorktree),
-                    systemImage: "sidebar.left",
-                    keywords: ["reveal", "navigator", "workspace", "sidebar"],
-                    accessory: nil
-                )
-            )
-
-            if defaultRunProfileAvailable(for: activeWorktree) {
-                items.append(
-                    WorkspaceSearchItem(
-                        action: .command(.runDefaultProfile),
-                        title: "Run Default Profile",
-                        subtitle: activeWorktree.workingDirectory.path,
-                        systemImage: "play.fill",
-                        keywords: ["run", "profile", "startup"],
-                        accessory: nil
-                    )
-                )
-            }
-        }
-
-        if workspaceAttentionStore.latestUnreadNotification() != nil {
-            items.append(
-                WorkspaceSearchItem(
-                    action: .command(.jumpToLatestUnreadWorkspace),
-                    title: "Jump to Latest Unread Workspace",
-                    subtitle: "Open the newest workspace attention item",
-                    systemImage: "bell.badge",
-                    keywords: ["notification", "unread", "attention", "jump"],
-                    accessory: appSettings.shortcuts.binding(for: .jumpToLatestUnreadWorkspace).displayString
-                )
-            )
-        }
-
-        return items
+    private var homeSections: [CommandPaletteSection] {
+        catalog.homeSections
     }
 
-    private func workspaceDisplayName(for worktree: Worktree) -> String {
-        let override = workspaceCatalog.displayName(for: worktree)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        if !override.isEmpty {
-            return override
-        }
-        return worktree.name
+    private var filteredSections: [CommandPaletteSection] {
+        catalog.filteredSections(query: query)
     }
 
-    private func defaultRunProfileAvailable(for worktree: Worktree) -> Bool {
-        let settings = repositorySettingsStore.settings(for: worktree.repositoryRootURL)
-        guard let defaultStartupProfileID = settings.defaultStartupProfileID else { return false }
-        return settings.startupProfiles.contains { $0.id == defaultStartupProfileID }
+    private var visibleItems: [WorkspaceSearchItem] {
+        catalog.visibleItems(query: query)
+    }
+
+    private func resetSelection() {
+        selectedIndex = 0
+    }
+
+    private func selectItem(at index: Int) {
+        guard visibleItems.indices.contains(index) else {
+            dismiss()
+            return
+        }
+
+        onSelect(visibleItems[index])
+        dismiss()
     }
 }
 
@@ -618,13 +400,14 @@ struct ContentViewFileSearchSheetSurface: View {
     @State private var query = ""
 
     var body: some View {
-        WorkspaceSearchPanelView(
-            presentation: WorkspaceSearchPresentation(mode: .files),
-            query: $query,
+        ContentViewSearchPaletteSurface(
+            mode: .files,
+            sectionTitle: "Files",
             items: items,
             isLoading: fileIndex?.isLoading == true,
             errorMessage: fileIndex == nil ? "Select a workspace to search files." : fileIndex?.lastError,
-            onSelect: onSelect
+            onSelect: onSelect,
+            query: $query
         )
         .onAppear {
             if query != initialQuery {
@@ -668,13 +451,14 @@ struct ContentViewTextSearchSheetSurface: View {
     @State private var service: RipgrepTextSearchService?
 
     var body: some View {
-        WorkspaceSearchPanelView(
-            presentation: WorkspaceSearchPresentation(mode: .textSearch),
-            query: $query,
+        ContentViewSearchPaletteSurface(
+            mode: .textSearch,
+            sectionTitle: "Matches",
             items: items,
             isLoading: service?.isSearching == true,
             errorMessage: serviceError,
-            onSelect: onSelect
+            onSelect: onSelect,
+            query: $query
         )
         .onAppear {
             if service == nil, let workspaceID, let rootURL {
@@ -721,8 +505,7 @@ struct ContentViewTextSearchSheetSurface: View {
 
 @MainActor
 struct ContentViewNotificationsPanelSurface: View {
-    let workspaceCatalog: WindowWorkspaceCatalogStore
-    let workspaceAttentionStore: WorkspaceAttentionStore
+    let items: [WorkspaceNotificationPanelItem]
     let onOpen: (WorkspaceNotificationPanelItem) -> Void
     let onClear: (WorkspaceNotificationPanelItem) -> Void
 
@@ -732,18 +515,5 @@ struct ContentViewNotificationsPanelSurface: View {
             onOpen: onOpen,
             onClear: onClear
         )
-    }
-
-    private var items: [WorkspaceNotificationPanelItem] {
-        workspaceAttentionStore.pendingNotifications.compactMap { notification in
-            guard let context = workspaceCatalog.workspaceContext(for: notification.workspaceID) else {
-                return nil
-            }
-            return WorkspaceNotificationPanelItem(
-                notification: notification,
-                repositoryName: context.repository.displayName,
-                workspaceName: context.worktree.name
-            )
-        }
     }
 }

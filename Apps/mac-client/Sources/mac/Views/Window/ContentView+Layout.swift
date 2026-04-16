@@ -5,65 +5,73 @@
 
 import Foundation
 import CoreGraphics
-import Split
+import AppFeatures
 import Workspace
 
 @MainActor
 extension ContentView {
     func saveDefaultLayout() {
-        guard workspaceCatalog.hasRepositories else { return }
-        let tree = controller.treeSnapshot()
-        let layout = PanelLayout(tree: panelNode(from: tree))
-        layoutPersistenceService.saveDefaultLayout(layout)
-    }
-
-    func applyLayout(_ layout: PanelLayout) {
-        guard let rootPane = controller.allPaneIds.first else { return }
-        buildLayoutNode(layout.tree, in: rootPane)
-        applySplitRatios(from: layout.tree, using: controller.treeSnapshot())
-    }
-
-    private func buildLayoutNode(_ node: PanelNode, in paneId: PaneID) {
-        switch node {
-        case .pane:
+        guard let workspaceID = selectedWorkspaceID,
+              let layout = store.workspaceShells[workspaceID]?.layout else {
             return
-        case .split(let orientation, let children, _):
-            guard children.count == 2 else { return }
-            let splitOrientation: Split.SplitOrientation = orientation == .horizontal ? .horizontal : .vertical
-            guard let newPane = controller.splitPane(paneId, orientation: splitOrientation) else { return }
-            buildLayoutNode(children[0], in: paneId)
-            buildLayoutNode(children[1], in: newPane)
         }
+        layoutPersistenceService.saveDefaultLayout(
+            PanelLayout(tree: panelNode(from: layout.root))
+        )
     }
 
-    private func applySplitRatios(from node: PanelNode, using tree: ExternalTreeNode) {
-        guard case .split(let orientation, let children, let ratios) = node,
-              case .split(let split) = tree,
-              children.count == 2 else { return }
-
-        let matches = (orientation == .horizontal && split.orientation == "horizontal")
-            || (orientation == .vertical && split.orientation == "vertical")
-        if matches {
-            let ratio = normalizedRatio(from: ratios)
-            if let splitId = UUID(uuidString: split.id) {
-                controller.setDividerPosition(ratio, forSplit: splitId, fromExternal: true)
-            }
-        }
-
-        applySplitRatios(from: children[0], using: split.first)
-        applySplitRatios(from: children[1], using: split.second)
+    func applyLayout(
+        _ layout: PanelLayout,
+        workspaceID: Workspace.ID? = nil
+    ) {
+        let workspaceID = workspaceID ?? selectedWorkspaceID
+        guard let workspaceID else { return }
+        let workspaceLayout = WindowFeature.WorkspaceLayout(
+            root: workspaceLayoutNode(from: layout.tree)
+        )
+        store.send(.setWorkspaceLayout(workspaceID: workspaceID, layout: workspaceLayout))
+        store.send(
+            .setWorkspaceFocusedPaneID(
+                workspaceID: workspaceID,
+                paneID: workspaceLayout.focusedFallbackPaneID
+            )
+        )
+        renderWorkspaceLayout(for: workspaceID)
     }
 
-    private func panelNode(from node: ExternalTreeNode) -> PanelNode {
+    private func panelNode(from node: WindowFeature.WorkspaceLayoutNode) -> PanelNode {
         switch node {
         case .pane:
             return .pane(.empty)
         case .split(let split):
             let ratio = CGFloat(split.dividerPosition)
             return .split(
-                orientation: split.orientation == "horizontal" ? .horizontal : .vertical,
-                children: [panelNode(from: split.first), panelNode(from: split.second)],
+                orientation: split.orientation == .horizontal ? .horizontal : .vertical,
+                children: [
+                    panelNode(from: split.first),
+                    panelNode(from: split.second)
+                ],
                 ratios: [ratio, max(0, 1 - ratio)]
+            )
+        }
+    }
+
+    private func workspaceLayoutNode(from node: PanelNode) -> WindowFeature.WorkspaceLayoutNode {
+        switch node {
+        case .pane:
+            return .pane(WindowFeature.WorkspacePaneLayout())
+
+        case .split(let orientation, let children, let ratios):
+            guard children.count == 2 else {
+                return .pane(WindowFeature.WorkspacePaneLayout())
+            }
+            return .split(
+                WindowFeature.WorkspaceSplitLayout(
+                    orientation: orientation == .horizontal ? .horizontal : .vertical,
+                    dividerPosition: normalizedRatio(from: ratios),
+                    first: workspaceLayoutNode(from: children[0]),
+                    second: workspaceLayoutNode(from: children[1])
+                )
             )
         }
     }

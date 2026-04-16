@@ -51,7 +51,7 @@ DevysGit
 1. **Actor-based Clients**: `GitClient` and `GitHubClient` are actors ensuring thread-safe CLI operations
 2. **Service Protocol**: `GitService` protocol abstracts git operations for testability
 3. **Observable State**: `GitStore` uses `@Observable` (Swift Observation) for reactive UI
-4. **Registry Pattern**: `GitStoreRegistry` maintains one `GitStore` per workspace
+4. **Observable Store Pattern**: host layers construct `GitStore` instances explicitly for the workspace they are rendering
 5. **Diff Parsing Pipeline**: Raw diff text -> `DiffParser` -> `ParsedDiff` -> `DiffRenderLayout` -> Views
 
 ---
@@ -97,7 +97,6 @@ DevysGit
 |------|-------------|
 | `DevysGit.swift` | Package exports and type aliases |
 | `GitService.swift` | Protocol + default implementation |
-| `GitStoreRegistry.swift` | Workspace -> GitStore mapping |
 
 ### `/Sources/DevysGit/Views/`
 
@@ -286,17 +285,6 @@ public final class GitStore {
 }
 ```
 
-#### `GitStoreRegistry`
-Singleton maintaining GitStore instances per workspace:
-```swift
-@MainActor
-public final class GitStoreRegistry {
-    static let shared = GitStoreRegistry()
-    func store(for workspaceId: UUID, projectFolder: URL?) -> GitStore
-    func removeStore(for workspaceId: UUID)
-}
-```
-
 ---
 
 ## Git Command Patterns
@@ -344,11 +332,8 @@ git branch --format=%(refname:short)|%(upstream:short)|%(HEAD) -a
 ### Entry Points
 
 ```swift
-// Create panel for a workspace
-let panel = GitPanelView.forWorkspace(id: workspaceId, projectFolder: folder)
-
-// Or with direct store access
-let store = GitStoreRegistry.shared.store(for: id, projectFolder: folder)
+// Create a store for the workspace you are rendering
+let store = GitStore(projectFolder: folder)
 let panel = GitPanelView(store: store)
 ```
 
@@ -389,7 +374,6 @@ public actor GitHubClient
 public protocol GitService
 public struct DefaultGitService: GitService
 public final class GitStore
-public final class GitStoreRegistry
 ```
 
 ---

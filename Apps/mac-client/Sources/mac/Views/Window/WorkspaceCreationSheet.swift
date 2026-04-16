@@ -2,19 +2,11 @@
 // Create or import workspaces for a repository.
 
 import AppKit
+import AppFeatures
 import Git
 import SwiftUI
 import UI
 import Workspace
-
-enum WorkspaceCreationMode: String, CaseIterable, Identifiable {
-    case newBranch = "New Branch"
-    case existingBranch = "Existing Branch"
-    case pullRequest = "Pull Request"
-    case importedWorktree = "Imported Worktree"
-
-    var id: String { rawValue }
-}
 
 @MainActor
 struct WorkspaceCreationSheet: View {
@@ -176,7 +168,7 @@ struct WorkspaceCreationSheet: View {
             } else {
                 ForEach(importedWorktreeURLs, id: \.path) { url in
                     Text(url.path)
-                        .font(.system(size: 11))
+                        .font(Typography.caption)
                         .foregroundStyle(theme.textSecondary)
                 }
             }

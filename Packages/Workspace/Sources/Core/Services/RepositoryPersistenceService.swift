@@ -5,12 +5,12 @@
 
 import Foundation
 
-public protocol RepositoryPersistenceService {
+public protocol RepositoryPersistenceService: Sendable {
     func loadRepositories() -> [Repository]
     func saveRepositories(_ repositories: [Repository])
 }
 
-public struct UserDefaultsRepositoryPersistenceService: RepositoryPersistenceService {
+public struct UserDefaultsRepositoryPersistenceService: RepositoryPersistenceService, @unchecked Sendable {
     private enum Keys {
         static let repositories = "com.devys.repositories"
     }

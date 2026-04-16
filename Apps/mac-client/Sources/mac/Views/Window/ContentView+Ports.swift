@@ -3,6 +3,7 @@
 //
 // Copyright © 2026 Devys. All rights reserved.
 
+import AppFeatures
 import AppKit
 import Darwin
 import Workspace
@@ -23,11 +24,9 @@ extension ContentView {
     func stopPortProcess(_ port: WorkspacePort, processID: Int32) {
         if let managedProcess = managedBackgroundProcess(for: processID, workspaceID: port.workspaceID) {
             workspaceBackgroundProcessRegistry.shutdown(id: managedProcess.id, in: port.workspaceID)
-            workspaceRunStore.removeBackgroundProcess(managedProcess.id)
-            syncCatalogPortState()
+            store.send(.removeWorkspaceRunBackgroundProcess(managedProcess.id))
         } else {
             Darwin.kill(processID, SIGTERM)
-            runtimeRegistry.portCoordinator.refresh(workspaceIDs: [port.workspaceID])
         }
     }
 

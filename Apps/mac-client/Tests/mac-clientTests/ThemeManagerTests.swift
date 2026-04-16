@@ -9,9 +9,9 @@ struct ThemeManagerTests {
     func setAccentColor() {
         let manager = ThemeManager()
 
-        manager.setAccentColor(from: AccentColor.cyan.rawValue)
+        manager.setAccentColor(from: AccentColor.teal.rawValue)
 
-        #expect(manager.accentColor == .cyan)
+        #expect(manager.accentColor == .teal)
         #expect(manager.colorScheme == .dark)
     }
 
@@ -19,10 +19,10 @@ struct ThemeManagerTests {
     @MainActor
     func invalidAccentColor() {
         let manager = ThemeManager()
-        manager.accentColor = .amber
+        manager.accentColor = .orange
 
         manager.setAccentColor(from: "not-a-color")
 
-        #expect(manager.accentColor == .amber)
+        #expect(manager.accentColor == .orange)
     }
 }

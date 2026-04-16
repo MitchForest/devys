@@ -20,50 +20,28 @@ struct SettingsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 32) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("SETTINGS")
-                        .font(DevysTypography.xl)
-                        .tracking(2)
-                        .foregroundStyle(theme.text)
-                    
-                    TerminalDivider()
-                }
-                
+            VStack(alignment: .leading, spacing: Spacing.spacious) {
+                Text("Settings")
+                    .font(Typography.title)
+                    .foregroundStyle(theme.text)
+
                 ShellSettingsSection()
-
-                TerminalDivider()
-
                 RestoreSettingsSection()
-
-                TerminalDivider()
-
                 NotificationSettingsSection()
-
-                TerminalDivider()
-
                 AppearanceSettingsSection()
-                
-                TerminalDivider()
-                
                 ExplorerSettingsSection()
-
-                TerminalDivider()
-
                 ShortcutSettingsSection()
 
                 if let repositoryRootURL {
-                    TerminalDivider()
-
                     RepositorySettingsSection(
                         repositoryRootURL: repositoryRootURL,
                         repositoryDisplayName: repositoryDisplayName
                     )
                 }
-                
+
                 Spacer()
             }
-            .padding(32)
+            .padding(Spacing.space8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(theme.base)
@@ -76,9 +54,9 @@ struct ShellSettingsSection: View {
     @Environment(AppSettings.self) private var appSettings
 
     var body: some View {
-        SettingsSection(title: "SHELL") {
+        SettingsSection(title: "Shell") {
             SettingsTextFieldRow(
-                title: "default_external_editor_bundle_id",
+                title: "Default external editor bundle ID",
                 description: "Bundle identifier used when opening a workspace in an external editor",
                 placeholder: "com.microsoft.VSCode",
                 text: Binding(
@@ -99,10 +77,10 @@ struct RestoreSettingsSection: View {
     @Environment(AppSettings.self) private var appSettings
 
     var body: some View {
-        SettingsSection(title: "RESTORE") {
+        SettingsSection(title: "Restore") {
             VStack(alignment: .leading, spacing: 16) {
                 SettingsToggle(
-                    title: "restore_repositories_on_launch",
+                    title: "Restore repositories on launch",
                     description: "Reopen repositories from the previous Devys session when the app relaunches",
                     isOn: Binding(
                         get: { appSettings.restore.restoreRepositoriesOnLaunch },
@@ -111,7 +89,7 @@ struct RestoreSettingsSection: View {
                 )
 
                 SettingsToggle(
-                    title: "restore_selected_workspace",
+                    title: "Restore selected workspace",
                     description: "Return each window to the last selected workspace when repository restore is enabled",
                     isOn: Binding(
                         get: { appSettings.restore.restoreSelectedWorkspace },
@@ -120,7 +98,7 @@ struct RestoreSettingsSection: View {
                 )
 
                 SettingsToggle(
-                    title: "restore_workspace_layout_and_tabs",
+                    title: "Restore workspace layout and tabs",
                     description: "Rebuild the last split layout, editor tabs, and diff tabs for restored workspaces",
                     isOn: Binding(
                         get: { appSettings.restore.restoreWorkspaceLayoutAndTabs },
@@ -129,7 +107,7 @@ struct RestoreSettingsSection: View {
                 )
 
                 SettingsToggle(
-                    title: "restore_terminal_sessions",
+                    title: "Restore terminal sessions",
                     description: "Reconnect persistent terminals and staged commands for restored workspaces",
                     isOn: Binding(
                         get: { appSettings.restore.restoreTerminalSessions },
@@ -138,7 +116,7 @@ struct RestoreSettingsSection: View {
                 )
 
                 SettingsToggle(
-                    title: "restore_agent_sessions",
+                    title: "Restore agent sessions",
                     description: "Reopen persisted Agents tabs and attempt ACP session restore when supported",
                     isOn: Binding(
                         get: { appSettings.restore.restoreAgentSessions },
@@ -156,10 +134,10 @@ struct NotificationSettingsSection: View {
     @Environment(AppSettings.self) private var appSettings
 
     var body: some View {
-        SettingsSection(title: "NOTIFICATIONS") {
+        SettingsSection(title: "Notifications") {
             VStack(alignment: .leading, spacing: 16) {
                 SettingsToggle(
-                    title: "terminal_activity",
+                    title: "Terminal activity",
                     description: "Show unread terminal attention and shell bell notifications in workspace badges",
                     isOn: Binding(
                         get: { appSettings.notifications.terminalActivity },
@@ -168,7 +146,7 @@ struct NotificationSettingsSection: View {
                 )
 
                 SettingsToggle(
-                    title: "agent_activity",
+                    title: "Agent activity",
                     description:
                         "Show agent waiting or completed notifications for each workspace " +
                         "when the active launcher supports it",
@@ -189,15 +167,15 @@ struct AppearanceSettingsSection: View {
     @Environment(AppSettings.self) private var appSettings
     
     var body: some View {
-        SettingsSection(title: "APPEARANCE") {
+        SettingsSection(title: "Appearance") {
             VStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("accent_color")
-                        .font(DevysTypography.label)
+                    Text("Accent color")
+                        .font(Typography.body)
                         .foregroundStyle(theme.text)
-                    
+
                     Text("Choose your accent color for highlights and focus states")
-                        .font(DevysTypography.xs)
+                        .font(Typography.caption)
                         .foregroundStyle(theme.textSecondary)
                     
                     HStack(spacing: 12) {
@@ -212,11 +190,11 @@ struct AppearanceSettingsSection: View {
                     }
                 }
                 
-                TerminalDivider()
-                
+                Separator()
+
                 SettingsToggle(
-                    title: "dark_mode",
-                    description: "Use dark theme for terminal aesthetic",
+                    title: "Dark mode",
+                    description: "Use dark theme for a warm studio feel",
                     isOn: Binding(
                         get: { appSettings.appearance.isDarkMode },
                         set: { appSettings.appearance.isDarkMode = $0 }
@@ -247,28 +225,31 @@ struct AccentColorButton: View {
                     .overlay(
                         Circle()
                             .strokeBorder(
-                                isSelected ? theme.text : Color.clear,
+                                isSelected ? theme.accent : Color.clear,
                                 lineWidth: 2
                             )
                     )
-                    .shadow(
-                        color: isSelected ? accent.color.opacity(0.5) : .clear,
-                        radius: 4
-                    )
                 
-                Text(accent.displayName.lowercased())
-                    .font(DevysTypography.xs)
+                Text(accent.displayName)
+                    .font(Typography.caption)
                     .foregroundStyle(isSelected ? theme.text : theme.textSecondary)
             }
             .padding(.vertical, 8)
             .padding(.horizontal, 12)
-            .background(
-                RoundedRectangle(cornerRadius: DevysSpacing.radiusSm)
-                    .fill(isSelected ? theme.elevated : (isHovered ? theme.hover : Color.clear))
+            .background(selectionBackground, in: RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
+                    .strokeBorder(isSelected ? theme.borderFocus : Color.clear, lineWidth: Spacing.borderWidth)
             )
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
+    }
+
+    private var selectionBackground: Color {
+        if isSelected { return theme.overlay }
+        if isHovered { return theme.hover }
+        return .clear
     }
 }
 
@@ -281,24 +262,16 @@ struct SettingsSection<Content: View>: View {
     @ViewBuilder let content: () -> Content
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: Spacing.space3) {
             Text(title)
-                .font(DevysTypography.heading)
-                .tracking(DevysTypography.headerTracking)
+                .font(Typography.heading)
                 .foregroundStyle(theme.textSecondary)
-            
-            VStack(alignment: .leading, spacing: 16) {
+
+            VStack(alignment: .leading, spacing: Spacing.space4) {
                 content()
             }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: DevysSpacing.radiusMd)
-                    .fill(theme.surface)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DevysSpacing.radiusMd)
-                    .strokeBorder(theme.borderSubtle, lineWidth: 1)
-            )
+            .padding(Spacing.space4)
+            .elevation(.card)
         }
     }
 }
@@ -312,17 +285,16 @@ struct SettingsTextFieldRow: View {
     @Binding var text: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Spacing.space2) {
             Text(title)
-                .font(DevysTypography.label)
+                .font(Typography.body)
                 .foregroundStyle(theme.text)
 
             Text(description)
-                .font(DevysTypography.xs)
+                .font(Typography.caption)
                 .foregroundStyle(theme.textSecondary)
 
-            TextField(placeholder, text: $text)
-                .textFieldStyle(.roundedBorder)
+            TextInput(placeholder, text: $text)
         }
     }
 }
@@ -346,85 +318,65 @@ struct ExplorerSettingsSection: View {
     }
     
     var body: some View {
-        SettingsSection(title: "FILE_EXPLORER") {
-            VStack(alignment: .leading, spacing: 16) {
+        SettingsSection(title: "File Explorer") {
+            VStack(alignment: .leading, spacing: Spacing.space4) {
                 SettingsToggle(
-                    title: "show_hidden_files",
+                    title: "Show hidden files",
                     description: "Show files and folders that start with a dot",
                     isOn: showDotfilesBinding
                 )
-                
-                TerminalDivider()
-                
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("exclude_patterns")
-                        .font(DevysTypography.label)
+
+                Separator()
+
+                VStack(alignment: .leading, spacing: Spacing.space3) {
+                    Text("Exclude patterns")
+                        .font(Typography.body)
                         .foregroundStyle(theme.text)
-                    
+
                     Text("Files matching these patterns will be hidden")
-                        .font(DevysTypography.xs)
+                        .font(Typography.caption)
                         .foregroundStyle(theme.textSecondary)
-                    
-                    VStack(alignment: .leading, spacing: 4) {
+
+                    VStack(alignment: .leading, spacing: Spacing.space1) {
                         ForEach(Array(patterns).sorted(), id: \.self) { pattern in
-                            HStack(spacing: 8) {
-                                Text("├──")
-                                    .font(DevysTypography.sm)
-                                    .foregroundStyle(theme.textTertiary)
-                                
+                            HStack(spacing: Spacing.space2) {
                                 Text(pattern)
-                                    .font(DevysTypography.sm)
+                                    .font(Typography.Code.base)
                                     .foregroundStyle(theme.textSecondary)
-                                
+
                                 Spacer()
-                                
+
                                 Button {
                                     removePattern(pattern)
                                 } label: {
-                                    Text("[×]")
-                                        .font(DevysTypography.xs)
-                                        .foregroundStyle(theme.textTertiary)
+                                    Icon("xmark.circle", size: .sm, color: theme.textTertiary)
                                 }
                                 .buttonStyle(.plain)
                             }
+                            .padding(.vertical, Spacing.space1)
                         }
                     }
-                    
-                    HStack(spacing: 8) {
-                        Text("$")
-                            .font(DevysTypography.sm)
-                            .foregroundStyle(theme.textTertiary)
-                        
-                        TextField("add_pattern", text: $excludePatterns)
-                            .textFieldStyle(.plain)
-                            .font(DevysTypography.sm)
+
+                    HStack(spacing: Spacing.space2) {
+                        TextInput("Add pattern...", text: $excludePatterns)
                             .onSubmit {
                                 addPattern()
                             }
-                        
+
                         if !excludePatterns.isEmpty {
-                            Button {
+                            ActionButton("Add", style: .ghost) {
                                 addPattern()
-                            } label: {
-                                Text("[add]")
-                                    .font(DevysTypography.xs)
-                                    .foregroundStyle(theme.visibleAccent)
                             }
-                            .buttonStyle(.plain)
+                            .controlSize(.small)
                         }
                     }
-                    .padding(8)
-                    .background(theme.elevated)
-                    .cornerRadius(DevysSpacing.radiusSm)
-                    
-                    Button {
+
+                    Button("Reset to defaults") {
                         resetExcludePatterns()
-                    } label: {
-                        Text("> reset_to_defaults")
-                            .font(DevysTypography.xs)
-                            .foregroundStyle(theme.textTertiary)
                     }
                     .buttonStyle(.plain)
+                    .foregroundStyle(theme.error)
+                    .font(Typography.caption)
                 }
             }
         }
@@ -471,16 +423,16 @@ struct ShortcutSettingsSection: View {
     }
 
     var body: some View {
-        SettingsSection(title: "SHORTCUTS") {
-            VStack(alignment: .leading, spacing: 16) {
+        SettingsSection(title: "Shortcuts") {
+            VStack(alignment: .leading, spacing: Spacing.space4) {
                 Text("Editable bindings for the workspace shell command plane.")
-                    .font(DevysTypography.xs)
+                    .font(Typography.caption)
                     .foregroundStyle(theme.textSecondary)
 
                 if conflicts.hasConflicts {
                     Text("Resolve duplicate or reserved bindings before relying on these shortcuts.")
-                        .font(DevysTypography.xs)
-                        .foregroundStyle(.red)
+                        .font(Typography.caption)
+                        .foregroundStyle(theme.error)
                 }
 
                 ForEach(WorkspaceShellShortcutAction.allCases, id: \.self) { action in
@@ -500,7 +452,9 @@ struct ShortcutSettingsSection: View {
                 Button("Restore All Defaults") {
                     restoreAllShortcutDefaults()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.plain)
+                .font(Typography.label)
+                .foregroundStyle(theme.textSecondary)
             }
         }
         .sheet(item: $editingAction) { action in
@@ -541,40 +495,33 @@ private struct ShortcutBindingRow: View {
     let onRestoreDefault: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(action.title.lowercased())
-                        .font(DevysTypography.label)
+        VStack(alignment: .leading, spacing: Spacing.space2) {
+            HStack(alignment: .top, spacing: Spacing.space4) {
+                VStack(alignment: .leading, spacing: Spacing.space1) {
+                    Text(action.title)
+                        .font(Typography.body)
                         .foregroundStyle(theme.text)
 
                     Text(action.description)
-                        .font(DevysTypography.xs)
+                        .font(Typography.caption)
                         .foregroundStyle(theme.textSecondary)
                 }
 
                 Spacer()
 
-                Text(binding.displayString)
-                    .font(DevysTypography.sm)
-                    .foregroundStyle(theme.visibleAccent)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(theme.elevated)
-                    .cornerRadius(DevysSpacing.radiusSm)
+                ShortcutBadge(binding.displayString)
 
-                Button("Edit", action: onEdit)
-                    .buttonStyle(.bordered)
+                ActionButton("Edit", style: .ghost, action: onEdit)
+                    .controlSize(.small)
 
-                Button("Default", action: onRestoreDefault)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(theme.textTertiary)
+                ActionButton("Default", style: .ghost, action: onRestoreDefault)
+                    .controlSize(.small)
             }
 
             ForEach(conflictMessages, id: \.self) { message in
                 Text(message)
-                    .font(DevysTypography.xs)
-                    .foregroundStyle(.red)
+                    .font(Typography.caption)
+                    .foregroundStyle(theme.error)
             }
         }
     }

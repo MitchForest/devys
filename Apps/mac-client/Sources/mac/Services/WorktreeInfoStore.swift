@@ -1,6 +1,7 @@
 // WorktreeInfoStore.swift
 // Devys - Worktree info aggregation for sidebar.
 
+import AppFeatures
 import Foundation
 import Observation
 import Workspace

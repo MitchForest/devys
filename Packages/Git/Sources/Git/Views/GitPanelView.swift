@@ -181,19 +181,3 @@ public struct GitPanelView: View {
         .padding()
     }
 }
-
-// MARK: - Convenience Initializer
-
-public extension GitPanelView {
-    /// Create a panel view for a workspace.
-    static func forWorkspace(
-        id: UUID,
-        projectFolder: URL?
-    ) -> GitPanelView {
-        let store = GitStoreRegistry.shared.store(
-            for: id,
-            projectFolder: projectFolder
-        )
-        return GitPanelView(store: store)
-    }
-}

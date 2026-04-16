@@ -9,4 +9,5 @@ xcodebuild build \
     -project Devys.xcodeproj \
     -scheme mac-client \
     -destination "generic/platform=macOS" \
+    -skipMacroValidation \
     CODE_SIGNING_ALLOWED=NO

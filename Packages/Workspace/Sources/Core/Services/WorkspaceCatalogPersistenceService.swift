@@ -5,12 +5,14 @@
 
 import Foundation
 
-public protocol WorkspaceCatalogPersistenceService {
+public protocol WorkspaceCatalogPersistenceService: Sendable {
     func loadWorkspaces() -> [Workspace]
     func saveWorkspaces(_ workspaces: [Workspace])
 }
 
-public struct UserDefaultsWorkspaceCatalogPersistenceService: WorkspaceCatalogPersistenceService {
+public struct UserDefaultsWorkspaceCatalogPersistenceService:
+    WorkspaceCatalogPersistenceService,
+    @unchecked Sendable {
     private enum Keys {
         static let workspaces = "com.devys.workspaces.catalog"
     }

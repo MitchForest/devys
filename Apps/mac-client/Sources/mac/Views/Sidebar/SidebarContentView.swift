@@ -36,11 +36,11 @@ struct SidebarContentView: View {
 
             if showsTrailingBorder {
                 Rectangle()
-                    .fill(theme.borderSubtle)
+                    .fill(theme.border)
                     .frame(width: 1)
             }
         }
-        .background(theme.surface)
+        .background(theme.card)
     }
 
     @ViewBuilder

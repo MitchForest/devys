@@ -1,33 +1,18 @@
 import SwiftUI
+import UI
 
-/// Preview shown during tab drag operations
+/// Preview shown during tab drag operations.
 struct TabDragPreview: View {
-    @Environment(\.splitColors) private var colors
-    
     let tab: TabItem
+    let layoutMetrics: TabBarLayoutMetrics
 
     var body: some View {
-        HStack(spacing: TabBarMetrics.contentSpacing) {
-            if let iconName = tab.icon {
-                Image(systemName: iconName)
-                    .font(.system(size: TabBarMetrics.iconSize))
-            }
-
-            Text(tab.title)
-                .font(.system(size: TabBarMetrics.titleFontSize))
-                .lineLimit(1)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: TabBarMetrics.tabCornerRadius, style: .continuous)
-                .fill(colors.activeTabBackground)
-                .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
+        DragPreview(
+            title: tab.title,
+            icon: tab.icon,
+            minWidth: layoutMetrics.tabMinWidth,
+            maxWidth: layoutMetrics.tabMaxWidth,
+            height: layoutMetrics.tabHeight
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: TabBarMetrics.tabCornerRadius, style: .continuous)
-                .stroke(colors.accent, lineWidth: 2)
-        )
-        .opacity(0.9)
     }
 }

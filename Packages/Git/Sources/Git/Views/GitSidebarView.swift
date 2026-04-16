@@ -350,12 +350,12 @@ private struct FileRowView: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(theme.elevated)
+            .background(theme.overlay)
             .overlay {
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
                     .strokeBorder(theme.border, lineWidth: 1)
             }
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
         }
         .contextMenu {
             contextMenuItems

@@ -21,12 +21,25 @@ struct GitRepositoryMetadataSnapshot: Equatable, Sendable {
         let exists: Bool
         let size: UInt64?
         let modificationDate: Date?
+
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            lhs.exists == rhs.exists &&
+                lhs.size == rhs.size &&
+                lhs.modificationDate == rhs.modificationDate
+        }
     }
 
     let headContents: String?
     let currentReferenceContents: String?
     let indexState: FileState
     let packedRefsState: FileState
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.headContents == rhs.headContents &&
+            lhs.currentReferenceContents == rhs.currentReferenceContents &&
+            lhs.indexState == rhs.indexState &&
+            lhs.packedRefsState == rhs.packedRefsState
+    }
 }
 
 enum GitRepositoryReferenceResolver {
@@ -184,21 +197,24 @@ private extension DefaultGitRepositoryMetadataWatcher {
         }
 
         if let source = makeFileWatcher(url: gitDirectoryURL.appendingPathComponent("index"), handler: { [weak self] in
-            self?.emit(.indexChanged)
+            self?.handleIndexChanged()
         }) {
             watchSources[.index] = source
         }
 
         if let currentReferenceURL = GitRepositoryReferenceResolver.resolveCurrentReferenceURL(for: repositoryURL),
            let source = makeFileWatcher(url: currentReferenceURL, handler: { [weak self] in
-               self?.emit(.repositoryStateChanged)
+               self?.handleRepositoryStateChanged()
            }) {
             watchSources[.currentReference] = source
         }
 
-        if let source = makeFileWatcher(url: gitDirectoryURL.appendingPathComponent("packed-refs"), handler: { [weak self] in
-            self?.emit(.repositoryStateChanged)
-        }) {
+        if let source = makeFileWatcher(
+            url: gitDirectoryURL.appendingPathComponent("packed-refs"),
+            handler: { [weak self] in
+                self?.handleRepositoryStateChanged()
+            }
+        ) {
             watchSources[.packedRefs] = source
         }
     }
@@ -218,6 +234,16 @@ private extension DefaultGitRepositoryMetadataWatcher {
     func handleHeadChanged() {
         rebuildWatchSources()
         emit(.headChanged)
+    }
+
+    func handleIndexChanged() {
+        rebuildWatchSources()
+        emit(.indexChanged)
+    }
+
+    func handleRepositoryStateChanged() {
+        rebuildWatchSources()
+        emit(.repositoryStateChanged)
     }
 
     func makeFileWatcher(url: URL, handler: @escaping () -> Void) -> DispatchSourceFileSystemObject? {

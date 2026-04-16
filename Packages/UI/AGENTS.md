@@ -1,395 +1,196 @@
-# DevysUI Package
+# Devys UI Package
 
 ## Overview
 
-DevysUI is the shared design system and UI component library for the Devys application - an artificial intelligence development environment. The package provides a cohesive, terminal-inspired monochrome aesthetic with configurable accent colors, supporting both light and dark modes.
+DevysUI is the shared design system and UI component library for the Devys IDE. It provides a warm, quiet, Dia-browser-inspired aesthetic with layered surfaces, one consistent corner radius, and monochrome warmth with optional accent tinting.
 
-**Version:** 1.0.0
 **Swift Tools Version:** 6.0
 **Minimum Platform:** macOS 14
 **Language Mode:** Swift 6 with Strict Concurrency enabled
 
-## Purpose
+## Design Philosophy
 
-DevysUI serves as the single source of truth for:
-- Design tokens (colors, typography, spacing, animations)
-- Reusable SwiftUI components
-- Terminal-themed visual effects
-- Consistent styling across the Devys ecosystem
+**Quiet confidence.** One radius everywhere. Three surface levels. Monochrome default with optional theme color. Everything consistent. No terminal-hacker aesthetic — warm, professional, native macOS.
+
+Canonical design spec: `.docs/reference/ui-ux.md`
+Canonical ADR: `.docs/adrs/0003-ui-rulebook.md`
 
 ## Architecture
 
 ### Package Structure
 
 ```
-DevysUI/
+UI/
 ├── Package.swift
-├── Sources/DevysUI/
-│   ├── DevysUI.swift                    # Main entry point, type aliases
+├── Sources/UI/
 │   ├── Models/
 │   │   └── DesignSystem/
-│   │       ├── DevysColors.swift        # Color palette and theming
-│   │       ├── DevysTypography.swift    # Font definitions
-│   │       ├── DevysSpacing.swift       # Spacing tokens and layout constants
-│   │       └── DevysAnimation.swift     # Animation presets
+│   │       ├── Colors.swift          # 3 surfaces, 3 text, 2 borders, 10 accents, semantic status
+│   │       ├── Typography.swift      # 7 UI + 4 code + 4 chat sizes
+│   │       ├── Spacing.swift         # 4px grid, 3 radii (micro/radius/full), layout constants
+│   │       ├── Animations.swift      # 1 spring + 1 micro timing + status animations
+│   │       ├── Shadows.swift         # 3 shadow presets (sm/md/lg)
+│   │       ├── Density.swift         # comfortable/compact modes
+│   │       ├── ChatTokens.swift      # Chat-specific geometry (bubbles, composer)
+│   │       ├── AgentColor.swift      # 9-color agent identity palette
+│   │       ├── Elevation.swift       # Surface recipes (.base/.card/.popover/.overlay)
+│   │       └── DevysShape.swift      # Continuous-curvature shape primitive
 │   └── Views/
 │       └── Components/
-│           ├── Common/
-│           │   ├── DevysButton.swift    # Terminal-style button
-│           │   ├── DevysIcon.swift      # Styled icon wrapper
-│           │   └── StatusIndicator.swift # Status dot with animations
-│           └── Terminal/
-│               ├── ASCIILogo.swift      # ASCII art logo variants
-│               └── TerminalEffects.swift # Cursor, typewriter, glow effects
-├── Tests/DevysUITests/
-│   └── ColorsTests.swift                # Unit tests for design system
-└── _deprecated/                         # Legacy Metal-based components
+│           ├── Common/               # 39 shared components
+│           └── Gallery/              # Design system gallery (debug)
 ```
-
-### Design Philosophy
-
-1. **Terminal-First Aesthetic**: All text uses monospace fonts. The interface feels like a modern terminal/IDE.
-2. **Monochrome with Configurable Accent**: Pure blacks and whites create depth through contrast, with a single accent color for emphasis.
-3. **Adaptive Theming**: Full support for light/dark modes via the `DevysTheme` system.
-4. **Swift 6 Ready**: Built with strict concurrency, all public types are `Sendable`.
-
-## Dependencies
-
-This package has **no external dependencies**. It only uses Apple frameworks:
-- `SwiftUI` - Primary UI framework
-- `AppKit` - macOS-specific functionality (typography)
 
 ## Design System
 
-### Colors (`DevysColors`)
+### The Three Rules
 
-The color system provides a complete terminal-inspired palette.
+1. **One radius (12pt).** Everything uses `Spacing.radius` with `.continuous` curvature. Micro (4pt) for tiny elements. Full (9999pt) for circles. Nothing else.
+2. **Three surfaces.** `base` (window/sidebar/rail/gaps), `card` (split panes), `overlay` (modals/popovers). Applied via `.elevation()` modifier.
+3. **Monochrome default.** Graphite accent = no color. 10 theme colors available for subtle tinting.
 
-#### Background Levels (Dark Mode)
+### Colors (`Colors` / `Theme`)
+
+Three surface levels per mode:
+
 ```swift
-DevysColors.darkBg0  // #000000 - True black, deepest background
-DevysColors.darkBg1  // #0A0A0A - Editor background
-DevysColors.darkBg2  // #121212 - Surface (sidebars, panels)
-DevysColors.darkBg3  // #1A1A1A - Elevated surfaces
-DevysColors.darkBg4  // #242424 - Hover states
-DevysColors.darkBg5  // #2E2E2E - Active/selected states
+// Dark                    // Light
+base:    #121110           base:    #F5F3F0
+card:    #1C1B19           card:    #FFFFFF
+overlay: #252321           overlay: #FFFFFF
 ```
 
-#### Background Levels (Light Mode)
+Three text levels: `text`, `textSecondary`, `textTertiary`
+Two borders: `border` (standard), `borderFocus` (accent at 50%)
+
+10 accent colors: Graphite (default), Blue, Teal, Green, Lime, Yellow, Orange, Red, Pink, Violet
+
 ```swift
-DevysColors.lightBg0  // #FFFFFF - Pure white
-DevysColors.lightBg1  // #FAFAFA - Off-white
-DevysColors.lightBg2  // #F5F5F5 - Light gray surface
-DevysColors.lightBg3  // #EEEEEE - Elevated
-DevysColors.lightBg4  // #E5E5E5 - Hover
-DevysColors.lightBg5  // #DDDDDD - Active
+@Environment(\.theme) private var theme
+
+theme.base          // window background
+theme.card          // split pane content
+theme.overlay       // floating surfaces
+theme.text          // primary text
+theme.textSecondary // secondary text
+theme.border        // standard border
+theme.accent        // theme accent color
+theme.primaryFill   // button fill (accent or text if monochrome)
 ```
 
-#### Semantic Colors
+### Spacing (`Spacing`)
+
+4px base unit. Scale: 0, 4, 8, 12, 16, 20, 24, 32, 48.
+Semantic aliases: `tight` (4), `normal` (8), `comfortable` (12), `relaxed` (16), `spacious` (24).
+
+Corner radii:
 ```swift
-DevysColors.success  // #34C759 - Success states
-DevysColors.warning  // #FF9500 - Caution states
-DevysColors.error    // #FF3B30 - Error states
+Spacing.radius      // 12pt — the one radius for everything
+Spacing.radiusMicro // 4pt — tiny inline elements only
+Spacing.radiusFull  // 9999pt — circles only
+Spacing.innerRadius(padding: 8) // computed nesting: 12 - 8 = 4pt
 ```
 
-#### Accent Colors (`AccentColor` enum)
+Pane gap: `Spacing.paneGap` (6pt) — visible gap between split-pane cards.
+
+### Typography (`Typography`)
+
+SF Pro for UI chrome, SF Mono for code:
+
 ```swift
-AccentColor.white     // Default - pure monochrome terminal
-AccentColor.coral     // #FF6B6B - Warm, approachable
-AccentColor.amber     // #FFB347 - Classic terminal amber
-AccentColor.cyan      // #00D4FF - Retro-futuristic
-AccentColor.mint      // #7FE5A0 - Matrix-inspired
-AccentColor.lavender  // #B19CD9 - Soft, modern
+Typography.display  // 24pt bold
+Typography.title    // 18pt semibold
+Typography.heading  // 14pt semibold
+Typography.body     // 13pt regular
+Typography.label    // 12pt medium
+Typography.caption  // 11pt regular
+Typography.micro    // 10pt medium
+
+Typography.Code.base   // 13pt mono
+Typography.Code.sm     // 12pt mono
+Typography.Code.lg     // 14pt mono
+Typography.Code.gutter // 11pt mono
+
+Typography.Chat.body    // 15pt
+Typography.Chat.heading // 17pt semibold
+Typography.Chat.caption // 12pt
+Typography.Chat.code    // 14pt mono
 ```
 
-Each accent color provides:
-- `.color` - The full color
-- `.muted` - 12% opacity for backgrounds
-- `.hover` - 85% opacity for hover states
-
-#### Adaptive Theme (`DevysTheme`)
-
-Use `DevysTheme` for automatic light/dark mode support:
+### Animations (`Animations`)
 
 ```swift
-struct MyView: View {
-    @Environment(\.devysTheme) private var theme
-
-    var body: some View {
-        Text("Hello")
-            .foregroundStyle(theme.text)
-            .background(theme.surface)
-    }
-}
+Animations.spring  // structural transitions (sidebar, modal, palette, splits)
+Animations.micro   // all micro-interactions (hover, press, focus) — 120ms ease-out
+Animations.heartbeat / .glow / .shake / .sweep  // status animations
 ```
 
-Theme Properties:
-- **Backgrounds:** `base`, `content`, `surface`, `elevated`, `hover`, `active`
-- **Borders:** `borderSubtle`, `border`, `borderStrong`
-- **Text:** `text`, `textSecondary`, `textTertiary`, `textDisabled`
-- **Accent:** `accent`, `accentHover`, `accentMuted`
+### Elevation (`Elevation`)
 
-#### Color Extension
+Surface recipes applied as a single modifier:
+
 ```swift
-// Initialize color from hex string
-Color(hex: "#FF6B6B")
-Color(hex: "AABBCC")      // Without hash
-Color(hex: "#FFAABBCC")   // With alpha
+.elevation(.base)    // flat, no border/shadow
+.elevation(.card)    // card bg + 1pt border + sm shadow + 12pt radius
+.elevation(.popover) // overlay bg + 1pt border + md shadow + 12pt radius
+.elevation(.overlay) // overlay bg + 1pt border + lg shadow + 12pt radius
 ```
 
-### Typography (`DevysTypography`)
+### DevysShape
 
-**All fonts are monospace** for terminal aesthetic consistency.
+Continuous-curvature shape primitive:
 
-#### Size Scale
 ```swift
-DevysTypography.micro   // 10px - Timestamps, metadata
-DevysTypography.xs      // 11px - Labels, hints
-DevysTypography.sm      // 12px - Secondary text
-DevysTypography.base    // 13px - Body text, UI elements
-DevysTypography.md      // 14px - Emphasized text
-DevysTypography.lg      // 16px - Section headers (medium weight)
-DevysTypography.xl      // 20px - Page titles (semibold)
-DevysTypography.xxl     // 24px - Hero (semibold)
-DevysTypography.display // 32px - ASCII art, logos (bold)
+DevysShape()                     // 12pt standard
+DevysShape(.micro)               // 4pt
+DevysShape(.full)                // circle
+DevysShape(innerPadding: 8)      // computed: 12 - 8 = 4pt
+
+.devysCornerRadius()             // clip to 12pt continuous
+.devysInnerCornerRadius(padding: 8)  // clip to computed inner
 ```
 
-#### Semantic Fonts
-```swift
-DevysTypography.body    // Standard readable (13px)
-DevysTypography.label   // Buttons (13px medium)
-DevysTypography.heading // Section headers (11px semibold)
-DevysTypography.title   // Page titles (18px semibold)
-DevysTypography.caption // Smallest readable (11px)
-DevysTypography.mono    // Same as base (all mono!)
-```
+## Components (39)
 
-#### Text Style Helpers
-```swift
-Text("HEADER").terminalHeader()   // ALL_CAPS with letter spacing
-Text("command").terminalCommand() // Base mono font
-Text("hint").terminalDim()        // 60% opacity
-```
+All in `Views/Components/Common/`:
 
-### Spacing (`DevysSpacing`)
+**Atoms:** ActionButton, Icon, TextField (TextInput + SearchInput), Toggle, Chip, Divider, ShortcutBadge, StatusDot, GitStatusIndicator, AgentIdentityStripe
 
-Based on a **4px base unit** for precise, consistent spacing.
+**Containers:** ListRow, SectionHeader, EmptyState, Panel (+ SidebarSection), Popover, Sheet, SegmentedControl, Tooltip
 
-#### Scale
-```swift
-DevysSpacing.space0  // 0px
-DevysSpacing.space1  // 4px - Tight gaps (icon + label)
-DevysSpacing.space2  // 8px - Default element gap
-DevysSpacing.space3  // 12px - Related groups
-DevysSpacing.space4  // 16px - Section padding
-DevysSpacing.space5  // 20px - Card padding
-DevysSpacing.space6  // 24px - Large section gaps
-DevysSpacing.space8  // 32px - Page margins
-DevysSpacing.space10 // 40px - Major section breaks
-DevysSpacing.space12 // 48px - Canvas gutters
-DevysSpacing.space16 // 64px - Hero spacing
-```
+**Feature:** TabPill, FileRow, FolderRow, ConnectorLine, AgentRow, DiffRow, RepoItem, WorktreeItem, NotificationToast, Breadcrumb, FABMenu, DropZoneOverlay, InsertionIndicator, DragPreview, InlineCommit, SavePromptPopover, Toolbar
 
-#### Semantic Aliases
-```swift
-DevysSpacing.tight       // 4px
-DevysSpacing.normal      // 8px
-DevysSpacing.comfortable // 12px
-DevysSpacing.relaxed     // 16px
-DevysSpacing.spacious    // 24px
-```
+**Composed:** CommandPalette, CommandPaletteRow, StatusCapsule, BranchPicker
 
-#### Layout Constants
-```swift
-DevysSpacing.sidebarCollapsed  // 48px
-DevysSpacing.sidebarExpanded   // 240px
-DevysSpacing.tabBarHeight      // 36px
-DevysSpacing.toolbarHeight     // 44px
-DevysSpacing.statusBarHeight   // 24px
-DevysSpacing.minPaneWidth      // 300px
-DevysSpacing.minPaneHeight     // 200px
-```
-
-#### Corner Radii
-```swift
-DevysSpacing.radiusSm  // 4px
-DevysSpacing.radiusMd  // 6px
-DevysSpacing.radius    // 8px (default)
-DevysSpacing.radiusLg  // 12px
-DevysSpacing.radiusXl  // 16px
-```
-
-#### Icon Sizes
-```swift
-DevysSpacing.iconSm  // 12px
-DevysSpacing.iconMd  // 16px
-DevysSpacing.iconLg  // 20px
-DevysSpacing.iconXl  // 24px
-```
-
-#### EdgeInsets Helpers
-```swift
-EdgeInsets.all(16)
-EdgeInsets.horizontal(8)
-EdgeInsets.vertical(12)
-EdgeInsets.symmetric(horizontal: 16, vertical: 8)
-```
-
-### Animations (`DevysAnimation`)
-
-Consistent, subtle animations that feel responsive but not distracting.
-
-#### Duration Presets
-```swift
-DevysAnimation.fast         // 100ms - Micro-interactions
-DevysAnimation.default      // 200ms - Standard transitions
-DevysAnimation.slow         // 300ms - Larger movements
-DevysAnimation.spring       // Bouncy feel for emphasis
-DevysAnimation.smoothSpring // Subtle spring
-```
-
-#### Named Animations
-```swift
-DevysAnimation.hover   // Fast - hover changes
-DevysAnimation.focus   // 150ms - focus transitions
-DevysAnimation.sidebar // 250ms ease-in-out
-DevysAnimation.resize  // 200ms - panel resize
-DevysAnimation.modal   // Spring - modal appear/disappear
-DevysAnimation.tab     // 150ms - tab switch
-```
-
-#### Transition Helpers
-Internal-only helpers; use standard SwiftUI transitions outside DevysUI.
-
-## UI Components
-
-### Public Components (exported)
-
-#### DevysLogoBlock
-```swift
-DevysLogoBlock(showTypewriter: true)  // Logo + tagline
-```
-
-#### TerminalCommandButton
-```swift
-TerminalCommandButton("open folder", icon: "folder", isAccent: true) {
-    // action
-}
-```
-
-#### KeyboardShortcutBadge
-```swift
-KeyboardShortcutBadge("CMD+S")  // Displays: [CMD+S]
-```
-
-#### TerminalDivider
-```swift
-TerminalDivider(useDashes: false)  // Solid line
-TerminalDivider(useDashes: true)   // ────── dashed
-```
-
-### Internal Components (not exported)
-
-- DevysButton, DevysIcon, StatusIndicator
-- ASCIILogo, AnimatedASCIILogo
-- BlinkingCursor, TypewriterText, TerminalGlow, ScanlineOverlay, TerminalPrompt
-
-## Public API Surface
-
-### Main Entry Point
-```swift
-public enum DevysUI {
-    public static let version: String
-}
-
-// Type aliases for convenience
-public typealias Colors = DevysColors
-public typealias Typography = DevysTypography
-public typealias Spacing = DevysSpacing
-public typealias Anim = DevysAnimation
-```
-
-### Environment
-```swift
-@Environment(\.devysTheme) var theme: DevysTheme
-```
-
-### Usage Example
+## Usage
 
 ```swift
-import DevysUI
+import UI
 
 struct MyView: View {
-    @Environment(\.devysTheme) private var theme
+    @Environment(\.theme) private var theme
 
     var body: some View {
         VStack(spacing: Spacing.normal) {
-            DevysLogoBlock(showTypewriter: true)
-
             Text("Welcome")
                 .font(Typography.title)
                 .foregroundStyle(theme.text)
 
-            TerminalCommandButton("get started", icon: "play") {}
-            KeyboardShortcutBadge("CMD+ENTER")
-            TerminalDivider(useDashes: true)
+            ActionButton("Get Started", style: .primary) { }
+
+            ShortcutBadge("⌘K")
         }
         .padding(Spacing.relaxed)
-        .background(theme.surface)
+        .elevation(.card)
     }
 }
 ```
 
-## Testing
+## Rules
 
-Tests use Swift Testing framework (`@Test`, `@Suite`).
-
-```swift
-import Testing
-@testable import DevysUI
-
-@Suite("DevysColors Tests")
-struct ColorsTests {
-    @Test("Color from hex creates valid color")
-    func colorFromHex() {
-        let color = Color(hex: "#FF0000")
-        // ...
-    }
-}
-```
-
-Run tests:
-```bash
-swift test
-```
-
-## Deprecated Code
-
-The `_deprecated/` folder contains legacy Metal-based ASCII rendering components that have been replaced with simpler SwiftUI implementations:
-
-- Metal shaders for ASCII art effects
-- Complex render pipelines
-- Welcome image processing with Metal
-
-These are preserved for reference but are not part of the active codebase.
-
-## Conventions
-
-### Naming
-- Design tokens use `Devys` prefix (e.g., `DevysColors`, `DevysSpacing`)
-- Exported components use stable names (e.g., `DevysLogoBlock`, `TerminalCommandButton`)
-
-### File Organization
-- Design system files in `Models/DesignSystem/`
-- UI components in `Views/Components/`
-- Components grouped by domain (`Common/`, `Terminal/`)
-
-### SwiftUI Patterns
-- Use `@Environment(\.devysTheme)` for adaptive theming
-- All components include `#Preview` macros
-- Button styles use `.buttonStyle(.plain)` with custom hover handling
-
-### Concurrency
-- All public enums and structs are `Sendable`
-- No actors needed (all state is UI-bound)
-- Strict concurrency checking enabled in Package.swift
+- Never hardcode colors, spacing, radii, or fonts in feature code
+- All `RoundedRectangle` must use `style: .continuous`
+- Use `.elevation()` instead of manual bg + border + shadow
+- Two button variants only: `.primary` and `.ghost`
+- Monospace is for code contexts only
+- All public types are `Sendable`

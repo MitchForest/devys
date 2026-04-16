@@ -11,6 +11,10 @@ import Git
 
 @MainActor
 @Observable
+/// Temporary composition root for live app services and engine-facing factories.
+///
+/// `AppContainer` is intentionally not the architectural owner of app-domain
+/// behavior. Reducer-owned shell and feature logic lives in `Packages/AppFeatures`.
 final class AppContainer {
     let appSettings: AppSettings
     let recentRepositoriesService: RecentRepositoriesService
@@ -20,6 +24,8 @@ final class AppContainer {
     let workspaceCreationService: WorkspaceCreationService
     let agentAdapterLauncher: ACPAdapterLauncher
     let agentComposerSpeechService: any AgentComposerSpeechService
+    let workspaceOperationalController: WorkspaceOperationalController
+    let editorSessionRegistry: EditorSessionRegistry
 
     private let fileTreeService: FileTreeService
     private let fileWatchServiceFactory: (URL) -> FileWatchService
@@ -36,6 +42,7 @@ final class AppContainer {
         workspaceCreationService: WorkspaceCreationService = WorkspaceCreationService(),
         agentAdapterLauncher: ACPAdapterLauncher = ACPAdapterLauncher(),
         agentComposerSpeechService: any AgentComposerSpeechService = DefaultAgentComposerSpeechService(),
+        editorSessionRegistry: EditorSessionRegistry = EditorSessionRegistry(),
         fileTreeService: FileTreeService = DefaultFileTreeService(),
         sharedFileWatchRegistry: SharedFileWatchRegistry = SharedFileWatchRegistry(),
         fileWatchServiceFactory: ((URL) -> FileWatchService)? = nil,
@@ -49,6 +56,8 @@ final class AppContainer {
         self.workspaceCreationService = workspaceCreationService
         self.agentAdapterLauncher = agentAdapterLauncher
         self.agentComposerSpeechService = agentComposerSpeechService
+        self.workspaceOperationalController = WorkspaceOperationalController()
+        self.editorSessionRegistry = editorSessionRegistry
         self.fileTreeService = fileTreeService
         self.fileWatchServiceFactory = fileWatchServiceFactory ?? {
             sharedFileWatchRegistry.makeService(rootURL: $0)
