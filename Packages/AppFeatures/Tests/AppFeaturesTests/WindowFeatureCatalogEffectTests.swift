@@ -39,6 +39,16 @@ struct WindowFeatureCatalogEffectTests {
             $0.selectedRepositoryID = repository.id
             $0.selectedWorkspaceID = refreshedWorktree.id
         }
+        await store.receive(.workflowWorkspaceLoadRequested(refreshedWorktree.id)) {
+            $0.workflowWorkspacesByID[refreshedWorktree.id] = WindowFeature.WorkflowWorkspaceState(
+                isLoading: true
+            )
+        }
+        await store.receive(
+            .workflowWorkspaceLoaded(refreshedWorktree.id, WorkflowWorkspaceSnapshot())
+        ) {
+            $0.workflowWorkspacesByID[refreshedWorktree.id] = WindowFeature.WorkflowWorkspaceState()
+        }
     }
 
     @Test("Selecting a workspace updates last-focused ordering and persists workspace states")
@@ -86,6 +96,16 @@ struct WindowFeatureCatalogEffectTests {
             $0.workspaceShells = [
                 repository.id: WindowFeature.WorkspaceShell(activeSidebar: .files)
             ]
+        }
+        await store.receive(.workflowWorkspaceLoadRequested(secondWorktree.id)) {
+            $0.workflowWorkspacesByID[secondWorktree.id] = WindowFeature.WorkflowWorkspaceState(
+                isLoading: true
+            )
+        }
+        await store.receive(
+            .workflowWorkspaceLoaded(secondWorktree.id, WorkflowWorkspaceSnapshot())
+        ) {
+            $0.workflowWorkspacesByID[secondWorktree.id] = WindowFeature.WorkflowWorkspaceState()
         }
 
         #expect(recorder.savedWorkspaceStates.count == 1)

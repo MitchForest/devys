@@ -4,9 +4,9 @@ Updated: 2026-04-15
 
 ## Purpose
 
-This document specifies the complete Devys visual design system, modeled on the Dia browser's design language: quiet confidence, layered surfaces, one consistent radius, monochrome warmth with optional accent tinting.
+This document specifies the canonical Devys visual design system, modeled on the Dia browser's design language: quiet confidence, layered surfaces, one consistent radius, monochrome warmth with optional accent tinting.
 
-It supersedes `ui-ux.md` (v1) and pairs with:
+It pairs with:
 
 - `architecture.md` for architecture and ownership rules
 - `../plan/implementation-plan.md` for migration status
@@ -94,7 +94,7 @@ Three levels. Not four. If you need "disabled" text, use `textTertiary` at 60% o
 | `border` | `#2A2826` | `#E5E2DD` | Card edges, input borders, dividers — one border color |
 | `borderFocus` | accent color at 50% | accent color at 50% | Focus rings on inputs, active card edge highlight |
 
-Two border colors. Not three. The subtle/strong distinction from v1 created ambiguity. One default border, one focus border.
+Two border colors. Not three. The old subtle/strong distinction created ambiguity. One default border, one focus border.
 
 ### 2.4 Accent / Theme Colors
 
@@ -282,7 +282,6 @@ This is the gap that makes the layered surface model work. It's always `base` co
 | `minPaneWidth` | 200pt |
 | `minPaneHeight` | 200pt |
 | `tabBarHeight` | 36pt |
-| `capsuleMinWidth` | 140pt |
 
 ---
 
@@ -595,7 +594,7 @@ A (+) button at the right end of the tab strip opens the creation menu.
 
 ### 10.3 Tab Drag & Drop
 
-Same state machine as v1. Key visual changes:
+The tab drag-and-drop interaction keeps the existing insertion and drop-zone behavior. Key visual changes:
 - Lifted tab uses `shadow.md` (not lg)
 - All corners remain `radius` (12pt)
 - Drop zone overlays use `accent.subtle` (6% opacity)
@@ -641,7 +640,7 @@ Border: 1pt `border` on right edge.
 
 Background: `base` surface. Not elevated. The sidebar and the gaps between pane cards are the same visual level.
 
-Two-tab segmented control at top: **Files & Diffs** | **Agents**
+Two-tab segmented control at top: **Files** | **Agents**
 
 Segmented control: `radius` corners on the track, sliding active indicator with spring animation. Active segment: `card` background (elevated look). Inactive: transparent.
 
@@ -653,7 +652,7 @@ File tree with:
 - Disclosure chevrons: 9pt, `textTertiary`
 - Folder names: `body` medium weight
 - File names: `body` regular weight
-- Git status indicators: colored symbols (same as v1)
+- Git status indicators: colored symbols aligned with the current shared `GitStatusIndicator` treatment
 
 Diffs section below with collapsible sections for Staged/Unstaged.
 
@@ -663,7 +662,8 @@ Inline commit area at bottom when staged files exist.
 
 Running agents with identity dots + status chips.
 Recent agents dimmed.
-Workflows section stubbed with empty state.
+Workflow cards live in the Agents tab alongside agent sessions.
+They surface active runs first, recent runs second, and open definition/run tabs in the existing split/tab shell.
 
 ---
 
@@ -673,8 +673,9 @@ Floating pill at bottom-center:
 - `radiusFull` (pill shape)
 - `.elevation(.popover)` treatment
 - 80% opacity at rest, 100% on hover
-- Branch name + ahead/behind + status
-- Expands on hover to show actions
+- Content-sized width (no minWidth, no stretching)
+- Branch name + ahead/behind + status + agent dots
+- Expands on hover to reveal git actions: fetch, pull, commit, push
 - Auto-hides after 3s inactivity
 
 ---
@@ -702,7 +703,7 @@ Same design, same tokens, scaled proportionally.
 
 ### 15.1 Keyboard Navigation
 
-Same as v1 — every surface fully keyboard-navigable.
+Every surface is fully keyboard-navigable.
 
 ### 15.2 Reduced Motion
 
@@ -721,56 +722,44 @@ When system high-contrast mode is active:
 
 ---
 
-## Part 16: What We Killed From v1
+## Part 16: What We Removed From The Legacy UI
 
-| v1 Feature | Status | Why |
-|-----------|--------|-----|
-| 6-level background scale (bg0–bg5) | → 3 surfaces | Too many similar levels created ambiguity |
-| 6-level radius scale (xs–xl + full) | → 3 values (micro, radius, full) | One radius creates coherence |
-| 4 button variants (primary, secondary, ghost, danger) | → 2 (primary, ghost) | Danger is a color param on primary |
-| Terminal effects (glow, scanline, typewriter, blink) | Deleted | Terminal-hacker aesthetic, conflicts with warm design |
-| ASCII logo with neon glow | Deleted | Replace with clean wordmark |
-| `[CMD+S]` bracket shortcut notation | Deleted | Modern chip style |
-| Chat blue bubble (#0A84FF) | → accent color | Foreign cold spot in warm palette |
-| `ChatTokens` as separate token set | → Merged into main tokens | One token system, not two |
-| 3-level border system (subtle/default/strong) | → 1 border + 1 focus | Simplicity |
-| 4-level shadow system (sm/md/lg/xl) | → 3 (sm/md/lg) | xl was unused in practice |
-| Multiple micro-interaction timings (60/100/150ms) | → 1 (120ms) | Invisible improvement, implementation simplicity |
-| `TerminalCommandButton` component | → `DevysButton` ghost | One button system |
-| `TerminalDivider` component | → `DevysDivider` | One divider |
-| `KeyboardShortcutBadge` bracket style | → `ShortcutBadge` chip style | Modern, consistent |
+| Legacy Pattern | Current Rule | Why |
+|---------------|--------------|-----|
+| 6-level background scale | 3 surfaces (`base`, `card`, `overlay`) | Too many near-identical levels created ambiguity |
+| 6-level radius scale | 3 values (`radiusMicro`, `radius`, `radiusFull`) | One dominant radius creates coherence |
+| 4 button variants | Filled + ghost | Fewer variants make intent clearer |
+| Terminal-aesthetic effects and ASCII visuals | Deleted | They fought the warm layered-surface system |
+| Bracket shortcut notation | Chip-style `ShortcutBadge` | Cleaner and more consistent with the rest of the UI |
+| Separate chat-style color system | Unified design tokens | One design system, not parallel ones |
+| Multi-level border and shadow scales | Minimal default + focus border, `sm/md/lg` shadows | Simpler and easier to apply consistently |
+| Multiple micro-interaction timings | One `Animations.micro` timing | Lower mental overhead and more consistency |
 
 ---
 
-## Part 17: Component Inventory (Simplified)
+## Part 17: Shared UI Inventory
 
-### Tokens (7 files)
+Design-system primitives live in `Packages/UI/Sources/UI/Models/DesignSystem/` and include:
 
-| File | Contents |
-|------|----------|
-| `Colors.swift` | 3 surfaces, 3 text, 2 borders, 10 accents, 4 semantic, agent colors |
-| `Typography.swift` | 7 UI sizes, 4 code sizes, 4 chat sizes |
-| `Spacing.swift` | 9-step scale, 5 aliases, 3 radii, layout constants |
-| `Animations.swift` | 1 spring, 1 micro timing, 5 status animations |
-| `Shadows.swift` | 3 shadow presets |
-| `Density.swift` | 2 modes with scaled values |
-| `Elevation.swift` | **NEW** — 4 elevation recipes (base, card, popover, overlay) |
+- `Colors`, `Typography`, `Spacing`, `Animations`, `Shadows`, `Density`
+- `AgentColor`, `StatusHint`, `ChatTokens`
+- `DevysShape`, `Elevation`
 
-### Components (Trimmed to essentials)
+Shared SwiftUI component files live in `Packages/UI/Sources/UI/Views/Components/Common/`.
 
-**Atoms (13):**
-Button, Icon, TextField, SearchField, Toggle, Chip, Divider, ShortcutBadge, StatusDot, GitStatusIndicator, AgentIdentityStripe, DevysShape, ElevationModifier
+**Atomic components (10):**
+`ActionButton`, `Icon`, `TextField`, `Toggle`, `Chip`, `Divider`, `ShortcutBadge`, `StatusDot`, `GitStatusIndicator`, `AgentIdentityStripe`
 
-**Containers (8):**
-ListRow, SectionHeader, EmptyState, Panel, Popover, Sheet, SegmentedControl, Tooltip
+**Container components (9):**
+`ListRow`, `SectionHeader`, `EmptyState`, `Panel`, `Popover`, `Sheet`, `SegmentedControl`, `Toolbar`, `Tooltip`
 
-**Feature (16):**
-TabPill, TabBar, FileRow, FolderRow, ConnectorLine, AgentRow, DiffRow, RepoItem, WorktreeItem, NotificationToast, Breadcrumb, FABMenu, DropZoneOverlay, InsertionIndicator, DragPreview, InlineCommit
+**Feature components (17):**
+`TabPill`, `FileRow`, `FolderRow`, `ConnectorLine`, `AgentRow`, `DiffRow`, `RepoItem`, `WorktreeItem`, `NotificationToast`, `Breadcrumb`, `FABMenu`, `DropZoneOverlay`, `InsertionIndicator`, `DragPreview`, `InlineCommit`, `SavePromptPopover`, `RailAddButton`
 
-**Composed (4):**
-CommandPalette, CommandPaletteRow, StatusCapsule, BranchPicker
+**Composed surfaces (4):**
+`CommandPalette`, `CommandPaletteRow`, `StatusCapsule`, `BranchPicker`
 
-**Total: 41 components** (down from 52 in v1 by eliminating terminal-aesthetic components and merging duplicates)
+This is the current shared UI surface area. If repeated feature-local visuals appear outside this set, they are design-system debt.
 
 ---
 
@@ -789,12 +778,12 @@ Before any PR is approved, check:
 - [ ] Works in both light and dark mode
 - [ ] Works in both comfortable and compact density
 
-## Appendix B: File-to-Component Migration
+## Appendix B: Legacy-To-Current Notes
 
-Same as v1 Appendix C, with additions:
-
-| Existing | Replaced By |
-|----------|-------------|
-| `TerminalEffects.swift` | Deleted entirely |
-| `ASCIILogo.swift` | Deleted — replaced by clean wordmark or minimal icon |
-| `Packages/UI/CLAUDE.md` | Rewritten to match this spec |
+| Legacy Item | Current Handling |
+|-------------|------------------|
+| `TerminalEffects.swift` | Deleted |
+| `ASCIILogo.swift` | Deleted |
+| legacy terminal command buttons | folded into `ActionButton` and shared button styling |
+| legacy terminal divider variants | folded into `Divider` |
+| package-local UI guidance | lives in `Packages/UI/AGENTS.md` and must match this reference |

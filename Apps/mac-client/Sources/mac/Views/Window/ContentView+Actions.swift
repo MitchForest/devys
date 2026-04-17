@@ -195,12 +195,6 @@ extension ContentView {
         }
     }
 
-    func toggleNavigator() {
-        _ = withAnimation(.easeInOut(duration: 0.25)) {
-            store.send(.toggleNavigatorCollapsed)
-        }
-    }
-
     func openShellForSelectedWorkspace(preferredPaneID: PaneID? = nil) {
         guard let worktree = activeWorktree else { return }
         if let preferredPaneID {

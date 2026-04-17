@@ -1,6 +1,6 @@
 # Devys Docs
 
-Updated: 2026-04-15
+Updated: 2026-04-16
 
 ## Purpose
 
@@ -24,7 +24,7 @@ If a document does not fit one of those roles cleanly, it should be rewritten or
 - `plan/implementation-plan.md`
   - the only active migration and execution plan
   - records what is done, what remains, and the ordered next work
-  - the required starting point for phase handoff work, especially phase 4
+  - the required starting point for migration work and phase-status questions
 
 ## Supporting Context
 

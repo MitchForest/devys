@@ -52,7 +52,7 @@ public struct ActionButton: View {
                         .scaleEffect(0.5)
                         .progressViewStyle(.circular)
                 } else if let icon {
-                    Image(systemName: icon)
+                    DevysIcon(icon, size: 12, weight: .medium)
                     Text(title)
                 } else {
                     Text(title)
@@ -138,6 +138,117 @@ public extension ActionButton {
     }
 }
 
+// MARK: - Icon Button
+
+/// An icon-only square button with ActionButton's style/tone/press semantics.
+///
+/// Use for toolbar actions where an icon carries the label (send, mic, close,
+/// attach). For text buttons or icon + label use `ActionButton`.
+public struct IconButton: View {
+    @Environment(\.theme) private var theme
+    @Environment(\.isEnabled) private var isEnabled
+
+    public enum Size: Sendable {
+        case sm
+        case md
+        case lg
+
+        var side: CGFloat {
+            switch self {
+            case .sm: 24
+            case .md: 30
+            case .lg: 36
+            }
+        }
+
+        var iconSize: CGFloat {
+            switch self {
+            case .sm: 11
+            case .md: 13
+            case .lg: 15
+            }
+        }
+    }
+
+    private let icon: String
+    private let style: ActionButton.Style
+    private let tone: ActionButton.Tone
+    private let size: Size
+    private let accessibilityLabel: String
+    private let action: () -> Void
+
+    @State private var isHovered = false
+    @State private var isPressed = false
+
+    public init(
+        _ icon: String,
+        style: ActionButton.Style = .ghost,
+        tone: ActionButton.Tone = .standard,
+        size: Size = .md,
+        accessibilityLabel: String,
+        action: @escaping () -> Void
+    ) {
+        self.icon = icon
+        self.style = style
+        self.tone = tone
+        self.size = size
+        self.accessibilityLabel = accessibilityLabel
+        self.action = action
+    }
+
+    public var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: size.iconSize, weight: .medium))
+                .frame(width: size.side, height: size.side)
+                .foregroundStyle(foregroundColor)
+                .background(backgroundColor, in: DevysShape())
+                .scaleEffect(isPressed ? 0.94 : 1.0)
+                .opacity(isEnabled ? 1.0 : 0.5)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
+        .onHover { hovering in
+            withAnimation(Animations.micro) { isHovered = hovering }
+        }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    withAnimation(Animations.micro) { isPressed = true }
+                }
+                .onEnded { _ in
+                    withAnimation(Animations.micro) { isPressed = false }
+                }
+        )
+    }
+
+    private var foregroundColor: Color {
+        switch (style, tone) {
+        case (.primary, .standard):
+            theme.primaryFillForeground
+        case (.primary, .destructive):
+            .white
+        case (.ghost, .standard):
+            isHovered ? theme.text : theme.textSecondary
+        case (.ghost, .destructive):
+            theme.error
+        }
+    }
+
+    private var backgroundColor: Color {
+        switch (style, tone) {
+        case (.primary, .standard):
+            isHovered ? theme.primaryFill.opacity(0.88) : theme.primaryFill
+        case (.primary, .destructive):
+            isHovered ? theme.error.opacity(0.88) : theme.error
+        case (.ghost, .standard):
+            isHovered ? theme.hover : .clear
+        case (.ghost, .destructive):
+            isHovered ? theme.errorSubtle : .clear
+        }
+    }
+}
+
 // MARK: - Previews
 
 #Preview("Buttons") {
@@ -146,6 +257,12 @@ public extension ActionButton {
         ActionButton("Cancel", style: .ghost) {}
         ActionButton("Delete", icon: "trash", style: .ghost, tone: .destructive) {}
         ActionButton("Loading", style: .primary, isLoading: true) {}
+
+        HStack(spacing: Spacing.space2) {
+            IconButton("arrow.up", style: .primary, accessibilityLabel: "Send") {}
+            IconButton("mic.fill", style: .ghost, accessibilityLabel: "Record") {}
+            IconButton("xmark", style: .ghost, tone: .destructive, accessibilityLabel: "Close") {}
+        }
     }
     .padding(24)
     .background(Color(hex: "#121110"))

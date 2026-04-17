@@ -78,16 +78,8 @@ public struct TabPill: View {
                 HStack(spacing: Spacing.space1) {
                     // Icon
                     if let icon {
-                        Image(systemName: icon)
-                            .font(Typography.heading.weight(.regular))
+                        DevysIcon(icon, size: 14)
                             .foregroundStyle(iconColor)
-                    }
-
-                    // Agent sparkle icon
-                    if let agentColor {
-                        Image(systemName: "sparkles")
-                            .font(Typography.micro)
-                            .foregroundStyle(agentColor.solid)
                     }
 
                     // Title

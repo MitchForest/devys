@@ -2,7 +2,6 @@ import AppFeatures
 import Dependencies
 import Foundation
 import Git
-import Split
 import Testing
 import Workspace
 @testable import mac_client

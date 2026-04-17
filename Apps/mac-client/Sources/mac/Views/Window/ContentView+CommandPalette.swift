@@ -33,6 +33,8 @@ extension ContentView {
                 workspaceStatesByID: store.workspaceStatesByID,
                 activeWorktree: activeWorktree,
                 agentSessions: hostedAgentSessions,
+                workflowState: visibleWorkspaceID.map { workflowWorkspaceState(for: $0) }
+                    ?? WindowFeature.WorkflowWorkspaceState(),
                 repositorySettingsStore: repositorySettingsStore,
                 operationalState: workspaceOperationalState,
                 appSettings: appSettings,
@@ -78,23 +80,85 @@ extension ContentView {
     }
 
     func performCommandPaletteAction(_ action: WorkspaceCommandPaletteAction) {
+        if handleProjectPaletteAction(action)
+            || handleNavigationPaletteAction(action)
+            || handleAgentPaletteAction(action)
+            || handleWorkflowPaletteAction(action)
+            || handleExecutionPaletteAction(action)
+            || handleAttentionPaletteAction(action) {
+            return
+        }
+    }
+
+    private func handleProjectPaletteAction(
+        _ action: WorkspaceCommandPaletteAction
+    ) -> Bool {
         switch action {
         case .addRepository:
             store.send(.requestOpenRepository)
-        case .selectRepository(let repositoryID):
-            store.send(.requestRepositorySelection(repositoryID))
         case .initializeRepository(let repositoryID):
             store.send(.requestInitializeRepository(repositoryID))
         case .createWorkspace(let repositoryID):
             store.send(.presentWorkspaceCreation(repositoryID: repositoryID, mode: .newBranch))
         case .importWorktrees(let repositoryID):
             store.send(.presentWorkspaceCreation(repositoryID: repositoryID, mode: .importedWorktree))
+        default:
+            return false
+        }
+        return true
+    }
+
+    private func handleNavigationPaletteAction(
+        _ action: WorkspaceCommandPaletteAction
+    ) -> Bool {
+        switch action {
+        case .selectRepository(let repositoryID):
+            store.send(.requestRepositorySelection(repositoryID))
         case .selectWorkspace(let repositoryID, let workspaceID):
             store.send(.requestWorkspaceSelection(repositoryID: repositoryID, workspaceID: workspaceID))
+        case .revealCurrentWorkspaceInNavigator:
+            store.send(.revealCurrentWorkspaceInNavigator)
+        default:
+            return false
+        }
+        return true
+    }
+
+    private func handleAgentPaletteAction(
+        _ action: WorkspaceCommandPaletteAction
+    ) -> Bool {
+        switch action {
         case .openAgents:
             store.send(.requestWorkspaceCommand(.openAgents))
         case .focusAgentSession(let sessionID):
             store.send(.requestFocusAgentSession(sessionID))
+        default:
+            return false
+        }
+        return true
+    }
+
+    private func handleWorkflowPaletteAction(
+        _ action: WorkspaceCommandPaletteAction
+    ) -> Bool {
+        guard let workspaceID = visibleWorkspaceID else { return false }
+        switch action {
+        case .createWorkflow:
+            createWorkflowDefinition(in: workspaceID)
+        case .openWorkflowDefinition(let definitionID):
+            openWorkflowDefinition(workspaceID: workspaceID, definitionID: definitionID)
+        case .openWorkflowRun(let runID):
+            openInPermanentTab(content: .workflowRun(workspaceID: workspaceID, runID: runID))
+        default:
+            return false
+        }
+        return true
+    }
+
+    private func handleExecutionPaletteAction(
+        _ action: WorkspaceCommandPaletteAction
+    ) -> Bool {
+        switch action {
         case .launchShell:
             store.send(.requestWorkspaceCommand(.launchShell))
         case .launchClaude:
@@ -103,11 +167,22 @@ extension ContentView {
             store.send(.requestWorkspaceCommand(.launchCodex))
         case .runDefaultProfile:
             store.send(.requestWorkspaceCommand(.runWorkspaceProfile))
+        default:
+            return false
+        }
+        return true
+    }
+
+    private func handleAttentionPaletteAction(
+        _ action: WorkspaceCommandPaletteAction
+    ) -> Bool {
+        switch action {
         case .jumpToLatestUnreadWorkspace:
             store.send(.requestWorkspaceCommand(.jumpToLatestUnreadWorkspace))
-        case .revealCurrentWorkspaceInNavigator:
-            store.send(.revealCurrentWorkspaceInNavigator)
+        default:
+            return false
         }
+        return true
     }
 
     func showFindInActiveEditor() {

@@ -137,7 +137,7 @@ extension ContentView {
         controller.delegate = splitDelegate
 
         // Set initial colors from theme
-        controller.updateColors(splitColorsFromTheme(themeManager.theme))
+        controller.updateColors(splitColorsFromTheme(theme))
     }
 
     private func configureSplitObservationCallbacks() {

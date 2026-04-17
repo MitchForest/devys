@@ -4,6 +4,7 @@
 // Copyright © 2026 Devys. All rights reserved.
 
 import AppFeatures
+import Browser
 import SwiftUI
 import Observation
 import Split
@@ -20,12 +21,34 @@ struct TabContentView: View {
     let content: WorkspaceTabContent?
     let gitStore: GitStore?
     let terminalSession: GhosttyTerminalSession?
+    let browserSession: BrowserSession?
+    let onOpenTerminalURL: (URL) -> Void
     let agentSession: AgentSessionRuntime?
+    let workflowDefinition: WorkflowDefinition?
+    let workflowRun: WorkflowRun?
+    let workflowLastErrorMessage: String?
+    let workflowDiffAvailable: Bool
     let agentComposerSpeechService: any AgentComposerSpeechService
     let onOpenAgentInlineTerminal: (Workspace.ID, UUID) -> Void
     let onOpenAgentFollowTarget: (Workspace.ID, AgentFollowTarget, Bool) -> Void
     let onOpenAgentDiffArtifact: (Workspace.ID, AgentDiffContent, Bool) -> Void
     let editorSession: EditorSession?
+    let onUpdateWorkflowDefinition: (Workspace.ID, String, WindowFeature.WorkflowDefinitionUpdate) -> Void
+    let onCreateWorkflowWorker: (Workspace.ID, String) -> Void
+    let onUpdateWorkflowWorker: (Workspace.ID, String, String, WindowFeature.WorkflowWorkerUpdate) -> Void
+    let onDeleteWorkflowWorker: (Workspace.ID, String, String) -> Void
+    let onReplaceWorkflowGraph: (Workspace.ID, String, [WorkflowNode], [WorkflowEdge]) -> Void
+    let onStartWorkflowRun: (Workspace.ID, String) -> Void
+    let onContinueWorkflowRun: (Workspace.ID, UUID) -> Void
+    let onRestartWorkflowRun: (Workspace.ID, UUID) -> Void
+    let onStopWorkflowRun: (Workspace.ID, UUID) -> Void
+    let onDeleteWorkflowRun: (Workspace.ID, UUID) -> Void
+    let onChooseWorkflowRunEdge: (Workspace.ID, UUID, String) -> Void
+    let onAppendWorkflowFollowUpTicket: (Workspace.ID, UUID, String, String) -> Void
+    let onDeleteWorkflowDefinition: (Workspace.ID, String) -> Void
+    let onOpenWorkflowFile: (Workspace.ID, String) -> Void
+    let onOpenWorkflowTerminal: (Workspace.ID, UUID) -> Void
+    let onOpenWorkflowDiff: (Workspace.ID, UUID) -> Void
     let selectedRepositoryRootURL: URL?
     let selectedRepositoryDisplayName: String?
     let onFocus: () -> Void
@@ -39,9 +62,22 @@ struct TabContentView: View {
             switch content {
             case .terminal:
                 if let terminalSession {
-                    GhosttyTerminalView(session: terminalSession)
+                    GhosttyTerminalView(
+                        session: terminalSession,
+                        onOpenURL: onOpenTerminalURL
+                    )
                 } else {
                     TerminalRewritePlaceholderView(workingDirectory: nil, requestedCommand: nil)
+                }
+            case .browser(_, _, let initialURL):
+                if let browserSession {
+                    BrowserContentView(session: browserSession)
+                } else {
+                    PlaceholderView(
+                        icon: "globe",
+                        title: "Browser session unavailable",
+                        subtitle: initialURL.absoluteString
+                    )
                 }
             case .agentSession:
                 if let agentSession {
@@ -61,11 +97,25 @@ struct TabContentView: View {
                     )
                 } else {
                     PlaceholderView(
-                        icon: "message",
+                        icon: "person.crop.circle",
                         title: "Agent session unavailable",
                         subtitle: "The selected agent session could not be restored."
                     )
                 }
+            case .workflowDefinition(let workspaceID, let definitionID):
+                workflowTab(
+                    workspaceID: workspaceID,
+                    definitionID: definitionID,
+                    runID: workflowRun?.id,
+                    initialMode: .design
+                )
+            case .workflowRun(let workspaceID, let runID):
+                workflowTab(
+                    workspaceID: workspaceID,
+                    definitionID: workflowDefinition?.id ?? workflowRun?.definitionID ?? "",
+                    runID: runID,
+                    initialMode: .run
+                )
             case .gitDiff:
                 if let store = gitStore {
                     GitDiffView(store: store)
@@ -111,12 +161,44 @@ struct TabContentView: View {
         }
     }
 
-    private var presentationSnapshot: String {
+    private var editorPerformanceSnapshot: EditorOpenPerformanceSnapshot? {
+        guard case .editor = content,
+              let editorSession else {
+            return nil
+        }
+
+        switch editorSession.phase {
+        case .idle, .loading:
+            return .loading
+        case .failed:
+            return .failed(fileSize: editorSession.currentFileSize)
+        case .preview(let preview):
+            if preview.isBinary {
+                return .binary(fileSize: preview.fileSize)
+            }
+            if preview.isTooLarge {
+                return .tooLarge(fileSize: preview.fileSize)
+            }
+            return .previewText(fileSize: preview.fileSize)
+        case .loaded:
+            return .loaded(fileSize: editorSession.currentFileSize)
+        }
+    }
+}
+
+private extension TabContentView {
+    var presentationSnapshot: String {
         switch content {
         case .terminal:
             [
                 terminalSession?.tabTitle ?? "",
                 terminalSession?.tabIcon ?? ""
+            ]
+            .joined(separator: "|")
+        case .browser:
+            [
+                browserSession?.tabTitle ?? "",
+                browserSession?.url.absoluteString ?? ""
             ]
             .joined(separator: "|")
         case .agentSession:
@@ -127,6 +209,22 @@ struct TabContentView: View {
                 String(agentSession?.tabIsBusy == true)
             ]
             .joined(separator: "|")
+        case .workflowDefinition:
+            [
+                workflowDefinition?.name ?? "",
+                workflowDefinition?.planFilePath ?? ""
+            ]
+            .joined(separator: "|")
+        case .workflowRun:
+            [
+                workflowRun?.displayStatus ?? "",
+                workflowRun?.currentPhaseTitle ?? "",
+                workflowRun.flatMap { run in
+                    workflowDefinition?.node(id: run.currentNodeID ?? "")?.displayTitle
+                } ?? "",
+                workflowRun?.currentTerminalID?.uuidString ?? ""
+            ]
+            .joined(separator: "|")
         case .editor:
             editorSession?.isDirty == true ? "dirty" : "clean"
         default:
@@ -134,7 +232,7 @@ struct TabContentView: View {
         }
     }
 
-    private func tooLargeSubtitle(for preview: EditorSessionPreview, fallback: String) -> String {
+    func tooLargeSubtitle(for preview: EditorSessionPreview, fallback: String) -> String {
         if let fileSize = preview.fileSize {
             let fileSizeLabel = ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file)
             let limitLabel = ByteCountFormatter.string(
@@ -147,7 +245,7 @@ struct TabContentView: View {
     }
 
     @ViewBuilder
-    private func editorContent(for session: EditorSession, url: URL) -> some View {
+    func editorContent(for session: EditorSession, url: URL) -> some View {
         VStack(spacing: 0) {
             if session.isFindPresented {
                 EditorFindBar(session: session)
@@ -189,30 +287,6 @@ struct TabContentView: View {
                     PlaceholderView(icon: "doc.text", title: "Loading", subtitle: url.lastPathComponent)
                 }
             }
-        }
-    }
-
-    private var editorPerformanceSnapshot: EditorOpenPerformanceSnapshot? {
-        guard case .editor = content,
-              let editorSession else {
-            return nil
-        }
-
-        switch editorSession.phase {
-        case .idle, .loading:
-            return .loading
-        case .failed:
-            return .failed(fileSize: editorSession.currentFileSize)
-        case .preview(let preview):
-            if preview.isBinary {
-                return .binary(fileSize: preview.fileSize)
-            }
-            if preview.isTooLarge {
-                return .tooLarge(fileSize: preview.fileSize)
-            }
-            return .previewText(fileSize: preview.fileSize)
-        case .loaded:
-            return .loaded(fileSize: editorSession.currentFileSize)
         }
     }
 }

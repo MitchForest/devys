@@ -8,17 +8,23 @@ import Workspace
 /// Dynamic presentation metadata comes from runtime/session state in the app.
 public enum WorkspaceTabContent: Equatable, Sendable {
     case terminal(workspaceID: Workspace.ID, id: UUID)
+    case browser(workspaceID: Workspace.ID, id: UUID, initialURL: URL)
     case agentSession(workspaceID: Workspace.ID, sessionID: ACPSessionID)
     case editor(workspaceID: Workspace.ID, url: URL)
     case gitDiff(workspaceID: Workspace.ID, path: String, isStaged: Bool)
+    case workflowDefinition(workspaceID: Workspace.ID, definitionID: String)
+    case workflowRun(workspaceID: Workspace.ID, runID: UUID)
     case settings
 
     public var workspaceID: Workspace.ID? {
         switch self {
         case .terminal(let workspaceID, _),
+             .browser(let workspaceID, _, _),
              .agentSession(let workspaceID, _),
              .editor(let workspaceID, _),
-             .gitDiff(let workspaceID, _, _):
+             .gitDiff(let workspaceID, _, _),
+             .workflowDefinition(let workspaceID, _),
+             .workflowRun(let workspaceID, _):
             return workspaceID
         case .settings:
             return nil
@@ -31,8 +37,14 @@ public enum WorkspaceTabContent: Equatable, Sendable {
             (path as NSString).lastPathComponent
         case .terminal:
             "Terminal"
+        case .browser:
+            "Browser"
         case .agentSession:
             "Agent"
+        case .workflowDefinition:
+            "Workflow"
+        case .workflowRun:
+            "Workflow Run"
         case .settings:
             "Settings"
         case .editor(_, let url):
@@ -46,8 +58,14 @@ public enum WorkspaceTabContent: Equatable, Sendable {
             return "plus.forwardslash.minus"
         case .terminal:
             return "terminal"
+        case .browser:
+            return "globe"
         case .agentSession:
-            return "message"
+            return "person.crop.circle"
+        case .workflowDefinition:
+            return "square.and.pencil"
+        case .workflowRun:
+            return "point.3.connected.trianglepath.dotted"
         case .settings:
             return "gearshape"
         case .editor(_, let url):
@@ -62,8 +80,14 @@ public enum WorkspaceTabContent: Equatable, Sendable {
             "gitDiff:\(workspaceID):\(path):\(isStaged)"
         case .terminal(let workspaceID, let id):
             "terminal:\(workspaceID):\(id.uuidString)"
+        case .browser(let workspaceID, let id, _):
+            "browser:\(workspaceID):\(id.uuidString)"
         case .agentSession(let workspaceID, let sessionID):
             "agentSession:\(workspaceID):\(sessionID.rawValue)"
+        case .workflowDefinition(let workspaceID, let definitionID):
+            "workflowDefinition:\(workspaceID):\(definitionID)"
+        case .workflowRun(let workspaceID, let runID):
+            "workflowRun:\(workspaceID):\(runID.uuidString)"
         case .settings:
             "settings"
         case .editor(let workspaceID, let url):
@@ -73,6 +97,8 @@ public enum WorkspaceTabContent: Equatable, Sendable {
 
     public func matchesSemanticIdentity(as other: Self) -> Bool {
         switch (self, other) {
+        case let (.browser(workspaceIDA, idA, _), .browser(workspaceIDB, idB, _)):
+            return workspaceIDA == workspaceIDB && idA == idB
         case let (.editor(workspaceIDA, urlA), .editor(workspaceIDB, urlB)):
             return workspaceIDA == workspaceIDB
                 && urlA.standardizedFileURL == urlB.standardizedFileURL
@@ -84,6 +110,10 @@ public enum WorkspaceTabContent: Equatable, Sendable {
             return workspaceIDA == workspaceIDB && idA == idB
         case let (.agentSession(workspaceIDA, sessionIDA), .agentSession(workspaceIDB, sessionIDB)):
             return workspaceIDA == workspaceIDB && sessionIDA == sessionIDB
+        case let (.workflowDefinition(workspaceIDA, definitionIDA), .workflowDefinition(workspaceIDB, definitionIDB)):
+            return workspaceIDA == workspaceIDB && definitionIDA == definitionIDB
+        case let (.workflowRun(workspaceIDA, runIDA), .workflowRun(workspaceIDB, runIDB)):
+            return workspaceIDA == workspaceIDB && runIDA == runIDB
         case (.settings, .settings):
             return true
         default:

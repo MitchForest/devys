@@ -512,7 +512,7 @@ Targeted verification that passed:
 
 ## Phase 8
 
-Status: in progress
+Status: complete
 
 Goal:
 
@@ -601,6 +601,8 @@ Progress:
 
 - reducer-owned hosted content remains the canonical visible state
 - hosted editor and agent summaries now publish through a focused `HostedWorkspaceContentBridge` instead of broad `ContentView` scans
+- hosted browser sessions now use the same bridge boundary: reducer-owned tab identity with host-owned `BrowserSession` handles and reducer-backed URL/title summaries
+- Ghostty `OPEN_URL` actions now route through a narrow host callback into the existing reducer-owned split/tab flow, reusing an existing browser pane or creating a side-by-side browser pane for local app testing links
 - visible agent ordering and editor dirty/loading metadata now derive from focused host observation rather than runtime-wide rescans
 - primary default-agent launch policy now resolves in reducer state before the host decides between direct launch and picker presentation
 
@@ -617,6 +619,10 @@ Rules:
 - runtime caches may survive only as host internals
 - app-domain workflow coordination moves into reducers or explicit dependency clients
 - host layers must expose focused interfaces instead of broad mutable object graphs
+
+Progress:
+
+- browser session handles now live in a focused `WorkspaceBrowserRegistry` host cache instead of re-expanding `WorktreeRuntimeRegistry`
 
 Progress:
 
@@ -937,6 +943,263 @@ Current closeout status:
 
 Later phases should start from the remaining runtime-oriented owners listed in `../reference/legacy-inventory.md`.
 Do not recreate a catalog bridge or a second source of truth for repository and workspace state.
+
+## Workflow V1 Execution Track
+
+This section is the active execution plan for the workflow feature described in `../future/workflow-vision.md`.
+
+It is not a new sidecar plan.
+It exists here because this file remains the only active execution plan for the repo.
+
+### Goal
+
+Ship a reducer-owned, graph-backed workflow system with Canvas as the definition builder, real PTY-backed terminals as the execution truth, and explicit node-to-node handoff after each run attempt.
+
+### Current Status
+
+- landed reducer-owned graph primitives: `WorkflowWorker`, `WorkflowNode`, `WorkflowEdge`, artifact bindings, run attempts, completion state, and operator-choice state
+- landed Canvas-backed definition editing in workflow tabs with reducer-owned graph sync
+- landed Canvas as an active production package at `Packages/Canvas`, replacing the archived package path in the shipped app dependency graph
+- landed terminal-first execution: workflow attempts launch in real PTY-backed terminals, terminal exit is the default completion signal, and ambiguous next edges pause for operator choice
+- landed workflow shell integration: workflow definition and run tabs restore through relaunch, run tabs stay inspector-first, and terminal focus stays the only steering behavior
+- landed file and artifact plumbing: markdown plan parsing, append-only follow-up ticket updates, prompt artifact capture, run persistence, and hosted-terminal reattachment
+- remaining follow-on product work is optional expansion, not architectural debt: workflow status hints in navigator/status surfaces, optional quality-gate and commit nodes, and later headless execution
+
+### Decisions Locked Now
+
+- workflow surfaces should be tab-first and sidebar-integrated, not modal-first
+- workflow truth belongs in `Packages/AppFeatures`; host execution belongs in `Apps/mac-client`
+- Canvas is on the v1 path as the workflow-definition builder surface
+- Canvas is a builder and visualization primitive, not the runtime source of truth
+- real PTY-backed terminal tabs are the execution truth for interactive agent nodes
+- `steering` means the operator focuses the running terminal and types into it
+- steering is not persisted note state, not a special workflow artifact, and not a dedicated UI panel
+- terminal exit is the default completion signal for terminal-backed nodes
+- node-to-node handoff happens after a run attempt completes; if the next edge is ambiguous, Devys pauses for operator choice
+- the markdown plan file is an artifact binding and progress document, not the workflow topology
+- the built-in delivery loop ships as a template, not as hardcoded workflow runtime law
+- headless execution may follow on the same run model but must not block the interactive path
+- v1 workflow execution must not depend on agent chat UI
+
+### Sequencing Rule
+
+Build the smallest real graph-backed loop first.
+
+Do not start with:
+
+- a second, temporary fixed-loop runtime that preserves executor/reviewer as core types
+- a fake terminal or mirrored chat surface in place of the real terminal tab
+- chat-oriented workflow execution
+- a modal control room that bypasses the existing tab and split shell
+
+Start with the actual primitives:
+
+- worker
+- node
+- edge
+- run attempt
+- terminal session
+- completion signal
+- operator action
+- artifact binding
+
+### Workstream A: Reducer-Owned Workflow Domain Rewrite
+
+Deliverables:
+
+- graph-backed workflow models in `Packages/AppFeatures`
+- `WorkflowWorker`, `WorkflowNode`, `WorkflowEdge`, `WorkflowArtifactBinding`, `WorkflowRunAttempt`, and explicit completion/handoff policy types
+- reducer-owned node execution state, edge traversal state, and operator-decision state
+- reducer-owned sidebar and tab presentation state for workflow surfaces
+- reducer tests for run state transitions, node completion, edge traversal, interruption, and restore
+
+Rules:
+
+- reducers own IDs, lifecycle, presentation, policy, and visible workflow state
+- engine handles, PTYs, ACP connections, and host runtimes stay outside reducer state
+- no workflow role semantics should be inferred from string IDs
+- the first shipped workflow template may be opinionated, but the runtime primitives must stay generic
+
+Likely placement:
+
+- `Packages/AppFeatures/Sources/AppFeatures/Workflows/...`
+- `Packages/AppFeatures/Tests/AppFeaturesTests/Workflow...`
+
+### Workstream B: Canvas Builder Adoption
+
+Deliverables:
+
+- use `Packages/Canvas` as the active workflow-definition builder package
+- semantic mapping between reducer-owned workflow nodes/edges and Canvas nodes/connectors
+- Canvas editing for workers, nodes, edges, and basic edge labels or conditions
+- workflow definition tabs centered on Canvas-first editing instead of list-only role forms
+
+Rules:
+
+- Canvas must not own workflow truth or runtime policy
+- node position and connector layout must remain presentation state or persisted builder metadata only
+- runtime semantics must round-trip without depending on canvas geometry
+
+Likely placement:
+
+- `Packages/Canvas/...`
+- `Apps/mac-client/Sources/mac/Views/Workflows/...`
+
+### Workstream C: Plan File And Artifact Bindings
+
+Deliverables:
+
+- markdown parser support for ordered phase headings and ticket extraction
+- append-only follow-up ticket writing for explicit workflow-owned sections
+- explicit artifact binding types for plan files, prompt files, diffs, test output, and run artifacts
+- tests for phase detection, ticket extraction, and non-destructive file updates
+
+Rules:
+
+- the plan file may live anywhere, but the parser contract must stay explicit
+- do not rewrite the whole markdown file just to update workflow state
+- do not make the markdown plan the only representation of workflow topology
+
+### Workstream D: Interactive Terminal Runner
+
+Deliverables:
+
+- reducer-issued host requests for launch, stop, retry, reopen, and reattach
+- a dedicated host execution coordinator for workflow steps in `Apps/mac-client`
+- persisted attempt, event, and artifact capture per run
+- reattachment to active hosted terminals after app relaunch
+
+Rules:
+
+- interactive execution uses the existing hosted-terminal infrastructure
+- the real terminal is the execution truth
+- the workflow tab may inspect execution but must not replace the terminal tab as the primary live surface
+- workflow execution may reuse low-level launcher and terminal plumbing, but it should not be modeled as `AgentSessionRuntime`
+
+Likely placement:
+
+- `Apps/mac-client/Sources/mac/Services/Workflows/...`
+
+### Workstream E: Handoff And Edge Traversal
+
+Deliverables:
+
+- explicit completion signals for node attempts
+- edge traversal after attempt completion
+- pause-for-choice behavior when multiple edges are valid
+- built-in edge conditions for the first slice kept small and explicit
+
+Rules:
+
+- process exit is the default completion signal for terminal-backed nodes
+- no hidden inference like "the agent stopped acting"
+- if Devys cannot determine the next edge unambiguously, it must pause and ask the operator
+
+### Workstream F: Workflow Shell Surfaces
+
+Deliverables:
+
+- `WorkspaceTabContent` cases for workflow definition and workflow run tabs
+- reducer actions to open, focus, and restore workflow tabs
+- Agents sidebar cards for active runs and recent runs
+- command palette and titlebar entry points
+- run tab focused on current node, run history, artifacts, and edge state
+- workflow status hints in navigator rows and status surfaces once the core loop is stable
+
+Rules:
+
+- workflows should live in the same split/tab shell as files, diffs, and terminals
+- no workflow-only parallel navigation model should be introduced
+- repeated workflow UI belongs in `Packages/UI`
+- "open terminal" must focus the actual live terminal tab for the active attempt
+- do not add a persistent steering panel or steering-note surface
+
+Likely placement:
+
+- `Packages/UI/Sources/UI/Views/Components/Workflow/...`
+- `Apps/mac-client/Sources/mac/Views/Workflows/...`
+
+### Workstream G: Delivery Loop Template
+
+Deliverables:
+
+- a built-in delivery workflow template expressed as normal workers, nodes, and edges
+- initial worker presets for implementation and review
+- optional quality-gate and commit nodes after the review pass
+- a template that can still target markdown phase work without hardcoding those semantics into the runtime
+
+Rules:
+
+- one active run per worktree in v1
+- one workflow run owns one worktree and branch
+- do not reintroduce executor/reviewer as privileged runtime types
+
+### Workstream H: Recovery And Operator Controls
+
+Deliverables:
+
+- stop, retry, choose-next-edge, open terminal, open plan file, and open diff actions
+- reducer-owned interrupted, blocked, awaiting-choice, failed, and complete states
+- run restore after app relaunch
+- artifact and log inspection in the workflow run surface
+
+Rules:
+
+- intervention must preserve run state instead of bypassing it
+- steering means typing into the active terminal, nothing more
+- no hidden fallback path should silently desynchronize the workflow tab from the underlying run
+
+### Workstream I: Deletion And Migration
+
+Deliverables:
+
+- remove fixed executor/reviewer slot logic from the workflow domain
+- remove persisted steering state and steering UI
+- remove fixed step enums and hardcoded next-step progression
+- migrate existing file-backed workflow definitions and runs if required
+- update docs and tests in the same change stream as the replacement
+
+Rules:
+
+- delete wrong abstractions instead of wrapping them
+- do not preserve the current fixed loop as a compatibility layer without a removal plan
+
+### Ordered Ticket Sequence
+
+1. Done and reusable: real PTY-backed workflow terminal launching and hosted-terminal reattachment exist.
+2. Done and reusable: markdown phase parsing and append-only plan updates exist.
+3. Done and reusable: file-backed workflow definition and run persistence exist.
+4. Done: fixed workflow domain types were replaced with workers, nodes, edges, artifact bindings, and run attempts.
+5. Done: Canvas is the active workflow-definition builder path.
+6. Done: fixed step sequencing was replaced with explicit completion signals and edge traversal.
+7. Done: persisted steering state and steering UI were removed; terminal focus/open is the only steering behavior.
+8. Done: the run tab is an inspector/control surface and the real terminal tab stays primary.
+9. Done: the built-in delivery loop can ship as template data on top of the generic primitives.
+10. Follow-on: add optional quality-gate and commit nodes after the core path is solid.
+11. Follow-on: reassess headless execution only after the interactive graph-backed path is solid.
+
+### Recommended First Slice
+
+The first slice should prove the primitives, not a temporary hardcoded loop.
+
+That slice is:
+
+1. select a markdown plan file
+2. define two or more workers on a Canvas-backed workflow definition
+3. connect those workers with explicit nodes and edges
+4. run one node in a real terminal tab
+5. click into that terminal and type to steer while it is running
+6. treat terminal exit as the default completion signal for that attempt
+7. traverse the next edge automatically when unambiguous, or pause for operator choice when it is not
+8. append follow-up tickets back into the bound plan file when the workflow definition requests it
+9. show current node, attempt state, and artifacts in the run tab and Agents sidebar
+10. restore the active run after relaunch
+
+Status:
+
+- complete for the interactive V1 target; remaining work is optional expansion on top of the shipped graph-backed runtime
+
+If that works well, then richer edge conditions, quality-gate nodes, and later headless execution can follow without changing the core runtime model.
 
 ## Documentation Maintenance Rule
 

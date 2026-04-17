@@ -1,4 +1,5 @@
 import AppFeatures
+import Browser
 import Foundation
 import Observation
 import Workspace
@@ -18,6 +19,11 @@ final class HostedWorkspaceContentBridge {
         var lastPublishedSessionID: AgentSessionID?
     }
 
+    private struct BrowserTracking {
+        let workspaceID: Workspace.ID
+        var lastPublishedSessionID: UUID?
+    }
+
     var publishHostedContent: PublishHandler?
 
     private var editorTrackingBySessionObjectID: [ObjectIdentifier: EditorTracking] = [:]
@@ -25,6 +31,9 @@ final class HostedWorkspaceContentBridge {
 
     private var agentTrackingByRuntimeObjectID: [ObjectIdentifier: AgentTracking] = [:]
     private var agentSummariesByWorkspaceID: [Workspace.ID: [AgentSessionID: HostedAgentSessionSummary]] = [:]
+
+    private var browserTrackingBySessionObjectID: [ObjectIdentifier: BrowserTracking] = [:]
+    private var browserSummariesByWorkspaceID: [Workspace.ID: [UUID: HostedBrowserSessionSummary]] = [:]
 
     private var lastPublishedContentByWorkspaceID: [Workspace.ID: HostedWorkspaceContentState] = [:]
 
@@ -93,6 +102,22 @@ final class HostedWorkspaceContentBridge {
         observeAgentSummary(for: runtime, runtimeObjectID: runtimeObjectID)
     }
 
+    func attachBrowserSession(_ session: BrowserSession, workspaceID: Workspace.ID) {
+        let sessionObjectID = ObjectIdentifier(session)
+        if let tracking = browserTrackingBySessionObjectID[sessionObjectID],
+           tracking.workspaceID == workspaceID {
+            publishBrowserSummary(for: session, sessionObjectID: sessionObjectID)
+            return
+        }
+
+        browserTrackingBySessionObjectID[sessionObjectID] = BrowserTracking(
+            workspaceID: workspaceID,
+            lastPublishedSessionID: nil
+        )
+        publishBrowserSummary(for: session, sessionObjectID: sessionObjectID)
+        observeBrowserSummary(for: session, sessionObjectID: sessionObjectID)
+    }
+
     func detachAgentSession(_ runtime: AgentSessionRuntime, workspaceID: Workspace.ID) {
         let runtimeObjectID = ObjectIdentifier(runtime)
         guard let tracking = agentTrackingByRuntimeObjectID.removeValue(forKey: runtimeObjectID),
@@ -105,6 +130,18 @@ final class HostedWorkspaceContentBridge {
         }
     }
 
+    func detachBrowserSession(_ session: BrowserSession, workspaceID: Workspace.ID) {
+        let sessionObjectID = ObjectIdentifier(session)
+        guard let tracking = browserTrackingBySessionObjectID.removeValue(forKey: sessionObjectID),
+              tracking.workspaceID == workspaceID else {
+            return
+        }
+
+        if let lastPublishedSessionID = tracking.lastPublishedSessionID {
+            removeBrowserSummary(sessionID: lastPublishedSessionID, workspaceID: workspaceID)
+        }
+    }
+
     func discardWorkspace(_ workspaceID: Workspace.ID) {
         editorTrackingBySessionObjectID = editorTrackingBySessionObjectID.filter {
             $0.value.workspaceID != workspaceID
@@ -112,8 +149,12 @@ final class HostedWorkspaceContentBridge {
         agentTrackingByRuntimeObjectID = agentTrackingByRuntimeObjectID.filter {
             $0.value.workspaceID != workspaceID
         }
+        browserTrackingBySessionObjectID = browserTrackingBySessionObjectID.filter {
+            $0.value.workspaceID != workspaceID
+        }
         editorSummariesByWorkspaceID.removeValue(forKey: workspaceID)
         agentSummariesByWorkspaceID.removeValue(forKey: workspaceID)
+        browserSummariesByWorkspaceID.removeValue(forKey: workspaceID)
         lastPublishedContentByWorkspaceID.removeValue(forKey: workspaceID)
         publishHostedContent?(workspaceID, HostedWorkspaceContentState())
     }
@@ -124,6 +165,7 @@ private extension HostedWorkspaceContentBridge {
     var publishedWorkspaceIDs: Set<Workspace.ID> {
         Set(editorSummariesByWorkspaceID.keys)
             .union(agentSummariesByWorkspaceID.keys)
+            .union(browserSummariesByWorkspaceID.keys)
             .union(lastPublishedContentByWorkspaceID.keys)
     }
 
@@ -169,6 +211,26 @@ private extension HostedWorkspaceContentBridge {
                 }
                 self.publishAgentSummary(for: runtime, runtimeObjectID: runtimeObjectID)
                 self.observeAgentSummary(for: runtime, runtimeObjectID: runtimeObjectID)
+            }
+        }
+    }
+
+    func observeBrowserSummary(
+        for session: BrowserSession,
+        sessionObjectID: ObjectIdentifier
+    ) {
+        withObservationTracking {
+            _ = session.url
+            _ = session.tabTitle
+        } onChange: { [weak self, weak session] in
+            Task { @MainActor in
+                guard let self,
+                      let session,
+                      self.browserTrackingBySessionObjectID[sessionObjectID] != nil else {
+                    return
+                }
+                self.publishBrowserSummary(for: session, sessionObjectID: sessionObjectID)
+                self.observeBrowserSummary(for: session, sessionObjectID: sessionObjectID)
             }
         }
     }
@@ -228,6 +290,33 @@ private extension HostedWorkspaceContentBridge {
         publishWorkspaceContent(for: tracking.workspaceID)
     }
 
+    func publishBrowserSummary(
+        for session: BrowserSession,
+        sessionObjectID: ObjectIdentifier
+    ) {
+        guard var tracking = browserTrackingBySessionObjectID[sessionObjectID] else { return }
+
+        let summary = HostedBrowserSessionSummary(
+            sessionID: session.id,
+            url: session.url,
+            title: session.tabTitle,
+            icon: session.tabIcon
+        )
+        if let lastPublishedSessionID = tracking.lastPublishedSessionID,
+           lastPublishedSessionID != summary.sessionID {
+            removeBrowserSummary(
+                sessionID: lastPublishedSessionID,
+                workspaceID: tracking.workspaceID,
+                publish: false
+            )
+        }
+
+        browserSummariesByWorkspaceID[tracking.workspaceID, default: [:]][summary.sessionID] = summary
+        tracking.lastPublishedSessionID = summary.sessionID
+        browserTrackingBySessionObjectID[sessionObjectID] = tracking
+        publishWorkspaceContent(for: tracking.workspaceID)
+    }
+
     func removeEditorSummary(
         url: URL,
         workspaceID: Workspace.ID,
@@ -256,6 +345,20 @@ private extension HostedWorkspaceContentBridge {
         }
     }
 
+    func removeBrowserSummary(
+        sessionID: UUID,
+        workspaceID: Workspace.ID,
+        publish: Bool = true
+    ) {
+        browserSummariesByWorkspaceID[workspaceID]?.removeValue(forKey: sessionID)
+        if browserSummariesByWorkspaceID[workspaceID]?.isEmpty == true {
+            browserSummariesByWorkspaceID.removeValue(forKey: workspaceID)
+        }
+        if publish {
+            publishWorkspaceContent(for: workspaceID)
+        }
+    }
+
     func publishWorkspaceContent(
         for workspaceID: Workspace.ID,
         force: Bool = false
@@ -264,9 +367,19 @@ private extension HostedWorkspaceContentBridge {
             .map { Array($0.values) } ?? []
         let agentSessions = agentSummariesByWorkspaceID[workspaceID]
             .map { Array($0.values) } ?? []
+        let browserSessions = browserSummariesByWorkspaceID[workspaceID]
+            .map { Array($0.values) } ?? []
         let nextContent = HostedWorkspaceContentState(
             editorDocuments: editorDocuments.sorted { lhs, rhs in
                 lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
+            },
+            browserSessions: browserSessions.sorted { lhs, rhs in
+                let titleComparison = lhs.title.localizedStandardCompare(rhs.title)
+                if titleComparison == .orderedSame {
+                    return lhs.url.absoluteString.localizedStandardCompare(rhs.url.absoluteString)
+                        == .orderedAscending
+                }
+                return titleComparison == .orderedAscending
             },
             agentSessions: agentSessions.sorted { lhs, rhs in
                 if lhs.lastActivityAt == rhs.lastActivityAt {

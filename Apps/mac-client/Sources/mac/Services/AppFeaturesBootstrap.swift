@@ -13,6 +13,7 @@ enum AppFeaturesBootstrap {
         let defaultLaunchOptions = makeDefaultLaunchOptions(container: container)
         let workspaceCatalogPersistenceClient = WorkspaceCatalogPersistenceClient.live()
         let windowRelaunchPersistenceStore = TerminalRelaunchPersistenceStore()
+        let workflowPersistenceStore = WorkflowPersistenceStore()
         let notificationSettings = container.appSettings.notifications
         let initialWindowState = WindowFeature.State(
             workspaceStatesByID: Dictionary(
@@ -43,6 +44,10 @@ enum AppFeaturesBootstrap {
                 controller: container.workspaceOperationalController
             )
             $0.workspaceAttentionIngressClient = .live()
+            $0.workflowPersistenceClient = .live(store: workflowPersistenceStore)
+            $0.workflowExecutionClient = .live(
+                controller: container.workflowExecutionController
+            )
             $0.agentLauncherClient = .live(
                 launcher: container.agentAdapterLauncher,
                 defaultLaunchOptions: defaultLaunchOptions
@@ -73,6 +78,55 @@ private extension WindowRelaunchPersistenceClient {
             load: { store.load() },
             save: { try store.save($0) },
             clear: { try store.clear() }
+        )
+    }
+}
+
+private extension WorkflowPersistenceClient {
+    static func live(store: WorkflowPersistenceStore) -> Self {
+        Self(
+            loadWorkspace: { workspaceID, rootURL in
+                try await store.loadWorkspace(workspaceID: workspaceID, rootURL: rootURL)
+            },
+            saveDefinition: { definition, rootURL in
+                try await store.saveDefinition(definition, rootURL: rootURL)
+            },
+            deleteDefinition: { definitionID, rootURL in
+                try await store.deleteDefinition(definitionID, rootURL: rootURL)
+            },
+            saveRun: { run, rootURL in
+                try await store.saveRun(run, rootURL: rootURL)
+            },
+            deleteRun: { runID, rootURL in
+                try await store.deleteRun(runID, rootURL: rootURL)
+            },
+            loadPlanSnapshot: { planFilePath, rootURL in
+                try await store.loadPlanSnapshot(planFilePath: planFilePath, rootURL: rootURL)
+            },
+            appendFollowUpTicket: { request, rootURL in
+                try await store.appendFollowUpTicket(request, rootURL: rootURL)
+            }
+        )
+    }
+}
+
+private extension WorkflowExecutionClient {
+    static func live(
+        controller: WorkflowExecutionController
+    ) -> Self {
+        Self(
+            updates: {
+                controller.updates()
+            },
+            registerRuns: { runs in
+                await controller.registerRuns(runs)
+            },
+            startNode: { request in
+                try await controller.startNode(request)
+            },
+            stopRun: { runID in
+                controller.stopRun(runID)
+            }
         )
     }
 }

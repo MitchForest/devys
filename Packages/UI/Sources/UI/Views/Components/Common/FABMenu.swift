@@ -202,7 +202,11 @@ private struct FABMenuRow: View {
                                     FABMenuItem(icon: "folder", title: "New Folder", shortcut: "Cmd+Shift+N") {},
                                 ]),
                                 FABMenuSection(title: "Agent", items: [
-                                    FABMenuItem(icon: "sparkles", title: "Start Agent", shortcut: "Cmd+L") {},
+                                    FABMenuItem(
+                                        icon: "person.crop.circle.badge.plus",
+                                        title: "Start Agent",
+                                        shortcut: "Cmd+L"
+                                    ) {},
                                     FABMenuItem(icon: "terminal", title: "Open Terminal", shortcut: "Cmd+`") {},
                                     FABMenuItem(icon: "arrow.triangle.branch", title: "Create Branch") {},
                                     FABMenuItem(icon: "tray", title: "Archived", isEnabled: false) {},

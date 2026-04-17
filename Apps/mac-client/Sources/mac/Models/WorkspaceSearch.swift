@@ -17,6 +17,9 @@ enum WorkspaceCommandPaletteAction: Equatable {
     case selectWorkspace(repositoryID: Repository.ID, workspaceID: Workspace.ID)
     case openAgents
     case focusAgentSession(AgentSessionID)
+    case createWorkflow
+    case openWorkflowDefinition(String)
+    case openWorkflowRun(UUID)
     case launchShell
     case launchClaude
     case launchCodex
@@ -32,17 +35,6 @@ enum WorkspaceSearchMode: String, Identifiable, Sendable {
 
     var id: String {
         rawValue
-    }
-
-    var title: String {
-        switch self {
-        case .commands:
-            "COMMAND PALETTE"
-        case .files:
-            "OPEN QUICKLY"
-        case .textSearch:
-            "FIND IN FILES"
-        }
     }
 
     var placeholder: String {
@@ -147,6 +139,12 @@ struct WorkspaceSearchItem: Identifiable, Equatable {
                 "command:open-agents"
             case .focusAgentSession(let sessionID):
                 "command:focus-agent-session:\(sessionID.rawValue)"
+            case .createWorkflow:
+                "command:create-workflow"
+            case .openWorkflowDefinition(let definitionID):
+                "command:open-workflow-definition:\(definitionID)"
+            case .openWorkflowRun(let runID):
+                "command:open-workflow-run:\(runID.uuidString)"
             case .launchShell:
                 "command:launch-shell"
             case .launchClaude:

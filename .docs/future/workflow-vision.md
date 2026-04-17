@@ -1,797 +1,314 @@
 # Workflow Vision
 
-Updated: 2026-04-15
+Updated: 2026-04-17
 
-## Summary
+## Purpose
 
-This document defines future product direction for reusable multi-agent workflows in Devys.
+This document defines the target product shape for reusable workflow execution in Devys.
 
-It is not part of the current architecture migration source of truth. Active migration sequencing lives in `../plan/implementation-plan.md`.
+It is intentionally product-focused.
+Active sequencing and migration work live in `../plan/implementation-plan.md`.
 
-The product goal is:
+## Product Stance
 
-- let a user create explicit reusable workflows for Claude Code and Codex
-- bind each workflow run to a dedicated worktree
-- run workflows either headlessly or in an interactive modal
-- make progress, commits, phases, active step, and terminal output visible at all times
-- allow the user to stop, restart, continue, and steer a run without losing context
+- V1 is a graph-backed workflow system, not a hardcoded executor/reviewer phase runner.
+- The workflow-definition builder is Canvas-first.
+- A workflow definition binds workers, nodes, edges, prompts, and artifact bindings.
+- Interactive agent nodes must run in real PTY-backed terminal tabs.
+- The terminal tab is the live execution truth for an active attempt.
+- The workflow run tab is an inspector and control surface, not a replacement terminal.
+- `steering` means the operator clicks into the running terminal and types.
+- Steering is not a persisted note, not a special workflow message, and not a dedicated UI panel.
+- Agent-to-agent handoff happens after a node attempt completes and Devys traverses an edge.
+- The markdown plan file is an artifact binding and progress document, not the workflow topology.
+- V1 does not add agent chat as part of workflow execution.
 
-The implementation goal is:
+## Primary V1 Use Case
 
-- ship a useful v1 without building a generic orchestration framework
-- use a simple ordered phase pipeline first
-- keep the data model stable so later versions can add Canvas-based visualization/editing and agent-authored workflow generation without rewriting the core system
+The first workflow Devys should support is:
 
-## Product Principles
+1. pick a real planning markdown file
+2. create or open a Canvas-backed workflow definition
+3. add workers such as implementation and review agents
+4. connect nodes explicitly on the canvas
+5. run a node in a real terminal
+6. click into that terminal and type whenever operator steering is needed
+7. let Devys move to the next node after the attempt completes
+8. append follow-up work back into the bound plan file when the workflow definition requests it
 
-- Workflow execution is explicit, not magical.
-- A workflow is a repeatable phase pipeline, not a freeform graph in v1.
-- A workflow run owns one worktree and one branch.
-- Prompt files are real files on disk.
-- The UI should expose exactly what will run.
-- The user should never feel lost in navigation.
-- The modal is the control room; the main window remains the workspace.
-- Terminals are the execution primitive; structured parsing is an enhancement, not the source of truth.
-- The workflow engine should be small, file-backed, and restartable.
+This should feel like a serious operator workflow with explicit flow control, not like a chat toy and not like a hidden fixed loop pretending to be a builder.
 
-## UX Direction
+## Core Primitives
 
-The workflow UI should feel like a native operator console inside Devys, not like a separate low-code builder product.
+- A `workflow definition` is a reusable graph of workers, nodes, edges, and artifact bindings.
+- A `workflow run` is one execution of that definition.
+- A `worker` is a named runnable agent configuration.
+- A `node` is one unit of work.
+- An `edge` is an explicit handoff path to the next node.
+- A `run attempt` is one execution of one node.
+- A `terminal session` is the real PTY-backed execution surface for an interactive attempt.
+- A `completion signal` tells Devys when an attempt is done.
+- An `operator action` is an explicit intervention such as stop, retry, or choose-next-edge.
+- An `artifact binding` links the workflow to real files such as plans, prompts, or outputs.
 
-The current app already has the right high-level structure:
+The runtime primitives should not encode business semantics like `executor`, `reviewer`, or `self-review` as core types.
+Those belong in shipped templates built on top of the primitives.
 
-- worktrees and repository state
-- PTY-backed terminal tabs
-- agent sessions
-- modal sheets for focused flows
-- workspace-aware status and persistence
+## Canvas-First Definition Model
 
-We should extend that model, not replace it.
+Canvas is the builder primitive users expect for workflow definition.
 
-## Core Mental Model
+The builder should let the user:
 
-- A workflow definition is a reusable template.
-- A workflow run is one execution of that template.
-- A workflow run is bound to one worktree.
-- A workflow phase is a user-meaningful milestone, usually ending in a commit.
-- A workflow step is one executable unit inside a phase.
-- A run can be automated, supervised, or mixed.
+- place nodes on a canvas
+- connect nodes with explicit edges
+- attach workers to runnable nodes
+- configure prompts and artifact bindings
+- label or condition edges where needed
 
-For your workflow style, the default shape should be:
+Canvas must not own workflow truth.
+Reducer-owned workflow models remain the source of truth, and Canvas renders and edits that state.
 
-1. prepare plan context
-2. claude implement
-3. claude self-audit
-4. codex review
-5. codex fix
-6. quality gate
-7. update plan doc
-8. commit phase
-9. continue to next phase
+That means:
 
-This is intentionally serial and explicit.
+- node position and connector layout are builder metadata
+- runtime semantics do not depend on node geometry
+- Canvas must round-trip cleanly with the canonical reducer-owned definition model
 
-## Sidebar Change
+## Plan File Contract
 
-Do not keep Files, Changes, Ports, Agents, and Workflows all crammed into one scrolling sidebar.
+The plan file is a user-owned markdown file, not a Devys-only document type.
 
-Replace the current stacked multi-section sidebar model with top tabs:
+V1 constraints:
 
-- `Files`
-- `Agents`
+- the file may live anywhere and may have any name
+- the workflow stores the resolved path, not a hardcoded repo convention
+- phase boundaries are explicit markdown headings
+- work items are explicit markdown task list items or bullets inside a phase
+- unchecked items represent open tickets
+- checked items represent completed tickets
 
-### Files Tab
+Recommended phase shape:
 
-The Files tab owns repository navigation and code inspection for the active worktree:
+```md
+# Refactor Plan
 
-- file tree
-- git changes / diffs
-- later: search and related code-inspection tools if needed
+## Phase 1
+- [ ] ticket one
+- [ ] ticket two
 
-This tab answers:
+### Follow-Ups
+- [ ] added by the workflow
 
-- what files are here
-- what changed
-- what should I inspect next
+## Phase 2
+- [ ] next batch
+```
 
-### Agents Tab
+V1 parser rules:
 
-The Agents tab owns workflow and execution oversight for the active worktree:
+- `##` headings define ordered phases
+- if no phase headings exist, the whole file is treated as one phase
+- Devys may append follow-up tickets only inside explicit workflow-owned sections
+- Devys must not rewrite the whole file or silently invent a new markdown format
 
-- active workflow runs
-- workflow templates relevant to this repository
-- active agent sessions
-- step status
-- progress through phases
-- intervention controls
+The plan file is important, but it is not the workflow graph.
+It is an artifact the workflow can read and update.
 
-This tab answers:
+## Definition Shape
 
-- what is running
-- what phase is active
-- what agent is doing work
-- what needs attention
-
-This keeps the sidebar legible and preserves the terminal-first feel.
-
-## North Star
-
-Long term, Devys should support three coordinated ways to work with workflows:
-
-1. direct authoring in the modal builder
-2. visual overview and editing through Canvas
-3. agent-authored workflow creation and editing through a CLI plus repo skill
-
-All three must target the same underlying workflow definition schema.
-
-That means v1 must not hardcode UI-only assumptions into the runtime.
-
-## Current Foundations In The Repo
-
-Devys already has several pieces we should build on directly:
-
-- repository-scoped launcher settings for Claude and Codex
-- worktree creation and import flows
-- persistent PTY-backed terminal hosting
-- worktree-aware runtime ownership
-- agent session views with timeline, tool-call display, and stop/retry controls
-- modal sheet presentation patterns
-
-Relevant existing surfaces:
-
-- `Apps/mac-client/Sources/mac/Views/Window/ContentView.swift`
-- `Apps/mac-client/Sources/mac/Views/Sidebar/UnifiedWorkspaceSidebar.swift`
-- `Apps/mac-client/Sources/mac/Views/Window/ContentView+LaunchActions.swift`
-- `Apps/mac-client/Sources/mac/Views/Window/ContentView+TerminalPersistence.swift`
-- `Apps/mac-client/Sources/mac/Services/PersistentTerminalHostDaemon.swift`
-- `Apps/mac-client/Sources/mac/Views/Window/AgentSessionView.swift`
-- `Apps/mac-client/Sources/mac/Models/Agents/AgentSessionModels.swift`
-- `Packages/Git/Sources/Git/Services/Worktree/WorkspaceCreationService.swift`
-- `Packages/Workspace/Sources/Core/Models/RepositorySettings.swift`
-- `Apps/mac-client/Sources/mac/Views/Settings/RepositorySettingsSection.swift`
-
-The archived Canvas package is a good future fit for visualization and editing, but it should not be on the critical path for workflow v1.
-
-## Data Model
-
-Define a stable, file-backed workflow domain model.
-
-### WorkflowDefinition
-
-A reusable template that lives in the repository or local Devys metadata.
+The workflow definition should stay file-backed and explicit.
 
 Suggested shape:
 
 ```json
 {
-  "id": "phase-delivery",
-  "name": "Phase Delivery",
-  "description": "Claude implements, Codex reviews, Codex fixes, then quality gates and commit.",
-  "version": 1,
-  "defaultMode": "interactive",
-  "plan": {
-    "source": ".docs/plan.md"
-  },
-  "phases": [
-    {
-      "id": "phase-1",
-      "name": "Phase 1",
-      "commitStrategy": "one_commit",
-      "steps": [
-        {
-          "id": "claude-implement",
-          "kind": "agent",
-          "runner": "claude",
-          "promptFile": "prompts/claude-implement.md",
-          "mode": "supervised"
-        }
-      ]
+  "id": "delivery-loop",
+  "name": "Delivery Loop",
+  "workers": {
+    "implementer": {
+      "provider": "claude-code",
+      "executionMode": "interactive",
+      "promptFile": "prompts/implement.md"
+    },
+    "reviewer": {
+      "provider": "codex",
+      "executionMode": "interactive",
+      "promptFile": "prompts/review.md"
     }
-  ]
+  },
+  "nodes": [
+    {
+      "id": "implement",
+      "kind": "agent",
+      "worker": "implementer"
+    },
+    {
+      "id": "review",
+      "kind": "agent",
+      "worker": "reviewer"
+    }
+  ],
+  "edges": [
+    {
+      "from": "implement",
+      "to": "review"
+    },
+    {
+      "from": "review",
+      "to": "implement",
+      "when": "rework-needed"
+    }
+  ],
+  "artifacts": {
+    "plan": ".docs/plan/refactor.md"
+  }
 }
 ```
 
-### WorkflowPhase
-
-- stable id
-- name
-- optional description
-- commit policy
-- completion policy
-- ordered steps
-
-### WorkflowStep
-
-Supported v1 step kinds:
-
-- `agent`
-- `quality_gate`
-- `doc_update`
-- `commit`
-- `pause`
-
-Supported v1 runners:
-
-- `claude`
-- `codex`
-- `shell`
-- `internal`
-
-Supported v1 execution modes:
-
-- `headless`
-- `supervised`
-- `manual`
-
-### WorkflowRun
-
-Runtime state for one execution:
-
-- workflow id and version
-- run id
-- repository id
-- worktree id / path
-- branch
-- phase index
-- step index
-- status
-- started / updated timestamps
-- active process metadata
-- active session metadata
-- commit log
-- artifact paths
-- operator notes
-
-### WorkflowArtifact
-
-Named outputs produced by steps:
-
-- review findings
-- fix plan
-- quality gate result
-- commit message
-- updated plan snapshot
-- logs
-
-Artifacts must be addressable by later steps.
+The built-in delivery loop can ship as a default template, but the runtime must not require those exact node names or worker roles.
 
 ## Files On Disk
 
-Use simple, inspectable files.
-
-### Committed Workflow Definitions
-
-Recommended repo location:
+Committed definitions should live in the repository:
 
 ```text
 .devys/workflows/
-  phase-delivery/
+  delivery-loop/
     workflow.json
     prompts/
-      claude-implement.md
-      claude-audit.md
-      codex-review.md
-      codex-fix.md
-      commit.md
+      implement.md
+      review.md
 ```
 
-Why committed:
-
-- reusable across runs
-- reviewable in Git
-- easy to diff
-- easy for future agents to create and edit
-
-### Local Run State
-
-Recommended local location:
+Local run state should stay outside Git, preferably in application support keyed by worktree identity:
 
 ```text
-.devys/runs/
-  <run-id>/
-    state.json
-    events/
-    artifacts/
-    terminals/
+~/Library/Application Support/Devys/workflows/
+  <worktree-key>/
+    runs/
+      <run-id>/
+        state.json
+        events.jsonl
+        artifacts/
+        attempts/
+        terminals/
 ```
 
-This should be gitignored.
-
-### Prompt Files
-
-Every prompt should be editable as a real file, not just inline UI state.
-
-The modal editor can edit the file contents directly, but the source of truth stays on disk.
-
-## Worktree Model
-
-One workflow run should map to one worktree.
-
-Why:
-
-- matches your working style
-- keeps branch and diff state explicit
-- keeps commits scoped
-- makes run status naturally worktree-aware in the UI
-- aligns with existing Devys workspace/worktree architecture
-
-Rules:
-
-- starting a workflow can create a new worktree or bind to an existing one
-- one active run per worktree in v1
-- runs store the exact worktree path and branch
-- deleting a run does not automatically delete the worktree unless the user explicitly asks
+Prompt files are real files on disk and remain directly editable.
 
 ## Execution Model
 
-The workflow engine should be a small serial state machine.
+V1 execution should be a small explicit state machine around node attempts.
 
-### Runner Loop
+The minimal flow is:
 
-For each step:
+1. select the next node
+2. launch that node in a real terminal if it is interactive
+3. while the node is running, the operator may focus the terminal and type
+4. when the attempt completes, record the completion signal
+5. traverse the next edge if there is one clear path
+6. if the next path is ambiguous, pause for operator choice
 
-1. load run state
-2. resolve step inputs
-3. launch the step
-4. stream and persist events
-5. collect artifacts
-6. mark step success / failure / interrupted
-7. advance only when the step completion policy passes
+### Completion And Handoff
 
-### Headless Steps
+For terminal-backed nodes, the default completion signal is simple:
 
-Used when the user wants unattended execution.
+- the process exited
 
-- Claude headless steps run via CLI print mode with structured output capture
-- Codex headless steps run via CLI JSONL output capture
-- shell steps run through a managed command execution path
+Devys must not rely on vague heuristics like "the model stopped acting."
 
-### Supervised Steps
+Handoff rules:
 
-Used when the user wants live terminal oversight and the ability to intervene.
+- if exactly one edge is valid, Devys may auto-traverse it
+- if multiple edges are valid, Devys must pause and ask the operator to choose
+- if no edges are valid, the run pauses or completes explicitly
 
-- launch the real CLI in a PTY-backed terminal tab
-- mirror terminal output inside the workflow modal
-- allow stop, restart, and operator message injection
+Structured handoff artifacts may be added later, but they are not required to define the first slice.
 
-### Manual Steps
+### Interactive Mode
 
-Used for intentional pauses:
+Interactive mode is mandatory for v1.
 
-- waiting for human review
-- waiting for external validation
-- waiting for a deployment or merge
+Rules:
 
-## Intervention Model
+- launch the real CLI in a PTY-backed terminal
+- keep the terminal tab as the execution truth
+- let the operator click into the terminal and type
+- mirror lifecycle state and artifacts into the workflow run surface
+- allow the user to focus the underlying terminal tab instantly
 
-The user must be able to intervene without breaking the run model.
+### Headless Mode
 
-Supported controls:
+Headless execution can exist later on the same node/run model, but it is not the first slice.
 
-- `Stop`
-- `Restart Step`
-- `Continue`
-- `Retry Last Prompt`
-- `Steer`
-- `Open Terminal`
-- `Open Worktree`
-- `Open Diff`
-- `Mark Complete`
-- `Mark Failed`
+We should not delay the real interactive path in order to design a more generic headless framework.
 
-### Stop
+## Product Surfaces
 
-Stops the current executing step and records the run as interrupted.
+Devys should be tab-first for workflows.
 
-### Restart Step
+V1 surfaces:
 
-Re-executes the current step from its persisted boundary.
+- Agents sidebar:
+  active runs, current node, attention state, quick actions
+- workflow definition tab:
+  Canvas-backed builder for workers, nodes, edges, and artifact bindings
+- workflow run tab:
+  current node, run history, artifacts, next-edge state, controls
+- terminal tab:
+  the real interactive execution surface for the active attempt
 
-### Continue
+Entry points:
 
-Advances from the current state once the current step is complete or manually approved.
-
-### Steer
-
-Adds operator input to the active supervised session or appends a steering note for the next headless resume.
-
-### Resume After App Restart
-
-The workflow engine must rehydrate:
-
-- active run state
-- associated worktree
-- active terminal if still alive
-- associated artifacts
-- current phase / step cursor
-
-## UI Surfaces
-
-## 1. Entry Points
-
-Add workflow entry points in three places:
-
-- titlebar action
-- Agents sidebar tab
+- Agents sidebar
 - command palette
+- titlebar action
 
-The titlebar action opens the workflow modal.
+V1 should not be modal-first.
+Workflows should live naturally in the same split/tab environment as files, diffs, and terminals.
 
-## 2. Agents Sidebar Tab
+## Architecture Boundaries
 
-The Agents tab should be split into two clear blocks:
+This feature must follow the repo’s accepted architecture:
 
-- `Workflows`
-- `Agent Sessions`
+- `Packages/AppFeatures`
+  owns workflow definitions, run state, nodes, edges, attempts, completion policy, sidebar summaries, tab identity, and presentation state
+- `Apps/mac-client`
+  owns host execution, PTY and terminal attachment, file-system side effects, and engine-backed workflow views
+- `Packages/UI`
+  owns shared workflow chrome and reusable stateless components
+- `Packages/Canvas`
+  should be promoted or replaced intentionally as the active workflow builder surface, but it must never own workflow truth or runtime policy
 
-### Workflows Block
+Important implementation rule:
 
-Show:
+- do not route workflow execution through `AgentSessionRuntime` chat behavior
 
-- active run cards
-- current phase
-- current step
-- status badge
-- elapsed time
-- latest commit
-- quick actions
+Workflow execution may reuse launchers, terminals, and low-level host infrastructure, but it should remain its own reducer-owned product domain.
 
-Quick actions:
+## V1 Non-Goals
 
-- open run
-- resume
-- stop
-- open worktree
-
-### Agent Sessions Block
-
-Show:
-
-- currently open agent sessions in this worktree
-- session type
-- busy / idle / attention-needed state
-
-This keeps workflows and ad hoc agent sessions related but distinct.
-
-## 3. Workflow Modal
-
-The modal is the primary workflow surface.
-
-It should support two modes:
-
-- builder / editor
-- run monitor / control
-
-### Modal Shell
-
-Three-column layout:
-
-- left: workflow templates and recent runs
-- center: definition or run timeline
-- right: inspector
-
-The modal should stay anchored and persistent. Closing it should never cancel a run.
-
-### Builder Mode
-
-Left column:
-
-- templates
-- duplicate
-- rename
-- create new
-
-Center column:
-
-- ordered phases
-- ordered steps inside each phase
-- add / remove / reorder
-
-Right inspector:
-
-- step type
-- runner
-- model
-- launcher / harness profile
-- execution mode
-- prompt file
-- prompt preview / editor
-- artifact expectations
-- completion behavior
-
-### Run Mode
-
-Left column:
-
-- active runs
-- paused runs
-- recent completed runs
-
-Center column:
-
-- current phase and step ladder
-- live transcript or terminal view
-- artifact list
-- commit history for this run
-
-Right inspector:
-
-- step prompt
-- run state
-- worktree / branch
-- intervention controls
-- execution metadata
-
-## 4. Worktree Status
-
-Workflow state must also be visible outside the modal.
-
-Add lightweight workflow status to:
-
-- navigator worktree rows
-- status bar when a workflow-owned worktree is active
-
-Suggested visible fields:
-
-- workflow name
-- phase
-- active step
-- running / paused / blocked / failed / complete
-
-## V1 Scope
-
-V1 should solve the real workflow problem without visual graph editing.
-
-### V1 Includes
-
-- workflow definition schema
-- committed workflow definitions and prompt files
-- local run state and artifact storage
-- one workflow run per worktree
-- ordered phases and steps
-- Files | Agents sidebar tab split
-- workflow modal builder/editor
-- workflow run monitor
-- headless and supervised step execution
-- explicit stop / restart / continue / steer controls
-- phase-level commits
-- run progress in sidebar and navigator
-- rehydration after app restart
-
-### V1 Default Workflow Preset
-
-Ship one opinionated starter template:
-
-- phase-based delivery workflow
-- Claude implement
-- Claude self-audit
-- Codex review
-- Codex fix
-- tests / lint / typecheck
-- update plan doc
-- commit phase
-
-This should work immediately and demonstrate the system.
-
-### V1 Non-Goals
-
-- generic DAG editing
-- arbitrary conditional branching
-- parallel fan-out / fan-in execution
-- visual canvas editing
-- remote collaboration
+- hidden fixed executor/reviewer semantics in the runtime type system
+- persisted steering-note state or a steering panel
+- fake terminal surrogates in place of the real terminal tab
+- agent chat as part of workflow execution
 - multi-repo workflows
 - automatic PR creation
-- automatic deployment orchestration
-
-## V1 Implementation Plan
-
-### Phase 1: Domain And Persistence
-
-- add workflow definition models
-- add workflow run models
-- add file-backed workflow store
-- add run-state persistence
-- add artifact store
-- add migration/version field support from day one
-
-Suggested files:
-
-- `Apps/mac-client/Sources/mac/Models/Workflows/...`
-- `Apps/mac-client/Sources/mac/Services/Workflows/...`
-
-### Phase 2: Sidebar Restructure
-
-- replace the current unified stacked sidebar with top tabs: `Files | Agents`
-- move file tree and diff/change surfaces under `Files`
-- move agent sessions and workflow surfaces under `Agents`
-- preserve worktree awareness and current active workspace behavior
-
-### Phase 3: Modal Builder
-
-- add a workflow modal shell
-- add template list
-- add create / duplicate / rename / delete
-- add phase and step editing
-- add prompt file editing
-- add harness profile and model selection
-
-### Phase 4: Runtime Engine
-
-- implement serial step execution
-- implement run cursoring
-- implement headless step execution
-- implement supervised PTY-backed step execution
-- persist event logs and artifacts
-
-### Phase 5: Run Monitor
-
-- add active run list
-- add live step state
-- add terminal mirroring
-- add artifact inspector
-- add commit log inspector
-
-### Phase 6: Intervention And Recovery
-
-- stop
-- restart step
-- continue
-- steer
-- recover active runs on relaunch
-
-### Phase 7: Quality And Presets
-
-- add starter workflow templates
-- add validation and guardrails
-- add tests for persistence, execution state, and sidebar state
-
-## V2: Canvas Visualization And Editing
-
-V2 should use the archived Canvas work to visualize and edit workflows.
-
-Important constraint:
-
-Canvas is not the source of truth.
-
-The same workflow definition schema from v1 remains canonical. Canvas becomes another editor and visualization layer over that schema.
-
-### V2 Goals
-
-- visualize workflows as phase/step graphs
-- edit workflow structure spatially
-- make long workflows easier to reason about
-- preserve a modal context so the user never feels dropped into a separate app mode
-
-### V2 UI Shape
-
-Inside the workflow modal, add a view switch:
-
-- `List`
-- `Canvas`
-
-List remains the explicit editor.
-Canvas becomes the visual editor and overview.
-
-### V2 Canvas Behaviors
-
-- phase groups
-- step nodes
-- dependency connectors
-- quick add
-- drag to reorder
-- inspector-driven editing
-- zoom / pan / focus current phase
-- run overlay showing active step and completed phases
-
-### V2 Constraints
-
-- no workflow logic should live only in node position or edge state
-- Canvas edits must round-trip cleanly to the list editor
-- Canvas should remain optional, not required
-
-## V3: Agent-Authored Workflow Creation And Editing
-
-Later, Devys should support a CLI plus a repo skill that lets an agent create or edit workflows for the user.
-
-This is the long-term "describe it, let an agent build it, then adjust it in the UI" path.
-
-### V3 Goals
-
-- let the user describe a workflow in natural language
-- let an agent generate the workflow definition and prompt files
-- let the user inspect and edit the result in the modal builder
-- let an agent later refactor or update a workflow safely
-
-### V3 Deliverables
-
-- a Devys CLI command for workflow creation / editing
-- a `SKILL.md` contract for workflow authoring
-- stable prompt and definition templates
-- validation and preview before write
-
-### Example Future Commands
-
-```bash
-devys workflow create "build me a claude->codex phase workflow for large refactors"
-devys workflow edit phase-delivery --add-step "security review with codex"
-devys workflow validate phase-delivery
-```
-
-### Why This Matters
-
-If the workflow format is file-backed, explicit, and stable in v1:
-
-- agents can generate workflows safely
-- workflows stay reviewable in Git
-- users can still edit prompts and models manually
-- Canvas can visualize the same definition later
-
-## Future Extensions After V3
-
-- conditional step transitions
-- branch templates per workflow
-- reusable step libraries
-- shared org-level workflow packs
-- richer review step primitives
-- PR creation and merge helpers
-- deployment-aware workflow gates
-
-## Risks
-
-### Risk: Over-engineering Early
-
-Mitigation:
-
-- v1 is phase pipeline only
-- no generic graph runtime
-- no speculative orchestration DSL
-
-### Risk: Splitting Reality Between PTY And Structured Events
-
-Mitigation:
-
-- terminal output is the execution truth
-- structured logs are supplementary
-- every step still persists explicit status and artifacts
-
-### Risk: Workflow Definitions Drift From How You Actually Work
-
-Mitigation:
-
-- ship one strongly opinionated starter template first
-- optimize for your actual phase loop before generalizing
-
-### Risk: Canvas Forces Premature Graph Semantics
-
-Mitigation:
-
-- keep Canvas in v2
-- keep list editor canonical
-
-## Design Rules
-
-- prefer explicit labels over abstract metaphors
-- keep controls close to the currently active step
-- never hide worktree ownership
-- always show phase and step together
-- keep prompt editing one click away
-- keep the modal anchored and resumable
-- avoid deep nested navigation
-
-## Recommended First Slice
-
-If building incrementally, the first useful slice should be:
-
-1. file-backed workflow definition
-2. Files | Agents sidebar split
-3. workflow modal with list editor
-4. one starter workflow template
-5. create run on a worktree
-6. supervised Claude step in a terminal
-7. supervised Codex step in a terminal
-8. manual quality gate step
-9. commit-phase step
-10. persisted run state and sidebar progress
-
-That gets a real end-to-end workflow into the product quickly and keeps the architecture aligned with the long-term plan.
+- deployment orchestration
+- parallel fan-out and fan-in in the first slice
+
+## Success Criteria
+
+This vision is on track when Devys can do all of the following without hidden magic:
+
+- define workflows on a Canvas-backed builder
+- bind a real markdown plan file as an artifact
+- run agent nodes in real terminal tabs
+- let the operator steer by typing into those terminals
+- use terminal exit as the default completion signal for terminal-backed attempts
+- move from node to node through explicit edges
+- pause for operator choice when the next edge is ambiguous
+- append follow-up tickets back into the plan file when the workflow definition requests it
+- expose workflow state in reducer-owned tabs and sidebar surfaces
+
+If the product can do that well, then richer edge conditions, quality-gate nodes, and later headless execution can land without rewriting the core model.

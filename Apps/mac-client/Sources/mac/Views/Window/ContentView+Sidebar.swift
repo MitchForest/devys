@@ -47,12 +47,6 @@ extension ContentView {
             onReorderRepository: { repositoryID, toIndex in
                 store.send(.reorderRepository(repositoryID, toIndex: toIndex))
             },
-            onSetRepositoryDisplayInitials: { repositoryID, initials in
-                store.send(.setRepositoryDisplayInitials(repositoryID, initials))
-            },
-            onSetRepositoryDisplaySymbol: { repositoryID, symbol in
-                store.send(.setRepositoryDisplaySymbol(repositoryID, symbol))
-            },
             onSetWorkspacePinned: { repositoryID, workspaceID, isPinned in
                 setWorkspacePinned(workspaceID, in: repositoryID, isPinned: isPinned)
             },
@@ -104,6 +98,8 @@ extension ContentView {
             gitStore: activeWorkspaceID.flatMap(runtimeRegistry.gitStore(for:)),
             changeCount: changeCount,
             agentSessions: hostedAgentSessions,
+            workflowState: activeWorkspaceID.map { workflowWorkspaceState(for: $0) }
+                ?? WindowFeature.WorkflowWorkspaceState(),
             portsByWorkspaceID: workspaceOperationalState.portsByWorkspaceID,
             repositorySettingsStore: repositorySettingsStore,
             onSelectSidebar: showSidebarItem,
@@ -154,6 +150,14 @@ extension ContentView {
             onOpenAgentSession: { workspaceID, sessionID in
                 focusAgentSession(workspaceID: workspaceID, sessionID: sessionID)
             },
+            onCreateWorkflowDefinition: createWorkflowDefinition,
+            onOpenWorkflowDefinition: openWorkflowDefinition,
+            onStartWorkflowDefinition: startWorkflowRun,
+            onDeleteWorkflowDefinition: deleteWorkflowDefinition,
+            onOpenWorkflowRun: { workspaceID, runID in
+                openInPermanentTab(content: .workflowRun(workspaceID: workspaceID, runID: runID))
+            },
+            onDeleteWorkflowRun: deleteWorkflowRun,
             onOpenPort: openPort,
             onCopyPortURL: copyPortURL,
             onStopPortProcess: stopPortProcess

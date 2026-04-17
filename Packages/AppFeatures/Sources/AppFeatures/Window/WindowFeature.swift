@@ -15,6 +15,8 @@ public struct WindowFeature {
     @Dependency(\.windowRelaunchPersistenceClient) var windowRelaunchPersistenceClient
     @Dependency(\.recentRepositoriesClient) var recentRepositoriesClient
     @Dependency(\.repositoryDiscoveryClient) var repositoryDiscoveryClient
+    @Dependency(\.workflowPersistenceClient) var workflowPersistenceClient
+    @Dependency(\.workflowExecutionClient) var workflowExecutionClient
     @Dependency(\.uuid) var uuid
     @Dependency(\.date.now) var now
 
@@ -87,9 +89,15 @@ public struct WindowFeature {
                     || previousWorkspaceID != state.selectedWorkspaceID {
                     state.restoreWorkspaceShell(for: state.selectedWorkspaceID)
                 }
-                return syncWorkspaceOperationalEffect(
-                    state.workspaceOperationalCatalogContext,
-                    mode: .all
+                let workflowLoadEffect = state.selectedWorkspaceID.map { workspaceID in
+                    Effect<Action>.send(.workflowWorkspaceLoadRequested(workspaceID))
+                } ?? .none
+                return .merge(
+                    syncWorkspaceOperationalEffect(
+                        state.workspaceOperationalCatalogContext,
+                        mode: .all
+                    ),
+                    workflowLoadEffect
                 )
 
             case let .moveRepository(repositoryID, offset):
@@ -157,6 +165,7 @@ public struct WindowFeature {
                 let previousWorkspaceID = state.selectedWorkspaceID
                 state.removeWorkspaceState(workspaceID, in: repositoryID)
                 state.hostedWorkspaceContentByID.removeValue(forKey: workspaceID)
+                state.workflowWorkspacesByID.removeValue(forKey: workspaceID)
                 if previousWorkspaceID != state.selectedWorkspaceID {
                     state.restoreWorkspaceShell(for: state.selectedWorkspaceID)
                 }
@@ -203,6 +212,7 @@ public struct WindowFeature {
                 state.reorderWorktrees(in: repositoryID)
                 return .merge(
                     persistWorkspaceStatesEffect(state.workspaceStatesByID),
+                    .send(.workflowWorkspaceLoadRequested(workspaceID)),
                     syncWorkspaceOperationalEffect(
                         state.workspaceOperationalCatalogContext,
                         mode: .metadata
@@ -464,9 +474,12 @@ public struct WindowFeature {
                 if state.selectedRepositoryID != nil {
                     state.restoreWorkspaceShell(for: workspaceID)
                 }
-                return syncWorkspaceOperationalEffect(
-                    state.workspaceOperationalCatalogContext,
-                    mode: .metadata
+                return .merge(
+                    syncWorkspaceOperationalEffect(
+                        state.workspaceOperationalCatalogContext,
+                        mode: .metadata
+                    ),
+                    workspaceID.map { Effect<Action>.send(.workflowWorkspaceLoadRequested($0)) } ?? .none
                 )
 
             case .startWorkspaceOperationalObservation:
@@ -478,6 +491,33 @@ public struct WindowFeature {
                         mode: .all
                     )
                 )
+
+            case .startWorkflowObservation,
+                 .workflowWorkspaceLoadRequested,
+                 .workflowWorkspaceLoaded,
+                 .workflowWorkspaceLoadFailed,
+                 .createDefaultWorkflowDefinition,
+                 .updateWorkflowDefinition,
+                 .createWorkflowWorker,
+                 .updateWorkflowWorker,
+                 .deleteWorkflowWorker,
+                 .replaceWorkflowGraph,
+                 .deleteWorkflowDefinition,
+                 .startWorkflowRun,
+                 .continueWorkflowRun,
+                 .restartWorkflowRun,
+                 .stopWorkflowRun,
+                 .chooseWorkflowRunEdge,
+                 .deleteWorkflowRun,
+                 .appendWorkflowFollowUpTicket,
+                 .workflowPlanSnapshotLoaded,
+                 .workflowPlanSnapshotLoadFailed,
+                 .workflowNodeLaunchSucceeded,
+                 .workflowNodeLaunchFailed,
+                 .workflowFollowUpTicketAppended,
+                 .workflowFollowUpTicketAppendFailed,
+                 .workflowExecutionUpdated:
+                return reduceWorkflowAction(state: &state, action: action)
 
             case .workspaceOperationalSnapshotUpdated(let snapshot):
                 state.operational.applySnapshot(

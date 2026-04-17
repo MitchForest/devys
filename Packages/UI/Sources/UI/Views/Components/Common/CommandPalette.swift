@@ -277,8 +277,8 @@ public struct CommandPalette: View {
                 CommandPaletteSection(
                     title: "Agents",
                     items: [
-                        CommandPaletteItem(icon: "sparkles", title: "API Refactor"),
-                        CommandPaletteItem(icon: "sparkles", title: "Test Writer"),
+                        CommandPaletteItem(icon: "person.crop.circle", title: "API Refactor"),
+                        CommandPaletteItem(icon: "person.crop.circle", title: "Test Writer"),
                     ]
                 ),
             ]

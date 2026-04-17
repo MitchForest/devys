@@ -4,6 +4,7 @@
 // Copyright © 2026 Devys. All rights reserved.
 
 import AppFeatures
+import AppKit
 import Foundation
 import Split
 import Workspace
@@ -14,6 +15,13 @@ extension ContentView {
         case promotedPreview
         case reusedPreview
         case created
+    }
+
+    private struct BrowserPaneDestination {
+        let paneID: PaneID
+        let tabID: TabID
+        let browserID: UUID
+        let initialURL: URL
     }
 
     func selectTab(_ tabId: TabID) {
@@ -35,16 +43,54 @@ extension ContentView {
                 title = session.tabTitle
                 icon = session.tabIcon
             }
+            if let binding = workflowTerminalBinding(terminalID: id, workspaceID: workspaceID) {
+                title = binding.nodeTitle
+                icon = binding.isActive ? "point.3.connected.trianglepath.dotted" : icon
+            }
+        case .browser(let workspaceID, let id, _):
+            if let session = browserRegistry.session(id: id, in: workspaceID) {
+                title = session.tabTitle
+                icon = session.tabIcon
+            }
         case .agentSession(let workspaceID, let sessionID):
             if let session = runtimeRegistry.agentSession(id: sessionID, in: workspaceID) {
                 title = session.tabTitle
                 icon = session.tabIcon
+            }
+        case .workflowDefinition(let workspaceID, let definitionID):
+            if let definition = workflowDefinition(
+                workspaceID: workspaceID,
+                definitionID: definitionID
+            ) {
+                title = definition.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    ? content.fallbackTitle
+                    : definition.name
+            }
+        case .workflowRun(let workspaceID, let runID):
+            if let run = workflowRun(workspaceID: workspaceID, runID: runID) {
+                title = run.currentPhaseTitle
+                    ?? workflowDefinition(
+                        workspaceID: workspaceID,
+                        definitionID: run.definitionID
+                    )?.node(id: run.currentNodeID ?? "")?.displayTitle
+                    ?? definitionTitleForRun(run, workspaceID: workspaceID)
+                icon = run.status.isActive ? "play.circle.fill" : content.fallbackIcon
             }
         default:
             title = content.fallbackTitle
             icon = content.fallbackIcon
         }
         return (title, icon)
+    }
+
+    private func definitionTitleForRun(
+        _ run: WorkflowRun,
+        workspaceID: Workspace.ID
+    ) -> String {
+        workflowDefinition(
+            workspaceID: workspaceID,
+            definitionID: run.definitionID
+        )?.name ?? "Workflow Run"
     }
 
     func tabActivityIndicator() -> TabActivityIndicator? {
@@ -95,6 +141,83 @@ extension ContentView {
         }
     }
 
+    @discardableResult
+    func openBrowserURL(
+        _ url: URL,
+        workspaceID: Workspace.ID? = nil,
+        preferredPaneID: PaneID? = nil
+    ) -> TabID? {
+        let workspaceID = workspaceID ?? selectedWorkspaceID
+        guard let workspaceID,
+              let paneID = targetPaneID(preferred: preferredPaneID, workspaceID: workspaceID) else {
+            return nil
+        }
+
+        let browserID = UUID()
+        _ = ensureBrowserSession(id: browserID, in: workspaceID, initialURL: url)
+        let content = WorkspaceTabContent.browser(
+            workspaceID: workspaceID,
+            id: browserID,
+            initialURL: url
+        )
+        let result = openWorkspaceContent(
+            content,
+            mode: .permanent,
+            preferredPaneID: paneID
+        )
+        if result.tabID == nil {
+            removeBrowserSession(id: browserID, in: workspaceID)
+        }
+        return result.tabID
+    }
+
+    func openBrowserURLFromTerminal(
+        _ url: URL,
+        workspaceID: Workspace.ID,
+        sourcePaneID: PaneID
+    ) {
+        guard shouldOpenInEmbeddedBrowser(url) else {
+            NSWorkspace.shared.open(url)
+            return
+        }
+
+        if let destination = existingBrowserPaneDestination(
+            workspaceID: workspaceID,
+            excluding: sourcePaneID
+        ) {
+            let session = ensureBrowserSession(
+                id: destination.browserID,
+                in: workspaceID,
+                initialURL: destination.initialURL
+            )
+            session.load(url: url)
+            store.send(
+                .selectWorkspaceTab(
+                    workspaceID: workspaceID,
+                    paneID: destination.paneID,
+                    tabID: destination.tabID
+                )
+            )
+            renderWorkspaceLayout(for: workspaceID)
+            applyHostSelectionEffects(for: destination.tabID)
+            return
+        }
+
+        guard let targetPaneID = splitPane(
+            sourcePaneID,
+            orientation: .horizontal,
+            workspaceID: workspaceID
+        ) else {
+            return
+        }
+
+        _ = openBrowserURL(
+            url,
+            workspaceID: workspaceID,
+            preferredPaneID: targetPaneID
+        )
+    }
+
     func findExistingTab(for content: WorkspaceTabContent) -> TabID? {
         tabContents.first { contentMatches($0.value, content) }?.key
     }
@@ -124,6 +247,13 @@ extension ContentView {
         case .terminal(let workspaceID, let terminalId):
             markTerminalNotificationRead(terminalId)
             workspaceTerminalRegistry.session(id: terminalId, in: workspaceID)?.requestKeyboardFocus()
+        case .workflowRun(let workspaceID, let runID):
+            if let terminalID = workflowRun(
+                workspaceID: workspaceID,
+                runID: runID
+            )?.currentTerminalID {
+                workspaceTerminalRegistry.session(id: terminalID, in: workspaceID)?.requestKeyboardFocus()
+            }
         case .agentSession:
             break
         case .editor:
@@ -174,7 +304,6 @@ extension ContentView {
         )
 
         reconcileWorkspaceTabContentMutation(
-            workspaceID: workspaceID,
             previousTabContents: previousTabContents,
             currentTabContents: workspaceTabContents(for: workspaceID)
         )
@@ -188,8 +317,72 @@ extension ContentView {
         return (tabID, disposition)
     }
 
-    private func reconcileWorkspaceTabContentMutation(
+    private func shouldOpenInEmbeddedBrowser(_ url: URL) -> Bool {
+        switch url.scheme?.lowercased() {
+        case "http", "https":
+            true
+        default:
+            false
+        }
+    }
+
+    private func existingBrowserPaneDestination(
         workspaceID: Workspace.ID,
+        excluding sourcePaneID: PaneID
+    ) -> BrowserPaneDestination? {
+        guard let shell = store.workspaceShells[workspaceID],
+              let layout = shell.layout else {
+            return nil
+        }
+
+        let candidatePaneIDs = layout.allPaneIDs.filter { $0 != sourcePaneID }
+
+        for paneID in candidatePaneIDs {
+            guard let selectedTabID = layout.paneLayout(for: paneID)?.selectedTabID,
+                  let destination = browserPaneDestination(
+                    for: selectedTabID,
+                    in: paneID,
+                    tabContents: shell.tabContents
+                  ) else {
+                continue
+            }
+            return destination
+        }
+
+        for paneID in candidatePaneIDs {
+            guard let paneLayout = layout.paneLayout(for: paneID) else { continue }
+            for tabID in paneLayout.tabIDs {
+                if let destination = browserPaneDestination(
+                    for: tabID,
+                    in: paneID,
+                    tabContents: shell.tabContents
+                ) {
+                    return destination
+                }
+            }
+        }
+
+        return nil
+    }
+
+    private func browserPaneDestination(
+        for tabID: TabID,
+        in paneID: PaneID,
+        tabContents: [TabID: WorkspaceTabContent]
+    ) -> BrowserPaneDestination? {
+        guard case .browser(_, let browserID, let initialURL)? = tabContents[tabID] else {
+            return nil
+        }
+
+        return BrowserPaneDestination(
+            paneID: paneID,
+            tabID: tabID,
+            browserID: browserID,
+            initialURL: initialURL
+        )
+    }
+
+    private func reconcileWorkspaceTabContentMutation(
         previousTabContents: [TabID: WorkspaceTabContent],
         currentTabContents: [TabID: WorkspaceTabContent]
     ) {
@@ -211,6 +404,13 @@ extension ContentView {
 
             guard case .editor(_, let url)? = currentContent else { continue }
             ensureEditorSession(tabId: tabID, url: url)
+        }
+
+        for (_, currentContent) in currentTabContents {
+            guard case .browser(let workspaceID, let id, let initialURL) = currentContent else {
+                continue
+            }
+            _ = ensureBrowserSession(id: id, in: workspaceID, initialURL: initialURL)
         }
     }
 }

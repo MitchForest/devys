@@ -41,7 +41,7 @@ final class WorkspaceBackgroundProcessRegistry {
         process.arguments = ["-lc", command]
         process.currentDirectoryURL = workingDirectory
 
-        var mergedEnvironment = ProcessInfo.processInfo.environment
+        var mergedEnvironment = colorCapableEnvironment(ProcessInfo.processInfo.environment)
         for (key, value) in environment {
             mergedEnvironment[key] = value
         }

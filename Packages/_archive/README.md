@@ -2,14 +2,11 @@
 
 These packages are preserved from earlier exploration phases. They are excluded from builds but kept in the repo for future use.
 
-| Package | Comes Back When |
-|---------|----------------|
-| **Agents** | V1.1 cloud agent orchestration needs programmatic agent control |
-| **Chat** | V2 multiplayer / team features |
-| **Server** | V1.5 automation orchestrator, V2 iOS companion |
-| **Browser** | Post-V1 web dev workflows |
-| **Canvas** | Post-V1 if needed |
-| **MetalASCII** | Demo/experiment |
+| Package | What It Was For | Comes Back When |
+|---------|------------------|-----------------|
+| **Server** | Remote runtime protocol and client for the old automation host / mobile companion direction | V1.5 automation orchestrator, V2 iOS companion |
+| **SSH** | Direct interactive SSH client library for macOS and iOS | Remote host workflows return as a first-class product surface |
+| **MetalASCII** | GPU ASCII rendering experiment and demo runner | Demo/experiment |
 
 ## To restore a package
 

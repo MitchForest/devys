@@ -7,37 +7,6 @@ import AppFeatures
 import UI
 import Workspace
 
-/// Computes aggregate status hints per repository from worktree operational data.
-@MainActor
-func computeRepoStatusHints(
-    repositories: [Repository],
-    worktreesByRepository: [Repository.ID: [Worktree]],
-    infoEntries: [Workspace.ID: WorktreeInfoEntry],
-    attentionSummaries: [Workspace.ID: WorkspaceAttentionSummary]
-) -> [Repository.ID: StatusHint] {
-    var result: [Repository.ID: StatusHint] = [:]
-
-    for repo in repositories {
-        let worktrees = worktreesByRepository[repo.id] ?? []
-        var worst: StatusHint = .clean
-
-        for worktree in worktrees {
-            let hint = computeWorktreeStatusHint(
-                worktreeID: worktree.id,
-                infoEntries: infoEntries,
-                attentionSummaries: attentionSummaries
-            )
-            if let hint {
-                worst = worseHint(worst, hint)
-            }
-        }
-
-        result[repo.id] = worst
-    }
-
-    return result
-}
-
 /// Computes status hints per worktree from operational data.
 @MainActor
 func computeWorktreeStatusHints(
@@ -78,9 +47,4 @@ private func computeWorktreeStatusHint(
     }
 
     return nil
-}
-
-private func worseHint(_ a: StatusHint, _ b: StatusHint) -> StatusHint {
-    let priority: [StatusHint: Int] = [.clean: 0, .dirty: 1, .attention: 2, .error: 3]
-    return (priority[b] ?? 0) > (priority[a] ?? 0) ? b : a
 }

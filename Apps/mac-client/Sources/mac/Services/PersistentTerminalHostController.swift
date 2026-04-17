@@ -211,7 +211,7 @@ actor PersistentTerminalHostController {
     }
 
     private func sanitizedHostEnvironment() -> [String: String] {
-        var environment = ProcessInfo.processInfo.environment
+        var environment = colorCapableEnvironment(ProcessInfo.processInfo.environment)
         for key in environment.keys where
             key.hasPrefix("XCTest")
             || key.hasPrefix("XCInject")

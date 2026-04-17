@@ -334,10 +334,16 @@ public struct ExplorerSettings: Codable, Equatable, Sendable {
 
 // MARK: - Appearance Settings
 
+public enum AppearanceMode: String, Codable, CaseIterable, Equatable, Sendable {
+    case auto
+    case light
+    case dark
+}
+
 /// Settings for visual appearance.
 public struct AppearanceSettings: Codable, Equatable, Sendable {
-    /// Whether dark mode is enabled (default: true for terminal aesthetic)
-    public var isDarkMode: Bool
+    /// App appearance mode.
+    public var mode: AppearanceMode
     
     /// UI font size multiplier (1.0 = default)
     public var uiFontScale: Double
@@ -347,11 +353,11 @@ public struct AppearanceSettings: Codable, Equatable, Sendable {
     public var accentColor: String
     
     public init(
-        isDarkMode: Bool = true,  // Default to dark for terminal aesthetic
+        mode: AppearanceMode = .dark,  // Default to dark for terminal aesthetic
         uiFontScale: Double = 1.0,
         accentColor: String = "#FFFFFF"  // White/Monochrome - pure terminal look
     ) {
-        self.isDarkMode = isDarkMode
+        self.mode = mode
         self.uiFontScale = uiFontScale
         self.accentColor = accentColor
     }

@@ -36,15 +36,6 @@ extension ContentView {
         runtimeRegistry.setFilesSidebarVisible(reducerFilesSidebarVisible)
     }
 
-    var reducerCatalogRuntimeSnapshot: WindowCatalogRuntimeSnapshot {
-        WindowCatalogRuntimeSnapshot(
-            repositories: store.repositories,
-            worktreesByRepository: store.worktreesByRepository,
-            selectedRepositoryID: selectedRepositoryID,
-            selectedWorkspaceID: selectedWorkspaceID
-        )
-    }
-
     var uniqueEditorSessions: [EditorSession] {
         var seen: Set<ObjectIdentifier> = []
         var result: [EditorSession] = []
@@ -61,6 +52,8 @@ extension ContentView {
         switch content {
         case .terminal(let workspaceID, let id):
             shutdownWorkspaceTerminalSession(id: id, in: workspaceID)
+        case .browser(let workspaceID, let id, _):
+            removeBrowserSession(id: id, in: workspaceID)
         case .agentSession(let workspaceID, let sessionID):
             if let session = runtimeRegistry.agentSession(id: sessionID, in: workspaceID) {
                 hostedContentBridge.detachAgentSession(session, workspaceID: workspaceID)
@@ -73,6 +66,8 @@ extension ContentView {
             if let tabId {
                 removeEditorSession(tabId: tabId)
             }
+        case .workflowRun(let workspaceID, let runID):
+            stopWorkflowRun(workspaceID: workspaceID, runID: runID)
         default:
             break
         }
@@ -197,10 +192,6 @@ extension ContentView {
         guard let request = store.workspaceTransitionRequest else { return }
         store.send(.setWorkspaceTransitionRequest(nil))
         await executeWorkspaceTransition(request)
-    }
-
-    func moveRepository(_ repositoryID: Repository.ID, by offset: Int) {
-        store.send(.moveRepository(repositoryID, by: offset))
     }
 
     func removeRepository(_ repositoryID: Repository.ID) async {

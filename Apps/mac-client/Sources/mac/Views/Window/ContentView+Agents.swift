@@ -3,6 +3,7 @@ import AppFeatures
 import Foundation
 import Git
 import Split
+import UI
 import Workspace
 
 @MainActor
@@ -331,7 +332,7 @@ extension ContentView {
         sessionRuntime.launchState = .launching
         sessionRuntime.updatePresentation(
             title: preferredKind?.displayName ?? "Agents",
-            icon: preferredKind.map(agentIcon(for:)) ?? "message",
+            icon: preferredKind.map(agentIcon(for:)) ?? "person.crop.circle.badge.plus",
             subtitle: preferredKind == nil ? "Choose an agent" : "Launching"
         )
         configureWorkspaceBridgeIfNeeded(for: sessionRuntime, workspaceID: workspaceID)
@@ -453,9 +454,9 @@ extension ContentView {
     private func agentIcon(for kind: ACPAgentKind) -> String {
         switch kind {
         case .codex:
-            "chevron.left.forwardslash.chevron.right"
+            DevysIconName.codex
         case .claude:
-            "brain"
+            DevysIconName.claudeCode
         }
     }
 

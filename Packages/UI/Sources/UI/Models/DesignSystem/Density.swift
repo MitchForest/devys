@@ -53,8 +53,8 @@ public struct DensityLayout: Sendable {
 
     // MARK: - Capsule
 
-    public var capsulePaddingH: CGFloat { density == .compact ? 10 : 14 }
-    public var capsulePaddingV: CGFloat { density == .compact ? 6 : 8 }
+    public var capsulePaddingH: CGFloat { density == .compact ? 8 : 10 }
+    public var capsulePaddingV: CGFloat { density == .compact ? 5 : 6 }
 
     // MARK: - Font Size Offset
 

@@ -20,9 +20,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Activate the app and bring it to the foreground
         NSApplication.shared.activate(ignoringOtherApps: true)
-        
-        // Default to dark mode for terminal aesthetic
-        NSApp.appearance = NSAppearance(named: .darkAqua)
 
         distributedAttentionObserver = DistributedNotificationCenter.default()
             .addObserver(
@@ -345,6 +342,7 @@ struct DevysApp: App {
 @main
 enum DevysMain {
     static func main() {
+        removeColorSuppressingEnvironmentFromCurrentProcess()
         let arguments = Array(CommandLine.arguments.dropFirst())
 
         if arguments.contains("--workspace-notify") {

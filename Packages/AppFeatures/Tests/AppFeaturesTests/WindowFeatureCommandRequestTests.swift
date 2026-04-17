@@ -507,8 +507,11 @@ struct WindowFeatureCommandRequestTests {
         )
         let paneID = PaneID()
         let terminalTabID = TabID()
+        let browserTabID = TabID()
         let agentTabID = TabID()
         let editorTabID = TabID()
+        let workflowDefinitionTabID = TabID()
+        let workflowRunTabID = TabID()
         let hostedSession = HostedTerminalSessionRecord(
             id: UUID(uuidString: "12345678-1234-1234-1234-123456789012")!,
             workspaceID: workspace.id,
@@ -523,6 +526,14 @@ struct WindowFeatureCommandRequestTests {
                 worktreesByRepository: [repository.id: [workspace]],
                 hostedWorkspaceContentByID: [
                     workspace.id: HostedWorkspaceContentState(
+                        browserSessions: [
+                            HostedBrowserSessionSummary(
+                                sessionID: UUID(uuidString: "bbbbbbbb-cccc-dddd-eeee-ffffffffffff")!,
+                                url: URL(string: "http://localhost:3000/dashboard")!,
+                                title: "Local App",
+                                icon: "globe"
+                            )
+                        ],
                         agentSessions: [
                             HostedAgentSessionSummary(
                                 sessionID: AgentSessionID(rawValue: "agent-1"),
@@ -545,9 +556,22 @@ struct WindowFeatureCommandRequestTests {
                         activeSidebar: .agents,
                         tabContents: [
                             terminalTabID: .terminal(workspaceID: workspace.id, id: hostedSession.id),
+                            browserTabID: .browser(
+                                workspaceID: workspace.id,
+                                id: UUID(uuidString: "bbbbbbbb-cccc-dddd-eeee-ffffffffffff")!,
+                                initialURL: URL(string: "http://localhost:3000")!
+                            ),
                             agentTabID: .agentSession(
                                 workspaceID: workspace.id,
                                 sessionID: AgentSessionID(rawValue: "agent-1")
+                            ),
+                            workflowDefinitionTabID: .workflowDefinition(
+                                workspaceID: workspace.id,
+                                definitionID: "delivery"
+                            ),
+                            workflowRunTabID: .workflowRun(
+                                workspaceID: workspace.id,
+                                runID: UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")!
                             ),
                             editorTabID: .editor(
                                 workspaceID: workspace.id,
@@ -558,11 +582,18 @@ struct WindowFeatureCommandRequestTests {
                         layout: WindowFeature.WorkspaceLayout(
                             root: .pane(
                                 WindowFeature.WorkspacePaneLayout(
-                                    id: paneID,
-                                    tabIDs: [terminalTabID, agentTabID, editorTabID],
-                                    selectedTabID: editorTabID
-                                )
+                                id: paneID,
+                                tabIDs: [
+                                    terminalTabID,
+                                    browserTabID,
+                                    agentTabID,
+                                    workflowDefinitionTabID,
+                                    workflowRunTabID,
+                                    editorTabID
+                                ],
+                                selectedTabID: editorTabID
                             )
+                        )
                         )
                     )
                 ]
@@ -591,7 +622,15 @@ struct WindowFeatureCommandRequestTests {
         #expect(savedSnapshot?.selectedRepositoryID == repository.id)
         #expect(savedSnapshot?.selectedWorkspaceID == workspace.id)
         #expect(savedSnapshot?.workspaceStates.first?.sidebarMode == .agents)
-        #expect(savedSnapshot?.workspaceStates.first?.persistedTabs.count == 3)
+        #expect(savedSnapshot?.workspaceStates.first?.persistedTabs.count == 6)
+        #expect(
+            savedSnapshot?.workspaceStates.first?.persistedTabs.contains(
+                .browser(
+                    id: UUID(uuidString: "bbbbbbbb-cccc-dddd-eeee-ffffffffffff")!,
+                    url: URL(string: "http://localhost:3000/dashboard")!
+                )
+            ) == true
+        )
     }
 
     @Test("Applying a window relaunch restore rebuilds reducer-owned selection and shells")
@@ -617,6 +656,10 @@ struct WindowFeatureCommandRequestTests {
                         selectedTabIndex: 1,
                         tabs: [
                             .editor(fileURL: workspace.workingDirectory.appendingPathComponent("App.swift")),
+                            .browser(
+                                id: UUID(uuidString: "bbbbbbbb-cccc-dddd-eeee-ffffffffffff")!,
+                                url: URL(string: "http://localhost:3000/dashboard")!
+                            ),
                             .agent(
                                 PersistedAgentSessionRecord(
                                     sessionID: "agent-1",
@@ -624,7 +667,9 @@ struct WindowFeatureCommandRequestTests {
                                     title: "Codex",
                                     subtitle: "Connected"
                                 )
-                            )
+                            ),
+                            .workflowDefinition(definitionID: "delivery"),
+                            .workflowRun(runID: UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")!)
                         ]
                     )
                 )
@@ -652,8 +697,30 @@ struct WindowFeatureCommandRequestTests {
         #expect(state.selectedWorkspaceID == workspace.id)
         #expect(state.activeSidebar == .agents)
         #expect(state.workspaceShells[workspace.id]?.activeSidebar == .agents)
-        #expect(state.workspaceShells[workspace.id]?.tabContents.count == 2)
+        #expect(state.workspaceShells[workspace.id]?.tabContents.count == 5)
         #expect(state.workspaceShells[workspace.id]?.layout != nil)
+        #expect(
+            state.workspaceShells[workspace.id]?.tabContents.values.contains(
+                .browser(
+                    workspaceID: workspace.id,
+                    id: UUID(uuidString: "bbbbbbbb-cccc-dddd-eeee-ffffffffffff")!,
+                    initialURL: URL(string: "http://localhost:3000/dashboard")!
+                )
+            ) == true
+        )
+        #expect(
+            state.workspaceShells[workspace.id]?.tabContents.values.contains(
+                .workflowDefinition(workspaceID: workspace.id, definitionID: "delivery")
+            ) == true
+        )
+        #expect(
+            state.workspaceShells[workspace.id]?.tabContents.values.contains(
+                .workflowRun(
+                    workspaceID: workspace.id,
+                    runID: UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")!
+                )
+            ) == true
+        )
     }
 }
 

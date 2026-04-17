@@ -264,14 +264,14 @@ final class EditorSession: Identifiable {
                 if let previewLoader, let documentBuilder {
                     let preview = try await previewLoader(targetURL)
                     guard !Task.isCancelled else { return }
-                    let expectedVersion = await self.applyPreviewResult(
+                    let expectedVersion = self.applyPreviewResult(
                         revision: revision,
                         preview: preview,
                         url: targetURL
                     )
                     guard !Task.isCancelled else { return }
                     guard preview.requiresFullLoad else {
-                        await self.completePreviewOnlyResult(revision: revision)
+                        self.completePreviewOnlyResult(revision: revision)
                         return
                     }
                     let preparedTextDocument = try await documentBuilder(targetURL, preview)
@@ -286,7 +286,7 @@ final class EditorSession: Identifiable {
                 } else if let loader {
                     let loadedDocument = try await loader(targetURL)
                     guard !Task.isCancelled else { return }
-                    await self.applyLoadedDocumentResult(
+                    self.applyLoadedDocumentResult(
                         revision: revision,
                         document: loadedDocument
                     )
@@ -294,10 +294,10 @@ final class EditorSession: Identifiable {
                     throw CancellationError()
                 }
             } catch is CancellationError {
-                await self.clearLoadTask(revision: revision)
+                self.clearLoadTask(revision: revision)
             } catch {
                 guard !Task.isCancelled else { return }
-                await self.applyFailureResult(
+                self.applyFailureResult(
                     revision: revision,
                     message: error.localizedDescription
                 )
@@ -660,10 +660,6 @@ final class EditorSessionRegistry {
 
     func unregister(tabId: TabID) {
         sessions.removeValue(forKey: tabId)
-    }
-
-    var dirtySessions: [EditorSession] {
-        uniqueSessions.filter { $0.isDirty }
     }
 
     func saveAll() async -> Bool {

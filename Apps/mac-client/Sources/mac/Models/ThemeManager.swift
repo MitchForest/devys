@@ -8,32 +8,44 @@ import GhosttyTerminal
 import UI
 import Observation
 import SwiftUI
+import Workspace
 
 // MARK: - Theme Manager
 
 @MainActor
 @Observable
 final class ThemeManager {
-    /// Dark mode preference (default: true for terminal aesthetic)
-    var isDarkMode: Bool = true
+    /// Appearance mode preference (default: dark for terminal aesthetic)
+    var appearanceMode: AppearanceMode = .dark
     
     /// Current accent color (default: white/monochrome for pure terminal look)
-    var accentColor: AccentColor = .violet
+    var accentColor: AccentColor = .graphite
 
-    var colorScheme: ColorScheme {
-        isDarkMode ? .dark : .light
+    var preferredColorScheme: ColorScheme? {
+        appearanceMode.preferredColorScheme
     }
 
     var nsAppearance: NSAppearance? {
-        NSAppearance(named: isDarkMode ? .darkAqua : .aqua)
+        switch appearanceMode {
+        case .auto:
+            nil
+        case .light:
+            NSAppearance(named: .aqua)
+        case .dark:
+            NSAppearance(named: .darkAqua)
+        }
     }
 
     /// Returns the DevysTheme based on current mode and accent
-    var theme: DevysTheme {
-        DevysTheme(isDark: isDarkMode, accentColor: accentColor)
+    func theme(systemColorScheme: ColorScheme) -> DevysTheme {
+        DevysTheme(
+            isDark: resolvedColorScheme(systemColorScheme: systemColorScheme) == .dark,
+            accentColor: accentColor
+        )
     }
 
-    var ghosttyAppearance: GhosttyTerminalAppearance {
+    func ghosttyAppearance(systemColorScheme: ColorScheme) -> GhosttyTerminalAppearance {
+        let isDarkMode = resolvedColorScheme(systemColorScheme: systemColorScheme) == .dark
         let background = GhosttyTerminalColor(hex: isDarkMode ? "#0C0B0A" : "#FAF8F5")
         let foreground = GhosttyTerminalColor(hex: isDarkMode ? "#EDE8E0" : "#1C1A17")
         let fallbackSelection = GhosttyTerminalColor(hex: isDarkMode ? "#2E2C28" : "#DDD9D1")
@@ -58,6 +70,10 @@ final class ThemeManager {
             selectionForeground: foreground,
             palette: isDarkMode ? Self.darkTerminalPalette : Self.lightTerminalPalette
         )
+    }
+
+    func resolvedColorScheme(systemColorScheme: ColorScheme) -> ColorScheme {
+        appearanceMode.resolvedColorScheme(systemColorScheme: systemColorScheme)
     }
 
     func applyAppearance() {

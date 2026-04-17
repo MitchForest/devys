@@ -249,6 +249,7 @@ extension WindowFeature.State {
         for workspaceID in removedWorkspaceIDs {
             workspaceStatesByID.removeValue(forKey: workspaceID)
             hostedWorkspaceContentByID.removeValue(forKey: workspaceID)
+            workflowWorkspacesByID.removeValue(forKey: workspaceID)
             workspaceShells.removeValue(forKey: workspaceID)
             operational.removeWorkspace(workspaceID)
         }

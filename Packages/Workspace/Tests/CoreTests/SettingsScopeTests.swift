@@ -26,7 +26,7 @@ struct GlobalSettingsPersistenceTests {
                 defaultExternalEditorBundleIdentifier: "com.microsoft.VSCode"
             ),
             explorer: ExplorerSettings(showDotfiles: false, excludePatterns: ["node_modules"]),
-            appearance: AppearanceSettings(isDarkMode: false, uiFontScale: 1.25, accentColor: "#FF0000"),
+            appearance: AppearanceSettings(mode: .auto, uiFontScale: 1.25, accentColor: "#FF0000"),
             agent: AgentSettings(defaultHarness: AgentSettings.Harness.codex.rawValue),
             notifications: NotificationSettings(
                 terminalActivity: false,
@@ -92,7 +92,7 @@ struct GlobalSettingsPersistenceTests {
                 preserveTerminalsOnRelaunch: true
             ),
             explorer: ExplorerSettings(showDotfiles: false, excludePatterns: ["DerivedData"]),
-            appearance: AppearanceSettings(isDarkMode: false, uiFontScale: 1.1, accentColor: "#00FF00"),
+            appearance: AppearanceSettings(mode: .light, uiFontScale: 1.1, accentColor: "#00FF00"),
             agent: AgentSettings(defaultHarness: AgentSettings.Harness.claudeCode.rawValue)
         )
 

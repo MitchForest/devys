@@ -1,0 +1,109 @@
+{
+  "artifactBindings" : [
+
+  ],
+  "createdAt" : 798147756.412362,
+  "edges" : [
+    {
+      "canvasID" : "1B092064-6FFB-4CDF-9D2F-F5681A168938",
+      "id" : "implement-to-review",
+      "sourceNodeID" : "implement",
+      "targetNodeID" : "review"
+    },
+    {
+      "canvasID" : "79D944F6-EF88-40B9-A41E-61E59A775E2C",
+      "id" : "review-to-implement",
+      "label" : "Rework",
+      "sourceNodeID" : "review",
+      "targetNodeID" : "implement"
+    },
+    {
+      "canvasID" : "09562793-4558-4DA7-8DF1-A6166A1DF4DA",
+      "id" : "review-to-finish",
+      "label" : "Complete",
+      "sourceNodeID" : "review",
+      "targetNodeID" : "finish"
+    }
+  ],
+  "entryNodeID" : "implement",
+  "id" : "workflow-177d0268-62e9-4ed4-b574-a51120b30046",
+  "name" : "Delivery Loop",
+  "nodes" : [
+    {
+      "canvasID" : "2862E0CE-4F14-4C61-878D-45D12C92EF7C",
+      "completionSignal" : "processExit",
+      "frame" : {
+        "height" : 120,
+        "width" : 220,
+        "x" : -320,
+        "y" : -40
+      },
+      "id" : "implement",
+      "kind" : "agent",
+      "title" : "Implement",
+      "workerID" : "implementer"
+    },
+    {
+      "canvasID" : "B4DAAF52-6AC1-48A7-A997-FA9EABC45B3A",
+      "completionSignal" : "processExit",
+      "frame" : {
+        "height" : 120,
+        "width" : 220,
+        "x" : 0,
+        "y" : -40
+      },
+      "id" : "review",
+      "kind" : "agent",
+      "title" : "Review",
+      "workerID" : "reviewer"
+    },
+    {
+      "canvasID" : "21835235-CDC8-4EE9-8F87-BA72891D87E3",
+      "completionSignal" : "processExit",
+      "frame" : {
+        "height" : 100,
+        "width" : 180,
+        "x" : 320,
+        "y" : -40
+      },
+      "id" : "finish",
+      "kind" : "finish",
+      "title" : "Complete"
+    }
+  ],
+  "updatedAt" : 798147756.412388,
+  "workers" : [
+    {
+      "displayName" : "Implementer",
+      "executionMode" : "interactive",
+      "id" : "implementer",
+      "kind" : "claude",
+      "launcher" : {
+        "dangerousPermissions" : true,
+        "executable" : "claude",
+        "executionBehavior" : "runImmediately",
+        "extraArguments" : [
+
+        ]
+      },
+      "prompt" : "You are the implementation worker for the active workflow node.\n\nWork only on the current task and the bound artifacts.\nIf a markdown plan file is bound to this workflow:\n- update completed tickets directly in that file\n- append newly discovered follow-up work only inside explicit workflow-owned follow-up sections\n\nWhen your pass is done, stop.",
+      "promptFilePath" : "prompts\/implement.md"
+    },
+    {
+      "displayName" : "Reviewer",
+      "executionMode" : "interactive",
+      "id" : "reviewer",
+      "kind" : "codex",
+      "launcher" : {
+        "dangerousPermissions" : false,
+        "executable" : "codex",
+        "executionBehavior" : "runImmediately",
+        "extraArguments" : [
+
+        ]
+      },
+      "prompt" : "You are the review worker for the active workflow node.\n\nAudit the work completed so far against the bound plan and artifacts.\nIf you discover more work:\n- append concrete follow-up tickets inside explicit workflow-owned follow-up sections\n- fix issues directly when appropriate for this node\n\nWhen your pass is done, stop.",
+      "promptFilePath" : "prompts\/review.md"
+    }
+  ]
+}

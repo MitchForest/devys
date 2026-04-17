@@ -72,17 +72,6 @@ extension WorkspacePortOwnershipCoordinator {
         )
     }
 
-    func ports(for workspaceID: Workspace.ID?) -> [WorkspacePort] {
-        guard let workspaceID else { return [] }
-        for store in storesByRepositoryID.values {
-            let ports = store.ports(for: workspaceID)
-            if !ports.isEmpty {
-                return ports
-            }
-        }
-        return []
-    }
-
     func summary(for workspaceID: Workspace.ID?) -> WorkspacePortSummary? {
         guard let workspaceID else { return nil }
         for store in storesByRepositoryID.values {
@@ -95,18 +84,6 @@ extension WorkspacePortOwnershipCoordinator {
 
     var activeSummariesByWorkspace: [Workspace.ID: WorkspacePortSummary] {
         activeStore?.summariesByWorkspace ?? [:]
-    }
-
-    func refresh(
-        workspaceIDs: [Workspace.ID],
-        in repositoryID: Repository.ID? = nil
-    ) {
-        let targetRepositoryID = repositoryID ?? activeRepositoryID
-        guard let targetRepositoryID,
-              let store = storesByRepositoryID[targetRepositoryID] else {
-            return
-        }
-        store.refresh(workspaceIDs: workspaceIDs)
     }
 
     func clearWorkspace(_ workspaceID: Workspace.ID) {

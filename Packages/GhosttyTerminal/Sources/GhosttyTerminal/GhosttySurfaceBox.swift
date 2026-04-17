@@ -75,6 +75,10 @@ final class GhosttySurfaceBox: @unchecked Sendable {
             hostView.updateHoveredURL(mouseOverLinkString(action.action.mouse_over_link))
             return true
 
+        case GHOSTTY_ACTION_OPEN_URL:
+            hostView.openURL(openURLString(action.action.open_url))
+            return true
+
         case GHOSTTY_ACTION_OPEN_CONFIG:
             return true
 
@@ -163,12 +167,25 @@ final class GhosttySurfaceBox: @unchecked Sendable {
 private func mouseOverLinkString(
     _ value: ghostty_action_mouse_over_link_s
 ) -> String? {
-    guard let url = value.url, value.len > 0 else { return nil }
+    actionString(value.url, length: Int(value.len))
+}
+
+private func openURLString(
+    _ value: ghostty_action_open_url_s
+) -> String? {
+    actionString(value.url, length: Int(value.len))
+}
+
+private func actionString(
+    _ value: UnsafePointer<CChar>?,
+    length: Int
+) -> String? {
+    guard let value, length > 0 else { return nil }
 
     let bytes = [UInt8](
         UnsafeBufferPointer(
-            start: UnsafeRawPointer(url).assumingMemoryBound(to: UInt8.self),
-            count: value.len
+            start: UnsafeRawPointer(value).assumingMemoryBound(to: UInt8.self),
+            count: length
         )
     )
     return String(bytes: bytes, encoding: .utf8)

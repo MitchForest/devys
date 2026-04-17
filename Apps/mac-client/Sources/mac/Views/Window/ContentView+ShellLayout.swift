@@ -66,6 +66,7 @@ extension ContentView {
               let layout = store.workspaceShells[workspaceID]?.layout else {
             return
         }
+        ensureBrowserSessions(for: workspaceID)
         let splitController = controller ?? self.controller
         splitController.restoreTreeSnapshot(
             controllerSnapshot(from: layout, workspaceID: workspaceID),
@@ -176,17 +177,6 @@ extension ContentView {
 
     func persistedWorkspaceViewState(for workspaceID: Workspace.ID) -> WorkspaceViewState {
         workspaceViewStatesByID[workspaceID] ?? WorkspaceViewState()
-    }
-
-    func setPreviewTabID(_ tabID: TabID?, in paneID: PaneID) {
-        guard let selectedWorkspaceID else { return }
-        store.send(
-            .setWorkspacePanePreviewTabID(
-                workspaceID: selectedWorkspaceID,
-                paneID: paneID,
-                tabID: tabID
-            )
-        )
     }
 
     func clearPreviewTabID(_ tabID: TabID, workspaceID: Workspace.ID? = nil) {

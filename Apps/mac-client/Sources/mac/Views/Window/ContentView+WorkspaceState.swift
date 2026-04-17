@@ -123,6 +123,7 @@ extension ContentView {
             }
         }
         runtimeRegistry.removeAllAgentSessions(in: workspaceID)
+        browserRegistry.removeAllSessions(in: workspaceID)
 
         for tabID in state.editorSessions.keys {
             if let session = state.editorSessions[tabID] {

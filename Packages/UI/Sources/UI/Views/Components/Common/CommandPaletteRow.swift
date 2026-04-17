@@ -39,8 +39,7 @@ public struct CommandPaletteRow: View {
 
     public var body: some View {
         HStack(spacing: Spacing.space2) {
-            Image(systemName: icon)
-                .font(Typography.title.weight(.regular))
+            DevysIcon(icon, size: 16)
                 .foregroundStyle(iconColor ?? theme.textSecondary)
                 .frame(width: 18, height: 18)
 
@@ -117,7 +116,7 @@ public struct CommandPaletteRow: View {
             shortcut: "Cmd+B"
         )
         CommandPaletteRow(
-            icon: "sparkles",
+            icon: "person.crop.circle",
             iconColor: AgentColor.forIndex(2).solid,
             title: "Ask Agent",
             subtitle: "AI Assistant"

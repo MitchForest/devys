@@ -14,6 +14,7 @@ struct ContentViewCommandPaletteCatalog {
     let workspaceStatesByID: [Worktree.ID: WorktreeState]
     let activeWorktree: Worktree?
     let agentSessions: [HostedAgentSessionSummary]
+    let workflowState: WindowFeature.WorkflowWorkspaceState
     let repositorySettingsStore: RepositorySettingsStore
     let operationalState: WorkspaceOperationalState
     let appSettings: AppSettings
@@ -32,7 +33,9 @@ struct ContentViewCommandPaletteCatalog {
             : filteredItems(query: query)
         return sectionEntries(from: sourceItems).flatMap { $0.1 }
     }
+}
 
+private extension ContentViewCommandPaletteCatalog {
     private func filteredItems(query: String) -> [WorkspaceSearchItem] {
         let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !normalizedQuery.isEmpty else { return items }
@@ -57,6 +60,7 @@ struct ContentViewCommandPaletteCatalog {
             "Projects",
             "Navigation",
             "Agents",
+            "Workflows",
             "Execution",
             "Attention"
         ]
@@ -93,6 +97,11 @@ struct ContentViewCommandPaletteCatalog {
         case .command(.openAgents),
              .command(.focusAgentSession):
             return "Agents"
+
+        case .command(.createWorkflow),
+             .command(.openWorkflowDefinition),
+             .command(.openWorkflowRun):
+            return "Workflows"
 
         case .command(.launchShell),
              .command(.launchClaude),
@@ -200,11 +209,53 @@ struct ContentViewCommandPaletteCatalog {
                     action: .command(.openAgents),
                     title: "New Agent Session",
                     subtitle: activeWorktree.workingDirectory.path,
-                    systemImage: "message.badge.waveform",
+                    systemImage: "person.crop.circle.badge.plus",
                     keywords: ["agent", "agents", "chat", "assistant", "new"],
                     accessory: nil
                 )
             )
+
+            items.append(
+                WorkspaceSearchItem(
+                    action: .command(.createWorkflow),
+                    title: "New Workflow",
+                    subtitle: activeWorktree.workingDirectory.path,
+                    systemImage: "point.3.connected.trianglepath.dotted",
+                    keywords: ["workflow", "phase", "plan", "new", "create"],
+                    accessory: nil
+                )
+            )
+
+            if let activeRun = workflowState.runs.first(where: { $0.status.isActive }) {
+                items.append(
+                    WorkspaceSearchItem(
+                        action: .command(.openWorkflowRun(activeRun.id)),
+                        title: "Open Active Workflow Run",
+                        subtitle: activeRun.currentPhaseTitle ?? activeRun.displayStatus,
+                        systemImage: "play.circle.fill",
+                        keywords: ["workflow", "run", "active", activeRun.displayStatus],
+                        accessory: nil
+                    )
+                )
+            }
+
+            if let latestDefinition = workflowState.definitions.first {
+                items.append(
+                    WorkspaceSearchItem(
+                        action: .command(.openWorkflowDefinition(latestDefinition.id)),
+                        title: "Open Workflow Definition",
+                        subtitle: latestDefinition.name.isEmpty ? "Untitled Workflow" : latestDefinition.name,
+                        systemImage: "square.and.pencil",
+                        keywords: [
+                            "workflow",
+                            "definition",
+                            latestDefinition.name,
+                            latestDefinition.planFilePath
+                        ],
+                        accessory: nil
+                    )
+                )
+            }
 
             for session in agentSessions {
                 items.append(
@@ -239,7 +290,7 @@ struct ContentViewCommandPaletteCatalog {
                     action: .command(.launchClaude),
                     title: "Launch Claude",
                     subtitle: activeWorktree.workingDirectory.path,
-                    systemImage: "sparkles",
+                    systemImage: DevysIconName.claudeCode,
                     keywords: ["claude", "agent", "launch"],
                     accessory: appSettings.shortcuts.binding(for: .launchClaude).displayString
                 )
@@ -249,7 +300,7 @@ struct ContentViewCommandPaletteCatalog {
                     action: .command(.launchCodex),
                     title: "Launch Codex",
                     subtitle: activeWorktree.workingDirectory.path,
-                    systemImage: "chevron.left.forwardslash.chevron.right",
+                    systemImage: DevysIconName.codex,
                     keywords: ["codex", "agent", "launch"],
                     accessory: appSettings.shortcuts.binding(for: .launchCodex).displayString
                 )

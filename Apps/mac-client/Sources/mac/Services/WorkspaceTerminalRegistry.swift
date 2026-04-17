@@ -37,6 +37,7 @@ final class WorkspaceTerminalRegistry {
         requestedCommand: String? = nil,
         stagedCommand: String? = nil,
         attachCommand: String? = nil,
+        tabIcon: String = "terminal",
         terminateHostedSessionOnClose: Bool = true,
         id: UUID = UUID()
     ) -> GhosttyTerminalSession {
@@ -46,6 +47,7 @@ final class WorkspaceTerminalRegistry {
             requestedCommand: requestedCommand,
             stagedCommand: stagedCommand,
             attachCommand: attachCommand,
+            tabIcon: tabIcon,
             terminateHostedSessionOnClose: terminateHostedSessionOnClose
         )
         var state = statesByWorkspace[workspaceID] ?? WorkspaceTerminalState()

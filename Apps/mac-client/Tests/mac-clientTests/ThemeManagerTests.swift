@@ -12,7 +12,7 @@ struct ThemeManagerTests {
         manager.setAccentColor(from: AccentColor.teal.rawValue)
 
         #expect(manager.accentColor == .teal)
-        #expect(manager.colorScheme == .dark)
+        #expect(manager.resolvedColorScheme(systemColorScheme: .light) == .dark)
     }
 
     @Test("Invalid accent values do not change the current accent")
@@ -24,5 +24,17 @@ struct ThemeManagerTests {
         manager.setAccentColor(from: "not-a-color")
 
         #expect(manager.accentColor == .orange)
+    }
+
+    @Test("Auto mode follows the current system appearance")
+    @MainActor
+    func autoModeResolvesFromSystemAppearance() {
+        let manager = ThemeManager()
+        manager.appearanceMode = .auto
+
+        #expect(manager.preferredColorScheme == nil)
+        #expect(manager.nsAppearance == nil)
+        #expect(manager.resolvedColorScheme(systemColorScheme: .light) == .light)
+        #expect(manager.resolvedColorScheme(systemColorScheme: .dark) == .dark)
     }
 }

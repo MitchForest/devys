@@ -33,7 +33,9 @@ extension ContentView {
 
     func applyLifecycleModifiers<V: View>(_ view: V) -> some View {
         applyShellCommandRequestModifiers(
-            applyAppearanceModifiers(view)
+            applyWorkflowAutoLayoutModifiers(
+                applyAppearanceModifiers(view)
+            )
         )
     }
 
@@ -42,19 +44,24 @@ extension ContentView {
             .onAppear {
                 handleRootContentAppear()
             }
-            .onChange(of: themeManager.isDarkMode) { _, _ in
+            .onChange(of: themeManager.appearanceMode) { _, _ in
                 applyCurrentAppearance()
+                controller.updateColors(splitColorsFromTheme(theme))
             }
             .onChange(of: appSettings.appearance.accentColor) { _, newValue in
                 themeManager.setAccentColor(from: newValue)
-                GhosttyTerminalThemeController.apply(themeManager.ghosttyAppearance)
-                controller.updateColors(splitColorsFromTheme(themeManager.theme))
+                GhosttyTerminalThemeController.apply(
+                    themeManager.ghosttyAppearance(systemColorScheme: systemColorScheme)
+                )
+                controller.updateColors(splitColorsFromTheme(theme))
             }
-            .onChange(of: themeManager.isDarkMode) { _, _ in
-                controller.updateColors(splitColorsFromTheme(themeManager.theme))
+            .onChange(of: systemColorScheme) { _, _ in
+                guard appSettings.appearance.mode == .auto else { return }
+                applyCurrentAppearance()
+                controller.updateColors(splitColorsFromTheme(theme))
             }
-            .onChange(of: appSettings.appearance.isDarkMode) { _, newValue in
-                themeManager.isDarkMode = newValue
+            .onChange(of: appSettings.appearance.mode) { _, newValue in
+                themeManager.appearanceMode = newValue
             }
             .onChange(of: restoreSettingsSnapshot) { _, _ in
                 persistTerminalRelaunchSnapshotIfNeeded()
@@ -78,7 +85,7 @@ extension ContentView {
         guard !hasInitialized else { return }
 
         hasInitialized = true
-        themeManager.isDarkMode = appSettings.appearance.isDarkMode
+        themeManager.appearanceMode = appSettings.appearance.mode
         themeManager.setAccentColor(from: appSettings.appearance.accentColor)
         applyCurrentAppearance()
         configureRuntimeRegistryFactories()
@@ -97,7 +104,9 @@ extension ContentView {
 
     private func applyCurrentAppearance() {
         themeManager.applyAppearance()
-        GhosttyTerminalThemeController.apply(themeManager.ghosttyAppearance)
+        GhosttyTerminalThemeController.apply(
+            themeManager.ghosttyAppearance(systemColorScheme: systemColorScheme)
+        )
     }
 
     private func configureRuntimeRegistryFactories() {

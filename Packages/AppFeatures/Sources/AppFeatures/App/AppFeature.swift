@@ -47,7 +47,10 @@ public struct AppFeature {
             switch action {
             case .appDidFinishLaunching:
                 state.lifecycle.hasFinishedLaunching = true
-                return .send(.window(.startWorkspaceOperationalObservation))
+                return .merge(
+                    .send(.window(.startWorkspaceOperationalObservation)),
+                    .send(.window(.startWorkflowObservation))
+                )
 
             case .scenePhaseChanged(let phase):
                 state.lifecycle.scenePhase = phase

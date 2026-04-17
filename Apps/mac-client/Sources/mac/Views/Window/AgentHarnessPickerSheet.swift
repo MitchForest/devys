@@ -23,13 +23,13 @@ struct AgentHarnessPickerSheet: View {
                 pickerButton(
                     title: "Codex",
                     subtitle: "OpenAI Codex ACP",
-                    icon: "chevron.left.forwardslash.chevron.right",
+                    icon: DevysIconName.codex,
                     kind: .codex
                 )
                 pickerButton(
                     title: "Claude",
                     subtitle: "Claude Code ACP",
-                    icon: "brain",
+                    icon: DevysIconName.claudeCode,
                     kind: .claude
                 )
             }
@@ -58,8 +58,7 @@ struct AgentHarnessPickerSheet: View {
             dismiss()
         } label: {
             VStack(alignment: .leading, spacing: DevysSpacing.space3) {
-                Image(systemName: icon)
-                    .font(DevysTypography.title)
+                DevysIcon(icon, size: 18)
                     .foregroundStyle(theme.accent)
 
                 Text(title)

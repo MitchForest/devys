@@ -122,8 +122,6 @@ struct RepositoryPortLabelsEditorView: View {
 }
 
 private struct PortLabelDraftRow: View {
-    @Environment(\.devysTheme) private var theme
-
     @Binding var draft: RepositoryPortLabelDraft
     let validationMessage: String?
     let onRemove: () -> Void

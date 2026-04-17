@@ -25,6 +25,7 @@ final class AppContainer {
     let agentAdapterLauncher: ACPAdapterLauncher
     let agentComposerSpeechService: any AgentComposerSpeechService
     let workspaceOperationalController: WorkspaceOperationalController
+    let workflowExecutionController: WorkflowExecutionController
     let editorSessionRegistry: EditorSessionRegistry
 
     private let fileTreeService: FileTreeService
@@ -48,6 +49,8 @@ final class AppContainer {
         fileWatchServiceFactory: ((URL) -> FileWatchService)? = nil,
         gitStoreFactory: @escaping (URL?) -> GitStore = { GitStore(projectFolder: $0) }
     ) {
+        let workspaceOperationalController = WorkspaceOperationalController()
+        let persistentTerminalHostController = PersistentTerminalHostController()
         self.appSettings = appSettings
         self.recentRepositoriesService = recentRepositoriesService
         self.layoutPersistenceService = layoutPersistenceService
@@ -56,7 +59,13 @@ final class AppContainer {
         self.workspaceCreationService = workspaceCreationService
         self.agentAdapterLauncher = agentAdapterLauncher
         self.agentComposerSpeechService = agentComposerSpeechService
-        self.workspaceOperationalController = WorkspaceOperationalController()
+        self.workspaceOperationalController = workspaceOperationalController
+        self.workflowExecutionController = WorkflowExecutionController(
+            workspaceOperationalController: workspaceOperationalController,
+            persistentTerminalHostController: persistentTerminalHostController
+        ) {
+            appSettings.restore.restoreTerminalSessions
+        }
         self.editorSessionRegistry = editorSessionRegistry
         self.fileTreeService = fileTreeService
         self.fileWatchServiceFactory = fileWatchServiceFactory ?? {
@@ -130,7 +139,7 @@ final class AppContainer {
     private func agentAdapterEnvironment(
         fallbackSearchDirectories: [URL]
     ) -> [String: String] {
-        var environment = ProcessInfo.processInfo.environment
+        var environment = colorCapableEnvironment(ProcessInfo.processInfo.environment)
         var pathEntries: [String] = []
         var seenEntries: Set<String> = []
 

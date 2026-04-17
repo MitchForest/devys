@@ -69,24 +69,34 @@ public enum PersistedWorkspaceSidebarMode: String, Codable, Equatable, Sendable 
 
 public enum PersistedWorkspaceTabRecord: Codable, Equatable, Sendable {
     case terminal(hostedSessionID: UUID)
+    case browser(id: UUID, url: URL)
     case agent(PersistedAgentSessionRecord)
     case editor(fileURL: URL)
     case gitDiff(path: String, isStaged: Bool)
+    case workflowDefinition(definitionID: String)
+    case workflowRun(runID: UUID)
 
     private enum CodingKeys: String, CodingKey {
         case kind
         case hostedSessionID
+        case browserID
+        case browserURL
         case agentSession
         case fileURL
         case path
         case isStaged
+        case definitionID
+        case runID
     }
 
     private enum Kind: String, Codable {
         case terminal
+        case browser
         case agent
         case editor
         case gitDiff
+        case workflowDefinition
+        case workflowRun
     }
 
     public init(from decoder: Decoder) throws {
@@ -95,6 +105,11 @@ public enum PersistedWorkspaceTabRecord: Codable, Equatable, Sendable {
         case .terminal:
             self = .terminal(
                 hostedSessionID: try container.decode(UUID.self, forKey: .hostedSessionID)
+            )
+        case .browser:
+            self = .browser(
+                id: try container.decode(UUID.self, forKey: .browserID),
+                url: try container.decode(URL.self, forKey: .browserURL)
             )
         case .agent:
             self = .agent(
@@ -109,6 +124,14 @@ public enum PersistedWorkspaceTabRecord: Codable, Equatable, Sendable {
                 path: try container.decode(String.self, forKey: .path),
                 isStaged: try container.decode(Bool.self, forKey: .isStaged)
             )
+        case .workflowDefinition:
+            self = .workflowDefinition(
+                definitionID: try container.decode(String.self, forKey: .definitionID)
+            )
+        case .workflowRun:
+            self = .workflowRun(
+                runID: try container.decode(UUID.self, forKey: .runID)
+            )
         }
     }
 
@@ -118,6 +141,10 @@ public enum PersistedWorkspaceTabRecord: Codable, Equatable, Sendable {
         case .terminal(let hostedSessionID):
             try container.encode(Kind.terminal, forKey: .kind)
             try container.encode(hostedSessionID, forKey: .hostedSessionID)
+        case .browser(let id, let url):
+            try container.encode(Kind.browser, forKey: .kind)
+            try container.encode(id, forKey: .browserID)
+            try container.encode(url, forKey: .browserURL)
         case .agent(let record):
             try container.encode(Kind.agent, forKey: .kind)
             try container.encode(record, forKey: .agentSession)
@@ -128,6 +155,12 @@ public enum PersistedWorkspaceTabRecord: Codable, Equatable, Sendable {
             try container.encode(Kind.gitDiff, forKey: .kind)
             try container.encode(path, forKey: .path)
             try container.encode(isStaged, forKey: .isStaged)
+        case .workflowDefinition(let definitionID):
+            try container.encode(Kind.workflowDefinition, forKey: .kind)
+            try container.encode(definitionID, forKey: .definitionID)
+        case .workflowRun(let runID):
+            try container.encode(Kind.workflowRun, forKey: .kind)
+            try container.encode(runID, forKey: .runID)
         }
     }
 }

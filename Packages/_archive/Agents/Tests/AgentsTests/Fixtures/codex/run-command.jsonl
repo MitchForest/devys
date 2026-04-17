@@ -1,8 +1,0 @@
-{"jsonrpc":"2.0","method":"thread/started","params":{"threadId":"thr_test_002"}}
-{"jsonrpc":"2.0","method":"turn/started","params":{"turn":{"id":"turn_test_002"}}}
-{"jsonrpc":"2.0","method":"item/started","params":{"item":{"id":"item_cmd_001","type":"commandExecution"}}}
-{"jsonrpc":"2.0","id":1,"method":"item/commandExecution/requestApproval","params":{"threadId":"thr_test_002","turnId":"turn_test_002","itemId":"item_cmd_001","command":"echo hello world","cwd":"/tmp/test","reason":"User requested command execution"}}
-{"jsonrpc":"2.0","method":"item/commandExecution/outputDelta","params":{"itemId":"item_cmd_001","delta":"hello world\n"}}
-{"jsonrpc":"2.0","method":"item/completed","params":{"itemId":"item_cmd_001","status":"completed"}}
-{"jsonrpc":"2.0","method":"item/agentMessage/delta","params":{"delta":"The command output \"hello world\"."}}
-{"jsonrpc":"2.0","method":"turn/completed","params":{"turn":{"id":"turn_test_002"}}}

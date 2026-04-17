@@ -179,16 +179,66 @@ public struct GhosttyTerminalAppearance: Sendable, Equatable {
     )
 
     var configText: String {
-        var lines = palette.enumerated().map { index, color in
-            "palette = \(index)=\(color.hexString)"
-        }
+        var lines: [String] = []
         lines.append("background = \(background.hexString)")
         lines.append("foreground = \(foreground.hexString)")
+        for (index, color) in palette.enumerated() {
+            lines.append("palette = \(index)=\(color.hexString)")
+        }
         lines.append("cursor-color = \(cursorColor.hexString)")
         lines.append("cursor-text = \(cursorText.hexString)")
         lines.append("selection-background = \(selectionBackground.hexString)")
         lines.append("selection-foreground = \(selectionForeground.hexString)")
         return lines.joined(separator: "\n") + "\n"
+    }
+}
+
+func ghosttyTerminalLaunchEnvironmentConfigText(
+    colorScheme: GhosttyTerminalColorScheme,
+    termProgram: String = "ghostty",
+    termProgramVersion: String? = currentTerminalProgramVersion()
+) -> String {
+    var lines = [
+        "env = TERM=xterm-256color",
+        "env = COLORTERM=truecolor",
+        "env = TERM_PROGRAM=\(termProgram)",
+    ]
+
+    if let termProgramVersion,
+       !termProgramVersion.isEmpty {
+        lines.append("env = TERM_PROGRAM_VERSION=\(termProgramVersion)")
+    }
+
+    lines.append("env = COLORFGBG=\(colorScheme.colorFgBg)")
+    lines.append("env = NO_COLOR=")
+    return lines.joined(separator: "\n") + "\n"
+}
+
+private func currentTerminalProgramVersion() -> String? {
+    let infoDictionary = Bundle.main.infoDictionary
+    let shortVersion = infoDictionary?["CFBundleShortVersionString"] as? String
+    if let shortVersion,
+       !shortVersion.isEmpty {
+        return shortVersion
+    }
+
+    let bundleVersion = infoDictionary?["CFBundleVersion"] as? String
+    if let bundleVersion,
+       !bundleVersion.isEmpty {
+        return bundleVersion
+    }
+
+    return nil
+}
+
+private extension GhosttyTerminalColorScheme {
+    var colorFgBg: String {
+        switch self {
+        case .light:
+            "0;15"
+        case .dark:
+            "15;0"
+        }
     }
 }
 

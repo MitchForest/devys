@@ -10,7 +10,8 @@ struct UnifiedWorkspaceSidebar<
     FilesContent: View,
     ChangesContent: View,
     PortsContent: View,
-    AgentsContent: View
+    AgentsContent: View,
+    WorkflowsContent: View
 >: View {
     @Environment(\.devysTheme) private var theme
 
@@ -19,10 +20,12 @@ struct UnifiedWorkspaceSidebar<
     let changeCount: Int
     let portCount: Int
     let agentCount: Int
+    let workflowCount: Int
     @ViewBuilder let filesContent: () -> FilesContent
     @ViewBuilder let changesContent: () -> ChangesContent
     @ViewBuilder let portsContent: () -> PortsContent
     @ViewBuilder let agentsContent: () -> AgentsContent
+    @ViewBuilder let workflowsContent: () -> WorkflowsContent
 
     @State private var isFilesExpanded = true
     @State private var isChangesExpanded = true
@@ -127,7 +130,7 @@ struct UnifiedWorkspaceSidebar<
             VStack(alignment: .leading, spacing: 0) {
                 SidebarSection(
                     "Agents",
-                    icon: "message.badge.waveform",
+                    icon: "person.2",
                     count: agentCount > 0 ? agentCount : nil,
                     isExpanded: $isAgentsExpanded
                 ) {
@@ -138,15 +141,11 @@ struct UnifiedWorkspaceSidebar<
 
                 SidebarSection(
                     "Workflows",
-                    icon: "sparkles",
+                    icon: "point.3.connected.trianglepath.dotted",
+                    count: workflowCount > 0 ? workflowCount : nil,
                     isExpanded: $isWorkflowsExpanded
                 ) {
-                    EmptyState(
-                        icon: "sparkles",
-                        title: "Workflows coming soon",
-                        description: "Multi-step automated agent pipelines will live here."
-                    )
-                    .frame(maxHeight: 220)
+                    workflowsContent()
                 }
             }
         }

@@ -48,8 +48,7 @@ public struct NotificationToast: View {
 
             // Icon
             if let icon {
-                Image(systemName: icon)
-                    .font(Typography.body.weight(.medium))
+                DevysIcon(icon, size: 14, weight: .medium)
                     .foregroundStyle(accentColor ?? theme.textSecondary)
             }
 
@@ -130,7 +129,7 @@ public struct NotificationToast: View {
 
         NotificationToast(
             message: "Agent completed: API refactor",
-            icon: "sparkles",
+            icon: "person.crop.circle",
             accentColor: AgentColor.forIndex(1).solid,
             autoDismissAfter: 60
         ) {}

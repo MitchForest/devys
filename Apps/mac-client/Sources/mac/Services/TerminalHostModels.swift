@@ -5,7 +5,4 @@ import AppFeatures
 
 typealias HostedTerminalSessionRecord = AppFeatures.HostedTerminalSessionRecord
 typealias PersistedAgentSessionRecord = AppFeatures.PersistedAgentSessionRecord
-typealias PersistedWorkspaceTabRecord = AppFeatures.PersistedWorkspaceTabRecord
-typealias PersistedWorkspaceLayoutTree = AppFeatures.PersistedWorkspaceLayoutTree
-typealias PersistedWorkspaceLayoutState = AppFeatures.PersistedWorkspaceLayoutState
 typealias TerminalRelaunchSnapshot = WindowRelaunchSnapshot

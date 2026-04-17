@@ -12,18 +12,23 @@ public struct GhosttyTerminalView: NSViewRepresentable {
     public typealias NSViewType = NSView
 
     public let session: GhosttyTerminalSession
+    public let onOpenURL: ((URL) -> Void)?
 
-    public init(session: GhosttyTerminalSession) {
+    public init(
+        session: GhosttyTerminalSession,
+        onOpenURL: ((URL) -> Void)? = nil
+    ) {
         self.session = session
+        self.onOpenURL = onOpenURL
     }
 
     public func makeNSView(context: Context) -> NSView {
-        GhosttySurfaceHostView(session: session)
+        GhosttySurfaceHostView(session: session, onOpenURL: onOpenURL)
     }
 
     public func updateNSView(_ nsView: NSView, context: Context) {
         guard let hostView = nsView as? GhosttySurfaceHostView else { return }
-        hostView.bind(session: session)
+        hostView.bind(session: session, onOpenURL: onOpenURL)
     }
 }
 
@@ -31,6 +36,7 @@ public struct GhosttyTerminalView: NSViewRepresentable {
 @MainActor
 final class GhosttySurfaceHostView: NSView {
     let session: GhosttyTerminalSession
+    var onOpenURL: ((URL) -> Void)?
 
     var rendererHealthy = true
     var isReadonly = false
@@ -50,8 +56,12 @@ final class GhosttySurfaceHostView: NSView {
         true
     }
 
-    init(session: GhosttyTerminalSession) {
+    init(
+        session: GhosttyTerminalSession,
+        onOpenURL: ((URL) -> Void)?
+    ) {
         self.session = session
+        self.onOpenURL = onOpenURL
         super.init(frame: NSRect(x: 0, y: 0, width: 960, height: 640))
         surfaceBox.bind(hostView: self)
 
@@ -74,8 +84,12 @@ final class GhosttySurfaceHostView: NSView {
         nil
     }
 
-    func bind(session: GhosttyTerminalSession) {
+    func bind(
+        session: GhosttyTerminalSession,
+        onOpenURL: ((URL) -> Void)?
+    ) {
         guard session.id == self.session.id else { return }
+        self.onOpenURL = onOpenURL
         session.focusRequestHandler = { [weak self] requestID in
             self?.handleFocusRequest(requestID)
         }
@@ -383,7 +397,7 @@ final class GhosttySurfaceHostView: NSView {
         guard !hasAppliedInitialStageCommand,
               let stagedCommand = session.stagedCommand,
               !stagedCommand.isEmpty,
-              let surface
+              surface != nil
         else {
             return
         }
@@ -505,6 +519,19 @@ final class GhosttySurfaceHostView: NSView {
         discardCursorRects()
     }
 
+    func openURL(_ rawURL: String?) {
+        guard let rawURL else { return }
+
+        let trimmed = rawURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let url = URL(string: trimmed),
+              url.scheme != nil else {
+            return
+        }
+
+        onOpenURL?(url)
+    }
+
     func invalidateEventMonitor() {
         guard let eventMonitor else { return }
         NSEvent.removeMonitor(eventMonitor)
@@ -535,9 +562,14 @@ private extension String {
 
 public struct GhosttyTerminalView: View {
     public let session: GhosttyTerminalSession
+    public let onOpenURL: ((URL) -> Void)?
 
-    public init(session: GhosttyTerminalSession) {
+    public init(
+        session: GhosttyTerminalSession,
+        onOpenURL: ((URL) -> Void)? = nil
+    ) {
         self.session = session
+        self.onOpenURL = onOpenURL
     }
 
     public var body: some View {

@@ -260,7 +260,10 @@ private func writeAppearanceConfig(
         withIntermediateDirectories: true,
         attributes: nil
     )
-    try appearance.configText.write(
+    let configText = appearance.configText
+        + ghosttyTerminalLaunchEnvironmentConfigText(colorScheme: appearance.colorScheme)
+
+    try configText.write(
         to: ghosttyThemeConfigURL,
         atomically: true,
         encoding: .utf8

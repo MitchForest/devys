@@ -187,7 +187,7 @@ It is supporting reference for `../plan/implementation-plan.md`, not an active p
 - `Apps/mac-client/Sources/mac/Views/Window/ContentView+Lifecycle.swift`
   - startup restore now begins from a reducer intent instead of host-owned relaunch policy
 
-## 7. Actionable Interpretation
+## 10. Actionable Interpretation
 
 - Treat notification routing, runtime registries, and shared mutable stores as deletion targets.
 - Treat engine-level unsafe sendable usage as quarantine targets behind dependency clients.

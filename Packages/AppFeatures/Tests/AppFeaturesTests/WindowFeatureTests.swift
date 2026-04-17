@@ -65,6 +65,11 @@ struct WindowFeatureTests {
             $0.selectedRepositoryID = firstRepository.id
             $0.selectedWorkspaceID = workspaceID
         }
+        await store.receive(.workflowWorkspaceLoadRequested(workspaceID)) {
+            $0.workflowWorkspacesByID[workspaceID] = WindowFeature.WorkflowWorkspaceState(
+                isLoading: true
+            )
+        }
     }
 
     @Test("Replacing the catalog snapshot normalizes stale selection")

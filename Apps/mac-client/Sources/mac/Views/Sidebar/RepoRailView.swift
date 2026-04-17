@@ -26,8 +26,6 @@ struct RepoRailView: View {
     let onCreateWorkspace: (Repository.ID) -> Void
     let onSelectWorkspace: (Repository.ID, Worktree.ID) -> Void
     let onReorderRepository: (Repository.ID, Int) -> Void
-    let onSetRepositoryDisplayInitials: (Repository.ID, String?) -> Void
-    let onSetRepositoryDisplaySymbol: (Repository.ID, String?) -> Void
     let onSetWorkspacePinned: (Repository.ID, Worktree.ID, Bool) -> Void
     let onSetWorkspaceArchived: (Repository.ID, Worktree.ID, Bool) -> Void
     let onRenameWorkspace: (Repository.ID, Worktree.ID) -> Void

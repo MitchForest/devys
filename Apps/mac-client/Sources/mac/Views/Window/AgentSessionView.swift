@@ -10,6 +10,7 @@ import Workspace
 struct AgentSessionView: View {
     @Environment(\.devysTheme) private var theme
     @State private var isComposerFocused = false
+    @State private var isAtBottom = true
 
     let session: AgentSessionRuntime
     let speechService: any AgentComposerSpeechService
@@ -28,259 +29,412 @@ struct AgentSessionView: View {
         }
     }
 
+    // MARK: - Transcript
+
     private var transcript: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: DevysSpacing.space3) {
+                LazyVStack(alignment: .leading, spacing: Spacing.space4) {
                     if session.timeline.isEmpty {
                         emptyState
+                            .padding(.vertical, Spacing.space8)
                     } else {
                         ForEach(session.timeline) { item in
                             timelineRow(item)
                                 .id(item.id)
                         }
                     }
+
+                    // Bottom sentinel for scroll-to-latest detection
+                    Color.clear
+                        .frame(height: 1)
+                        .id(Self.bottomSentinelID)
+                        .onAppear { isAtBottom = true }
+                        .onDisappear { isAtBottom = false }
                 }
-                .padding(DevysSpacing.space4)
+                .padding(.horizontal, Spacing.space4)
+                .padding(.vertical, Spacing.space4)
             }
             .background(theme.base)
+            .overlay(alignment: .bottom) {
+                if !isAtBottom && !session.timeline.isEmpty {
+                    jumpToLatest(proxy: proxy)
+                        .padding(.bottom, Spacing.space3)
+                }
+            }
             .onAppear {
                 scrollToBottom(using: proxy)
             }
             .onChange(of: session.timeline.last?.id) { _, _ in
-                scrollToBottom(using: proxy)
+                if isAtBottom {
+                    scrollToBottom(using: proxy)
+                }
             }
         }
     }
 
+    private static let bottomSentinelID = "agent-session-bottom-sentinel"
+
+    private func jumpToLatest(proxy: ScrollViewProxy) -> some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.22)) {
+                proxy.scrollTo(Self.bottomSentinelID, anchor: .bottom)
+            }
+        } label: {
+            HStack(spacing: Spacing.space1) {
+                Image(systemName: "arrow.down")
+                    .font(Typography.micro)
+                Text("Jump to latest")
+                    .font(Typography.label)
+            }
+            .foregroundStyle(theme.text)
+            .padding(.horizontal, Spacing.space3)
+            .padding(.vertical, Spacing.space2)
+            .background(theme.overlay, in: DevysShape())
+            .overlay(
+                DevysShape()
+                    .stroke(theme.border, lineWidth: Spacing.borderWidth)
+            )
+            .shadowStyle(Shadows.md)
+        }
+        .buttonStyle(.plain)
+        .transition(.opacity.combined(with: .move(edge: .bottom)))
+    }
+
+    // MARK: - Composer
+
     private var composer: some View {
-        VStack(alignment: .leading, spacing: DevysSpacing.space3) {
+        VStack(alignment: .leading, spacing: Spacing.space3) {
             if !session.attachmentSummaries.isEmpty {
                 attachmentStrip
             }
 
             if let speechMessage = session.speechState.message {
                 Text(speechMessage)
-                    .font(DevysTypography.body)
+                    .font(Typography.caption)
                     .foregroundStyle(session.speechState.isRecording ? theme.accent : theme.textSecondary)
             }
 
             if let selectedCommand = session.selectedCommand {
-                HStack(spacing: DevysSpacing.space2) {
-                    HStack(spacing: Spacing.tight) {
-                        Image(systemName: "command")
-                            .font(Typography.micro)
-                        Text("/\(selectedCommand.name)")
-                            .font(DevysTypography.body)
-                        if let hint = selectedCommand.input?.hint {
-                            Text(hint)
-                                .font(DevysTypography.caption)
-                                .foregroundStyle(theme.textSecondary)
-                        }
-                    }
-                    .foregroundStyle(theme.text)
-                    .padding(.horizontal, Spacing.normal)
-                    .padding(.vertical, Spacing.normal)
-                    .background(theme.card)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
-                            .stroke(theme.border, lineWidth: 1)
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
-
-                    Button("Clear") {
-                        session.clearSelectedSlashCommand()
-                        isComposerFocused = true
-                    }
-                    .buttonStyle(.plain)
-                    .font(DevysTypography.caption)
-                    .foregroundStyle(theme.textSecondary)
-                }
+                selectedCommandRow(selectedCommand)
             }
 
             if !slashCommandSuggestions.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: DevysSpacing.space2) {
-                        ForEach(slashCommandSuggestions) { command in
-                            Button {
-                                session.selectSlashCommand(command)
-                                isComposerFocused = true
-                            } label: {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("/\(command.name)")
-                                        .font(DevysTypography.body)
-                                        .foregroundStyle(theme.text)
-                                    Text(command.description)
-                                        .font(DevysTypography.caption)
-                                        .foregroundStyle(theme.textSecondary)
-                                }
-                                .padding(.horizontal, Spacing.normal)
-                                .padding(.vertical, Spacing.normal)
-                                .background(theme.card)
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
-                                        .stroke(theme.border, lineWidth: 1)
-                                }
-                                .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
+                suggestionStrip(for: slashCommandSuggestions)
             }
 
             if !session.mentionSuggestions.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: DevysSpacing.space2) {
-                        ForEach(session.mentionSuggestions) { suggestion in
-                            Button {
-                                session.insertMention(suggestion)
-                                isComposerFocused = true
-                            } label: {
-                                HStack(spacing: Spacing.tight) {
-                                    Image(systemName: "at")
-                                        .font(Typography.micro)
-                                    Text(suggestion.displayPath)
-                                        .font(DevysTypography.body)
-                                }
-                                .foregroundStyle(theme.text)
-                                .padding(.horizontal, Spacing.normal)
-                                .padding(.vertical, Spacing.normal)
-                                .background(theme.card)
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
-                                        .stroke(theme.border, lineWidth: 1)
-                                }
-                                .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
+                mentionStrip(for: session.mentionSuggestions)
             }
 
-            HStack(alignment: .bottom, spacing: DevysSpacing.space3) {
-                composerInput
+            composerInput
 
-                VStack(spacing: DevysSpacing.space2) {
-                    Button {
-                        if session.speechState.isRecording {
-                            session.stopDictation()
-                        } else {
-                            session.startDictation(using: speechService)
-                        }
-                        isComposerFocused = true
-                    } label: {
-                        Image(systemName: session.speechState.isRecording ? "stop.circle.fill" : "mic.fill")
-                            .font(Typography.heading)
-                            .frame(width: 32, height: 32)
-                            .foregroundStyle(session.speechState.isRecording ? theme.accentForeground : theme.text)
-                            .background(session.speechState.isRecording ? theme.accent : theme.card)
-                            .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-
-                    Button {
-                        if session.isSendingPrompt {
-                            session.cancelPrompt()
-                        } else {
-                            session.sendDraft()
-                        }
-                        isComposerFocused = true
-                    } label: {
-                        Image(systemName: session.isSendingPrompt ? "stop.fill" : "arrow.up")
-                            .font(Typography.heading)
-                            .frame(width: 32, height: 32)
-                            .foregroundStyle(
-                                session.canSendDraft || session.isSendingPrompt
-                                    ? theme.accentForeground
-                                    : theme.base
-                            )
-                            .background(
-                                session.canSendDraft || session.isSendingPrompt
-                                    ? theme.accent
-                                    : theme.textTertiary
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!session.canSendDraft && !session.isSendingPrompt)
-                }
-            }
-
-            if session.isSendingPrompt || !session.configOptions.isEmpty {
-                composerConfigRow
-            }
+            composerToolbar
         }
-        .padding(DevysSpacing.space4)
-        .background(theme.card)
+        .padding(.horizontal, Spacing.space4)
+        .padding(.vertical, Spacing.space3)
+        .background(theme.base)
         .overlay(alignment: .top) {
             Rectangle()
                 .fill(theme.border)
-                .frame(height: 1)
+                .frame(height: Spacing.borderWidth)
         }
     }
 
-    private var composerConfigRow: some View {
-        HStack(spacing: DevysSpacing.space3) {
-            if session.isSendingPrompt {
-                HStack(spacing: Spacing.tight) {
-                    ProgressView()
-                        .scaleEffect(0.5)
-                        .frame(width: 12, height: 12)
-                    Text("Running")
-                        .font(DevysTypography.caption)
+    private func selectedCommandRow(_ command: AgentAvailableCommand) -> some View {
+        HStack(spacing: Spacing.space2) {
+            HStack(spacing: Spacing.space1) {
+                Image(systemName: "command")
+                    .font(Typography.micro)
+                Text("/\(command.name)")
+                    .font(Typography.label)
+                if let hint = command.input?.hint {
+                    Text(hint)
+                        .font(Typography.caption)
                         .foregroundStyle(theme.textSecondary)
                 }
             }
+            .foregroundStyle(theme.text)
+            .padding(.horizontal, Spacing.space3)
+            .padding(.vertical, Spacing.space2)
+            .elevation(.card)
 
-            ForEach(session.configOptions) { option in
-                Menu {
-                    ForEach(option.groups) { group in
-                        if let name = group.name {
-                            Section(name) {
-                                configButtons(for: option, group: group)
-                            }
-                        } else {
-                            configButtons(for: option, group: group)
-                        }
-                    }
-                } label: {
-                    HStack(spacing: Spacing.tight) {
-                        Image(systemName: icon(for: option))
-                            .font(Typography.micro)
-                        Text(selectedValueName(for: option))
-                            .font(DevysTypography.caption)
-                    }
-                    .foregroundStyle(theme.textSecondary)
-                }
-                .buttonStyle(.plain)
+            Button("Clear") {
+                session.clearSelectedSlashCommand()
+                isComposerFocused = true
             }
+            .buttonStyle(.plain)
+            .font(Typography.caption)
+            .foregroundStyle(theme.textSecondary)
 
             Spacer()
         }
     }
 
-    private var emptyState: some View {
-        VStack(alignment: .leading, spacing: DevysSpacing.space3) {
-            Text("Agents")
-                .font(DevysTypography.title)
-                .foregroundStyle(theme.text)
-
-            Text(emptyStateMessage)
-                .font(DevysTypography.body)
-                .foregroundStyle(theme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+    private func suggestionStrip(for commands: [AgentAvailableCommand]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Spacing.space2) {
+                ForEach(commands) { command in
+                    Button {
+                        session.selectSlashCommand(command)
+                        isComposerFocused = true
+                    } label: {
+                        HStack(spacing: Spacing.space1) {
+                            Image(systemName: "slash.circle")
+                                .font(Typography.micro)
+                                .foregroundStyle(theme.accent)
+                            Text(command.name)
+                                .font(Typography.label)
+                                .foregroundStyle(theme.text)
+                            Text(command.description)
+                                .font(Typography.caption)
+                                .foregroundStyle(theme.textTertiary)
+                                .lineLimit(1)
+                        }
+                        .padding(.horizontal, Spacing.space3)
+                        .padding(.vertical, Spacing.space1)
+                        .background(theme.overlay, in: DevysShape())
+                        .overlay(
+                            DevysShape()
+                                .stroke(theme.border, lineWidth: Spacing.borderWidth)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 1)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(DevysSpacing.space4)
-        .background(theme.card)
-        .overlay {
-            RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
-                .stroke(theme.border, lineWidth: 1)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
     }
+
+    private func mentionStrip(for suggestions: [AgentMentionSuggestion]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Spacing.space2) {
+                ForEach(suggestions) { suggestion in
+                    Button {
+                        session.insertMention(suggestion)
+                        isComposerFocused = true
+                    } label: {
+                        HStack(spacing: Spacing.space1) {
+                            Image(systemName: "at")
+                                .font(Typography.micro)
+                                .foregroundStyle(theme.accent)
+                            Text(suggestion.displayPath)
+                                .font(Typography.label)
+                                .foregroundStyle(theme.text)
+                        }
+                        .padding(.horizontal, Spacing.space3)
+                        .padding(.vertical, Spacing.space1)
+                        .background(theme.overlay, in: DevysShape())
+                        .overlay(
+                            DevysShape()
+                                .stroke(theme.border, lineWidth: Spacing.borderWidth)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 1)
+        }
+    }
+
+    private var composerInput: some View {
+        AgentComposerTextView(
+            text: Binding(
+                get: { session.draft },
+                set: { session.updateDraft($0) }
+            ),
+            isFocused: $isComposerFocused
+        ) {
+            session.sendDraft()
+            isComposerFocused = true
+        }
+        .font(Typography.Chat.body)
+        .foregroundStyle(theme.text)
+        .frame(minHeight: 44, maxHeight: 180)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(theme.card)
+        .clipShape(DevysShape())
+        .overlay(
+            DevysShape()
+                .stroke(isComposerFocused ? theme.borderFocus : theme.border, lineWidth: Spacing.borderWidth)
+        )
+        .shadowStyle(Shadows.sm)
+        .overlay(alignment: .topLeading) {
+            if let hint = placeholderHint, session.draft.isEmpty {
+                Text(hint)
+                    .font(Typography.Chat.body)
+                    .foregroundStyle(theme.textTertiary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .allowsHitTesting(false)
+            }
+        }
+        .animation(Animations.micro, value: isComposerFocused)
+        .dropDestination(for: URL.self) { items, _ in
+            handleDroppedURLs(items)
+        }
+        .dropDestination(for: GitDiffTransfer.self) { items, _ in
+            session.addAttachments(items.map { .gitDiff(path: $0.path, isStaged: $0.isStaged) })
+            return true
+        }
+    }
+
+    private var composerToolbar: some View {
+        HStack(spacing: Spacing.space2) {
+            IconButton(
+                session.speechState.isRecording ? "stop.circle.fill" : "mic.fill",
+                style: session.speechState.isRecording ? .primary : .ghost,
+                tone: session.speechState.isRecording ? .destructive : .standard,
+                size: .md,
+                accessibilityLabel: session.speechState.isRecording ? "Stop dictation" : "Start dictation"
+            ) {
+                if session.speechState.isRecording {
+                    session.stopDictation()
+                } else {
+                    session.startDictation(using: speechService)
+                }
+                isComposerFocused = true
+            }
+
+            ForEach(session.configOptions) { option in
+                configMenu(option)
+            }
+
+            if session.isSendingPrompt {
+                HStack(spacing: Spacing.space1) {
+                    ProgressView()
+                        .scaleEffect(0.45)
+                        .frame(width: 12, height: 12)
+                    Text("Running")
+                        .font(Typography.caption)
+                        .foregroundStyle(theme.textSecondary)
+                }
+            }
+
+            Spacer()
+
+            IconButton(
+                session.isSendingPrompt ? "stop.fill" : "arrow.up",
+                style: .primary,
+                tone: .standard,
+                size: .md,
+                accessibilityLabel: session.isSendingPrompt ? "Cancel prompt" : "Send message"
+            ) {
+                if session.isSendingPrompt {
+                    session.cancelPrompt()
+                } else {
+                    session.sendDraft()
+                }
+                isComposerFocused = true
+            }
+            .disabled(!session.canSendDraft && !session.isSendingPrompt)
+        }
+    }
+
+    private func configMenu(_ option: AgentSessionConfigOption) -> some View {
+        Menu {
+            ForEach(option.groups) { group in
+                if let name = group.name {
+                    Section(name) {
+                        configButtons(for: option, group: group)
+                    }
+                } else {
+                    configButtons(for: option, group: group)
+                }
+            }
+        } label: {
+            HStack(spacing: Spacing.space1) {
+                Image(systemName: icon(for: option))
+                    .font(Typography.micro)
+                Text(selectedValueName(for: option))
+                    .font(Typography.label)
+                Image(systemName: "chevron.down")
+                    .font(Typography.micro)
+            }
+            .foregroundStyle(theme.textSecondary)
+            .padding(.horizontal, Spacing.space2)
+            .padding(.vertical, 6)
+            .background(theme.hover.opacity(0.001), in: DevysShape())
+            .contentShape(DevysShape())
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+    }
+
+    // MARK: - Empty state
+
+    private var emptyState: some View {
+        VStack(alignment: .center, spacing: Spacing.space4) {
+            Icon("sparkles", size: .custom(28), color: theme.textTertiary)
+
+            VStack(spacing: Spacing.space2) {
+                Text(session.descriptor.displayName)
+                    .font(Typography.title)
+                    .foregroundStyle(theme.text)
+
+                Text(emptyStateMessage)
+                    .font(Typography.body)
+                    .foregroundStyle(theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 380)
+            }
+
+            if case .connected = session.launchState {
+                quickStartChips
+            } else if case .idle = session.launchState {
+                quickStartChips
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var quickStartChips: some View {
+        HStack(spacing: Spacing.space2) {
+            ForEach(quickStartActions, id: \.label) { quickStart in
+                Button {
+                    session.updateDraft(quickStart.draft)
+                    isComposerFocused = true
+                } label: {
+                    HStack(spacing: Spacing.space1) {
+                        Image(systemName: quickStart.icon)
+                            .font(Typography.micro)
+                            .foregroundStyle(theme.accent)
+                        Text(quickStart.label)
+                            .font(Typography.label)
+                            .foregroundStyle(theme.text)
+                    }
+                    .padding(.horizontal, Spacing.space3)
+                    .padding(.vertical, Spacing.space2)
+                    .background(theme.card, in: DevysShape())
+                    .overlay(
+                        DevysShape()
+                            .stroke(theme.border, lineWidth: Spacing.borderWidth)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.top, Spacing.space2)
+    }
+
+    private var quickStartActions: [QuickStart] {
+        [
+            QuickStart(label: "Plan a task", icon: "list.bullet.rectangle", draft: "/plan "),
+            QuickStart(label: "Review changes", icon: "eye", draft: "/review "),
+            QuickStart(label: "Reference a file", icon: "at", draft: "@")
+        ]
+    }
+
+    private struct QuickStart {
+        let label: String
+        let icon: String
+        let draft: String
+    }
+
+    // MARK: - Timeline
 
     @ViewBuilder
     private func timelineRow(_ item: AgentTimelineItem) -> some View {
@@ -288,40 +442,50 @@ struct AgentSessionView: View {
         case .message(let message):
             messageRow(message)
         case .toolCall(let toolCall):
-            toolCallRow(toolCall)
+            ToolCallRowView(
+                item: toolCall,
+                session: session,
+                onOpenLocationTarget: onOpenLocationTarget,
+                onOpenDiffArtifact: onOpenDiffArtifact,
+                onOpenTerminalTab: onOpenTerminalTab
+            )
         case .approval(let approval):
             approvalRow(approval)
         case .plan(let plan):
-            planRow(plan)
+            PlanRowView(item: plan)
         case .status(let status):
             statusRow(status)
         }
     }
 
     private func messageRow(_ item: AgentMessageTimelineItem) -> some View {
-        HStack {
+        HStack(alignment: .top, spacing: Spacing.space3) {
             if item.role == .user {
-                Spacer(minLength: 80)
+                Spacer(minLength: 64)
+            } else {
+                AgentIdentityStripe(
+                    color: sessionAgentColor,
+                    status: stripeStatus(for: item),
+                    width: 2
+                )
+                .frame(minHeight: 20)
             }
 
-            VStack(alignment: .leading, spacing: Spacing.tight) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(roleLabel(for: item.role))
-                    .font(DevysTypography.caption)
-                    .foregroundStyle(theme.textSecondary)
+                    .font(Typography.Chat.caption)
+                    .foregroundStyle(theme.textTertiary)
 
                 Text(item.text)
-                    .font(DevysTypography.body)
-                    .foregroundStyle(theme.text)
+                    .font(Typography.Chat.body)
+                    .foregroundStyle(item.role == .thought ? theme.textSecondary : theme.text)
+                    .italic(item.role == .thought)
                     .textSelection(.enabled)
             }
-            .frame(maxWidth: 720, alignment: .leading)
-            .padding(Spacing.comfortable)
-            .background(messageBackground(for: item.role))
-            .overlay {
-                RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
-                    .stroke(theme.border, lineWidth: 1)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
+            .frame(maxWidth: item.role == .user ? 640 : .infinity, alignment: .leading)
+            .padding(item.role == .user ? EdgeInsets(top: 10, leading: 14, bottom: 10, trailing: 14)
+                                         : EdgeInsets(top: 2, leading: 0, bottom: 2, trailing: 0))
+            .background(item.role == .user ? theme.active : Color.clear, in: DevysShape())
             .contextMenu {
                 Button("Copy") {
                     copyText(item.text)
@@ -337,105 +501,343 @@ struct AgentSessionView: View {
             }
 
             if item.role != .user {
-                Spacer(minLength: 80)
+                Spacer(minLength: 0)
             }
         }
     }
 
-    // swiftlint:disable:next function_body_length
-    private func toolCallRow(_ item: AgentToolCallTimelineItem) -> some View {
-        VStack(alignment: .leading, spacing: DevysSpacing.space3) {
-            HStack(spacing: DevysSpacing.space2) {
-                Image(systemName: icon(forToolKind: item.kind))
-                    .font(Typography.caption)
-                    .foregroundStyle(theme.accent)
-
-                Text(item.title)
-                    .font(DevysTypography.body)
-                    .foregroundStyle(theme.text)
-
-                if let status = item.status {
-                    pill(status.replacingOccurrences(of: "_", with: " "), tint: theme.active)
+    private func approvalRow(_ item: AgentApprovalTimelineItem) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.space3) {
+            HStack(spacing: Spacing.space2) {
+                Image(systemName: "exclamationmark.shield.fill")
+                    .font(Typography.heading)
+                    .foregroundStyle(theme.warning)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.title)
+                        .font(Typography.heading)
+                        .foregroundStyle(theme.text)
+                    Text(item.toolCallId)
+                        .font(Typography.caption)
+                        .foregroundStyle(theme.textTertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
-
                 Spacer()
             }
 
-            if !item.locations.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: DevysSpacing.space2) {
-                        ForEach(item.locations, id: \.self) { location in
-                            Button {
-                                onOpenLocationTarget(
-                                    AgentFollowTarget(
-                                        location: location,
-                                        diff: preferredDiff(for: item, location: location)
-                                    ),
-                                    false
-                                )
-                            } label: {
-                                pill(
-                                    location.line.map { "\(location.path):\($0)" } ?? location.path,
-                                    tint: theme.card
-                                )
-                            }
-                            .buttonStyle(.plain)
-                        }
+            HStack(spacing: Spacing.space2) {
+                ForEach(Array(item.options.enumerated()), id: \.element.id) { index, option in
+                    ActionButton(
+                        option.name,
+                        style: approvalButtonStyle(for: item, option: option, isPrimary: index == 0),
+                        tone: approvalButtonTone(for: option)
+                    ) {
+                        session.respondToApproval(
+                            requestID: item.requestID,
+                            optionID: option.optionId
+                        )
                     }
+                    .disabled(item.isResolved)
                 }
-            }
-
-            ForEach(item.content) { content in
-                switch content.kind {
-                case .diff:
-                    if let diff = content.diff {
-                        VStack(alignment: .leading, spacing: Spacing.tight) {
-                            HStack(spacing: DevysSpacing.space2) {
-                                Text(diff.path)
-                                    .font(DevysTypography.body)
-                                    .foregroundStyle(theme.text)
-                                Spacer()
-                                Button("Open Diff") {
-                                    onOpenDiffArtifact(diff, false)
-                                }
-                                .buttonStyle(.plain)
-                                .font(DevysTypography.caption)
-                                .foregroundStyle(theme.accent)
-                            }
-                            if let oldText = diff.oldText {
-                                diffBlock(oldText, tint: Color.red.opacity(0.12))
-                            }
-                            diffBlock(diff.newText, tint: Color.green.opacity(0.12))
-                        }
-                    }
-                case .terminal:
-                    if let terminalID = content.terminalID,
-                       let terminal = session.inlineTerminal(id: terminalID) {
-                        terminalRow(terminal)
-                    } else {
-                        Text(content.summary)
-                            .font(DevysTypography.body)
-                            .foregroundStyle(theme.textSecondary)
-                            .textSelection(.enabled)
-                    }
-                default:
-                    Text(content.summary)
-                        .font(DevysTypography.body)
-                        .foregroundStyle(theme.textSecondary)
-                        .textSelection(.enabled)
-                }
+                Spacer()
             }
         }
-        .padding(DevysSpacing.space3)
-        .background(theme.card)
-        .overlay {
-            RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
-                .stroke(theme.border, lineWidth: 1)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
+        .padding(Spacing.space4)
+        .elevation(.popover)
         .contextMenu {
             Button("Copy") {
                 copyText(copyText(for: item))
+            }
+        }
+    }
+
+    private func statusRow(_ item: AgentStatusTimelineItem) -> some View {
+        HStack {
+            Spacer()
+            Chip(.status(item.text, statusColor(for: item.style)))
+            Spacer()
+        }
+        .contextMenu {
+            Button("Copy") {
+                copyText(item.text)
+            }
+        }
+    }
+
+    // MARK: - Attachment strip
+
+    private var attachmentStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Spacing.space2) {
+                ForEach(session.attachmentSummaries) { summary in
+                    attachmentChip(summary)
+                }
+            }
+            .padding(.horizontal, 1)
+        }
+    }
+
+    private func attachmentChip(_ summary: AgentAttachmentSummary) -> some View {
+        HStack(spacing: Spacing.space2) {
+            Image(systemName: summary.systemImage)
+                .font(Typography.caption)
+                .foregroundStyle(theme.accent)
+
+            VStack(alignment: .leading, spacing: 0) {
+                Text(summary.title)
+                    .font(Typography.label)
+                    .foregroundStyle(theme.text)
+                    .lineLimit(1)
+                if let subtitle = summary.subtitle {
+                    Text(subtitle)
+                        .font(Typography.caption)
+                        .foregroundStyle(theme.textTertiary)
+                        .lineLimit(1)
+                }
+            }
+
+            Text(summary.delivery.rawValue.capitalized)
+                .font(Typography.micro)
+                .foregroundStyle(theme.textTertiary)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(theme.hover, in: Capsule())
+
+            Button {
+                session.removeAttachment(id: summary.id)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(Typography.micro)
+                    .foregroundStyle(theme.textTertiary)
+                    .frame(width: 18, height: 18)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Remove attachment")
+        }
+        .padding(.leading, Spacing.space3)
+        .padding(.trailing, Spacing.space1)
+        .padding(.vertical, 6)
+        .background(theme.card, in: DevysShape())
+        .overlay(
+            DevysShape()
+                .stroke(theme.border, lineWidth: Spacing.borderWidth)
+        )
+    }
+
+    // MARK: - Helpers
+
+    @ViewBuilder
+    fileprivate func configButtons(
+        for option: AgentSessionConfigOption,
+        group: AgentSessionConfigValueGroup
+    ) -> some View {
+        ForEach(group.options) { value in
+            Button(value.name) {
+                session.setConfigOption(id: option.id, value: value.value)
+            }
+        }
+    }
+
+    fileprivate func selectedValueName(for option: AgentSessionConfigOption) -> String {
+        option.allValues.first { $0.value == option.currentValue }?.name ?? option.currentValue
+    }
+
+    fileprivate var slashCommandSuggestions: [AgentAvailableCommand] {
+        guard session.selectedCommand == nil else { return [] }
+        let trimmed = session.draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("/") else { return [] }
+        let query = String(trimmed.dropFirst()).lowercased()
+        if query.isEmpty {
+            return session.availableCommands
+        }
+        return session.availableCommands.filter { command in
+            command.name.lowercased().contains(query) || command.description.lowercased().contains(query)
+        }
+    }
+
+    fileprivate var placeholderHint: String? {
+        if let commandHint = session.commandInputHint {
+            return commandHint
+        }
+        switch session.launchState {
+        case .launching:
+            return "Connecting…"
+        case .failed:
+            return nil
+        case .idle, .connected:
+            return "Message \(session.descriptor.displayName)… (⇧⏎ for newline)"
+        }
+    }
+
+    fileprivate var emptyStateMessage: String {
+        switch session.launchState {
+        case .launching:
+            "Restoring the prior session and replaying agent state."
+        case .failed(let message):
+            message
+        case .idle, .connected:
+            "Send a prompt, reference files with @, or start with a slash command."
+        }
+    }
+
+    fileprivate func scrollToBottom(using proxy: ScrollViewProxy) {
+        withAnimation(.easeOut(duration: 0.18)) {
+            proxy.scrollTo(Self.bottomSentinelID, anchor: .bottom)
+        }
+    }
+
+    fileprivate var sessionAgentColor: AgentColor {
+        let index = abs(session.descriptor.kind.rawValue.hashValue) % AgentColor.palette.count
+        return AgentColor.palette[index]
+    }
+
+    fileprivate func stripeStatus(for item: AgentMessageTimelineItem) -> AgentStatus {
+        guard isLastAssistantMessage(item) else { return .complete }
+        if session.isSendingPrompt { return .running }
+        if case .failed = session.launchState { return .error }
+        return .complete
+    }
+
+    fileprivate func roleLabel(for role: AgentMessageRole) -> String {
+        switch role {
+        case .user:
+            "You"
+        case .assistant:
+            session.descriptor.displayName
+        case .thought:
+            "Reasoning"
+        }
+    }
+
+    fileprivate func icon(for option: AgentSessionConfigOption) -> String {
+        switch option.category {
+        case "mode":
+            "slider.horizontal.3"
+        case "model":
+            "cpu"
+        case "thought_level":
+            "brain"
+        default:
+            "dial.low"
+        }
+    }
+
+    fileprivate func approvalButtonStyle(
+        for item: AgentApprovalTimelineItem,
+        option: AgentPermissionOption,
+        isPrimary: Bool
+    ) -> ActionButton.Style {
+        if item.selectedOptionID == option.optionId {
+            return .primary
+        }
+        return isPrimary ? .primary : .ghost
+    }
+
+    fileprivate func approvalButtonTone(for option: AgentPermissionOption) -> ActionButton.Tone {
+        let lowered = option.name.lowercased()
+        if lowered.contains("reject") || lowered.contains("deny") || lowered.contains("cancel") {
+            return .destructive
+        }
+        return .standard
+    }
+
+    fileprivate func statusColor(for style: AgentStatusStyle) -> Color {
+        switch style {
+        case .neutral:
+            theme.textSecondary
+        case .warning:
+            theme.warning
+        case .error:
+            theme.error
+        }
+    }
+
+    fileprivate func isLastUserMessage(_ item: AgentMessageTimelineItem) -> Bool {
+        guard let lastUserItem = session.timeline.last(where: {
+            if case .message(let msg) = $0, msg.role == .user { return true }
+            return false
+        }),
+        case .message(let msg) = lastUserItem else {
+            return false
+        }
+        return msg.id == item.id
+    }
+
+    fileprivate func isLastAssistantMessage(_ item: AgentMessageTimelineItem) -> Bool {
+        guard let lastAssistantItem = session.timeline.last(where: {
+            if case .message(let msg) = $0, msg.role != .user { return true }
+            return false
+        }),
+        case .message(let msg) = lastAssistantItem else {
+            return false
+        }
+        return msg.id == item.id
+    }
+
+    fileprivate func handleDroppedURLs(_ items: [URL]) -> Bool {
+        guard !items.isEmpty else { return false }
+        session.addAttachments(items.map(attachment(from:)))
+        return true
+    }
+
+    fileprivate func attachment(from url: URL) -> AgentAttachment {
+        let mimeType = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType
+        if let mimeType,
+           let type = UTType(mimeType: mimeType),
+           type.conforms(to: .image) {
+            return .image(url: url)
+        }
+        return .file(url: url)
+    }
+
+    fileprivate func copyText(for item: AgentApprovalTimelineItem) -> String {
+        [
+            item.title,
+            item.toolCallId,
+            item.options.map(\.name).joined(separator: ", ")
+        ]
+        .joined(separator: "\n")
+    }
+
+    fileprivate func copyText(_ value: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(value, forType: .string)
+    }
+}
+
+// MARK: - Tool Call Row
+
+@MainActor
+private struct ToolCallRowView: View {
+    @Environment(\.devysTheme) private var theme
+    @State private var isExpanded = true
+
+    let item: AgentToolCallTimelineItem
+    let session: AgentSessionRuntime
+    let onOpenLocationTarget: (AgentFollowTarget, Bool) -> Void
+    let onOpenDiffArtifact: (AgentDiffContent, Bool) -> Void
+    let onOpenTerminalTab: (UUID) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: isExpanded ? Spacing.space3 : 0) {
+            header
+
+            if isExpanded {
+                if !item.locations.isEmpty {
+                    locationsStrip
+                }
+
+                ForEach(item.content) { content in
+                    contentView(for: content)
+                }
+            }
+        }
+        .padding(Spacing.space3)
+        .elevation(.card)
+        .contextMenu {
+            Button("Copy") {
+                copy(copyText(for: item))
             }
             if let location = item.locations.first {
                 Button("Reveal File") {
@@ -456,335 +858,161 @@ struct AgentSessionView: View {
         }
     }
 
-    private func approvalRow(_ item: AgentApprovalTimelineItem) -> some View {
-        VStack(alignment: .leading, spacing: DevysSpacing.space3) {
-            Text(item.title)
-                .font(DevysTypography.body)
-                .foregroundStyle(theme.text)
+    private var header: some View {
+        Button {
+            withAnimation(Animations.micro) { isExpanded.toggle() }
+        } label: {
+            HStack(spacing: Spacing.space2) {
+                Image(systemName: "chevron.right")
+                    .font(Typography.micro)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    .foregroundStyle(theme.textTertiary)
+                    .frame(width: 10)
 
-            Text(item.toolCallId)
-                .font(DevysTypography.caption)
-                .foregroundStyle(theme.textSecondary)
+                Image(systemName: icon(forToolKind: item.kind))
+                    .font(Typography.caption)
+                    .foregroundStyle(theme.accent)
 
-            HStack(spacing: DevysSpacing.space2) {
-                ForEach(item.options) { option in
-                    Button(option.name) {
-                        session.respondToApproval(
-                            requestID: item.requestID,
-                            optionID: option.optionId
+                Text(item.title)
+                    .font(Typography.label)
+                    .foregroundStyle(theme.text)
+                    .lineLimit(1)
+
+                if let status = item.status {
+                    Chip(.status(
+                        status.replacingOccurrences(of: "_", with: " "),
+                        statusColorForToolStatus(status)
+                    ))
+                }
+
+                Spacer()
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var locationsStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Spacing.space2) {
+                ForEach(item.locations, id: \.self) { location in
+                    Button {
+                        onOpenLocationTarget(
+                            AgentFollowTarget(
+                                location: location,
+                                diff: preferredDiff(for: item, location: location)
+                            ),
+                            false
                         )
+                    } label: {
+                        HStack(spacing: Spacing.space1) {
+                            Image(systemName: "doc.text")
+                                .font(Typography.micro)
+                            Text(location.line.map { "\(location.path):\($0)" } ?? location.path)
+                                .font(Typography.caption)
+                                .lineLimit(1)
+                        }
+                        .foregroundStyle(theme.textSecondary)
+                        .padding(.horizontal, Spacing.space2)
+                        .padding(.vertical, 3)
+                        .background(theme.hover, in: DevysShape())
                     }
                     .buttonStyle(.plain)
-                    .font(DevysTypography.body)
-                    .foregroundStyle(buttonTextColor(for: item, option: option))
-                    .padding(.horizontal, Spacing.normal)
-                    .padding(.vertical, Spacing.tight)
-                    .background(buttonBackground(for: item, option: option))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
-                            .stroke(theme.border, lineWidth: 1)
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
-                    .disabled(item.isResolved)
                 }
-            }
-        }
-        .padding(DevysSpacing.space3)
-        .background(theme.card)
-        .overlay {
-            RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
-                .stroke(theme.border, lineWidth: 1)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
-        .contextMenu {
-            Button("Copy") {
-                copyText(copyText(for: item))
-            }
-        }
-    }
-
-    private func planRow(_ item: AgentPlanTimelineItem) -> some View {
-        VStack(alignment: .leading, spacing: DevysSpacing.space2) {
-            Text("Plan")
-                .font(DevysTypography.body)
-                .foregroundStyle(theme.text)
-
-            ForEach(Array(item.entries.enumerated()), id: \.offset) { index, entry in
-                HStack(alignment: .top, spacing: DevysSpacing.space2) {
-                    Text("\(index + 1).")
-                        .font(DevysTypography.body)
-                        .foregroundStyle(theme.textSecondary)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(entry.content)
-                            .font(DevysTypography.body)
-                            .foregroundStyle(theme.text)
-                        Text("\(entry.status) • \(entry.priority)")
-                            .font(DevysTypography.caption)
-                            .foregroundStyle(theme.textSecondary)
-                    }
-                }
-            }
-        }
-        .padding(DevysSpacing.space3)
-        .background(theme.card)
-        .overlay {
-            RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
-                .stroke(theme.border, lineWidth: 1)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
-        .contextMenu {
-            Button("Copy") {
-                copyText(copyText(for: item))
-            }
-        }
-    }
-
-    private func statusRow(_ item: AgentStatusTimelineItem) -> some View {
-        HStack {
-            Spacer()
-            Text(item.text)
-                .font(DevysTypography.body)
-                .foregroundStyle(statusColor(for: item.style))
-                .padding(.horizontal, Spacing.normal)
-                .padding(.vertical, Spacing.tight)
-                .background(theme.card)
-                .overlay {
-                    Capsule()
-                        .stroke(theme.border, lineWidth: 1)
-                }
-            Spacer()
-        }
-        .contextMenu {
-            Button("Copy") {
-                copyText(item.text)
             }
         }
     }
 
     @ViewBuilder
-    private func configButtons(
-        for option: AgentSessionConfigOption,
-        group: AgentSessionConfigValueGroup
-    ) -> some View {
-        ForEach(group.options) { value in
-            Button(value.name) {
-                session.setConfigOption(id: option.id, value: value.value)
+    private func contentView(for content: AgentToolContentPreview) -> some View {
+        switch content.kind {
+        case .diff:
+            if let diff = content.diff {
+                diffContent(diff)
             }
-        }
-    }
-
-    private func selectedValueName(for option: AgentSessionConfigOption) -> String {
-        option.allValues.first { $0.value == option.currentValue }?.name ?? option.currentValue
-    }
-
-    private var slashCommandSuggestions: [AgentAvailableCommand] {
-        guard session.selectedCommand == nil else { return [] }
-        let trimmed = session.draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.hasPrefix("/") else { return [] }
-        let query = String(trimmed.dropFirst()).lowercased()
-        if query.isEmpty {
-            return session.availableCommands
-        }
-        return session.availableCommands.filter { command in
-            command.name.lowercased().contains(query) || command.description.lowercased().contains(query)
-        }
-    }
-
-    private var emptyStateMessage: String {
-        switch session.launchState {
-        case .launching:
-            "Restoring the prior session and replaying agent state."
-        case .failed(let message):
-            message
-        case .idle, .connected:
-            "Send a prompt, adjust the active model or mode, and follow tool activity inline."
-        }
-    }
-
-    private func scrollToBottom(using proxy: ScrollViewProxy) {
-        guard let lastID = session.timeline.last?.id else { return }
-        withAnimation(.easeOut(duration: 0.18)) {
-            proxy.scrollTo(lastID, anchor: .bottom)
-        }
-    }
-
-    private var composerInput: some View {
-        AgentComposerTextView(
-            text: Binding(
-                get: { session.draft },
-                set: { session.updateDraft($0) }
-            ),
-            isFocused: $isComposerFocused
-        ) {
-            session.sendDraft()
-            isComposerFocused = true
-        }
-        .font(DevysTypography.body)
-        .foregroundStyle(theme.text)
-        .frame(minHeight: 92, maxHeight: 160)
-        .padding(.horizontal, Spacing.normal)
-        .padding(.vertical, Spacing.normal)
-        .background(theme.card)
-        .overlay {
-            RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
-                .stroke(theme.border, lineWidth: 1)
-        }
-        .overlay(alignment: .topLeading) {
-            if let hint = session.commandInputHint,
-               session.draft.isEmpty {
-                Text(hint)
-                    .font(DevysTypography.body)
-                    .foregroundStyle(theme.textTertiary)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, Spacing.relaxed)
-                    .allowsHitTesting(false)
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
-        .dropDestination(for: URL.self) { items, _ in
-            handleDroppedURLs(items)
-        }
-        .dropDestination(for: GitDiffTransfer.self) { items, _ in
-            session.addAttachments(items.map { .gitDiff(path: $0.path, isStaged: $0.isStaged) })
-            return true
-        }
-    }
-
-    private var attachmentStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DevysSpacing.space2) {
-                ForEach(session.attachmentSummaries) { summary in
-                    HStack(spacing: Spacing.normal) {
-                        Image(systemName: summary.systemImage)
-                            .font(Typography.caption)
-                            .foregroundStyle(theme.accent)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(summary.title)
-                                .font(DevysTypography.body)
-                                .foregroundStyle(theme.text)
-                            if let subtitle = summary.subtitle {
-                                Text(subtitle)
-                                    .font(DevysTypography.caption)
-                                    .foregroundStyle(theme.textSecondary)
-                            }
-                        }
-
-                        pill(summary.delivery.rawValue.capitalized, tint: theme.card)
-
-                        Button {
-                            session.removeAttachment(id: summary.id)
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(Typography.label)
-                                .foregroundStyle(theme.textTertiary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .padding(.horizontal, Spacing.normal)
-                    .padding(.vertical, Spacing.normal)
-                    .background(theme.card)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
-                            .stroke(theme.border, lineWidth: 1)
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
-                }
-            }
-        }
-    }
-
-    // swiftlint:disable:next function_body_length
-    private func terminalRow(_ terminal: AgentInlineTerminalViewState) -> some View {
-        VStack(alignment: .leading, spacing: DevysSpacing.space2) {
-            HStack(spacing: DevysSpacing.space2) {
-                Image(systemName: "terminal")
-                    .font(Typography.caption)
-                    .foregroundStyle(theme.accent)
-                Text(terminal.command)
-                    .font(DevysTypography.body)
-                    .foregroundStyle(theme.text)
-                    .lineLimit(1)
-                Spacer()
-                if terminal.isRunning {
-                    pill("Running", tint: theme.active)
-                } else if let exitCode = terminal.exitCode {
-                    pill("Exit \(exitCode)", tint: theme.card)
-                } else if let signal = terminal.signal {
-                    pill("Signal \(signal)", tint: theme.card)
-                }
-                Button("Open Terminal") {
-                    Task {
-                        do {
-                            let terminalTabID = try await session.promoteInlineTerminal(terminal.terminalID)
-                            onOpenTerminalTab(terminalTabID)
-                        } catch {
-                            session.noteStatus(error.localizedDescription, style: .error)
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-                .font(DevysTypography.caption)
-                .foregroundStyle(theme.accent)
-                .disabled(!terminal.isRunning)
-            }
-
-            ScrollView(.vertical, showsIndicators: true) {
-                Text(terminal.output.isEmpty ? "Waiting for output…" : terminal.output)
-                    .font(Typography.Code.gutter)
+        case .terminal:
+            if let terminalID = content.terminalID,
+               let terminal = session.inlineTerminal(id: terminalID) {
+                TerminalInlineView(
+                    terminal: terminal,
+                    session: session,
+                    onOpenTerminalTab: onOpenTerminalTab
+                )
+            } else {
+                Text(content.summary)
+                    .font(Typography.body)
                     .foregroundStyle(theme.textSecondary)
                     .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(Spacing.normal)
             }
-            .frame(minHeight: 84, maxHeight: 180)
-            .background(theme.base)
-            .overlay {
-                RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
-                    .stroke(theme.border, lineWidth: 1)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
-
-            if terminal.truncated {
-                Text("Output truncated to the retained byte limit.")
-                    .font(DevysTypography.caption)
-                    .foregroundStyle(theme.textSecondary)
-            }
-        }
-    }
-
-    private func roleLabel(for role: AgentMessageRole) -> String {
-        switch role {
-        case .user:
-            "You"
-        case .assistant:
-            session.descriptor.displayName
-        case .thought:
-            "Reasoning"
-        }
-    }
-
-    private func messageBackground(for role: AgentMessageRole) -> Color {
-        switch role {
-        case .user:
-            theme.active
-        case .assistant:
-            theme.card
-        case .thought:
-            theme.card
-        }
-    }
-
-    private func icon(for option: AgentSessionConfigOption) -> String {
-        switch option.category {
-        case "mode":
-            "slider.horizontal.3"
-        case "model":
-            "cpu"
-        case "thought_level":
-            "brain"
         default:
-            "dial.low"
+            Text(content.summary)
+                .font(Typography.body)
+                .foregroundStyle(theme.textSecondary)
+                .textSelection(.enabled)
+        }
+    }
+
+    private func diffContent(_ diff: AgentDiffContent) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.space1) {
+            HStack(spacing: Spacing.space2) {
+                Image(systemName: "doc.text.below.ecg")
+                    .font(Typography.caption)
+                    .foregroundStyle(theme.textSecondary)
+                Text(diff.path)
+                    .font(Typography.Code.sm)
+                    .foregroundStyle(theme.text)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer()
+                Button("Open Diff") {
+                    onOpenDiffArtifact(diff, false)
+                }
+                .buttonStyle(.plain)
+                .font(Typography.caption)
+                .foregroundStyle(theme.accent)
+            }
+            .padding(.horizontal, Spacing.space2)
+            .padding(.vertical, 4)
+            .background(theme.hover, in: DevysShape())
+
+            if let oldText = diff.oldText {
+                diffBlock(oldText, kind: .removed)
+            }
+            diffBlock(diff.newText, kind: .added)
+        }
+    }
+
+    private enum DiffKind { case added, removed }
+
+    private func diffBlock(_ text: String, kind: DiffKind) -> some View {
+        Text(text)
+            .font(Typography.Code.sm)
+            .foregroundStyle(theme.text)
+            .textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(Spacing.space2)
+            .background(kind == .added ? theme.successSubtle : theme.errorSubtle, in: DevysShape())
+            .overlay(
+                DevysShape()
+                    .stroke(
+                        (kind == .added ? theme.success : theme.error).opacity(0.3),
+                        lineWidth: Spacing.borderWidth
+                    )
+            )
+    }
+
+    // Helpers
+
+    private func statusColorForToolStatus(_ status: String) -> Color {
+        switch status.lowercased() {
+        case "completed", "complete", "success":
+            theme.success
+        case "failed", "error":
+            theme.error
+        case "running", "in_progress":
+            theme.accent
+        default:
+            theme.textSecondary
         }
     }
 
@@ -805,99 +1033,6 @@ struct AgentSessionView: View {
         default:
             "gearshape.2"
         }
-    }
-
-    private func buttonBackground(
-        for item: AgentApprovalTimelineItem,
-        option: AgentPermissionOption
-    ) -> Color {
-        if item.selectedOptionID == option.optionId {
-            return theme.accent
-        }
-        return theme.card
-    }
-
-    private func buttonTextColor(
-        for item: AgentApprovalTimelineItem,
-        option: AgentPermissionOption
-    ) -> Color {
-        if item.selectedOptionID == option.optionId {
-            return theme.accentForeground
-        }
-        return theme.text
-    }
-
-    private func statusColor(for style: AgentStatusStyle) -> Color {
-        switch style {
-        case .neutral:
-            theme.textSecondary
-        case .warning:
-            Color.orange
-        case .error:
-            Color.red
-        }
-    }
-
-    private func isLastUserMessage(_ item: AgentMessageTimelineItem) -> Bool {
-        guard let lastUserItem = session.timeline.last(where: {
-            if case .message(let msg) = $0, msg.role == .user { return true }
-            return false
-        }),
-        case .message(let msg) = lastUserItem else {
-            return false
-        }
-        return msg.id == item.id
-    }
-
-    private func pill(
-        _ text: String,
-        tint: Color
-    ) -> some View {
-        Text(text)
-            .font(DevysTypography.caption)
-            .foregroundStyle(theme.textSecondary)
-            .padding(.horizontal, Spacing.normal)
-            .padding(.vertical, Spacing.tight)
-            .background(tint)
-            .overlay {
-                Capsule()
-                    .stroke(theme.border, lineWidth: 1)
-            }
-            .clipShape(Capsule())
-    }
-
-    private func diffBlock(
-        _ text: String,
-        tint: Color
-    ) -> some View {
-        Text(text)
-            .font(DevysTypography.body)
-            .foregroundStyle(theme.textSecondary)
-            .textSelection(.enabled)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(Spacing.normal)
-            .background(tint)
-            .overlay {
-                RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
-                    .stroke(theme.border, lineWidth: 1)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
-    }
-
-    private func handleDroppedURLs(_ items: [URL]) -> Bool {
-        guard !items.isEmpty else { return false }
-        session.addAttachments(items.map(attachment(from:)))
-        return true
-    }
-
-    private func attachment(from url: URL) -> AgentAttachment {
-        let mimeType = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType
-        if let mimeType,
-           let type = UTType(mimeType: mimeType),
-           type.conforms(to: .image) {
-            return .image(url: url)
-        }
-        return .file(url: url)
     }
 
     private func preferredDiff(
@@ -927,13 +1062,91 @@ struct AgentSessionView: View {
         return components.joined(separator: "\n")
     }
 
-    private func copyText(for item: AgentApprovalTimelineItem) -> String {
-        [
-            item.title,
-            item.toolCallId,
-            item.options.map(\.name).joined(separator: ", ")
-        ]
-        .joined(separator: "\n")
+    private func copy(_ value: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(value, forType: .string)
+    }
+}
+
+// MARK: - Plan Row
+
+@MainActor
+private struct PlanRowView: View {
+    @Environment(\.devysTheme) private var theme
+    @State private var isExpanded = true
+
+    let item: AgentPlanTimelineItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: isExpanded ? Spacing.space2 : 0) {
+            Button {
+                withAnimation(Animations.micro) { isExpanded.toggle() }
+            } label: {
+                HStack(spacing: Spacing.space2) {
+                    Image(systemName: "chevron.right")
+                        .font(Typography.micro)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .foregroundStyle(theme.textTertiary)
+                        .frame(width: 10)
+
+                    Image(systemName: "list.bullet.rectangle")
+                        .font(Typography.caption)
+                        .foregroundStyle(theme.accent)
+
+                    Text("Plan")
+                        .font(Typography.label)
+                        .foregroundStyle(theme.text)
+
+                    Chip(.count(item.entries.count))
+
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if isExpanded {
+                ForEach(Array(item.entries.enumerated()), id: \.offset) { index, entry in
+                    HStack(alignment: .top, spacing: Spacing.space2) {
+                        Text("\(index + 1).")
+                            .font(Typography.body)
+                            .foregroundStyle(theme.textTertiary)
+                            .frame(width: 20, alignment: .trailing)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(entry.content)
+                                .font(Typography.body)
+                                .foregroundStyle(theme.text)
+                            HStack(spacing: Spacing.space1) {
+                                Chip(.status(entry.status, planStatusColor(entry.status)))
+                                Chip(.tag(entry.priority))
+                            }
+                        }
+                        Spacer()
+                    }
+                    .padding(.leading, Spacing.space2)
+                }
+            }
+        }
+        .padding(Spacing.space3)
+        .elevation(.card)
+        .contextMenu {
+            Button("Copy") {
+                copy(copyText(for: item))
+            }
+        }
+    }
+
+    private func planStatusColor(_ status: String) -> Color {
+        switch status.lowercased() {
+        case "completed", "done":
+            theme.success
+        case "in_progress", "active":
+            theme.accent
+        case "blocked", "failed":
+            theme.error
+        default:
+            theme.textSecondary
+        }
     }
 
     private func copyText(for item: AgentPlanTimelineItem) -> String {
@@ -943,11 +1156,87 @@ struct AgentSessionView: View {
         .joined(separator: "\n")
     }
 
-    private func copyText(_ value: String) {
+    private func copy(_ value: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(value, forType: .string)
     }
 }
+
+// MARK: - Inline Terminal
+
+@MainActor
+private struct TerminalInlineView: View {
+    @Environment(\.devysTheme) private var theme
+
+    let terminal: AgentInlineTerminalViewState
+    let session: AgentSessionRuntime
+    let onOpenTerminalTab: (UUID) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.space2) {
+            HStack(spacing: Spacing.space2) {
+                Image(systemName: "terminal")
+                    .font(Typography.caption)
+                    .foregroundStyle(theme.accent)
+                Text(terminal.command)
+                    .font(Typography.Code.sm)
+                    .foregroundStyle(theme.text)
+                    .lineLimit(1)
+                Spacer()
+                statusChip
+                Button("Open Terminal") {
+                    Task {
+                        do {
+                            let terminalTabID = try await session.promoteInlineTerminal(terminal.terminalID)
+                            onOpenTerminalTab(terminalTabID)
+                        } catch {
+                            session.noteStatus(error.localizedDescription, style: .error)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .font(Typography.caption)
+                .foregroundStyle(theme.accent)
+                .disabled(!terminal.isRunning)
+            }
+
+            ScrollView(.vertical, showsIndicators: true) {
+                Text(terminal.output.isEmpty ? "Waiting for output…" : terminal.output)
+                    .font(Typography.Code.gutter)
+                    .foregroundStyle(theme.textSecondary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(Spacing.space2)
+            }
+            .frame(minHeight: 84, maxHeight: 180)
+            .background(theme.base)
+            .clipShape(DevysShape())
+            .overlay(
+                DevysShape()
+                    .stroke(theme.border, lineWidth: Spacing.borderWidth)
+            )
+
+            if terminal.truncated {
+                Text("Output truncated to the retained byte limit.")
+                    .font(Typography.caption)
+                    .foregroundStyle(theme.textTertiary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var statusChip: some View {
+        if terminal.isRunning {
+            Chip(.status("Running", theme.accent))
+        } else if let exitCode = terminal.exitCode {
+            Chip(.status("Exit \(exitCode)", exitCode == 0 ? theme.success : theme.error))
+        } else if let signal = terminal.signal {
+            Chip(.status("Signal \(signal)", theme.warning))
+        }
+    }
+}
+
+// MARK: - Composer Text View
 
 @MainActor
 private struct AgentComposerTextView: NSViewRepresentable {
@@ -1009,8 +1298,8 @@ private struct AgentComposerTextView: NSViewRepresentable {
             textView.usesFindBar = true
             textView.allowsUndo = true
             textView.drawsBackground = false
-            textView.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
-            textView.textContainerInset = NSSize(width: 0, height: 6)
+            textView.font = .systemFont(ofSize: 15, weight: .regular)
+            textView.textContainerInset = NSSize(width: 0, height: 2)
             textView.textContainer?.lineFragmentPadding = 0
             textView.textContainer?.widthTracksTextView = true
             textView.isHorizontallyResizable = false

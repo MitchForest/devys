@@ -85,8 +85,4 @@ public enum Spacing {
     public static let tabMinWidth: CGFloat = 120
     public static let tabMaxWidth: CGFloat = 200
 
-    // MARK: - Status Capsule
-
-    public static let capsuleMinWidth: CGFloat = 140
-
 }

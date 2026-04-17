@@ -6,7 +6,7 @@ struct WorkspaceAgentLaunchCommandBuilderTests {
     @Test("Environment wrapper prefixes the command with env assignments")
     func wrapsCommandWithInlineEnvironment() {
         let expected =
-            "env DEVYS_WORKSPACE_ID=/tmp/devys/repo DEVYS_TERMINAL_ID=1234-5678 " +
+            "env -u NO_COLOR DEVYS_WORKSPACE_ID=/tmp/devys/repo DEVYS_TERMINAL_ID=1234-5678 " +
             "DEVYS_EXECUTABLE_PATH='/Applications/Devys.app/Contents/MacOS/mac client' " +
             "claude --model sonnet"
         let command = envWrappedShellCommand(

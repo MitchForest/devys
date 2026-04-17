@@ -127,6 +127,7 @@ final class WorkspaceOperationalController {
         requestedCommand: String? = nil,
         stagedCommand: String? = nil,
         attachCommand: String? = nil,
+        tabIcon: String = "terminal",
         terminateHostedSessionOnClose: Bool = true,
         id: UUID = UUID()
     ) -> GhosttyTerminalSession {
@@ -136,6 +137,7 @@ final class WorkspaceOperationalController {
             requestedCommand: requestedCommand,
             stagedCommand: stagedCommand,
             attachCommand: attachCommand,
+            tabIcon: tabIcon,
             terminateHostedSessionOnClose: terminateHostedSessionOnClose,
             id: id
         )
@@ -157,6 +159,12 @@ final class WorkspaceOperationalController {
 
     func replaceHostedSessions(_ sessionsByID: [UUID: HostedTerminalSessionRecord]) {
         hostedSessionsByID = sessionsByID
+        syncCurrentPortOwnership()
+        broadcastSnapshot()
+    }
+
+    func upsertHostedSession(_ session: HostedTerminalSessionRecord) {
+        hostedSessionsByID[session.id] = session
         syncCurrentPortOwnership()
         broadcastSnapshot()
     }

@@ -185,31 +185,28 @@ private extension WindowFeature.State {
 
         switch content {
         case .terminal(let tabWorkspaceID, let terminalID):
-            guard tabWorkspaceID == workspaceID,
-                  settings.restoreTerminalSessions,
-                  hostedTerminalSessions.contains(where: { record in
-                      record.workspaceID == workspaceID && record.id == terminalID
-                  }) else {
-                return nil
-            }
-            return .terminal(hostedSessionID: terminalID)
+            return persistedTerminalTabRecord(
+                workspaceID: workspaceID,
+                tabWorkspaceID: tabWorkspaceID,
+                terminalID: terminalID,
+                settings: settings,
+                hostedTerminalSessions: hostedTerminalSessions
+            )
+
+        case .browser(let tabWorkspaceID, let browserID, let initialURL):
+            return persistedBrowserTabRecord(
+                workspaceID: workspaceID,
+                tabWorkspaceID: tabWorkspaceID,
+                browserID: browserID,
+                initialURL: initialURL
+            )
 
         case .agentSession(let tabWorkspaceID, let sessionID):
-            guard tabWorkspaceID == workspaceID,
-                  settings.restoreAgentSessions,
-                  let summary = hostedWorkspaceContentByID[workspaceID]?.agentSessions.first(where: {
-                      $0.sessionID == sessionID
-                  }),
-                  summary.isRestorable else {
-                return nil
-            }
-            return .agent(
-                PersistedAgentSessionRecord(
-                    sessionID: sessionID.rawValue,
-                    kind: summary.kind,
-                    title: summary.title,
-                    subtitle: summary.subtitle
-                )
+            return persistedAgentTabRecord(
+                workspaceID: workspaceID,
+                tabWorkspaceID: tabWorkspaceID,
+                sessionID: sessionID,
+                settings: settings
             )
 
         case .editor(let tabWorkspaceID, let url):
@@ -220,9 +217,71 @@ private extension WindowFeature.State {
             guard tabWorkspaceID == workspaceID else { return nil }
             return .gitDiff(path: path, isStaged: isStaged)
 
+        case .workflowDefinition(let tabWorkspaceID, let definitionID):
+            guard tabWorkspaceID == workspaceID else { return nil }
+            return .workflowDefinition(definitionID: definitionID)
+
+        case .workflowRun(let tabWorkspaceID, let runID):
+            guard tabWorkspaceID == workspaceID else { return nil }
+            return .workflowRun(runID: runID)
+
         case .settings:
             return nil
         }
+    }
+
+    func persistedTerminalTabRecord(
+        workspaceID: Workspace.ID,
+        tabWorkspaceID: Workspace.ID,
+        terminalID: UUID,
+        settings: RelaunchSettingsSnapshot,
+        hostedTerminalSessions: [HostedTerminalSessionRecord]
+    ) -> PersistedWorkspaceTabRecord? {
+        guard tabWorkspaceID == workspaceID,
+              settings.restoreTerminalSessions,
+              hostedTerminalSessions.contains(where: { record in
+                  record.workspaceID == workspaceID && record.id == terminalID
+              }) else {
+            return nil
+        }
+        return .terminal(hostedSessionID: terminalID)
+    }
+
+    func persistedBrowserTabRecord(
+        workspaceID: Workspace.ID,
+        tabWorkspaceID: Workspace.ID,
+        browserID: UUID,
+        initialURL: URL
+    ) -> PersistedWorkspaceTabRecord? {
+        guard tabWorkspaceID == workspaceID else { return nil }
+        let currentURL = hostedWorkspaceContentByID[workspaceID]?.browserSessions.first {
+            $0.sessionID == browserID
+        }?.url ?? initialURL
+        return .browser(id: browserID, url: currentURL)
+    }
+
+    func persistedAgentTabRecord(
+        workspaceID: Workspace.ID,
+        tabWorkspaceID: Workspace.ID,
+        sessionID: AgentSessionID,
+        settings: RelaunchSettingsSnapshot
+    ) -> PersistedWorkspaceTabRecord? {
+        guard tabWorkspaceID == workspaceID,
+              settings.restoreAgentSessions,
+              let summary = hostedWorkspaceContentByID[workspaceID]?.agentSessions.first(where: {
+                  $0.sessionID == sessionID
+              }),
+              summary.isRestorable else {
+            return nil
+        }
+        return .agent(
+            PersistedAgentSessionRecord(
+                sessionID: sessionID.rawValue,
+                kind: summary.kind,
+                title: summary.title,
+                subtitle: summary.subtitle
+            )
+        )
     }
 
     func snapshotPersistentSplit(
@@ -315,6 +374,8 @@ private extension WindowFeature.State {
         case .terminal(let hostedSessionID):
             guard settings.restoreTerminalSessions else { return nil }
             return .terminal(workspaceID: workspaceID, id: hostedSessionID)
+        case .browser(let id, let url):
+            return .browser(workspaceID: workspaceID, id: id, initialURL: url)
         case .agent(let record):
             guard settings.restoreAgentSessions else { return nil }
             return .agentSession(
@@ -325,6 +386,10 @@ private extension WindowFeature.State {
             return .editor(workspaceID: workspaceID, url: fileURL)
         case .gitDiff(let path, let isStaged):
             return .gitDiff(workspaceID: workspaceID, path: path, isStaged: isStaged)
+        case .workflowDefinition(let definitionID):
+            return .workflowDefinition(workspaceID: workspaceID, definitionID: definitionID)
+        case .workflowRun(let runID):
+            return .workflowRun(workspaceID: workspaceID, runID: runID)
         }
     }
 

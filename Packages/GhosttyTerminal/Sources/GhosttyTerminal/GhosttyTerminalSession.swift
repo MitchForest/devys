@@ -30,11 +30,12 @@ public final class GhosttyTerminalSession: Identifiable {
         requestedCommand: String? = nil,
         stagedCommand: String? = nil,
         attachCommand: String? = nil,
+        tabIcon: String = "terminal",
         terminateHostedSessionOnClose: Bool = true
     ) {
         self.id = id
         self.tabTitle = "Terminal"
-        self.tabIcon = "terminal"
+        self.tabIcon = tabIcon
         self.bellCount = 0
         self.isRunning = true
         self.focusRequestID = 0

@@ -7,17 +7,14 @@ import Workspace
 struct SettingsSceneRoot: View {
     let store: StoreOf<WindowFeature>
 
+    @Environment(\.colorScheme) private var systemColorScheme
     @Environment(AppSettings.self) private var appSettings
 
     private var theme: DevysTheme {
         DevysTheme(
-            isDark: appSettings.appearance.isDarkMode,
+            isDark: appSettings.appearance.mode.resolvedColorScheme(systemColorScheme: systemColorScheme) == .dark,
             accentColor: AccentColor(rawValue: appSettings.appearance.accentColor) ?? .graphite
         )
-    }
-
-    private var colorScheme: ColorScheme {
-        appSettings.appearance.isDarkMode ? .dark : .light
     }
 
     var body: some View {
@@ -27,6 +24,6 @@ struct SettingsSceneRoot: View {
         )
         .frame(minWidth: 760, minHeight: 680)
         .environment(\.devysTheme, theme)
-        .preferredColorScheme(colorScheme)
+        .preferredColorScheme(appSettings.appearance.mode.preferredColorScheme)
     }
 }

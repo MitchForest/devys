@@ -15,17 +15,6 @@ import AppKit
 import Workspace
 import UniformTypeIdentifiers
 
-// MARK: - Content View
-
-struct NavigatorRevealRequest: Equatable {
-    let workspaceID: Workspace.ID
-    let token: UUID
-
-    static func == (lhs: NavigatorRevealRequest, rhs: NavigatorRevealRequest) -> Bool {
-        lhs.workspaceID == rhs.workspaceID && lhs.token == rhs.token
-    }
-}
-
 struct EditorOpenTraceState {
     let trace: WorkspacePerformanceTrace
     var tracker: EditorOpenPerformanceTracker
@@ -37,6 +26,7 @@ struct ContentView: View {
 
     let store: StoreOf<WindowFeature>
 
+    @Environment(\.colorScheme) var systemColorScheme
     @Environment(AppContainer.self) var container
     @Environment(AppSettings.self) var appSettings
     @Environment(RecentRepositoriesService.self) var recentRepositoriesService
@@ -46,11 +36,9 @@ struct ContentView: View {
     let terminalRelaunchPersistenceStore = TerminalRelaunchPersistenceStore()
     @State var runtimeRegistry = WorktreeRuntimeRegistry()
     @State var hostedContentBridge = HostedWorkspaceContentBridge()
+    @State var browserRegistry = WorkspaceBrowserRegistry()
     @State var themeManager = ThemeManager()
     @State var sidebarWidth: CGFloat = 240
-    /// Legacy navigator width — replaced by the always-visible 48pt repo rail.
-    /// Kept briefly for any residual references during migration.
-    let navigatorWidth: CGFloat = Spacing.repoRailWidth
     @State var isCapsuleExpanded = false
     @State var availableRelaunchSnapshot: TerminalRelaunchSnapshot?
     @State var rehydratableHostedSessionsByID: [UUID: HostedTerminalSessionRecord] = [:]
@@ -73,10 +61,13 @@ struct ContentView: View {
     @State var controller = ContentView.makeSplitController()
     @State var tabPresentationById: [TabID: TabPresentationState] = [:]
     @State var hasInitialized = false
+
+    @State var workflowRunTerminalPaneMap: [UUID: PaneID] = [:]
+    @State var openedWorkflowTerminalIDs: Set<UUID> = []
     
     /// Computed theme from manager
     var theme: DevysTheme {
-        themeManager.theme
+        themeManager.theme(systemColorScheme: systemColorScheme)
     }
 
     var activeSidebarItem: WorkspaceSidebarMode? {
@@ -107,10 +98,6 @@ struct ContentView: View {
         store.isSidebarVisible
     }
 
-    var isNavigatorCollapsed: Bool {
-        store.isNavigatorCollapsed
-    }
-
     var selectedTabId: TabID? {
         store.selectedTabID
     }
@@ -124,33 +111,13 @@ struct ContentView: View {
         workspaceShell?.layout
     }
 
-    var focusedPaneId: PaneID? {
-        workspaceShell?.focusedPaneID ?? workspaceLayout?.focusedFallbackPaneID
-    }
-
     var tabContents: [TabID: WorkspaceTabContent] {
         guard let selectedWorkspaceID else { return [:] }
         return store.workspaceShells[selectedWorkspaceID]?.tabContents ?? [:]
     }
 
-    var navigatorRevealRequest: NavigatorRevealRequest? {
-        guard let request = store.navigatorRevealRequest else { return nil }
-        return NavigatorRevealRequest(
-            workspaceID: request.workspaceID,
-            token: request.token
-        )
-    }
-
-    func storedSidebarMode(for workspaceID: Workspace.ID) -> WorkspaceSidebarMode {
-        store.workspaceShells[workspaceID]?.activeSidebar?.workspaceSidebarMode ?? .files
-    }
-
     func paneLayout(for paneID: PaneID) -> WindowFeature.WorkspacePaneLayout? {
         workspaceLayout?.paneLayout(for: paneID)
-    }
-
-    func previewTabID(in paneID: PaneID) -> TabID? {
-        paneLayout(for: paneID)?.previewTabID
     }
 
     func paneID(for tabID: TabID, workspaceID: Workspace.ID? = nil) -> PaneID? {
@@ -204,10 +171,6 @@ struct ContentView: View {
 
     var hostedAgentSessions: [HostedAgentSessionSummary] {
         hostedWorkspaceContent.agentSessions
-    }
-
-    var hostedEditorDocuments: [HostedEditorDocumentSummary] {
-        hostedWorkspaceContent.editorDocuments
     }
 
     var visibleWorkspaceID: Workspace.ID? {
@@ -266,7 +229,7 @@ extension ContentView {
         rootContent
             .background(theme.base)
             .environment(\.devysTheme, theme)
-            .preferredColorScheme(themeManager.colorScheme)
+            .preferredColorScheme(themeManager.preferredColorScheme)
             .tint(theme.accent)
             .background {
                 WindowTitlebarToolbarHost(
@@ -277,6 +240,10 @@ extension ContentView {
                     repoName: selectedRepository?.displayName,
                     branchName: selectedCatalogWorktree?.name,
                     onToggleSidebar: { toggleSidebar() },
+                    onWorkflow: {
+                        guard let workspaceID = visibleWorkspaceID else { return }
+                        createWorkflowDefinition(in: workspaceID)
+                    },
                     onAgents: { openDefaultOrPromptAgentForSelectedWorkspace() },
                     onShell: { openShellForSelectedWorkspace() },
                     onClaude: { launchClaudeForSelectedWorkspace() },
@@ -436,7 +403,7 @@ extension ContentView {
     func presentedSheetContent<V: View>(_ view: V) -> some View {
         view
             .environment(\.devysTheme, theme)
-            .preferredColorScheme(themeManager.colorScheme)
+            .preferredColorScheme(themeManager.preferredColorScheme)
     }
 
     static func makeSplitController() -> DevysSplitController {

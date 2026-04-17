@@ -31,6 +31,48 @@ public struct Icon: View {
     }
 }
 
+public enum DevysIconName {
+    public static let claudeCode = "asset:claude-code"
+    public static let codex = "asset:codex"
+
+    private static let assetPrefix = "asset:"
+
+    public static func assetName(for icon: String) -> String? {
+        guard icon.hasPrefix(assetPrefix) else { return nil }
+        return String(icon.dropFirst(assetPrefix.count))
+    }
+}
+
+public struct DevysIcon: View {
+    private let icon: String
+    private let size: CGFloat
+    private let weight: Font.Weight
+
+    public init(
+        _ icon: String,
+        size: CGFloat = 14,
+        weight: Font.Weight = .regular
+    ) {
+        self.icon = icon
+        self.size = size
+        self.weight = weight
+    }
+
+    public var body: some View {
+        if let assetName = DevysIconName.assetName(for: icon) {
+            Image(assetName)
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: size, height: size)
+        } else {
+            Image(systemName: icon)
+                .font(.system(size: size, weight: weight))
+                .frame(width: size, height: size)
+        }
+    }
+}
+
 // MARK: - Size
 
 public extension Icon {

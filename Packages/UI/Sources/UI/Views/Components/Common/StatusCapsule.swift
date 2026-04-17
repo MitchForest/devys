@@ -36,7 +36,7 @@ public enum StatusIcon: Sendable {
 ///
 /// Sits at the bottom center of the window (positioned by the consumer).
 /// Auto-hides after 3 seconds of inactivity, reappears on hover.
-/// Expands on hover to reveal git action buttons and agent details.
+/// Expands on hover to reveal git action buttons (fetch, pull, commit, push).
 public struct StatusCapsule: View {
     @Environment(\.theme) private var theme
     @Environment(\.densityLayout) private var layout
@@ -44,7 +44,6 @@ public struct StatusCapsule: View {
     private let branchName: String?
     private let aheadCount: Int
     private let behindCount: Int
-    private let agentCount: Int
     private let agentColors: [AgentColor]
     private let statusIcon: StatusIcon
     private let onTap: (() -> Void)?
@@ -58,7 +57,6 @@ public struct StatusCapsule: View {
         branchName: String? = nil,
         aheadCount: Int = 0,
         behindCount: Int = 0,
-        agentCount: Int = 0,
         agentColors: [AgentColor] = [],
         statusIcon: StatusIcon = .clean,
         isExpanded: Binding<Bool>,
@@ -67,7 +65,6 @@ public struct StatusCapsule: View {
         self.branchName = branchName
         self.aheadCount = aheadCount
         self.behindCount = behindCount
-        self.agentCount = agentCount
         self.agentColors = agentColors
         self.statusIcon = statusIcon
         self._isExpanded = isExpanded
@@ -85,7 +82,7 @@ public struct StatusCapsule: View {
         }
         .padding(.vertical, layout.capsulePaddingV)
         .padding(.horizontal, layout.capsulePaddingH)
-        .frame(minWidth: Spacing.capsuleMinWidth)
+        .fixedSize(horizontal: true, vertical: false)
         .background(theme.overlay, in: Capsule())
         .shadowStyle(isExpanded ? Shadows.md : Shadows.sm)
         .opacity(capsuleOpacity)
@@ -160,14 +157,8 @@ public struct StatusCapsule: View {
         HStack(spacing: Spacing.space2) {
             ActionButton("Fetch", icon: "arrow.down.circle", style: .ghost) {}
             ActionButton("Pull", icon: "arrow.down.to.line", style: .ghost) {}
+            ActionButton("Commit", icon: "checkmark", style: .ghost) {}
             ActionButton("Push", icon: "arrow.up.to.line", style: .ghost) {}
-
-            if agentCount > 0 {
-                Spacer()
-                Text("\(agentCount) agent\(agentCount == 1 ? "" : "s")")
-                    .font(Typography.micro)
-                    .foregroundStyle(theme.textTertiary)
-            }
         }
     }
 
@@ -209,7 +200,6 @@ public struct StatusCapsule: View {
                         branchName: "main",
                         aheadCount: 0,
                         behindCount: 0,
-                        agentCount: 0,
                         agentColors: [],
                         statusIcon: .clean,
                         isExpanded: $isExpanded
@@ -239,7 +229,6 @@ public struct StatusCapsule: View {
                         branchName: "feat/tca-refactor",
                         aheadCount: 3,
                         behindCount: 1,
-                        agentCount: 2,
                         agentColors: [AgentColor.forIndex(0), AgentColor.forIndex(1)],
                         statusIcon: .warning,
                         isExpanded: $isExpanded
@@ -269,7 +258,6 @@ public struct StatusCapsule: View {
                         branchName: "hotfix/crash",
                         aheadCount: 1,
                         behindCount: 0,
-                        agentCount: 3,
                         agentColors: [
                             AgentColor.forIndex(2),
                             AgentColor.forIndex(3),

@@ -81,15 +81,41 @@ public struct HostedAgentSessionSummary: Equatable, Sendable, Identifiable {
     }
 }
 
+public struct HostedBrowserSessionSummary: Equatable, Sendable, Identifiable {
+    public var sessionID: UUID
+    public var url: URL
+    public var title: String
+    public var icon: String
+
+    public init(
+        sessionID: UUID,
+        url: URL,
+        title: String,
+        icon: String
+    ) {
+        self.sessionID = sessionID
+        self.url = url
+        self.title = title
+        self.icon = icon
+    }
+
+    public var id: UUID {
+        sessionID
+    }
+}
+
 public struct HostedWorkspaceContentState: Equatable, Sendable {
     public var editorDocuments: [HostedEditorDocumentSummary]
+    public var browserSessions: [HostedBrowserSessionSummary]
     public var agentSessions: [HostedAgentSessionSummary]
 
     public init(
         editorDocuments: [HostedEditorDocumentSummary] = [],
+        browserSessions: [HostedBrowserSessionSummary] = [],
         agentSessions: [HostedAgentSessionSummary] = []
     ) {
         self.editorDocuments = editorDocuments
+        self.browserSessions = browserSessions
         self.agentSessions = agentSessions
     }
 

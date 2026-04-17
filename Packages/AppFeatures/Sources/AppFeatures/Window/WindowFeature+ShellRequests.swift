@@ -246,7 +246,9 @@ extension WindowFeature {
 
         case .applyWindowRelaunchRestore(let request):
             state.applyWindowRelaunchRestore(request)
-            return .none
+            return request.snapshot.selectedWorkspaceID.map { workspaceID in
+                .send(.workflowWorkspaceLoadRequested(workspaceID))
+            } ?? .none
 
         case .persistWindowRelaunchSnapshot(let hostedTerminalSessions):
             return makePersistWindowRelaunchSnapshotEffect(

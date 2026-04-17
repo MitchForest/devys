@@ -142,7 +142,7 @@ private extension PersistentTerminalHostDaemon {
             if let workingDirectoryPath {
                 _ = workingDirectoryPath.withCString { Darwin.chdir($0) }
             }
-            setenv("TERM", "xterm-256color", 1)
+            applyTerminalSessionEnvironment()
             execShell(launchCommand: launchCommand)
         }
 
@@ -392,13 +392,100 @@ private func setNonBlocking(_ fd: Int32) {
     _ = fcntl(fd, F_SETFL, flags | O_NONBLOCK)
 }
 
-private func execShell(launchCommand: String?) -> Never {
-    let arguments: [String]
-    if let launchCommand, !launchCommand.isEmpty {
-        arguments = ["zsh", "-lc", launchCommand]
-    } else {
-        arguments = ["zsh", "-il"]
+func terminalSessionEnvironmentAssignments() -> [String: String] {
+    var assignments = [
+        "COLORTERM": "truecolor",
+        "COLORFGBG": terminalSessionColorFgBg(),
+        "TERM": "xterm-256color",
+        "TERM_PROGRAM": "ghostty",
+    ]
+
+    if let termProgramVersion = terminalSessionTermProgramVersion() {
+        assignments["TERM_PROGRAM_VERSION"] = termProgramVersion
     }
+
+    return assignments
+}
+
+func terminalSessionEnvironmentKeysToUnset() -> [String] {
+    colorSuppressingEnvironmentKeysList()
+}
+
+func terminalSessionTermProgramVersion() -> String? {
+    let infoDictionary = Bundle.main.infoDictionary
+    let shortVersion = infoDictionary?["CFBundleShortVersionString"] as? String
+    if let shortVersion,
+       !shortVersion.isEmpty {
+        return shortVersion
+    }
+
+    let bundleVersion = infoDictionary?["CFBundleVersion"] as? String
+    if let bundleVersion,
+       !bundleVersion.isEmpty {
+        return bundleVersion
+    }
+
+    return nil
+}
+
+func terminalSessionColorFgBg() -> String {
+    let environment = ProcessInfo.processInfo.environment
+    if let colorFgBg = environment["COLORFGBG"],
+       !colorFgBg.isEmpty {
+        return colorFgBg
+    }
+
+    return "15;0"
+}
+
+func resolvedTerminalShellPath(
+    environment: [String: String]
+) -> String {
+    guard let shellPath = environment["SHELL"],
+          shellPath.hasPrefix("/"),
+          !shellPath.isEmpty
+    else {
+        return "/bin/zsh"
+    }
+    return shellPath
+}
+
+func terminalShellLaunchConfiguration(
+    launchCommand: String?,
+    environment: [String: String]
+) -> (executablePath: String, arguments: [String]) {
+    let executablePath = resolvedTerminalShellPath(environment: environment)
+    let shellName = URL(fileURLWithPath: executablePath).lastPathComponent
+
+    if let launchCommand,
+       !launchCommand.isEmpty {
+        return (
+            executablePath,
+            [shellName, "-i", "-l", "-c", launchCommand]
+        )
+    }
+
+    return (
+        executablePath,
+        [shellName, "-i", "-l"]
+    )
+}
+
+private func applyTerminalSessionEnvironment() {
+    for key in terminalSessionEnvironmentKeysToUnset() {
+        unsetenv(key)
+    }
+    for (key, value) in terminalSessionEnvironmentAssignments() {
+        setenv(key, value, 1)
+    }
+}
+
+private func execShell(launchCommand: String?) -> Never {
+    let configuration = terminalShellLaunchConfiguration(
+        launchCommand: launchCommand,
+        environment: ProcessInfo.processInfo.environment
+    )
+    let arguments = configuration.arguments
 
     var cArguments = arguments.map { strdup($0) }
     cArguments.append(nil)
@@ -408,8 +495,7 @@ private func execShell(launchCommand: String?) -> Never {
         }
     }
 
-    let executablePath = "/bin/zsh"
-    _ = executablePath.withCString { executable in
+    _ = configuration.executablePath.withCString { executable in
         cArguments.withUnsafeMutableBufferPointer { buffer in
             execv(executable, buffer.baseAddress)
         }

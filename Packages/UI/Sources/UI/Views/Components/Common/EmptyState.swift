@@ -69,7 +69,7 @@ public struct EmptyState: View {
         Separator()
 
         EmptyState(
-            icon: "sparkles",
+            icon: "person.crop.circle",
             title: "No Agents Running",
             description: "Launch an agent to start coding with AI.",
             actionTitle: "New Agent"

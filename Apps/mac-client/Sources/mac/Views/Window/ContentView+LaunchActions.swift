@@ -5,41 +5,52 @@
 
 import AppFeatures
 import Foundation
+import GhosttyTerminal
 import Split
+import UI
 import Workspace
 
 private struct ResolvedWorkspaceTerminalLaunch {
     let launch: (terminalID: UUID, command: String)
     let resolvedCommand: ResolvedLauncherCommand
+    let tabIcon: String
 }
 
 @MainActor
 extension ContentView {
-    func launchClaudeForSelectedWorkspace() {
-        launchSelectedWorkspaceTerminal(kind: .claude, label: "Claude")
+    func launchClaudeForSelectedWorkspace(preferredPaneID: PaneID? = nil) {
+        launchSelectedWorkspaceTerminal(
+            kind: .claude,
+            label: "Claude",
+            preferredPaneID: preferredPaneID
+        )
     }
 
-    func launchCodexForSelectedWorkspace() {
-        launchSelectedWorkspaceTerminal(kind: .codex, label: "Codex")
+    func launchCodexForSelectedWorkspace(preferredPaneID: PaneID? = nil) {
+        launchSelectedWorkspaceTerminal(
+            kind: .codex,
+            label: "Codex",
+            preferredPaneID: preferredPaneID
+        )
     }
 
-    func runSelectedWorkspaceProfile() {
-        store.send(.requestWorkspaceCommand(.runWorkspaceProfile))
-    }
-
-    func editSelectedWorkspaceProfiles() {
-        openRepositorySettings()
-    }
-
-    func stopSelectedWorkspaceProfile() {
-        store.send(.requestStopWorkspaceRun(activeWorktree?.id))
+    func isLauncherConfiguredForSelectedWorkspace(
+        kind: BuiltInLauncherKind
+    ) -> Bool {
+        guard let worktree = activeWorktree else { return false }
+        return isWorkspaceLauncherConfigured(kind: kind, worktree: worktree)
     }
 
     private func launchSelectedWorkspaceTerminal(
         kind: BuiltInLauncherKind,
-        label: String
+        label: String,
+        preferredPaneID: PaneID? = nil
     ) {
         guard let worktree = activeWorktree else { return }
+        if let preferredPaneID {
+            store.send(.setWorkspaceFocusedPaneID(workspaceID: worktree.id, paneID: preferredPaneID))
+            renderWorkspaceLayout(for: worktree.id)
+        }
         guard let resolvedLaunch = resolveWorkspaceTerminalLaunch(
             kind: kind,
             label: label,
@@ -55,18 +66,16 @@ extension ContentView {
                 ]
             )
             do {
-                let session = try await createWorkspaceTerminalSession(
-                    in: worktree.id,
-                    workingDirectory: worktree.workingDirectory,
-                    requestedCommand: resolvedLaunch.resolvedCommand.executionBehavior == .runImmediately
-                        ? resolvedLaunch.launch.command
-                        : nil,
-                    stagedCommand: resolvedLaunch.resolvedCommand.executionBehavior == .stageInTerminal
-                        ? resolvedLaunch.launch.command
-                        : nil,
-                    id: resolvedLaunch.launch.terminalID
+                let session = try await createResolvedWorkspaceTerminalSession(
+                    for: resolvedLaunch,
+                    in: worktree
                 )
-                openInPermanentTab(content: .terminal(workspaceID: worktree.id, id: session.id))
+                try presentResolvedWorkspaceTerminalSession(
+                    session,
+                    workspaceID: worktree.id,
+                    label: label,
+                    preferredPaneID: preferredPaneID
+                )
                 persistTerminalRelaunchSnapshotIfNeeded()
                 WorkspacePerformanceRecorder.end(trace)
             } catch {
@@ -111,7 +120,76 @@ extension ContentView {
             resolvedCommand: resolvedCommand.command,
             worktree: worktree
         )
-        return ResolvedWorkspaceTerminalLaunch(launch: launch, resolvedCommand: resolvedCommand)
+        return ResolvedWorkspaceTerminalLaunch(
+            launch: launch,
+            resolvedCommand: resolvedCommand,
+            tabIcon: terminalTabIcon(for: kind)
+        )
+    }
+
+    private func createResolvedWorkspaceTerminalSession(
+        for resolvedLaunch: ResolvedWorkspaceTerminalLaunch,
+        in worktree: Worktree
+    ) async throws -> GhosttyTerminalSession {
+        try await createWorkspaceTerminalSession(
+            in: worktree.id,
+            workingDirectory: worktree.workingDirectory,
+            requestedCommand: resolvedLaunch.resolvedCommand.executionBehavior == .runImmediately
+                ? resolvedLaunch.launch.command
+                : nil,
+            stagedCommand: resolvedLaunch.resolvedCommand.executionBehavior == .stageInTerminal
+                ? resolvedLaunch.launch.command
+                : nil,
+            tabIcon: resolvedLaunch.tabIcon,
+            id: resolvedLaunch.launch.terminalID
+        )
+    }
+
+    private func presentResolvedWorkspaceTerminalSession(
+        _ session: GhosttyTerminalSession,
+        workspaceID: Workspace.ID,
+        label: String,
+        preferredPaneID: PaneID?
+    ) throws {
+        let content = WorkspaceTabContent.terminal(workspaceID: workspaceID, id: session.id)
+        if let preferredPaneID {
+            guard createTab(in: preferredPaneID, content: content) != nil else {
+                shutdownWorkspaceTerminalSession(id: session.id, in: workspaceID)
+                throw NSError(domain: "DevysLauncher", code: 4, userInfo: [
+                    NSLocalizedDescriptionKey:
+                        "Could not open a terminal tab for \(label)."
+                ])
+            }
+        } else {
+            openInPermanentTab(content: content)
+        }
+    }
+
+    private func isWorkspaceLauncherConfigured(
+        kind: BuiltInLauncherKind,
+        worktree: Worktree
+    ) -> Bool {
+        let settings = repositorySettingsStore.settings(for: worktree.repositoryRootURL)
+        let launcher = switch kind {
+        case .claude: settings.claudeLauncher
+        case .codex: settings.codexLauncher
+        }
+
+        do {
+            _ = try RepositoryLaunchPlanner.resolveLauncher(launcher, kind: kind)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func terminalTabIcon(for kind: BuiltInLauncherKind) -> String {
+        switch kind {
+        case .claude:
+            DevysIconName.claudeCode
+        case .codex:
+            DevysIconName.codex
+        }
     }
 
     func executeRunProfileLaunch(_ request: WindowFeature.RunProfileLaunchRequest) async {

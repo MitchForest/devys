@@ -64,6 +64,16 @@ struct WindowFeatureSelectionTests {
             $0.worktreesByRepository = [repository.id: [secondWorkspace, firstWorkspace]]
             $0.selectedWorkspaceID = secondWorkspace.id
         }
+        await store.receive(.workflowWorkspaceLoadRequested(secondWorkspace.id)) {
+            $0.workflowWorkspacesByID[secondWorkspace.id] = WindowFeature.WorkflowWorkspaceState(
+                isLoading: true
+            )
+        }
+        await store.receive(
+            .workflowWorkspaceLoaded(secondWorkspace.id, WorkflowWorkspaceSnapshot())
+        ) {
+            $0.workflowWorkspacesByID[secondWorkspace.id] = WindowFeature.WorkflowWorkspaceState()
+        }
     }
 
     @Test("Catalog snapshots normalize workspace ordering with reducer rules")
@@ -90,6 +100,16 @@ struct WindowFeatureSelectionTests {
             ]
             $0.selectedRepositoryID = fixture.repository.id
             $0.selectedWorkspaceID = fixture.pinnedWorkspace.id
+        }
+        await store.receive(.workflowWorkspaceLoadRequested(fixture.pinnedWorkspace.id)) {
+            $0.workflowWorkspacesByID[fixture.pinnedWorkspace.id] = WindowFeature.WorkflowWorkspaceState(
+                isLoading: true
+            )
+        }
+        await store.receive(
+            .workflowWorkspaceLoaded(fixture.pinnedWorkspace.id, WorkflowWorkspaceSnapshot())
+        ) {
+            $0.workflowWorkspacesByID[fixture.pinnedWorkspace.id] = WindowFeature.WorkflowWorkspaceState()
         }
     }
 }

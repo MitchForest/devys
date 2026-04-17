@@ -40,8 +40,7 @@ public struct ListRow<Trailing: View>: View {
     public var body: some View {
         let content = HStack(spacing: Spacing.space2) {
             if let icon {
-                Image(systemName: icon)
-                    .font(Typography.body.weight(.medium))
+                DevysIcon(icon, size: 14, weight: .medium)
                     .foregroundStyle(iconColor ?? theme.textSecondary)
                     .frame(width: 18)
             }
@@ -103,7 +102,7 @@ public struct ListRow<Trailing: View>: View {
             Chip(.status("Running", Colors.success))
         }
         ListRow(
-            icon: "sparkles",
+            icon: "person.crop.circle",
             iconColor: AgentColor.forIndex(1).solid,
             title: "API Refactor",
             subtitle: "Working on auth.swift",

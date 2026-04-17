@@ -250,9 +250,22 @@ struct TerminalRelaunchSnapshotTests {
         )
     }
 
-    private struct LegacyPersistedWorkspaceLayoutState: Codable {
+    private struct LegacyPersistedWorkspaceLayoutState: Encodable {
         let workspaceID: Workspace.ID
         let sidebarMode: String
         let tree: PersistedWorkspaceLayoutTree
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(workspaceID, forKey: .workspaceID)
+            try container.encode(sidebarMode, forKey: .sidebarMode)
+            try container.encode(tree, forKey: .tree)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case workspaceID
+            case sidebarMode
+            case tree
+        }
     }
 }

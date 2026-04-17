@@ -42,6 +42,7 @@ struct TabContentTests {
     @Test("Terminal and diff tabs stay isolated by workspace")
     func nonEditorWorkspaceScopedIdentity() {
         let sharedTerminalID = UUID()
+        let sharedBrowserID = UUID()
         let sharedAgentSessionID = ACPSessionID(rawValue: "agent-session")
         let firstTerminal = WorkspaceTabContent.terminal(
             workspaceID: "/tmp/devys/worktrees/a",
@@ -61,6 +62,16 @@ struct TabContentTests {
             path: "Sources/Feature/Thing.swift",
             isStaged: false
         )
+        let firstBrowser = WorkspaceTabContent.browser(
+            workspaceID: "/tmp/devys/worktrees/a",
+            id: sharedBrowserID,
+            initialURL: URL(string: "http://localhost:3000")!
+        )
+        let secondBrowser = WorkspaceTabContent.browser(
+            workspaceID: "/tmp/devys/worktrees/b",
+            id: sharedBrowserID,
+            initialURL: URL(string: "http://localhost:5173")!
+        )
         let firstAgent = WorkspaceTabContent.agentSession(
             workspaceID: "/tmp/devys/worktrees/a",
             sessionID: sharedAgentSessionID
@@ -72,11 +83,19 @@ struct TabContentTests {
 
         #expect(firstTerminal.stableId != secondTerminal.stableId)
         #expect(firstDiff.stableId != secondDiff.stableId)
+        #expect(firstBrowser.stableId != secondBrowser.stableId)
+        #expect(firstBrowser.matchesSemanticIdentity(as: .browser(
+            workspaceID: "/tmp/devys/worktrees/a",
+            id: sharedBrowserID,
+            initialURL: URL(string: "http://localhost:9999")!
+        )))
         #expect(firstAgent.stableId != secondAgent.stableId)
         #expect(firstTerminal.workspaceID == "/tmp/devys/worktrees/a")
         #expect(secondDiff.workspaceID == "/tmp/devys/worktrees/b")
+        #expect(firstBrowser.fallbackTitle == "Browser")
+        #expect(secondBrowser.fallbackIcon == "globe")
         #expect(firstAgent.fallbackTitle == "Agent")
-        #expect(secondAgent.fallbackIcon == "message")
+        #expect(secondAgent.fallbackIcon == "person.crop.circle")
     }
 
     @Test("Settings tabs use stable built-in identifiers")
@@ -84,5 +103,23 @@ struct TabContentTests {
         #expect(WorkspaceTabContent.settings.stableId == "settings")
         #expect(WorkspaceTabContent.settings.fallbackIcon == "gearshape")
         #expect(WorkspaceTabContent.settings.workspaceID == nil)
+    }
+
+    @Test("Workflow tabs participate in workspace-scoped identity")
+    func workflowMetadata() {
+        let runID = UUID()
+        let definition = WorkspaceTabContent.workflowDefinition(
+            workspaceID: "/tmp/devys/worktrees/a",
+            definitionID: "delivery"
+        )
+        let run = WorkspaceTabContent.workflowRun(
+            workspaceID: "/tmp/devys/worktrees/a",
+            runID: runID
+        )
+
+        #expect(definition.fallbackTitle == "Workflow")
+        #expect(run.fallbackIcon == "point.3.connected.trianglepath.dotted")
+        #expect(definition.stableId == "workflowDefinition:/tmp/devys/worktrees/a:delivery")
+        #expect(run.stableId == "workflowRun:/tmp/devys/worktrees/a:\(runID.uuidString)")
     }
 }

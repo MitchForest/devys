@@ -165,10 +165,38 @@ struct NotificationSettingsSection: View {
 struct AppearanceSettingsSection: View {
     @Environment(\.devysTheme) private var theme
     @Environment(AppSettings.self) private var appSettings
+
+    private var appearanceModeBinding: Binding<AppearanceMode> {
+        Binding(
+            get: { appSettings.appearance.mode },
+            set: { appSettings.appearance.mode = $0 }
+        )
+    }
     
     var body: some View {
         SettingsSection(title: "Appearance") {
             VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Theme")
+                        .font(Typography.body)
+                        .foregroundStyle(theme.text)
+
+                    Text("Auto follows macOS appearance. Light and Dark lock the app theme.")
+                        .font(Typography.caption)
+                        .foregroundStyle(theme.textSecondary)
+
+                    Picker("Theme", selection: appearanceModeBinding) {
+                        ForEach(AppearanceMode.allCases, id: \.self) { mode in
+                            Text(mode.displayName)
+                                .tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                }
+
+                Separator()
+
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Accent color")
                         .font(Typography.body)
@@ -189,17 +217,6 @@ struct AppearanceSettingsSection: View {
                         }
                     }
                 }
-                
-                Separator()
-
-                SettingsToggle(
-                    title: "Dark mode",
-                    description: "Use dark theme for a warm studio feel",
-                    isOn: Binding(
-                        get: { appSettings.appearance.isDarkMode },
-                        set: { appSettings.appearance.isDarkMode = $0 }
-                    )
-                )
             }
         }
     }

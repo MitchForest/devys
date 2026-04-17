@@ -4,7 +4,6 @@
 import Foundation
 import CoreGraphics
 import AppFeatures
-import Split
 import GhosttyTerminal
 import Workspace
 
@@ -46,6 +45,7 @@ extension ContentView {
         workingDirectory: URL? = nil,
         requestedCommand: String? = nil,
         stagedCommand: String? = nil,
+        tabIcon: String = "terminal",
         id: UUID = UUID()
     ) async throws -> GhosttyTerminalSession {
         if appSettings.restore.restoreTerminalSessions {
@@ -64,6 +64,7 @@ extension ContentView {
                 workingDirectory: workingDirectory ?? record.workingDirectory,
                 stagedCommand: stagedCommand,
                 attachCommand: attachCommand,
+                tabIcon: tabIcon,
                 id: record.id
             )
         }
@@ -73,6 +74,7 @@ extension ContentView {
             workingDirectory: workingDirectory,
             requestedCommand: requestedCommand,
             stagedCommand: stagedCommand,
+            tabIcon: tabIcon,
             id: id
         )
     }
@@ -149,8 +151,12 @@ extension ContentView {
                 case .agent(let record):
                     guard request.settings.restoreAgentSessions else { continue }
                     restoreAgentSession(record, workspaceID: workspaceID)
+                case .browser(let id, let url):
+                    _ = ensureBrowserSession(id: id, in: workspaceID, initialURL: url)
                 case .editor,
-                     .gitDiff:
+                     .gitDiff,
+                     .workflowDefinition,
+                     .workflowRun:
                     continue
                 }
             }

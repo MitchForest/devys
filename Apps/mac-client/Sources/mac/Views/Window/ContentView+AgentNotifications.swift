@@ -78,7 +78,7 @@ func envWrappedShellCommand(
     let assignments = environment.map { key, value in
         "\(key)=\(shellQuoted(value))"
     }
-    return (["env"] + assignments + [command]).joined(separator: " ")
+    return (["env", "-u", "NO_COLOR"] + assignments + [command]).joined(separator: " ")
 }
 
 func shellQuoted(_ value: String) -> String {

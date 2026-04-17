@@ -4,6 +4,7 @@
 // Copyright © 2026 Devys. All rights reserved.
 
 import AppFeatures
+import Browser
 import Git
 import SwiftUI
 import Split
@@ -20,7 +21,19 @@ extension ContentView {
             tabContents: tabContents,
             gitStoreForContent: gitStoreForContent,
             terminalSessionForContent: terminalSessionForContent,
+            browserSessionForContent: browserSessionForContent,
+            onOpenTerminalURL: { workspaceID, paneID, url in
+                openBrowserURLFromTerminal(
+                    url,
+                    workspaceID: workspaceID,
+                    sourcePaneID: paneID
+                )
+            },
             agentSessionForContent: agentSessionForContent,
+            workflowDefinitionForContent: workflowDefinitionForContent,
+            workflowRunForContent: workflowRunForContent,
+            workflowLastErrorForContent: workflowLastErrorForContent,
+            workflowDiffAvailableForContent: workflowDiffAvailableForContent,
             agentComposerSpeechService: container.agentComposerSpeechService,
             onOpenAgentInlineTerminal: { workspaceID, terminalID in
                 openInPermanentTab(content: .terminal(workspaceID: workspaceID, id: terminalID))
@@ -42,11 +55,104 @@ extension ContentView {
             editorSessionForContent: { content, tabID in
                 editorSessionForContent(content, tabId: tabID)
             },
+            onUpdateWorkflowDefinition: { workspaceID, definitionID, update in
+                updateWorkflowDefinition(
+                    workspaceID: workspaceID,
+                    definitionID: definitionID,
+                    update: update
+                )
+            },
+            onCreateWorkflowWorker: { workspaceID, definitionID in
+                createWorkflowWorker(
+                    workspaceID: workspaceID,
+                    definitionID: definitionID
+                )
+            },
+            onUpdateWorkflowWorker: { workspaceID, definitionID, workerID, update in
+                updateWorkflowWorker(
+                    workspaceID: workspaceID,
+                    definitionID: definitionID,
+                    workerID: workerID,
+                    update: update
+                )
+            },
+            onDeleteWorkflowWorker: { workspaceID, definitionID, workerID in
+                deleteWorkflowWorker(
+                    workspaceID: workspaceID,
+                    definitionID: definitionID,
+                    workerID: workerID
+                )
+            },
+            onReplaceWorkflowGraph: { workspaceID, definitionID, nodes, edges in
+                replaceWorkflowGraph(
+                    workspaceID: workspaceID,
+                    definitionID: definitionID,
+                    nodes: nodes,
+                    edges: edges
+                )
+            },
+            onStartWorkflowRun: { workspaceID, definitionID in
+                startWorkflowRun(workspaceID: workspaceID, definitionID: definitionID)
+            },
+            onContinueWorkflowRun: { workspaceID, runID in
+                continueWorkflowRun(workspaceID: workspaceID, runID: runID)
+            },
+            onRestartWorkflowRun: { workspaceID, runID in
+                restartWorkflowRun(workspaceID: workspaceID, runID: runID)
+            },
+            onStopWorkflowRun: { workspaceID, runID in
+                stopWorkflowRun(workspaceID: workspaceID, runID: runID)
+            },
+            onDeleteWorkflowRun: { workspaceID, runID in
+                deleteWorkflowRun(workspaceID: workspaceID, runID: runID)
+            },
+            onChooseWorkflowRunEdge: { workspaceID, runID, edgeID in
+                chooseWorkflowRunEdge(
+                    workspaceID: workspaceID,
+                    runID: runID,
+                    edgeID: edgeID
+                )
+            },
+            onAppendWorkflowFollowUpTicket: { workspaceID, runID, sectionTitle, text in
+                appendWorkflowFollowUpTicket(
+                    workspaceID: workspaceID,
+                    runID: runID,
+                    sectionTitle: sectionTitle,
+                    text: text
+                )
+            },
+            onDeleteWorkflowDefinition: { workspaceID, definitionID in
+                deleteWorkflowDefinition(workspaceID: workspaceID, definitionID: definitionID)
+            },
+            onOpenWorkflowFile: { workspaceID, path in
+                openWorkflowFile(workspaceID: workspaceID, path: path)
+            },
+            onOpenWorkflowTerminal: { workspaceID, runID in
+                openWorkflowTerminal(workspaceID: workspaceID, runID: runID)
+            },
+            onOpenWorkflowDiff: { workspaceID, runID in
+                openWorkflowDiff(workspaceID: workspaceID, runID: runID)
+            },
             onFocusPane: { paneID in
                 focusPane(paneID)
             },
             onOpenTerminalInPane: { paneID in
                 openShellForSelectedWorkspace(preferredPaneID: paneID)
+            },
+            onOpenBrowserInPane: { paneID in
+                openDefaultBrowserForSelectedWorkspace(preferredPaneID: paneID)
+            },
+            isClaudeLauncherConfiguredForSelectedWorkspace: isLauncherConfiguredForSelectedWorkspace(
+                kind: .claude
+            ),
+            isCodexLauncherConfiguredForSelectedWorkspace: isLauncherConfiguredForSelectedWorkspace(
+                kind: .codex
+            ),
+            onOpenClaudeInPane: { paneID in
+                launchClaudeForSelectedWorkspace(preferredPaneID: paneID)
+            },
+            onOpenCodexInPane: { paneID in
+                launchCodexForSelectedWorkspace(preferredPaneID: paneID)
             },
             onOpenAgentInPane: { paneID in
                 openDefaultOrPromptAgentForSelectedWorkspace(preferredPaneID: paneID)
@@ -76,6 +182,11 @@ extension ContentView {
         return workspaceTerminalRegistry.session(id: id, in: workspaceID)
     }
 
+    func browserSessionForContent(_ content: WorkspaceTabContent?) -> BrowserSession? {
+        guard case .browser(let workspaceID, let id, let initialURL) = content else { return nil }
+        return ensureBrowserSession(id: id, in: workspaceID, initialURL: initialURL)
+    }
+
     func gitStoreForContent(_ content: WorkspaceTabContent?) -> GitStore? {
         guard let workspaceID = content?.workspaceID else { return nil }
         return runtimeRegistry.gitStore(for: workspaceID)
@@ -92,6 +203,7 @@ extension ContentView {
         requestedCommand: String? = nil,
         stagedCommand: String? = nil,
         attachCommand: String? = nil,
+        tabIcon: String = "terminal",
         id: UUID = UUID()
     ) -> GhosttyTerminalSession {
         workspaceOperationalController.createTerminalSession(
@@ -100,7 +212,55 @@ extension ContentView {
             requestedCommand: requestedCommand,
             stagedCommand: stagedCommand,
             attachCommand: attachCommand,
+            tabIcon: tabIcon,
             id: id
+        )
+    }
+
+    func ensureBrowserSessions(for workspaceID: Workspace.ID) {
+        for content in workspaceTabContents(for: workspaceID).values {
+            guard case .browser(let contentWorkspaceID, let id, let initialURL) = content else {
+                continue
+            }
+            _ = ensureBrowserSession(id: id, in: contentWorkspaceID, initialURL: initialURL)
+        }
+    }
+
+    @discardableResult
+    func ensureBrowserSession(
+        id: UUID,
+        in workspaceID: Workspace.ID,
+        initialURL: URL
+    ) -> BrowserSession {
+        if let existing = browserRegistry.session(id: id, in: workspaceID) {
+            return existing
+        }
+
+        let session = browserRegistry.createSession(
+            in: workspaceID,
+            url: initialURL,
+            id: id
+        )
+        hostedContentBridge.attachBrowserSession(session, workspaceID: workspaceID)
+        return session
+    }
+
+    func removeBrowserSession(id: UUID, in workspaceID: Workspace.ID) {
+        if let session = browserRegistry.session(id: id, in: workspaceID) {
+            hostedContentBridge.detachBrowserSession(session, workspaceID: workspaceID)
+        }
+        browserRegistry.removeSession(id: id, in: workspaceID)
+    }
+
+    func openDefaultBrowserForSelectedWorkspace(preferredPaneID: PaneID? = nil) {
+        guard let workspaceID = selectedWorkspaceID,
+              let url = URL(string: "http://localhost:3000") else {
+            return
+        }
+        openBrowserURL(
+            url,
+            workspaceID: workspaceID,
+            preferredPaneID: preferredPaneID
         )
     }
 }

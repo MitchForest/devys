@@ -47,15 +47,8 @@ public struct DragPreview: View {
 
             HStack(spacing: Spacing.space1) {
                 if let icon {
-                    Image(systemName: icon)
-                        .font(Typography.heading.weight(.regular))
+                    DevysIcon(icon, size: 14)
                         .foregroundStyle(theme.textTertiary)
-                }
-
-                if let agentColor {
-                    Image(systemName: "sparkles")
-                        .font(Typography.micro)
-                        .foregroundStyle(agentColor.solid)
                 }
 
                 Text(title)
@@ -90,7 +83,7 @@ public struct DragPreview: View {
 
         DragPreview(
             title: "API Refactor",
-            icon: "doc",
+            icon: "person.crop.circle",
             agentColor: .forIndex(1)
         )
 

@@ -3,6 +3,7 @@ import ACPClientKit
 import AppFeatures
 import Foundation
 import Observation
+import UI
 import Workspace
 
 enum AgentSessionLaunchState: Equatable, Sendable {
@@ -347,22 +348,6 @@ final class AgentSessionRuntime: Identifiable, TabContentProvider {
         refreshAttachmentSummaries()
         refreshMentionSuggestions()
         sendDraft()
-    }
-
-    var stateSummary: String {
-        switch launchState {
-        case .idle:
-            return "Idle"
-        case .launching:
-            return tabSubtitle ?? "Launching"
-        case .connected:
-            if isSendingPrompt {
-                return "Running"
-            }
-            return tabSubtitle ?? "Connected"
-        case .failed(let message):
-            return message
-        }
     }
 
     func configureWorkspaceBridge(_ bridge: AgentWorkspaceBridge) {
@@ -1544,9 +1529,9 @@ final class AgentSessionRuntime: Identifiable, TabContentProvider {
     private static func defaultIcon(for kind: ACPAgentKind) -> String {
         switch kind {
         case .codex:
-            "chevron.left.forwardslash.chevron.right"
+            DevysIconName.codex
         case .claude:
-            "brain"
+            DevysIconName.claudeCode
         }
     }
 }

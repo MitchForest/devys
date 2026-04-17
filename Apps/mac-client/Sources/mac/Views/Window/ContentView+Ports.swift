@@ -12,7 +12,7 @@ import Workspace
 extension ContentView {
     func openPort(_ port: WorkspacePort, label: RepositoryPortLabel?) {
         guard let url = resolvedURL(for: port, label: label) else { return }
-        NSWorkspace.shared.open(url)
+        _ = openBrowserURL(url, workspaceID: port.workspaceID)
     }
 
     func copyPortURL(_ port: WorkspacePort, label: RepositoryPortLabel?) {

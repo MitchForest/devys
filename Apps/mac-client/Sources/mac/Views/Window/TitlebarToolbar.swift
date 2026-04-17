@@ -15,6 +15,7 @@ struct WindowTitlebarToolbarHost: NSViewRepresentable {
     let repoName: String?
     let branchName: String?
     let onToggleSidebar: () -> Void
+    let onWorkflow: () -> Void
     let onAgents: () -> Void
     let onShell: () -> Void
     let onClaude: () -> Void
@@ -51,6 +52,7 @@ struct WindowTitlebarToolbarHost: NSViewRepresentable {
             repoName: repoName,
             branchName: branchName,
             onToggleSidebar: onToggleSidebar,
+            onWorkflow: onWorkflow,
             onAgents: onAgents,
             onShell: onShell,
             onClaude: onClaude,
@@ -80,6 +82,7 @@ final class Coordinator: NSObject, NSToolbarDelegate {
         let repoName: String?
         let branchName: String?
         let onToggleSidebar: () -> Void
+        let onWorkflow: () -> Void
         let onAgents: () -> Void
         let onShell: () -> Void
         let onClaude: () -> Void
@@ -217,6 +220,7 @@ final class Coordinator: NSObject, NSToolbarDelegate {
             if configuration.hasRepositories {
                 TitlebarFABButton(
                     hasWorktree: configuration.hasWorktree,
+                    onWorkflow: configuration.onWorkflow,
                     onAgents: configuration.onAgents,
                     onShell: configuration.onShell,
                     onClaude: configuration.onClaude,
@@ -267,6 +271,7 @@ private struct TitlebarFABButton: View {
     @Environment(\.devysTheme) private var theme
 
     let hasWorktree: Bool
+    let onWorkflow: () -> Void
     let onAgents: () -> Void
     let onShell: () -> Void
     let onClaude: () -> Void
@@ -300,6 +305,13 @@ private struct TitlebarFABButton: View {
     private var fabMenuContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             fabMenuItem(
+                "Workflow",
+                icon: "point.3.connected.trianglepath.dotted",
+                shortcut: "",
+                enabled: hasWorktree,
+                action: onWorkflow
+            )
+            fabMenuItem(
                 "Terminal",
                 icon: "terminal",
                 shortcut: "⌘T",
@@ -308,21 +320,21 @@ private struct TitlebarFABButton: View {
             )
             fabMenuItem(
                 "Agent Session",
-                icon: "sparkles",
+                icon: "person.crop.circle.badge.plus",
                 shortcut: "⌘⇧A",
                 enabled: hasWorktree,
                 action: onAgents
             )
             fabMenuItem(
                 "Claude Code",
-                icon: "brain",
+                icon: DevysIconName.claudeCode,
                 shortcut: "⌘⇧C",
                 enabled: hasWorktree,
                 action: onClaude
             )
             fabMenuItem(
                 "Codex",
-                icon: "chevron.left.forwardslash.chevron.right",
+                icon: DevysIconName.codex,
                 shortcut: "⌘⇧X",
                 enabled: hasWorktree,
                 action: onCodex
@@ -345,8 +357,7 @@ private struct TitlebarFABButton: View {
             action()
         } label: {
             HStack(spacing: Spacing.space2) {
-                Image(systemName: icon)
-                    .font(Typography.body)
+                DevysIcon(icon, size: 14)
                     .foregroundStyle(enabled ? theme.textSecondary : theme.textTertiary)
                     .frame(width: 18)
 
@@ -356,8 +367,10 @@ private struct TitlebarFABButton: View {
 
                 Spacer()
 
-                ShortcutBadge(shortcut)
-                    .opacity(enabled ? 1 : 0.7)
+                if !shortcut.isEmpty {
+                    ShortcutBadge(shortcut)
+                        .opacity(enabled ? 1 : 0.7)
+                }
             }
             .padding(.horizontal, Spacing.space3)
             .padding(.vertical, Spacing.space2)
