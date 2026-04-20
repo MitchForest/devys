@@ -24,8 +24,8 @@ public struct HostedEditorDocumentSummary: Equatable, Sendable, Identifiable {
     }
 }
 
-public struct HostedAgentSessionSummary: Equatable, Sendable, Identifiable {
-    public var sessionID: AgentSessionID
+public struct HostedChatSessionSummary: Equatable, Sendable, Identifiable {
+    public var sessionID: ChatSessionID
     public var kind: ACPAgentKind
     public var title: String
     public var icon: String
@@ -36,7 +36,7 @@ public struct HostedAgentSessionSummary: Equatable, Sendable, Identifiable {
     public var lastActivityAt: Date
 
     public init(
-        sessionID: AgentSessionID,
+        sessionID: ChatSessionID,
         kind: ACPAgentKind,
         title: String,
         icon: String,
@@ -107,16 +107,16 @@ public struct HostedBrowserSessionSummary: Equatable, Sendable, Identifiable {
 public struct HostedWorkspaceContentState: Equatable, Sendable {
     public var editorDocuments: [HostedEditorDocumentSummary]
     public var browserSessions: [HostedBrowserSessionSummary]
-    public var agentSessions: [HostedAgentSessionSummary]
+    public var chatSessions: [HostedChatSessionSummary]
 
     public init(
         editorDocuments: [HostedEditorDocumentSummary] = [],
         browserSessions: [HostedBrowserSessionSummary] = [],
-        agentSessions: [HostedAgentSessionSummary] = []
+        chatSessions: [HostedChatSessionSummary] = []
     ) {
         self.editorDocuments = editorDocuments
         self.browserSessions = browserSessions
-        self.agentSessions = agentSessions
+        self.chatSessions = chatSessions
     }
 
     public var dirtyEditorCount: Int {

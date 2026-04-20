@@ -318,7 +318,7 @@ public struct WorkspaceOperationalState: Equatable, Sendable {
     // swiftlint:disable:next function_body_length
     public mutating func ingest(
         _ payload: WorkspaceAttentionIngressPayload,
-        agentNotificationsEnabled: Bool,
+        chatNotificationsEnabled: Bool,
         terminalNotificationsEnabled: Bool,
         now: Date
     ) {
@@ -327,7 +327,7 @@ public struct WorkspaceOperationalState: Equatable, Sendable {
         case .terminal:
             isEnabled = terminalNotificationsEnabled
         case .claude, .codex, .run, .build:
-            isEnabled = agentNotificationsEnabled
+            isEnabled = chatNotificationsEnabled
         }
         guard isEnabled else { return }
 
@@ -398,11 +398,11 @@ public struct WorkspaceOperationalState: Equatable, Sendable {
 
     public mutating func syncAttentionPreferences(
         terminalNotificationsEnabled: Bool,
-        agentNotificationsEnabled: Bool,
+        chatNotificationsEnabled: Bool,
         now: Date
     ) {
         syncTerminalNotifications(isEnabled: terminalNotificationsEnabled, now: now)
-        if !agentNotificationsEnabled {
+        if !chatNotificationsEnabled {
             clearNotifications(from: [.claude, .codex, .run, .build])
         }
     }

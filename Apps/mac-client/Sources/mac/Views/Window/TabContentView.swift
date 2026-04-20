@@ -15,15 +15,18 @@ import UI
 import Workspace
 
 struct TabContentView: View {
-    @Environment(\.devysTheme) private var theme
+    @Environment(\.devysTheme) var theme
 
     let tab: Split.Tab
     let content: WorkspaceTabContent?
     let gitStore: GitStore?
     let terminalSession: GhosttyTerminalSession?
+    let terminalController: HostedLocalTerminalController?
+    let terminalAppearance: GhosttyTerminalAppearance
+    let onTerminalPerformanceCheckpoint: (UUID, TerminalOpenPerformanceTracker.Checkpoint) -> Void
     let browserSession: BrowserSession?
     let onOpenTerminalURL: (URL) -> Void
-    let agentSession: AgentSessionRuntime?
+    let chatSession: ChatSessionRuntime?
     let workflowDefinition: WorkflowDefinition?
     let workflowRun: WorkflowRun?
     let workflowLastErrorMessage: String?
@@ -61,13 +64,17 @@ struct TabContentView: View {
         ZStack {
             switch content {
             case .terminal:
-                if let terminalSession {
-                    GhosttyTerminalView(
+                if let terminalSession, let terminalController {
+                    terminalContentView(
                         session: terminalSession,
-                        onOpenURL: onOpenTerminalURL
+                        controller: terminalController
                     )
                 } else {
-                    TerminalRewritePlaceholderView(workingDirectory: nil, requestedCommand: nil)
+                    PlaceholderView(
+                        icon: "terminal",
+                        title: "Terminal unavailable",
+                        subtitle: "No terminal controller is attached."
+                    )
                 }
             case .browser(_, _, let initialURL):
                 if let browserSession {
@@ -79,27 +86,27 @@ struct TabContentView: View {
                         subtitle: initialURL.absoluteString
                     )
                 }
-            case .agentSession:
-                if let agentSession {
+            case .chatSession:
+                if let chatSession {
                     let openInlineTerminal: (UUID) -> Void = { terminalID in
-                        onOpenAgentInlineTerminal(agentSession.workspaceID, terminalID)
+                        onOpenAgentInlineTerminal(chatSession.workspaceID, terminalID)
                     }
-                    AgentSessionView(
-                        session: agentSession,
+                    ChatSessionView(
+                        session: chatSession,
                         speechService: agentComposerSpeechService,
                         onOpenTerminalTab: openInlineTerminal,
                         onOpenLocationTarget: { target, prefersPreview in
-                            onOpenAgentFollowTarget(agentSession.workspaceID, target, prefersPreview)
+                            onOpenAgentFollowTarget(chatSession.workspaceID, target, prefersPreview)
                         },
                         onOpenDiffArtifact: { diff, prefersPreview in
-                            onOpenAgentDiffArtifact(agentSession.workspaceID, diff, prefersPreview)
+                            onOpenAgentDiffArtifact(chatSession.workspaceID, diff, prefersPreview)
                         }
                     )
                 } else {
                     PlaceholderView(
                         icon: "person.crop.circle",
-                        title: "Agent session unavailable",
-                        subtitle: "The selected agent session could not be restored."
+                        title: "Chat unavailable",
+                        subtitle: "The selected chat could not be restored."
                     )
                 }
             case .workflowDefinition(let workspaceID, let definitionID):
@@ -184,6 +191,7 @@ struct TabContentView: View {
             return .loaded(fileSize: editorSession.currentFileSize)
         }
     }
+
 }
 
 private extension TabContentView {
@@ -201,12 +209,12 @@ private extension TabContentView {
                 browserSession?.url.absoluteString ?? ""
             ]
             .joined(separator: "|")
-        case .agentSession:
+        case .chatSession:
             [
-                agentSession?.tabTitle ?? "",
-                agentSession?.tabIcon ?? "",
-                agentSession?.tabSubtitle ?? "",
-                String(agentSession?.tabIsBusy == true)
+                chatSession?.tabTitle ?? "",
+                chatSession?.tabIcon ?? "",
+                chatSession?.tabSubtitle ?? "",
+                String(chatSession?.tabIsBusy == true)
             ]
             .joined(separator: "|")
         case .workflowDefinition:

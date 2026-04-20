@@ -11,6 +11,7 @@ struct WindowTitlebarToolbarHost: NSViewRepresentable {
     let theme: DevysTheme
     let hasRepositories: Bool
     let hasWorktree: Bool
+    let supportsStructuredWorkspaceFeatures: Bool
     let isSidebarVisible: Bool
     let repoName: String?
     let branchName: String?
@@ -48,6 +49,7 @@ struct WindowTitlebarToolbarHost: NSViewRepresentable {
             theme: theme,
             hasRepositories: hasRepositories,
             hasWorktree: hasWorktree,
+            supportsStructuredWorkspaceFeatures: supportsStructuredWorkspaceFeatures,
             isSidebarVisible: isSidebarVisible,
             repoName: repoName,
             branchName: branchName,
@@ -78,6 +80,7 @@ final class Coordinator: NSObject, NSToolbarDelegate {
         let theme: DevysTheme
         let hasRepositories: Bool
         let hasWorktree: Bool
+        let supportsStructuredWorkspaceFeatures: Bool
         let isSidebarVisible: Bool
         let repoName: String?
         let branchName: String?
@@ -220,6 +223,7 @@ final class Coordinator: NSObject, NSToolbarDelegate {
             if configuration.hasRepositories {
                 TitlebarFABButton(
                     hasWorktree: configuration.hasWorktree,
+                    supportsStructuredWorkspaceFeatures: configuration.supportsStructuredWorkspaceFeatures,
                     onWorkflow: configuration.onWorkflow,
                     onAgents: configuration.onAgents,
                     onShell: configuration.onShell,
@@ -271,6 +275,7 @@ private struct TitlebarFABButton: View {
     @Environment(\.devysTheme) private var theme
 
     let hasWorktree: Bool
+    let supportsStructuredWorkspaceFeatures: Bool
     let onWorkflow: () -> Void
     let onAgents: () -> Void
     let onShell: () -> Void
@@ -308,7 +313,7 @@ private struct TitlebarFABButton: View {
                 "Workflow",
                 icon: "point.3.connected.trianglepath.dotted",
                 shortcut: "",
-                enabled: hasWorktree,
+                enabled: hasWorktree && supportsStructuredWorkspaceFeatures,
                 action: onWorkflow
             )
             fabMenuItem(
@@ -319,10 +324,10 @@ private struct TitlebarFABButton: View {
                 action: onShell
             )
             fabMenuItem(
-                "Agent Session",
+                "Chat",
                 icon: "person.crop.circle.badge.plus",
                 shortcut: "⌘⇧A",
-                enabled: hasWorktree,
+                enabled: hasWorktree && supportsStructuredWorkspaceFeatures,
                 action: onAgents
             )
             fabMenuItem(

@@ -198,7 +198,7 @@ struct WindowFeatureWorkflowTests {
         }
     }
 
-    @Test("Deleting an active workflow run is rejected until it is stopped")
+    @Test("Deleting a workflow run removes it immediately")
     @MainActor
     func deleteActiveWorkflowRunRejects() async {
         let repository = workflowTestRepository()
@@ -231,8 +231,8 @@ struct WindowFeatureWorkflowTests {
         }
 
         await store.send(.deleteWorkflowRun(workspaceID: worktree.id, runID: activeRun.id)) {
-            $0.workflowWorkspacesByID[worktree.id]?.lastErrorMessage =
-                "Stop the active workflow run before deleting it."
+            $0.workflowWorkspacesByID[worktree.id]?.runs = []
+            $0.workflowWorkspacesByID[worktree.id]?.lastErrorMessage = nil
         }
     }
 

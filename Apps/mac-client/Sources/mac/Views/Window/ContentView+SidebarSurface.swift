@@ -7,27 +7,26 @@ import Workspace
 @MainActor
 struct ContentViewSidebarSurface: View {
     let activeSidebar: WorkspaceSidebarMode
-    let selectedRepositoryRootURL: URL?
     let currentWorktree: Worktree?
     let selectedWorkspaceID: Workspace.ID?
     let fileTreeModel: FileTreeModel?
     let gitStatusIndex: WorkspaceFileTreeGitStatusIndex?
     let gitStore: GitStore?
     let changeCount: Int
-    let agentSessions: [HostedAgentSessionSummary]
+    let chatSessions: [HostedChatSessionSummary]
     let workflowState: WindowFeature.WorkflowWorkspaceState
     let portsByWorkspaceID: [Workspace.ID: [WorkspacePort]]
     let repositorySettingsStore: RepositorySettingsStore
     let onSelectSidebar: (WorkspaceSidebarMode) -> Void
     let onPreviewFile: (Workspace.ID, URL) -> Void
     let onOpenFile: (Workspace.ID, URL) -> Void
-    let onAddFileToAgent: (Workspace.ID, URL) -> Void
+    let onAddFileToChat: (Workspace.ID, URL) -> Void
     let onRenameFile: (Workspace.ID, URL) -> Void
     let onDeleteFiles: (Workspace.ID, [URL]) -> Void
     let onOpenDiff: (Workspace.ID, String, Bool, Bool) -> Void
-    let onAddDiffToAgent: (Workspace.ID, String, Bool) -> Void
-    let onCreateAgentSession: (Workspace.ID) -> Void
-    let onOpenAgentSession: (Workspace.ID, AgentSessionID) -> Void
+    let onAddDiffToChat: (Workspace.ID, String, Bool) -> Void
+    let onCreateChatSession: (Workspace.ID) -> Void
+    let onOpenChatSession: (Workspace.ID, ChatSessionID) -> Void
     let onCreateWorkflowDefinition: (Workspace.ID) -> Void
     let onOpenWorkflowDefinition: (Workspace.ID, String) -> Void
     let onStartWorkflowDefinition: (Workspace.ID, String) -> Void
@@ -46,12 +45,12 @@ struct ContentViewSidebarSurface: View {
             onSelect: onSelectSidebar,
             changeCount: changeCount,
             portCount: ports.count,
-            agentCount: agentSessions.count,
+            agentCount: chatSessions.count,
             workflowCount: workflowState.definitions.count + workflowState.runs.count
         ) {
             SidebarContentView(
                 model: fileTreeModel,
-                activeDirectory: currentWorktree?.workingDirectory ?? selectedRepositoryRootURL,
+                activeDirectory: currentWorktree?.workingDirectory,
                 gitStatusIndex: gitStatusIndex,
                 onPreviewFile: { url in
                     guard let selectedWorkspaceID else { return }
@@ -63,7 +62,7 @@ struct ContentViewSidebarSurface: View {
                 },
                 onAddToChat: { url in
                     guard let selectedWorkspaceID else { return }
-                    onAddFileToAgent(selectedWorkspaceID, url)
+                    onAddFileToChat(selectedWorkspaceID, url)
                 },
                 onRenameItem: { url in
                     guard let selectedWorkspaceID else { return }
@@ -89,7 +88,7 @@ struct ContentViewSidebarSurface: View {
                     },
                     onAddDiffToChat: { path, isStaged in
                         guard let selectedWorkspaceID else { return }
-                        onAddDiffToAgent(selectedWorkspaceID, path, isStaged)
+                        onAddDiffToChat(selectedWorkspaceID, path, isStaged)
                     }
                 )
             }
@@ -104,15 +103,15 @@ struct ContentViewSidebarSurface: View {
                 onStopProcess: onStopPortProcess
             )
         } agentsContent: {
-            AgentSessionsSidebarSection(
-                sessions: agentSessions,
+            ChatSessionsSidebarSection(
+                sessions: chatSessions,
                 onCreateSession: {
                     guard let selectedWorkspaceID else { return }
-                    onCreateAgentSession(selectedWorkspaceID)
+                    onCreateChatSession(selectedWorkspaceID)
                 },
                 onOpenSession: { sessionID in
                     guard let selectedWorkspaceID else { return }
-                    onOpenAgentSession(selectedWorkspaceID, sessionID)
+                    onOpenChatSession(selectedWorkspaceID, sessionID)
                 }
             )
         } workflowsContent: {
@@ -149,22 +148,22 @@ struct ContentViewSidebarSurface: View {
 }
 
 @MainActor
-private struct AgentSessionsSidebarSection: View {
+private struct ChatSessionsSidebarSection: View {
     @Environment(\.devysTheme) private var theme
 
-    let sessions: [HostedAgentSessionSummary]
+    let sessions: [HostedChatSessionSummary]
     let onCreateSession: () -> Void
-    let onOpenSession: (AgentSessionID) -> Void
+    let onOpenSession: (ChatSessionID) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: DevysSpacing.space2) {
-            ActionButton("New Agent Session", icon: "person.crop.circle.badge.plus") {
+            ActionButton("New Chat", icon: "person.crop.circle.badge.plus") {
                 onCreateSession()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if sessions.isEmpty {
-                Text("No active sessions in this workspace.")
+                Text("No active chats in this workspace.")
                     .font(DevysTypography.caption)
                     .foregroundStyle(theme.textSecondary)
                     .padding(.horizontal, DevysSpacing.space3)

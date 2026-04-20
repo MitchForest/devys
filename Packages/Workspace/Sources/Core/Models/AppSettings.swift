@@ -10,7 +10,7 @@ public struct GlobalSettings: Codable, Equatable, Sendable {
     public var shell: ShellSettings
     public var explorer: ExplorerSettings
     public var appearance: AppearanceSettings
-    public var agent: AgentSettings
+    public var chat: ChatSettings
     public var notifications: NotificationSettings
     public var restore: RestoreSettings
     public var shortcuts: WorkspaceShellShortcutSettings
@@ -19,6 +19,7 @@ public struct GlobalSettings: Codable, Equatable, Sendable {
         case shell
         case explorer
         case appearance
+        case chat
         case agent
         case notifications
         case restore
@@ -29,7 +30,7 @@ public struct GlobalSettings: Codable, Equatable, Sendable {
         shell: ShellSettings = ShellSettings(),
         explorer: ExplorerSettings = ExplorerSettings(),
         appearance: AppearanceSettings = AppearanceSettings(),
-        agent: AgentSettings = AgentSettings(),
+        chat: ChatSettings = ChatSettings(),
         notifications: NotificationSettings = NotificationSettings(),
         restore: RestoreSettings = RestoreSettings(),
         shortcuts: WorkspaceShellShortcutSettings = WorkspaceShellShortcutSettings()
@@ -37,7 +38,7 @@ public struct GlobalSettings: Codable, Equatable, Sendable {
         self.shell = shell
         self.explorer = explorer
         self.appearance = appearance
-        self.agent = agent
+        self.chat = chat
         self.notifications = notifications
         self.restore = restore
         self.shortcuts = shortcuts
@@ -53,8 +54,9 @@ public struct GlobalSettings: Codable, Equatable, Sendable {
             ?? ExplorerSettings()
         self.appearance = try container.decodeIfPresent(AppearanceSettings.self, forKey: .appearance)
             ?? AppearanceSettings()
-        self.agent = try container.decodeIfPresent(AgentSettings.self, forKey: .agent)
-            ?? AgentSettings()
+        self.chat = try container.decodeIfPresent(ChatSettings.self, forKey: .chat)
+            ?? container.decodeIfPresent(ChatSettings.self, forKey: .agent)
+            ?? ChatSettings()
         self.notifications = try container.decodeIfPresent(NotificationSettings.self, forKey: .notifications)
             ?? NotificationSettings()
         self.restore = try container.decodeIfPresent(RestoreSettings.self, forKey: .restore)
@@ -70,7 +72,7 @@ public struct GlobalSettings: Codable, Equatable, Sendable {
         try container.encode(shell, forKey: .shell)
         try container.encode(explorer, forKey: .explorer)
         try container.encode(appearance, forKey: .appearance)
-        try container.encode(agent, forKey: .agent)
+        try container.encode(chat, forKey: .chat)
         try container.encode(notifications, forKey: .notifications)
         try container.encode(restore, forKey: .restore)
         try container.encode(shortcuts, forKey: .shortcuts)
@@ -106,8 +108,8 @@ public final class AppSettings {
         didSet { save() }
     }
     
-    /// Agent/chat settings
-    public var agent: AgentSettings {
+    /// Chat settings
+    public var chat: ChatSettings {
         didSet { save() }
     }
 
@@ -138,7 +140,7 @@ public final class AppSettings {
         self.shell = globalSettings.shell
         self.explorer = globalSettings.explorer
         self.appearance = globalSettings.appearance
-        self.agent = globalSettings.agent
+        self.chat = globalSettings.chat
         self.notifications = globalSettings.notifications
         self.restore = globalSettings.restore
         self.shortcuts = globalSettings.shortcuts
@@ -150,7 +152,7 @@ public final class AppSettings {
                 shell: shell,
                 explorer: explorer,
                 appearance: appearance,
-                agent: agent,
+                chat: chat,
                 notifications: notifications,
                 restore: restore,
                 shortcuts: shortcuts
@@ -165,7 +167,7 @@ public final class AppSettings {
         shell = ShellSettings()
         explorer = ExplorerSettings()
         appearance = AppearanceSettings()
-        agent = AgentSettings()
+        chat = ChatSettings()
         notifications = NotificationSettings()
         restore = RestoreSettings()
         shortcuts = WorkspaceShellShortcutSettings()
@@ -207,14 +209,34 @@ private struct LegacyShellSettings: Codable, Equatable, Sendable {
 
 public struct NotificationSettings: Codable, Equatable, Sendable {
     public var terminalActivity: Bool
-    public var agentActivity: Bool
+    public var chatActivity: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case terminalActivity
+        case chatActivity
+        case agentActivity
+    }
 
     public init(
         terminalActivity: Bool = true,
-        agentActivity: Bool = true
+        chatActivity: Bool = true
     ) {
         self.terminalActivity = terminalActivity
-        self.agentActivity = agentActivity
+        self.chatActivity = chatActivity
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        terminalActivity = try container.decodeIfPresent(Bool.self, forKey: .terminalActivity) ?? true
+        chatActivity = try container.decodeIfPresent(Bool.self, forKey: .chatActivity)
+            ?? container.decodeIfPresent(Bool.self, forKey: .agentActivity)
+            ?? true
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(terminalActivity, forKey: .terminalActivity)
+        try container.encode(chatActivity, forKey: .chatActivity)
     }
 }
 
@@ -225,13 +247,14 @@ public struct RestoreSettings: Codable, Equatable, Sendable {
     public var restoreSelectedWorkspace: Bool
     public var restoreWorkspaceLayoutAndTabs: Bool
     public var restoreTerminalSessions: Bool
-    public var restoreAgentSessions: Bool
+    public var restoreChatSessions: Bool
 
     private enum CodingKeys: String, CodingKey {
         case restoreRepositoriesOnLaunch
         case restoreSelectedWorkspace
         case restoreWorkspaceLayoutAndTabs
         case restoreTerminalSessions
+        case restoreChatSessions
         case restoreAgentSessions
     }
 
@@ -240,13 +263,13 @@ public struct RestoreSettings: Codable, Equatable, Sendable {
         restoreSelectedWorkspace: Bool = true,
         restoreWorkspaceLayoutAndTabs: Bool = true,
         restoreTerminalSessions: Bool = false,
-        restoreAgentSessions: Bool = true
+        restoreChatSessions: Bool = true
     ) {
         self.restoreRepositoriesOnLaunch = restoreRepositoriesOnLaunch
         self.restoreSelectedWorkspace = restoreSelectedWorkspace
         self.restoreWorkspaceLayoutAndTabs = restoreWorkspaceLayoutAndTabs
         self.restoreTerminalSessions = restoreTerminalSessions
-        self.restoreAgentSessions = restoreAgentSessions
+        self.restoreChatSessions = restoreChatSessions
     }
 
     public init(from decoder: Decoder) throws {
@@ -267,7 +290,10 @@ public struct RestoreSettings: Codable, Equatable, Sendable {
             Bool.self,
             forKey: .restoreTerminalSessions
         ) ?? false
-        restoreAgentSessions = try container.decodeIfPresent(
+        restoreChatSessions = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .restoreChatSessions
+        ) ?? container.decodeIfPresent(
             Bool.self,
             forKey: .restoreAgentSessions
         ) ?? true
@@ -279,7 +305,7 @@ public struct RestoreSettings: Codable, Equatable, Sendable {
         try container.encode(restoreSelectedWorkspace, forKey: .restoreSelectedWorkspace)
         try container.encode(restoreWorkspaceLayoutAndTabs, forKey: .restoreWorkspaceLayoutAndTabs)
         try container.encode(restoreTerminalSessions, forKey: .restoreTerminalSessions)
-        try container.encode(restoreAgentSessions, forKey: .restoreAgentSessions)
+        try container.encode(restoreChatSessions, forKey: .restoreChatSessions)
     }
 }
 
@@ -363,10 +389,10 @@ public struct AppearanceSettings: Codable, Equatable, Sendable {
     }
 }
 
-// MARK: - Agent Settings
+// MARK: - Chat Settings
 
-/// Settings for AI agent/chat behavior.
-public struct AgentSettings: Codable, Equatable, Sendable {
+/// Settings for repo-scoped chat behavior.
+public struct ChatSettings: Codable, Equatable, Sendable {
     /// Default harness for new chats.
     /// Stored as raw string to avoid dependency on Agents.
     /// Valid values: "claudeCode", "codex", or nil (always ask).

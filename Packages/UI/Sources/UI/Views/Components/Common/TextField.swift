@@ -91,6 +91,46 @@ public struct TextInput: View {
     }
 }
 
+/// Secure text input that mirrors `TextInput` chrome for passwords and passphrases.
+public struct SecureInput: View {
+    @Environment(\.theme) private var theme
+
+    private let placeholder: String
+    @Binding private var text: String
+    private let icon: String?
+
+    @FocusState private var isFocused: Bool
+
+    public init(
+        _ placeholder: String,
+        text: Binding<String>,
+        icon: String? = nil
+    ) {
+        self.placeholder = placeholder
+        self._text = text
+        self.icon = icon
+    }
+
+    public var body: some View {
+        HStack(spacing: Spacing.space2) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(Typography.body.weight(.medium))
+                    .foregroundStyle(isFocused ? theme.accent : theme.textTertiary)
+                    .frame(width: 16)
+            }
+            SecureField(placeholder, text: $text)
+                .textFieldStyle(.plain)
+                .font(Typography.body)
+                .foregroundStyle(theme.text)
+                .focused($isFocused)
+        }
+        .padding(.horizontal, Spacing.space2)
+        .padding(.vertical, Spacing.space2)
+        .inputChrome(.card, isFocused: isFocused)
+    }
+}
+
 /// Search-specific input with magnifying glass and clear button.
 public struct SearchInput: View {
     @Environment(\.theme) private var theme

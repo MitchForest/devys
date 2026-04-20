@@ -52,8 +52,8 @@ extension ContentView {
                 title = session.tabTitle
                 icon = session.tabIcon
             }
-        case .agentSession(let workspaceID, let sessionID):
-            if let session = runtimeRegistry.agentSession(id: sessionID, in: workspaceID) {
+        case .chatSession(let workspaceID, let sessionID):
+            if let session = runtimeRegistry.chatSession(id: sessionID, in: workspaceID) {
                 title = session.tabTitle
                 icon = session.tabIcon
             }
@@ -102,6 +102,10 @@ extension ContentView {
         defer {
             WorkspacePerformanceRecorder.end(trace)
         }
+        beginTerminalOpenTraceIfNeeded(
+            for: content,
+            openMode: "preview"
+        )
         let result = openWorkspaceContent(
             content,
             mode: .preview
@@ -124,6 +128,10 @@ extension ContentView {
         defer {
             WorkspacePerformanceRecorder.end(trace)
         }
+        beginTerminalOpenTraceIfNeeded(
+            for: content,
+            openMode: "permanent"
+        )
         let result = openWorkspaceContent(
             content,
             mode: .permanent
@@ -254,7 +262,7 @@ extension ContentView {
             )?.currentTerminalID {
                 workspaceTerminalRegistry.session(id: terminalID, in: workspaceID)?.requestKeyboardFocus()
             }
-        case .agentSession:
+        case .chatSession:
             break
         case .editor:
             editorSessions[tabId]?.requestKeyboardFocus()

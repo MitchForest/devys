@@ -14,8 +14,10 @@ struct AppFeatureTests {
         await store.send(.appDidFinishLaunching) {
             $0.lifecycle.hasFinishedLaunching = true
         }
+        await store.receive(.window(.loadRemoteRepositories))
         await store.receive(.window(.startWorkspaceOperationalObservation))
         await store.receive(.window(.startWorkflowObservation))
+        await store.receive(.window(.loadRemoteRepositoriesResponse(.success([]))))
     }
 
     @Test("Scene phase updates lifecycle state")

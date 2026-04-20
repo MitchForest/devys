@@ -1,16 +1,14 @@
 # Devys UI/UX Reference — Dia-Modeled Design System
 
-Updated: 2026-04-15
+Updated: 2026-04-19
 
 ## Purpose
 
 This document specifies the canonical Devys visual design system, modeled on the Dia browser's design language: quiet confidence, layered surfaces, one consistent radius, monochrome warmth with optional accent tinting.
 
-It pairs with:
+It pairs with `architecture.md` for architecture and ownership rules.
 
-- `architecture.md` for architecture and ownership rules
-- `../plan/implementation-plan.md` for migration status
-- `../adrs/0003-ui-rulebook.md` for the codified rules
+This is the canonical UI reference. If the UI system changes, update this file directly instead of creating sidecar governance docs.
 
 The goal: someone opens Devys for the first time and thinks "this feels expensive." Not because it's flashy, but because every detail is consistent.
 

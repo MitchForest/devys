@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 // FileTreeModel.swift
 // DevysCore - Core functionality for Devys
 //
@@ -54,6 +55,7 @@ public final class FileTreeModel {
     private var rootNode: CEWorkspaceFileNode?
     private var fileWatchService: FileWatchService?
     private var isWatchingActive = false
+    @ObservationIgnored private var loadTask: Task<Void, Never>?
     private var loadedDirectories: Set<URL> = []
     private var invalidatedDirectories: Set<URL> = []
     private var expandedDirectories: Set<URL> = []
@@ -92,13 +94,7 @@ public final class FileTreeModel {
     
     /// Loads the file tree from the root URL.
     public func loadTree() async {
-        isLoading = true
-        defer { isLoading = false }
-
-        await reloadRoot()
-        await restoreExpandedSubdirectories()
-        rebuildFlattenedList()
-        startWatching()
+        await performTreeLoad(forceReload: true)
     }
 
     /// Loads the file tree once, then reactivates watchers on later mounts.
@@ -108,7 +104,7 @@ public final class FileTreeModel {
             return
         }
 
-        await loadTree()
+        await performTreeLoad(forceReload: false)
     }
 
     /// Reattaches filesystem observation for an already-loaded tree.
@@ -335,6 +331,34 @@ public final class FileTreeModel {
 
 @MainActor
 private extension FileTreeModel {
+    func performTreeLoad(forceReload: Bool) async {
+        if let loadTask {
+            await loadTask.value
+            if !forceReload, rootNode != nil {
+                activate()
+                return
+            }
+        }
+
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            isLoading = true
+            defer {
+                isLoading = false
+                loadTask = nil
+            }
+
+            await reloadRoot()
+            await restoreExpandedSubdirectories()
+            rebuildFlattenedList()
+            startWatching()
+        }
+
+        loadTask = task
+        await task.value
+    }
+
     func findNode(for url: URL) -> CEWorkspaceFileNode? {
         guard let rootNode = rootNode else { return nil }
 
@@ -639,3 +663,4 @@ private extension FileTreeModel {
         )
     }
 }
+// swiftlint:enable file_length

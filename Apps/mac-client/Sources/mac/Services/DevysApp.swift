@@ -106,7 +106,10 @@ struct DevysApp: App {
     var body: some Scene {
         WindowGroup {
             AppFeatureHost(store: appStore) {
-                ContentView(store: appStore.scope(state: \.window, action: \.window))
+                ContentView(
+                    store: appStore.scope(state: \.window, action: \.window),
+                    initialAppearance: container.appSettings.appearance
+                )
                     .frame(minWidth: 900, minHeight: 600)
                     .onAppear {
                         appDelegate.editorSessionRegistry = container.editorSessionRegistry
@@ -141,7 +144,7 @@ struct DevysApp: App {
 
             CommandGroup(after: .newItem) {
                 Button("Add Repository...") {
-                    appStore.send(.window(.requestOpenRepository))
+                    appStore.send(.window(.requestAddRepository))
                 }
                 .keyboardShortcut("o", modifiers: .command)
             }
@@ -375,10 +378,6 @@ enum DevysMain {
                 fputs("terminal host failed: \(error.localizedDescription)\n", stderr)
                 exit(1)
             }
-        }
-
-        if arguments.contains("--terminal-attach") {
-            PersistentTerminalAttachMain.run(arguments: arguments)
         }
 
         DevysApp.main()

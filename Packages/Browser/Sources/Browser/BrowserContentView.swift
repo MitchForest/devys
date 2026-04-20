@@ -4,8 +4,8 @@
 // Copyright © 2026 Devys. All rights reserved.
 
 import SwiftUI
-import WebKit
 import UI
+@preconcurrency import WebKit
 
 /// Browser content view that displays a web page with navigation controls.
 @MainActor
@@ -169,16 +169,20 @@ private struct BrowserWebViewWrapper: NSViewRepresentable {
 
     func makeNSView(context: Context) -> WKWebView {
         let webView = session.ensureWebView()
-        webView.navigationDelegate = context.coordinator
+        session.setNavigationDelegate(context.coordinator)
         return webView
     }
 
     func updateNSView(_ nsView: WKWebView, context: Context) {
-        // State updates handled via KVO in BrowserSession
+        session.setNavigationDelegate(context.coordinator)
     }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(session: session)
+    }
+
+    static func dismantleNSView(_ nsView: WKWebView, coordinator: Coordinator) {
+        coordinator.session.dismantleHostedWebView(nsView)
     }
 
     class Coordinator: NSObject, WKNavigationDelegate {
@@ -192,7 +196,8 @@ private struct BrowserWebViewWrapper: NSViewRepresentable {
             _ webView: WKWebView,
             didStartProvisionalNavigation navigation: WKNavigation?
         ) {
-            MainActor.assumeIsolated {
+            Task { @MainActor [session] in
+                guard session.isManaging(webView) else { return }
                 session.clearError()
             }
         }
@@ -202,7 +207,8 @@ private struct BrowserWebViewWrapper: NSViewRepresentable {
             didFail navigation: WKNavigation?,
             withError error: Error
         ) {
-            MainActor.assumeIsolated {
+            Task { @MainActor [session] in
+                guard session.isManaging(webView) else { return }
                 session.handleLoadError(error)
             }
         }
@@ -212,7 +218,8 @@ private struct BrowserWebViewWrapper: NSViewRepresentable {
             didFailProvisionalNavigation navigation: WKNavigation?,
             withError error: Error
         ) {
-            MainActor.assumeIsolated {
+            Task { @MainActor [session] in
+                guard session.isManaging(webView) else { return }
                 session.handleLoadError(error)
             }
         }

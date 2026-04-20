@@ -201,8 +201,8 @@ private extension WindowFeature.State {
                 initialURL: initialURL
             )
 
-        case .agentSession(let tabWorkspaceID, let sessionID):
-            return persistedAgentTabRecord(
+        case .chatSession(let tabWorkspaceID, let sessionID):
+            return persistedChatTabRecord(
                 workspaceID: workspaceID,
                 tabWorkspaceID: tabWorkspaceID,
                 sessionID: sessionID,
@@ -260,22 +260,22 @@ private extension WindowFeature.State {
         return .browser(id: browserID, url: currentURL)
     }
 
-    func persistedAgentTabRecord(
+    func persistedChatTabRecord(
         workspaceID: Workspace.ID,
         tabWorkspaceID: Workspace.ID,
-        sessionID: AgentSessionID,
+        sessionID: ChatSessionID,
         settings: RelaunchSettingsSnapshot
     ) -> PersistedWorkspaceTabRecord? {
         guard tabWorkspaceID == workspaceID,
-              settings.restoreAgentSessions,
-              let summary = hostedWorkspaceContentByID[workspaceID]?.agentSessions.first(where: {
+              settings.restoreChatSessions,
+              let summary = hostedWorkspaceContentByID[workspaceID]?.chatSessions.first(where: {
                   $0.sessionID == sessionID
               }),
               summary.isRestorable else {
             return nil
         }
-        return .agent(
-            PersistedAgentSessionRecord(
+        return .chat(
+            PersistedChatSessionRecord(
                 sessionID: sessionID.rawValue,
                 kind: summary.kind,
                 title: summary.title,
@@ -376,11 +376,11 @@ private extension WindowFeature.State {
             return .terminal(workspaceID: workspaceID, id: hostedSessionID)
         case .browser(let id, let url):
             return .browser(workspaceID: workspaceID, id: id, initialURL: url)
-        case .agent(let record):
-            guard settings.restoreAgentSessions else { return nil }
-            return .agentSession(
+        case .chat(let record):
+            guard settings.restoreChatSessions else { return nil }
+            return .chatSession(
                 workspaceID: workspaceID,
-                sessionID: AgentSessionID(rawValue: record.sessionID)
+                sessionID: ChatSessionID(rawValue: record.sessionID)
             )
         case .editor(let fileURL):
             return .editor(workspaceID: workspaceID, url: fileURL)

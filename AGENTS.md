@@ -2,7 +2,9 @@
 
 This file applies to the entire repository.
 
-Follow any deeper `AGENTS.md` files for package-local details. Several package-level `AGENTS.md` files predate the TCA migration and are useful as local package context, but they are not the source of truth for app-domain ownership. If a package guide conflicts with the accepted ADRs or canonical reference docs, treat that mismatch as documentation debt and fix it.
+Follow any deeper `AGENTS.md` files for package-local details. Several package-level `AGENTS.md` files predate the TCA migration and are useful as local package context, but they are not the source of truth for app-domain ownership. If a package guide conflicts with the canonical reference docs, treat that mismatch as documentation debt and fix it.
+
+Every `AGENTS.md` in this repo should have a sibling `CLAUDE.md` symlink pointing to `AGENTS.md`. Edit `AGENTS.md`, not `CLAUDE.md`.
 
 ## What Devys Is Building
 
@@ -23,30 +25,60 @@ The app should feel explicit, warm, and fast. Power users should be able to stay
 
 Read these before changing architecture, shell behavior, or shared UI.
 
-### Stable Governance And Reference Docs
+### Stable Reference Docs
 
-- `.docs/adrs/0001-architecture-charter.md`
-- `.docs/adrs/0002-tca-boundary-rule.md`
-- `.docs/adrs/0003-ui-rulebook.md`
-- `.docs/adrs/0004-module-visibility-rulebook.md`
-- `.docs/adrs/0005-no-shims-no-mirrors.md`
 - `.docs/reference/architecture.md`
 - `.docs/reference/ui-ux.md`
 - `.docs/reference/legacy-inventory.md`
+- `.docs/reference/terminal-runtime.md`
 
 These are the canonical docs that define repo doctrine. Do not casually edit them. If repo doctrine changes, update them intentionally.
 
-### Active Plan
+### Docs Taxonomy
 
-- `.docs/plan/implementation-plan.md`
-
-This is the only active migration and execution plan.
+- `.docs/README.md`
+- `.docs/AGENTS.md`
+- `.docs/active/README.md`
 
 Rules:
 
-- Do not create sidecar phase plans.
+- Do not create ADRs in this repo.
+- Put stable doctrine in `reference/`.
+- Put active work plans in `.docs/active/`.
+- Put inactive design briefs in `.docs/future/`.
+- Put research and investigations in `.docs/research/`.
+- When a future brief becomes active, move it into `.docs/active/`.
+- When active-plan work lands, update the relevant plan doc in the same change stream.
 - Do not put immutable architecture rules in plan docs.
-- When migration work lands, update the implementation plan in the same change stream.
+
+## Build And Validation Entry Points
+
+Use the repo's Xcode schemes as the canonical app entrypoints.
+
+Supported app builds:
+
+- `xcodebuild -scheme mac-client -configuration Debug -destination 'platform=macOS' build`
+- `xcodebuild -scheme ios-client -configuration Debug -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build`
+
+Supported package verification:
+
+- `swift test` from the package directory for package-local validation
+- `xcodebuild -scheme <PackageName> -configuration Debug build` only when you specifically need the Xcode package scheme path
+
+Do not use raw `xcodebuild -target ...` app builds as the primary validation path in this repo.
+
+Reason:
+
+- this repo uses many local Swift packages
+- the `-target` path can route package products through per-package `build/` directories and surface false missing-module failures that do not reproduce on the supported scheme path
+- recent examples were false dependency failures like `Split -> UI` and `Syntax -> Text` during `-target` builds while the package schemes and app schemes built successfully
+
+Do not run multiple `xcodebuild` scheme builds in parallel against the same DerivedData location.
+
+Reason:
+
+- Xcode will lock `build.db`
+- that produces misleading verification failures unrelated to source changes
 
 ## Core Architecture Rules
 
@@ -186,9 +218,9 @@ Treat unnecessary `public` surface as a design bug.
 - Do not preserve legacy shell ownership just because it exists today.
 - Do not normalize the current bridge state between reducers and legacy owners into a permanent architecture.
 - Treat notification routing, runtime registries, mutable shared stores, and legacy workspace shell copies as migration targets unless the canonical docs explicitly classify them as engine-only boundaries.
-- If you touch migration status or the remaining ownership boundary, update `.docs/plan/implementation-plan.md`.
+- If you touch migration status or the remaining ownership boundary, update the relevant active plan in `.docs/active/` or the affected canonical reference doc in `.docs/reference/`.
 
-Current migration reality lives in the implementation plan. Read it before touching shell ownership.
+Current migration reality belongs in active plan docs while work is in flight and in canonical reference docs once it stabilizes. Read the relevant docs before touching shell ownership.
 
 ## Concurrency And Effects
 

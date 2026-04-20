@@ -137,7 +137,7 @@ extension ContentView {
         controller.delegate = splitDelegate
 
         // Set initial colors from theme
-        controller.updateColors(splitColorsFromTheme(theme))
+        controller.updateColors(Self.makeSplitColors(from: theme))
     }
 
     private func configureSplitObservationCallbacks() {
@@ -203,12 +203,12 @@ extension ContentView {
         guard let firstURL = urls.first else { return nil }
         let attachments = urls.map(agentAttachment(from:))
 
-        if let agentTabID = handleAgentFileDrop(
+        if let chatTabID = handleChatFileDrop(
             attachments: attachments,
             inPane: paneId,
             zone: zone
         ) {
-            return agentTabID
+            return chatTabID
         }
 
         if case let .edge(orientation, insertion) = zone,
@@ -225,34 +225,34 @@ extension ContentView {
         return openEditorTabFromDrop(url: firstURL, inPane: paneId)
     }
 
-    private func handleAgentFileDrop(
-        attachments: [AgentAttachment],
+    private func handleChatFileDrop(
+        attachments: [ChatAttachment],
         inPane paneID: PaneID,
         zone: DropZone
     ) -> TabID? {
-        guard let agentTabID = selectedAgentTabID(inPane: paneID) else {
+        guard let chatTabID = selectedChatTabID(inPane: paneID) else {
             return nil
         }
 
-        if case .agentSession(let workspaceID, let sessionID)? = tabContents[agentTabID],
-           let session = runtimeRegistry.agentSession(id: sessionID, in: workspaceID) {
+        if case .chatSession(let workspaceID, let sessionID)? = tabContents[chatTabID],
+           let session = runtimeRegistry.chatSession(id: sessionID, in: workspaceID) {
             session.addAttachments(attachments)
         }
 
         if case let .edge(orientation, insertion) = zone {
             splitSelectedTabIfNeeded(
-                agentTabID,
+                chatTabID,
                 from: paneID,
                 orientation: orientation,
                 insertion: insertion
             )
         }
 
-        return agentTabID
+        return chatTabID
     }
 
     private func handleEdgeFileDrop(
-        attachments: [AgentAttachment],
+        attachments: [ChatAttachment],
         sourcePaneID: PaneID,
         workspaceID: Workspace.ID,
         orientation: Split.SplitOrientation,
@@ -267,15 +267,15 @@ extension ContentView {
             return nil
         }
 
-        if let configuredHarness = appSettings.agent.defaultHarness,
-           let kind = agentKind(forHarness: configuredHarness),
-           let prepared = preparePendingAgentSessionLaunch(
+        if let configuredHarness = appSettings.chat.defaultHarness,
+           let kind = chatProviderKind(forHarness: configuredHarness),
+           let prepared = preparePendingChatSessionLaunch(
                 workspaceID: workspaceID,
                 preferredPaneID: targetPaneID,
                 initialAttachments: attachments,
                 preferredKind: kind
            ) {
-            launchPreparedAgentSession(
+            launchPreparedChatSession(
                 kind,
                 workspaceID: workspaceID,
                 sessionID: prepared.runtime.sessionID
@@ -283,13 +283,13 @@ extension ContentView {
             return prepared.tabID
         }
 
-        if let prepared = preparePendingAgentSessionLaunch(
+        if let prepared = preparePendingChatSessionLaunch(
             workspaceID: workspaceID,
             preferredPaneID: targetPaneID,
             initialAttachments: attachments,
             preferredKind: nil
         ) {
-            store.send(.setAgentLaunchPresentation(AgentLaunchPresentation(
+            store.send(.setChatLaunchPresentation(ChatLaunchPresentation(
                 workspaceID: workspaceID,
                 initialAttachments: [],
                 preferredPaneID: targetPaneID,
@@ -318,28 +318,28 @@ extension ContentView {
         guard let workspaceID = selectedWorkspaceID else { return nil }
 
         if case let .edge(orientation, insertion) = zone,
-           let agentTabID = selectedAgentTabID(inPane: paneId),
-           case .agentSession(_, let sessionID)? = tabContents[agentTabID],
-           let session = runtimeRegistry.agentSession(id: sessionID, in: workspaceID) {
+           let chatTabID = selectedChatTabID(inPane: paneId),
+           case .chatSession(_, let sessionID)? = tabContents[chatTabID],
+           let session = runtimeRegistry.chatSession(id: sessionID, in: workspaceID) {
             session.addAttachment(.gitDiff(path: transfer.path, isStaged: transfer.isStaged))
             splitSelectedTabIfNeeded(
-                agentTabID,
+                chatTabID,
                 from: paneId,
                 orientation: orientation,
                 insertion: insertion
             )
-            return agentTabID
+            return chatTabID
         }
 
-        if let agentTabID = selectedAgentTabID(inPane: paneId),
-           case .agentSession(_, let sessionID)? = tabContents[agentTabID],
-           let session = runtimeRegistry.agentSession(id: sessionID, in: workspaceID) {
+        if let chatTabID = selectedChatTabID(inPane: paneId),
+           case .chatSession(_, let sessionID)? = tabContents[chatTabID],
+           let session = runtimeRegistry.chatSession(id: sessionID, in: workspaceID) {
             session.addAttachment(.gitDiff(path: transfer.path, isStaged: transfer.isStaged))
-            return agentTabID
+            return chatTabID
         }
 
         if case let .edge(orientation, insertion) = zone {
-            let attachment = AgentAttachment.gitDiff(path: transfer.path, isStaged: transfer.isStaged)
+            let attachment = ChatAttachment.gitDiff(path: transfer.path, isStaged: transfer.isStaged)
             guard let targetPaneID = splitPane(
                 paneId,
                 orientation: orientation,
@@ -348,15 +348,15 @@ extension ContentView {
             ) else {
                 return nil
             }
-            if let configuredHarness = appSettings.agent.defaultHarness,
-               let kind = agentKind(forHarness: configuredHarness),
-               let prepared = preparePendingAgentSessionLaunch(
+            if let configuredHarness = appSettings.chat.defaultHarness,
+               let kind = chatProviderKind(forHarness: configuredHarness),
+               let prepared = preparePendingChatSessionLaunch(
                     workspaceID: workspaceID,
                     preferredPaneID: targetPaneID,
                     initialAttachments: [attachment],
                     preferredKind: kind
                ) {
-                launchPreparedAgentSession(
+                launchPreparedChatSession(
                     kind,
                     workspaceID: workspaceID,
                     sessionID: prepared.runtime.sessionID
@@ -364,13 +364,13 @@ extension ContentView {
                 return prepared.tabID
             }
 
-            if let prepared = preparePendingAgentSessionLaunch(
+            if let prepared = preparePendingChatSessionLaunch(
                 workspaceID: workspaceID,
                 preferredPaneID: targetPaneID,
                 initialAttachments: [attachment],
                 preferredKind: nil
             ) {
-                store.send(.setAgentLaunchPresentation(AgentLaunchPresentation(
+                store.send(.setChatLaunchPresentation(ChatLaunchPresentation(
                     workspaceID: workspaceID,
                     initialAttachments: [],
                     preferredPaneID: targetPaneID,
@@ -399,9 +399,9 @@ extension ContentView {
         return createTab(in: paneId, content: content)
     }
 
-    private func selectedAgentTabID(inPane paneId: PaneID) -> TabID? {
+    private func selectedChatTabID(inPane paneId: PaneID) -> TabID? {
         guard let selectedTabID = paneLayout(for: paneId)?.selectedTabID,
-              case .agentSession = tabContents[selectedTabID] else {
+              case .chatSession = tabContents[selectedTabID] else {
             return nil
         }
         return selectedTabID
@@ -426,7 +426,7 @@ extension ContentView {
         )
     }
 
-    private func agentAttachment(from url: URL) -> AgentAttachment {
+    private func agentAttachment(from url: URL) -> ChatAttachment {
         let type = UTType(filenameExtension: url.pathExtension)
         if let type, type.conforms(to: .image) {
             return .image(url: url)

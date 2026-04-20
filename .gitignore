@@ -73,6 +73,7 @@ secrets.json
 
 # Local reference clones
 /.docs/repos/
+/.docs/research/
 
 # Ghostty rewrite bootstrap artifacts
 /.deps/ghostty-build/

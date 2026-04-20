@@ -83,46 +83,46 @@ extension WorktreeRuntimeRegistry {
         runtimesByWorkspaceID[workspaceID]?.gitStatusIndex
     }
 
-    func agentSession(id: AgentSessionID, in workspaceID: Workspace.ID) -> AgentSessionRuntime? {
-        runtimesByWorkspaceID[workspaceID]?.agentSession(id: id)
+    func chatSession(id: ChatSessionID, in workspaceID: Workspace.ID) -> ChatSessionRuntime? {
+        runtimesByWorkspaceID[workspaceID]?.chatSession(id: id)
     }
 
-    func allAgentSessions(for workspaceID: Workspace.ID) -> [AgentSessionRuntime] {
-        runtimesByWorkspaceID[workspaceID]?.allAgentSessions ?? []
+    func allChatSessions(for workspaceID: Workspace.ID) -> [ChatSessionRuntime] {
+        runtimesByWorkspaceID[workspaceID]?.allChatSessions ?? []
     }
 
     @discardableResult
-    func ensureAgentSession(
+    func ensureChatSession(
         in workspaceID: Workspace.ID,
-        sessionID: AgentSessionID,
+        sessionID: ChatSessionID,
         descriptor: ACPAgentDescriptor
-    ) -> AgentSessionRuntime? {
-        runtimesByWorkspaceID[workspaceID]?.ensureAgentSession(
+    ) -> ChatSessionRuntime? {
+        runtimesByWorkspaceID[workspaceID]?.ensureChatSession(
             workspaceID: workspaceID,
             sessionID: sessionID,
             descriptor: descriptor
         )
     }
 
-    func rekeyAgentSession(
-        _ runtime: AgentSessionRuntime,
+    func rekeyChatSession(
+        _ runtime: ChatSessionRuntime,
         in workspaceID: Workspace.ID,
-        to sessionID: AgentSessionID,
+        to sessionID: ChatSessionID,
         descriptor: ACPAgentDescriptor
     ) {
-        runtimesByWorkspaceID[workspaceID]?.rekeyAgentSession(
+        runtimesByWorkspaceID[workspaceID]?.rekeyChatSession(
             runtime,
             to: sessionID,
             descriptor: descriptor
         )
     }
 
-    func removeAgentSession(id: AgentSessionID, in workspaceID: Workspace.ID) {
-        runtimesByWorkspaceID[workspaceID]?.removeAgentSession(id: id)
+    func removeChatSession(id: ChatSessionID, in workspaceID: Workspace.ID) {
+        runtimesByWorkspaceID[workspaceID]?.removeChatSession(id: id)
     }
 
-    func removeAllAgentSessions(in workspaceID: Workspace.ID) {
-        runtimesByWorkspaceID[workspaceID]?.removeAllAgentSessions()
+    func removeAllChatSessions(in workspaceID: Workspace.ID) {
+        runtimesByWorkspaceID[workspaceID]?.removeAllChatSessions()
     }
 
     func activate(
@@ -210,7 +210,7 @@ private final class WorktreeRuntimeState {
     let worktree: Worktree
     let editorSessionPool = EditorSessionPool()
     var gitStore: GitStore?
-    private var agentSessionsByID: [AgentSessionID: AgentSessionRuntime] = [:]
+    private var chatSessionsByID: [ChatSessionID: ChatSessionRuntime] = [:]
     var fileTreeModel: FileTreeModel?
     var gitStatusIndex: WorkspaceFileTreeGitStatusIndex?
     private var hasHydratedGitStore = false
@@ -220,8 +220,8 @@ private final class WorktreeRuntimeState {
         self.worktree = worktree
     }
 
-    var allAgentSessions: [AgentSessionRuntime] {
-        Array(agentSessionsByID.values)
+    var allChatSessions: [ChatSessionRuntime] {
+        Array(chatSessionsByID.values)
     }
 
     func ensureGitStore(using factory: (URL?) -> GitStore?) {
@@ -237,45 +237,45 @@ private final class WorktreeRuntimeState {
         }
     }
 
-    func agentSession(id: AgentSessionID) -> AgentSessionRuntime? {
-        agentSessionsByID[id]
+    func chatSession(id: ChatSessionID) -> ChatSessionRuntime? {
+        chatSessionsByID[id]
     }
 
     @discardableResult
-    func ensureAgentSession(
+    func ensureChatSession(
         workspaceID: Workspace.ID,
-        sessionID: AgentSessionID,
+        sessionID: ChatSessionID,
         descriptor: ACPAgentDescriptor
-    ) -> AgentSessionRuntime {
-        if let existing = agentSessionsByID[sessionID] {
+    ) -> ChatSessionRuntime {
+        if let existing = chatSessionsByID[sessionID] {
             return existing
         }
 
-        let runtime = AgentSessionRuntime(
+        let runtime = ChatSessionRuntime(
             workspaceID: workspaceID,
             sessionID: sessionID,
             descriptor: descriptor
         )
-        agentSessionsByID[sessionID] = runtime
+        chatSessionsByID[sessionID] = runtime
         return runtime
     }
 
-    func rekeyAgentSession(
-        _ runtime: AgentSessionRuntime,
-        to sessionID: AgentSessionID,
+    func rekeyChatSession(
+        _ runtime: ChatSessionRuntime,
+        to sessionID: ChatSessionID,
         descriptor: ACPAgentDescriptor
     ) {
-        agentSessionsByID.removeValue(forKey: runtime.sessionID)
+        chatSessionsByID.removeValue(forKey: runtime.sessionID)
         runtime.updateSessionIdentity(sessionID: sessionID, descriptor: descriptor)
-        agentSessionsByID[sessionID] = runtime
+        chatSessionsByID[sessionID] = runtime
     }
 
-    func removeAgentSession(id: AgentSessionID) {
-        agentSessionsByID.removeValue(forKey: id)
+    func removeChatSession(id: ChatSessionID) {
+        chatSessionsByID.removeValue(forKey: id)
     }
 
-    func removeAllAgentSessions() {
-        agentSessionsByID.removeAll()
+    func removeAllChatSessions() {
+        chatSessionsByID.removeAll()
     }
 
     func setFilesSidebarVisible(

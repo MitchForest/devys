@@ -6,7 +6,7 @@ Read these first:
 
 - `/Users/mitchwhite/Code/devys/AGENTS.md`
 - `/Users/mitchwhite/Code/devys/.docs/reference/architecture.md`
-- `/Users/mitchwhite/Code/devys/.docs/plan/implementation-plan.md`
+- `/Users/mitchwhite/Code/devys/.docs/active/README.md`
 
 ## Role
 

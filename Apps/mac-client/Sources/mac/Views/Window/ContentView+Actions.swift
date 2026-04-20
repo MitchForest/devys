@@ -196,11 +196,13 @@ extension ContentView {
     }
 
     func openShellForSelectedWorkspace(preferredPaneID: PaneID? = nil) {
-        guard let worktree = activeWorktree else { return }
-        if let preferredPaneID {
-            store.send(.setWorkspaceFocusedPaneID(workspaceID: worktree.id, paneID: preferredPaneID))
-            renderWorkspaceLayout(for: worktree.id)
+        if isRemoteWorkspaceSelected {
+            store.send(.requestOpenRemoteTerminal(preferredPaneID: preferredPaneID))
+            return
         }
+
+        guard let worktree = selectedCatalogWorktree else { return }
+        focusWorkspacePaneIfNeeded(preferredPaneID, workspaceID: worktree.id)
         Task { @MainActor in
             let trace = WorkspacePerformanceRecorder.begin(
                 "terminal-launch",
@@ -209,32 +211,61 @@ extension ContentView {
                     "source": "shell"
                 ]
             )
+            let session = createPendingHostedTerminalSession(
+                in: worktree.id,
+                workingDirectory: worktree.workingDirectory,
+                traceSource: "shell",
+                launchProfile: .fastShell,
+                openMode: "permanent"
+            )
             do {
-                let session = try await createWorkspaceTerminalSession(
-                    in: worktree.id,
-                    workingDirectory: worktree.workingDirectory
+                try presentHostedTerminalTab(
+                    session: session,
+                    workspaceID: worktree.id,
+                    preferredPaneID: preferredPaneID,
+                    failureMessage: "Could not open a terminal tab."
                 )
-                let content = WorkspaceTabContent.terminal(workspaceID: worktree.id, id: session.id)
-                if let preferredPaneID {
-                    _ = createTab(in: preferredPaneID, content: content)
-                } else {
-                    openInPermanentTab(content: content)
-                }
+                try await startPendingHostedTerminalSession(
+                    session,
+                    in: worktree.id,
+                    workingDirectory: worktree.workingDirectory,
+                    launchProfile: .fastShell,
+                    traceSource: "shell"
+                )
                 persistTerminalRelaunchSnapshotIfNeeded()
                 WorkspacePerformanceRecorder.end(trace)
             } catch {
-                WorkspacePerformanceRecorder.end(
-                    trace,
-                    outcome: "failure",
-                    context: ["error": error.localizedDescription]
-                )
-                showLauncherUnavailableAlert(title: "Shell Unavailable", message: error.localizedDescription)
+                failShellLaunch(trace: trace, error: error)
             }
         }
     }
 
     func openRepositorySettings() {
         openInPermanentTab(content: .settings)
+    }
+
+    func focusWorkspacePaneIfNeeded(
+        _ preferredPaneID: PaneID?,
+        workspaceID: Workspace.ID
+    ) {
+        guard let preferredPaneID else { return }
+        store.send(.setWorkspaceFocusedPaneID(workspaceID: workspaceID, paneID: preferredPaneID))
+        renderWorkspaceLayout(for: workspaceID)
+    }
+
+    private func failShellLaunch(
+        trace: WorkspacePerformanceTrace,
+        error: Error
+    ) {
+        WorkspacePerformanceRecorder.end(
+            trace,
+            outcome: "failure",
+            context: ["error": error.localizedDescription]
+        )
+        showLauncherUnavailableAlert(
+            title: "Shell Unavailable",
+            message: error.localizedDescription
+        )
     }
 
     func openFilePickerForSelectedWorkspace(in paneID: PaneID) {
@@ -280,13 +311,19 @@ extension ContentView {
         alert.runModal()
     }
 
-    func confirmCloseCurrentRepository() async -> Bool {
+    func confirmCloseCurrentRepository(
+        dirtyPromptTitle: String = "Save changes before opening a new repository?",
+        dirtyPromptMessage: String = "Your changes will be lost if you don't save them.",
+        confirmationTitle: String = "Switch repositories?",
+        confirmationMessage: String = "This will close all tabs and switch the active repository.",
+        confirmationButtonTitle: String = "Add Repository"
+    ) async -> Bool {
         let dirtySessions = uniqueEditorSessions.filter { $0.isDirty }
         if !dirtySessions.isEmpty {
             let alert = NSAlert()
             alert.alertStyle = .warning
-            alert.messageText = "Save changes before opening a new repository?"
-            alert.informativeText = "Your changes will be lost if you don't save them."
+            alert.messageText = dirtyPromptTitle
+            alert.informativeText = dirtyPromptMessage
             alert.addButton(withTitle: "Save")
             alert.addButton(withTitle: "Don't Save")
             alert.addButton(withTitle: "Cancel")
@@ -313,9 +350,9 @@ extension ContentView {
 
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "Switch repositories?"
-        alert.informativeText = "This will close all tabs and switch the active repository."
-        alert.addButton(withTitle: "Add Repository")
+        alert.messageText = confirmationTitle
+        alert.informativeText = confirmationMessage
+        alert.addButton(withTitle: confirmationButtonTitle)
         alert.addButton(withTitle: "Cancel")
         return alert.runModal() == .alertFirstButtonReturn
     }

@@ -126,9 +126,10 @@ final class WorkspaceOperationalController {
         workingDirectory: URL? = nil,
         requestedCommand: String? = nil,
         stagedCommand: String? = nil,
-        attachCommand: String? = nil,
         tabIcon: String = "terminal",
         terminateHostedSessionOnClose: Bool = true,
+        startupPhase: GhosttyTerminalStartupPhase = .startingShell,
+        preferredViewportSize: HostedTerminalViewportSize? = nil,
         id: UUID = UUID()
     ) -> GhosttyTerminalSession {
         let session = terminalRegistry.createSession(
@@ -136,9 +137,10 @@ final class WorkspaceOperationalController {
             workingDirectory: workingDirectory,
             requestedCommand: requestedCommand,
             stagedCommand: stagedCommand,
-            attachCommand: attachCommand,
             tabIcon: tabIcon,
             terminateHostedSessionOnClose: terminateHostedSessionOnClose,
+            startupPhase: startupPhase,
+            preferredViewportSize: preferredViewportSize,
             id: id
         )
         broadcastSnapshot()

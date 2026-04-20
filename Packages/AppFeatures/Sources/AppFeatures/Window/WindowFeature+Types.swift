@@ -1,5 +1,6 @@
 import ComposableArchitecture
 import Foundation
+import RemoteCore
 import Split
 import Workspace
 
@@ -8,10 +9,14 @@ public extension WindowFeature {
     struct State: Equatable, Sendable {
         public var repositories: [Repository] = []
         public var worktreesByRepository: [Repository.ID: [Worktree]] = [:]
+        public var remoteRepositories: [RemoteRepositoryAuthority] = []
+        public var remoteWorktreesByRepository: [RemoteRepositoryAuthority.ID: [RemoteWorktree]] = [:]
         public var workspaceStatesByID: [Worktree.ID: WorktreeState] = [:]
         public var hostedWorkspaceContentByID: [Workspace.ID: HostedWorkspaceContentState] = [:]
         public var workflowWorkspacesByID: [Workspace.ID: WorkflowWorkspaceState] = [:]
         public var selectedRepositoryID: Repository.ID?
+        public var selectedRemoteRepositoryID: RemoteRepositoryAuthority.ID?
+        public var selectedRemoteWorktreeID: RemoteWorktree.ID?
         public var selectedWorkspaceID: Workspace.ID?
         public var workspaceShells: [Workspace.ID: WorkspaceShell] = [:]
         public var selectedTabID: TabID?
@@ -21,36 +26,45 @@ public extension WindowFeature {
         public var navigatorRevealRequest: NavigatorRevealRequest?
         public var activeSheet: Sheet?
         public var searchPresentation: SearchPresentation?
+        public var addRepositoryPresentation: AddRepositoryPresentation?
         public var workspaceCreationPresentation: WorkspaceCreationPresentation?
-        public var agentLaunchPresentation: AgentLaunchPresentation?
-        public var agentSessionLaunchRequest: AgentSessionLaunchRequest?
+        public var chatLaunchPresentation: ChatLaunchPresentation?
+        public var remoteRepositoryPresentation: RemoteRepositoryPresentation?
+        public var remoteWorktreeCreationPresentation: RemoteWorktreeCreationPresentation?
+        public var chatSessionLaunchRequest: ChatSessionLaunchRequest?
         public var isGitCommitSheetPresented = false
         public var isCreatePullRequestSheetPresented = false
         public var openRepositoryRequestID: UUID?
         public var editorCommandRequest: EditorCommandRequest?
         public var workspaceTabCloseRequest: WorkspaceTabCloseRequest?
         public var workspaceTransitionRequest: WorkspaceTransitionRequest?
+        public var remoteWorkspaceTransitionRequest: RemoteWorkspaceTransitionRequest?
         public var workspaceDiscardRequest: WorkspaceDiscardRequest?
         public var initializeRepositoryRequest: InitializeRepositoryRequest?
         public var saveDefaultLayoutRequestID: UUID?
         public var workspaceCommandRequest: WorkspaceCommandRequest?
-        public var focusAgentSessionRequest: FocusAgentSessionRequest?
+        public var focusChatSessionRequest: FocusChatSessionRequest?
+        public var remoteTerminalLaunchRequest: RemoteTerminalLaunchRequest?
         public var runProfileLaunchRequest: RunProfileLaunchRequest?
         public var runProfileStopRequest: RunProfileStopRequest?
         public var windowRelaunchRestoreRequest: WindowRelaunchRestoreRequest?
         public var isNotificationsPanelPresented = false
         public var isTerminalActivityNotificationsEnabled = true
-        public var isAgentActivityNotificationsEnabled = true
+        public var isChatActivityNotificationsEnabled = true
         public var operational = WorkspaceOperationalState()
         public var lastErrorMessage: String?
 
         public init(
             repositories: [Repository] = [],
             worktreesByRepository: [Repository.ID: [Worktree]] = [:],
+            remoteRepositories: [RemoteRepositoryAuthority] = [],
+            remoteWorktreesByRepository: [RemoteRepositoryAuthority.ID: [RemoteWorktree]] = [:],
             workspaceStatesByID: [Worktree.ID: WorktreeState] = [:],
             hostedWorkspaceContentByID: [Workspace.ID: HostedWorkspaceContentState] = [:],
             workflowWorkspacesByID: [Workspace.ID: WorkflowWorkspaceState] = [:],
             selectedRepositoryID: Repository.ID? = nil,
+            selectedRemoteRepositoryID: RemoteRepositoryAuthority.ID? = nil,
+            selectedRemoteWorktreeID: RemoteWorktree.ID? = nil,
             selectedWorkspaceID: Workspace.ID? = nil,
             workspaceShells: [Workspace.ID: WorkspaceShell] = [:],
             selectedTabID: TabID? = nil,
@@ -60,35 +74,44 @@ public extension WindowFeature {
             navigatorRevealRequest: NavigatorRevealRequest? = nil,
             activeSheet: Sheet? = nil,
             searchPresentation: SearchPresentation? = nil,
+            addRepositoryPresentation: AddRepositoryPresentation? = nil,
             workspaceCreationPresentation: WorkspaceCreationPresentation? = nil,
-            agentLaunchPresentation: AgentLaunchPresentation? = nil,
-            agentSessionLaunchRequest: AgentSessionLaunchRequest? = nil,
+            chatLaunchPresentation: ChatLaunchPresentation? = nil,
+            remoteRepositoryPresentation: RemoteRepositoryPresentation? = nil,
+            remoteWorktreeCreationPresentation: RemoteWorktreeCreationPresentation? = nil,
+            chatSessionLaunchRequest: ChatSessionLaunchRequest? = nil,
             isGitCommitSheetPresented: Bool = false,
             isCreatePullRequestSheetPresented: Bool = false,
             openRepositoryRequestID: UUID? = nil,
             editorCommandRequest: EditorCommandRequest? = nil,
             workspaceTabCloseRequest: WorkspaceTabCloseRequest? = nil,
             workspaceTransitionRequest: WorkspaceTransitionRequest? = nil,
+            remoteWorkspaceTransitionRequest: RemoteWorkspaceTransitionRequest? = nil,
             workspaceDiscardRequest: WorkspaceDiscardRequest? = nil,
             initializeRepositoryRequest: InitializeRepositoryRequest? = nil,
             saveDefaultLayoutRequestID: UUID? = nil,
             workspaceCommandRequest: WorkspaceCommandRequest? = nil,
-            focusAgentSessionRequest: FocusAgentSessionRequest? = nil,
+            focusChatSessionRequest: FocusChatSessionRequest? = nil,
+            remoteTerminalLaunchRequest: RemoteTerminalLaunchRequest? = nil,
             runProfileLaunchRequest: RunProfileLaunchRequest? = nil,
             runProfileStopRequest: RunProfileStopRequest? = nil,
             windowRelaunchRestoreRequest: WindowRelaunchRestoreRequest? = nil,
             isNotificationsPanelPresented: Bool = false,
             isTerminalActivityNotificationsEnabled: Bool = true,
-            isAgentActivityNotificationsEnabled: Bool = true,
+            isChatActivityNotificationsEnabled: Bool = true,
             operational: WorkspaceOperationalState = WorkspaceOperationalState(),
             lastErrorMessage: String? = nil
         ) {
             self.repositories = repositories
             self.worktreesByRepository = worktreesByRepository
+            self.remoteRepositories = remoteRepositories
+            self.remoteWorktreesByRepository = remoteWorktreesByRepository
             self.workspaceStatesByID = workspaceStatesByID
             self.hostedWorkspaceContentByID = hostedWorkspaceContentByID
             self.workflowWorkspacesByID = workflowWorkspacesByID
             self.selectedRepositoryID = selectedRepositoryID
+            self.selectedRemoteRepositoryID = selectedRemoteRepositoryID
+            self.selectedRemoteWorktreeID = selectedRemoteWorktreeID
             self.selectedWorkspaceID = selectedWorkspaceID
             self.workspaceShells = workspaceShells
             self.selectedTabID = selectedTabID
@@ -98,26 +121,31 @@ public extension WindowFeature {
             self.navigatorRevealRequest = navigatorRevealRequest
             self.activeSheet = activeSheet
             self.searchPresentation = searchPresentation
+            self.addRepositoryPresentation = addRepositoryPresentation
             self.workspaceCreationPresentation = workspaceCreationPresentation
-            self.agentLaunchPresentation = agentLaunchPresentation
-            self.agentSessionLaunchRequest = agentSessionLaunchRequest
+            self.chatLaunchPresentation = chatLaunchPresentation
+            self.remoteRepositoryPresentation = remoteRepositoryPresentation
+            self.remoteWorktreeCreationPresentation = remoteWorktreeCreationPresentation
+            self.chatSessionLaunchRequest = chatSessionLaunchRequest
             self.isGitCommitSheetPresented = isGitCommitSheetPresented
             self.isCreatePullRequestSheetPresented = isCreatePullRequestSheetPresented
             self.openRepositoryRequestID = openRepositoryRequestID
             self.editorCommandRequest = editorCommandRequest
             self.workspaceTabCloseRequest = workspaceTabCloseRequest
             self.workspaceTransitionRequest = workspaceTransitionRequest
+            self.remoteWorkspaceTransitionRequest = remoteWorkspaceTransitionRequest
             self.workspaceDiscardRequest = workspaceDiscardRequest
             self.initializeRepositoryRequest = initializeRepositoryRequest
             self.saveDefaultLayoutRequestID = saveDefaultLayoutRequestID
             self.workspaceCommandRequest = workspaceCommandRequest
-            self.focusAgentSessionRequest = focusAgentSessionRequest
+            self.focusChatSessionRequest = focusChatSessionRequest
+            self.remoteTerminalLaunchRequest = remoteTerminalLaunchRequest
             self.runProfileLaunchRequest = runProfileLaunchRequest
             self.runProfileStopRequest = runProfileStopRequest
             self.windowRelaunchRestoreRequest = windowRelaunchRestoreRequest
             self.isNotificationsPanelPresented = isNotificationsPanelPresented
             self.isTerminalActivityNotificationsEnabled = isTerminalActivityNotificationsEnabled
-            self.isAgentActivityNotificationsEnabled = isAgentActivityNotificationsEnabled
+            self.isChatActivityNotificationsEnabled = isChatActivityNotificationsEnabled
             self.operational = operational
             self.lastErrorMessage = lastErrorMessage
             normalizeSelection()
@@ -125,6 +153,22 @@ public extension WindowFeature {
     }
 
     enum Action: Equatable {
+        case loadRemoteRepositories
+        case loadRemoteRepositoriesResponse(TaskResult<[RemoteRepositoryAuthority]>)
+        case setRemoteRepositories([RemoteRepositoryAuthority])
+        case setRemoteWorktrees(
+            repositoryID: RemoteRepositoryAuthority.ID,
+            worktrees: [RemoteWorktree]
+        )
+        case upsertRemoteRepository(RemoteRepositoryAuthority)
+        case removeRemoteRepository(RemoteRepositoryAuthority.ID)
+        case selectRemoteRepository(RemoteRepositoryAuthority.ID?)
+        case selectRemoteWorktree(
+            repositoryID: RemoteRepositoryAuthority.ID,
+            workspaceID: RemoteWorktree.ID
+        )
+        case setRemoteRepositoryPresentation(RemoteRepositoryPresentation?)
+        case setRemoteWorktreeCreationPresentation(RemoteWorktreeCreationPresentation?)
         case openRepository(URL)
         case openRepositoryResponse(TaskResult<Repository>)
         case openResolvedRepositories([Repository])
@@ -212,12 +256,14 @@ public extension WindowFeature {
         case requestNavigatorReveal(Workspace.ID)
         case setNavigatorRevealRequest(NavigatorRevealRequest?)
         case openSearch(SearchMode, initialQuery: String)
+        case requestAddRepository
+        case setAddRepositoryPresentation(AddRepositoryPresentation?)
         case presentWorkspaceCreation(repositoryID: Repository.ID, mode: WorkspaceCreationMode)
         case setWorkspaceCreationPresentation(WorkspaceCreationPresentation?)
-        case setAgentLaunchPresentation(AgentLaunchPresentation?)
-        case requestAgentSessionLaunch(AgentSessionLaunchIntent)
-        case agentSessionLaunchResolved(AgentSessionLaunchResolution)
-        case setAgentSessionLaunchRequest(AgentSessionLaunchRequest?)
+        case setChatLaunchPresentation(ChatLaunchPresentation?)
+        case requestChatSessionLaunch(ChatSessionLaunchIntent)
+        case chatSessionLaunchResolved(ChatSessionLaunchResolution)
+        case setChatSessionLaunchRequest(ChatSessionLaunchRequest?)
         case setGitCommitSheetPresented(Bool)
         case setCreatePullRequestSheetPresented(Bool)
         case requestOpenRepository
@@ -231,6 +277,11 @@ public extension WindowFeature {
         case requestWorkspaceSelectionAtIndex(Int)
         case requestAdjacentWorkspaceSelection(Int)
         case setWorkspaceTransitionRequest(WorkspaceTransitionRequest?)
+        case requestRemoteWorktreeSelection(
+            repositoryID: RemoteRepositoryAuthority.ID,
+            workspaceID: RemoteWorktree.ID
+        )
+        case setRemoteWorkspaceTransitionRequest(RemoteWorkspaceTransitionRequest?)
         case requestWorkspaceDiscard(workspaceID: Workspace.ID, repositoryID: Repository.ID)
         case setWorkspaceDiscardRequest(WorkspaceDiscardRequest?)
         case requestInitializeRepository(Repository.ID)
@@ -239,8 +290,39 @@ public extension WindowFeature {
         case setSaveDefaultLayoutRequestID(UUID?)
         case requestWorkspaceCommand(WorkspaceCommand)
         case setWorkspaceCommandRequest(WorkspaceCommandRequest?)
-        case requestFocusAgentSession(AgentSessionID)
-        case setFocusAgentSessionRequest(FocusAgentSessionRequest?)
+        case requestFocusChatSession(ChatSessionID)
+        case setFocusChatSessionRequest(FocusChatSessionRequest?)
+        case refreshRemoteRepository(RemoteRepositoryAuthority.ID)
+        case refreshRemoteRepositoryResponse(
+            repositoryID: RemoteRepositoryAuthority.ID,
+            result: TaskResult<[RemoteWorktree]>
+        )
+        case createRemoteWorktree(RemoteWorktreeDraft)
+        case createRemoteWorktreeResponse(TaskResult<RemoteWorktreeCreationResult>)
+        case fetchRemoteRepository(RemoteRepositoryAuthority.ID)
+        case fetchRemoteRepositoryResponse(
+            repositoryID: RemoteRepositoryAuthority.ID,
+            result: TaskResult<[RemoteWorktree]>
+        )
+        case pullRemoteWorktree(
+            repositoryID: RemoteRepositoryAuthority.ID,
+            workspaceID: RemoteWorktree.ID
+        )
+        case pullRemoteWorktreeResponse(
+            repositoryID: RemoteRepositoryAuthority.ID,
+            result: TaskResult<[RemoteWorktree]>
+        )
+        case pushRemoteWorktree(
+            repositoryID: RemoteRepositoryAuthority.ID,
+            workspaceID: RemoteWorktree.ID
+        )
+        case pushRemoteWorktreeResponse(
+            repositoryID: RemoteRepositoryAuthority.ID,
+            result: TaskResult<[RemoteWorktree]>
+        )
+        case requestOpenRemoteTerminal(preferredPaneID: PaneID?)
+        case remoteTerminalLaunchPrepared(TaskResult<RemoteTerminalLaunchRequest>)
+        case setRemoteTerminalLaunchRequest(RemoteTerminalLaunchRequest?)
         case runProfileLaunchRequestResolved(RunProfileLaunchResolution)
         case setRunProfileLaunchRequest(RunProfileLaunchRequest?)
         case runProfileLaunchCompleted(RunProfileLaunchResult)
@@ -340,7 +422,7 @@ public extension WindowFeature {
         case syncWorkspaceOperationalState(WorkspaceOperationalSyncMode)
         case markTerminalAttentionRead(workspaceID: Workspace.ID?, terminalID: UUID)
         case clearAttentionNotification(UUID)
-        case setWorkspaceNotificationPreferences(terminalActivity: Bool, agentActivity: Bool)
+        case setWorkspaceNotificationPreferences(terminalActivity: Bool, chatActivity: Bool)
         case requestWorkspaceOperationalMetadataRefresh(worktreeIDs: [Workspace.ID], repositoryID: Repository.ID?)
         case setWorkspaceRunState(workspaceID: Workspace.ID, WorkspaceRunState?)
         case removeWorkspaceRunTerminal(UUID)

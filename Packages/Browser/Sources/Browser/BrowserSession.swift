@@ -4,8 +4,8 @@
 // Copyright © 2026 Devys. All rights reserved.
 
 import Foundation
-import WebKit
 import Observation
+@preconcurrency import WebKit
 
 /// A browser session that owns a WKWebView and tracks its state.
 ///
@@ -63,6 +63,9 @@ public final class BrowserSession: Identifiable {
     /// KVO observations
     private var observations: [NSKeyValueObservation] = []
 
+    /// Prevent stale callbacks from touching state during teardown.
+    private var isClosing = false
+
     // MARK: - Initialization
 
     public init(id: UUID = UUID(), url: URL) {
@@ -78,6 +81,8 @@ public final class BrowserSession: Identifiable {
         if let existing = webView {
             return existing
         }
+
+        isClosing = false
 
         let config = WKWebViewConfiguration()
         config.preferences.setValue(true, forKey: "developerExtrasEnabled")
@@ -98,39 +103,45 @@ public final class BrowserSession: Identifiable {
     private func setupObservers(for webView: WKWebView) {
         observations = [
             webView.observe(\.url) { [weak self] webView, _ in
-                MainActor.assumeIsolated {
+                Task { @MainActor [weak self] in
                     self?.syncState(from: webView)
                 }
             },
             webView.observe(\.title) { [weak self] webView, _ in
-                MainActor.assumeIsolated {
+                Task { @MainActor [weak self] in
                     self?.syncState(from: webView)
                 }
             },
             webView.observe(\.canGoBack) { [weak self] webView, _ in
-                MainActor.assumeIsolated {
-                    self?.canGoBack = webView.canGoBack
+                Task { @MainActor [weak self] in
+                    guard let self, self.isManaging(webView) else { return }
+                    self.canGoBack = webView.canGoBack
                 }
             },
             webView.observe(\.canGoForward) { [weak self] webView, _ in
-                MainActor.assumeIsolated {
-                    self?.canGoForward = webView.canGoForward
+                Task { @MainActor [weak self] in
+                    guard let self, self.isManaging(webView) else { return }
+                    self.canGoForward = webView.canGoForward
                 }
             },
             webView.observe(\.isLoading) { [weak self] webView, _ in
-                MainActor.assumeIsolated {
-                    self?.isLoading = webView.isLoading
+                Task { @MainActor [weak self] in
+                    guard let self, self.isManaging(webView) else { return }
+                    self.isLoading = webView.isLoading
                 }
             },
             webView.observe(\.estimatedProgress) { [weak self] webView, _ in
-                MainActor.assumeIsolated {
-                    self?.loadProgress = webView.estimatedProgress
+                Task { @MainActor [weak self] in
+                    guard let self, self.isManaging(webView) else { return }
+                    self.loadProgress = webView.estimatedProgress
                 }
             }
         ]
     }
 
     private func syncState(from webView: WKWebView) {
+        guard isManaging(webView) else { return }
+
         if let newURL = webView.url, newURL != url {
             url = newURL
         }
@@ -206,6 +217,44 @@ public final class BrowserSession: Identifiable {
 
     func clearError() {
         errorMessage = nil
+    }
+
+    // MARK: - Teardown
+
+    func setNavigationDelegate(_ delegate: WKNavigationDelegate?) {
+        webView?.navigationDelegate = delegate
+    }
+
+    public func beginRemoval() {
+        guard !isClosing else { return }
+        isClosing = true
+        webView?.stopLoading()
+        isLoading = false
+        loadProgress = 0
+    }
+
+    func dismantleHostedWebView(_ hostedWebView: WKWebView) {
+        hostedWebView.stopLoading()
+        hostedWebView.navigationDelegate = nil
+        hostedWebView.uiDelegate = nil
+
+        guard webView === hostedWebView else { return }
+
+        invalidateObservations()
+        webView = nil
+        canGoBack = false
+        canGoForward = false
+        isLoading = false
+        loadProgress = 0
+    }
+
+    func isManaging(_ webView: WKWebView) -> Bool {
+        self.webView === webView && !isClosing
+    }
+
+    private func invalidateObservations() {
+        observations.forEach { $0.invalidate() }
+        observations.removeAll()
     }
 
     // MARK: - URL Normalization

@@ -209,8 +209,7 @@ private extension WorkflowExecutionController {
     }
 
     func hostedSessionsByID() async -> [UUID: HostedTerminalSessionRecord] {
-        guard restoreTerminalSessionsEnabled(),
-              let persistentTerminalHostController,
+        guard let persistentTerminalHostController,
               let sessions = try? await persistentTerminalHostController.listSessions() else {
             return [:]
         }
@@ -222,30 +221,30 @@ private extension WorkflowExecutionController {
         request: WorkflowNodeLaunchRequest,
         command: String
     ) async throws -> (session: GhosttyTerminalSession, isHostedSession: Bool) {
-        guard restoreTerminalSessionsEnabled(),
-              let persistentTerminalHostController else {
-            return (
-                workspaceOperationalController.createTerminalSession(
-                    in: request.workspaceID,
-                    workingDirectory: request.workingDirectoryURL,
-                    requestedCommand: command
-                ),
-                false
+        guard let persistentTerminalHostController else {
+            throw NSError(
+                domain: "WorkflowExecutionController",
+                code: 2,
+                userInfo: [NSLocalizedDescriptionKey: "Persistent terminal host is unavailable."]
             )
         }
 
         let record = try await persistentTerminalHostController.createSession(
             workspaceID: request.workspaceID,
             workingDirectory: request.workingDirectoryURL,
-            launchCommand: command
+            launchCommand: command,
+            launchProfile: .compatibilityShell,
+            persistOnDisconnect: restoreTerminalSessionsEnabled()
         )
-        let attachCommand = await persistentTerminalHostController.attachCommand(for: record.id)
         workspaceOperationalController.upsertHostedSession(record)
         let session = workspaceOperationalController.createTerminalSession(
             in: request.workspaceID,
             workingDirectory: record.workingDirectory ?? request.workingDirectoryURL,
-            attachCommand: attachCommand,
+            requestedCommand: command,
             terminateHostedSessionOnClose: true,
+            preferredViewportSize: record.viewportSize.map {
+                HostedTerminalViewportSize(cols: $0.cols, rows: $0.rows)
+            },
             id: record.id
         )
         return (session, true)
@@ -255,18 +254,19 @@ private extension WorkflowExecutionController {
         _ record: HostedTerminalSessionRecord,
         workspaceID: Workspace.ID
     ) async -> GhosttyTerminalSession? {
-        guard restoreTerminalSessionsEnabled(),
-              let persistentTerminalHostController else {
+        guard restoreTerminalSessionsEnabled() else {
             return nil
         }
 
-        let attachCommand = await persistentTerminalHostController.attachCommand(for: record.id)
         workspaceOperationalController.upsertHostedSession(record)
         return workspaceOperationalController.createTerminalSession(
             in: workspaceID,
             workingDirectory: record.workingDirectory,
-            attachCommand: attachCommand,
+            requestedCommand: record.launchCommand,
             terminateHostedSessionOnClose: true,
+            preferredViewportSize: record.viewportSize.map {
+                HostedTerminalViewportSize(cols: $0.cols, rows: $0.rows)
+            },
             id: record.id
         )
     }

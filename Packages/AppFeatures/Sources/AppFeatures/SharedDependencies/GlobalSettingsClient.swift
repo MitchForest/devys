@@ -44,7 +44,7 @@ public extension GlobalSettingsClient {
                     shell: appSettings.shell,
                     explorer: appSettings.explorer,
                     appearance: appSettings.appearance,
-                    agent: appSettings.agent,
+                    chat: appSettings.chat,
                     notifications: appSettings.notifications,
                     restore: appSettings.restore,
                     shortcuts: appSettings.shortcuts
@@ -54,7 +54,7 @@ public extension GlobalSettingsClient {
                 appSettings.shell = settings.shell
                 appSettings.explorer = settings.explorer
                 appSettings.appearance = settings.appearance
-                appSettings.agent = settings.agent
+                appSettings.chat = settings.chat
                 appSettings.notifications = settings.notifications
                 appSettings.restore = settings.restore
                 appSettings.shortcuts = settings.shortcuts

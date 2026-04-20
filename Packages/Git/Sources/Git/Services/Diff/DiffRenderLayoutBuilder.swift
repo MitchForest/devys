@@ -14,6 +14,16 @@ struct DiffLayoutContext {
     let sourceDocuments: DiffSourceDocuments
 }
 
+enum DiffChromeMetrics {
+    static let hunkActionBarHeight: CGFloat = 30
+
+    static func hiddenHunkSpacerRowCount(lineHeight: CGFloat) -> Int {
+        let normalizedLineHeight = max(1, lineHeight)
+        let reservedRows = Int(ceil(hunkActionBarHeight / normalizedLineHeight))
+        return max(0, reservedRows - 1)
+    }
+}
+
 enum DiffRenderLayoutBuilder {
     static func build(
         snapshot: DiffSnapshot,

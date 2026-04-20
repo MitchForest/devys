@@ -1,6 +1,7 @@
 import AppFeatures
 import ComposableArchitecture
 import Foundation
+import RemoteCore
 import Testing
 import Workspace
 
@@ -24,6 +25,80 @@ struct WindowFeatureSelectionTests {
         await store.send(.selectRepository(secondRepository.id)) {
             $0.selectedRepositoryID = secondRepository.id
             $0.selectedWorkspaceID = nil
+        }
+    }
+
+    @Test("Selecting a remote repository clears local selection and restores the remote worktree")
+    @MainActor
+    func selectRemoteRepositoryClearsLocalSelection() async {
+        let localRepository = Repository(rootURL: URL(fileURLWithPath: "/tmp/devys-project"))
+        let remoteRepository = RemoteRepositoryAuthority(
+            sshTarget: "mac-mini",
+            displayName: "devys",
+            repositoryPath: "/Users/mitch/Code/devys"
+        )
+        let remoteWorktree = RemoteWorktree(
+            repositoryID: remoteRepository.id,
+            branchName: "feature/remote-agent",
+            remotePath: "/Users/mitch/Code/devys-feature-remote-agent",
+            isPrimary: false
+        )
+        let store = TestStore(
+            initialState: WindowFeature.State(
+                repositories: [localRepository],
+                remoteRepositories: [remoteRepository],
+                remoteWorktreesByRepository: [remoteRepository.id: [remoteWorktree]],
+                selectedRepositoryID: localRepository.id,
+                selectedWorkspaceID: "/tmp/devys-project/workspaces/main"
+            )
+        ) {
+            WindowFeature()
+        }
+
+        await store.send(WindowFeature.Action.selectRemoteRepository(remoteRepository.id)) {
+            $0.selectedRepositoryID = nil
+            $0.selectedRemoteRepositoryID = remoteRepository.id
+            $0.selectedRemoteWorktreeID = remoteWorktree.id
+            $0.selectedWorkspaceID = remoteWorktree.id
+        }
+    }
+
+    @Test("Selecting a local repository clears remote authority selection")
+    @MainActor
+    func selectLocalRepositoryClearsRemoteSelection() async {
+        let localRepository = Repository(rootURL: URL(fileURLWithPath: "/tmp/devys-project"))
+        let remoteRepository = RemoteRepositoryAuthority(
+            sshTarget: "mac-mini",
+            displayName: "devys",
+            repositoryPath: "/Users/mitch/Code/devys"
+        )
+        let remoteWorktree = RemoteWorktree(
+            repositoryID: remoteRepository.id,
+            branchName: "feature/remote-agent",
+            remotePath: "/Users/mitch/Code/devys-feature-remote-agent",
+            isPrimary: false
+        )
+        let store = TestStore(
+            initialState: WindowFeature.State(
+                repositories: [localRepository],
+                remoteRepositories: [remoteRepository],
+                remoteWorktreesByRepository: [remoteRepository.id: [remoteWorktree]],
+                selectedRemoteRepositoryID: remoteRepository.id,
+                selectedRemoteWorktreeID: remoteWorktree.id,
+                selectedWorkspaceID: remoteWorktree.id
+            )
+        ) {
+            WindowFeature()
+        }
+
+        await store.send(WindowFeature.Action.selectRepository(localRepository.id)) {
+            $0.selectedRepositoryID = localRepository.id
+            $0.selectedRemoteRepositoryID = nil
+            $0.selectedRemoteWorktreeID = nil
+            $0.selectedWorkspaceID = nil
+            $0.workspaceShells = [
+                remoteWorktree.id: WindowFeature.WorkspaceShell(activeSidebar: .files)
+            ]
         }
     }
 

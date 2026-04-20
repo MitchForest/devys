@@ -28,10 +28,10 @@ struct WindowFeaturePresentationTests {
         }
     }
 
-    @Test("Agent launch and git presentations are reducer-owned")
+    @Test("Chat launch and git presentations are reducer-owned")
     @MainActor
     func shellPresentations() async {
-        let launchPresentation = AgentLaunchPresentation(
+        let launchPresentation = ChatLaunchPresentation(
             workspaceID: "/tmp/devys-project/workspaces/feature",
             initialAttachments: [.snippet(language: "swift", content: "print(\"hi\")")]
         )
@@ -39,8 +39,8 @@ struct WindowFeaturePresentationTests {
             WindowFeature()
         }
 
-        await store.send(.setAgentLaunchPresentation(launchPresentation)) {
-            $0.agentLaunchPresentation = launchPresentation
+        await store.send(.setChatLaunchPresentation(launchPresentation)) {
+            $0.chatLaunchPresentation = launchPresentation
         }
 
         await store.send(.setGitCommitSheetPresented(true)) {
@@ -51,8 +51,8 @@ struct WindowFeaturePresentationTests {
             $0.isCreatePullRequestSheetPresented = true
         }
 
-        await store.send(.setAgentLaunchPresentation(nil)) {
-            $0.agentLaunchPresentation = nil
+        await store.send(.setChatLaunchPresentation(nil)) {
+            $0.chatLaunchPresentation = nil
         }
     }
 
@@ -69,9 +69,9 @@ struct WindowFeaturePresentationTests {
                     isLoading: false
                 )
             ],
-            agentSessions: [
-                HostedAgentSessionSummary(
-                    sessionID: AgentSessionID(rawValue: "session-1"),
+            chatSessions: [
+                HostedChatSessionSummary(
+                    sessionID: ChatSessionID(rawValue: "session-1"),
                     kind: .codex,
                     title: "Codex",
                     icon: "chevron.left.forwardslash.chevron.right",

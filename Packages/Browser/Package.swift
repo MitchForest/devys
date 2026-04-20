@@ -25,6 +25,10 @@ let package = Package(
             swiftSettings: [
                 .enableExperimentalFeature("StrictConcurrency")
             ]
+        ),
+        .testTarget(
+            name: "BrowserTests",
+            dependencies: ["Browser"]
         )
     ],
     swiftLanguageModes: [.v6]

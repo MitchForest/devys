@@ -1,5 +1,6 @@
 import ACPClientKit
 import AppFeatures
+import Browser
 import Editor
 import Foundation
 import Testing
@@ -42,14 +43,14 @@ struct HostedWorkspaceContentBridgeTests {
         #expect(publishedByWorkspaceID[workspaceID]?.editorDocuments.isEmpty == true)
     }
 
-    @Test("Bridge republishes agent summaries when session identity and presentation change")
+    @Test("Bridge republishes chat summaries when session identity and presentation change")
     @MainActor
-    func republishesAgentSummariesForAgentRuntimeChanges() async {
-        let workspaceID = Workspace.ID("/tmp/devys-hosted-agent")
+    func republishesChatSummariesForChatRuntimeChanges() async {
+        let workspaceID = Workspace.ID("/tmp/devys-hosted-chat")
         let descriptor = ACPAgentDescriptor.descriptor(for: .codex)
-        let runtime = AgentSessionRuntime(
+        let runtime = ChatSessionRuntime(
             workspaceID: workspaceID,
-            sessionID: AgentSessionID(rawValue: "pending-agent"),
+            sessionID: ChatSessionID(rawValue: "pending-chat"),
             descriptor: descriptor
         )
         let bridge = HostedWorkspaceContentBridge()
@@ -58,29 +59,69 @@ struct HostedWorkspaceContentBridgeTests {
             publishedByWorkspaceID[workspaceID] = content
         }
 
-        bridge.attachAgentSession(runtime, workspaceID: workspaceID)
+        bridge.attachChatSession(runtime, workspaceID: workspaceID)
 
         #expect(
-            publishedByWorkspaceID[workspaceID]?.agentSessions.map { $0.sessionID.rawValue } == ["pending-agent"]
+            publishedByWorkspaceID[workspaceID]?.chatSessions.map { $0.sessionID.rawValue } == ["pending-chat"]
         )
 
         runtime.prepareForRestore(title: "Codex Restore", subtitle: "Restoring")
         await flushObservationUpdates()
 
-        #expect(publishedByWorkspaceID[workspaceID]?.agentSessions.first?.subtitle == "Restoring")
-        #expect(publishedByWorkspaceID[workspaceID]?.agentSessions.first?.isBusy == true)
+        #expect(publishedByWorkspaceID[workspaceID]?.chatSessions.first?.subtitle == "Restoring")
+        #expect(publishedByWorkspaceID[workspaceID]?.chatSessions.first?.isBusy == true)
 
-        let restoredSessionID = AgentSessionID(rawValue: "session-123")
+        let restoredSessionID = ChatSessionID(rawValue: "session-123")
         runtime.updateSessionIdentity(sessionID: restoredSessionID, descriptor: descriptor)
         await flushObservationUpdates()
 
         #expect(
-            publishedByWorkspaceID[workspaceID]?.agentSessions.map { $0.sessionID.rawValue } == ["session-123"]
+            publishedByWorkspaceID[workspaceID]?.chatSessions.map { $0.sessionID.rawValue } == ["session-123"]
         )
 
-        bridge.detachAgentSession(runtime, workspaceID: workspaceID)
+        bridge.detachChatSession(runtime, workspaceID: workspaceID)
 
-        #expect(publishedByWorkspaceID[workspaceID]?.agentSessions.isEmpty == true)
+        #expect(publishedByWorkspaceID[workspaceID]?.chatSessions.isEmpty == true)
+    }
+
+    @Test("Bridge republishes browser summaries when the browser session URL changes")
+    @MainActor
+    func republishesBrowserSummariesForBrowserSessionChanges() async throws {
+        let workspaceID = Workspace.ID("/tmp/devys-hosted-browser")
+        let bridge = HostedWorkspaceContentBridge()
+        var publishedByWorkspaceID: [Workspace.ID: HostedWorkspaceContentState] = [:]
+        bridge.setPublishHandler { workspaceID, content in
+            publishedByWorkspaceID[workspaceID] = content
+        }
+
+        let initialURL = try #require(URL(string: "http://localhost:3000"))
+        let updatedURL = try #require(URL(string: "https://example.com/docs"))
+        let session = BrowserSession(url: initialURL)
+
+        bridge.attachBrowserSession(session, workspaceID: workspaceID)
+
+        #expect(
+            publishedByWorkspaceID[workspaceID]?.browserSessions.map(\.url.absoluteString)
+            == ["http://localhost:3000"]
+        )
+        #expect(
+            publishedByWorkspaceID[workspaceID]?.browserSessions.first?.title == "localhost"
+        )
+
+        session.load(url: updatedURL)
+        await flushObservationUpdates()
+
+        #expect(
+            publishedByWorkspaceID[workspaceID]?.browserSessions.map(\.url.absoluteString)
+            == ["https://example.com/docs"]
+        )
+        #expect(
+            publishedByWorkspaceID[workspaceID]?.browserSessions.first?.title == "example.com"
+        )
+
+        bridge.detachBrowserSession(session, workspaceID: workspaceID)
+
+        #expect(publishedByWorkspaceID[workspaceID]?.browserSessions.isEmpty == true)
     }
 }
 

@@ -169,6 +169,48 @@ struct WindowFeatureCatalogEffectTests {
         #expect(recorder.savedRepositories == [[secondRepository]])
         #expect(recorder.savedWorkspaceStates == [[WorktreeState(worktreeId: secondWorktree.id)]])
     }
+
+    @Test("Removing the final repository persists an empty catalog")
+    @MainActor
+    func removeFinalRepositoryPersistsEmptyCatalog() async {
+        let repository = Repository(rootURL: URL(fileURLWithPath: "/tmp/devys-remove-last"))
+        let worktree = Worktree(
+            workingDirectory: repository.rootURL.appendingPathComponent("feature-a"),
+            repositoryRootURL: repository.rootURL
+        )
+        let recorder = CatalogPersistenceRecorder()
+        let store = TestStore(
+            initialState: WindowFeature.State(
+                repositories: [repository],
+                worktreesByRepository: [repository.id: [worktree]],
+                workspaceStatesByID: [
+                    worktree.id: WorktreeState(worktreeId: worktree.id)
+                ],
+                selectedRepositoryID: repository.id,
+                selectedWorkspaceID: worktree.id
+            )
+        ) {
+            WindowFeature()
+        } withDependencies: {
+            $0.workspaceCatalogPersistenceClient.saveRepositories = { repositories in
+                recorder.savedRepositories.append(repositories)
+            }
+            $0.workspaceCatalogPersistenceClient.saveWorkspaceStates = { states in
+                recorder.savedWorkspaceStates.append(states)
+            }
+        }
+
+        await store.send(.removeRepository(repository.id)) {
+            $0.repositories = []
+            $0.worktreesByRepository = [:]
+            $0.workspaceStatesByID = [:]
+            $0.selectedRepositoryID = nil
+            $0.selectedWorkspaceID = nil
+        }
+
+        #expect(recorder.savedRepositories == [[]])
+        #expect(recorder.savedWorkspaceStates == [[]])
+    }
 }
 
 @MainActor

@@ -116,11 +116,11 @@ struct RestoreSettingsSection: View {
                 )
 
                 SettingsToggle(
-                    title: "Restore agent sessions",
-                    description: "Reopen persisted Agents tabs and attempt ACP session restore when supported",
+                    title: "Restore chats",
+                    description: "Reopen persisted chat tabs and attempt ACP session restore when supported",
                     isOn: Binding(
-                        get: { appSettings.restore.restoreAgentSessions },
-                        set: { appSettings.restore.restoreAgentSessions = $0 }
+                        get: { appSettings.restore.restoreChatSessions },
+                        set: { appSettings.restore.restoreChatSessions = $0 }
                     )
                 )
             }
@@ -146,13 +146,13 @@ struct NotificationSettingsSection: View {
                 )
 
                 SettingsToggle(
-                    title: "Agent activity",
+                    title: "Chat activity",
                     description:
-                        "Show agent waiting or completed notifications for each workspace " +
+                        "Show chat waiting or completed notifications for each workspace " +
                         "when the active launcher supports it",
                     isOn: Binding(
-                        get: { appSettings.notifications.agentActivity },
-                        set: { appSettings.notifications.agentActivity = $0 }
+                        get: { appSettings.notifications.chatActivity },
+                        set: { appSettings.notifications.chatActivity = $0 }
                     )
                 )
             }

@@ -14,9 +14,9 @@ final class HostedWorkspaceContentBridge {
         var lastPublishedURL: URL?
     }
 
-    private struct AgentTracking {
+    private struct ChatTracking {
         let workspaceID: Workspace.ID
-        var lastPublishedSessionID: AgentSessionID?
+        var lastPublishedSessionID: ChatSessionID?
     }
 
     private struct BrowserTracking {
@@ -29,8 +29,8 @@ final class HostedWorkspaceContentBridge {
     private var editorTrackingBySessionObjectID: [ObjectIdentifier: EditorTracking] = [:]
     private var editorSummariesByWorkspaceID: [Workspace.ID: [URL: HostedEditorDocumentSummary]] = [:]
 
-    private var agentTrackingByRuntimeObjectID: [ObjectIdentifier: AgentTracking] = [:]
-    private var agentSummariesByWorkspaceID: [Workspace.ID: [AgentSessionID: HostedAgentSessionSummary]] = [:]
+    private var chatTrackingByRuntimeObjectID: [ObjectIdentifier: ChatTracking] = [:]
+    private var chatSummariesByWorkspaceID: [Workspace.ID: [ChatSessionID: HostedChatSessionSummary]] = [:]
 
     private var browserTrackingBySessionObjectID: [ObjectIdentifier: BrowserTracking] = [:]
     private var browserSummariesByWorkspaceID: [Workspace.ID: [UUID: HostedBrowserSessionSummary]] = [:]
@@ -86,20 +86,20 @@ final class HostedWorkspaceContentBridge {
         }
     }
 
-    func attachAgentSession(_ runtime: AgentSessionRuntime, workspaceID: Workspace.ID) {
+    func attachChatSession(_ runtime: ChatSessionRuntime, workspaceID: Workspace.ID) {
         let runtimeObjectID = ObjectIdentifier(runtime)
-        if let tracking = agentTrackingByRuntimeObjectID[runtimeObjectID],
+        if let tracking = chatTrackingByRuntimeObjectID[runtimeObjectID],
            tracking.workspaceID == workspaceID {
-            publishAgentSummary(for: runtime, runtimeObjectID: runtimeObjectID)
+            publishChatSummary(for: runtime, runtimeObjectID: runtimeObjectID)
             return
         }
 
-        agentTrackingByRuntimeObjectID[runtimeObjectID] = AgentTracking(
+        chatTrackingByRuntimeObjectID[runtimeObjectID] = ChatTracking(
             workspaceID: workspaceID,
             lastPublishedSessionID: nil
         )
-        publishAgentSummary(for: runtime, runtimeObjectID: runtimeObjectID)
-        observeAgentSummary(for: runtime, runtimeObjectID: runtimeObjectID)
+        publishChatSummary(for: runtime, runtimeObjectID: runtimeObjectID)
+        observeChatSummary(for: runtime, runtimeObjectID: runtimeObjectID)
     }
 
     func attachBrowserSession(_ session: BrowserSession, workspaceID: Workspace.ID) {
@@ -118,15 +118,15 @@ final class HostedWorkspaceContentBridge {
         observeBrowserSummary(for: session, sessionObjectID: sessionObjectID)
     }
 
-    func detachAgentSession(_ runtime: AgentSessionRuntime, workspaceID: Workspace.ID) {
+    func detachChatSession(_ runtime: ChatSessionRuntime, workspaceID: Workspace.ID) {
         let runtimeObjectID = ObjectIdentifier(runtime)
-        guard let tracking = agentTrackingByRuntimeObjectID.removeValue(forKey: runtimeObjectID),
+        guard let tracking = chatTrackingByRuntimeObjectID.removeValue(forKey: runtimeObjectID),
               tracking.workspaceID == workspaceID else {
             return
         }
 
         if let lastPublishedSessionID = tracking.lastPublishedSessionID {
-            removeAgentSummary(sessionID: lastPublishedSessionID, workspaceID: workspaceID)
+            removeChatSummary(sessionID: lastPublishedSessionID, workspaceID: workspaceID)
         }
     }
 
@@ -146,14 +146,14 @@ final class HostedWorkspaceContentBridge {
         editorTrackingBySessionObjectID = editorTrackingBySessionObjectID.filter {
             $0.value.workspaceID != workspaceID
         }
-        agentTrackingByRuntimeObjectID = agentTrackingByRuntimeObjectID.filter {
+        chatTrackingByRuntimeObjectID = chatTrackingByRuntimeObjectID.filter {
             $0.value.workspaceID != workspaceID
         }
         browserTrackingBySessionObjectID = browserTrackingBySessionObjectID.filter {
             $0.value.workspaceID != workspaceID
         }
         editorSummariesByWorkspaceID.removeValue(forKey: workspaceID)
-        agentSummariesByWorkspaceID.removeValue(forKey: workspaceID)
+        chatSummariesByWorkspaceID.removeValue(forKey: workspaceID)
         browserSummariesByWorkspaceID.removeValue(forKey: workspaceID)
         lastPublishedContentByWorkspaceID.removeValue(forKey: workspaceID)
         publishHostedContent?(workspaceID, HostedWorkspaceContentState())
@@ -164,7 +164,7 @@ final class HostedWorkspaceContentBridge {
 private extension HostedWorkspaceContentBridge {
     var publishedWorkspaceIDs: Set<Workspace.ID> {
         Set(editorSummariesByWorkspaceID.keys)
-            .union(agentSummariesByWorkspaceID.keys)
+            .union(chatSummariesByWorkspaceID.keys)
             .union(browserSummariesByWorkspaceID.keys)
             .union(lastPublishedContentByWorkspaceID.keys)
     }
@@ -190,8 +190,8 @@ private extension HostedWorkspaceContentBridge {
         }
     }
 
-    func observeAgentSummary(
-        for runtime: AgentSessionRuntime,
+    func observeChatSummary(
+        for runtime: ChatSessionRuntime,
         runtimeObjectID: ObjectIdentifier
     ) {
         withObservationTracking {
@@ -206,11 +206,11 @@ private extension HostedWorkspaceContentBridge {
             Task { @MainActor in
                 guard let self,
                       let runtime,
-                      self.agentTrackingByRuntimeObjectID[runtimeObjectID] != nil else {
+                      self.chatTrackingByRuntimeObjectID[runtimeObjectID] != nil else {
                     return
                 }
-                self.publishAgentSummary(for: runtime, runtimeObjectID: runtimeObjectID)
-                self.observeAgentSummary(for: runtime, runtimeObjectID: runtimeObjectID)
+                self.publishChatSummary(for: runtime, runtimeObjectID: runtimeObjectID)
+                self.observeChatSummary(for: runtime, runtimeObjectID: runtimeObjectID)
             }
         }
     }
@@ -258,13 +258,13 @@ private extension HostedWorkspaceContentBridge {
         publishWorkspaceContent(for: tracking.workspaceID)
     }
 
-    func publishAgentSummary(
-        for runtime: AgentSessionRuntime,
+    func publishChatSummary(
+        for runtime: ChatSessionRuntime,
         runtimeObjectID: ObjectIdentifier
     ) {
-        guard var tracking = agentTrackingByRuntimeObjectID[runtimeObjectID] else { return }
+        guard var tracking = chatTrackingByRuntimeObjectID[runtimeObjectID] else { return }
 
-        let summary = HostedAgentSessionSummary(
+        let summary = HostedChatSessionSummary(
             sessionID: runtime.sessionID,
             kind: runtime.descriptor.kind,
             title: runtime.tabTitle,
@@ -277,16 +277,16 @@ private extension HostedWorkspaceContentBridge {
         )
         if let lastPublishedSessionID = tracking.lastPublishedSessionID,
            lastPublishedSessionID != summary.sessionID {
-            removeAgentSummary(
+            removeChatSummary(
                 sessionID: lastPublishedSessionID,
                 workspaceID: tracking.workspaceID,
                 publish: false
             )
         }
 
-        agentSummariesByWorkspaceID[tracking.workspaceID, default: [:]][summary.sessionID] = summary
+        chatSummariesByWorkspaceID[tracking.workspaceID, default: [:]][summary.sessionID] = summary
         tracking.lastPublishedSessionID = summary.sessionID
-        agentTrackingByRuntimeObjectID[runtimeObjectID] = tracking
+        chatTrackingByRuntimeObjectID[runtimeObjectID] = tracking
         publishWorkspaceContent(for: tracking.workspaceID)
     }
 
@@ -331,14 +331,14 @@ private extension HostedWorkspaceContentBridge {
         }
     }
 
-    func removeAgentSummary(
-        sessionID: AgentSessionID,
+    func removeChatSummary(
+        sessionID: ChatSessionID,
         workspaceID: Workspace.ID,
         publish: Bool = true
     ) {
-        agentSummariesByWorkspaceID[workspaceID]?.removeValue(forKey: sessionID)
-        if agentSummariesByWorkspaceID[workspaceID]?.isEmpty == true {
-            agentSummariesByWorkspaceID.removeValue(forKey: workspaceID)
+        chatSummariesByWorkspaceID[workspaceID]?.removeValue(forKey: sessionID)
+        if chatSummariesByWorkspaceID[workspaceID]?.isEmpty == true {
+            chatSummariesByWorkspaceID.removeValue(forKey: workspaceID)
         }
         if publish {
             publishWorkspaceContent(for: workspaceID)
@@ -365,7 +365,7 @@ private extension HostedWorkspaceContentBridge {
     ) {
         let editorDocuments = editorSummariesByWorkspaceID[workspaceID]
             .map { Array($0.values) } ?? []
-        let agentSessions = agentSummariesByWorkspaceID[workspaceID]
+        let chatSessions = chatSummariesByWorkspaceID[workspaceID]
             .map { Array($0.values) } ?? []
         let browserSessions = browserSummariesByWorkspaceID[workspaceID]
             .map { Array($0.values) } ?? []
@@ -381,7 +381,7 @@ private extension HostedWorkspaceContentBridge {
                 }
                 return titleComparison == .orderedAscending
             },
-            agentSessions: agentSessions.sorted { lhs, rhs in
+            chatSessions: chatSessions.sorted { lhs, rhs in
                 if lhs.lastActivityAt == rhs.lastActivityAt {
                     return lhs.createdAt > rhs.createdAt
                 }

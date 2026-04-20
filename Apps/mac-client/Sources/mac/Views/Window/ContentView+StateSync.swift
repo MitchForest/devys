@@ -54,14 +54,14 @@ extension ContentView {
             shutdownWorkspaceTerminalSession(id: id, in: workspaceID)
         case .browser(let workspaceID, let id, _):
             removeBrowserSession(id: id, in: workspaceID)
-        case .agentSession(let workspaceID, let sessionID):
-            if let session = runtimeRegistry.agentSession(id: sessionID, in: workspaceID) {
-                hostedContentBridge.detachAgentSession(session, workspaceID: workspaceID)
+        case .chatSession(let workspaceID, let sessionID):
+            if let session = runtimeRegistry.chatSession(id: sessionID, in: workspaceID) {
+                hostedContentBridge.detachChatSession(session, workspaceID: workspaceID)
                 Task {
                     await session.teardown()
                 }
             }
-            runtimeRegistry.removeAgentSession(id: sessionID, in: workspaceID)
+            runtimeRegistry.removeChatSession(id: sessionID, in: workspaceID)
         case .editor:
             if let tabId {
                 removeEditorSession(tabId: tabId)
@@ -199,13 +199,21 @@ extension ContentView {
 
         let isActiveRepository = selectedRepositoryID == repositoryID
         if isActiveRepository {
-            guard await confirmCloseCurrentRepository() else { return }
-            persistVisibleWorkspaceState()
+            let returnsToWelcomeScreen = store.repositories.count == 1 && store.remoteRepositories.isEmpty
+            guard await confirmCloseCurrentRepository(
+                dirtyPromptTitle: "Save changes before removing this repository?",
+                confirmationTitle: "Remove repository?",
+                confirmationMessage: returnsToWelcomeScreen
+                    ? "This will close all tabs and return to the welcome screen."
+                    : "This will close all tabs and switch to another repository.",
+                confirmationButtonTitle: "Remove Repository"
+            ) else { return }
             resetWorkspaceState()
         }
 
         recentRepositoriesService.remove(repository.rootURL)
         store.send(.removeRepository(repositoryID))
+        await persistTerminalRelaunchSnapshot()
 
         if let selectedWorktree = selectedCatalogWorktree {
             restoreWorkspaceState(for: selectedWorktree)

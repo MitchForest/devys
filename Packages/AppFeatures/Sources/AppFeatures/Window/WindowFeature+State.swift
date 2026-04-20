@@ -1,8 +1,9 @@
 import Foundation
+import RemoteCore
 import Split
 import Workspace
 
-private struct WorktreeSortKey {
+struct WorktreeSortKey {
     let isArchived: Bool
     let pinnedOrder: Int
     let explicitOrder: Int
@@ -10,7 +11,7 @@ private struct WorktreeSortKey {
     let name: String
 }
 
-private func orderedWorktrees(
+func orderedWorktrees(
     _ worktrees: [Worktree],
     workspaceStatesByID: [Worktree.ID: WorktreeState]
 ) -> [Worktree] {
@@ -30,7 +31,7 @@ private func orderedWorktrees(
     }
 }
 
-private func worktreeSortKey(
+func worktreeSortKey(
     for worktree: Worktree,
     workspaceStatesByID: [Worktree.ID: WorktreeState]
 ) -> WorktreeSortKey {
@@ -73,7 +74,7 @@ extension WindowFeature.State {
     }
 
     public var hasRepositories: Bool {
-        !repositories.isEmpty
+        !repositories.isEmpty || !remoteRepositories.isEmpty
     }
 
     public var selectedRepository: Repository? {
@@ -81,13 +82,29 @@ extension WindowFeature.State {
         return repositories.first { $0.id == selectedRepositoryID }
     }
 
+    public var selectedRemoteRepository: RemoteRepositoryAuthority? {
+        guard let selectedRemoteRepositoryID else { return nil }
+        return remoteRepositories.first { $0.id == selectedRemoteRepositoryID }
+    }
+
     var selectedWorktree: Worktree? {
         worktree(for: selectedWorkspaceID)
+    }
+
+    public var selectedRemoteWorktree: RemoteWorktree? {
+        remoteWorktree(for: selectedRemoteWorktreeID)
     }
 
     func worktree(for workspaceID: Workspace.ID?) -> Worktree? {
         guard let workspaceID else { return nil }
         return worktreesByRepository.values
+            .flatMap { $0 }
+            .first { $0.id == workspaceID }
+    }
+
+    func remoteWorktree(for workspaceID: Workspace.ID?) -> RemoteWorktree? {
+        guard let workspaceID else { return nil }
+        return remoteWorktreesByRepository.values
             .flatMap { $0 }
             .first { $0.id == workspaceID }
     }
@@ -136,6 +153,7 @@ extension WindowFeature.State {
         }
 
         if selectLast {
+            clearRemoteSelection()
             selectedRepositoryID = repositories.last?.id ?? selectedRepositoryID
             selectedWorkspaceID = nil
         }
@@ -155,6 +173,37 @@ extension WindowFeature.State {
     }
 
     mutating func normalizeSelection() {
+        if let selectedRemoteRepositoryID,
+           remoteRepositories.contains(where: { $0.id == selectedRemoteRepositoryID }) {
+            normalizeRemoteWorkspaceSelection(in: selectedRemoteRepositoryID)
+            return
+        }
+
+        guard !repositories.isEmpty else {
+            if remoteRepositories.isEmpty {
+                selectedRepositoryID = nil
+                selectedRemoteRepositoryID = nil
+                selectedRemoteWorktreeID = nil
+                selectedWorkspaceID = nil
+                selectedTabID = nil
+            }
+            if let fallbackRemoteRepository = remoteRepositories.last {
+                selectRemoteRepository(fallbackRemoteRepository.id)
+            }
+            return
+        }
+
+        if !remoteRepositories.isEmpty,
+           selectedRepositoryID == nil,
+           selectedWorkspaceID == nil,
+           selectedRemoteRepositoryID == nil,
+           selectedRemoteWorktreeID == nil,
+           let fallbackRemoteRepository = remoteRepositories.last {
+            selectRemoteRepository(fallbackRemoteRepository.id)
+            return
+        }
+
+        clearRemoteSelection()
         guard !repositories.isEmpty else {
             selectedRepositoryID = nil
             selectedWorkspaceID = nil
@@ -189,6 +238,21 @@ extension WindowFeature.State {
         selectedWorkspaceID = worktrees.first { workspace in
             workspaceStatesByID[workspace.id]?.isArchived != true
         }?.id
+    }
+
+    mutating func normalizeRemoteWorkspaceSelection(
+        in repositoryID: RemoteRepositoryAuthority.ID
+    ) {
+        let worktrees = remoteWorktreesByRepository[repositoryID] ?? []
+
+        if let selectedRemoteWorktreeID,
+           worktrees.contains(where: { $0.id == selectedRemoteWorktreeID }) {
+            selectedWorkspaceID = selectedRemoteWorktreeID
+            return
+        }
+
+        selectedRemoteWorktreeID = worktrees.first?.id
+        selectedWorkspaceID = selectedRemoteWorktreeID
     }
 
     mutating func moveRepository(
@@ -252,6 +316,35 @@ extension WindowFeature.State {
             workflowWorkspacesByID.removeValue(forKey: workspaceID)
             workspaceShells.removeValue(forKey: workspaceID)
             operational.removeWorkspace(workspaceID)
+        }
+
+        normalizeSelection()
+    }
+
+    mutating func upsertRemoteRepository(_ repository: RemoteRepositoryAuthority) {
+        if let existingIndex = remoteRepositories.firstIndex(where: { $0.id == repository.id }) {
+            remoteRepositories[existingIndex] = repository
+        } else {
+            remoteRepositories.append(repository)
+        }
+        selectRemoteRepository(repository.id)
+        lastErrorMessage = nil
+    }
+
+    mutating func removeRemoteRepository(_ repositoryID: RemoteRepositoryAuthority.ID) {
+        let removedWorkspaceIDs = Set((remoteWorktreesByRepository[repositoryID] ?? []).map(\.id))
+        remoteRepositories.removeAll { $0.id == repositoryID }
+        remoteWorktreesByRepository.removeValue(forKey: repositoryID)
+
+        for workspaceID in removedWorkspaceIDs {
+            workspaceShells.removeValue(forKey: workspaceID)
+            operational.removeWorkspace(workspaceID)
+        }
+
+        if selectedRemoteRepositoryID == repositoryID {
+            selectedRemoteRepositoryID = nil
+            selectedRemoteWorktreeID = nil
+            selectedWorkspaceID = nil
         }
 
         normalizeSelection()
@@ -345,6 +438,36 @@ extension WindowFeature.State {
         selectedTabID = shell.layout?.selectedTabID(in: focusedPaneID)
     }
 
+    mutating func clearRemoteSelection() {
+        selectedRemoteRepositoryID = nil
+        selectedRemoteWorktreeID = nil
+    }
+
+    mutating func selectRemoteRepository(
+        _ repositoryID: RemoteRepositoryAuthority.ID?
+    ) {
+        selectedRepositoryID = nil
+        selectedRemoteRepositoryID = repositoryID
+        if let repositoryID {
+            normalizeRemoteWorkspaceSelection(in: repositoryID)
+        } else {
+            selectedRemoteWorktreeID = nil
+            selectedWorkspaceID = nil
+        }
+        selectedTabID = nil
+    }
+
+    mutating func selectRemoteWorktree(
+        repositoryID: RemoteRepositoryAuthority.ID,
+        workspaceID: RemoteWorktree.ID
+    ) {
+        selectedRepositoryID = nil
+        selectedRemoteRepositoryID = repositoryID
+        selectedRemoteWorktreeID = workspaceID
+        selectedWorkspaceID = workspaceID
+        selectedTabID = nil
+    }
+
     mutating func updateActiveWorkspaceShell(
         _ update: (inout WindowFeature.WorkspaceShell) -> Void
     ) {
@@ -427,57 +550,4 @@ extension WindowFeature.State {
         return workspaces[nextIndex]
     }
 
-}
-
-extension Array {
-    subscript(safe index: Int) -> Element? {
-        guard indices.contains(index) else { return nil }
-        return self[index]
-    }
-}
-
-public extension WindowFeature.RepositoryCatalogSnapshot {
-    func normalizedForReducer() -> Self {
-        var normalizedWorktreesByRepository: [Repository.ID: [Worktree]] = [:]
-
-        for (repositoryID, worktrees) in worktreesByRepository {
-            normalizedWorktreesByRepository[repositoryID] = orderedWorktrees(
-                worktrees,
-                workspaceStatesByID: workspaceStatesByID
-            )
-        }
-
-        return Self(
-            repositories: repositories,
-            worktreesByRepository: normalizedWorktreesByRepository,
-            workspaceStatesByID: workspaceStatesByID
-        )
-    }
-}
-
-func workspaceLayoutSettingPreviewTabID(
-    _ tabID: TabID?,
-    in paneID: PaneID,
-    layout: WindowFeature.WorkspaceLayout
-) -> WindowFeature.WorkspaceLayout {
-    WindowFeature.WorkspaceLayout(
-        root: workspaceLayoutSettingPreviewTabID(tabID, in: paneID, node: layout.root)
-    )
-}
-
-func workspaceLayoutSettingPreviewTabID(
-    _ tabID: TabID?,
-    in paneID: PaneID,
-    node: WindowFeature.WorkspaceLayoutNode
-) -> WindowFeature.WorkspaceLayoutNode {
-    switch node {
-    case .pane(var pane):
-        guard pane.id == paneID else { return .pane(pane) }
-        pane.previewTabID = tabID
-        return .pane(pane)
-    case .split(var split):
-        split.first = workspaceLayoutSettingPreviewTabID(tabID, in: paneID, node: split.first)
-        split.second = workspaceLayoutSettingPreviewTabID(tabID, in: paneID, node: split.second)
-        return .split(split)
-    }
 }

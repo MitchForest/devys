@@ -25,15 +25,17 @@ extension DiffRenderLayoutBuilder {
             rowIndex += 1
 
             if !context.configuration.showsHunkHeaders {
-                rows.append(
-                    SplitDiffRow(
-                        id: "split-hunk-spacer-\(hunk.id)",
-                        kind: .line,
-                        left: nil,
-                        right: nil
+                for spacerIndex in 0..<DiffChromeMetrics.hiddenHunkSpacerRowCount(lineHeight: lineHeight) {
+                    rows.append(
+                        SplitDiffRow(
+                            id: "split-hunk-spacer-\(hunk.id)-\(spacerIndex)",
+                            kind: .line,
+                            left: nil,
+                            right: nil
+                        )
                     )
-                )
-                rowIndex += 1
+                    rowIndex += 1
+                }
             }
 
             let lineRows = splitLineRows(hunk: hunk, context: context)

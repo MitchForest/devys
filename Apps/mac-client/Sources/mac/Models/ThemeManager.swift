@@ -16,10 +16,18 @@ import Workspace
 @Observable
 final class ThemeManager {
     /// Appearance mode preference (default: dark for terminal aesthetic)
-    var appearanceMode: AppearanceMode = .dark
+    var appearanceMode: AppearanceMode
     
     /// Current accent color (default: white/monochrome for pure terminal look)
-    var accentColor: AccentColor = .graphite
+    var accentColor: AccentColor
+
+    init(
+        appearanceMode: AppearanceMode = .dark,
+        accentColor: AccentColor = .graphite
+    ) {
+        self.appearanceMode = appearanceMode
+        self.accentColor = accentColor
+    }
 
     var preferredColorScheme: ColorScheme? {
         appearanceMode.preferredColorScheme
@@ -46,9 +54,10 @@ final class ThemeManager {
 
     func ghosttyAppearance(systemColorScheme: ColorScheme) -> GhosttyTerminalAppearance {
         let isDarkMode = resolvedColorScheme(systemColorScheme: systemColorScheme) == .dark
-        let background = GhosttyTerminalColor(hex: isDarkMode ? "#0C0B0A" : "#FAF8F5")
-        let foreground = GhosttyTerminalColor(hex: isDarkMode ? "#EDE8E0" : "#1C1A17")
-        let fallbackSelection = GhosttyTerminalColor(hex: isDarkMode ? "#2E2C28" : "#DDD9D1")
+        let theme = theme(systemColorScheme: systemColorScheme)
+        let background = GhosttyTerminalColor(theme.terminalBackground)
+        let foreground = GhosttyTerminalColor(theme.terminalText)
+        let fallbackSelection = GhosttyTerminalColor(theme.active)
         let accent = GhosttyTerminalColor(hex: accentColor.rawValue)
 
         let cursorColor = accent.contrastRatio(with: background) >= 2.5 ? accent : foreground
@@ -65,10 +74,10 @@ final class ThemeManager {
             background: background,
             foreground: foreground,
             cursorColor: cursorColor,
-            cursorText: cursorColor.idealTextColor(),
             selectionBackground: selectionBackground,
-            selectionForeground: foreground,
-            palette: isDarkMode ? Self.darkTerminalPalette : Self.lightTerminalPalette
+            palette: isDarkMode
+                ? GhosttyTerminalAppearance.ghosttyDarkPalette
+                : GhosttyTerminalAppearance.ghosttyLightPalette
         )
     }
 
@@ -79,49 +88,40 @@ final class ThemeManager {
     func applyAppearance() {
         NSApp.appearance = nsAppearance
     }
+
+    static func accentColor(from rawValue: String) -> AccentColor {
+        AccentColor(rawValue: rawValue) ?? .graphite
+    }
+
+    static func bootstrapTheme(
+        appearanceMode: AppearanceMode,
+        accentColor: AccentColor,
+        systemColorScheme: ColorScheme = currentSystemColorScheme()
+    ) -> DevysTheme {
+        DevysTheme(
+            isDark: appearanceMode.resolvedColorScheme(systemColorScheme: systemColorScheme) == .dark,
+            accentColor: accentColor
+        )
+    }
     
     /// Update accent color from settings string
     func setAccentColor(from rawValue: String) {
-        if let color = AccentColor(rawValue: rawValue) {
-            accentColor = color
-        }
+        accentColor = Self.accentColor(from: rawValue)
     }
 
-    private static let darkTerminalPalette: [GhosttyTerminalColor] = [
-        GhosttyTerminalColor(hex: "#121212"),
-        GhosttyTerminalColor(hex: "#E06C75"),
-        GhosttyTerminalColor(hex: "#98C379"),
-        GhosttyTerminalColor(hex: "#E5C07B"),
-        GhosttyTerminalColor(hex: "#61AFEF"),
-        GhosttyTerminalColor(hex: "#C678DD"),
-        GhosttyTerminalColor(hex: "#56B6C2"),
-        GhosttyTerminalColor(hex: "#A0A0A0"),
-        GhosttyTerminalColor(hex: "#666666"),
-        GhosttyTerminalColor(hex: "#FF8A93"),
-        GhosttyTerminalColor(hex: "#B4E28F"),
-        GhosttyTerminalColor(hex: "#FFD08A"),
-        GhosttyTerminalColor(hex: "#7BC3FF"),
-        GhosttyTerminalColor(hex: "#D19AEE"),
-        GhosttyTerminalColor(hex: "#7BDFF2"),
-        GhosttyTerminalColor(hex: "#EFEFEF"),
-    ]
+    private static func currentSystemColorScheme() -> ColorScheme {
+        let match = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua])
+        return match == .darkAqua ? .dark : .light
+    }
+}
 
-    private static let lightTerminalPalette: [GhosttyTerminalColor] = [
-        GhosttyTerminalColor(hex: "#1A1A1A"),
-        GhosttyTerminalColor(hex: "#C43E1C"),
-        GhosttyTerminalColor(hex: "#2F6F44"),
-        GhosttyTerminalColor(hex: "#9A6700"),
-        GhosttyTerminalColor(hex: "#005CC5"),
-        GhosttyTerminalColor(hex: "#8250DF"),
-        GhosttyTerminalColor(hex: "#0A7F7F"),
-        GhosttyTerminalColor(hex: "#555555"),
-        GhosttyTerminalColor(hex: "#888888"),
-        GhosttyTerminalColor(hex: "#D84A26"),
-        GhosttyTerminalColor(hex: "#3E8A52"),
-        GhosttyTerminalColor(hex: "#B27D12"),
-        GhosttyTerminalColor(hex: "#1F6FEB"),
-        GhosttyTerminalColor(hex: "#A371F7"),
-        GhosttyTerminalColor(hex: "#1B9AAA"),
-        GhosttyTerminalColor(hex: "#FFFFFF"),
-    ]
+private extension GhosttyTerminalColor {
+    init(_ color: Color) {
+        let resolved = NSColor(color).usingColorSpace(.deviceRGB) ?? .black
+        self.init(
+            red: UInt8(clamping: Int((resolved.redComponent * 255).rounded())),
+            green: UInt8(clamping: Int((resolved.greenComponent * 255).rounded())),
+            blue: UInt8(clamping: Int((resolved.blueComponent * 255).rounded()))
+        )
+    }
 }

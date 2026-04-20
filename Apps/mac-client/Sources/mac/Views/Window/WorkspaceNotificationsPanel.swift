@@ -57,7 +57,7 @@ struct WorkspaceNotificationsPanel: View {
                 .font(Typography.body.weight(.medium))
                 .foregroundStyle(theme.textSecondary)
 
-            Text("Workspace attention will appear here when terminals or agents need input.")
+            Text("Workspace attention will appear here when terminals or chats need input.")
                 .font(Typography.caption)
                 .foregroundStyle(theme.textTertiary)
                 .multilineTextAlignment(.center)

@@ -4,20 +4,27 @@
 // Copyright © 2026 Devys. All rights reserved.
 
 import AppFeatures
+import AppKit
 import ComposableArchitecture
-import SwiftUI
-import Split
-import UI
 import Editor
 import Git
 import GhosttyTerminal
-import AppKit
+import RemoteCore
+import Split
+import SwiftUI
+import UI
 import Workspace
 import UniformTypeIdentifiers
 
 struct EditorOpenTraceState {
     let trace: WorkspacePerformanceTrace
     var tracker: EditorOpenPerformanceTracker
+    var lastCheckpoint: WorkspacePerformanceCheckpoint?
+}
+
+struct TerminalOpenTraceState {
+    let trace: WorkspacePerformanceTrace
+    var tracker: TerminalOpenPerformanceTracker
     var lastCheckpoint: WorkspacePerformanceCheckpoint?
 }
 
@@ -42,10 +49,12 @@ struct ContentView: View {
     @State var isCapsuleExpanded = false
     @State var availableRelaunchSnapshot: TerminalRelaunchSnapshot?
     @State var rehydratableHostedSessionsByID: [UUID: HostedTerminalSessionRecord] = [:]
-    @State var rehydratableAttachCommandsBySessionID: [UUID: String] = [:]
+    @State var terminalHostWarmupState = TerminalHostWarmupState()
+    @State var terminalRendererWarmupState = TerminalRendererWarmupState()
     
     @State var editorSessions: [TabID: EditorSession] = [:]
     @State var editorOpenTraceStates: [TabID: EditorOpenTraceState] = [:]
+    @State var terminalOpenTraceStates: [UUID: TerminalOpenTraceState] = [:]
     @State var workspaceViewStatesByID: [Workspace.ID: WorkspaceViewState] = [:]
     
     /// Delegate for DevysSplit tab lifecycle hooks (close/save prompts)
@@ -68,6 +77,31 @@ struct ContentView: View {
     /// Computed theme from manager
     var theme: DevysTheme {
         themeManager.theme(systemColorScheme: systemColorScheme)
+    }
+
+    init(
+        store: StoreOf<WindowFeature>,
+        initialAppearance: AppearanceSettings = AppearanceSettings()
+    ) {
+        self.store = store
+
+        let initialAccentColor = ThemeManager.accentColor(from: initialAppearance.accentColor)
+        _themeManager = State(
+            initialValue: ThemeManager(
+                appearanceMode: initialAppearance.mode,
+                accentColor: initialAccentColor
+            )
+        )
+        _controller = State(
+            initialValue: Self.makeSplitController(
+                colors: Self.makeSplitColors(
+                    from: ThemeManager.bootstrapTheme(
+                        appearanceMode: initialAppearance.mode,
+                        accentColor: initialAccentColor
+                    )
+                )
+            )
+        )
     }
 
     var activeSidebarItem: WorkspaceSidebarMode? {
@@ -147,6 +181,18 @@ struct ContentView: View {
         selectedRepository?.rootURL
     }
 
+    var selectedRemoteRepository: RemoteRepositoryAuthority? {
+        store.selectedRemoteRepository
+    }
+
+    var selectedRemoteWorktree: RemoteWorktree? {
+        store.selectedRemoteWorktree
+    }
+
+    var isRemoteWorkspaceSelected: Bool {
+        selectedRemoteWorktree != nil
+    }
+
     var selectedCatalogWorktree: Worktree? {
         guard let selectedRepositoryID,
               let selectedWorkspaceID else {
@@ -160,6 +206,18 @@ struct ContentView: View {
         runtimeRegistry.activeWorktree
     }
 
+    var hasLaunchableWorkspace: Bool {
+        selectedCatalogWorktree != nil || selectedRemoteWorktree != nil
+    }
+
+    var currentBreadcrumbRepositoryName: String? {
+        selectedRepository?.displayName ?? selectedRemoteRepository?.railDisplayName
+    }
+
+    var currentBreadcrumbBranchName: String? {
+        selectedCatalogWorktree?.name ?? selectedRemoteWorktree?.branchName
+    }
+
     var workspaceOperationalState: WorkspaceOperationalState {
         store.operational
     }
@@ -169,8 +227,8 @@ struct ContentView: View {
         return store.hostedWorkspaceContentByID[selectedWorkspaceID] ?? HostedWorkspaceContentState()
     }
 
-    var hostedAgentSessions: [HostedAgentSessionSummary] {
-        hostedWorkspaceContent.agentSessions
+    var hostedChatSessions: [HostedChatSessionSummary] {
+        hostedWorkspaceContent.chatSessions
     }
 
     var visibleWorkspaceID: Workspace.ID? {
@@ -198,7 +256,7 @@ struct ContentView: View {
             restore.restoreSelectedWorkspace,
             restore.restoreWorkspaceLayoutAndTabs,
             restore.restoreTerminalSessions,
-            restore.restoreAgentSessions
+            restore.restoreChatSessions
         ]
         .map { $0 ? "1" : "0" }
         .joined(separator: "|")
@@ -208,10 +266,14 @@ struct ContentView: View {
         let notifications = appSettings.notifications
         return [
             notifications.terminalActivity,
-            notifications.agentActivity
+            notifications.chatActivity
         ]
         .map { $0 ? "1" : "0" }
         .joined(separator: "|")
+    }
+
+    var remoteRepositorySnapshot: String {
+        store.remoteRepositories.map(\.id).joined(separator: "|")
     }
     
     // MARK: - Body
@@ -235,16 +297,21 @@ extension ContentView {
                 WindowTitlebarToolbarHost(
                     theme: theme,
                     hasRepositories: store.hasRepositories,
-                    hasWorktree: activeWorktree != nil,
+                    hasWorktree: hasLaunchableWorkspace,
+                    supportsStructuredWorkspaceFeatures: !isRemoteWorkspaceSelected && activeWorktree != nil,
                     isSidebarVisible: isSidebarVisible,
-                    repoName: selectedRepository?.displayName,
-                    branchName: selectedCatalogWorktree?.name,
+                    repoName: currentBreadcrumbRepositoryName,
+                    branchName: currentBreadcrumbBranchName,
                     onToggleSidebar: { toggleSidebar() },
                     onWorkflow: {
+                        guard !isRemoteWorkspaceSelected else { return }
                         guard let workspaceID = visibleWorkspaceID else { return }
                         createWorkflowDefinition(in: workspaceID)
                     },
-                    onAgents: { openDefaultOrPromptAgentForSelectedWorkspace() },
+                    onAgents: {
+                        guard !isRemoteWorkspaceSelected else { return }
+                        openDefaultOrPromptChatForSelectedWorkspace()
+                    },
                     onShell: { openShellForSelectedWorkspace() },
                     onClaude: { launchClaudeForSelectedWorkspace() },
                     onCodex: { launchCodexForSelectedWorkspace() }
@@ -252,50 +319,14 @@ extension ContentView {
             }
     }
 
-    var searchPresentationBinding: Binding<WindowFeature.SearchPresentation?> {
-        Binding(
-            get: { store.searchPresentation },
-            set: { store.send(.setSearchPresentation($0)) }
-        )
-    }
-
-    var workspaceCreationPresentationBinding: Binding<WorkspaceCreationPresentation?> {
-        Binding(
-            get: { store.workspaceCreationPresentation },
-            set: { store.send(.setWorkspaceCreationPresentation($0)) }
-        )
-    }
-
-    var agentLaunchPresentationBinding: Binding<AgentLaunchPresentation?> {
-        Binding(
-            get: { store.agentLaunchPresentation },
-            set: { store.send(.setAgentLaunchPresentation($0)) }
-        )
-    }
-
-    var gitCommitSheetBinding: Binding<Bool> {
-        Binding(
-            get: { store.isGitCommitSheetPresented },
-            set: { store.send(.setGitCommitSheetPresented($0)) }
-        )
-    }
-
-    var createPullRequestSheetBinding: Binding<Bool> {
-        Binding(
-            get: { store.isCreatePullRequestSheetPresented },
-            set: { store.send(.setCreatePullRequestSheetPresented($0)) }
-        )
-    }
-
-    var notificationsPanelBinding: Binding<Bool> {
-        Binding(
-            get: { store.isNotificationsPanelPresented },
-            set: { store.send(.setNotificationsPanelPresented($0)) }
-        )
-    }
-
     func applyShellObservation<V: View>(_ view: V) -> some View {
         view
+            .onAppear {
+                syncVisibleWorkspaceRuntimeWithReducerSelection()
+            }
+            .onChange(of: workspaceRuntimeSyncSnapshot) { _, _ in
+                syncVisibleWorkspaceRuntimeWithReducerSelection()
+            }
             .onChange(of: reducerFilesSidebarVisible) { _, _ in
                 syncFilesSidebarVisibilityFromReducer()
             }
@@ -304,6 +335,12 @@ extension ContentView {
                 showLauncherUnavailableAlert(title: "Action Failed", message: message)
                 store.send(.clearErrorMessage)
             }
+            .onChange(of: remoteRepositorySnapshot) { _, _ in
+                for repository in store.remoteRepositories
+                where (store.remoteWorktreesByRepository[repository.id] ?? []).isEmpty {
+                    refreshRemoteRepository(repository.id)
+                }
+            }
             .onReceive(
                 NotificationCenter.default.publisher(for: FileTreeModel.itemsDeletedNotification)
             ) { notification in
@@ -311,102 +348,9 @@ extension ContentView {
             }
     }
 
-    func applyWindowPresentations<V: View>(_ view: V) -> some View {
-        applyGitPresentations(
-            applySearchAndNotificationsPresentations(
-                applyPrimarySheetPresentations(view)
-            )
-        )
-    }
-
-    func applyPrimarySheetPresentations<V: View>(_ view: V) -> some View {
-        view
-            .sheet(item: workspaceCreationPresentationBinding) { request in
-                presentedSheetContent(
-                    WorkspaceCreationSheet(
-                    repository: request.repository,
-                    defaults: repositorySettingsStore.settings(for: request.repository.rootURL)
-                        .workspaceCreation,
-                    creationService: container.workspaceCreationService,
-                    initialMode: request.mode
-                    ) { workspaces in
-                        await handleCreatedWorkspaces(workspaces, in: request.repository)
-                    }
-                )
-            }
-            .sheet(item: agentLaunchPresentationBinding) { request in
-                presentedSheetContent(
-                    AgentHarnessPickerSheet(
-                    onSelect: { kind in
-                        store.send(.setAgentLaunchPresentation(nil))
-                        if let pendingSessionID = request.pendingSessionID {
-                            launchPreparedAgentSession(
-                                kind,
-                                workspaceID: request.workspaceID,
-                                sessionID: pendingSessionID
-                            )
-                        } else {
-                            openAgentSession(
-                                kind,
-                                workspaceID: request.workspaceID,
-                                initialAttachments: request.initialAttachments,
-                                preferredPaneID: request.preferredPaneID
-                            )
-                        }
-                    },
-                    onCancel: {
-                        store.send(.setAgentLaunchPresentation(nil))
-                        if let pendingSessionID = request.pendingSessionID,
-                           let pendingTabID = request.pendingTabID {
-                            cancelPreparedAgentSessionLaunch(
-                                workspaceID: request.workspaceID,
-                                sessionID: pendingSessionID,
-                                tabID: pendingTabID
-                            )
-                        }
-                    }
-                    )
-                )
-            }
-    }
-
-    func applySearchAndNotificationsPresentations<V: View>(_ view: V) -> some View {
-        view
-            .sheet(item: searchPresentationBinding) { presentation in
-                presentedSheetContent(searchSheetContent(for: presentation))
-            }
-            .sheet(isPresented: notificationsPanelBinding) {
-                presentedSheetContent(notificationsPanelContent)
-            }
-    }
-
-    func applyGitPresentations<V: View>(_ view: V) -> some View {
-        view
-            .sheet(isPresented: gitCommitSheetBinding) {
-                if let gitStore {
-                    presentedSheetContent(CommitSheet(store: gitStore))
-                }
-            }
-            .sheet(isPresented: createPullRequestSheetBinding) {
-                if let gitStore {
-                    presentedSheetContent(
-                        CreatePRSheet(store: gitStore) { _ in
-                            Task { @MainActor in
-                                await handleCreatedPullRequest()
-                            }
-                        }
-                    )
-                }
-            }
-    }
-
-    func presentedSheetContent<V: View>(_ view: V) -> some View {
-        view
-            .environment(\.devysTheme, theme)
-            .preferredColorScheme(themeManager.preferredColorScheme)
-    }
-
-    static func makeSplitController() -> DevysSplitController {
+    static func makeSplitController(
+        colors: DevysSplitConfiguration.Colors = DevysSplitConfiguration.Colors()
+    ) -> DevysSplitController {
         DevysSplitController(
             configuration: DevysSplitConfiguration(
                 allowSplits: true,
@@ -426,27 +370,12 @@ extension ContentView {
                     minimumPaneWidth: 200,
                     minimumPaneHeight: 150,
                     showSplitButtons: true
-                )
+                ),
+                colors: colors
             )
         )
     }
     
-    /// Create split colors from theme
-    func splitColorsFromTheme(_ theme: DevysTheme) -> DevysSplitConfiguration.Colors {
-        DevysSplitConfiguration.Colors(
-            accent: theme.accent,
-            tabBarBackground: theme.card,
-            activeTabBackground: theme.base,
-            inactiveText: theme.textSecondary,
-            activeText: theme.text,
-            separator: theme.border,
-            contentBackground: theme.card,
-            baseBackground: theme.base,
-            paneCornerRadius: Spacing.radius,
-            paneGap: Spacing.paneGap
-        )
-    }
-
     var workspaceShellView: some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
@@ -473,17 +402,6 @@ extension ContentView {
                             .padding(.bottom, DevysSpacing.space2)
                     }
             }
-        }
-    }
-}
-
-private extension WindowFeature.Sidebar {
-    var workspaceSidebarMode: WorkspaceSidebarMode {
-        switch self {
-        case .files:
-            .files
-        case .agents:
-            .agents
         }
     }
 }

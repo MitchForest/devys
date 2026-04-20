@@ -2,11 +2,22 @@ import ACPClientKit
 import Foundation
 import Workspace
 
+public struct HostedTerminalViewportSizeRecord: Codable, Equatable, Sendable {
+    public let cols: Int
+    public let rows: Int
+
+    public init(cols: Int, rows: Int) {
+        self.cols = cols
+        self.rows = rows
+    }
+}
+
 public struct HostedTerminalSessionRecord: Codable, Equatable, Sendable, Identifiable {
     public let id: UUID
     public let workspaceID: Workspace.ID
     public let workingDirectory: URL?
     public let launchCommand: String?
+    public let viewportSize: HostedTerminalViewportSizeRecord?
     public let processID: Int32?
     public let createdAt: Date
 
@@ -15,6 +26,7 @@ public struct HostedTerminalSessionRecord: Codable, Equatable, Sendable, Identif
         workspaceID: Workspace.ID,
         workingDirectory: URL?,
         launchCommand: String?,
+        viewportSize: HostedTerminalViewportSizeRecord? = nil,
         processID: Int32? = nil,
         createdAt: Date
     ) {
@@ -22,12 +34,13 @@ public struct HostedTerminalSessionRecord: Codable, Equatable, Sendable, Identif
         self.workspaceID = workspaceID
         self.workingDirectory = workingDirectory
         self.launchCommand = launchCommand
+        self.viewportSize = viewportSize
         self.processID = processID
         self.createdAt = createdAt
     }
 }
 
-public struct PersistedAgentSessionRecord: Codable, Equatable, Sendable {
+public struct PersistedChatSessionRecord: Codable, Equatable, Sendable {
     public let sessionID: String
     public let kind: ACPAgentKind
     public let title: String?
@@ -70,7 +83,7 @@ public enum PersistedWorkspaceSidebarMode: String, Codable, Equatable, Sendable 
 public enum PersistedWorkspaceTabRecord: Codable, Equatable, Sendable {
     case terminal(hostedSessionID: UUID)
     case browser(id: UUID, url: URL)
-    case agent(PersistedAgentSessionRecord)
+    case chat(PersistedChatSessionRecord)
     case editor(fileURL: URL)
     case gitDiff(path: String, isStaged: Bool)
     case workflowDefinition(definitionID: String)
@@ -81,7 +94,7 @@ public enum PersistedWorkspaceTabRecord: Codable, Equatable, Sendable {
         case hostedSessionID
         case browserID
         case browserURL
-        case agentSession
+        case chatSession
         case fileURL
         case path
         case isStaged
@@ -92,6 +105,7 @@ public enum PersistedWorkspaceTabRecord: Codable, Equatable, Sendable {
     private enum Kind: String, Codable {
         case terminal
         case browser
+        case chat
         case agent
         case editor
         case gitDiff
@@ -111,9 +125,9 @@ public enum PersistedWorkspaceTabRecord: Codable, Equatable, Sendable {
                 id: try container.decode(UUID.self, forKey: .browserID),
                 url: try container.decode(URL.self, forKey: .browserURL)
             )
-        case .agent:
-            self = .agent(
-                try container.decode(PersistedAgentSessionRecord.self, forKey: .agentSession)
+        case .chat, .agent:
+            self = .chat(
+                try container.decode(PersistedChatSessionRecord.self, forKey: .chatSession)
             )
         case .editor:
             self = .editor(
@@ -145,9 +159,9 @@ public enum PersistedWorkspaceTabRecord: Codable, Equatable, Sendable {
             try container.encode(Kind.browser, forKey: .kind)
             try container.encode(id, forKey: .browserID)
             try container.encode(url, forKey: .browserURL)
-        case .agent(let record):
-            try container.encode(Kind.agent, forKey: .kind)
-            try container.encode(record, forKey: .agentSession)
+        case .chat(let record):
+            try container.encode(Kind.chat, forKey: .kind)
+            try container.encode(record, forKey: .chatSession)
         case .editor(let fileURL):
             try container.encode(Kind.editor, forKey: .kind)
             try container.encode(fileURL, forKey: .fileURL)
@@ -287,20 +301,20 @@ public struct RelaunchSettingsSnapshot: Equatable, Sendable {
     public var restoreSelectedWorkspace: Bool
     public var restoreWorkspaceLayoutAndTabs: Bool
     public var restoreTerminalSessions: Bool
-    public var restoreAgentSessions: Bool
+    public var restoreChatSessions: Bool
 
     public init(
         restoreRepositoriesOnLaunch: Bool,
         restoreSelectedWorkspace: Bool,
         restoreWorkspaceLayoutAndTabs: Bool,
         restoreTerminalSessions: Bool,
-        restoreAgentSessions: Bool
+        restoreChatSessions: Bool
     ) {
         self.restoreRepositoriesOnLaunch = restoreRepositoriesOnLaunch
         self.restoreSelectedWorkspace = restoreSelectedWorkspace
         self.restoreWorkspaceLayoutAndTabs = restoreWorkspaceLayoutAndTabs
         self.restoreTerminalSessions = restoreTerminalSessions
-        self.restoreAgentSessions = restoreAgentSessions
+        self.restoreChatSessions = restoreChatSessions
     }
 }
 

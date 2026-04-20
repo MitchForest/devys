@@ -6,7 +6,7 @@ import Observation
 import UI
 import Workspace
 
-enum AgentSessionLaunchState: Equatable, Sendable {
+enum ChatSessionLaunchState: Equatable, Sendable {
     case idle
     case launching
     case connected
@@ -87,7 +87,7 @@ struct AgentFollowTarget: Equatable, Sendable {
 struct AgentSubmissionSnapshot: Equatable, Sendable {
     var draft: String
     var selectedCommand: AgentAvailableCommand?
-    var attachments: [AgentAttachment]
+    var attachments: [ChatAttachment]
 }
 
 struct AgentPromptDraftResolution: Equatable, Sendable {
@@ -155,18 +155,18 @@ enum AgentComposerSpeechState: Equatable, Sendable {
 @MainActor
 @Observable
 // swiftlint:disable:next type_body_length
-final class AgentSessionRuntime: Identifiable, TabContentProvider {
+final class ChatSessionRuntime: Identifiable, TabContentProvider {
     nonisolated let id: String
     let workspaceID: Workspace.ID
-    private(set) var sessionID: AgentSessionID
+    private(set) var sessionID: ChatSessionID
     private(set) var descriptor: ACPAgentDescriptor
 
     var connection: ACPConnection?
     var initializeResult: ACPInitializeResult?
-    var launchState: AgentSessionLaunchState
+    var launchState: ChatSessionLaunchState
     var timeline: [AgentTimelineItem]
-    var attachments: [AgentAttachment]
-    var attachmentSummaries: [AgentAttachmentSummary]
+    var attachments: [ChatAttachment]
+    var attachmentSummaries: [ChatAttachmentSummary]
     var tabTitle: String
     var tabIcon: String
     var tabSubtitle: String?
@@ -194,11 +194,11 @@ final class AgentSessionRuntime: Identifiable, TabContentProvider {
 
     init(
         workspaceID: Workspace.ID,
-        sessionID: AgentSessionID,
+        sessionID: ChatSessionID,
         descriptor: ACPAgentDescriptor,
-        launchState: AgentSessionLaunchState = .idle,
+        launchState: ChatSessionLaunchState = .idle,
         timeline: [AgentTimelineItem] = [],
-        attachments: [AgentAttachment] = []
+        attachments: [ChatAttachment] = []
     ) {
         self.id = sessionID.rawValue
         self.workspaceID = workspaceID
@@ -211,7 +211,7 @@ final class AgentSessionRuntime: Identifiable, TabContentProvider {
         self.attachments = attachments
         self.attachmentSummaries = []
         self.tabTitle = descriptor.displayName
-        self.tabIcon = AgentSessionRuntime.defaultIcon(for: descriptor.kind)
+        self.tabIcon = ChatSessionRuntime.defaultIcon(for: descriptor.kind)
         self.tabSubtitle = nil
         self.draft = ""
         self.selectedCommand = nil
@@ -327,7 +327,7 @@ final class AgentSessionRuntime: Identifiable, TabContentProvider {
     }
 
     func updateSessionIdentity(
-        sessionID: AgentSessionID,
+        sessionID: ChatSessionID,
         descriptor: ACPAgentDescriptor
     ) {
         self.sessionID = sessionID
@@ -376,13 +376,13 @@ final class AgentSessionRuntime: Identifiable, TabContentProvider {
         selectedCommand = nil
     }
 
-    func addAttachment(_ attachment: AgentAttachment) {
+    func addAttachment(_ attachment: ChatAttachment) {
         guard !attachments.contains(where: { $0.id == attachment.id }) else { return }
         attachments.append(attachment)
         refreshAttachmentSummaries()
     }
 
-    func addAttachments(_ newAttachments: [AgentAttachment]) {
+    func addAttachments(_ newAttachments: [ChatAttachment]) {
         var didChange = false
         for attachment in newAttachments where !attachments.contains(where: { $0.id == attachment.id }) {
             attachments.append(attachment)
@@ -861,7 +861,7 @@ final class AgentSessionRuntime: Identifiable, TabContentProvider {
     private func decodeRequest<Request: Decodable & AgentSessionScopedRequest>(
         _ type: Request.Type,
         from request: ACPIncomingRequest,
-        expectedSessionID: AgentSessionID
+        expectedSessionID: ChatSessionID
     ) -> Request? {
         guard let params = request.params,
               let decoded = try? ACPValue.decode(Request.self, from: params),
@@ -1094,7 +1094,7 @@ final class AgentSessionRuntime: Identifiable, TabContentProvider {
         message: String,
         draft: String,
         selectedCommand: AgentAvailableCommand?,
-        attachments: [AgentAttachment]
+        attachments: [ChatAttachment]
     ) async {
         if self.draft.isEmpty {
             self.draft = draft
@@ -1111,7 +1111,7 @@ final class AgentSessionRuntime: Identifiable, TabContentProvider {
 
     private func makePromptBlocks(
         draft: String,
-        attachments: [AgentAttachment]
+        attachments: [ChatAttachment]
     ) async throws -> [AgentContentBlock] {
         if let workspaceBridge {
             return try await workspaceBridge.promptBlocks(
@@ -1161,7 +1161,7 @@ final class AgentSessionRuntime: Identifiable, TabContentProvider {
     private func refreshAttachmentSummaries() {
         guard let workspaceBridge else {
             attachmentSummaries = attachments.map {
-                AgentAttachmentSummary(
+                ChatAttachmentSummary(
                     attachment: $0,
                     title: $0.id,
                     subtitle: nil,

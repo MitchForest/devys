@@ -15,6 +15,7 @@ public struct RepoItem: View {
 
     private let abbreviation: String
     private let customSymbol: String?
+    private let badgeSymbol: String?
     private let repoName: String
     private let isActive: Bool
     private let onSelect: () -> Void
@@ -24,12 +25,14 @@ public struct RepoItem: View {
     public init(
         abbreviation: String,
         customSymbol: String? = nil,
+        badgeSymbol: String? = nil,
         repoName: String = "",
         isActive: Bool = false,
         onSelect: @escaping () -> Void
     ) {
         self.abbreviation = String(abbreviation.prefix(2))
         self.customSymbol = customSymbol
+        self.badgeSymbol = badgeSymbol
         self.repoName = repoName
         self.isActive = isActive
         self.onSelect = onSelect
@@ -61,6 +64,11 @@ public struct RepoItem: View {
                     }
                 }
                 .foregroundStyle(foregroundColor)
+
+                if let badgeSymbol {
+                    badgeView(symbol: badgeSymbol)
+                        .offset(x: layout.repoItemSize * 0.24, y: layout.repoItemSize * 0.24)
+                }
             }
         }
         .buttonStyle(.plain)
@@ -84,6 +92,24 @@ public struct RepoItem: View {
         if isHovered { return theme.text }
         return theme.textSecondary
     }
+
+    private func badgeView(
+        symbol: String
+    ) -> some View {
+        ZStack {
+            Circle()
+                .fill(theme.card)
+                .frame(width: 14, height: 14)
+
+            Circle()
+                .stroke(theme.border, lineWidth: 1)
+                .frame(width: 14, height: 14)
+
+            Image(systemName: symbol)
+                .font(.system(size: 6, weight: .bold))
+                .foregroundStyle(theme.textSecondary)
+        }
+    }
 }
 
 // MARK: - Previews
@@ -93,6 +119,7 @@ public struct RepoItem: View {
         RepoItem(abbreviation: "DV", repoName: "devys", isActive: true) {}
         RepoItem(abbreviation: "AF", repoName: "agent-flows") {}
         RepoItem(abbreviation: "UI", customSymbol: "paintbrush.fill", repoName: "devys-ui") {}
+        RepoItem(abbreviation: "DV", badgeSymbol: "server.rack", repoName: "devys (mac-mini)") {}
     }
     .padding(24)
     .background(Color(hex: "#121110"))

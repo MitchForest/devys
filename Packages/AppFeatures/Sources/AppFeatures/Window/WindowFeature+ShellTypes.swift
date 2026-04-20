@@ -36,7 +36,7 @@ public extension WindowFeature {
     }
 
     enum WorkspaceCommand: Equatable, Sendable {
-        case openAgents
+        case openChat
         case launchShell
         case launchClaude
         case launchCodex

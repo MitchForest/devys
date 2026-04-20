@@ -7,7 +7,7 @@ import Workspace
 
 @Suite("Terminal Relaunch Snapshot Tests")
 struct TerminalRelaunchSnapshotTests {
-    @Test("Workspace relaunch snapshots round-trip editor, diff, terminal, and agent tabs")
+    @Test("Workspace relaunch snapshots round-trip editor, diff, terminal, and chat tabs")
     func snapshotRoundTrip() throws {
         let repositoryURL = URL(fileURLWithPath: "/tmp/devys/repo")
         let editorURL = URL(fileURLWithPath: "/tmp/devys/repo/README.md")
@@ -36,8 +36,8 @@ struct TerminalRelaunchSnapshotTests {
                             .editor(fileURL: editorURL),
                             .gitDiff(path: "README.md", isStaged: false),
                             .terminal(hostedSessionID: terminalID),
-                            .agent(
-                                PersistedAgentSessionRecord(
+                            .chat(
+                                PersistedChatSessionRecord(
                                     sessionID: "session-1",
                                     kind: .codex,
                                     title: "Codex",
@@ -109,8 +109,8 @@ struct TerminalRelaunchSnapshotTests {
                         selectedTabIndex: 1,
                         tabs: [
                             .gitDiff(path: "README.md", isStaged: false),
-                            .agent(
-                                PersistedAgentSessionRecord(
+                            .chat(
+                                PersistedChatSessionRecord(
                                     sessionID: "session-nested",
                                     kind: .codex,
                                     title: "Nested",
@@ -237,8 +237,8 @@ struct TerminalRelaunchSnapshotTests {
                     .editor(fileURL: editorURL),
                     .gitDiff(path: "Sources/App.swift", isStaged: diffIsStaged),
                     .terminal(hostedSessionID: terminalID),
-                    .agent(
-                        PersistedAgentSessionRecord(
+                    .chat(
+                        PersistedChatSessionRecord(
                             sessionID: "session-\(workspaceID)",
                             kind: .claude,
                             title: "Claude",

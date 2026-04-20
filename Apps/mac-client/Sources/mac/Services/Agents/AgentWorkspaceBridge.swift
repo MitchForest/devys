@@ -8,14 +8,14 @@ import Git
 import UniformTypeIdentifiers
 import Workspace
 
-struct AgentAttachmentSummary: Equatable, Sendable, Identifiable {
+struct ChatAttachmentSummary: Equatable, Sendable, Identifiable {
     enum Delivery: String, Equatable, Sendable {
         case embedded
         case linked
         case image
     }
 
-    let attachment: AgentAttachment
+    let attachment: ChatAttachment
     let title: String
     let subtitle: String?
     let systemImage: String
@@ -78,7 +78,7 @@ enum AgentWorkspaceBridgeError: LocalizedError, Equatable {
 final class AgentWorkspaceBridge {
     private struct ResolvedAttachmentPayload {
         let block: AgentContentBlock
-        let summary: AgentAttachmentSummary
+        let summary: ChatAttachmentSummary
     }
 
     let workspaceID: Workspace.ID
@@ -110,10 +110,10 @@ final class AgentWorkspaceBridge {
     }
 
     func attachmentSummaries(
-        for attachments: [AgentAttachment],
+        for attachments: [ChatAttachment],
         capabilities: ACPPromptCapabilities
-    ) async -> [AgentAttachmentSummary] {
-        var summaries: [AgentAttachmentSummary] = []
+    ) async -> [ChatAttachmentSummary] {
+        var summaries: [ChatAttachmentSummary] = []
         for attachment in attachments {
             if let summary = try? await resolvedAttachmentPayload(
                 for: attachment,
@@ -143,7 +143,7 @@ final class AgentWorkspaceBridge {
 
     func promptBlocks(
         draft: String,
-        attachments: [AgentAttachment],
+        attachments: [ChatAttachment],
         capabilities: ACPPromptCapabilities
     ) async throws -> [AgentContentBlock] {
         var blocks: [AgentContentBlock] = []
@@ -273,14 +273,10 @@ final class AgentWorkspaceBridge {
                 return existing.id
             }
 
-            let attachCommand = await persistentTerminalHostController.attachCommand(
-                for: snapshot.hostedSessionID
-            )
             let session = workspaceTerminalRegistry.createSession(
                 in: workspaceID,
                 workingDirectory: snapshot.workingDirectoryURL,
                 requestedCommand: snapshot.command,
-                attachCommand: attachCommand,
                 terminateHostedSessionOnClose: false,
                 id: snapshot.hostedSessionID
             )
@@ -288,11 +284,22 @@ final class AgentWorkspaceBridge {
             return session.id
         }
 
-        let command = "cat \(shellQuoted(snapshot.logFileURL.path))"
+        _ = try await persistentTerminalHostController.ensureRunning()
+        let record = try await persistentTerminalHostController.createSession(
+            workspaceID: workspaceID,
+            workingDirectory: snapshot.workingDirectoryURL,
+            launchCommand: "tail -n +1 -f \(shellQuoted(snapshot.logFileURL.path))",
+            launchProfile: .compatibilityShell,
+            persistOnDisconnect: false
+        )
         let session = workspaceTerminalRegistry.createSession(
             in: workspaceID,
-            workingDirectory: snapshot.workingDirectoryURL,
-            requestedCommand: command
+            workingDirectory: record.workingDirectory ?? snapshot.workingDirectoryURL,
+            requestedCommand: record.launchCommand,
+            preferredViewportSize: record.viewportSize.map {
+                HostedTerminalViewportSize(cols: $0.cols, rows: $0.rows)
+            },
+            id: record.id
         )
         session.tabTitle = snapshot.command
         return session.id
@@ -310,7 +317,7 @@ final class AgentWorkspaceBridge {
     }
 
     private func resolvedAttachmentPayload(
-        for attachment: AgentAttachment,
+        for attachment: ChatAttachment,
         capabilities: ACPPromptCapabilities
     ) async throws -> ResolvedAttachmentPayload {
         switch attachment {
@@ -325,7 +332,7 @@ final class AgentWorkspaceBridge {
         case .image(let url):
             return try await resolvedImageAttachment(url: url, capabilities: capabilities)
         case .url(let url):
-            let summary = AgentAttachmentSummary(
+            let summary = ChatAttachmentSummary(
                 attachment: attachment,
                 title: url.lastPathComponent.isEmpty ? url.absoluteString : url.lastPathComponent,
                 subtitle: url.host,
@@ -348,7 +355,7 @@ final class AgentWorkspaceBridge {
                 blob: nil,
                 mimeType: language.flatMap { "text/\($0)" } ?? "text/plain"
             )
-            let summary = AgentAttachmentSummary(
+            let summary = ChatAttachmentSummary(
                 attachment: attachment,
                 title: "Snippet",
                 subtitle: language ?? "plain text",
@@ -367,7 +374,7 @@ final class AgentWorkspaceBridge {
         capabilities: ACPPromptCapabilities
     ) async throws -> ResolvedAttachmentPayload {
         let normalizedURL = url.standardizedFileURL
-        let attachment = AgentAttachment.file(url: normalizedURL)
+        let attachment = ChatAttachment.file(url: normalizedURL)
         let mimeType = mimeType(for: normalizedURL)
 
         if let imageUTType = UTType(mimeType: mimeType),
@@ -388,7 +395,7 @@ final class AgentWorkspaceBridge {
             return embedded
         }
 
-        let summary = AgentAttachmentSummary(
+        let summary = ChatAttachmentSummary(
             attachment: attachment,
             title: normalizedURL.lastPathComponent,
             subtitle: relativePath(for: normalizedURL),
@@ -413,7 +420,7 @@ final class AgentWorkspaceBridge {
         isStaged: Bool,
         capabilities: ACPPromptCapabilities
     ) async throws -> ResolvedAttachmentPayload {
-        let attachment = AgentAttachment.gitDiff(path: path, isStaged: isStaged)
+        let attachment = ChatAttachment.gitDiff(path: path, isStaged: isStaged)
         let title = URL(fileURLWithPath: path).lastPathComponent
         guard let gitStore = gitStoreProvider() else {
             throw AgentWorkspaceBridgeError.unavailable("Git diff context is unavailable for this workspace.")
@@ -427,7 +434,7 @@ final class AgentWorkspaceBridge {
                 blob: nil,
                 mimeType: "text/x-diff"
             )
-            let summary = AgentAttachmentSummary(
+            let summary = ChatAttachmentSummary(
                 attachment: attachment,
                 title: title,
                 subtitle: isStaged ? "Staged diff" : "Working tree diff",
@@ -440,7 +447,7 @@ final class AgentWorkspaceBridge {
             )
         }
 
-        let summary = AgentAttachmentSummary(
+        let summary = ChatAttachmentSummary(
             attachment: attachment,
             title: title,
             subtitle: isStaged ? "Linked staged diff" : "Linked working diff",
@@ -463,7 +470,7 @@ final class AgentWorkspaceBridge {
     private func resolvedImageAttachment(
         url: URL,
         capabilities: ACPPromptCapabilities,
-        attachment: AgentAttachment? = nil
+        attachment: ChatAttachment? = nil
     ) async throws -> ResolvedAttachmentPayload {
         let normalizedURL = url.standardizedFileURL
         let attachment = attachment ?? .image(url: normalizedURL)
@@ -471,7 +478,7 @@ final class AgentWorkspaceBridge {
 
         if capabilities.image {
             let imageData = try Data(contentsOf: normalizedURL)
-            let summary = AgentAttachmentSummary(
+            let summary = ChatAttachmentSummary(
                 attachment: attachment,
                 title: normalizedURL.lastPathComponent,
                 subtitle: relativePath(for: normalizedURL),
@@ -489,7 +496,7 @@ final class AgentWorkspaceBridge {
             )
         }
 
-        let summary = AgentAttachmentSummary(
+        let summary = ChatAttachmentSummary(
             attachment: attachment,
             title: normalizedURL.lastPathComponent,
             subtitle: "Image linked as a resource",
@@ -511,11 +518,11 @@ final class AgentWorkspaceBridge {
 
     private func textResourceBlock(
         url: URL,
-        attachment: AgentAttachment,
+        attachment: ChatAttachment,
         mimeType: String
     ) throws -> ResolvedAttachmentPayload {
         let text = try readAttachmentText(from: url)
-        let summary = AgentAttachmentSummary(
+        let summary = ChatAttachmentSummary(
             attachment: attachment,
             title: url.lastPathComponent,
             subtitle: relativePath(for: url),
@@ -763,11 +770,13 @@ private actor AgentInlineTerminalStore {
             ([request.command] + request.args).map(shellQuoted).joined(separator: " "),
             environment: request.env.map { ($0.name, $0.value) }
         )
-        try await terminalHostController.ensureRunning()
+        _ = try await terminalHostController.ensureRunning()
         let record = try await terminalHostController.createSession(
             workspaceID: workspaceID,
             workingDirectory: workingDirectoryURL,
-            launchCommand: launchCommand
+            launchCommand: launchCommand,
+            launchProfile: .compatibilityShell,
+            persistOnDisconnect: false
         )
         let terminalID = record.id.uuidString
         let attachHandle = try Self.attachHandle(
@@ -991,21 +1000,34 @@ private actor AgentInlineTerminalStore {
     ) throws -> FileHandle {
         let fd = try TerminalHostSocketIO.connect(to: socketPath)
         let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
-        let request = TerminalHostControlRequest.attach(sessionID: sessionID, cols: 120, rows: 40)
-        let requestData = try JSONEncoder().encode(request)
-        try TerminalHostSocketIO.writeLine(requestData, to: handle)
+        let request = TerminalHostControlRequest.attach(
+            sessionID: sessionID,
+            cols: 120,
+            rows: 40,
+            replayBudget: .hostedTerminalDefault
+        )
+        do {
+            try TerminalHostSocketIO.withResponseTimeout(fileDescriptor: fd) {
+                let requestData = try JSONEncoder().encode(request)
+                try TerminalHostSocketIO.writeLine(requestData, to: handle)
 
-        let responseData = try TerminalHostSocketIO.readLine(from: handle)
-        let response = try JSONDecoder().decode(TerminalHostControlResponse.self, from: responseData)
-        switch response {
-        case .attached:
+                let responseData = try TerminalHostSocketIO.readLine(from: handle)
+                let response = try JSONDecoder().decode(TerminalHostControlResponse.self, from: responseData)
+                switch response {
+                case .attached:
+                    return
+                case .failure(let message):
+                    throw AgentWorkspaceBridgeError.unavailable(message)
+                default:
+                    throw AgentWorkspaceBridgeError.unavailable(
+                        "Failed to attach to the hosted terminal session."
+                    )
+                }
+            }
             return handle
-        case .failure(let message):
+        } catch {
             try? handle.close()
-            throw AgentWorkspaceBridgeError.unavailable(message)
-        default:
-            try? handle.close()
-            throw AgentWorkspaceBridgeError.unavailable("Failed to attach to the hosted terminal session.")
+            throw error
         }
     }
 }

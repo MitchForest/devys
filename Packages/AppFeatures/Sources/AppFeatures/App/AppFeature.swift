@@ -48,6 +48,7 @@ public struct AppFeature {
             case .appDidFinishLaunching:
                 state.lifecycle.hasFinishedLaunching = true
                 return .merge(
+                    .send(.window(.loadRemoteRepositories)),
                     .send(.window(.startWorkspaceOperationalObservation)),
                     .send(.window(.startWorkflowObservation))
                 )

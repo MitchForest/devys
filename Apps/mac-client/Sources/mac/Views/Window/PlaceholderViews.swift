@@ -4,7 +4,6 @@
 // Copyright © 2026 Devys. All rights reserved.
 
 import SwiftUI
-import GhosttyTerminal
 import UI
 
 struct PlaceholderView: View {
@@ -37,78 +36,6 @@ struct PlaceholderView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(theme.base)
-    }
-}
-
-struct TerminalRewritePlaceholderView: View {
-    @Environment(\.devysTheme) private var theme
-
-    let workingDirectory: URL?
-    let requestedCommand: String?
-
-    private let ghosttyStatus = GhosttyBootstrap.status
-
-    private var directoryLabel: String? {
-        workingDirectory?.lastPathComponent.nilIfEmpty
-    }
-
-    private var commandLabel: String? {
-        requestedCommand?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .nilIfEmpty
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DevysSpacing.space4) {
-            VStack(alignment: .leading, spacing: DevysSpacing.space2) {
-                Text("terminal_unavailable")
-                    .font(DevysTypography.title)
-                    .foregroundStyle(theme.text)
-
-                Text("$ rebuilding_on_libghostty")
-                    .font(DevysTypography.body)
-                    .foregroundStyle(theme.textSecondary)
-            }
-
-            VStack(alignment: .leading, spacing: DevysSpacing.space2) {
-                if let directoryLabel {
-                    placeholderLine(label: "cwd", value: directoryLabel)
-                }
-
-                if let commandLabel {
-                    placeholderLine(label: "command", value: commandLabel)
-                }
-
-                placeholderLine(label: "status", value: "stubbed_phase_1")
-                placeholderLine(label: "ghostty", value: ghosttyStatus.frameworkStateLabel)
-                placeholderLine(label: "source", value: ghosttyStatus.sourceStateLabel)
-                placeholderLine(label: "commit", value: ghosttyStatus.shortCommit)
-                placeholderLine(label: "zig_min", value: ghosttyStatus.minimumZigVersion)
-                placeholderLine(label: "next", value: "build_ghostty_surface")
-            }
-
-            Text(
-                "The old terminal path is intentionally disabled on this branch "
-                    + "while the new Ghostty-backed terminal is built from scratch."
-            )
-                .font(DevysTypography.body)
-                .foregroundStyle(theme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-        .padding(DevysSpacing.space6)
-        .background(theme.base)
-    }
-
-    @ViewBuilder
-    private func placeholderLine(label: String, value: String) -> some View {
-        HStack(spacing: DevysSpacing.space2) {
-            Text("\(label):")
-                .foregroundStyle(theme.textTertiary)
-            Text(value.lowercased().replacingOccurrences(of: " ", with: "_"))
-                .foregroundStyle(theme.textSecondary)
-        }
-        .font(DevysTypography.body)
     }
 }
 

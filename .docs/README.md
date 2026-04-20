@@ -1,47 +1,70 @@
 # Devys Docs
 
-Updated: 2026-04-16
+Updated: 2026-04-19
 
 ## Purpose
 
-This directory is intentionally split into reference docs, plan docs, ADRs, and supporting context.
+This directory is split by document role.
 
-If a document does not fit one of those roles cleanly, it should be rewritten or deleted instead of allowed to drift.
+If a document does not fit one role cleanly, rewrite it or delete it.
 
-## Canonical Reference Docs
+## Directory Roles
 
-- `adrs/`
-  - immutable governance decisions
+### `reference/`
+
+Canonical, stable repo reference material.
+
+This is where architecture rules, UI system rules, shipped product contracts, and other durable guidance belong.
+
+Current canonical reference docs include:
+
 - `reference/architecture.md`
-  - canonical architecture, ownership, boundary, and modularity reference
 - `reference/ui-ux.md`
-  - canonical UI and interaction reference
 - `reference/legacy-inventory.md`
-  - concrete legacy deletion and quarantine inventory that informs migration work
+- `reference/terminal-runtime.md`
 
-## Canonical Planning Doc
+### `active/`
 
-- `plan/implementation-plan.md`
-  - the only active migration and execution plan
-  - records what is done, what remains, and the ordered next work
-  - the required starting point for migration work and phase-status questions
+Active work plans only.
 
-## Supporting Context
+Rules:
 
-- `future/workflow-vision.md`
-  - future product direction for reusable workflows
-  - not a migration source of truth
-- `research/comparison-matrix.md`
-  - competitive and repo research input
-  - not a build plan
-- `repos/`
-  - raw upstream repo snapshots and reference material used during research
-  - not part of the canonical Devys doc set
+- `active/` may contain multiple active plans.
+- A plan belongs here only while the work is active or queued next.
+- When a future brief becomes active, move it here and turn it into the working plan.
+- When a plan closes, delete it or promote its durable outcomes into `reference/`.
 
-## Rules
+### `future/`
 
-- Do not create phase-specific working-plan files when the active implementation plan can be updated instead.
-- Do not put immutable rules into plan docs. Put them in ADRs or the reference docs.
-- Do not leave outdated plans in place once their useful content has been folded forward.
-- When a migration slice lands, update `plan/implementation-plan.md` in the same stream.
-- If phase status, handoff notes, or next-work instructions appear to conflict elsewhere, `plan/implementation-plan.md` is the source of truth.
+Inactive design briefs and future-looking product ideas.
+
+Rules:
+
+- These docs do not override `reference/`.
+- These docs are not execution source of truth.
+- If work actually starts, move the doc into `active/` instead of copying it into some generic catch-all plan.
+
+### `research/`
+
+Investigation notes, comparisons, reverse engineering, and other exploratory material.
+
+Rules:
+
+- Research is input, not doctrine.
+- Research is not a plan.
+- If research becomes stable guidance, rewrite it into `reference/`.
+
+## Repo Rules
+
+- Do not create ADR files. Put accepted doctrine directly into the relevant `reference/` doc.
+- Do not leave closed plans in `active/`.
+- Do not keep active work in `future/`.
+- Do not leave plan history or phase diaries inside `reference/`.
+- Keep cross-references current when docs move.
+- Prefer one clear doc over multiple overlapping versions.
+
+## Current State
+
+Look in `active/` for active work.
+
+If `active/` only contains `README.md`, no active plan is currently declared.

@@ -13,7 +13,7 @@ struct ContentViewCommandPaletteCatalog {
     let visibleNavigatorWorkspaces: [(repositoryID: Repository.ID, workspace: Worktree)]
     let workspaceStatesByID: [Worktree.ID: WorktreeState]
     let activeWorktree: Worktree?
-    let agentSessions: [HostedAgentSessionSummary]
+    let chatSessions: [HostedChatSessionSummary]
     let workflowState: WindowFeature.WorkflowWorkspaceState
     let repositorySettingsStore: RepositorySettingsStore
     let operationalState: WorkspaceOperationalState
@@ -94,8 +94,8 @@ private extension ContentViewCommandPaletteCatalog {
              .command(.revealCurrentWorkspaceInNavigator):
             return "Navigation"
 
-        case .command(.openAgents),
-             .command(.focusAgentSession):
+        case .command(.openChat),
+             .command(.focusChatSession):
             return "Agents"
 
         case .command(.createWorkflow),
@@ -125,9 +125,9 @@ private extension ContentViewCommandPaletteCatalog {
             WorkspaceSearchItem(
                 action: .command(.addRepository),
                 title: "Add Repository",
-                subtitle: "Open a local project or import a Git repository",
+                subtitle: "Open a local project or connect a repository over SSH",
                 systemImage: "folder.badge.plus",
-                keywords: ["repository", "project", "import", "add", "open"],
+                keywords: ["repository", "project", "import", "add", "open", "ssh", "remote"],
                 accessory: "⌘O"
             )
         ]
@@ -206,11 +206,11 @@ private extension ContentViewCommandPaletteCatalog {
         if let activeWorktree {
             items.append(
                 WorkspaceSearchItem(
-                    action: .command(.openAgents),
-                    title: "New Agent Session",
+                    action: .command(.openChat),
+                    title: "New Chat",
                     subtitle: activeWorktree.workingDirectory.path,
                     systemImage: "person.crop.circle.badge.plus",
-                    keywords: ["agent", "agents", "chat", "assistant", "new"],
+                    keywords: ["chat", "assistant", "new"],
                     accessory: nil
                 )
             )
@@ -257,16 +257,15 @@ private extension ContentViewCommandPaletteCatalog {
                 )
             }
 
-            for session in agentSessions {
+            for session in chatSessions {
                 items.append(
                     WorkspaceSearchItem(
-                        action: .command(.focusAgentSession(session.sessionID)),
+                        action: .command(.focusChatSession(session.sessionID)),
                         title: "Open \(session.tabTitle)",
                         subtitle: session.stateSummary,
                         systemImage: session.tabIcon,
                         keywords: [
-                            "agent",
-                            "session",
+                            "chat",
                             session.tabTitle,
                             session.stateSummary
                         ],

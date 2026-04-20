@@ -27,17 +27,17 @@ struct GlobalSettingsPersistenceTests {
             ),
             explorer: ExplorerSettings(showDotfiles: false, excludePatterns: ["node_modules"]),
             appearance: AppearanceSettings(mode: .auto, uiFontScale: 1.25, accentColor: "#FF0000"),
-            agent: AgentSettings(defaultHarness: AgentSettings.Harness.codex.rawValue),
+            chat: ChatSettings(defaultHarness: ChatSettings.Harness.codex.rawValue),
             notifications: NotificationSettings(
                 terminalActivity: false,
-                agentActivity: true
+                chatActivity: true
             ),
             restore: RestoreSettings(
                 restoreRepositoriesOnLaunch: true,
                 restoreSelectedWorkspace: true,
                 restoreWorkspaceLayoutAndTabs: false,
                 restoreTerminalSessions: true,
-                restoreAgentSessions: false
+                restoreChatSessions: false
             ),
             shortcuts: WorkspaceShellShortcutSettings(
                 bindingsByAction: [
@@ -93,7 +93,7 @@ struct GlobalSettingsPersistenceTests {
             ),
             explorer: ExplorerSettings(showDotfiles: false, excludePatterns: ["DerivedData"]),
             appearance: AppearanceSettings(mode: .light, uiFontScale: 1.1, accentColor: "#00FF00"),
-            agent: AgentSettings(defaultHarness: AgentSettings.Harness.claudeCode.rawValue)
+            agent: ChatSettings(defaultHarness: ChatSettings.Harness.claudeCode.rawValue)
         )
 
         userDefaults.set(
@@ -109,12 +109,12 @@ struct GlobalSettingsPersistenceTests {
         #expect(loaded.restore.restoreSelectedWorkspace)
         #expect(loaded.restore.restoreTerminalSessions)
         #expect(loaded.restore.restoreWorkspaceLayoutAndTabs)
-        #expect(loaded.restore.restoreAgentSessions)
+        #expect(loaded.restore.restoreChatSessions)
         #expect(loaded.shortcuts == WorkspaceShellShortcutSettings())
     }
 
-    @Test("Restore settings default agent restore when the persisted field is absent")
-    func restoreSettingsDecodeDefaultsAgentRestore() throws {
+    @Test("Restore settings default chat restore when the persisted field is absent")
+    func restoreSettingsDecodeDefaultsChatRestore() throws {
         let data = try JSONSerialization.data(withJSONObject: [
             "restoreRepositoriesOnLaunch": true,
             "restoreSelectedWorkspace": false,
@@ -128,7 +128,29 @@ struct GlobalSettingsPersistenceTests {
         #expect(!decoded.restoreSelectedWorkspace)
         #expect(decoded.restoreWorkspaceLayoutAndTabs)
         #expect(decoded.restoreTerminalSessions)
-        #expect(decoded.restoreAgentSessions)
+        #expect(decoded.restoreChatSessions)
+    }
+
+    @Test("Legacy notification and restore keys decode into chat settings")
+    func legacyNotificationAndRestoreKeysDecodeIntoChatSettings() throws {
+        let notificationData = try JSONSerialization.data(withJSONObject: [
+            "terminalActivity": false,
+            "agentActivity": true
+        ])
+        let restoreData = try JSONSerialization.data(withJSONObject: [
+            "restoreRepositoriesOnLaunch": true,
+            "restoreSelectedWorkspace": true,
+            "restoreWorkspaceLayoutAndTabs": true,
+            "restoreTerminalSessions": false,
+            "restoreAgentSessions": false
+        ])
+
+        let decodedNotifications = try JSONDecoder().decode(NotificationSettings.self, from: notificationData)
+        let decodedRestore = try JSONDecoder().decode(RestoreSettings.self, from: restoreData)
+
+        #expect(decodedNotifications.terminalActivity == false)
+        #expect(decodedNotifications.chatActivity == true)
+        #expect(decodedRestore.restoreChatSessions == false)
     }
 }
 
@@ -136,7 +158,7 @@ private struct LegacyGlobalSettings: Codable {
     var shell: LegacyShellSettings
     var explorer: ExplorerSettings
     var appearance: AppearanceSettings
-    var agent: AgentSettings
+    var agent: ChatSettings
 }
 
 private struct LegacyShellSettings: Codable {

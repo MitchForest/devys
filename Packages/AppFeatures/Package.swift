@@ -14,6 +14,7 @@ let package = Package(
         )
     ],
     dependencies: [
+        .package(path: "../RemoteCore"),
         .package(path: "../Workspace"),
         .package(path: "../Git"),
         .package(path: "../Split"),
@@ -32,6 +33,7 @@ let package = Package(
                 .product(name: "Split", package: "Split"),
                 .product(name: "UI", package: "UI"),
                 .product(name: "ACPClientKit", package: "ACPClientKit"),
+                .product(name: "RemoteCore", package: "RemoteCore"),
                 .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "Sharing", package: "swift-sharing")

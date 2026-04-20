@@ -5,15 +5,15 @@ import Split
 import Workspace
 
 public extension WindowFeature {
-    struct AgentSessionLaunchIntent: Equatable, Sendable {
+    struct ChatSessionLaunchIntent: Equatable, Sendable {
         public var workspaceID: Workspace.ID
-        public var initialAttachments: [AgentAttachment]
+        public var initialAttachments: [ChatAttachment]
         public var preferredPaneID: PaneID?
         public var preferredKind: ACPAgentKind?
 
         public init(
             workspaceID: Workspace.ID,
-            initialAttachments: [AgentAttachment] = [],
+            initialAttachments: [ChatAttachment] = [],
             preferredPaneID: PaneID? = nil,
             preferredKind: ACPAgentKind? = nil
         ) {
@@ -24,17 +24,17 @@ public extension WindowFeature {
         }
     }
 
-    struct AgentSessionLaunchRequest: Equatable, Identifiable, Sendable {
+    struct ChatSessionLaunchRequest: Equatable, Identifiable, Sendable {
         public let id: UUID
         public var workspaceID: Workspace.ID
         public var kind: ACPAgentKind
-        public var initialAttachments: [AgentAttachment]
+        public var initialAttachments: [ChatAttachment]
         public var preferredPaneID: PaneID?
 
         public init(
             workspaceID: Workspace.ID,
             kind: ACPAgentKind,
-            initialAttachments: [AgentAttachment] = [],
+            initialAttachments: [ChatAttachment] = [],
             preferredPaneID: PaneID? = nil,
             id: UUID = UUID()
         ) {
@@ -46,9 +46,9 @@ public extension WindowFeature {
         }
     }
 
-    enum AgentSessionLaunchResolution: Equatable, Sendable {
-        case request(AgentSessionLaunchRequest)
-        case presentation(AgentLaunchPresentation)
+    enum ChatSessionLaunchResolution: Equatable, Sendable {
+        case request(ChatSessionLaunchRequest)
+        case presentation(ChatLaunchPresentation)
     }
 }
 
@@ -58,9 +58,9 @@ extension WindowFeature {
         action: Action
     ) -> Effect<Action> {
         switch action {
-        case .requestAgentSessionLaunch(let intent):
+        case .requestChatSessionLaunch(let intent):
             if let preferredKind = intent.preferredKind {
-                state.agentSessionLaunchRequest = AgentSessionLaunchRequest(
+                state.chatSessionLaunchRequest = ChatSessionLaunchRequest(
                     workspaceID: intent.workspaceID,
                     kind: preferredKind,
                     initialAttachments: intent.initialAttachments,
@@ -74,25 +74,25 @@ extension WindowFeature {
             let requestID = uuid()
             return .run { send in
                 let settings = await globalSettingsClient.load()
-                let resolution = resolveAgentSessionLaunchResolution(
+                let resolution = resolveChatSessionLaunchResolution(
                     intent: intent,
-                    defaultHarness: settings.agent.defaultHarness,
+                    defaultHarness: settings.chat.defaultHarness,
                     requestID: requestID
                 )
-                await send(.agentSessionLaunchResolved(resolution))
+                await send(.chatSessionLaunchResolved(resolution))
             }
 
-        case .agentSessionLaunchResolved(let resolution):
+        case .chatSessionLaunchResolved(let resolution):
             switch resolution {
             case .request(let request):
-                state.agentSessionLaunchRequest = request
+                state.chatSessionLaunchRequest = request
             case .presentation(let presentation):
-                state.agentLaunchPresentation = presentation
+                state.chatLaunchPresentation = presentation
             }
             return .none
 
-        case .setAgentSessionLaunchRequest(let request):
-            state.agentSessionLaunchRequest = request
+        case .setChatSessionLaunchRequest(let request):
+            state.chatSessionLaunchRequest = request
             return .none
 
         default:
@@ -101,14 +101,14 @@ extension WindowFeature {
     }
 }
 
-private func resolveAgentSessionLaunchResolution(
-    intent: WindowFeature.AgentSessionLaunchIntent,
+private func resolveChatSessionLaunchResolution(
+    intent: WindowFeature.ChatSessionLaunchIntent,
     defaultHarness: String?,
     requestID: UUID
-) -> WindowFeature.AgentSessionLaunchResolution {
+) -> WindowFeature.ChatSessionLaunchResolution {
     if let kind = defaultHarness.flatMap(preferredAgentKind(forDefaultHarness:)) {
         return .request(
-            WindowFeature.AgentSessionLaunchRequest(
+            WindowFeature.ChatSessionLaunchRequest(
                 workspaceID: intent.workspaceID,
                 kind: kind,
                 initialAttachments: intent.initialAttachments,
@@ -119,7 +119,7 @@ private func resolveAgentSessionLaunchResolution(
     }
 
     return .presentation(
-        AgentLaunchPresentation(
+        ChatLaunchPresentation(
             workspaceID: intent.workspaceID,
             initialAttachments: intent.initialAttachments,
             preferredPaneID: intent.preferredPaneID,
@@ -133,9 +133,9 @@ private func preferredAgentKind(
     forDefaultHarness rawValue: String
 ) -> ACPAgentKind? {
     switch rawValue {
-    case AgentSettings.Harness.codex.rawValue:
+    case ChatSettings.Harness.codex.rawValue:
         .codex
-    case AgentSettings.Harness.claudeCode.rawValue:
+    case ChatSettings.Harness.claudeCode.rawValue:
         .claude
     default:
         nil

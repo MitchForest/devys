@@ -89,6 +89,7 @@ public struct Sheet<Content: View>: View {
                             style: .ghost,
                             action: secondaryAction.action
                         )
+                        .disabled(!secondaryAction.isEnabled)
                     }
 
                     if let primaryAction {
@@ -97,6 +98,7 @@ public struct Sheet<Content: View>: View {
                             style: .primary,
                             action: primaryAction.action
                         )
+                        .disabled(!primaryAction.isEnabled)
                     }
                 }
                 .padding(.horizontal, Spacing.space4)
@@ -111,10 +113,16 @@ public struct Sheet<Content: View>: View {
 
 public struct SheetAction {
     public let title: String
+    public let isEnabled: Bool
     public let action: () -> Void
 
-    public init(title: String, action: @escaping () -> Void) {
+    public init(
+        title: String,
+        isEnabled: Bool = true,
+        action: @escaping () -> Void
+    ) {
         self.title = title
+        self.isEnabled = isEnabled
         self.action = action
     }
 }

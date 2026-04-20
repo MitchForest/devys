@@ -1,82 +1,86 @@
 import Foundation
+import GhosttyTerminalCore
+import MetalKit
+import Rendering
 import SwiftUI
 
 #if os(macOS)
 import AppKit
+#elseif os(iOS)
+import UIKit
 #endif
 
-#if canImport(GhosttyKit) && os(macOS)
-import GhosttyKit
+public struct GhosttyTerminalView: View {
+    public let surfaceState: GhosttyTerminalSurfaceState
+    public let frameProjection: GhosttyTerminalFrameProjection
+    public let appearance: GhosttyTerminalAppearance
+    public let selectionMode: Bool
+    public let focusRequestID: Int
 
-public struct GhosttyTerminalView: NSViewRepresentable {
-    public typealias NSViewType = NSView
+    let callbacks: GhosttyTerminalViewCallbacks
+}
 
-    public let session: GhosttyTerminalSession
-    public let onOpenURL: ((URL) -> Void)?
+#if os(macOS)
+struct GhosttyTerminalPlatformView: NSViewRepresentable {
+    let surfaceState: GhosttyTerminalSurfaceState
+    let frameProjection: GhosttyTerminalFrameProjection
+    let appearance: GhosttyTerminalAppearance
+    let selectionMode: Bool
+    let focusRequestID: Int
+    let callbacks: GhosttyTerminalViewCallbacks
 
-    public init(
-        session: GhosttyTerminalSession,
-        onOpenURL: ((URL) -> Void)? = nil
-    ) {
-        self.session = session
-        self.onOpenURL = onOpenURL
+    func makeNSView(context: Context) -> GhosttyTerminalHostView {
+        let view = GhosttyTerminalHostView()
+        view.update(
+            surfaceState: surfaceState,
+            frameProjection: frameProjection,
+            appearance: appearance,
+            selectionMode: selectionMode,
+            focusRequestID: focusRequestID,
+            callbacks: callbacks
+        )
+        return view
     }
 
-    public func makeNSView(context: Context) -> NSView {
-        GhosttySurfaceHostView(session: session, onOpenURL: onOpenURL)
-    }
-
-    public func updateNSView(_ nsView: NSView, context: Context) {
-        guard let hostView = nsView as? GhosttySurfaceHostView else { return }
-        hostView.bind(session: session, onOpenURL: onOpenURL)
+    func updateNSView(_ nsView: GhosttyTerminalHostView, context: Context) {
+        nsView.update(
+            surfaceState: surfaceState,
+            frameProjection: frameProjection,
+            appearance: appearance,
+            selectionMode: selectionMode,
+            focusRequestID: focusRequestID,
+            callbacks: callbacks
+        )
     }
 }
 
-// swiftlint:disable type_body_length
 @MainActor
-final class GhosttySurfaceHostView: NSView {
-    let session: GhosttyTerminalSession
-    var onOpenURL: ((URL) -> Void)?
+final class GhosttyTerminalHostView: NSView {
+    let metalView = MTKView(frame: .zero, device: MTLCreateSystemDefaultDevice())
+    var renderer: GhosttyMetalTerminalRenderer?
+    var callbacks = GhosttyTerminalViewCallbacks()
+    private var focusRequestID = 0
+    private var lastHandledFocusRequestID = 0
+    private var selectionMode = true
+    private var dragAnchor: CGPoint?
+    private var isSelectionDragActive = false
+    private var lastViewportSignature = ""
+    private var lastRenderInputs: GhosttyTerminalRenderInputs?
+    var drawRetryTask: Task<Void, Never>?
+    var lastRenderFailure: String?
 
-    var rendererHealthy = true
-    var isReadonly = false
-    var focused = false
-    var markedText = NSMutableAttributedString()
-    var keyTextAccumulator: [String]?
-    var lastPerformKeyEvent: TimeInterval?
-    var focusTransferState = GhosttyFocusTransferState()
+    override var acceptsFirstResponder: Bool { true }
 
-    var lastHandledFocusRequestID = 0
-    var hasAppliedInitialStageCommand = false
-
-    let surfaceBox = GhosttySurfaceBox()
-    var eventMonitor: Any?
-
-    override var acceptsFirstResponder: Bool {
-        true
+    init() {
+        super.init(frame: .zero)
+        configureMetalView()
+        configureAccessibility()
+        addSubview(metalView)
     }
 
-    init(
-        session: GhosttyTerminalSession,
-        onOpenURL: ((URL) -> Void)?
-    ) {
-        self.session = session
-        self.onOpenURL = onOpenURL
-        super.init(frame: NSRect(x: 0, y: 0, width: 960, height: 640))
-        surfaceBox.bind(hostView: self)
-
-        session.shutdownHandler = { [weak self] in
-            self?.shutdown()
-        }
-        session.focusRequestHandler = { [weak self] requestID in
-            self?.handleFocusRequest(requestID)
-        }
-
-        installLocalEventMonitor()
-        createSurfaceIfNeeded()
-        updateTrackingAreas()
-        applyPendingFocusRequest()
-        applyPendingStageCommand()
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let local = convert(point, from: superview)
+        return bounds.contains(local) ? self : nil
     }
 
     @available(*, unavailable)
@@ -84,509 +88,248 @@ final class GhosttySurfaceHostView: NSView {
         nil
     }
 
-    func bind(
-        session: GhosttyTerminalSession,
-        onOpenURL: ((URL) -> Void)?
+    deinit {
+        drawRetryTask?.cancel()
+    }
+
+    func update(
+        surfaceState: GhosttyTerminalSurfaceState,
+        frameProjection: GhosttyTerminalFrameProjection,
+        appearance: GhosttyTerminalAppearance,
+        selectionMode: Bool,
+        focusRequestID: Int,
+        callbacks: GhosttyTerminalViewCallbacks
     ) {
-        guard session.id == self.session.id else { return }
-        self.onOpenURL = onOpenURL
-        session.focusRequestHandler = { [weak self] requestID in
-            self?.handleFocusRequest(requestID)
-        }
-        createSurfaceIfNeeded()
-        syncSurfaceMetrics()
-        applyPendingFocusRequest()
-        applyPendingStageCommand()
-    }
+        self.callbacks = callbacks
+        self.selectionMode = selectionMode
+        self.focusRequestID = focusRequestID
+        let renderInputs = GhosttyTerminalRenderInputs(
+            surfaceState: surfaceState,
+            frameProjection: frameProjection,
+            appearance: appearance
+        )
 
-    func handleCloseRequested(processAlive: Bool) {
-        if !processAlive {
-            session.isRunning = false
-        }
-    }
-
-    func updateCurrentDirectory(_ path: String) {
-        session.currentDirectory = URL(fileURLWithPath: path).standardizedFileURL
-    }
-
-    func readClipboard(
-        surface: ghostty_surface_t,
-        location: ghostty_clipboard_e,
-        state: UnsafeMutableRawPointer?
-    ) -> Bool {
-        guard location == GHOSTTY_CLIPBOARD_STANDARD,
-              let value = NSPasteboard.general.string(forType: .string)
-        else {
-            return false
-        }
-
-        value.withCString { pointer in
-            ghostty_surface_complete_clipboard_request(surface, pointer, state, true)
-        }
-        return true
-    }
-
-    func confirmReadClipboard(
-        surface: ghostty_surface_t,
-        text: String?,
-        state: UnsafeMutableRawPointer?,
-        request: ghostty_clipboard_request_e
-    ) {
-        guard request == GHOSTTY_CLIPBOARD_REQUEST_PASTE,
-              let text
-        else {
+        guard ensureRenderer() else {
+            updateAccessibilityValue(for: surfaceState)
             return
         }
 
-        text.withCString { pointer in
-            ghostty_surface_complete_clipboard_request(surface, pointer, state, true)
+        if lastRenderInputs != renderInputs {
+            renderer?.surfaceState = surfaceState
+            renderer?.frameProjection = frameProjection
+            renderer?.appearance = appearance
+            lastRenderInputs = renderInputs
+            requestDraw()
         }
-    }
-
-    func writeClipboard(
-        location: ghostty_clipboard_e,
-        string: String?,
-        confirm: Bool
-    ) {
-        guard location == GHOSTTY_CLIPBOARD_STANDARD,
-              let data = string?.nilIfEmpty
-        else {
-            return
-        }
-
-        _ = confirm
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(data, forType: .string)
-    }
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        if window == nil {
-            session.shutdownHandler = nil
-            session.focusRequestHandler = nil
-            invalidateEventMonitor()
-            shutdown()
-            return
-        }
-        syncSurfaceMetrics()
-        if window?.firstResponder === self {
-            focusDidChange(true)
-        }
-        applyPendingFocusRequest()
+        updateAccessibilityValue(for: surfaceState)
+        notifyViewportIfNeeded()
+        applyFocusRequestIfNeeded()
     }
 
     override func layout() {
         super.layout()
-        syncSurfaceMetrics()
+        metalView.frame = bounds
+        notifyViewportIfNeeded()
+        requestDraw()
     }
 
-    override func updateTrackingAreas() {
-        trackingAreas.forEach(removeTrackingArea)
-        addTrackingArea(
-            NSTrackingArea(
-                rect: bounds,
-                options: [.activeAlways, .inVisibleRect, .mouseEnteredAndExited, .mouseMoved],
-                owner: self
-            )
-        )
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        notifyViewportIfNeeded()
+        applyFocusRequestIfNeeded()
+        requestDraw()
     }
 
     override func viewDidChangeBackingProperties() {
         super.viewDidChangeBackingProperties()
-        syncSurfaceMetrics()
+        notifyViewportIfNeeded()
+        requestDraw()
     }
 
     override func becomeFirstResponder() -> Bool {
-        let accepted = super.becomeFirstResponder()
-        if accepted {
-            focusDidChange(true)
-        }
-        return accepted
-    }
-
-    override func resignFirstResponder() -> Bool {
-        let accepted = super.resignFirstResponder()
-        if accepted {
-            focusDidChange(false)
-        }
-        return accepted
+        true
     }
 
     override func keyDown(with event: NSEvent) {
-        guard surface != nil else {
-            interpretKeyEvents([event])
+        let modifiers = event.modifierFlags.intersection([.shift, .control, .option, .command])
+
+        if modifiers.contains(.command) {
+            if event.charactersIgnoringModifiers == "v",
+               let text = NSPasteboard.general.string(forType: .string),
+               !text.isEmpty {
+                callbacks.onPasteText(text)
+                return
+            }
+
+            if event.charactersIgnoringModifiers == "c",
+               let selection = callbacks.selectionTextProvider(),
+               !selection.isEmpty {
+                let pasteboard = NSPasteboard.general
+                pasteboard.clearContents()
+                pasteboard.setString(selection, forType: .string)
+                return
+            }
+
+            super.keyDown(with: event)
             return
         }
 
-        handleKeyDown(event)
-    }
-
-    override func keyUp(with event: NSEvent) {
-        guard surface != nil else {
-            super.keyUp(with: event)
+        if let specialKey = specialKey(for: event) {
+            callbacks.onSendSpecialKey(specialKey)
             return
         }
 
-        handleKeyUp(event)
-    }
-
-    override func flagsChanged(with event: NSEvent) {
-        guard surface != nil else {
-            super.flagsChanged(with: event)
+        if modifiers.contains(.control),
+           let character = event.charactersIgnoringModifiers?.first {
+            if modifiers.contains(.option),
+               let altText = event.charactersIgnoringModifiers,
+               !altText.isEmpty {
+                callbacks.onSendAltText(altText)
+            }
+            callbacks.onSendControlCharacter(character)
             return
         }
 
-        handleFlagsChanged(event)
-    }
+        if modifiers.contains(.option),
+           let altText = event.charactersIgnoringModifiers,
+           !altText.isEmpty {
+            callbacks.onSendAltText(altText)
+            return
+        }
 
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        handlePerformKeyEquivalent(event)
-    }
+        if let text = event.characters, !text.isEmpty {
+            callbacks.onSendText(text)
+            return
+        }
 
-    override func doCommand(by selector: Selector) {
-        handleDoCommand(by: selector)
+        super.keyDown(with: event)
     }
 
     override func mouseDown(with event: NSEvent) {
-        guard surface != nil else {
-            super.mouseDown(with: event)
+        window?.makeFirstResponder(self)
+        callbacks.onTap()
+
+        let point = convert(event.locationInWindow, from: nil)
+        if event.clickCount == 2, let grid = gridMetrics() {
+            let cell = grid.clampedCell(for: point)
+            callbacks.onSelectWord(cell.row, cell.col)
             return
         }
 
-        handleMouseDown(event)
-    }
-
-    override func mouseUp(with event: NSEvent) {
-        guard surface != nil else {
-            super.mouseUp(with: event)
-            return
-        }
-
-        handleMouseUp(event)
-    }
-
-    override func rightMouseDown(with event: NSEvent) {
-        guard surface != nil else {
-            super.rightMouseDown(with: event)
-            return
-        }
-
-        handleRightMouseDown(event)
-    }
-
-    override func rightMouseUp(with event: NSEvent) {
-        guard surface != nil else {
-            super.rightMouseUp(with: event)
-            return
-        }
-
-        handleRightMouseUp(event)
-    }
-
-    override func otherMouseDown(with event: NSEvent) {
-        guard surface != nil else {
-            super.otherMouseDown(with: event)
-            return
-        }
-
-        handleOtherMouseDown(event)
-    }
-
-    override func otherMouseUp(with event: NSEvent) {
-        guard surface != nil else {
-            super.otherMouseUp(with: event)
-            return
-        }
-
-        handleOtherMouseUp(event)
-    }
-
-    override func mouseMoved(with event: NSEvent) {
-        sendMousePosition(event)
+        dragAnchor = point
+        isSelectionDragActive = false
     }
 
     override func mouseDragged(with event: NSEvent) {
-        sendMousePosition(event)
+        guard selectionMode, let anchor = dragAnchor, let grid = gridMetrics() else { return }
+        let point = convert(event.locationInWindow, from: nil)
+        let distance = hypot(point.x - anchor.x, point.y - anchor.y)
+        if isSelectionDragActive == false, distance > 2 {
+            let start = grid.clampedCell(for: anchor)
+            callbacks.onSelectionBegin(start.row, start.col)
+            isSelectionDragActive = true
+        }
+        guard isSelectionDragActive else { return }
+        let cell = grid.clampedCell(for: point)
+        callbacks.onSelectionMove(cell.row, cell.col)
     }
 
-    override func rightMouseDragged(with event: NSEvent) {
-        sendMousePosition(event)
-    }
-
-    override func otherMouseDragged(with event: NSEvent) {
-        sendMousePosition(event)
-    }
-
-    override func mouseEntered(with event: NSEvent) {
-        sendMousePosition(event)
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        guard let surface else { return }
-        ghostty_surface_mouse_pos(surface, -1, -1, ghosttyMods(from: event.modifierFlags))
+    override func mouseUp(with event: NSEvent) {
+        if isSelectionDragActive {
+            callbacks.onSelectionEnd()
+        } else {
+            callbacks.onClearSelection()
+        }
+        dragAnchor = nil
+        isSelectionDragActive = false
     }
 
     override func scrollWheel(with event: NSEvent) {
-        guard let surface else { return }
-
-        var mods: ghostty_input_scroll_mods_t = 0
-        if event.hasPreciseScrollingDeltas {
-            mods |= 1
-        }
-
-        let momentumPhase = Int32(event.momentumPhase.rawValue)
-        mods |= momentumPhase << 1
-
-        ghostty_surface_mouse_scroll(surface, event.scrollingDeltaX, event.scrollingDeltaY, mods)
+        guard let renderer else { return }
+        let lineHeight = max(renderer.pointCellSize.height, 1)
+        let rawLines = -ScrollWheelNormalizer.pixelDelta(for: event, lineHeight: lineHeight) / lineHeight
+        let lines = Int(rawLines.rounded())
+        guard lines != 0 else { return }
+        callbacks.onScroll(lines)
     }
 
-    func createSurfaceIfNeeded() {
-        guard surface == nil else { return }
-        let sessionID = self.session.id.uuidString
-        let runtimeSummary = GhosttyRuntimeIdentity.summary
+    override func magnify(with event: NSEvent) {}
 
-        GhosttyRuntimeIdentity.logger.notice(
-            "ghostty_surface_request session=\(sessionID, privacy: .public) \(runtimeSummary, privacy: .public)"
+    private func configureMetalView() {
+        let configuration = GhosttyTerminalMetalViewConfiguration.onDemand
+        metalView.colorPixelFormat = .bgra8Unorm_srgb
+        metalView.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
+        metalView.isPaused = configuration.isPaused
+        metalView.enableSetNeedsDisplay = configuration.enableSetNeedsDisplay
+        metalView.preferredFramesPerSecond = configuration.preferredFramesPerSecond
+        metalView.framebufferOnly = configuration.framebufferOnly
+        metalView.autoresizingMask = [.width, .height]
+    }
+
+    private func gridMetrics() -> GhosttyTerminalGridMetrics? {
+        guard let renderer else { return nil }
+        return GhosttyTerminalGridMetrics(
+            cols: max(1, renderer.surfaceState.cols),
+            rows: max(1, renderer.surfaceState.rows),
+            cellWidth: renderer.pointCellSize.width,
+            cellHeight: renderer.pointCellSize.height
         )
-
-        guard let createdSurface = GhosttyAppBridge.shared.makeSurface(
-            for: self,
-            session: session,
-            surfaceBox: surfaceBox
-        ) else {
-            session.lastErrorDescription = "Failed to create Ghostty surface."
-            session.isRunning = false
-            GhosttyRuntimeIdentity.logger.error(
-                "ghostty_surface_unavailable session=\(sessionID, privacy: .public) \(runtimeSummary, privacy: .public)"
-            )
-            return
-        }
-
-        surfaceBox.attachSurface(createdSurface)
-        session.lastErrorDescription = nil
-        GhosttyRuntimeIdentity.logger.notice(
-            "ghostty_surface_ready session=\(sessionID, privacy: .public) \(runtimeSummary, privacy: .public)"
-        )
-        syncSurfaceMetrics()
-        applyPendingStageCommand()
     }
 
-    func shutdown() {
-        let surface = surfaceBox.prepareForShutdown()
-        GhosttyAppBridge.shared.unregister(surfaceBox)
-        let sessionID = self.session.id.uuidString
-        let runtimeSummary = GhosttyRuntimeIdentity.summary
-        GhosttyRuntimeIdentity.logger.notice(
-            "ghostty_surface_shutdown session=\(sessionID, privacy: .public) \(runtimeSummary, privacy: .public)"
-        )
-        GhosttyAppBridge.shared.destroySurface(surface)
+    private func notifyViewportIfNeeded() {
+        guard let renderer, !bounds.isEmpty else { return }
+        let cellSize = renderer.pointCellSize
+        let cols = max(20, Int(floor(bounds.width / max(cellSize.width, 1))))
+        let rows = max(5, Int(floor(bounds.height / max(cellSize.height, 1))))
+        let cellWidthPx = max(1, Int((cellSize.width * currentScaleFactor).rounded()))
+        let cellHeightPx = max(1, Int((cellSize.height * currentScaleFactor).rounded()))
+        let signature = "\(bounds.size.width)x\(bounds.size.height)|\(cols)x\(rows)|\(cellWidthPx)x\(cellHeightPx)"
+        guard signature != lastViewportSignature else { return }
+        lastViewportSignature = signature
+        callbacks.onViewportSizeChange(bounds.size, cols, rows, cellWidthPx, cellHeightPx)
     }
 
-    func handleFocusRequest(_ requestID: Int) {
-        guard requestID > lastHandledFocusRequestID else { return }
-        guard claimKeyboardFocusIfPossible() else { return }
-        lastHandledFocusRequestID = requestID
-    }
-
-    func applyPendingFocusRequest() {
-        handleFocusRequest(session.focusRequestID)
-    }
-
-    func applyPendingStageCommand() {
-        guard !hasAppliedInitialStageCommand,
-              let stagedCommand = session.stagedCommand,
-              !stagedCommand.isEmpty,
-              surface != nil
-        else {
-            return
-        }
-        guard claimKeyboardFocusIfPossible() else { return }
-
-        stageCommand(stagedCommand)
-        hasAppliedInitialStageCommand = true
-        session.stagedCommand = nil
-    }
-
-    @discardableResult
-    func claimKeyboardFocusIfPossible() -> Bool {
-        guard let window else { return false }
-        if window.firstResponder === self {
-            return true
-        }
-
+    private func applyFocusRequestIfNeeded() {
+        guard focusRequestID != lastHandledFocusRequestID,
+              let window
+        else { return }
         window.makeFirstResponder(self)
-        return window.firstResponder === self
-    }
-
-    func focusDidChange(_ focused: Bool) {
-        guard self.focused != focused else { return }
-        self.focused = focused
-
-        if !focused {
-            focusTransferState.clear()
-        }
-
-        if let surface {
-            ghostty_surface_set_focus(surface, focused)
+        if window.firstResponder === self {
+            lastHandledFocusRequestID = focusRequestID
         }
     }
 
-    func syncSurfaceMetrics() {
-        guard let surface, !bounds.isEmpty else { return }
-
-        let backingBounds = convertToBacking(bounds)
-        let scaleFactor = Double(window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2)
-        ghostty_surface_set_content_scale(
-            surface,
-            scaleFactor,
-            scaleFactor
-        )
-        ghostty_surface_set_size(
-            surface,
-            UInt32(max(1, Int(backingBounds.width.rounded(.toNearestOrEven)))),
-            UInt32(max(1, Int(backingBounds.height.rounded(.toNearestOrEven))))
-        )
-    }
-
-    func stageCommand(_ command: String) {
-        let preservedClipboard = NSPasteboard.general.string(forType: .string)
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(command, forType: .string)
-
-        defer {
-            pasteboard.clearContents()
-            if let preservedClipboard {
-                pasteboard.setString(preservedClipboard, forType: .string)
-            }
+    private func specialKey(for event: NSEvent) -> GhosttyTerminalSpecialKey? {
+        switch Int(event.keyCode) {
+        case 36, 76:
+            return .enter
+        case 48:
+            return event.modifierFlags.contains(.shift) ? .backtab : .tab
+        case 51:
+            return .backspace
+        case 117:
+            return .delete
+        case 53:
+            return .escape
+        case 123:
+            return .left
+        case 124:
+            return .right
+        case 125:
+            return .down
+        case 126:
+            return .up
+        case 115:
+            return .home
+        case 119:
+            return .end
+        case 116:
+            return .pageUp
+        case 121:
+            return .pageDown
+        default:
+            return nil
         }
-
-        let flags: NSEvent.ModifierFlags = [.command]
-        guard let keyDown = NSEvent.keyEvent(
-            with: .keyDown,
-            location: .zero,
-            modifierFlags: flags,
-            timestamp: ProcessInfo.processInfo.systemUptime,
-            windowNumber: window?.windowNumber ?? 0,
-            context: nil,
-            characters: "v",
-            charactersIgnoringModifiers: "v",
-            isARepeat: false,
-            keyCode: 9
-        ),
-        let keyUp = NSEvent.keyEvent(
-            with: .keyUp,
-            location: .zero,
-            modifierFlags: flags,
-            timestamp: ProcessInfo.processInfo.systemUptime,
-            windowNumber: window?.windowNumber ?? 0,
-            context: nil,
-            characters: "v",
-            charactersIgnoringModifiers: "v",
-            isARepeat: false,
-            keyCode: 9
-        ) else {
-            return
-        }
-
-        _ = sendKeyAction(GHOSTTY_ACTION_PRESS, event: keyDown)
-        _ = sendKeyAction(GHOSTTY_ACTION_RELEASE, event: keyUp)
-    }
-
-    func sendMouseButton(
-        _ event: NSEvent,
-        state: ghostty_input_mouse_state_e,
-        button: ghostty_input_mouse_button_e
-    ) {
-        guard let surface else { return }
-        _ = ghostty_surface_mouse_button(surface, state, button, ghosttyMods(from: event.modifierFlags))
-    }
-
-    func sendMousePosition(_ event: NSEvent) {
-        guard let surface else { return }
-        let location = convert(event.locationInWindow, from: nil)
-        ghostty_surface_mouse_pos(
-            surface,
-            location.x,
-            bounds.height - location.y,
-            ghosttyMods(from: event.modifierFlags)
-        )
-    }
-
-    func updateHoveredURL(_ hoveredURL: String?) {
-        toolTip = hoveredURL
-        discardCursorRects()
-    }
-
-    func openURL(_ rawURL: String?) {
-        guard let rawURL else { return }
-
-        let trimmed = rawURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty,
-              let url = URL(string: trimmed),
-              url.scheme != nil else {
-            return
-        }
-
-        onOpenURL?(url)
-    }
-
-    func invalidateEventMonitor() {
-        guard let eventMonitor else { return }
-        NSEvent.removeMonitor(eventMonitor)
-        self.eventMonitor = nil
-    }
-
-    override func resetCursorRects() {
-        if toolTip != nil {
-            addCursorRect(bounds, cursor: .pointingHand)
-        } else {
-            addCursorRect(bounds, cursor: .iBeam)
-        }
-    }
-
-    var surface: ghostty_surface_t? {
-        surfaceBox.surface
     }
 }
-// swiftlint:enable type_body_length
-
-private extension String {
-    var nilIfEmpty: String? {
-        isEmpty ? nil : self
-    }
-}
-
-#else
-
-public struct GhosttyTerminalView: View {
-    public let session: GhosttyTerminalSession
-    public let onOpenURL: ((URL) -> Void)?
-
-    public init(
-        session: GhosttyTerminalSession,
-        onOpenURL: ((URL) -> Void)? = nil
-    ) {
-        self.session = session
-        self.onOpenURL = onOpenURL
-    }
-
-    public var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("terminal_unavailable")
-                .font(.headline)
-            Text("GhosttyKit is not linked for this build.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            if let error = session.lastErrorDescription {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-    }
-}
-
 #endif

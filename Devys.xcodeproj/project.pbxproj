@@ -7,6 +7,16 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		2EBEB9CCE7743BE1F98A0860 /* IOSRemoteWorkspaceBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE38FF8FE9D375A801F1C3F3 /* IOSRemoteWorkspaceBridge.swift */; };
+		3184B5611C8D4B0AA0F6A111 /* IOSGhosttyTerminalInputCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3184B5601C8D4B0AA0F6A111 /* IOSGhosttyTerminalInputCaptureView.swift */; };
+		3184B5631C8D4B0AA0F6A111 /* IOSGhosttyTerminalAccessoryRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3184B5621C8D4B0AA0F6A111 /* IOSGhosttyTerminalAccessoryRow.swift */; };
+		41349E80F5CFB6A8253480D2 /* IOSClientRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B08A6CCB4F1C28BBD033283 /* IOSClientRootView.swift */; };
+		56FFAC8353AF25FE605EA6F6 /* IOSClientSecondaryViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2B000D110E5BC99C73E037D /* IOSClientSecondaryViews.swift */; };
+		589C13EA74A6CED66F020D81 /* IOSAppBootstrap.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9B604BDE10B3BC0139AAAAF /* IOSAppBootstrap.swift */; };
+		5EAF204D404102327747ACDA /* IOSRemoteSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 895CED311174339CFCDD871B /* IOSRemoteSessionView.swift */; };
+		97F5358EE9FA7FD9F016C95A /* IOSRepositorySheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF03BCC5FA401C94BDE3FCBD /* IOSRepositorySheets.swift */; };
+		AD2123EA2B86317A788BCEE5 /* IOSRemoteRepositoryPersistenceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A73BCD6AC4BDDE043F05AE8 /* IOSRemoteRepositoryPersistenceStore.swift */; };
+		AD56F2018617D84203932E1F /* IOSKnownHostsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E19F64762BE01600A7F371A9 /* IOSKnownHostsStore.swift */; };
 		APP003 /* Workspace in Frameworks */ = {isa = PBXBuildFile; productRef = PKG001 /* Workspace */; };
 		APP004 /* Syntax in Frameworks */ = {isa = PBXBuildFile; productRef = PKG002 /* Syntax */; };
 		APP005 /* UI in Frameworks */ = {isa = PBXBuildFile; productRef = PKG003 /* UI */; };
@@ -19,7 +29,10 @@
 		APP019 /* ACPClientKit in Frameworks */ = {isa = PBXBuildFile; productRef = PKG016 /* ACPClientKit */; };
 		APP020 /* Canvas in Frameworks */ = {isa = PBXBuildFile; productRef = PKG018 /* Canvas */; };
 		APP021 /* Browser in Frameworks */ = {isa = PBXBuildFile; productRef = PKG019 /* Browser */; };
+		C462C50E3CB5A9E961EA40BB /* IOSClientApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 615F4B3CF4999D916F0581E3 /* IOSClientApp.swift */; };
+		F978226D234553CE775969CB /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 80B0CE54ACF3DFB3F45A7633 /* Foundation.framework */; };
 		RES003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = RES004 /* Assets.xcassets */; };
+		RES005 /* terminfo in Resources */ = {isa = PBXBuildFile; fileRef = RES006 /* terminfo */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -33,16 +46,51 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		0A73BCD6AC4BDDE043F05AE8 /* IOSRemoteRepositoryPersistenceStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = IOSRemoteRepositoryPersistenceStore.swift; sourceTree = "<group>"; };
+		3184B5601C8D4B0AA0F6A111 /* IOSGhosttyTerminalInputCaptureView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = IOSGhosttyTerminalInputCaptureView.swift; sourceTree = "<group>"; };
+		3184B5621C8D4B0AA0F6A111 /* IOSGhosttyTerminalAccessoryRow.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = IOSGhosttyTerminalAccessoryRow.swift; sourceTree = "<group>"; };
+		5B08A6CCB4F1C28BBD033283 /* IOSClientRootView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = IOSClientRootView.swift; sourceTree = "<group>"; };
+		615F4B3CF4999D916F0581E3 /* IOSClientApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = IOSClientApp.swift; sourceTree = "<group>"; };
+		64DB7D6ADE410B2C32E80F8D /* ContentView+SidebarMode.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "ContentView+SidebarMode.swift"; sourceTree = "<group>"; };
+		80B0CE54ACF3DFB3F45A7633 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		895CED311174339CFCDD871B /* IOSRemoteSessionView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = IOSRemoteSessionView.swift; sourceTree = "<group>"; };
 		A1B2C3D40100000000000001 /* mac-clientTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "mac-clientTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
-		PRD001 /* Devys.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Devys.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		BE713580958CD184C02E8D1F /* ios-client.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ios-client.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		D9B604BDE10B3BC0139AAAAF /* IOSAppBootstrap.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = IOSAppBootstrap.swift; sourceTree = "<group>"; };
+		DF03BCC5FA401C94BDE3FCBD /* IOSRepositorySheets.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = IOSRepositorySheets.swift; sourceTree = "<group>"; };
+		E19F64762BE01600A7F371A9 /* IOSKnownHostsStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = IOSKnownHostsStore.swift; sourceTree = "<group>"; };
+		E2B000D110E5BC99C73E037D /* IOSClientSecondaryViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = IOSClientSecondaryViews.swift; sourceTree = "<group>"; };
+		FE38FF8FE9D375A801F1C3F3 /* IOSRemoteWorkspaceBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = IOSRemoteWorkspaceBridge.swift; sourceTree = "<group>"; };
+		PRD001 /* Devys.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Devys.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		RES001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		RES002 /* Devys.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Devys.entitlements; sourceTree = "<group>"; };
 		RES004 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		RES006 /* terminfo */ = {isa = PBXFileReference; lastKnownFileType = folder; path = terminfo; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		A1B2C3D40100000000000002 /* Apps/mac-client/Tests/mac-clientTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = "Apps/mac-client/Tests/mac-clientTests"; sourceTree = "<group>"; };
-		GRP001 /* Apps/mac-client/Sources/mac */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = "Apps/mac-client/Sources/mac"; sourceTree = "<group>"; };
+		A1B2C3D40100000000000002 /* Apps/mac-client/Tests/mac-clientTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = "Apps/mac-client/Tests/mac-clientTests";
+			sourceTree = "<group>";
+		};
+		GRP001 /* Apps/mac-client/Sources/mac */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = "Apps/mac-client/Sources/mac";
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -51,6 +99,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				APP019 /* ACPClientKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EE64AB2D2581D46B041C30BD /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F978226D234553CE775969CB /* Foundation.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -75,6 +131,141 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		020BAA7FC7305AE3454A5135 /* ios_client */ = {
+			isa = PBXGroup;
+			children = (
+				615F4B3CF4999D916F0581E3 /* IOSClientApp.swift */,
+				33FFD44254549064B3DFA5C8 /* Services */,
+				3AA8FCD34B16BBAA74151829 /* Views */,
+			);
+			name = ios_client;
+			path = ios_client;
+			sourceTree = "<group>";
+		};
+		228FFB43318431C70B273067 /* ios-client */ = {
+			isa = PBXGroup;
+			children = (
+				945BCD10F1C84627EEFBF07E /* Sources */,
+			);
+			name = "ios-client";
+			path = "ios-client";
+			sourceTree = "<group>";
+		};
+		235EF703524B1A2B92B601A6 /* mac-client */ = {
+			isa = PBXGroup;
+			children = (
+				7C2DBA1B4E55CD2D5BFC97D2 /* Sources */,
+			);
+			name = "mac-client";
+			path = "mac-client";
+			sourceTree = "<group>";
+		};
+		2C22DF7A297F2FAD5B4473C5 /* Apps */ = {
+			isa = PBXGroup;
+			children = (
+				228FFB43318431C70B273067 /* ios-client */,
+				235EF703524B1A2B92B601A6 /* mac-client */,
+			);
+			name = Apps;
+			path = Apps;
+			sourceTree = "<group>";
+		};
+		33FFD44254549064B3DFA5C8 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				D9B604BDE10B3BC0139AAAAF /* IOSAppBootstrap.swift */,
+				E19F64762BE01600A7F371A9 /* IOSKnownHostsStore.swift */,
+				0A73BCD6AC4BDDE043F05AE8 /* IOSRemoteRepositoryPersistenceStore.swift */,
+				FE38FF8FE9D375A801F1C3F3 /* IOSRemoteWorkspaceBridge.swift */,
+			);
+			name = Services;
+			path = Services;
+			sourceTree = "<group>";
+		};
+		3184B5661C8D4B0AA0F6A111 /* Terminal */ = {
+			isa = PBXGroup;
+			children = (
+				3184B5621C8D4B0AA0F6A111 /* IOSGhosttyTerminalAccessoryRow.swift */,
+				3184B5601C8D4B0AA0F6A111 /* IOSGhosttyTerminalInputCaptureView.swift */,
+			);
+			name = Terminal;
+			path = Terminal;
+			sourceTree = "<group>";
+		};
+		3AA8FCD34B16BBAA74151829 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				5B08A6CCB4F1C28BBD033283 /* IOSClientRootView.swift */,
+				895CED311174339CFCDD871B /* IOSRemoteSessionView.swift */,
+				DF03BCC5FA401C94BDE3FCBD /* IOSRepositorySheets.swift */,
+				E2B000D110E5BC99C73E037D /* IOSClientSecondaryViews.swift */,
+				3184B5661C8D4B0AA0F6A111 /* Terminal */,
+			);
+			name = Views;
+			path = Views;
+			sourceTree = "<group>";
+		};
+		6C45940F69CBDBD1EB996615 /* mac */ = {
+			isa = PBXGroup;
+			children = (
+				972BEB42E92D611199442220 /* Views */,
+			);
+			name = mac;
+			path = mac;
+			sourceTree = "<group>";
+		};
+		7005449D0A10175849113645 /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				80B0CE54ACF3DFB3F45A7633 /* Foundation.framework */,
+			);
+			name = iOS;
+			sourceTree = "<group>";
+		};
+		7C2DBA1B4E55CD2D5BFC97D2 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				6C45940F69CBDBD1EB996615 /* mac */,
+			);
+			name = Sources;
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		945BCD10F1C84627EEFBF07E /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				020BAA7FC7305AE3454A5135 /* ios_client */,
+			);
+			name = Sources;
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		949F090AD48B6F556F59C36D /* Window */ = {
+			isa = PBXGroup;
+			children = (
+				64DB7D6ADE410B2C32E80F8D /* ContentView+SidebarMode.swift */,
+			);
+			name = Window;
+			path = Window;
+			sourceTree = "<group>";
+		};
+		972BEB42E92D611199442220 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				949F090AD48B6F556F59C36D /* Window */,
+			);
+			name = Views;
+			path = Views;
+			sourceTree = "<group>";
+		};
+		E9B1620A340546DD3EE0A40F /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				7005449D0A10175849113645 /* iOS */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		GRP000 = {
 			isa = PBXGroup;
 			children = (
@@ -83,6 +274,8 @@
 				A1B2C3D40100000000000002 /* Apps/mac-client/Tests/mac-clientTests */,
 				GRP002 /* Packages */,
 				GRP003 /* Products */,
+				E9B1620A340546DD3EE0A40F /* Frameworks */,
+				2C22DF7A297F2FAD5B4473C5 /* Apps */,
 			);
 			sourceTree = "<group>";
 		};
@@ -98,6 +291,7 @@
 			children = (
 				PRD001 /* Devys.app */,
 				A1B2C3D40100000000000001 /* mac-clientTests.xctest */,
+				BE713580958CD184C02E8D1F /* ios-client.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -108,6 +302,7 @@
 				RES001 /* Info.plist */,
 				RES002 /* Devys.entitlements */,
 				RES004 /* Assets.xcassets */,
+				RES006 /* terminfo */,
 			);
 			name = "mac Resources";
 			path = "Apps/mac-client/Resources";
@@ -116,6 +311,31 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		753D833EE2BD764F084CFBF1 /* ios-client */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D0A04D5AD90B7FF0626E16AD /* Build configuration list for PBXNativeTarget "ios-client" */;
+			buildPhases = (
+				99540417358A33BFF498B95E /* Sources */,
+				EE64AB2D2581D46B041C30BD /* Frameworks */,
+				EFD65E19A98D4B21398F4AAC /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "ios-client";
+			packageProductDependencies = (
+				E8E7174F9AF40BF1D6AFF371 /* UI */,
+				710BDB325363056F70C5919B /* RemoteCore */,
+				2A4FE612A0B20AE079853515 /* SSH */,
+				E294BF7ACBDFD7B603B4EB73 /* RemoteFeatures */,
+				PKG015 /* GhosttyTerminal */,
+				B3D47A6B8E7F4012A1C0D3E4 /* GhosttyTerminalCore */,
+			);
+			productName = "ios-client";
+			productReference = BE713580958CD184C02E8D1F /* ios-client.app */;
+			productType = "com.apple.product-type.application";
+		};
 		A1B2C3D40100000000000006 /* mac-clientTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = A1B2C3D4010000000000000B /* Build configuration list for PBXNativeTarget "mac-clientTests" */;
@@ -158,6 +378,7 @@
 			name = "mac-client";
 			packageProductDependencies = (
 				PKG017 /* AppFeatures */,
+				2A4FE612A0B20AE079853515 /* SSH */,
 				PKG001 /* Workspace */,
 				PKG002 /* Syntax */,
 				PKG003 /* UI */,
@@ -199,19 +420,22 @@
 			);
 			mainGroup = GRP000;
 			packageReferences = (
-				PKR001 /* XCLocalSwiftPackageReference "Packages/Workspace" */,
-				PKR002 /* XCLocalSwiftPackageReference "Packages/Syntax" */,
-				PKR003 /* XCLocalSwiftPackageReference "Packages/UI" */,
-				PKR004 /* XCLocalSwiftPackageReference "Packages/Split" */,
-				PKR005 /* XCLocalSwiftPackageReference "Packages/Editor" */,
-				PKR006 /* XCLocalSwiftPackageReference "Packages/Text" */,
-				PKR007 /* XCLocalSwiftPackageReference "Packages/Git" */,
-				PKR008 /* XCLocalSwiftPackageReference "Packages/Rendering" */,
-				PKR015 /* XCLocalSwiftPackageReference "Packages/GhosttyTerminal" */,
-				PKR016 /* XCLocalSwiftPackageReference "Packages/ACPClientKit" */,
-				PKR017 /* XCLocalSwiftPackageReference "Packages/AppFeatures" */,
-				PKR018 /* XCLocalSwiftPackageReference "Packages/Canvas" */,
-				PKR019 /* XCLocalSwiftPackageReference "Packages/Browser" */,
+				PKR001 /* XCLocalSwiftPackageReference "Workspace" */,
+				PKR002 /* XCLocalSwiftPackageReference "Syntax" */,
+				PKR003 /* XCLocalSwiftPackageReference "UI" */,
+				PKR004 /* XCLocalSwiftPackageReference "Split" */,
+				PKR005 /* XCLocalSwiftPackageReference "Editor" */,
+				PKR006 /* XCLocalSwiftPackageReference "Text" */,
+				PKR007 /* XCLocalSwiftPackageReference "Git" */,
+				PKR008 /* XCLocalSwiftPackageReference "Rendering" */,
+				PKR015 /* XCLocalSwiftPackageReference "GhosttyTerminal" */,
+				PKR016 /* XCLocalSwiftPackageReference "ACPClientKit" */,
+				PKR017 /* XCLocalSwiftPackageReference "AppFeatures" */,
+				PKR018 /* XCLocalSwiftPackageReference "Canvas" */,
+				PKR019 /* XCLocalSwiftPackageReference "Browser" */,
+				A6D471E7A8DBC4092D017A3F /* XCLocalSwiftPackageReference "RemoteCore" */,
+				93C37752794007D153BF7FFF /* XCLocalSwiftPackageReference "SSH" */,
+				F31EBB165CE64D77A9BE9ECA /* XCLocalSwiftPackageReference "RemoteFeatures" */,
 			);
 			productRefGroup = GRP003 /* Products */;
 			projectDirPath = "";
@@ -219,6 +443,7 @@
 			targets = (
 				TGT001 /* mac-client */,
 				A1B2C3D40100000000000006 /* mac-clientTests */,
+				753D833EE2BD764F084CFBF1 /* ios-client */,
 			);
 		};
 /* End PBXProject section */
@@ -231,17 +456,43 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		EFD65E19A98D4B21398F4AAC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		RES000 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				RES003 /* Assets.xcassets in Resources */,
+				RES005 /* terminfo in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		99540417358A33BFF498B95E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C462C50E3CB5A9E961EA40BB /* IOSClientApp.swift in Sources */,
+				589C13EA74A6CED66F020D81 /* IOSAppBootstrap.swift in Sources */,
+				AD56F2018617D84203932E1F /* IOSKnownHostsStore.swift in Sources */,
+				AD2123EA2B86317A788BCEE5 /* IOSRemoteRepositoryPersistenceStore.swift in Sources */,
+				2EBEB9CCE7743BE1F98A0860 /* IOSRemoteWorkspaceBridge.swift in Sources */,
+				41349E80F5CFB6A8253480D2 /* IOSClientRootView.swift in Sources */,
+				5EAF204D404102327747ACDA /* IOSRemoteSessionView.swift in Sources */,
+				97F5358EE9FA7FD9F016C95A /* IOSRepositorySheets.swift in Sources */,
+				56FFAC8353AF25FE605EA6F6 /* IOSClientSecondaryViews.swift in Sources */,
+				3184B5631C8D4B0AA0F6A111 /* IOSGhosttyTerminalAccessoryRow.swift in Sources */,
+				3184B5611C8D4B0AA0F6A111 /* IOSGhosttyTerminalInputCaptureView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A1B2C3D40100000000000005 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -267,6 +518,33 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		4A6EF9CEA31DC50C67808348 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = "";
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.devys.ios-client";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 		A1B2C3D40100000000000009 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -313,6 +591,32 @@
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Devys.app/Contents/MacOS/Devys";
 			};
 			name = Release;
+		};
+		A5BE7F06F9E49138BA7C9255 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = "";
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.devys.ios-client";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
 		};
 		CFG003 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -458,8 +762,8 @@
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Apps/mac-client/Resources/Info.plist";
-				INFOPLIST_KEY_CFBundleName = Devys;
 				INFOPLIST_KEY_CFBundleDisplayName = Devys;
+				INFOPLIST_KEY_CFBundleName = Devys;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Devys. All rights reserved.";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -467,8 +771,8 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_MODULE_NAME = mac_client;
 				PRODUCT_BUNDLE_IDENTIFIER = com.devys.mac;
+				PRODUCT_MODULE_NAME = mac_client;
 				PRODUCT_NAME = Devys;
 				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -495,8 +799,8 @@
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Apps/mac-client/Resources/Info.plist";
-				INFOPLIST_KEY_CFBundleName = Devys;
 				INFOPLIST_KEY_CFBundleDisplayName = Devys;
+				INFOPLIST_KEY_CFBundleName = Devys;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Devys. All rights reserved.";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -504,8 +808,8 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_MODULE_NAME = mac_client;
 				PRODUCT_BUNDLE_IDENTIFIER = com.devys.mac;
+				PRODUCT_MODULE_NAME = mac_client;
 				PRODUCT_NAME = Devys;
 				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -546,122 +850,168 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		D0A04D5AD90B7FF0626E16AD /* Build configuration list for PBXNativeTarget "ios-client" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4A6EF9CEA31DC50C67808348 /* Release */,
+				A5BE7F06F9E49138BA7C9255 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		PKR001 /* XCLocalSwiftPackageReference "Packages/Workspace" */ = {
+		93C37752794007D153BF7FFF /* XCLocalSwiftPackageReference "SSH" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/SSH;
+		};
+		A6D471E7A8DBC4092D017A3F /* XCLocalSwiftPackageReference "RemoteCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/RemoteCore;
+		};
+		F31EBB165CE64D77A9BE9ECA /* XCLocalSwiftPackageReference "RemoteFeatures" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/RemoteFeatures;
+		};
+		PKR001 /* XCLocalSwiftPackageReference "Workspace" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/Workspace;
 		};
-		PKR002 /* XCLocalSwiftPackageReference "Packages/Syntax" */ = {
+		PKR002 /* XCLocalSwiftPackageReference "Syntax" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/Syntax;
 		};
-		PKR003 /* XCLocalSwiftPackageReference "Packages/UI" */ = {
+		PKR003 /* XCLocalSwiftPackageReference "UI" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/UI;
 		};
-		PKR004 /* XCLocalSwiftPackageReference "Packages/Split" */ = {
+		PKR004 /* XCLocalSwiftPackageReference "Split" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/Split;
 		};
-		PKR005 /* XCLocalSwiftPackageReference "Packages/Editor" */ = {
+		PKR005 /* XCLocalSwiftPackageReference "Editor" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/Editor;
 		};
-		PKR006 /* XCLocalSwiftPackageReference "Packages/Text" */ = {
+		PKR006 /* XCLocalSwiftPackageReference "Text" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/Text;
 		};
-		PKR007 /* XCLocalSwiftPackageReference "Packages/Git" */ = {
+		PKR007 /* XCLocalSwiftPackageReference "Git" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/Git;
 		};
-		PKR008 /* XCLocalSwiftPackageReference "Packages/Rendering" */ = {
+		PKR008 /* XCLocalSwiftPackageReference "Rendering" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/Rendering;
 		};
-		PKR015 /* XCLocalSwiftPackageReference "Packages/GhosttyTerminal" */ = {
+		PKR015 /* XCLocalSwiftPackageReference "GhosttyTerminal" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/GhosttyTerminal;
 		};
-		PKR016 /* XCLocalSwiftPackageReference "Packages/ACPClientKit" */ = {
+		PKR016 /* XCLocalSwiftPackageReference "ACPClientKit" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/ACPClientKit;
 		};
-		PKR017 /* XCLocalSwiftPackageReference "Packages/AppFeatures" */ = {
+		PKR017 /* XCLocalSwiftPackageReference "AppFeatures" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/AppFeatures;
 		};
-		PKR018 /* XCLocalSwiftPackageReference "Packages/Canvas" */ = {
+		PKR018 /* XCLocalSwiftPackageReference "Canvas" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/Canvas;
 		};
-		PKR019 /* XCLocalSwiftPackageReference "Packages/Browser" */ = {
+		PKR019 /* XCLocalSwiftPackageReference "Browser" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/Browser;
 		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		2A4FE612A0B20AE079853515 /* SSH */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 93C37752794007D153BF7FFF /* XCLocalSwiftPackageReference "SSH" */;
+			productName = SSH;
+		};
+		710BDB325363056F70C5919B /* RemoteCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A6D471E7A8DBC4092D017A3F /* XCLocalSwiftPackageReference "RemoteCore" */;
+			productName = RemoteCore;
+		};
+		E294BF7ACBDFD7B603B4EB73 /* RemoteFeatures */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F31EBB165CE64D77A9BE9ECA /* XCLocalSwiftPackageReference "RemoteFeatures" */;
+			productName = RemoteFeatures;
+		};
+		E8E7174F9AF40BF1D6AFF371 /* UI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = PKR003 /* XCLocalSwiftPackageReference "UI" */;
+			productName = UI;
+		};
 		PKG001 /* Workspace */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = PKR001 /* XCLocalSwiftPackageReference "Packages/Workspace" */;
+			package = PKR001 /* XCLocalSwiftPackageReference "Workspace" */;
 			productName = Workspace;
 		};
 		PKG002 /* Syntax */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = PKR002 /* XCLocalSwiftPackageReference "Packages/Syntax" */;
+			package = PKR002 /* XCLocalSwiftPackageReference "Syntax" */;
 			productName = Syntax;
 		};
 		PKG003 /* UI */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = PKR003 /* XCLocalSwiftPackageReference "Packages/UI" */;
+			package = PKR003 /* XCLocalSwiftPackageReference "UI" */;
 			productName = UI;
 		};
 		PKG004 /* Split */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = PKR004 /* XCLocalSwiftPackageReference "Packages/Split" */;
+			package = PKR004 /* XCLocalSwiftPackageReference "Split" */;
 			productName = Split;
 		};
 		PKG005 /* Editor */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = PKR005 /* XCLocalSwiftPackageReference "Packages/Editor" */;
+			package = PKR005 /* XCLocalSwiftPackageReference "Editor" */;
 			productName = Editor;
 		};
 		PKG006 /* Text */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = PKR006 /* XCLocalSwiftPackageReference "Packages/Text" */;
+			package = PKR006 /* XCLocalSwiftPackageReference "Text" */;
 			productName = Text;
 		};
 		PKG007 /* Git */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = PKR007 /* XCLocalSwiftPackageReference "Packages/Git" */;
+			package = PKR007 /* XCLocalSwiftPackageReference "Git" */;
 			productName = Git;
 		};
 		PKG015 /* GhosttyTerminal */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = PKR015 /* XCLocalSwiftPackageReference "Packages/GhosttyTerminal" */;
+			package = PKR015 /* XCLocalSwiftPackageReference "GhosttyTerminal" */;
 			productName = GhosttyTerminal;
+		};
+		B3D47A6B8E7F4012A1C0D3E4 /* GhosttyTerminalCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = PKR015 /* XCLocalSwiftPackageReference "GhosttyTerminal" */;
+			productName = GhosttyTerminalCore;
 		};
 		PKG016 /* ACPClientKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = PKR016 /* XCLocalSwiftPackageReference "Packages/ACPClientKit" */;
+			package = PKR016 /* XCLocalSwiftPackageReference "ACPClientKit" */;
 			productName = ACPClientKit;
 		};
 		PKG017 /* AppFeatures */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = PKR017 /* XCLocalSwiftPackageReference "Packages/AppFeatures" */;
+			package = PKR017 /* XCLocalSwiftPackageReference "AppFeatures" */;
 			productName = AppFeatures;
 		};
 		PKG018 /* Canvas */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = PKR018 /* XCLocalSwiftPackageReference "Packages/Canvas" */;
+			package = PKR018 /* XCLocalSwiftPackageReference "Canvas" */;
 			productName = Canvas;
 		};
 		PKG019 /* Browser */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = PKR019 /* XCLocalSwiftPackageReference "Packages/Browser" */;
+			package = PKR019 /* XCLocalSwiftPackageReference "Browser" */;
 			productName = Browser;
 		};
 /* End XCSwiftPackageProductDependency section */

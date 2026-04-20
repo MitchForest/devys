@@ -1,14 +1,14 @@
 # Devys Architecture Reference
 
-Updated: 2026-04-15
+Updated: 2026-04-19
 
 ## Purpose
 
 This is the canonical architecture reference for Devys.
 
-It defines ownership, boundaries, package roles, migration discipline, and the target repo shape. It is intentionally separate from execution sequencing, which lives in `../plan/implementation-plan.md`.
+It defines ownership, boundaries, package roles, migration discipline, and the target repo shape.
 
-The governing ADRs in `../adrs` remain the final authority when wording differs.
+Execution sequencing belongs in active plan docs under `../active/` when those exist. This file is stable reference, not a work log.
 
 ## Non-Negotiable Outcomes
 
@@ -148,8 +148,6 @@ These packages are not app-domain owners.
 - Floating status capsule for ambient status.
 
 The pane and tab shell is now reducer-owned and value-driven.
-Phase 8 reducer-owned workflow boundaries are complete.
-Phase 9 reducer-owned relaunch persistence and restore boundaries are complete; later phases require fresh scoping instead of preserving host-owned relaunch policy.
 Empty panes render CTA surfaces directly; synthetic welcome tabs are not part of the canonical shell model.
 
 ## Contributor Heuristics

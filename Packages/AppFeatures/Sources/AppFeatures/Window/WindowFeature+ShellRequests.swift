@@ -8,9 +8,11 @@ extension WindowFeature {
         action: Action
     ) -> Effect<Action> {
         switch action {
-        case .requestOpenRepository,
+        case .requestAddRepository,
+             .setAddRepositoryPresentation,
+             .requestOpenRepository,
              .setOpenRepositoryRequestID:
-            return reduceOpenRepositoryRequestAction(state: &state, action: action)
+            return reduceRepositoryImportRequestAction(state: &state, action: action)
 
         case .requestEditorCommand,
              .setEditorCommandRequest:
@@ -28,8 +30,8 @@ extension WindowFeature {
              .setWorkspaceCommandRequest:
             return reduceWorkspaceCommandRequestAction(state: &state, action: action)
 
-        case .requestFocusAgentSession,
-             .setFocusAgentSessionRequest,
+        case .requestFocusChatSession,
+             .setFocusChatSessionRequest,
              .revealCurrentWorkspaceInNavigator:
             return reduceWorkspaceScopedRequestAction(state: &state, action: action)
 
@@ -45,24 +47,6 @@ extension WindowFeature {
              .applyWindowRelaunchRestore,
              .persistWindowRelaunchSnapshot:
             return reduceWindowRelaunchRequestAction(state: &state, action: action)
-
-        default:
-            return .none
-        }
-    }
-
-    private func reduceOpenRepositoryRequestAction(
-        state: inout State,
-        action: Action
-    ) -> Effect<Action> {
-        switch action {
-        case .requestOpenRepository:
-            state.openRepositoryRequestID = uuid()
-            return .none
-
-        case .setOpenRepositoryRequestID(let requestID):
-            state.openRepositoryRequestID = requestID
-            return .none
 
         default:
             return .none
@@ -155,17 +139,17 @@ extension WindowFeature {
         action: Action
     ) -> Effect<Action> {
         switch action {
-        case .requestFocusAgentSession(let sessionID):
+        case .requestFocusChatSession(let sessionID):
             guard let workspaceID = state.selectedWorkspaceID else { return .none }
-            state.focusAgentSessionRequest = FocusAgentSessionRequest(
+            state.focusChatSessionRequest = FocusChatSessionRequest(
                 workspaceID: workspaceID,
                 sessionID: sessionID,
                 id: uuid()
             )
             return .none
 
-        case .setFocusAgentSessionRequest(let request):
-            state.focusAgentSessionRequest = request
+        case .setFocusChatSessionRequest(let request):
+            state.focusChatSessionRequest = request
             return .none
 
         case .revealCurrentWorkspaceInNavigator:
@@ -312,7 +296,7 @@ extension WindowFeature {
         case .runWorkspaceProfile:
             guard let worktree = state.selectedWorktree else { return .none }
             return prepareRunProfileLaunchEffect(for: worktree)
-        case .openAgents,
+        case .openChat,
              .launchShell,
              .launchClaude,
              .launchCodex,
@@ -473,7 +457,7 @@ private func makeRelaunchSettingsSnapshot(
         restoreSelectedWorkspace: settings.restore.restoreSelectedWorkspace,
         restoreWorkspaceLayoutAndTabs: settings.restore.restoreWorkspaceLayoutAndTabs,
         restoreTerminalSessions: settings.restore.restoreTerminalSessions,
-        restoreAgentSessions: settings.restore.restoreAgentSessions
+        restoreChatSessions: settings.restore.restoreChatSessions
     )
 }
 

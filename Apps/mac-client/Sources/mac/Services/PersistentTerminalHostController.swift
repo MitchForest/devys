@@ -4,9 +4,15 @@
 import Foundation
 import Workspace
 
+enum PersistentTerminalHostStartupMode: String, Sendable {
+    case warm
+    case cold
+}
+
 actor PersistentTerminalHostController {
     private let fileManager: FileManager
     nonisolated let socketPath: String
+    private let metadataPath: String
     private let executablePathProvider: @Sendable () -> String?
     private let jsonEncoder = JSONEncoder()
     private let jsonDecoder = JSONDecoder()
@@ -20,6 +26,7 @@ actor PersistentTerminalHostController {
     ) {
         self.fileManager = fileManager
         self.socketPath = socketPath
+        self.metadataPath = terminalHostMetadataPath(for: socketPath)
         self.executablePathProvider = executablePathProvider
     }
 
@@ -30,9 +37,21 @@ actor PersistentTerminalHostController {
         return false
     }
 
-    func ensureRunning() async throws {
-        if isAvailable() {
-            return
+    func ensureRunning() async throws -> PersistentTerminalHostStartupMode {
+        guard let executablePath = executablePathProvider() else {
+            throw NSError(
+                domain: "PersistentTerminalHostController",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Devys executable path is unavailable."]
+            )
+        }
+
+        let expectedFingerprint = terminalHostExecutableFingerprint(at: executablePath)
+        if daemonIsCompatible(
+            executablePath: executablePath,
+            executableFingerprint: expectedFingerprint
+        ) {
+            return .warm
         }
 
         // Unix domain socket paths have a small fixed limit. Fail fast here so callers
@@ -45,13 +64,7 @@ actor PersistentTerminalHostController {
             withIntermediateDirectories: true
         )
 
-        guard let executablePath = executablePathProvider() else {
-            throw NSError(
-                domain: "PersistentTerminalHostController",
-                code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "Devys executable path is unavailable."]
-            )
-        }
+        clearStaleHostRegistration()
 
         let process = Process()
         let errorPipe = Pipe()
@@ -65,7 +78,7 @@ actor PersistentTerminalHostController {
 
         for _ in 0..<60 {
             if isAvailable() {
-                return
+                return .cold
             }
             if !process.isRunning {
                 throw startupFailure(process: process, errorPipe: errorPipe)
@@ -91,15 +104,24 @@ actor PersistentTerminalHostController {
         id: UUID = UUID(),
         workspaceID: Workspace.ID,
         workingDirectory: URL?,
-        launchCommand: String?
+        launchCommand: String?,
+        initialSize: HostedTerminalViewportSize? = nil,
+        launchProfile: TerminalSessionLaunchProfile = .compatibilityShell,
+        persistOnDisconnect: Bool,
+        skipEnsureRunning: Bool = false
     ) async throws -> HostedTerminalSessionRecord {
-        try await ensureRunning()
+        if !skipEnsureRunning {
+            _ = try await ensureRunning()
+        }
         switch try send(
             .createSession(
                 id: id,
                 workspaceID: workspaceID,
                 workingDirectoryPath: workingDirectory?.path,
-                launchCommand: launchCommand
+                launchCommand: launchCommand,
+                initialSize: initialSize,
+                launchProfile: launchProfile,
+                persistOnDisconnect: persistOnDisconnect
             )
         ) {
         case .created(let record):
@@ -123,26 +145,6 @@ actor PersistentTerminalHostController {
         }
     }
 
-    func attachCommand(for sessionID: UUID) -> String {
-        let config = attachProcessConfiguration(for: sessionID)
-        return ([shellEscape(config.executablePath)] + config.arguments.map(shellEscape))
-            .joined(separator: " ")
-    }
-
-    func attachProcessConfiguration(for sessionID: UUID) -> (executablePath: String, arguments: [String]) {
-        let executablePath = executablePathProvider() ?? ""
-        return (
-            executablePath: executablePath,
-            arguments: [
-                "--terminal-attach",
-                "--socket",
-                socketPath,
-                "--session-id",
-                sessionID.uuidString
-            ]
-        )
-    }
-
     static func defaultSocketPath() -> String {
         let baseURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
             .first?
@@ -157,10 +159,12 @@ actor PersistentTerminalHostController {
     private func send(_ request: TerminalHostControlRequest) throws -> TerminalHostControlResponse {
         let fd = try TerminalHostSocketIO.connect(to: socketPath)
         let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
-        let requestData = try jsonEncoder.encode(request)
-        try TerminalHostSocketIO.writeLine(requestData, to: handle)
-        let responseData = try TerminalHostSocketIO.readLine(from: handle)
-        return try jsonDecoder.decode(TerminalHostControlResponse.self, from: responseData)
+        return try TerminalHostSocketIO.withResponseTimeout(fileDescriptor: fd) {
+            let requestData = try jsonEncoder.encode(request)
+            try TerminalHostSocketIO.writeLine(requestData, to: handle)
+            let responseData = try TerminalHostSocketIO.readLine(from: handle)
+            return try jsonDecoder.decode(TerminalHostControlResponse.self, from: responseData)
+        }
     }
 
     private func hostFailure(_ message: String) -> NSError {
@@ -218,15 +222,40 @@ actor PersistentTerminalHostController {
             || key == "DYLD_INSERT_LIBRARIES" {
             environment.removeValue(forKey: key)
         }
+        if let resourcePath = Bundle.main.resourceURL?.path(percentEncoded: false),
+           !resourcePath.isEmpty {
+            environment["DEVYS_RESOURCE_DIR"] = resourcePath
+        }
         return environment
     }
-}
-private func shellEscape(_ value: String) -> String {
-    guard !value.isEmpty else { return "''" }
-    if value.unicodeScalars.allSatisfy({ scalar in
-        CharacterSet.alphanumerics.contains(scalar) || "/-._:".unicodeScalars.contains(scalar)
-    }) {
-        return value
+
+    private func daemonIsCompatible(
+        executablePath: String,
+        executableFingerprint: String?
+    ) -> Bool {
+        guard isAvailable(), let metadata = loadDaemonMetadata() else {
+            return false
+        }
+
+        return metadata.matches(
+            executablePath: executablePath,
+            executableFingerprint: executableFingerprint
+        )
     }
-    return "'" + value.replacingOccurrences(of: "'", with: "'\"'\"'") + "'"
+
+    private func loadDaemonMetadata() -> TerminalHostDaemonMetadata? {
+        guard let data = fileManager.contents(atPath: metadataPath) else {
+            return nil
+        }
+        return try? jsonDecoder.decode(TerminalHostDaemonMetadata.self, from: data)
+    }
+
+    private func clearStaleHostRegistration() {
+        if fileManager.fileExists(atPath: socketPath) {
+            try? fileManager.removeItem(atPath: socketPath)
+        }
+        if fileManager.fileExists(atPath: metadataPath) {
+            try? fileManager.removeItem(atPath: metadataPath)
+        }
+    }
 }

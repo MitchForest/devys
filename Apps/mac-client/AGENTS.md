@@ -7,7 +7,7 @@ Read these first before changing architecture, shell ownership, or shared UI:
 - `/Users/mitchwhite/Code/devys/AGENTS.md`
 - `/Users/mitchwhite/Code/devys/.docs/reference/architecture.md`
 - `/Users/mitchwhite/Code/devys/.docs/reference/ui-ux.md`
-- `/Users/mitchwhite/Code/devys/.docs/plan/implementation-plan.md`
+- `/Users/mitchwhite/Code/devys/.docs/active/README.md`
 
 ## Role
 
@@ -41,6 +41,24 @@ Read these first before changing architecture, shell ownership, or shared UI:
 - `Sources/mac/Services/HostedWorkspaceContentBridge.swift`
   - focused host observation feeding reducer-owned summaries
 
+## Build Entry Point
+
+Use the `mac-client` scheme as the canonical validation entrypoint for this host:
+
+- `xcodebuild -scheme mac-client -configuration Debug -destination 'platform=macOS' build`
+
+Do not use raw `xcodebuild -target mac-client ...` as the primary verification path.
+
+Reason:
+
+- the repo depends on many local Swift packages
+- the `-target` path can surface false missing-module failures from package graph setup that do not reproduce on the supported scheme path
+
+If you need package-local verification while working in this area, prefer:
+
+- `swift test` in the touched package
+- package schemes only when you need to validate the Xcode package path explicitly
+
 ## Working Rules
 
 - If a change affects app behavior, policy, navigation, lifecycle, or visible shell truth, default to `Packages/AppFeatures`.
@@ -48,4 +66,4 @@ Read these first before changing architecture, shell ownership, or shared UI:
 - If a change affects pane or tab truth, remember `Packages/Split` is a rendering boundary and the reducer owns canonical layout state.
 - Host runtimes may cache engine handles, sessions, and adapters, but they must not become UI-facing authorities.
 - Do not reintroduce app-domain `NotificationCenter` routing, service-locator ownership, or bidirectional reducer/runtime mirrors.
-- When remaining migration boundaries change, update `/Users/mitchwhite/Code/devys/.docs/plan/implementation-plan.md` in the same stream.
+- When remaining migration boundaries change, update the relevant file under `/Users/mitchwhite/Code/devys/.docs/active/` if the work is active, otherwise update the affected `/Users/mitchwhite/Code/devys/.docs/reference/*.md` doc in the same stream.

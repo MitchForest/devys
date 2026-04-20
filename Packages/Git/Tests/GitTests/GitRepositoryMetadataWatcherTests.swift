@@ -26,16 +26,30 @@ struct GitRepositoryMetadataWatcherTests {
 
         #expect(resolvedGitDirectory == fixture.expectedGitDirectory)
     }
+
+    @Test("Current reference resolver follows the common git directory for linked worktrees")
+    func resolvesCurrentReferenceInCommonDirectory() throws {
+        let fixture = try GitDirectoryFixture(mode: .linkedWorktree)
+        defer { fixture.cleanup() }
+
+        let currentReferenceURL = try #require(
+            GitRepositoryReferenceResolver.resolveCurrentReferenceURL(for: fixture.repositoryRoot)
+        )
+
+        #expect(currentReferenceURL == fixture.expectedCurrentReferenceURL)
+    }
 }
 
 private struct GitDirectoryFixture {
     enum Mode {
         case directory
         case fileReference
+        case linkedWorktree
     }
 
     let repositoryRoot: URL
     let expectedGitDirectory: URL
+    let expectedCurrentReferenceURL: URL?
 
     init(mode: Mode) throws {
         repositoryRoot = FileManager.default.temporaryDirectory
@@ -47,6 +61,7 @@ private struct GitDirectoryFixture {
             let gitDirectory = repositoryRoot.appendingPathComponent(".git")
             try FileManager.default.createDirectory(at: gitDirectory, withIntermediateDirectories: true)
             expectedGitDirectory = gitDirectory.standardizedFileURL
+            expectedCurrentReferenceURL = nil
         case .fileReference:
             let metadataRoot = repositoryRoot.appendingPathComponent(".worktree-metadata")
             let gitDirectory = metadataRoot.appendingPathComponent("gitdir")
@@ -59,6 +74,48 @@ private struct GitDirectoryFixture {
                 encoding: .utf8
             )
             expectedGitDirectory = gitDirectory.standardizedFileURL
+            expectedCurrentReferenceURL = nil
+        case .linkedWorktree:
+            let metadataRoot = repositoryRoot.appendingPathComponent(".worktree-metadata")
+            let worktreeGitDirectory = metadataRoot.appendingPathComponent("worktree-gitdir")
+            let commonGitDirectory = metadataRoot.appendingPathComponent("common-gitdir")
+            let branchReferenceURL = commonGitDirectory
+                .appendingPathComponent("refs/heads/feature/external")
+
+            try FileManager.default.createDirectory(
+                at: worktreeGitDirectory,
+                withIntermediateDirectories: true
+            )
+            try FileManager.default.createDirectory(
+                at: branchReferenceURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+
+            try "ref: refs/heads/feature/external\n".write(
+                to: worktreeGitDirectory.appendingPathComponent("HEAD"),
+                atomically: true,
+                encoding: .utf8
+            )
+            try "../common-gitdir\n".write(
+                to: worktreeGitDirectory.appendingPathComponent("commondir"),
+                atomically: true,
+                encoding: .utf8
+            )
+            try "1234567\n".write(
+                to: branchReferenceURL,
+                atomically: true,
+                encoding: .utf8
+            )
+
+            let gitFile = repositoryRoot.appendingPathComponent(".git")
+            try "gitdir: .worktree-metadata/worktree-gitdir\n".write(
+                to: gitFile,
+                atomically: true,
+                encoding: .utf8
+            )
+
+            expectedGitDirectory = worktreeGitDirectory.standardizedFileURL
+            expectedCurrentReferenceURL = branchReferenceURL.standardizedFileURL
         }
     }
 

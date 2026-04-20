@@ -1,0 +1,5 @@
+import GhosttyTerminalCore
+
+public typealias GhosttyTerminalAppearance = GhosttyTerminalCore.GhosttyTerminalAppearance
+public typealias GhosttyTerminalColor = GhosttyTerminalCore.GhosttyTerminalColor
+public typealias GhosttyTerminalColorScheme = GhosttyTerminalCore.GhosttyTerminalColorScheme

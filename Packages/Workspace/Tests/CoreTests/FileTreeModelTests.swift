@@ -35,6 +35,21 @@ struct FileTreeModelTests {
         #expect(fixture.watchServiceFactory.services.first?.startWatchingCallCount == 2)
     }
 
+    @Test("Concurrent initial loads coalesce into one tree build")
+    @MainActor
+    func concurrentInitialLoadsCoalesce() async {
+        let fixture = FileTreeFixture(buildDelay: .milliseconds(50))
+        let model = fixture.makeModel()
+
+        async let firstLoad: Void = model.loadTreeIfNeeded()
+        async let secondLoad: Void = model.loadTreeIfNeeded()
+        _ = await (firstLoad, secondLoad)
+
+        #expect(fixture.fileTreeService.buildTreeCallCount == 1)
+        #expect(fixture.watchServiceFactory.services.count == 1)
+        #expect(fixture.watchServiceFactory.services.first?.startWatchingCallCount == 1)
+    }
+
     @Test("Common file mutations reload only the affected directory")
     @MainActor
     func modifiedEventsReloadOnlyAffectedDirectory() async throws {
@@ -175,8 +190,8 @@ private final class FileTreeFixture {
     let fileTreeService: RecordingFileTreeService
     let watchServiceFactory = RecordingFileWatchServiceFactory()
 
-    init() {
-        self.fileTreeService = RecordingFileTreeService(rootURL: rootURL)
+    init(buildDelay: Duration? = nil) {
+        self.fileTreeService = RecordingFileTreeService(rootURL: rootURL, buildDelay: buildDelay)
     }
 
     func makeModel() -> FileTreeModel {
@@ -197,13 +212,15 @@ private final class RecordingFileTreeService: FileTreeService {
     }
 
     private let rootURL: URL
+    private let buildDelay: Duration?
     private var listingsByDirectoryURL: [URL: DirectoryListing]
     private var loadChildrenCallCounts: [URL: Int] = [:]
 
     private(set) var buildTreeCallCount = 0
 
-    init(rootURL: URL) {
+    init(rootURL: URL, buildDelay: Duration? = nil) {
         self.rootURL = rootURL.standardizedFileURL
+        self.buildDelay = buildDelay
         self.listingsByDirectoryURL = [
             self.rootURL: DirectoryListing(directories: ["Docs", "Sources"], files: []),
             self.rootURL.appendingPathComponent("Sources"): DirectoryListing(directories: [], files: ["App.swift"]),
@@ -213,6 +230,9 @@ private final class RecordingFileTreeService: FileTreeService {
 
     func buildTree(rootURL: URL, explorerSettings: ExplorerSettings) async -> CEWorkspaceFileNode {
         _ = explorerSettings
+        if let buildDelay {
+            try? await Task.sleep(for: buildDelay)
+        }
         buildTreeCallCount += 1
 
         let root = CEWorkspaceFileNode(url: rootURL, isDirectory: true)

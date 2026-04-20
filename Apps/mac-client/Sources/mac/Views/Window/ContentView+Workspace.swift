@@ -21,6 +21,11 @@ extension ContentView {
             tabContents: tabContents,
             gitStoreForContent: gitStoreForContent,
             terminalSessionForContent: terminalSessionForContent,
+            terminalControllerForContent: terminalControllerForContent,
+            terminalAppearance: themeManager.ghosttyAppearance(systemColorScheme: systemColorScheme),
+            onTerminalPerformanceCheckpoint: { sessionID, checkpoint in
+                recordTerminalOpenCheckpoint(sessionID: sessionID, checkpoint)
+            },
             browserSessionForContent: browserSessionForContent,
             onOpenTerminalURL: { workspaceID, paneID, url in
                 openBrowserURLFromTerminal(
@@ -29,7 +34,7 @@ extension ContentView {
                     sourcePaneID: paneID
                 )
             },
-            agentSessionForContent: agentSessionForContent,
+            chatSessionForContent: chatSessionForContent,
             workflowDefinitionForContent: workflowDefinitionForContent,
             workflowRunForContent: workflowRunForContent,
             workflowLastErrorForContent: workflowLastErrorForContent,
@@ -39,14 +44,14 @@ extension ContentView {
                 openInPermanentTab(content: .terminal(workspaceID: workspaceID, id: terminalID))
             },
             onOpenAgentFollowTarget: { workspaceID, target, prefersPreview in
-                openAgentLocationTarget(
+                openChatLocationTarget(
                     workspaceID: workspaceID,
                     target: target,
                     prefersPreview: prefersPreview
                 )
             },
             onOpenAgentDiffArtifact: { workspaceID, diff, prefersPreview in
-                _ = openAgentDiffArtifact(
+                _ = openChatDiffArtifact(
                     workspaceID: workspaceID,
                     diff: diff,
                     prefersPreview: prefersPreview
@@ -142,6 +147,7 @@ extension ContentView {
             onOpenBrowserInPane: { paneID in
                 openDefaultBrowserForSelectedWorkspace(preferredPaneID: paneID)
             },
+            showsBrowserInEmptyPane: !isRemoteWorkspaceSelected,
             isClaudeLauncherConfiguredForSelectedWorkspace: isLauncherConfiguredForSelectedWorkspace(
                 kind: .claude
             ),
@@ -155,11 +161,13 @@ extension ContentView {
                 launchCodexForSelectedWorkspace(preferredPaneID: paneID)
             },
             onOpenAgentInPane: { paneID in
-                openDefaultOrPromptAgentForSelectedWorkspace(preferredPaneID: paneID)
+                openDefaultOrPromptChatForSelectedWorkspace(preferredPaneID: paneID)
             },
+            showsAgentInEmptyPane: !isRemoteWorkspaceSelected,
             onOpenFileInPane: { paneID in
                 openFilePickerForSelectedWorkspace(in: paneID)
             },
+            showsOpenFileInEmptyPane: !isRemoteWorkspaceSelected,
             onAttentionAcknowledged: { content in
                 if case .some(.terminal(_, let terminalID)) = content {
                     markTerminalNotificationRead(terminalID)
@@ -182,6 +190,13 @@ extension ContentView {
         return workspaceTerminalRegistry.session(id: id, in: workspaceID)
     }
 
+    func terminalControllerForContent(
+        _ content: WorkspaceTabContent?
+    ) -> HostedLocalTerminalController? {
+        guard case .terminal(let workspaceID, let id) = content else { return nil }
+        return ensureHostedTerminalController(sessionID: id, workspaceID: workspaceID)
+    }
+
     func browserSessionForContent(_ content: WorkspaceTabContent?) -> BrowserSession? {
         guard case .browser(let workspaceID, let id, let initialURL) = content else { return nil }
         return ensureBrowserSession(id: id, in: workspaceID, initialURL: initialURL)
@@ -192,9 +207,9 @@ extension ContentView {
         return runtimeRegistry.gitStore(for: workspaceID)
     }
 
-    func agentSessionForContent(_ content: WorkspaceTabContent?) -> AgentSessionRuntime? {
-        guard case .agentSession(let workspaceID, let sessionID) = content else { return nil }
-        return runtimeRegistry.agentSession(id: sessionID, in: workspaceID)
+    func chatSessionForContent(_ content: WorkspaceTabContent?) -> ChatSessionRuntime? {
+        guard case .chatSession(let workspaceID, let sessionID) = content else { return nil }
+        return runtimeRegistry.chatSession(id: sessionID, in: workspaceID)
     }
 
     func createTerminalSession(
@@ -202,8 +217,9 @@ extension ContentView {
         workingDirectory: URL? = nil,
         requestedCommand: String? = nil,
         stagedCommand: String? = nil,
-        attachCommand: String? = nil,
         tabIcon: String = "terminal",
+        startupPhase: GhosttyTerminalStartupPhase = .startingShell,
+        preferredViewportSize: HostedTerminalViewportSize? = nil,
         id: UUID = UUID()
     ) -> GhosttyTerminalSession {
         workspaceOperationalController.createTerminalSession(
@@ -211,8 +227,9 @@ extension ContentView {
             workingDirectory: workingDirectory,
             requestedCommand: requestedCommand,
             stagedCommand: stagedCommand,
-            attachCommand: attachCommand,
             tabIcon: tabIcon,
+            startupPhase: startupPhase,
+            preferredViewportSize: preferredViewportSize,
             id: id
         )
     }
@@ -247,9 +264,18 @@ extension ContentView {
 
     func removeBrowserSession(id: UUID, in workspaceID: Workspace.ID) {
         if let session = browserRegistry.session(id: id, in: workspaceID) {
+            session.beginRemoval()
             hostedContentBridge.detachBrowserSession(session, workspaceID: workspaceID)
         }
         browserRegistry.removeSession(id: id, in: workspaceID)
+    }
+
+    func removeAllBrowserSessions(in workspaceID: Workspace.ID) {
+        for session in browserRegistry.sessions(for: workspaceID).values {
+            session.beginRemoval()
+            hostedContentBridge.detachBrowserSession(session, workspaceID: workspaceID)
+        }
+        browserRegistry.removeAllSessions(in: workspaceID)
     }
 
     func openDefaultBrowserForSelectedWorkspace(preferredPaneID: PaneID? = nil) {

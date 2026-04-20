@@ -4,26 +4,34 @@
 // Copyright © 2026 Devys. All rights reserved.
 
 import AppFeatures
-import SwiftUI
 import Editor
 import Git
 import GhosttyTerminal
+import RemoteCore
+import SwiftUI
 import UI
 import Workspace
 
 @MainActor
 struct ContentViewRepoRailSurface: View {
     let repositories: [Repository]
+    let remoteRepositories: [RemoteRepositoryAuthority]
     let selectedRepositoryID: Repository.ID?
+    let selectedRemoteRepositoryID: RemoteRepositoryAuthority.ID?
     let selectedWorkspaceID: Workspace.ID?
     let worktreesByRepository: [Repository.ID: [Worktree]]
+    let remoteWorktreesByRepository: [RemoteRepositoryAuthority.ID: [RemoteWorktree]]
     let workspaceStatesByID: [Worktree.ID: WorktreeState]
     let worktreeStatusHints: [Worktree.ID: StatusHint]
+    let remoteWorktreeStatusHints: [RemoteWorktree.ID: StatusHint]
     let onAddRepository: () -> Void
     let onRemoveRepository: (Repository.ID) -> Void
+    let onRemoveRemoteRepository: (RemoteRepositoryAuthority.ID) -> Void
     let onInitializeRepository: (Repository.ID) -> Void
     let onCreateWorkspace: (Repository.ID) -> Void
+    let onCreateRemoteWorktree: (RemoteRepositoryAuthority.ID) -> Void
     let onSelectWorkspace: (Repository.ID, Worktree.ID) -> Void
+    let onSelectRemoteWorktree: (RemoteRepositoryAuthority.ID, RemoteWorktree.ID) -> Void
     let onReorderRepository: (Repository.ID, Int) -> Void
     let onSetWorkspacePinned: (Repository.ID, Worktree.ID, Bool) -> Void
     let onSetWorkspaceArchived: (Repository.ID, Worktree.ID, Bool) -> Void
@@ -32,20 +40,31 @@ struct ContentViewRepoRailSurface: View {
     let onRevealWorkspaceInFinder: (Repository.ID, Worktree.ID) -> Void
     let onOpenWorkspaceInExternalEditor: (Repository.ID, Worktree.ID) -> Void
     let onRevealRepositoryInFinder: (Repository.ID) -> Void
+    let onRefreshRemoteRepository: (RemoteRepositoryAuthority.ID) -> Void
+    let onFetchRemoteRepository: (RemoteRepositoryAuthority.ID) -> Void
+    let onPullRemoteWorktree: (RemoteRepositoryAuthority.ID, RemoteWorktree.ID) -> Void
+    let onPushRemoteWorktree: (RemoteRepositoryAuthority.ID, RemoteWorktree.ID) -> Void
 
     var body: some View {
         RepoRailView(
             repositories: repositories,
+            remoteRepositories: remoteRepositories,
             selectedRepositoryID: selectedRepositoryID,
+            selectedRemoteRepositoryID: selectedRemoteRepositoryID,
             selectedWorkspaceID: selectedWorkspaceID,
             worktreesByRepository: worktreesByRepository,
+            remoteWorktreesByRepository: remoteWorktreesByRepository,
             workspaceStatesByID: workspaceStatesByID,
             worktreeStatusHints: worktreeStatusHints,
+            remoteWorktreeStatusHints: remoteWorktreeStatusHints,
             onAddRepository: onAddRepository,
             onRemoveRepository: onRemoveRepository,
+            onRemoveRemoteRepository: onRemoveRemoteRepository,
             onInitializeRepository: onInitializeRepository,
             onCreateWorkspace: onCreateWorkspace,
+            onCreateRemoteWorktree: onCreateRemoteWorktree,
             onSelectWorkspace: onSelectWorkspace,
+            onSelectRemoteWorktree: onSelectRemoteWorktree,
             onReorderRepository: onReorderRepository,
             onSetWorkspacePinned: onSetWorkspacePinned,
             onSetWorkspaceArchived: onSetWorkspaceArchived,
@@ -53,7 +72,11 @@ struct ContentViewRepoRailSurface: View {
             onDeleteWorkspace: onDeleteWorkspace,
             onRevealWorkspaceInFinder: onRevealWorkspaceInFinder,
             onOpenWorkspaceInExternalEditor: onOpenWorkspaceInExternalEditor,
-            onRevealRepositoryInFinder: onRevealRepositoryInFinder
+            onRevealRepositoryInFinder: onRevealRepositoryInFinder,
+            onRefreshRemoteRepository: onRefreshRemoteRepository,
+            onFetchRemoteRepository: onFetchRemoteRepository,
+            onPullRemoteWorktree: onPullRemoteWorktree,
+            onPushRemoteWorktree: onPushRemoteWorktree
         )
     }
 }
@@ -66,7 +89,7 @@ struct ContentViewCommandPaletteSheetSurface: View {
     let visibleNavigatorWorkspaces: [(repositoryID: Repository.ID, workspace: Worktree)]
     let workspaceStatesByID: [Worktree.ID: WorktreeState]
     let activeWorktree: Worktree?
-    let agentSessions: [HostedAgentSessionSummary]
+    let chatSessions: [HostedChatSessionSummary]
     let workflowState: WindowFeature.WorkflowWorkspaceState
     let repositorySettingsStore: RepositorySettingsStore
     let operationalState: WorkspaceOperationalState
@@ -104,7 +127,7 @@ struct ContentViewCommandPaletteSheetSurface: View {
             visibleNavigatorWorkspaces: visibleNavigatorWorkspaces,
             workspaceStatesByID: workspaceStatesByID,
             activeWorktree: activeWorktree,
-            agentSessions: agentSessions,
+            chatSessions: chatSessions,
             workflowState: workflowState,
             repositorySettingsStore: repositorySettingsStore,
             operationalState: operationalState,

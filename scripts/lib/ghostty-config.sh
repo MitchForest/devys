@@ -13,6 +13,7 @@ readonly DEVYS_GHOSTTY_BUILD_MODE="ReleaseFast"
 readonly DEVYS_GHOSTTY_XCFRAMEWORK_TARGET="universal"
 readonly DEVYS_GHOSTTY_XCFRAMEWORK_DIR="Vendor/Ghostty/GhosttyKit.xcframework"
 readonly DEVYS_GHOSTTY_RESOURCES_DIR="Vendor/Ghostty/share/ghostty"
+readonly DEVYS_GHOSTTY_VT_ARTIFACT_DIR="Vendor/Ghostty/libghostty-vt"
 
 readonly DEVYS_GHOSTTY_ZIG_AARCH64_MACOS_URL="https://ziglang.org/download/0.15.2/zig-aarch64-macos-0.15.2.tar.xz"
 readonly DEVYS_GHOSTTY_ZIG_AARCH64_MACOS_SHA256="3cc2bab367e185cdfb27501c4b30b1b0653c28d9f73df8dc91488e66ece5fa6b"

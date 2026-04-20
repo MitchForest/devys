@@ -5,7 +5,7 @@ import AppFeatures
 import Foundation
 
 protocol AgentSessionScopedRequest {
-    var sessionId: AgentSessionID { get }
+    var sessionId: ChatSessionID { get }
 }
 
 struct AgentSessionNewRequest: Codable, Sendable {
@@ -22,7 +22,7 @@ struct AgentSessionNewRequest: Codable, Sendable {
 }
 
 struct AgentSessionNewResponse: Decodable, Sendable, Equatable {
-    var sessionId: AgentSessionID
+    var sessionId: ChatSessionID
     var configOptions: [AgentSessionConfigOption]?
     var modes: AgentSessionModeState?
 
@@ -37,7 +37,7 @@ struct AgentSessionNewResponse: Decodable, Sendable, Equatable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        sessionId = try container.decode(AgentSessionID.self, forKey: .sessionId)
+        sessionId = try container.decode(ChatSessionID.self, forKey: .sessionId)
         configOptions = try container.decodeIfPresent([AgentSessionConfigOption].self, forKey: .configOptions)
             ?? container.decodeIfPresent([AgentSessionConfigOption].self, forKey: .options)
         modes = try container.decodeIfPresent(AgentSessionModeState.self, forKey: .modes)
@@ -49,12 +49,12 @@ struct AgentSessionNewResponse: Decodable, Sendable, Equatable {
 }
 
 struct AgentSessionLoadRequest: Codable, Sendable {
-    var sessionId: AgentSessionID
+    var sessionId: ChatSessionID
     var cwd: String
     var mcpServers: [ACPValue]
 
     init(
-        sessionId: AgentSessionID,
+        sessionId: ChatSessionID,
         cwd: String,
         mcpServers: [ACPValue] = []
     ) {
@@ -65,7 +65,7 @@ struct AgentSessionLoadRequest: Codable, Sendable {
 }
 
 struct AgentSessionLoadResponse: Decodable, Sendable, Equatable {
-    var sessionId: AgentSessionID
+    var sessionId: ChatSessionID
     var configOptions: [AgentSessionConfigOption]?
     var modes: AgentSessionModeState?
 
@@ -80,7 +80,7 @@ struct AgentSessionLoadResponse: Decodable, Sendable, Equatable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        sessionId = try container.decode(AgentSessionID.self, forKey: .sessionId)
+        sessionId = try container.decode(ChatSessionID.self, forKey: .sessionId)
         configOptions = try container.decodeIfPresent([AgentSessionConfigOption].self, forKey: .configOptions)
             ?? container.decodeIfPresent([AgentSessionConfigOption].self, forKey: .options)
         modes = try container.decodeIfPresent(AgentSessionModeState.self, forKey: .modes)
@@ -92,7 +92,7 @@ struct AgentSessionLoadResponse: Decodable, Sendable, Equatable {
 }
 
 struct AgentPromptRequest: Codable, Sendable {
-    var sessionId: AgentSessionID
+    var sessionId: ChatSessionID
     var prompt: [AgentContentBlock]
 }
 
@@ -101,7 +101,7 @@ struct AgentPromptResponse: Codable, Sendable, Equatable {
 }
 
 struct AgentSessionNotification: Decodable, Sendable, Equatable {
-    var sessionId: AgentSessionID
+    var sessionId: ChatSessionID
     var update: AgentSessionUpdate
 }
 
@@ -635,7 +635,7 @@ private func decodeFlexibleStringIfPresent<Key: CodingKey>(
 }
 
 struct AgentRequestPermissionRequest: Decodable, Sendable, Equatable, AgentSessionScopedRequest {
-    var sessionId: AgentSessionID
+    var sessionId: ChatSessionID
     var toolCall: AgentToolCallUpdate
     var options: [AgentPermissionOption]
 }
@@ -655,7 +655,7 @@ struct AgentRequestPermissionResponse: Codable, Sendable, Equatable {
 }
 
 struct AgentReadTextFileRequest: Codable, Sendable, Equatable, AgentSessionScopedRequest {
-    var sessionId: AgentSessionID
+    var sessionId: ChatSessionID
     var path: String
     var line: Int?
     var limit: Int?
@@ -666,7 +666,7 @@ struct AgentReadTextFileResponse: Codable, Sendable, Equatable {
 }
 
 struct AgentWriteTextFileRequest: Codable, Sendable, Equatable, AgentSessionScopedRequest {
-    var sessionId: AgentSessionID
+    var sessionId: ChatSessionID
     var path: String
     var content: String
 }
@@ -677,7 +677,7 @@ struct AgentTerminalEnvironmentVariable: Codable, Sendable, Equatable {
 }
 
 struct AgentCreateTerminalRequest: Codable, Sendable, Equatable, AgentSessionScopedRequest {
-    var sessionId: AgentSessionID
+    var sessionId: ChatSessionID
     var command: String
     var args: [String]
     var env: [AgentTerminalEnvironmentVariable]
@@ -685,7 +685,7 @@ struct AgentCreateTerminalRequest: Codable, Sendable, Equatable, AgentSessionSco
     var outputByteLimit: Int?
 
     init(
-        sessionId: AgentSessionID,
+        sessionId: ChatSessionID,
         command: String,
         args: [String] = [],
         env: [AgentTerminalEnvironmentVariable] = [],
@@ -706,7 +706,7 @@ struct AgentCreateTerminalResponse: Codable, Sendable, Equatable {
 }
 
 struct AgentTerminalOutputRequest: Codable, Sendable, Equatable, AgentSessionScopedRequest {
-    var sessionId: AgentSessionID
+    var sessionId: ChatSessionID
     var terminalId: String
 }
 
@@ -722,7 +722,7 @@ struct AgentTerminalOutputResponse: Codable, Sendable, Equatable {
 }
 
 struct AgentWaitForTerminalExitRequest: Codable, Sendable, Equatable, AgentSessionScopedRequest {
-    var sessionId: AgentSessionID
+    var sessionId: ChatSessionID
     var terminalId: String
 }
 
@@ -732,12 +732,12 @@ struct AgentWaitForTerminalExitResponse: Codable, Sendable, Equatable {
 }
 
 struct AgentKillTerminalRequest: Codable, Sendable, Equatable, AgentSessionScopedRequest {
-    var sessionId: AgentSessionID
+    var sessionId: ChatSessionID
     var terminalId: String
 }
 
 struct AgentReleaseTerminalRequest: Codable, Sendable, Equatable, AgentSessionScopedRequest {
-    var sessionId: AgentSessionID
+    var sessionId: ChatSessionID
     var terminalId: String
 }
 

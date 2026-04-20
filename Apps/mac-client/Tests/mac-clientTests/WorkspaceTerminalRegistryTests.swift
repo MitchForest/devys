@@ -52,4 +52,40 @@ struct WorkspaceTerminalRegistryTests {
         #expect(registry.sessions(for: firstWorkspace).isEmpty)
         #expect(registry.sessions(for: secondWorkspace)[second.id] === second)
     }
+
+    @Test("Sessions preserve the requested startup phase")
+    @MainActor
+    func sessionStartupPhase() {
+        let registry = WorkspaceTerminalRegistry()
+        let workspaceID = "/tmp/devys/worktrees/a"
+
+        let session = registry.createSession(
+            in: workspaceID,
+            startupPhase: .startingHost
+        )
+
+        #expect(session.startupPhase == .startingHost)
+        #expect(registry.sessions(for: workspaceID)[session.id] === session)
+    }
+
+    @Test("Preferred viewport size seeds the hosted controller before first measurement")
+    @MainActor
+    func preferredViewportSizeSeedsController() {
+        let registry = WorkspaceTerminalRegistry()
+        let workspaceID = "/tmp/devys/worktrees/a"
+        let session = registry.createSession(
+            in: workspaceID,
+            preferredViewportSize: HostedTerminalViewportSize(cols: 132, rows: 42)
+        )
+
+        let controller = registry.ensureController(
+            for: session.id,
+            in: workspaceID,
+            socketPath: "/tmp/devys-terminal-test.sock",
+            appearance: .defaultDark
+        )
+
+        #expect(controller?.surfaceState.cols == 132)
+        #expect(controller?.surfaceState.rows == 42)
+    }
 }

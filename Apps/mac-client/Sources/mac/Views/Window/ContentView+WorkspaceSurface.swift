@@ -15,9 +15,12 @@ struct ContentViewWorkspaceSurface: View {
     let tabContents: [TabID: WorkspaceTabContent]
     let gitStoreForContent: (WorkspaceTabContent?) -> GitStore?
     let terminalSessionForContent: (WorkspaceTabContent?) -> GhosttyTerminalSession?
+    let terminalControllerForContent: (WorkspaceTabContent?) -> HostedLocalTerminalController?
+    let terminalAppearance: GhosttyTerminalAppearance
+    let onTerminalPerformanceCheckpoint: (UUID, TerminalOpenPerformanceTracker.Checkpoint) -> Void
     let browserSessionForContent: (WorkspaceTabContent?) -> BrowserSession?
     let onOpenTerminalURL: (Workspace.ID, PaneID, URL) -> Void
-    let agentSessionForContent: (WorkspaceTabContent?) -> AgentSessionRuntime?
+    let chatSessionForContent: (WorkspaceTabContent?) -> ChatSessionRuntime?
     let workflowDefinitionForContent: (WorkspaceTabContent?) -> WorkflowDefinition?
     let workflowRunForContent: (WorkspaceTabContent?) -> WorkflowRun?
     let workflowLastErrorForContent: (WorkspaceTabContent?) -> String?
@@ -46,12 +49,15 @@ struct ContentViewWorkspaceSurface: View {
     let onFocusPane: (PaneID) -> Void
     let onOpenTerminalInPane: (PaneID) -> Void
     let onOpenBrowserInPane: (PaneID) -> Void
+    let showsBrowserInEmptyPane: Bool
     let isClaudeLauncherConfiguredForSelectedWorkspace: Bool
     let isCodexLauncherConfiguredForSelectedWorkspace: Bool
     let onOpenClaudeInPane: (PaneID) -> Void
     let onOpenCodexInPane: (PaneID) -> Void
     let onOpenAgentInPane: (PaneID) -> Void
+    let showsAgentInEmptyPane: Bool
     let onOpenFileInPane: (PaneID) -> Void
+    let showsOpenFileInEmptyPane: Bool
     let onAttentionAcknowledged: (WorkspaceTabContent?) -> Void
     let onPresentationChange: () -> Void
     let onEditorURLChange: (TabID, URL) -> Void
@@ -67,12 +73,15 @@ struct ContentViewWorkspaceSurface: View {
                     content: content,
                     gitStore: gitStoreForContent(content),
                     terminalSession: terminalSessionForContent(content),
+                    terminalController: terminalControllerForContent(content),
+                    terminalAppearance: terminalAppearance,
+                    onTerminalPerformanceCheckpoint: onTerminalPerformanceCheckpoint,
                     browserSession: browserSessionForContent(content),
                     onOpenTerminalURL: { url in
                         guard case .terminal(let workspaceID, _) = content else { return }
                         onOpenTerminalURL(workspaceID, paneID, url)
                     },
-                    agentSession: agentSessionForContent(content),
+                    chatSession: chatSessionForContent(content),
                     workflowDefinition: workflowDefinitionForContent(content),
                     workflowRun: workflowRunForContent(content),
                     workflowLastErrorMessage: workflowLastErrorForContent(content),
@@ -152,12 +161,15 @@ struct ContentViewWorkspaceSurface: View {
                     onFocusPane: onFocusPane,
                     onOpenTerminal: onOpenTerminalInPane,
                     onOpenBrowser: onOpenBrowserInPane,
+                    showsBrowser: showsBrowserInEmptyPane,
                     canLaunchClaude: isClaudeLauncherConfiguredForSelectedWorkspace,
                     canLaunchCodex: isCodexLauncherConfiguredForSelectedWorkspace,
                     onOpenClaude: onOpenClaudeInPane,
                     onOpenCodex: onOpenCodexInPane,
                     onOpenAgent: onOpenAgentInPane,
-                    onOpenFile: onOpenFileInPane
+                    showsAgent: showsAgentInEmptyPane,
+                    onOpenFile: onOpenFileInPane,
+                    showsOpenFile: showsOpenFileInEmptyPane
                 )
             }
         )

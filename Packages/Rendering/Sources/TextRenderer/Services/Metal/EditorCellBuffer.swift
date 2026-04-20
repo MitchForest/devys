@@ -60,7 +60,7 @@ public final class EditorCellBuffer {
         for i in 0..<bufferCount {
             guard let buffer = device.makeBuffer(
                 length: bufferSize,
-                options: .storageModeManaged
+                options: Self.bufferOptions
             ) else {
                 fatalError("EditorCellBuffer: Failed to create buffer \(i)")
             }
@@ -142,6 +142,14 @@ public final class EditorCellBuffer {
     public var bufferSize: Int {
         capacity * MemoryLayout<EditorCellGPU>.stride
     }
+
+    private static var bufferOptions: MTLResourceOptions {
+        #if os(macOS)
+        .storageModeManaged
+        #else
+        .storageModeShared
+        #endif
+    }
 }
 
 // MARK: - Overlay Buffer
@@ -165,7 +173,7 @@ public final class EditorOverlayBuffer {
     
     private func createBuffer() {
         let size = capacity * MemoryLayout<EditorOverlayVertex>.stride
-        buffer = device.makeBuffer(length: size, options: .storageModeManaged)
+        buffer = device.makeBuffer(length: size, options: Self.bufferOptions)
         buffer?.label = "EditorOverlayBuffer"
     }
     
@@ -215,6 +223,14 @@ public final class EditorOverlayBuffer {
         
         #if os(macOS)
         buf.didModifyRange(0..<vertexCount * MemoryLayout<EditorOverlayVertex>.stride)
+        #endif
+    }
+
+    private static var bufferOptions: MTLResourceOptions {
+        #if os(macOS)
+        .storageModeManaged
+        #else
+        .storageModeShared
         #endif
     }
 }

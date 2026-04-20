@@ -5,7 +5,6 @@
 Read these first:
 
 - `/Users/mitchwhite/Code/devys/AGENTS.md`
-- `/Users/mitchwhite/Code/devys/.docs/adrs/0003-ui-rulebook.md`
 - `/Users/mitchwhite/Code/devys/.docs/reference/ui-ux.md`
 
 ## Role

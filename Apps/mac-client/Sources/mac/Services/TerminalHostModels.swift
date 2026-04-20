@@ -4,5 +4,6 @@
 import AppFeatures
 
 typealias HostedTerminalSessionRecord = AppFeatures.HostedTerminalSessionRecord
-typealias PersistedAgentSessionRecord = AppFeatures.PersistedAgentSessionRecord
+typealias HostedTerminalViewportSizeRecord = AppFeatures.HostedTerminalViewportSizeRecord
+typealias PersistedChatSessionRecord = AppFeatures.PersistedChatSessionRecord
 typealias TerminalRelaunchSnapshot = WindowRelaunchSnapshot

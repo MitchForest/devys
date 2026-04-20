@@ -29,17 +29,19 @@ extension DiffRenderLayoutBuilder {
             rowIndex += 1
 
             if !context.configuration.showsHunkHeaders {
-                rows.append(UnifiedDiffRow(
-                    id: "unified-hunk-spacer-\(hunk.id)",
-                    kind: .line,
-                    lineType: .context,
-                    oldLineNumber: nil,
-                    newLineNumber: nil,
-                    content: "",
-                    wordChanges: nil,
-                    highlightSegment: nil
-                ))
-                rowIndex += 1
+                for spacerIndex in 0..<DiffChromeMetrics.hiddenHunkSpacerRowCount(lineHeight: lineHeight) {
+                    rows.append(UnifiedDiffRow(
+                        id: "unified-hunk-spacer-\(hunk.id)-\(spacerIndex)",
+                        kind: .line,
+                        lineType: .context,
+                        oldLineNumber: nil,
+                        newLineNumber: nil,
+                        content: "",
+                        wordChanges: nil,
+                        highlightSegment: nil
+                    ))
+                    rowIndex += 1
+                }
             }
 
             let lineRows = unifiedLineRows(hunk: hunk, context: context)

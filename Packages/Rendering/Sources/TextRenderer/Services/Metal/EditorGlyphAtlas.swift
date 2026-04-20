@@ -332,7 +332,11 @@ public final class EditorGlyphAtlas {
             height: atlasHeight,
             mipmapped: false
         )
+#if os(macOS)
         descriptor.storageMode = .managed
+#else
+        descriptor.storageMode = .shared
+#endif
         descriptor.usage = .shaderRead
         
         guard let texture = device.makeTexture(descriptor: descriptor) else {

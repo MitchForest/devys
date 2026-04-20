@@ -57,7 +57,11 @@ struct SidebarContentView: View {
                 onDeleteItems: onDeleteItems
             )
         } else {
-            EmptyView()
+            EmptyState(
+                icon: "folder.badge.questionmark",
+                title: "Select a Workspace",
+                description: "Choose a worktree from the repo rail to load files for the active workspace."
+            )
         }
     }
 }
@@ -90,9 +94,6 @@ private struct SingleFolderTreeView: View {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-        }
-        .task(id: folder) {
-            await model?.loadTreeIfNeeded()
         }
     }
 }

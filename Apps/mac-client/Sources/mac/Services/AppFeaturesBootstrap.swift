@@ -14,6 +14,7 @@ enum AppFeaturesBootstrap {
         let workspaceCatalogPersistenceClient = WorkspaceCatalogPersistenceClient.live()
         let windowRelaunchPersistenceStore = TerminalRelaunchPersistenceStore()
         let workflowPersistenceStore = WorkflowPersistenceStore()
+        let remoteRepositoryPersistenceStore = RemoteRepositoryPersistenceStore()
         let notificationSettings = container.appSettings.notifications
         let initialWindowState = WindowFeature.State(
             workspaceStatesByID: Dictionary(
@@ -25,7 +26,7 @@ enum AppFeaturesBootstrap {
                 forKey: navigatorCollapsedDefaultsKey
             ),
             isTerminalActivityNotificationsEnabled: notificationSettings.terminalActivity,
-            isAgentActivityNotificationsEnabled: notificationSettings.agentActivity
+            isChatActivityNotificationsEnabled: notificationSettings.chatActivity
         )
 
         return withDependencies {
@@ -37,6 +38,8 @@ enum AppFeaturesBootstrap {
             $0.windowRelaunchPersistenceClient = .live(store: windowRelaunchPersistenceStore)
             $0.workspaceCreationClient = .live(service: container.workspaceCreationService)
             $0.workspaceCatalogPersistenceClient = workspaceCatalogPersistenceClient
+            $0.remoteRepositoryPersistenceClient = .live(store: remoteRepositoryPersistenceStore)
+            $0.remoteTerminalWorkspaceClient = .live(service: container.remoteSSHWorkspaceService)
             $0.workspaceCatalogRefreshClient = .live(
                 gitWorktreeService: DefaultGitWorktreeService()
             )
@@ -78,6 +81,51 @@ private extension WindowRelaunchPersistenceClient {
             load: { store.load() },
             save: { try store.save($0) },
             clear: { try store.clear() }
+        )
+    }
+}
+
+private extension RemoteRepositoryPersistenceClient {
+    static func live(store: RemoteRepositoryPersistenceStore) -> Self {
+        Self(
+            load: { try await store.load() },
+            save: { try await store.save($0) }
+        )
+    }
+}
+
+private extension RemoteTerminalWorkspaceClient {
+    static func live(
+        service: RemoteSSHWorkspaceService
+    ) -> Self {
+        Self(
+            refreshWorktrees: { repository in
+                try await service.refreshWorktrees(for: repository)
+            },
+            createWorktree: { repository, draft in
+                try await service.createWorktree(
+                    repository: repository,
+                    draft: draft
+                )
+            },
+            fetch: { repository in
+                try await service.fetch(repository: repository)
+                return try await service.refreshWorktrees(for: repository)
+            },
+            pull: { repository, worktree in
+                try await service.pull(repository: repository, worktree: worktree)
+                return try await service.refreshWorktrees(for: repository)
+            },
+            push: { repository, worktree in
+                try await service.push(repository: repository, worktree: worktree)
+                return try await service.refreshWorktrees(for: repository)
+            },
+            prepareShellLaunch: { repository, worktree in
+                try await service.prepareShellLaunch(
+                    repository: repository,
+                    worktree: worktree
+                )
+            }
         )
     }
 }

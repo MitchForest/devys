@@ -76,6 +76,17 @@ struct ColorsTests {
         #expect(dark.accent == light.accent)
     }
 
+    @Test("Theme exposes dedicated terminal colors")
+    func terminalColors() {
+        let dark = Theme(isDark: true)
+        let light = Theme(isDark: false)
+
+        #expect(dark.terminalBackground == dark.card)
+        #expect(light.terminalBackground == light.card)
+        #expect(dark.terminalText != dark.text)
+        #expect(light.terminalText != light.text)
+    }
+
     @Test("Theme default accent is graphite")
     func defaultAccent() {
         let theme = Theme(isDark: true)

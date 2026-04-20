@@ -32,7 +32,7 @@ extension ContentView {
                 visibleNavigatorWorkspaces: visibleNavigatorWorkspaces,
                 workspaceStatesByID: store.workspaceStatesByID,
                 activeWorktree: activeWorktree,
-                agentSessions: hostedAgentSessions,
+                chatSessions: hostedChatSessions,
                 workflowState: visibleWorkspaceID.map { workflowWorkspaceState(for: $0) }
                     ?? WindowFeature.WorkflowWorkspaceState(),
                 repositorySettingsStore: repositorySettingsStore,
@@ -95,7 +95,7 @@ extension ContentView {
     ) -> Bool {
         switch action {
         case .addRepository:
-            store.send(.requestOpenRepository)
+            store.send(.requestAddRepository)
         case .initializeRepository(let repositoryID):
             store.send(.requestInitializeRepository(repositoryID))
         case .createWorkspace(let repositoryID):
@@ -128,10 +128,10 @@ extension ContentView {
         _ action: WorkspaceCommandPaletteAction
     ) -> Bool {
         switch action {
-        case .openAgents:
-            store.send(.requestWorkspaceCommand(.openAgents))
-        case .focusAgentSession(let sessionID):
-            store.send(.requestFocusAgentSession(sessionID))
+        case .openChat:
+            store.send(.requestWorkspaceCommand(.openChat))
+        case .focusChatSession(let sessionID):
+            store.send(.requestFocusChatSession(sessionID))
         default:
             return false
         }

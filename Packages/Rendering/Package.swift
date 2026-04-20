@@ -5,7 +5,8 @@ import PackageDescription
 let package = Package(
     name: "Rendering",
     platforms: [
-        .macOS(.v14)
+        .macOS(.v14),
+        .iOS(.v17),
     ],
     products: [
         .library(
@@ -18,7 +19,8 @@ let package = Package(
             name: "Rendering",
             path: "Sources/TextRenderer",
             resources: [
-                .process("Resources/EditorShaders.metal")
+                .process("Resources/EditorShaders.metal"),
+                .process("Resources/TerminalShaders.metal")
             ],
             swiftSettings: [
                 .swiftLanguageMode(.v6),

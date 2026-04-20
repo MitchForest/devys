@@ -3,9 +3,11 @@
 //
 // Copyright © 2026 Devys. All rights reserved.
 
+import AppFeatures
+import RemoteCore
 import SwiftUI
-import Workspace
 import UI
+import Workspace
 
 // MARK: - RepoRailView
 
@@ -14,17 +16,24 @@ struct RepoRailView: View {
     @Environment(\.densityLayout) private var layout
 
     let repositories: [Repository]
+    let remoteRepositories: [RemoteRepositoryAuthority]
     let selectedRepositoryID: Repository.ID?
+    let selectedRemoteRepositoryID: RemoteRepositoryAuthority.ID?
     let selectedWorkspaceID: Workspace.ID?
     let worktreesByRepository: [Repository.ID: [Worktree]]
+    let remoteWorktreesByRepository: [RemoteRepositoryAuthority.ID: [RemoteWorktree]]
     let workspaceStatesByID: [Worktree.ID: WorktreeState]
     let worktreeStatusHints: [Worktree.ID: StatusHint]
+    let remoteWorktreeStatusHints: [RemoteWorktree.ID: StatusHint]
 
     let onAddRepository: () -> Void
     let onRemoveRepository: (Repository.ID) -> Void
+    let onRemoveRemoteRepository: (RemoteRepositoryAuthority.ID) -> Void
     let onInitializeRepository: (Repository.ID) -> Void
     let onCreateWorkspace: (Repository.ID) -> Void
+    let onCreateRemoteWorktree: (RemoteRepositoryAuthority.ID) -> Void
     let onSelectWorkspace: (Repository.ID, Worktree.ID) -> Void
+    let onSelectRemoteWorktree: (RemoteRepositoryAuthority.ID, RemoteWorktree.ID) -> Void
     let onReorderRepository: (Repository.ID, Int) -> Void
     let onSetWorkspacePinned: (Repository.ID, Worktree.ID, Bool) -> Void
     let onSetWorkspaceArchived: (Repository.ID, Worktree.ID, Bool) -> Void
@@ -33,8 +42,12 @@ struct RepoRailView: View {
     let onRevealWorkspaceInFinder: (Repository.ID, Worktree.ID) -> Void
     let onOpenWorkspaceInExternalEditor: (Repository.ID, Worktree.ID) -> Void
     let onRevealRepositoryInFinder: (Repository.ID) -> Void
+    let onRefreshRemoteRepository: (RemoteRepositoryAuthority.ID) -> Void
+    let onFetchRemoteRepository: (RemoteRepositoryAuthority.ID) -> Void
+    let onPullRemoteWorktree: (RemoteRepositoryAuthority.ID, RemoteWorktree.ID) -> Void
+    let onPushRemoteWorktree: (RemoteRepositoryAuthority.ID, RemoteWorktree.ID) -> Void
 
-    @State private var expandedRepos: Set<Repository.ID> = []
+    @State private var expandedRepos: Set<String> = []
     @State private var draggedRepositoryID: Repository.ID?
     @State private var dropTargetIndex: Int?
 
@@ -45,7 +58,8 @@ struct RepoRailView: View {
             Spacer(minLength: 0)
 
             RailAddButton(action: onAddRepository)
-                .padding(.vertical, Spacing.space2)
+                .help("Add Repository")
+            .padding(.vertical, Spacing.space2)
         }
         .frame(width: layout.repoRailWidth)
         .frame(maxHeight: .infinity)
@@ -61,6 +75,9 @@ struct RepoRailView: View {
         .onChange(of: selectedRepositoryID) { _, _ in
             autoExpandSelectedRepo()
         }
+        .onChange(of: selectedRemoteRepositoryID) { _, _ in
+            autoExpandSelectedRepo()
+        }
     }
 
     // MARK: - Scrollable Content
@@ -71,6 +88,10 @@ struct RepoRailView: View {
                 LazyVStack(spacing: Spacing.space1) {
                     ForEach(Array(repositories.enumerated()), id: \.element.id) { index, repo in
                         repoGroup(repo, at: index)
+                    }
+
+                    ForEach(remoteRepositories) { repository in
+                        remoteRepoGroup(repository)
                     }
                 }
                 .padding(.vertical, Spacing.space2)
@@ -145,6 +166,31 @@ struct RepoRailView: View {
         .animation(Animations.spring, value: isExpanded)
     }
 
+    @ViewBuilder
+    private func remoteRepoGroup(_ repository: RemoteRepositoryAuthority) -> some View {
+        let isExpanded = expandedRepos.contains(repository.id)
+        let isActive = selectedRemoteRepositoryID == repository.id
+
+        VStack(spacing: 2) {
+            RepoItem(
+                abbreviation: String(repository.displayName.prefix(2)),
+                badgeSymbol: "server.rack",
+                repoName: repository.railDisplayName,
+                isActive: isActive
+            ) {
+                toggleRemoteRepo(repository)
+            }
+            .id("remote-\(repository.id)")
+            .contextMenu { remoteRepoContextMenu(repository) }
+
+            if isExpanded {
+                remoteWorktreeList(for: repository)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .animation(Animations.spring, value: isExpanded)
+    }
+
     // MARK: - Worktree List
 
     @ViewBuilder
@@ -169,6 +215,26 @@ struct RepoRailView: View {
         }
     }
 
+    @ViewBuilder
+    private func remoteWorktreeList(
+        for repository: RemoteRepositoryAuthority
+    ) -> some View {
+        let worktrees = remoteWorktreesByRepository[repository.id] ?? []
+
+        ForEach(Array(worktrees.enumerated()), id: \.element.id) { worktreeIndex, worktree in
+            WorktreeItem(
+                index: worktreeIndex,
+                branchName: worktree.branchName,
+                isActive: selectedWorkspaceID == worktree.id,
+                statusHint: remoteWorktreeStatusHints[worktree.id]
+            ) {
+                onSelectRemoteWorktree(repository.id, worktree.id)
+            }
+            .id(worktree.id)
+            .contextMenu { remoteWorktreeContextMenu(repository, worktree) }
+        }
+    }
+
     // MARK: - Context Menus
 
     @ViewBuilder
@@ -186,6 +252,17 @@ struct RepoRailView: View {
         Divider()
 
         Button("Remove", role: .destructive) { onRemoveRepository(repo.id) }
+    }
+
+    @ViewBuilder
+    private func remoteRepoContextMenu(_ repository: RemoteRepositoryAuthority) -> some View {
+        Button("New Remote Worktree") { onCreateRemoteWorktree(repository.id) }
+        Button("Refresh") { onRefreshRemoteRepository(repository.id) }
+        Button("Fetch") { onFetchRemoteRepository(repository.id) }
+
+        Divider()
+
+        Button("Remove", role: .destructive) { onRemoveRemoteRepository(repository.id) }
     }
 
     @ViewBuilder
@@ -211,6 +288,15 @@ struct RepoRailView: View {
             .disabled(worktree.isPrimary)
     }
 
+    @ViewBuilder
+    private func remoteWorktreeContextMenu(
+        _ repository: RemoteRepositoryAuthority,
+        _ worktree: RemoteWorktree
+    ) -> some View {
+        Button("Pull") { onPullRemoteWorktree(repository.id, worktree.id) }
+        Button("Push") { onPushRemoteWorktree(repository.id, worktree.id) }
+    }
+
     // MARK: - Helpers
 
     private func toggleRepo(_ repo: Repository) {
@@ -229,6 +315,22 @@ struct RepoRailView: View {
         }
     }
 
+    private func toggleRemoteRepo(_ repository: RemoteRepositoryAuthority) {
+        withAnimation(Animations.spring) {
+            if expandedRepos.contains(repository.id) {
+                if selectedRemoteRepositoryID == repository.id {
+                    expandedRepos.remove(repository.id)
+                } else {
+                    expandedRepos.insert(repository.id)
+                    selectFirstRemoteWorktree(in: repository)
+                }
+            } else {
+                expandedRepos.insert(repository.id)
+                selectFirstRemoteWorktree(in: repository)
+            }
+        }
+    }
+
     private func selectFirstWorktree(in repo: Repository) {
         let worktrees = visibleWorktrees(for: repo)
         if let first = worktrees.first {
@@ -236,9 +338,18 @@ struct RepoRailView: View {
         }
     }
 
+    private func selectFirstRemoteWorktree(in repository: RemoteRepositoryAuthority) {
+        guard let first = (remoteWorktreesByRepository[repository.id] ?? []).first else { return }
+        onSelectRemoteWorktree(repository.id, first.id)
+    }
+
     private func autoExpandSelectedRepo() {
-        guard let selectedRepositoryID else { return }
-        expandedRepos.insert(selectedRepositoryID)
+        if let selectedRepositoryID {
+            expandedRepos.insert(selectedRepositoryID)
+        }
+        if let selectedRemoteRepositoryID {
+            expandedRepos.insert(selectedRemoteRepositoryID)
+        }
     }
 
     private func visibleWorktrees(for repo: Repository) -> [Worktree] {

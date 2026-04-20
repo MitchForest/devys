@@ -7,7 +7,7 @@ import Workspace
 @testable import mac_client
 
 @Suite("Agent Session Runtime Tests")
-struct AgentSessionRuntimeTests {
+struct ChatSessionRuntimeTests {
     @Test("Tool call updates render as one evolving timeline card")
     @MainActor
     // swiftlint:disable:next function_body_length
@@ -413,10 +413,10 @@ struct AgentSessionRuntimeTests {
     }
 
     @MainActor
-    private func makeRuntime() -> AgentSessionRuntime {
-        AgentSessionRuntime(
+    private func makeRuntime() -> ChatSessionRuntime {
+        ChatSessionRuntime(
             workspaceID: "/tmp/devys/worktrees/agents",
-            sessionID: AgentSessionID(rawValue: "session-1"),
+            sessionID: ChatSessionID(rawValue: "session-1"),
             descriptor: ACPAgentDescriptor.descriptor(for: .codex)
         )
     }

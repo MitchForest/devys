@@ -49,6 +49,11 @@ extension ContentView {
                     await executeWorkspaceTransition(request)
                 }
             }
+            .onChange(of: store.remoteWorkspaceTransitionRequest) { _, request in
+                guard let request else { return }
+                store.send(.setRemoteWorkspaceTransitionRequest(nil))
+                executeRemoteWorkspaceTransition(request)
+            }
             .onChange(of: store.workspaceDiscardRequest) { _, request in
                 guard let request else { return }
                 store.send(.setWorkspaceDiscardRequest(nil))
@@ -67,10 +72,10 @@ extension ContentView {
 
     private func applyWorkspaceScopedRequestModifiers<V: View>(_ view: V) -> some View {
         view
-            .onChange(of: store.agentSessionLaunchRequest) { _, request in
+            .onChange(of: store.chatSessionLaunchRequest) { _, request in
                 guard let request else { return }
-                store.send(.setAgentSessionLaunchRequest(nil))
-                openAgentSession(
+                store.send(.setChatSessionLaunchRequest(nil))
+                openChatSession(
                     request.kind,
                     workspaceID: request.workspaceID,
                     initialAttachments: request.initialAttachments,
@@ -82,10 +87,17 @@ extension ContentView {
                 store.send(.setWorkspaceCommandRequest(nil))
                 executeWorkspaceCommand(request.command)
             }
-            .onChange(of: store.focusAgentSessionRequest) { _, request in
+            .onChange(of: store.focusChatSessionRequest) { _, request in
                 guard let request else { return }
-                store.send(.setFocusAgentSessionRequest(nil))
-                focusAgentSession(workspaceID: request.workspaceID, sessionID: request.sessionID)
+                store.send(.setFocusChatSessionRequest(nil))
+                focusChatSession(workspaceID: request.workspaceID, sessionID: request.sessionID)
+            }
+            .onChange(of: store.remoteTerminalLaunchRequest) { _, request in
+                guard let request else { return }
+                store.send(.setRemoteTerminalLaunchRequest(nil))
+                Task { @MainActor in
+                    await executeRemoteTerminalLaunch(request)
+                }
             }
     }
 
@@ -135,8 +147,8 @@ extension ContentView {
 
     private func executeWorkspaceCommand(_ command: WindowFeature.WorkspaceCommand) {
         switch command {
-        case .openAgents:
-            openDefaultOrPromptAgentForSelectedWorkspace()
+        case .openChat:
+            openDefaultOrPromptChatForSelectedWorkspace()
         case .launchShell:
             openShellForSelectedWorkspace()
         case .launchClaude:
@@ -215,5 +227,25 @@ extension ContentView {
         if selectedRepositoryID == request.repositoryID {
             _ = restoreSelectedWorkspaceOrReset()
         }
+    }
+
+    private func executeRemoteWorkspaceTransition(
+        _ request: WindowFeature.RemoteWorkspaceTransitionRequest
+    ) {
+        if request.shouldPersistVisibleWorkspaceState {
+            persistVisibleWorkspaceState()
+        }
+        if request.shouldResetHostWorkspaceState {
+            resetVisibleWorkspaceRuntime()
+        }
+
+        store.send(
+            .selectRemoteWorktree(
+                repositoryID: request.targetRepositoryID,
+                workspaceID: request.targetWorkspaceID
+            )
+        )
+        ensureWorkspaceLayout(for: request.targetWorkspaceID)
+        renderWorkspaceLayout(for: request.targetWorkspaceID)
     }
 }

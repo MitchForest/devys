@@ -27,6 +27,7 @@ final class AppContainer {
     let workspaceOperationalController: WorkspaceOperationalController
     let workflowExecutionController: WorkflowExecutionController
     let editorSessionRegistry: EditorSessionRegistry
+    let remoteSSHWorkspaceService: RemoteSSHWorkspaceService
 
     private let fileTreeService: FileTreeService
     private let fileWatchServiceFactory: (URL) -> FileWatchService
@@ -51,6 +52,7 @@ final class AppContainer {
     ) {
         let workspaceOperationalController = WorkspaceOperationalController()
         let persistentTerminalHostController = PersistentTerminalHostController()
+        let remoteSSHWorkspaceService = RemoteSSHWorkspaceService()
         self.appSettings = appSettings
         self.recentRepositoriesService = recentRepositoriesService
         self.layoutPersistenceService = layoutPersistenceService
@@ -67,6 +69,7 @@ final class AppContainer {
             appSettings.restore.restoreTerminalSessions
         }
         self.editorSessionRegistry = editorSessionRegistry
+        self.remoteSSHWorkspaceService = remoteSSHWorkspaceService
         self.fileTreeService = fileTreeService
         self.fileWatchServiceFactory = fileWatchServiceFactory ?? {
             sharedFileWatchRegistry.makeService(rootURL: $0)

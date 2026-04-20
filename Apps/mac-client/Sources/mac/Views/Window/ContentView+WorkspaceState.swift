@@ -85,13 +85,13 @@ extension ContentView {
     func discardWorkspaceState(_ workspaceID: Workspace.ID) {
         let wasVisibleWorkspace = visibleWorkspaceID == workspaceID
         workspaceOperationalController.clearWorkspace(workspaceID)
-        let agentSessions = runtimeRegistry.allAgentSessions(for: workspaceID)
+        let chatSessions = runtimeRegistry.allChatSessions(for: workspaceID)
         let editorSessionPool = runtimeRegistry.editorSessionPool(for: workspaceID)
         runtimeRegistry.discardWorkspace(workspaceID)
         disposeWorkspaceState(
             workspaceID,
             editorSessionPool: editorSessionPool,
-            agentSessions: agentSessions
+            chatSessions: chatSessions
         )
         hostedContentBridge.discardWorkspace(workspaceID)
         workspaceViewStatesByID.removeValue(forKey: workspaceID)
@@ -104,7 +104,7 @@ extension ContentView {
     private func disposeWorkspaceState(
         _ workspaceID: Workspace.ID,
         editorSessionPool: EditorSessionPool?,
-        agentSessions: [AgentSessionRuntime]
+        chatSessions: [ChatSessionRuntime]
     ) {
         let state = persistedWorkspaceViewState(for: workspaceID)
 
@@ -117,13 +117,13 @@ extension ContentView {
         }
         workspaceBackgroundProcessRegistry.shutdownAll(in: workspaceID)
         store.send(.setWorkspaceRunState(workspaceID: workspaceID, nil))
-        for session in agentSessions {
+        for session in chatSessions {
             Task {
                 await session.teardown()
             }
         }
-        runtimeRegistry.removeAllAgentSessions(in: workspaceID)
-        browserRegistry.removeAllSessions(in: workspaceID)
+        runtimeRegistry.removeAllChatSessions(in: workspaceID)
+        removeAllBrowserSessions(in: workspaceID)
 
         for tabID in state.editorSessions.keys {
             if let session = state.editorSessions[tabID] {

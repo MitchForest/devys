@@ -15,8 +15,8 @@ enum WorkspaceCommandPaletteAction: Equatable {
     case createWorkspace(Repository.ID)
     case importWorktrees(Repository.ID)
     case selectWorkspace(repositoryID: Repository.ID, workspaceID: Workspace.ID)
-    case openAgents
-    case focusAgentSession(AgentSessionID)
+    case openChat
+    case focusChatSession(ChatSessionID)
     case createWorkflow
     case openWorkflowDefinition(String)
     case openWorkflowRun(UUID)
@@ -135,10 +135,10 @@ struct WorkspaceSearchItem: Identifiable, Equatable {
                 "command:import-worktrees:\(repositoryID)"
             case .selectWorkspace(let repositoryID, let workspaceID):
                 "command:select-workspace:\(repositoryID):\(workspaceID)"
-            case .openAgents:
-                "command:open-agents"
-            case .focusAgentSession(let sessionID):
-                "command:focus-agent-session:\(sessionID.rawValue)"
+            case .openChat:
+                "command:open-chat"
+            case .focusChatSession(let sessionID):
+                "command:focus-chat-session:\(sessionID.rawValue)"
             case .createWorkflow:
                 "command:create-workflow"
             case .openWorkflowDefinition(let definitionID):

@@ -3,7 +3,7 @@
 //
 // Copyright © 2026 Devys. All rights reserved.
 
-import GhosttyTerminal
+import AppFeatures
 import SwiftUI
 
 @MainActor
@@ -16,7 +16,7 @@ extension ContentView {
             ProjectPickerView(
                 recentRepositories: Array(recentRepositoriesService.load().prefix(5)),
                 canRestorePreviousSession: availableRelaunchSnapshot != nil,
-                onAddRepository: { requestOpenRepository() },
+                onAddRepository: { store.send(.requestAddRepository) },
                 onRestorePreviousSession: {
                     Task { @MainActor in
                         await restorePreviousSession()
@@ -46,19 +46,19 @@ extension ContentView {
             }
             .onChange(of: themeManager.appearanceMode) { _, _ in
                 applyCurrentAppearance()
-                controller.updateColors(splitColorsFromTheme(theme))
+                controller.updateColors(Self.makeSplitColors(from: theme))
+                applyTerminalAppearance()
             }
             .onChange(of: appSettings.appearance.accentColor) { _, newValue in
                 themeManager.setAccentColor(from: newValue)
-                GhosttyTerminalThemeController.apply(
-                    themeManager.ghosttyAppearance(systemColorScheme: systemColorScheme)
-                )
-                controller.updateColors(splitColorsFromTheme(theme))
+                controller.updateColors(Self.makeSplitColors(from: theme))
+                applyTerminalAppearance()
             }
             .onChange(of: systemColorScheme) { _, _ in
                 guard appSettings.appearance.mode == .auto else { return }
                 applyCurrentAppearance()
-                controller.updateColors(splitColorsFromTheme(theme))
+                controller.updateColors(Self.makeSplitColors(from: theme))
+                applyTerminalAppearance()
             }
             .onChange(of: appSettings.appearance.mode) { _, newValue in
                 themeManager.appearanceMode = newValue
@@ -71,7 +71,7 @@ extension ContentView {
                 store.send(
                     .setWorkspaceNotificationPreferences(
                         terminalActivity: appSettings.notifications.terminalActivity,
-                        agentActivity: appSettings.notifications.agentActivity
+                        chatActivity: appSettings.notifications.chatActivity
                     )
                 )
             }
@@ -87,16 +87,19 @@ extension ContentView {
         hasInitialized = true
         themeManager.appearanceMode = appSettings.appearance.mode
         themeManager.setAccentColor(from: appSettings.appearance.accentColor)
+        controller.updateColors(Self.makeSplitColors(from: theme))
         applyCurrentAppearance()
+        applyTerminalAppearance()
         configureRuntimeRegistryFactories()
         store.send(
             .setWorkspaceNotificationPreferences(
                 terminalActivity: appSettings.notifications.terminalActivity,
-                agentActivity: appSettings.notifications.agentActivity
+                chatActivity: appSettings.notifications.chatActivity
             )
         )
         Task {
             refreshAvailableRelaunchSnapshot()
+            await warmTerminalRendererIfNeeded()
             await warmPersistentTerminalHostIfNeeded()
             await requestWindowRelaunchRestore(force: false)
         }
@@ -104,7 +107,10 @@ extension ContentView {
 
     private func applyCurrentAppearance() {
         themeManager.applyAppearance()
-        GhosttyTerminalThemeController.apply(
+    }
+
+    private func applyTerminalAppearance() {
+        workspaceTerminalRegistry.updateAppearance(
             themeManager.ghosttyAppearance(systemColorScheme: systemColorScheme)
         )
     }

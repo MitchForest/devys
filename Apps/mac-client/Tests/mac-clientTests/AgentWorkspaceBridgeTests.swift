@@ -163,7 +163,7 @@ struct AgentWorkspaceBridgeTests {
         defer { try? FileManager.default.removeItem(at: workspaceURL) }
 
         let bridge = makeBridge(workspaceURL: workspaceURL)
-        let sessionID = AgentSessionID(rawValue: "sess-test")
+        let sessionID = ChatSessionID(rawValue: "sess-test")
 
         let created = try await bridge.createInlineTerminal(
             request: AgentCreateTerminalRequest(
@@ -213,7 +213,7 @@ struct AgentWorkspaceBridgeTests {
             workspaceURL: workspaceURL,
             workspaceTerminalRegistry: registry
         )
-        let sessionID = AgentSessionID(rawValue: "sess-promote")
+        let sessionID = ChatSessionID(rawValue: "sess-promote")
 
         let created = try await bridge.createInlineTerminal(
             request: AgentCreateTerminalRequest(
@@ -233,7 +233,7 @@ struct AgentWorkspaceBridgeTests {
         let terminalSession = registry.session(id: promotedID, in: workspaceURL.path)
 
         #expect(promotedID == hostedSessionID)
-        #expect(terminalSession?.attachCommand != nil)
+        #expect(terminalSession?.requestedCommand?.isEmpty == false)
         #expect(terminalSession?.terminateHostedSessionOnClose == false)
     }
 
@@ -247,7 +247,7 @@ struct AgentWorkspaceBridgeTests {
         try FileManager.default.createDirectory(at: scriptsURL, withIntermediateDirectories: true)
 
         let bridge = makeBridge(workspaceURL: workspaceURL)
-        let sessionID = AgentSessionID(rawValue: "sess-relative-cwd")
+        let sessionID = ChatSessionID(rawValue: "sess-relative-cwd")
         let created = try await bridge.createInlineTerminal(
             request: AgentCreateTerminalRequest(
                 sessionId: sessionID,

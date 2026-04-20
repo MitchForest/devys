@@ -1,6 +1,7 @@
 import AppFeatures
 import ComposableArchitecture
 import Foundation
+import Split
 import Testing
 import Workspace
 
@@ -114,6 +115,53 @@ struct WindowFeatureRepositoryMutationTests {
                 secondWorkspace.id: WindowFeature.WorkspaceShell(activeSidebar: .agents)
             ]
             $0.activeSidebar = .agents
+        }
+    }
+
+    @Test("Removing the final repository clears selection and returns to an empty catalog")
+    @MainActor
+    func removeFinalRepository() async {
+        let repository = Repository(rootURL: URL(fileURLWithPath: "/tmp/devys-project"))
+        let workspace = Worktree(
+            workingDirectory: repository.rootURL.appendingPathComponent("feature-a"),
+            repositoryRootURL: repository.rootURL
+        )
+        let selectedTabID = TabID()
+        let store = TestStore(
+            initialState: WindowFeature.State(
+                repositories: [repository],
+                worktreesByRepository: [repository.id: [workspace]],
+                workspaceStatesByID: [
+                    workspace.id: WorktreeState(worktreeId: workspace.id)
+                ],
+                hostedWorkspaceContentByID: [
+                    workspace.id: HostedWorkspaceContentState()
+                ],
+                workflowWorkspacesByID: [
+                    workspace.id: WindowFeature.WorkflowWorkspaceState()
+                ],
+                selectedRepositoryID: repository.id,
+                selectedWorkspaceID: workspace.id,
+                workspaceShells: [
+                    workspace.id: WindowFeature.WorkspaceShell(activeSidebar: .agents)
+                ],
+                selectedTabID: selectedTabID,
+                activeSidebar: .agents
+            )
+        ) {
+            WindowFeature()
+        }
+
+        await store.send(.removeRepository(repository.id)) {
+            $0.repositories = []
+            $0.worktreesByRepository = [:]
+            $0.workspaceStatesByID = [:]
+            $0.hostedWorkspaceContentByID = [:]
+            $0.workflowWorkspacesByID = [:]
+            $0.selectedRepositoryID = nil
+            $0.selectedWorkspaceID = nil
+            $0.workspaceShells = [:]
+            $0.selectedTabID = nil
         }
     }
 

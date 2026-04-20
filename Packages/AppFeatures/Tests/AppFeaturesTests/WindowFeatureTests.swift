@@ -1321,9 +1321,9 @@ struct WindowFeatureTests {
             $0.date.now = Date(timeIntervalSince1970: 300)
         }
 
-        await store.send(.setWorkspaceNotificationPreferences(terminalActivity: false, agentActivity: false)) {
+        await store.send(.setWorkspaceNotificationPreferences(terminalActivity: false, chatActivity: false)) {
             $0.isTerminalActivityNotificationsEnabled = false
-            $0.isAgentActivityNotificationsEnabled = false
+            $0.isChatActivityNotificationsEnabled = false
             $0.operational.notificationsByWorkspaceID = [:]
             $0.operational.unreadTerminalIDsByWorkspaceID = [workspaceID: Set([terminalID])]
         }

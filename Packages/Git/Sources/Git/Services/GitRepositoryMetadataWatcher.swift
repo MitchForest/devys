@@ -72,13 +72,33 @@ enum GitRepositoryReferenceResolver {
         return nil
     }
 
-    static func metadataSnapshot(for repositoryURL: URL) -> GitRepositoryMetadataSnapshot? {
+    static func resolveGitCommonDirectory(for repositoryURL: URL) -> URL? {
         guard let gitDirectoryURL = resolveGitDirectory(for: repositoryURL) else {
             return nil
         }
 
+        let commonDirURL = gitDirectoryURL.appendingPathComponent("commondir")
+        guard let rawContents = fileContents(at: commonDirURL) else {
+            return gitDirectoryURL
+        }
+
+        for rawLine in rawContents.split(whereSeparator: \.isNewline) {
+            let path = String(rawLine).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !path.isEmpty else { continue }
+            return URL(fileURLWithPath: path, relativeTo: gitDirectoryURL).standardizedFileURL
+        }
+
+        return gitDirectoryURL
+    }
+
+    static func metadataSnapshot(for repositoryURL: URL) -> GitRepositoryMetadataSnapshot? {
+        guard let gitDirectoryURL = resolveGitDirectory(for: repositoryURL),
+              let commonDirectoryURL = resolveGitCommonDirectory(for: repositoryURL) else {
+            return nil
+        }
+
         let headURL = gitDirectoryURL.appendingPathComponent("HEAD")
-        let packedRefsURL = gitDirectoryURL.appendingPathComponent("packed-refs")
+        let packedRefsURL = commonDirectoryURL.appendingPathComponent("packed-refs")
         let currentReferenceURL = resolveCurrentReferenceURL(for: repositoryURL)
 
         return GitRepositoryMetadataSnapshot(
@@ -90,7 +110,8 @@ enum GitRepositoryReferenceResolver {
     }
 
     static func resolveCurrentReferenceURL(for repositoryURL: URL) -> URL? {
-        guard let gitDirectoryURL = resolveGitDirectory(for: repositoryURL) else {
+        guard let gitDirectoryURL = resolveGitDirectory(for: repositoryURL),
+              let commonDirectoryURL = resolveGitCommonDirectory(for: repositoryURL) else {
             return nil
         }
 
@@ -104,7 +125,7 @@ enum GitRepositoryReferenceResolver {
             guard line.hasPrefix("ref:") else { continue }
             let path = String(line.dropFirst("ref:".count)).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !path.isEmpty else { continue }
-            return URL(fileURLWithPath: path, relativeTo: gitDirectoryURL).standardizedFileURL
+            return URL(fileURLWithPath: path, relativeTo: commonDirectoryURL).standardizedFileURL
         }
 
         return nil
@@ -186,7 +207,10 @@ private extension DefaultGitRepositoryMetadataWatcher {
 
     func rebuildWatchSources() {
         cancelWatchSources()
-        guard let gitDirectoryURL = GitRepositoryReferenceResolver.resolveGitDirectory(for: repositoryURL) else {
+        guard
+            let gitDirectoryURL = GitRepositoryReferenceResolver.resolveGitDirectory(for: repositoryURL),
+            let commonDirectoryURL = GitRepositoryReferenceResolver.resolveGitCommonDirectory(for: repositoryURL)
+        else {
             return
         }
 
@@ -210,7 +234,7 @@ private extension DefaultGitRepositoryMetadataWatcher {
         }
 
         if let source = makeFileWatcher(
-            url: gitDirectoryURL.appendingPathComponent("packed-refs"),
+            url: commonDirectoryURL.appendingPathComponent("packed-refs"),
             handler: { [weak self] in
                 self?.handleRepositoryStateChanged()
             }

@@ -22,7 +22,7 @@ extension ContentView {
             branchName: repoInfo?.currentBranch ?? infoEntry?.branchName,
             aheadCount: repoInfo?.aheadCount ?? 0,
             behindCount: repoInfo?.behindCount ?? 0,
-            agentColors: hostedAgentSessions.prefix(5).indices.map { index in
+            agentColors: hostedChatSessions.prefix(5).indices.map { index in
                 AgentColor.forIndex(index)
             },
             statusIcon: capsuleStatusIcon(infoEntry: infoEntry),

@@ -43,7 +43,7 @@ struct TabContentTests {
     func nonEditorWorkspaceScopedIdentity() {
         let sharedTerminalID = UUID()
         let sharedBrowserID = UUID()
-        let sharedAgentSessionID = ACPSessionID(rawValue: "agent-session")
+        let sharedChatSessionID = ACPSessionID(rawValue: "chat-session")
         let firstTerminal = WorkspaceTabContent.terminal(
             workspaceID: "/tmp/devys/worktrees/a",
             id: sharedTerminalID
@@ -72,13 +72,13 @@ struct TabContentTests {
             id: sharedBrowserID,
             initialURL: URL(string: "http://localhost:5173")!
         )
-        let firstAgent = WorkspaceTabContent.agentSession(
+        let firstAgent = WorkspaceTabContent.chatSession(
             workspaceID: "/tmp/devys/worktrees/a",
-            sessionID: sharedAgentSessionID
+            sessionID: sharedChatSessionID
         )
-        let secondAgent = WorkspaceTabContent.agentSession(
+        let secondAgent = WorkspaceTabContent.chatSession(
             workspaceID: "/tmp/devys/worktrees/b",
-            sessionID: sharedAgentSessionID
+            sessionID: sharedChatSessionID
         )
 
         #expect(firstTerminal.stableId != secondTerminal.stableId)
@@ -94,7 +94,7 @@ struct TabContentTests {
         #expect(secondDiff.workspaceID == "/tmp/devys/worktrees/b")
         #expect(firstBrowser.fallbackTitle == "Browser")
         #expect(secondBrowser.fallbackIcon == "globe")
-        #expect(firstAgent.fallbackTitle == "Agent")
+        #expect(firstAgent.fallbackTitle == "Chat")
         #expect(secondAgent.fallbackIcon == "person.crop.circle")
     }
 

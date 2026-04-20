@@ -63,12 +63,14 @@ public enum Colors {
     public static let darkText = Color(hex: "#EDEDEB")
     public static let darkTextSecondary = Color(hex: "#9B9990")
     public static let darkTextTertiary = Color(hex: "#5E5C57")
+    public static let darkTerminalText = Color(hex: "#FFFFFF")
 
     // MARK: - Light Mode Text
 
     public static let lightText = Color(hex: "#1C1B19")
     public static let lightTextSecondary = Color(hex: "#7A7772")
     public static let lightTextTertiary = Color(hex: "#AFACA6")
+    public static let lightTerminalText = Color(hex: "#000000")
 
     // MARK: - Borders
 
@@ -161,6 +163,9 @@ public struct Theme: Sendable {
     /// Popovers, dropdowns, command palette, modals.
     public var overlay: Color { isDark ? Colors.darkOverlay : Colors.lightOverlay }
 
+    /// Terminal surface background.
+    public var terminalBackground: Color { isDark ? Colors.darkCard : Colors.lightCard }
+
     // MARK: Derived States
 
     /// Hover state — base lightened/darkened slightly.
@@ -183,6 +188,7 @@ public struct Theme: Sendable {
     public var text: Color { isDark ? Colors.darkText : Colors.lightText }
     public var textSecondary: Color { isDark ? Colors.darkTextSecondary : Colors.lightTextSecondary }
     public var textTertiary: Color { isDark ? Colors.darkTextTertiary : Colors.lightTextTertiary }
+    public var terminalText: Color { isDark ? Colors.darkTerminalText : Colors.lightTerminalText }
 
     // MARK: Borders
 

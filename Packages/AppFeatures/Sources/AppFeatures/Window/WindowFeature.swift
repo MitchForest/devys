@@ -1,5 +1,6 @@
 import ComposableArchitecture
 import Foundation
+import RemoteCore
 import Split
 import Workspace
 
@@ -7,6 +8,8 @@ import Workspace
 @Reducer
 public struct WindowFeature {
     @Dependency(\.workspaceCatalogPersistenceClient) var workspaceCatalogPersistenceClient
+    @Dependency(\.remoteRepositoryPersistenceClient) var remoteRepositoryPersistenceClient
+    @Dependency(\.remoteTerminalWorkspaceClient) var remoteTerminalWorkspaceClient
     @Dependency(\.workspaceCatalogRefreshClient) var workspaceCatalogRefreshClient
     @Dependency(\.workspaceOperationalClient) var workspaceOperationalClient
     @Dependency(\.workspaceAttentionIngressClient) var workspaceAttentionIngressClient
@@ -25,6 +28,90 @@ public struct WindowFeature {
     public var body: some ReducerOf<Self> {
         Reduce { state, action in
             switch action {
+            case .loadRemoteRepositories:
+                let remoteRepositoryPersistenceClient = self.remoteRepositoryPersistenceClient
+                return .run { send in
+                    await send(
+                        .loadRemoteRepositoriesResponse(
+                            TaskResult {
+                                try await remoteRepositoryPersistenceClient.load()
+                            }
+                        )
+                    )
+                }
+
+            case .loadRemoteRepositoriesResponse(.success(let repositories)):
+                state.remoteRepositories = repositories
+                state.normalizeSelection()
+                return .none
+
+            case .loadRemoteRepositoriesResponse(.failure(let error)):
+                state.lastErrorMessage = error.localizedDescription
+                return .none
+
+            case .setRemoteRepositories(let repositories):
+                state.remoteRepositories = repositories
+                state.normalizeSelection()
+                return .none
+
+            case let .setRemoteWorktrees(repositoryID, worktrees):
+                state.remoteWorktreesByRepository[repositoryID] = worktrees
+                state.normalizeSelection()
+                return .none
+
+            case .upsertRemoteRepository(let repository):
+                state.upsertRemoteRepository(repository)
+                let repositories = state.remoteRepositories
+                let remoteRepositoryPersistenceClient = self.remoteRepositoryPersistenceClient
+                return .run { _ in
+                    try await remoteRepositoryPersistenceClient.save(repositories)
+                }
+
+            case .removeRemoteRepository(let repositoryID):
+                state.removeRemoteRepository(repositoryID)
+                let repositories = state.remoteRepositories
+                let remoteRepositoryPersistenceClient = self.remoteRepositoryPersistenceClient
+                return .run { _ in
+                    try await remoteRepositoryPersistenceClient.save(repositories)
+                }
+
+            case .selectRemoteRepository(let repositoryID):
+                state.persistActiveWorkspaceShellIfNeeded()
+                state.selectRemoteRepository(repositoryID)
+                state.restoreWorkspaceShell(for: state.selectedWorkspaceID)
+                return .none
+
+            case let .selectRemoteWorktree(repositoryID, workspaceID):
+                state.persistActiveWorkspaceShellIfNeeded()
+                state.selectRemoteWorktree(repositoryID: repositoryID, workspaceID: workspaceID)
+                state.restoreWorkspaceShell(for: state.selectedWorkspaceID)
+                return .none
+
+            case .setRemoteRepositoryPresentation(let presentation):
+                state.remoteRepositoryPresentation = presentation
+                return .none
+
+            case .setRemoteWorktreeCreationPresentation(let presentation):
+                state.remoteWorktreeCreationPresentation = presentation
+                return .none
+
+            case .refreshRemoteRepository,
+                 .refreshRemoteRepositoryResponse,
+                 .requestRemoteWorktreeSelection,
+                 .setRemoteWorkspaceTransitionRequest,
+                 .createRemoteWorktree,
+                 .createRemoteWorktreeResponse,
+                 .fetchRemoteRepository,
+                 .fetchRemoteRepositoryResponse,
+                 .pullRemoteWorktree,
+                 .pullRemoteWorktreeResponse,
+                 .pushRemoteWorktree,
+                 .pushRemoteWorktreeResponse,
+                 .requestOpenRemoteTerminal,
+                 .remoteTerminalLaunchPrepared,
+                 .setRemoteTerminalLaunchRequest:
+                return reduceRemoteOperationAction(state: &state, action: action)
+
             case .openRepository(let url):
                 state.lastErrorMessage = nil
                 let repositoryDiscoveryClient = self.repositoryDiscoveryClient
@@ -188,6 +275,7 @@ public struct WindowFeature {
 
             case .selectRepository(let repositoryID):
                 state.persistActiveWorkspaceShellIfNeeded()
+                state.clearRemoteSelection()
                 state.selectedRepositoryID = repositoryID
                 state.restoreWorkspaceShell(for: nil)
                 state.normalizeSelection()
@@ -198,6 +286,7 @@ public struct WindowFeature {
 
             case .selectWorkspace(let workspaceID):
                 state.persistActiveWorkspaceShellIfNeeded()
+                state.clearRemoteSelection()
                 state.restoreWorkspaceShell(for: workspaceID)
                 guard let workspaceID,
                       let repositoryID = state.repositoryID(containing: workspaceID) else {
@@ -530,7 +619,7 @@ public struct WindowFeature {
             case .workspaceAttentionIngressReceived(let payload):
                 state.operational.ingest(
                     payload,
-                    agentNotificationsEnabled: state.isAgentActivityNotificationsEnabled,
+                    chatNotificationsEnabled: state.isChatActivityNotificationsEnabled,
                     terminalNotificationsEnabled: state.isTerminalActivityNotificationsEnabled,
                     now: now
                 )
@@ -553,12 +642,12 @@ public struct WindowFeature {
                 state.operational.clearNotification(notificationID)
                 return .none
 
-            case let .setWorkspaceNotificationPreferences(terminalActivity, agentActivity):
+            case let .setWorkspaceNotificationPreferences(terminalActivity, chatActivity):
                 state.isTerminalActivityNotificationsEnabled = terminalActivity
-                state.isAgentActivityNotificationsEnabled = agentActivity
+                state.isChatActivityNotificationsEnabled = chatActivity
                 state.operational.syncAttentionPreferences(
                     terminalNotificationsEnabled: terminalActivity,
-                    agentNotificationsEnabled: agentActivity,
+                    chatNotificationsEnabled: chatActivity,
                     now: now
                 )
                 return .none
@@ -648,17 +737,17 @@ public struct WindowFeature {
                     .map { WorkspaceCreationPresentation(repository: $0, mode: mode) }
                 return .none
 
-            case .requestAgentSessionLaunch,
-                 .agentSessionLaunchResolved,
-                 .setAgentSessionLaunchRequest:
+            case .requestChatSessionLaunch,
+                 .chatSessionLaunchResolved,
+                 .setChatSessionLaunchRequest:
                 return reduceAgentSessionLaunchAction(state: &state, action: action)
 
             case .setWorkspaceCreationPresentation(let presentation):
                 state.workspaceCreationPresentation = presentation
                 return .none
 
-            case .setAgentLaunchPresentation(let presentation):
-                state.agentLaunchPresentation = presentation
+            case .setChatLaunchPresentation(let presentation):
+                state.chatLaunchPresentation = presentation
                 return .none
 
             case .setGitCommitSheetPresented(let isPresented):
@@ -669,7 +758,9 @@ public struct WindowFeature {
                 state.isCreatePullRequestSheetPresented = isPresented
                 return .none
 
-            case .requestOpenRepository,
+            case .requestAddRepository,
+                 .setAddRepositoryPresentation,
+                 .requestOpenRepository,
                  .setOpenRepositoryRequestID,
                  .requestEditorCommand,
                  .setEditorCommandRequest,
@@ -679,8 +770,8 @@ public struct WindowFeature {
                  .setSaveDefaultLayoutRequestID,
                  .requestWorkspaceCommand,
                  .setWorkspaceCommandRequest,
-                 .requestFocusAgentSession,
-                 .setFocusAgentSessionRequest,
+                 .requestFocusChatSession,
+                 .setFocusChatSessionRequest,
                  .runProfileLaunchRequestResolved,
                  .setRunProfileLaunchRequest,
                  .requestStopWorkspaceRun,

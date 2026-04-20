@@ -28,7 +28,7 @@ struct WorkspaceOperationalStateTests {
         #expect(state.attentionSummary(for: workspaceID).unreadCount == 1)
     }
 
-    @Test("Attention preferences clear agent and terminal notifications by policy")
+    @Test("Attention preferences clear chat and terminal notifications by policy")
     func notificationPreferencesDriveVisibleAttention() {
         let workspaceID = "/tmp/devys/worktrees/preferences"
         let terminalID = UUID(uuidString: "987F25C1-1C5B-442E-8101-B1A8BA37E6AA")!
@@ -51,14 +51,14 @@ struct WorkspaceOperationalStateTests {
                 title: "Claude needs approval",
                 subtitle: "permission prompt"
             ),
-            agentNotificationsEnabled: true,
+            chatNotificationsEnabled: true,
             terminalNotificationsEnabled: true,
             now: Date(timeIntervalSince1970: 200)
         )
 
         state.syncAttentionPreferences(
             terminalNotificationsEnabled: true,
-            agentNotificationsEnabled: false,
+            chatNotificationsEnabled: false,
             now: Date(timeIntervalSince1970: 300)
         )
 
@@ -66,7 +66,7 @@ struct WorkspaceOperationalStateTests {
 
         state.syncAttentionPreferences(
             terminalNotificationsEnabled: false,
-            agentNotificationsEnabled: false,
+            chatNotificationsEnabled: false,
             now: Date(timeIntervalSince1970: 400)
         )
 

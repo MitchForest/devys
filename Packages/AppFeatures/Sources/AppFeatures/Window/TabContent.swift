@@ -9,7 +9,7 @@ import Workspace
 public enum WorkspaceTabContent: Equatable, Sendable {
     case terminal(workspaceID: Workspace.ID, id: UUID)
     case browser(workspaceID: Workspace.ID, id: UUID, initialURL: URL)
-    case agentSession(workspaceID: Workspace.ID, sessionID: ACPSessionID)
+    case chatSession(workspaceID: Workspace.ID, sessionID: ACPSessionID)
     case editor(workspaceID: Workspace.ID, url: URL)
     case gitDiff(workspaceID: Workspace.ID, path: String, isStaged: Bool)
     case workflowDefinition(workspaceID: Workspace.ID, definitionID: String)
@@ -20,7 +20,7 @@ public enum WorkspaceTabContent: Equatable, Sendable {
         switch self {
         case .terminal(let workspaceID, _),
              .browser(let workspaceID, _, _),
-             .agentSession(let workspaceID, _),
+             .chatSession(let workspaceID, _),
              .editor(let workspaceID, _),
              .gitDiff(let workspaceID, _, _),
              .workflowDefinition(let workspaceID, _),
@@ -39,8 +39,8 @@ public enum WorkspaceTabContent: Equatable, Sendable {
             "Terminal"
         case .browser:
             "Browser"
-        case .agentSession:
-            "Agent"
+        case .chatSession:
+            "Chat"
         case .workflowDefinition:
             "Workflow"
         case .workflowRun:
@@ -60,7 +60,7 @@ public enum WorkspaceTabContent: Equatable, Sendable {
             return "terminal"
         case .browser:
             return "globe"
-        case .agentSession:
+        case .chatSession:
             return "person.crop.circle"
         case .workflowDefinition:
             return "square.and.pencil"
@@ -82,8 +82,8 @@ public enum WorkspaceTabContent: Equatable, Sendable {
             "terminal:\(workspaceID):\(id.uuidString)"
         case .browser(let workspaceID, let id, _):
             "browser:\(workspaceID):\(id.uuidString)"
-        case .agentSession(let workspaceID, let sessionID):
-            "agentSession:\(workspaceID):\(sessionID.rawValue)"
+        case .chatSession(let workspaceID, let sessionID):
+            "chatSession:\(workspaceID):\(sessionID.rawValue)"
         case .workflowDefinition(let workspaceID, let definitionID):
             "workflowDefinition:\(workspaceID):\(definitionID)"
         case .workflowRun(let workspaceID, let runID):
@@ -108,7 +108,7 @@ public enum WorkspaceTabContent: Equatable, Sendable {
                 && isStagedA == isStagedB
         case let (.terminal(workspaceIDA, idA), .terminal(workspaceIDB, idB)):
             return workspaceIDA == workspaceIDB && idA == idB
-        case let (.agentSession(workspaceIDA, sessionIDA), .agentSession(workspaceIDB, sessionIDB)):
+        case let (.chatSession(workspaceIDA, sessionIDA), .chatSession(workspaceIDB, sessionIDB)):
             return workspaceIDA == workspaceIDB && sessionIDA == sessionIDB
         case let (.workflowDefinition(workspaceIDA, definitionIDA), .workflowDefinition(workspaceIDB, definitionIDB)):
             return workspaceIDA == workspaceIDB && definitionIDA == definitionIDB

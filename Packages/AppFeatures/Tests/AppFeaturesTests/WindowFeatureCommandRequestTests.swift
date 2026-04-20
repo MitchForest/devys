@@ -18,6 +18,14 @@ struct WindowFeatureCommandRequestTests {
             $0.uuid = .constant(requestID)
         }
 
+        await store.send(.requestAddRepository) {
+            $0.addRepositoryPresentation = AddRepositoryPresentation(id: requestID)
+        }
+
+        await store.send(.setAddRepositoryPresentation(nil)) {
+            $0.addRepositoryPresentation = nil
+        }
+
         await store.send(.requestOpenRepository) {
             $0.openRepositoryRequestID = requestID
         }
@@ -105,16 +113,16 @@ struct WindowFeatureCommandRequestTests {
         }
     }
 
-    @Test("Agent launch requests resolve the configured default harness in the reducer")
+    @Test("Chat launch requests resolve the configured default harness in the reducer")
     @MainActor
-    func agentSessionLaunchRequestUsesConfiguredDefaultHarness() async {
+    func chatSessionLaunchRequestUsesConfiguredDefaultHarness() async {
         let requestID = UUID(15)
         let workspaceID = "/tmp/devys-project/workspaces/feature"
-        let intent = WindowFeature.AgentSessionLaunchIntent(
+        let intent = WindowFeature.ChatSessionLaunchIntent(
             workspaceID: workspaceID,
             initialAttachments: [.snippet(language: "swift", content: "print(\"hi\")")]
         )
-        let expectedRequest = WindowFeature.AgentSessionLaunchRequest(
+        let expectedRequest = WindowFeature.ChatSessionLaunchRequest(
             workspaceID: workspaceID,
             kind: .codex,
             initialAttachments: intent.initialAttachments,
@@ -127,28 +135,28 @@ struct WindowFeatureCommandRequestTests {
             $0.uuid = .constant(requestID)
             $0.globalSettingsClient.load = {
                 var settings = GlobalSettings()
-                settings.agent.defaultHarness = AgentSettings.Harness.codex.rawValue
+                settings.chat.defaultHarness = ChatSettings.Harness.codex.rawValue
                 return settings
             }
         }
 
-        await store.send(.requestAgentSessionLaunch(intent))
+        await store.send(.requestChatSessionLaunch(intent))
 
-        await store.receive(.agentSessionLaunchResolved(.request(expectedRequest))) {
-            $0.agentSessionLaunchRequest = expectedRequest
+        await store.receive(.chatSessionLaunchResolved(.request(expectedRequest))) {
+            $0.chatSessionLaunchRequest = expectedRequest
         }
 
-        await store.send(.setAgentSessionLaunchRequest(nil)) {
-            $0.agentSessionLaunchRequest = nil
+        await store.send(.setChatSessionLaunchRequest(nil)) {
+            $0.chatSessionLaunchRequest = nil
         }
     }
 
-    @Test("Agent launch requests present the picker when no default harness is configured")
+    @Test("Chat launch requests present the picker when no default harness is configured")
     @MainActor
-    func agentSessionLaunchRequestPresentsPicker() async {
+    func chatSessionLaunchRequestPresentsPicker() async {
         let requestID = UUID(16)
         let workspaceID = "/tmp/devys-project/workspaces/feature"
-        let intent = WindowFeature.AgentSessionLaunchIntent(
+        let intent = WindowFeature.ChatSessionLaunchIntent(
             workspaceID: workspaceID,
             initialAttachments: [.file(url: URL(fileURLWithPath: "/tmp/devys-project/README.md"))]
         )
@@ -161,12 +169,12 @@ struct WindowFeatureCommandRequestTests {
             }
         }
 
-        await store.send(.requestAgentSessionLaunch(intent))
+        await store.send(.requestChatSessionLaunch(intent))
 
         await store.receive(
-            .agentSessionLaunchResolved(
+            .chatSessionLaunchResolved(
                 .presentation(
-                    AgentLaunchPresentation(
+                    ChatLaunchPresentation(
                         workspaceID: workspaceID,
                         initialAttachments: intent.initialAttachments,
                         preferredPaneID: nil,
@@ -176,7 +184,7 @@ struct WindowFeatureCommandRequestTests {
                 )
             )
         ) {
-            $0.agentLaunchPresentation = AgentLaunchPresentation(
+            $0.chatLaunchPresentation = ChatLaunchPresentation(
                 workspaceID: workspaceID,
                 initialAttachments: intent.initialAttachments,
                 preferredPaneID: nil,
@@ -388,7 +396,7 @@ struct WindowFeatureCommandRequestTests {
         }
     }
 
-    @Test("Focus agent and reveal requests resolve from selected workspace state")
+    @Test("Focus chat and reveal requests resolve from selected workspace state")
     @MainActor
     func workspaceScopedRequests() async {
         let requestID = UUID(11)
@@ -399,7 +407,7 @@ struct WindowFeatureCommandRequestTests {
             workingDirectory: repository.rootURL.appendingPathComponent("feature"),
             repositoryRootURL: repository.rootURL
         )
-        let sessionID = AgentSessionID(rawValue: "session-1")
+        let sessionID = ChatSessionID(rawValue: "session-1")
         let store = TestStore(
             initialState: WindowFeature.State(
                 repositories: [repository],
@@ -413,16 +421,16 @@ struct WindowFeatureCommandRequestTests {
             $0.uuid = .constant(requestID)
         }
 
-        await store.send(.requestFocusAgentSession(sessionID)) {
-            $0.focusAgentSessionRequest = WindowFeature.FocusAgentSessionRequest(
+        await store.send(.requestFocusChatSession(sessionID)) {
+            $0.focusChatSessionRequest = WindowFeature.FocusChatSessionRequest(
                 workspaceID: workspace.id,
                 sessionID: sessionID,
                 id: requestID
             )
         }
 
-        await store.send(.setFocusAgentSessionRequest(nil)) {
-            $0.focusAgentSessionRequest = nil
+        await store.send(.setFocusChatSessionRequest(nil)) {
+            $0.focusChatSessionRequest = nil
         }
 
         await store.send(.revealCurrentWorkspaceInNavigator) {
@@ -458,7 +466,7 @@ struct WindowFeatureCommandRequestTests {
                 restoreSelectedWorkspace: true,
                 restoreWorkspaceLayoutAndTabs: true,
                 restoreTerminalSessions: true,
-                restoreAgentSessions: true
+                restoreChatSessions: true
             ),
             id: requestID
         )
@@ -472,7 +480,7 @@ struct WindowFeatureCommandRequestTests {
                 settings.restore.restoreSelectedWorkspace = true
                 settings.restore.restoreWorkspaceLayoutAndTabs = true
                 settings.restore.restoreTerminalSessions = true
-                settings.restore.restoreAgentSessions = true
+                settings.restore.restoreChatSessions = true
                 return settings
             }
             $0.windowRelaunchPersistenceClient.load = { snapshot }
@@ -534,9 +542,9 @@ struct WindowFeatureCommandRequestTests {
                                 icon: "globe"
                             )
                         ],
-                        agentSessions: [
-                            HostedAgentSessionSummary(
-                                sessionID: AgentSessionID(rawValue: "agent-1"),
+                        chatSessions: [
+                            HostedChatSessionSummary(
+                                sessionID: ChatSessionID(rawValue: "agent-1"),
                                 kind: .codex,
                                 title: "Codex",
                                 icon: "chevron.left.forwardslash.chevron.right",
@@ -561,9 +569,9 @@ struct WindowFeatureCommandRequestTests {
                                 id: UUID(uuidString: "bbbbbbbb-cccc-dddd-eeee-ffffffffffff")!,
                                 initialURL: URL(string: "http://localhost:3000")!
                             ),
-                            agentTabID: .agentSession(
+                            agentTabID: .chatSession(
                                 workspaceID: workspace.id,
-                                sessionID: AgentSessionID(rawValue: "agent-1")
+                                sessionID: ChatSessionID(rawValue: "agent-1")
                             ),
                             workflowDefinitionTabID: .workflowDefinition(
                                 workspaceID: workspace.id,
@@ -606,7 +614,7 @@ struct WindowFeatureCommandRequestTests {
                 settings.restore.restoreSelectedWorkspace = true
                 settings.restore.restoreWorkspaceLayoutAndTabs = true
                 settings.restore.restoreTerminalSessions = true
-                settings.restore.restoreAgentSessions = true
+                settings.restore.restoreChatSessions = true
                 return settings
             }
             $0.windowRelaunchPersistenceClient.save = { snapshot in
@@ -660,8 +668,8 @@ struct WindowFeatureCommandRequestTests {
                                 id: UUID(uuidString: "bbbbbbbb-cccc-dddd-eeee-ffffffffffff")!,
                                 url: URL(string: "http://localhost:3000/dashboard")!
                             ),
-                            .agent(
-                                PersistedAgentSessionRecord(
+                            .chat(
+                                PersistedChatSessionRecord(
                                     sessionID: "agent-1",
                                     kind: .codex,
                                     title: "Codex",
@@ -682,7 +690,7 @@ struct WindowFeatureCommandRequestTests {
                 restoreSelectedWorkspace: true,
                 restoreWorkspaceLayoutAndTabs: true,
                 restoreTerminalSessions: true,
-                restoreAgentSessions: true
+                restoreChatSessions: true
             )
         )
         var state = WindowFeature.State(

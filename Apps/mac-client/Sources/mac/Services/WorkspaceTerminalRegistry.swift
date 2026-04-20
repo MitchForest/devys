@@ -10,6 +10,8 @@ import Workspace
 
 struct WorkspaceTerminalState {
     var sessionsByID: [UUID: GhosttyTerminalSession] = [:]
+    var controllersByID: [UUID: HostedLocalTerminalController] = [:]
+    var preferredViewportSizesByID: [UUID: HostedTerminalViewportSize] = [:]
 }
 
 @MainActor
@@ -27,6 +29,11 @@ final class WorkspaceTerminalRegistry {
         return statesByWorkspace[workspaceID]?.sessionsByID[id]
     }
 
+    func controller(id: UUID, in workspaceID: Workspace.ID?) -> HostedLocalTerminalController? {
+        guard let workspaceID else { return nil }
+        return statesByWorkspace[workspaceID]?.controllersByID[id]
+    }
+
     func workspaceID(for terminalId: UUID) -> Workspace.ID? {
         statesByWorkspace.first { $0.value.sessionsByID[terminalId] != nil }?.key
     }
@@ -36,9 +43,10 @@ final class WorkspaceTerminalRegistry {
         workingDirectory: URL? = nil,
         requestedCommand: String? = nil,
         stagedCommand: String? = nil,
-        attachCommand: String? = nil,
         tabIcon: String = "terminal",
         terminateHostedSessionOnClose: Bool = true,
+        startupPhase: GhosttyTerminalStartupPhase = .startingShell,
+        preferredViewportSize: HostedTerminalViewportSize? = nil,
         id: UUID = UUID()
     ) -> GhosttyTerminalSession {
         let session = GhosttyTerminalSession(
@@ -46,18 +54,63 @@ final class WorkspaceTerminalRegistry {
             workingDirectory: workingDirectory,
             requestedCommand: requestedCommand,
             stagedCommand: stagedCommand,
-            attachCommand: attachCommand,
             tabIcon: tabIcon,
-            terminateHostedSessionOnClose: terminateHostedSessionOnClose
+            terminateHostedSessionOnClose: terminateHostedSessionOnClose,
+            startupPhase: startupPhase
         )
         var state = statesByWorkspace[workspaceID] ?? WorkspaceTerminalState()
         state.sessionsByID[session.id] = session
+        if let preferredViewportSize {
+            state.preferredViewportSizesByID[session.id] = preferredViewportSize
+        }
         statesByWorkspace[workspaceID] = state
         return session
     }
 
+    func ensureController(
+        for sessionID: UUID,
+        in workspaceID: Workspace.ID,
+        socketPath: String,
+        appearance: GhosttyTerminalAppearance,
+        performanceObserver: TerminalOpenPerformanceObserver? = nil
+    ) -> HostedLocalTerminalController? {
+        guard var state = statesByWorkspace[workspaceID],
+              let session = state.sessionsByID[sessionID]
+        else {
+            return nil
+        }
+
+        if let existing = state.controllersByID[sessionID] {
+            existing.updateAppearance(appearance)
+            existing.updatePerformanceObserver(performanceObserver)
+            return existing
+        }
+
+        let controller = HostedLocalTerminalController(
+            session: session,
+            socketPath: socketPath,
+            appearance: appearance,
+            performanceObserver: performanceObserver,
+            preferredViewportSize: state.preferredViewportSizesByID[sessionID]
+        )
+        state.controllersByID[sessionID] = controller
+        statesByWorkspace[workspaceID] = state
+        return controller
+    }
+
+    func updateAppearance(_ appearance: GhosttyTerminalAppearance) {
+        for state in statesByWorkspace.values {
+            for controller in state.controllersByID.values {
+                controller.updateAppearance(appearance)
+            }
+        }
+    }
+
     func shutdownSession(id: UUID, in workspaceID: Workspace.ID) {
         guard var state = statesByWorkspace[workspaceID] else { return }
+        state.controllersByID[id]?.detach()
+        state.controllersByID.removeValue(forKey: id)
+        state.preferredViewportSizesByID.removeValue(forKey: id)
         state.sessionsByID[id]?.shutdown()
         state.sessionsByID.removeValue(forKey: id)
         statesByWorkspace[workspaceID] = state
@@ -66,6 +119,9 @@ final class WorkspaceTerminalRegistry {
 
     func shutdownAllSessions(in workspaceID: Workspace.ID) {
         guard let state = statesByWorkspace[workspaceID] else { return }
+        for controller in state.controllersByID.values {
+            controller.detach()
+        }
         for session in state.sessionsByID.values {
             session.shutdown()
         }
@@ -73,7 +129,7 @@ final class WorkspaceTerminalRegistry {
     }
     private func cleanupWorkspaceIfEmpty(_ workspaceID: Workspace.ID) {
         guard let state = statesByWorkspace[workspaceID] else { return }
-        guard state.sessionsByID.isEmpty else { return }
+        guard state.sessionsByID.isEmpty, state.controllersByID.isEmpty else { return }
         statesByWorkspace.removeValue(forKey: workspaceID)
     }
 }

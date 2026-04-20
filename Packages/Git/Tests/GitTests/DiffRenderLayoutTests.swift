@@ -47,6 +47,52 @@ struct DiffRenderLayoutTests {
         }
     }
 
+    @Test func hiddenHunkHeadersReserveEnoughRowsForOverlayHeight() throws {
+        let parsed = DiffParser.parse("""
+        --- a/file.swift
+        +++ b/file.swift
+        @@ -1,2 +1,2 @@
+        -let greeting = "Hello"
+        +let greeting = "Hello, Devys"
+         print(greeting)
+        """)
+
+        let config = DiffRenderConfiguration(
+            fontName: "Menlo",
+            fontSize: 12,
+            showLineNumbers: true,
+            showPrefix: true,
+            showWordDiff: true,
+            wrapLines: false,
+            changeStyle: .fullBackground,
+            showsHunkHeaders: false
+        )
+        let metrics = EditorMetrics.measure(fontSize: 12, fontName: "Menlo")
+        let snapshot = makeActualDiffSnapshot(parsed)
+
+        let layout = DiffRenderLayoutBuilder.build(
+            snapshot: snapshot,
+            mode: .unified,
+            configuration: config,
+            lineHeight: metrics.lineHeight,
+            cellWidth: metrics.cellWidth,
+            availableWidth: 320
+        )
+
+        guard case .unified(let unified) = layout else {
+            Issue.record("Expected unified layout")
+            return
+        }
+
+        let headerIndex = try #require(unified.rows.firstIndex(where: { $0.kind == .hunkHeader }))
+        let firstContentIndex = try #require(
+            unified.rows.firstIndex(where: { $0.kind == .line && !$0.content.isEmpty })
+        )
+        let reservedRows = firstContentIndex - headerIndex
+
+        #expect(reservedRows == DiffChromeMetrics.hiddenHunkSpacerRowCount(lineHeight: metrics.lineHeight) + 1)
+    }
+
     @Test func unifiedLayoutIDsRemainStableAcrossRebuilds() {
         let parsed = DiffParser.parse("""
         --- a/file.swift
