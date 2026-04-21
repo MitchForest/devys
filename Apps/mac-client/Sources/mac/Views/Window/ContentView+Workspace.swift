@@ -5,7 +5,6 @@
 
 import AppFeatures
 import Browser
-import Git
 import SwiftUI
 import Split
 import GhosttyTerminal
@@ -17,9 +16,11 @@ extension ContentView {
         ContentViewWorkspaceSurface(
             selectedRepositoryRootURL: selectedRepositoryRootURL,
             selectedRepositoryDisplayName: selectedRepository?.displayName,
+            workspaceOperationalController: workspaceOperationalController,
             controller: controller,
             tabContents: tabContents,
-            gitStoreForContent: gitStoreForContent,
+            gitInfoForContent: gitInfoForContent,
+            onRetargetGitDiff: retargetGitDiffTab,
             terminalSessionForContent: terminalSessionForContent,
             terminalControllerForContent: terminalControllerForContent,
             terminalAppearance: themeManager.ghosttyAppearance(systemColorScheme: systemColorScheme),
@@ -237,13 +238,13 @@ extension ContentView {
     }
 
     func browserSessionForContent(_ content: WorkspaceTabContent?) -> BrowserSession? {
-        guard case .browser(let workspaceID, let id, let initialURL) = content else { return nil }
-        return ensureBrowserSession(id: id, in: workspaceID, initialURL: initialURL)
+        guard case .browser(let workspaceID, let id, _) = content else { return nil }
+        return browserRegistry.session(id: id, in: workspaceID)
     }
 
-    func gitStoreForContent(_ content: WorkspaceTabContent?) -> GitStore? {
+    func gitInfoForContent(_ content: WorkspaceTabContent?) -> WorktreeInfoEntry? {
         guard let workspaceID = content?.workspaceID else { return nil }
-        return runtimeRegistry.gitStore(for: workspaceID)
+        return workspaceOperationalState.metadataEntriesByWorkspaceID[workspaceID]
     }
 
     func chatSessionForContent(_ content: WorkspaceTabContent?) -> ChatSessionRuntime? {
@@ -289,6 +290,7 @@ extension ContentView {
         initialURL: URL
     ) -> BrowserSession {
         if let existing = browserRegistry.session(id: id, in: workspaceID) {
+            hostedContentBridge.attachBrowserSession(existing, workspaceID: workspaceID)
             return existing
         }
 
@@ -315,6 +317,24 @@ extension ContentView {
             hostedContentBridge.detachBrowserSession(session, workspaceID: workspaceID)
         }
         browserRegistry.removeAllSessions(in: workspaceID)
+    }
+
+    func retargetGitDiffTab(
+        workspaceID: Workspace.ID,
+        tabID: TabID,
+        isStaged: Bool
+    ) {
+        guard case .gitDiff(_, let path, _) = store.workspaceShells[workspaceID]?.tabContents[tabID] else {
+            return
+        }
+
+        store.send(
+            .setWorkspaceTabContent(
+                workspaceID: workspaceID,
+                tabID: tabID,
+                content: .gitDiff(workspaceID: workspaceID, path: path, isStaged: isStaged)
+            )
+        )
     }
 
     func openDefaultBrowserForSelectedWorkspace(preferredPaneID: PaneID? = nil) {

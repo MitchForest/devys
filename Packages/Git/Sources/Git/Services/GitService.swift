@@ -35,9 +35,12 @@ protocol GitService {
     func unstageAll() async throws
     func stageHunk(_ hunk: DiffHunk, for path: String) async throws
     func unstageHunk(_ hunk: DiffHunk, for path: String) async throws
+    func stagePatch(_ patch: String) async throws
+    func unstagePatch(_ patch: String) async throws
     func discard(_ path: String) async throws
     func discardUntracked(_ path: String) async throws
     func discardHunk(_ hunk: DiffHunk, for path: String) async throws
+    func discardPatch(_ patch: String) async throws
 
     func commit(message: String) async throws -> String
     func fetch() async throws
@@ -160,6 +163,14 @@ struct DefaultGitService: GitService {
         try await requireGitClient().unstageHunk(hunk, for: path)
     }
 
+    func stagePatch(_ patch: String) async throws {
+        try await requireGitClient().stagePatch(patch)
+    }
+
+    func unstagePatch(_ patch: String) async throws {
+        try await requireGitClient().unstagePatch(patch)
+    }
+
     func discard(_ path: String) async throws {
         try await requireGitClient().discard(path)
     }
@@ -170,6 +181,10 @@ struct DefaultGitService: GitService {
 
     func discardHunk(_ hunk: DiffHunk, for path: String) async throws {
         try await requireGitClient().discardHunk(hunk, for: path)
+    }
+
+    func discardPatch(_ patch: String) async throws {
+        try await requireGitClient().discardPatch(patch)
     }
 
     func commit(message: String) async throws -> String {

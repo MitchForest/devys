@@ -116,7 +116,7 @@ extension ContentView {
     func workflowDiffTarget(
         workspaceID: Workspace.ID
     ) -> GitFileChange? {
-        runtimeRegistry.gitStore(for: workspaceID)?.allChanges.first
+        workspaceOperationalState.metadataEntriesByWorkspaceID[workspaceID]?.changes.first
     }
 
     func workflowDiffAvailableForContent(

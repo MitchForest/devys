@@ -47,13 +47,7 @@ extension ContentView {
         closeInFlight = state.closeInFlight
         restoreWorkspaceController(for: workspaceID, hadSavedState: hadSavedState)
 
-        bindRepositoryCapability(for: worktree)
-
         syncTabMetadataFromSessions()
-        Task { @MainActor in
-            await Task.yield()
-            await runtimeRegistry.hydrateGitRuntimeIfNeeded(for: worktree.id)
-        }
         if let selectedTabId,
            case .terminal(_, let terminalID) = tabContents[selectedTabId] {
             markTerminalNotificationRead(terminalID)
@@ -130,27 +124,6 @@ extension ContentView {
                 editorSessionPool?.release(url: session.url)
             }
             editorSessionRegistry.unregister(tabId: tabID)
-        }
-    }
-
-    private func bindRepositoryCapability(for worktree: Worktree) {
-        guard let gitStore = runtimeRegistry.gitStore(for: worktree.id) else { return }
-        let windowStore = store
-        gitStore.onRepositoryAvailabilityDidUpdate = { isAvailable in
-            Task { @MainActor in
-                windowStore.send(
-                    .setRepositorySourceControl(
-                        isAvailable ? .git : .none,
-                        for: worktree.repositoryRootURL.standardizedFileURL.path
-                    )
-                )
-                windowStore.send(
-                    .requestWorkspaceOperationalMetadataRefresh(
-                        worktreeIDs: [worktree.id],
-                        repositoryID: worktree.repositoryRootURL.standardizedFileURL.path
-                    )
-                )
-            }
         }
     }
 }

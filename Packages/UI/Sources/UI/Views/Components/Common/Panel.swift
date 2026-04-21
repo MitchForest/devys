@@ -12,14 +12,14 @@ public struct Panel<Content: View>: View {
     @Environment(\.theme) private var theme
 
     private let title: String?
-    private let content: Content
+    private let content: () -> Content
 
     public init(
         title: String? = nil,
-        @ViewBuilder content: () -> Content
+        @ViewBuilder content: @escaping () -> Content
     ) {
         self.title = title
-        self.content = content()
+        self.content = content
     }
 
     public var body: some View {
@@ -31,7 +31,7 @@ public struct Panel<Content: View>: View {
                 Separator()
             }
 
-            content
+            content()
         }
         .background(theme.card)
         .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
@@ -48,7 +48,7 @@ public struct SidebarSection<Content: View>: View {
     private let actionIcon: String?
     private let action: (() -> Void)?
     @Binding private var isExpanded: Bool
-    private let content: Content
+    private let content: () -> Content
 
     @State private var isActionHovered = false
 
@@ -59,7 +59,7 @@ public struct SidebarSection<Content: View>: View {
         actionIcon: String? = nil,
         action: (() -> Void)? = nil,
         isExpanded: Binding<Bool>,
-        @ViewBuilder content: () -> Content
+        @ViewBuilder content: @escaping () -> Content
     ) {
         self.title = title
         self.icon = icon
@@ -67,7 +67,7 @@ public struct SidebarSection<Content: View>: View {
         self.actionIcon = actionIcon
         self.action = action
         self._isExpanded = isExpanded
-        self.content = content()
+        self.content = content
     }
 
     public var body: some View {
@@ -127,7 +127,7 @@ public struct SidebarSection<Content: View>: View {
             .padding(.vertical, Spacing.space2)
 
             if isExpanded {
-                content
+                content()
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }

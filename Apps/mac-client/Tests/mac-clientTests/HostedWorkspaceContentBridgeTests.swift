@@ -22,6 +22,7 @@ struct HostedWorkspaceContentBridgeTests {
         let session = EditorSession(url: URL(fileURLWithPath: "/tmp/devys-hosted-editor/main.swift"))
 
         bridge.attachEditorSession(session, workspaceID: workspaceID)
+        await flushObservationUpdates()
 
         #expect(publishedByWorkspaceID[workspaceID]?.editorDocuments.map { $0.title } == ["main.swift"])
         #expect(publishedByWorkspaceID[workspaceID]?.dirtyEditorCount == 0)
@@ -39,6 +40,7 @@ struct HostedWorkspaceContentBridgeTests {
         #expect(publishedByWorkspaceID[workspaceID]?.editorDocuments.map { $0.title } == ["App.swift"])
 
         bridge.detachEditorSession(session, workspaceID: workspaceID)
+        await flushObservationUpdates()
 
         #expect(publishedByWorkspaceID[workspaceID]?.editorDocuments.isEmpty == true)
     }
@@ -60,6 +62,7 @@ struct HostedWorkspaceContentBridgeTests {
         }
 
         bridge.attachChatSession(runtime, workspaceID: workspaceID)
+        await flushObservationUpdates()
 
         #expect(
             publishedByWorkspaceID[workspaceID]?.chatSessions.map { $0.sessionID.rawValue } == ["pending-chat"]
@@ -80,6 +83,7 @@ struct HostedWorkspaceContentBridgeTests {
         )
 
         bridge.detachChatSession(runtime, workspaceID: workspaceID)
+        await flushObservationUpdates()
 
         #expect(publishedByWorkspaceID[workspaceID]?.chatSessions.isEmpty == true)
     }
@@ -99,6 +103,7 @@ struct HostedWorkspaceContentBridgeTests {
         let session = BrowserSession(url: initialURL)
 
         bridge.attachBrowserSession(session, workspaceID: workspaceID)
+        await flushObservationUpdates()
 
         #expect(
             publishedByWorkspaceID[workspaceID]?.browserSessions.map(\.url.absoluteString)
@@ -120,13 +125,43 @@ struct HostedWorkspaceContentBridgeTests {
         )
 
         bridge.detachBrowserSession(session, workspaceID: workspaceID)
+        await flushObservationUpdates()
 
         #expect(publishedByWorkspaceID[workspaceID]?.browserSessions.isEmpty == true)
+    }
+
+    @Test("Bridge defers and coalesces workspace publication")
+    @MainActor
+    func defersAndCoalescesWorkspacePublication() async throws {
+        let workspaceID = Workspace.ID("/tmp/devys-hosted-browser")
+        let bridge = HostedWorkspaceContentBridge()
+        var publishCount = 0
+        var lastPublishedContent: HostedWorkspaceContentState?
+        bridge.setPublishHandler { _, content in
+            publishCount += 1
+            lastPublishedContent = content
+        }
+
+        let initialURL = try #require(URL(string: "http://localhost:3000"))
+        let updatedURL = try #require(URL(string: "https://example.com/docs"))
+        let session = BrowserSession(url: initialURL)
+
+        bridge.attachBrowserSession(session, workspaceID: workspaceID)
+        session.load(url: updatedURL)
+
+        #expect(publishCount == 0)
+
+        await flushObservationUpdates()
+
+        #expect(publishCount == 1)
+        #expect(lastPublishedContent?.browserSessions.map(\.url.absoluteString) == ["https://example.com/docs"])
     }
 }
 
 @MainActor
 private func flushObservationUpdates() async {
-    await Task.yield()
-    await Task.yield()
+    for _ in 0..<3 {
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 10_000_000)
+    }
 }

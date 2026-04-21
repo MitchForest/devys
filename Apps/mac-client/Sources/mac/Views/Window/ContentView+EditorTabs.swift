@@ -58,10 +58,9 @@ extension ContentView {
         return editorSessions[tabId]
     }
 
-    func removeEditorSession(tabId: TabID) {
+    func removeEditorSession(tabId: TabID, workspaceID: Workspace.ID?) {
         endEditorOpenTrace(tabId: tabId, outcome: "cancelled")
         guard let session = editorSessions.removeValue(forKey: tabId) else { return }
-        let workspaceID = tabContents[tabId]?.workspaceID ?? visibleWorkspaceID
         if let workspaceID {
             hostedContentBridge.detachEditorSession(session, workspaceID: workspaceID)
         }

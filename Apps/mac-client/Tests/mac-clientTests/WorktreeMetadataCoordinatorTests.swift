@@ -29,7 +29,6 @@ struct WorktreeMetadataCoordinatorTests {
         #expect(firstStore.entriesById[fixture.firstWorktree.id] != nil)
         #expect(secondStore.entriesById[fixture.secondWorktree.id] == nil)
         #expect(await fixture.provider.requestedWorktreeIDs() == [fixture.firstWorktree.id])
-        #expect(await fixture.statusProvider.requestedWorktreeIDs() == [fixture.firstWorktree.id])
 
         fixture.coordinator.syncCatalog(
             runtimeSnapshot(
@@ -47,10 +46,6 @@ struct WorktreeMetadataCoordinatorTests {
         #expect(fixture.coordinator.activeRepositoryID == fixture.secondRepository.id)
         #expect(refreshedSecondStore.entriesById[fixture.secondWorktree.id] != nil)
         #expect(await fixture.provider.requestedWorktreeIDs() == [
-            fixture.firstWorktree.id,
-            fixture.secondWorktree.id,
-        ])
-        #expect(await fixture.statusProvider.requestedWorktreeIDs() == [
             fixture.firstWorktree.id,
             fixture.secondWorktree.id,
         ])
@@ -74,18 +69,15 @@ struct WorktreeMetadataCoordinatorTests {
         let firstWorktree = makeWorktree(name: "feature/a", repository: firstRepository, path: "feature-a")
         let secondWorktree = makeWorktree(name: "feature/b", repository: secondRepository, path: "feature-b")
         let provider = RecordingMetadataProvider()
-        let statusProvider = RecordingMetadataStatusProvider()
         let stores = WorktreeInfoStoreRecorder()
         let coordinator = makeCoordinator(
             provider: provider,
-            statusProvider: statusProvider,
             stores: stores
         )
         return MetadataCoordinatorFixture(
             coordinator: coordinator,
             stores: stores,
             provider: provider,
-            statusProvider: statusProvider,
             repositories: [firstRepository, secondRepository],
             worktreesByRepository: [
                 firstRepository.id: [firstWorktree],
@@ -121,14 +113,12 @@ struct WorktreeMetadataCoordinatorTests {
     @MainActor
     private func makeCoordinator(
         provider: RecordingMetadataProvider,
-        statusProvider: RecordingMetadataStatusProvider,
         stores: WorktreeInfoStoreRecorder
     ) -> WorktreeMetadataCoordinator {
         let coordinator = WorktreeMetadataCoordinator {
             let store = WorktreeInfoStore(
                 infoProvider: provider,
                 infoWatcher: NoopWorktreeInfoWatcher(),
-                statusProvider: statusProvider,
                 configuration: .init(
                     selectedRefreshInterval: 60,
                     backgroundRefreshInterval: 60,
@@ -163,7 +153,6 @@ private struct MetadataCoordinatorFixture {
     let coordinator: WorktreeMetadataCoordinator
     let stores: WorktreeInfoStoreRecorder
     let provider: RecordingMetadataProvider
-    let statusProvider: RecordingMetadataStatusProvider
     let repositories: [Repository]
     let worktreesByRepository: [Repository.ID: [Worktree]]
     let firstRepository: Repository
@@ -180,19 +169,16 @@ private final class WorktreeInfoStoreRecorder {
 private actor RecordingMetadataProvider: WorktreeInfoProvider {
     private var requestedWorktreeIDsStorage: [Worktree.ID] = []
 
-    func branchName(for worktreeURL: URL) async -> String? {
+    func snapshot(for worktreeURL: URL) async -> WorktreeGitSnapshot {
         requestedWorktreeIDsStorage.append(worktreeURL.path)
-        return worktreeURL.lastPathComponent
-    }
-
-    func lineChanges(for worktreeURL: URL) async -> WorktreeLineChanges? {
-        _ = worktreeURL
-        return nil
-    }
-
-    func repositoryInfo(for worktreeURL: URL) async -> GitRepositoryInfo? {
-        _ = worktreeURL
-        return nil
+        return WorktreeGitSnapshot(
+            isRepositoryAvailable: true,
+            branchName: worktreeURL.lastPathComponent,
+            repositoryInfo: nil,
+            lineChanges: nil,
+            statusSummary: nil,
+            changes: []
+        )
     }
 
     func isPullRequestAvailable(for repositoryRoot: URL) async -> Bool {
@@ -204,19 +190,6 @@ private actor RecordingMetadataProvider: WorktreeInfoProvider {
         _ = repositoryRoot
         _ = branches
         return [:]
-    }
-
-    func requestedWorktreeIDs() -> [Worktree.ID] {
-        requestedWorktreeIDsStorage
-    }
-}
-
-private actor RecordingMetadataStatusProvider: WorktreeStatusProvider {
-    private var requestedWorktreeIDsStorage: [Worktree.ID] = []
-
-    func statusSummary(for worktreeURL: URL) async -> WorktreeStatusSummary? {
-        requestedWorktreeIDsStorage.append(worktreeURL.path)
-        return nil
     }
 
     func requestedWorktreeIDs() -> [Worktree.ID] {

@@ -14,14 +14,14 @@ public struct FormField<Content: View>: View {
     @Environment(\.theme) private var theme
 
     private let title: String
-    private let content: Content
+    private let content: () -> Content
 
     public init(
         _ title: String,
-        @ViewBuilder content: () -> Content
+        @ViewBuilder content: @escaping () -> Content
     ) {
         self.title = title
-        self.content = content()
+        self.content = content
     }
 
     public var body: some View {
@@ -29,7 +29,7 @@ public struct FormField<Content: View>: View {
             Text(title)
                 .font(Typography.micro.weight(.semibold))
                 .foregroundStyle(theme.textTertiary)
-            content
+            content()
         }
     }
 }

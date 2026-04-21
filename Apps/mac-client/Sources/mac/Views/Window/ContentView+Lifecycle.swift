@@ -126,15 +126,9 @@ extension ContentView {
     }
 
     private func configureRuntimeRegistryFactories() {
-        runtimeRegistry.configure(
-            makeGitStore: { workingDirectory in
-                guard let workingDirectory else { return nil }
-                return container.makeGitStore(projectFolder: workingDirectory)
-            },
-            makeFileTreeModel: { rootURL in
-                container.makeFileTreeModel(rootURL: rootURL)
-            }
-        )
+        runtimeRegistry.configure { rootURL in
+            container.makeFileTreeModel(rootURL: rootURL)
+        }
     }
 
     private func synchronizeReviewTriggerHooks() {

@@ -151,19 +151,32 @@ extension ContentView {
             let selectedWorkspaceInfo = selectedWorkspaceID.flatMap {
                 workspaceOperationalState.metadataEntriesByWorkspaceID[$0]
             }
-            let changeSummary = selectedWorkspaceInfo?.statusSummary
-            let changeCount = (changeSummary?.staged ?? 0)
-                + (changeSummary?.unstaged ?? 0)
-                + (changeSummary?.untracked ?? 0)
-                + (changeSummary?.conflicts ?? 0)
+            let changeCount = selectedWorkspaceInfo?.changeCount ?? 0
+            let gitStatusIndex = currentWorktree.flatMap { worktree in
+                selectedWorkspaceInfo.map {
+                    WorkspaceFileTreeGitStatusIndex(rootURL: worktree.workingDirectory, changes: $0.changes)
+                }
+            }
+            let selectedDiffSelection: (path: String?, isStaged: Bool?) = {
+                guard let selectedTabId,
+                      let content = tabContents[selectedTabId],
+                      case .gitDiff(let workspaceID, let path, let isStaged) = content,
+                      workspaceID == sidebarWorkspaceID else {
+                    return (nil, nil)
+                }
+                return (path, isStaged)
+            }()
 
             ContentViewSidebarSurface(
                 activeSidebar: activeSidebarItem ?? .files,
                 currentWorktree: currentWorktree,
+                selectedRepositoryID: selectedRepositoryID,
                 selectedWorkspaceID: sidebarWorkspaceID,
                 fileTreeModel: sidebarWorkspaceID.flatMap(runtimeRegistry.fileTreeModel(for:)),
-                gitStatusIndex: sidebarWorkspaceID.flatMap(runtimeRegistry.gitStatusIndex(for:)),
-                gitStore: sidebarWorkspaceID.flatMap(runtimeRegistry.gitStore(for:)),
+                gitStatusIndex: gitStatusIndex,
+                gitEntry: selectedWorkspaceInfo,
+                selectedDiffPath: selectedDiffSelection.path,
+                selectedDiffIsStaged: selectedDiffSelection.isStaged,
                 changeCount: changeCount,
                 chatSessions: hostedChatSessions,
                 reviewState: sidebarWorkspaceID.map { reviewWorkspaceState(for: $0) }
@@ -208,6 +221,58 @@ extension ContentView {
                 },
                 onAddDiffToChat: { workspaceID, path, isStaged in
                     addAttachmentToChat(.gitDiff(path: path, isStaged: isStaged), workspaceID: workspaceID)
+                },
+                onInitializeRepository: { repositoryID in
+                    Task { @MainActor in
+                        await initializeRepository(repositoryID)
+                    }
+                },
+                onStageFile: { workspaceID, path in
+                    Task { @MainActor in
+                        await workspaceOperationalController.stageFile(path: path, workspaceID: workspaceID)
+                    }
+                },
+                onUnstageFile: { workspaceID, path in
+                    Task { @MainActor in
+                        await workspaceOperationalController.unstageFile(path: path, workspaceID: workspaceID)
+                    }
+                },
+                onStageAll: { workspaceID in
+                    Task { @MainActor in
+                        await workspaceOperationalController.stageAll(workspaceID: workspaceID)
+                    }
+                },
+                onUnstageAll: { workspaceID in
+                    Task { @MainActor in
+                        await workspaceOperationalController.unstageAll(workspaceID: workspaceID)
+                    }
+                },
+                onDiscardChange: { workspaceID, change in
+                    Task { @MainActor in
+                        await workspaceOperationalController.discard(change: change, workspaceID: workspaceID)
+                    }
+                },
+                onCommit: { workspaceID, message, push in
+                    await workspaceOperationalController.commit(
+                        workspaceID: workspaceID,
+                        message: message,
+                        push: push
+                    )
+                },
+                onFetch: { workspaceID in
+                    Task { @MainActor in
+                        await workspaceOperationalController.fetch(workspaceID: workspaceID)
+                    }
+                },
+                onPull: { workspaceID in
+                    Task { @MainActor in
+                        await workspaceOperationalController.pull(workspaceID: workspaceID)
+                    }
+                },
+                onPush: { workspaceID in
+                    Task { @MainActor in
+                        await workspaceOperationalController.push(workspaceID: workspaceID)
+                    }
                 },
                 onCreateChatSession: { workspaceID in
                     if visibleWorkspaceID != workspaceID,

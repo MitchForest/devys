@@ -5,9 +5,9 @@
 
 import ACPClientKit
 import Foundation
+import Git
 import Observation
 import Workspace
-import Git
 
 @MainActor
 @Observable
@@ -31,7 +31,6 @@ final class AppContainer {
 
     private let fileTreeService: FileTreeService
     private let fileWatchServiceFactory: (URL) -> FileWatchService
-    private let gitStoreFactory: (URL?) -> GitStore
     @ObservationIgnored private var fileTreeModelsByRoot: [URL: FileTreeModel] = [:]
     @ObservationIgnored private var fileIndexesByRoot: [URL: WorkspaceFileIndex] = [:]
 
@@ -47,8 +46,7 @@ final class AppContainer {
         editorSessionRegistry: EditorSessionRegistry = EditorSessionRegistry(),
         fileTreeService: FileTreeService = DefaultFileTreeService(),
         sharedFileWatchRegistry: SharedFileWatchRegistry = SharedFileWatchRegistry(),
-        fileWatchServiceFactory: ((URL) -> FileWatchService)? = nil,
-        gitStoreFactory: @escaping (URL?) -> GitStore = { GitStore(projectFolder: $0) }
+        fileWatchServiceFactory: ((URL) -> FileWatchService)? = nil
     ) {
         let workspaceOperationalController = WorkspaceOperationalController()
         let persistentTerminalHostController = PersistentTerminalHostController()
@@ -74,7 +72,6 @@ final class AppContainer {
         self.fileWatchServiceFactory = fileWatchServiceFactory ?? {
             sharedFileWatchRegistry.makeService(rootURL: $0)
         }
-        self.gitStoreFactory = gitStoreFactory
     }
 
     func makeFileTreeModel(rootURL: URL) -> FileTreeModel {
@@ -91,10 +88,6 @@ final class AppContainer {
         )
         fileTreeModelsByRoot[normalizedRootURL] = model
         return model
-    }
-
-    func makeGitStore(projectFolder: URL?) -> GitStore {
-        gitStoreFactory(projectFolder)
     }
 
     func makeWorkspaceFileIndex(rootURL: URL) -> WorkspaceFileIndex {

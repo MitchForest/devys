@@ -1,6 +1,6 @@
 # Devys Legacy Inventory
 
-Updated: 2026-04-19
+Updated: 2026-04-20
 
 ## Purpose
 
@@ -36,7 +36,7 @@ This is a current-state reference, not a phase log.
 - `Apps/mac-client/Sources/mac/Services/AppContainer.swift`
   - service-locator style composition root
 - `Apps/mac-client/Sources/mac/Services/WorktreeRuntimeRegistry.swift`
-  - narrowed substantially, but still a migration target
+  - narrowed substantially, with sidebar-visible git ownership removed; still a migration target for remaining host runtime concerns
 - `Apps/mac-client/Sources/mac/Models/Agents/AgentSessionModels.swift`
   - `AgentSessionRuntime`
 - `Apps/mac-client/Sources/mac/Models/EditorSession.swift`
@@ -49,7 +49,7 @@ This is a current-state reference, not a phase log.
 - `Apps/mac-client/Sources/mac/Services/WorkspaceBackgroundProcessRegistry.swift`
   - background process handle ownership only
 - `Apps/mac-client/Sources/mac/Services/WorktreeInfoStore.swift`
-  - low-level metadata watcher/client implementation
+  - low-level workspace git snapshot watcher/client implementation
 - `Apps/mac-client/Sources/mac/Services/WorkspacePortStore.swift`
   - low-level port watcher/client implementation
 - `Packages/Workspace/Sources/Core/Services/SharedFileWatchRegistry.swift`

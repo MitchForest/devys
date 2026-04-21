@@ -7,14 +7,14 @@ struct WorkflowFormField<Content: View>: View {
     @Environment(\.devysTheme) private var theme
 
     let title: String
-    private let content: Content
+    private let content: () -> Content
 
     init(
         _ title: String,
-        @ViewBuilder content: () -> Content
+        @ViewBuilder content: @escaping () -> Content
     ) {
         self.title = title
-        self.content = content()
+        self.content = content
     }
 
     var body: some View {
@@ -22,7 +22,7 @@ struct WorkflowFormField<Content: View>: View {
             Text(title)
                 .font(Typography.caption)
                 .foregroundStyle(theme.textSecondary)
-            content
+            content()
         }
     }
 }

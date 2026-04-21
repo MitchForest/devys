@@ -9,7 +9,6 @@ import Workspace
 @MainActor
 extension ContentView {
     func handleCreatedPullRequest() async {
-        await gitStore?.refresh()
         if let activeWorktreeID = activeWorktree?.id {
             store.send(
                 .requestWorkspaceOperationalMetadataRefresh(
@@ -23,13 +22,7 @@ extension ContentView {
     func initializeRepository(_ repositoryID: Repository.ID) async {
         guard let repository = store.repositories.first(where: { $0.id == repositoryID }) else { return }
 
-        let store: GitStore
-        if selectedRepositoryID == repositoryID,
-           let activeStore = gitStore {
-            store = activeStore
-        } else {
-            store = GitStore(projectFolder: repository.rootURL)
-        }
+        let store = GitStore(projectFolder: repository.rootURL)
 
         await store.initializeRepository()
 

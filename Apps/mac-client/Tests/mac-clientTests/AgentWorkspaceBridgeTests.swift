@@ -279,7 +279,6 @@ struct AgentWorkspaceBridgeTests {
         editorSessionPool: EditorSessionPool = EditorSessionPool(),
         workspaceTerminalRegistry: WorkspaceTerminalRegistry = WorkspaceTerminalRegistry()
     ) -> AgentWorkspaceBridge {
-        let gitStoreProvider: @MainActor @Sendable () -> GitStore? = { nil }
         let terminalHostController = PersistentTerminalHostController(
             socketPath: makeTestSocketPath(),
             executablePathProvider: testExecutablePath
@@ -289,9 +288,10 @@ struct AgentWorkspaceBridgeTests {
             workingDirectoryURL: workspaceURL,
             editorSessionPool: editorSessionPool,
             workspaceTerminalRegistry: workspaceTerminalRegistry,
-            persistentTerminalHostController: terminalHostController,
-            gitStoreProvider: gitStoreProvider
-        )
+            persistentTerminalHostController: terminalHostController
+        ) { _, _ in
+            ""
+        }
     }
 
     private func makeTemporaryWorkspace() throws -> URL {

@@ -8,10 +8,13 @@ import Workspace
 struct ContentViewSidebarSurface: View {
     let activeSidebar: WorkspaceSidebarMode
     let currentWorktree: Worktree?
+    let selectedRepositoryID: Repository.ID?
     let selectedWorkspaceID: Workspace.ID?
     let fileTreeModel: FileTreeModel?
     let gitStatusIndex: WorkspaceFileTreeGitStatusIndex?
-    let gitStore: GitStore?
+    let gitEntry: WorktreeInfoEntry?
+    let selectedDiffPath: String?
+    let selectedDiffIsStaged: Bool?
     let changeCount: Int
     let chatSessions: [HostedChatSessionSummary]
     let reviewState: WindowFeature.ReviewWorkspaceState
@@ -27,6 +30,16 @@ struct ContentViewSidebarSurface: View {
     let onDeleteFiles: (Workspace.ID, [URL]) -> Void
     let onOpenDiff: (Workspace.ID, String, Bool, Bool) -> Void
     let onAddDiffToChat: (Workspace.ID, String, Bool) -> Void
+    let onInitializeRepository: (Repository.ID) -> Void
+    let onStageFile: (Workspace.ID, String) -> Void
+    let onUnstageFile: (Workspace.ID, String) -> Void
+    let onStageAll: (Workspace.ID) -> Void
+    let onUnstageAll: (Workspace.ID) -> Void
+    let onDiscardChange: (Workspace.ID, GitFileChange) -> Void
+    let onCommit: (Workspace.ID, String, Bool) async -> String?
+    let onFetch: (Workspace.ID) -> Void
+    let onPull: (Workspace.ID) -> Void
+    let onPush: (Workspace.ID) -> Void
     let onCreateChatSession: (Workspace.ID) -> Void
     let onOpenChatSession: (Workspace.ID, ChatSessionID) -> Void
     let onCreateWorkflowDefinition: (Workspace.ID) -> Void
@@ -93,20 +106,50 @@ struct ContentViewSidebarSurface: View {
                 showsTrailingBorder: false
             )
         } changesContent: {
-            if let gitStore {
-                GitSidebarView(
-                    store: gitStore,
+            if let selectedWorkspaceID,
+               let gitEntry {
+                WorkspaceGitSidebarView(
+                    entry: gitEntry,
+                    selectedDiffPath: selectedDiffPath,
+                    selectedDiffIsStaged: selectedDiffIsStaged,
                     onPreviewDiff: { path, isStaged in
-                        guard let selectedWorkspaceID else { return }
                         onOpenDiff(selectedWorkspaceID, path, isStaged, false)
                     },
                     onOpenDiff: { path, isStaged in
-                        guard let selectedWorkspaceID else { return }
                         onOpenDiff(selectedWorkspaceID, path, isStaged, true)
                     },
                     onAddDiffToChat: { path, isStaged in
-                        guard let selectedWorkspaceID else { return }
                         onAddDiffToChat(selectedWorkspaceID, path, isStaged)
+                    },
+                    onInitializeGit: selectedRepositoryID.map { repositoryID in
+                        { onInitializeRepository(repositoryID) }
+                    },
+                    onStageFile: { path in
+                        onStageFile(selectedWorkspaceID, path)
+                    },
+                    onUnstageFile: { path in
+                        onUnstageFile(selectedWorkspaceID, path)
+                    },
+                    onStageAll: {
+                        onStageAll(selectedWorkspaceID)
+                    },
+                    onUnstageAll: {
+                        onUnstageAll(selectedWorkspaceID)
+                    },
+                    onDiscardChange: { change in
+                        onDiscardChange(selectedWorkspaceID, change)
+                    },
+                    onCommit: { message, push in
+                        await onCommit(selectedWorkspaceID, message, push)
+                    },
+                    onFetch: {
+                        onFetch(selectedWorkspaceID)
+                    },
+                    onPull: {
+                        onPull(selectedWorkspaceID)
+                    },
+                    onPush: {
+                        onPush(selectedWorkspaceID)
                     }
                 )
             }

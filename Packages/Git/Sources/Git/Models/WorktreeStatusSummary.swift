@@ -16,6 +16,18 @@ public struct WorktreeStatusSummary: Equatable, Sendable {
         self.conflicts = conflicts
     }
 
+    public init(changes: [GitFileChange]) {
+        self.staged = changes.filter(\.isStaged).count
+        self.unstaged = changes.filter {
+            !$0.isStaged &&
+            $0.status != .untracked &&
+            $0.status != .ignored &&
+            $0.status != .unmerged
+        }.count
+        self.untracked = changes.filter { !$0.isStaged && $0.status == .untracked }.count
+        self.conflicts = changes.filter { $0.status == .unmerged }.count
+    }
+
     public var isClean: Bool {
         staged == 0 && unstaged == 0 && untracked == 0 && conflicts == 0
     }

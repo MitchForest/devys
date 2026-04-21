@@ -1,7 +1,6 @@
 import AppFeatures
 import Browser
 import Editor
-import Git
 import GhosttyTerminal
 import Split
 import SwiftUI
@@ -11,9 +10,11 @@ import Workspace
 struct ContentViewWorkspaceSurface: View {
     let selectedRepositoryRootURL: URL?
     let selectedRepositoryDisplayName: String?
+    let workspaceOperationalController: WorkspaceOperationalController
     let controller: DevysSplitController
     let tabContents: [TabID: WorkspaceTabContent]
-    let gitStoreForContent: (WorkspaceTabContent?) -> GitStore?
+    let gitInfoForContent: (WorkspaceTabContent?) -> WorktreeInfoEntry?
+    let onRetargetGitDiff: (Workspace.ID, TabID, Bool) -> Void
     let terminalSessionForContent: (WorkspaceTabContent?) -> GhosttyTerminalSession?
     let terminalControllerForContent: (WorkspaceTabContent?) -> HostedLocalTerminalController?
     let terminalAppearance: GhosttyTerminalAppearance
@@ -79,7 +80,9 @@ struct ContentViewWorkspaceSurface: View {
                 TabContentView(
                     tab: tab,
                     content: content,
-                    gitStore: gitStoreForContent(content),
+                    workspaceOperationalController: workspaceOperationalController,
+                    gitEntry: gitInfoForContent(content),
+                    onRetargetGitDiff: onRetargetGitDiff,
                     terminalSession: terminalSessionForContent(content),
                     terminalController: terminalControllerForContent(content),
                     terminalAppearance: terminalAppearance,

@@ -298,10 +298,8 @@ extension ContentView {
             break
         case .editor:
             editorSessions[tabId]?.requestKeyboardFocus()
-        case .gitDiff(_, let path, let isStaged):
-            Task {
-                await gitStore?.selectFile(path, isStaged: isStaged)
-            }
+        case .gitDiff:
+            break
         default:
             break
         }

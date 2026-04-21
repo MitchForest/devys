@@ -1,6 +1,6 @@
 # Devys Architecture Reference
 
-Updated: 2026-04-19
+Updated: 2026-04-20
 
 ## Purpose
 
@@ -61,6 +61,14 @@ Execution sequencing belongs in active plan docs under `../active/` when those e
 - No mirrored long-lived state between reducers and legacy stores.
 - No permanent compatibility wrappers.
 - No legacy owner survives just to preserve the old architecture story.
+
+## Local Workspace Git Ownership
+
+- Reducer-fed workspace operational snapshots are the only UI-visible git truth for local workspaces.
+- Repo rail hints, floating status capsule data, files-sidebar counts, file-tree git badges, changes sidebar sections, and diff-tab reconciliation all derive from the same workspace snapshot.
+- Host-side git watchers and refresh helpers may exist only as low-level invalidation and execution dependencies.
+- `GitStore` may remain as a capability helper for explicit git operations and on-demand diff loading, but it must not own sidebar-visible state, selection state, or a second UI refresh path.
+- `WorktreeRuntimeRegistry` must not own local-workspace git truth.
 
 ## Dependency And Concurrency Rules
 

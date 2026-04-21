@@ -9,7 +9,11 @@ import Darwin
 public final class DefaultWorktreeInfoWatcher: WorktreeInfoWatcher, @unchecked Sendable {
     private enum DebounceKey: Hashable {
         case branch(Worktree.ID)
-        case files(Worktree.ID)
+        // Git-precise events (index/ref file writes). Short debounce, not cancelled
+        // by working-tree FS noise.
+        case filesFromMetadata(Worktree.ID)
+        // Working-directory FS events. Long debounce to coalesce editor/build churn.
+        case filesFromWorkingTree(Worktree.ID)
     }
 
     private struct WorktreeWatch {
@@ -157,8 +161,22 @@ public final class DefaultWorktreeInfoWatcher: WorktreeInfoWatcher, @unchecked S
                 switch event {
                 case .headChanged:
                     self.schedule(.branchChanged(worktreeId: worktree.id), key: .branch(worktree.id))
-                case .indexChanged, .repositoryStateChanged:
-                    self.schedule(.filesChanged(worktreeId: worktree.id), key: .files(worktree.id))
+                case .indexChanged:
+                    self.schedule(
+                        .filesChanged(worktreeId: worktree.id),
+                        key: .filesFromMetadata(worktree.id)
+                    )
+                case .repositoryStateChanged:
+                    // A ref file moved (e.g. commit on the current branch). Branch
+                    // metadata (ahead/behind/SHA) and the staged/working-tree status
+                    // both need re-reading, so drive BOTH channels. The branch
+                    // channel uses its own debounce key, guaranteeing a refresh
+                    // even if the metadata-files channel is ever coalesced away.
+                    self.schedule(.branchChanged(worktreeId: worktree.id), key: .branch(worktree.id))
+                    self.schedule(
+                        .filesChanged(worktreeId: worktree.id),
+                        key: .filesFromMetadata(worktree.id)
+                    )
                 }
             }
             watcher.startWatching()
@@ -199,17 +217,24 @@ public final class DefaultWorktreeInfoWatcher: WorktreeInfoWatcher, @unchecked S
             path: worktree.workingDirectory.path,
             queue: queue
         ) { [weak self] in
-            self?.schedule(.filesChanged(worktreeId: worktreeId), key: .files(worktreeId))
+            self?.schedule(
+                .filesChanged(worktreeId: worktreeId),
+                key: .filesFromWorkingTree(worktreeId)
+            )
         }
     }
 
     private func removeWatch(for id: Worktree.ID) {
         watches[id]?.stop()
         watches.removeValue(forKey: id)
-        debounceItems[.branch(id)]?.cancel()
-        debounceItems[.files(id)]?.cancel()
-        debounceItems.removeValue(forKey: .branch(id))
-        debounceItems.removeValue(forKey: .files(id))
+        for key in [
+            DebounceKey.branch(id),
+            DebounceKey.filesFromMetadata(id),
+            DebounceKey.filesFromWorkingTree(id)
+        ] {
+            debounceItems[key]?.cancel()
+            debounceItems.removeValue(forKey: key)
+        }
     }
 
     private func schedule(_ event: WorktreeInfoEvent, key: DebounceKey) {
@@ -218,7 +243,11 @@ public final class DefaultWorktreeInfoWatcher: WorktreeInfoWatcher, @unchecked S
         switch key {
         case .branch:
             delay = 0.25
-        case .files:
+        case .filesFromMetadata:
+            // Git already wrote the index/ref atomically; only coalesce the
+            // pair that arrives on a single commit.
+            delay = 0.15
+        case .filesFromWorkingTree:
             delay = 1.0
         }
         let item = DispatchWorkItem { [weak self] in

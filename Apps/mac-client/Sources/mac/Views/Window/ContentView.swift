@@ -235,11 +235,6 @@ struct ContentView: View {
         runtimeRegistry.activeWorkspaceID
     }
 
-    var gitStore: GitStore? {
-        guard let workspaceID = visibleWorkspaceID else { return nil }
-        return runtimeRegistry.gitStore(for: workspaceID)
-    }
-
     func editorSessionPool(for workspaceID: Workspace.ID?) -> EditorSessionPool? {
         guard let workspaceID else { return nil }
         return runtimeRegistry.editorSessionPool(for: workspaceID)

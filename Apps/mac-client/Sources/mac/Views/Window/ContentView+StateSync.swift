@@ -62,9 +62,9 @@ extension ContentView {
                 }
             }
             runtimeRegistry.removeChatSession(id: sessionID, in: workspaceID)
-        case .editor:
+        case .editor(let workspaceID, _):
             if let tabId {
-                removeEditorSession(tabId: tabId)
+                removeEditorSession(tabId: tabId, workspaceID: workspaceID)
             }
         case .workflowRun(let workspaceID, let runID):
             stopWorkflowRun(workspaceID: workspaceID, runID: runID)

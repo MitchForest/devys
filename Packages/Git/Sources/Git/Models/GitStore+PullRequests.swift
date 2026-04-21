@@ -78,6 +78,15 @@ extension GitStore {
         return try await gitService.createPR(title: title, body: body, base: base, draft: draft)
     }
 
+    public func createPullRequest(
+        title: String,
+        body: String,
+        base: String,
+        draft: Bool
+    ) async throws -> Int {
+        try await createPR(title: title, body: body, base: base, draft: draft)
+    }
+
     /// Merge a PR.
     func mergePR(_ pr: PullRequest, method: MergeMethod = .squash) async {
         guard gitService.hasPRClient else { return }

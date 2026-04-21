@@ -14,6 +14,7 @@ final class DevysSplitCloseDelegate: DevysSplitDelegate {
     // Callbacks for original Bonsplit methods
     var onShouldCloseTab: ((Tab, PaneID) -> Bool)?
     var onDidCloseTab: ((TabID, PaneID) -> Void)?
+    var onDidClosePane: ((PaneID) -> Void)?
     var onDidCreateTab: ((Tab, PaneID) -> Void)?
     var onDidSelectTab: ((Tab, PaneID) -> Void)?
     var onDidRequestGestureIntent: ((SplitGestureIntent) -> Bool)?
@@ -41,6 +42,15 @@ final class DevysSplitCloseDelegate: DevysSplitDelegate {
     ) {
         MainActor.assumeIsolated {
             onDidCloseTab?(tabId, pane)
+        }
+    }
+
+    nonisolated func splitTabBar(
+        _ _: DevysSplitController,
+        didClosePane paneId: PaneID
+    ) {
+        MainActor.assumeIsolated {
+            onDidClosePane?(paneId)
         }
     }
     
@@ -122,6 +132,9 @@ extension ContentView {
         }
         splitDelegate.onDidCloseTab = { tabId, paneId in
             handleTabDidClose(tabId, paneId: paneId)
+        }
+        splitDelegate.onDidClosePane = { paneId in
+            handlePaneDidClose(paneId)
         }
         splitDelegate.onDidCreateTab = { _, _ in
             syncTabMetadataFromSessions()
@@ -507,14 +520,23 @@ extension ContentView {
     private func handleTabDidClose(_ id: TabID, paneId: PaneID) {
         guard let closedTab = workspaceTabRecord(for: id) else { return }
         let workspaceID = closedTab.workspaceID
-        let content = closedTab.content
-        let wasPreview = paneID(for: id, workspaceID: workspaceID)
-            .flatMap { paneID in
-                store.workspaceShells[workspaceID]?.layout?.paneLayout(for: paneID)?.previewTabID
-            } == id
+        let closedTabs = [
+            closedWorkspaceTab(
+                id: id,
+                content: closedTab.content,
+                paneID: paneId,
+                workspaceID: workspaceID
+            )
+        ]
         store.send(.closeWorkspaceTab(workspaceID: workspaceID, paneID: paneId, tabID: id))
-        removeTabState(id: id, content: content, wasPreview: wasPreview)
+        prepareClosedTabsForRemoval(closedTabs)
         renderWorkspaceLayout(for: workspaceID)
+        cleanupClosedTabs(closedTabs)
+    }
+
+    private func handlePaneDidClose(_ paneID: PaneID) {
+        guard let workspaceID = selectedWorkspaceID else { return }
+        closeWorkspacePaneAndCleanup(paneID, workspaceID: workspaceID)
     }
 
     private func workspaceTabRecord(
@@ -526,18 +548,6 @@ extension ContentView {
             }
         }
         return nil
-    }
-
-    /// Removes all state associated with a tab ID
-    private func removeTabState(id: TabID, content: WorkspaceTabContent, wasPreview: Bool) {
-        tabPresentationById.removeValue(forKey: id)
-        removeTabContent(for: id, content: content)
-
-        if wasPreview {
-            clearPreviewTabID(id, workspaceID: content.workspaceID)
-        }
-
-        cleanupSession(for: content, tabId: id)
     }
 
     /// Shows save/don't save/cancel dialog

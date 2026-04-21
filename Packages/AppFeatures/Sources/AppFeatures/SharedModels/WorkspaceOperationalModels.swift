@@ -4,24 +4,67 @@ import Git
 import Workspace
 
 public struct WorktreeInfoEntry: Equatable, Sendable {
+    public var refreshToken: UUID?
+    public var isRepositoryAvailable: Bool
     public var branchName: String?
     public var repositoryInfo: GitRepositoryInfo?
     public var lineChanges: WorktreeLineChanges?
     public var statusSummary: WorktreeStatusSummary?
+    public var changes: [GitFileChange]
+    public var isLoading: Bool
+    public var errorMessage: String?
     public var pullRequest: PullRequest?
 
     public init(
+        refreshToken: UUID? = nil,
+        isRepositoryAvailable: Bool = false,
         branchName: String? = nil,
         repositoryInfo: GitRepositoryInfo? = nil,
         lineChanges: WorktreeLineChanges? = nil,
         statusSummary: WorktreeStatusSummary? = nil,
+        changes: [GitFileChange] = [],
+        isLoading: Bool = false,
+        errorMessage: String? = nil,
         pullRequest: PullRequest? = nil
     ) {
+        self.refreshToken = refreshToken
+        self.isRepositoryAvailable = isRepositoryAvailable
         self.branchName = branchName
         self.repositoryInfo = repositoryInfo
         self.lineChanges = lineChanges
         self.statusSummary = statusSummary
+        self.changes = changes
+        self.isLoading = isLoading
+        self.errorMessage = errorMessage
         self.pullRequest = pullRequest
+    }
+
+    public var hasChanges: Bool {
+        !changes.isEmpty
+    }
+
+    public var stagedChanges: [GitFileChange] {
+        changes.filter(\.isStaged)
+    }
+
+    public var unstagedChanges: [GitFileChange] {
+        changes.filter {
+            !$0.isStaged &&
+            $0.status != .untracked &&
+            $0.status != .ignored
+        }
+    }
+
+    public var untrackedChanges: [GitFileChange] {
+        changes.filter { !$0.isStaged && $0.status == .untracked }
+    }
+
+    public var ignoredChanges: [GitFileChange] {
+        changes.filter { !$0.isStaged && $0.status == .ignored }
+    }
+
+    public var changeCount: Int {
+        changes.count
     }
 }
 

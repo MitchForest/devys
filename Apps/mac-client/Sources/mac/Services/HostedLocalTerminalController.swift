@@ -71,15 +71,17 @@ final class HostedLocalTerminalController {
     }
 
     deinit {
+        // Normal lifecycle teardown is explicit via `detach()` on the main actor.
+        // If the last release happens from a detached task, deinit may run off-main.
+        // In that case we must not touch actor-isolated state here.
+        guard Thread.isMainThread else { return }
+
         MainActor.assumeIsolated {
             attachTask?.cancel()
             readTask?.cancel()
             outputFlushTask?.cancel()
             cancelViewportWaiters()
-            if let connection {
-                try? TerminalHostSocketIO.writeFrame(type: .close, payload: Data(), to: connection.handle)
-                try? connection.handle.close()
-            }
+            try? connection?.handle.close()
         }
     }
 

@@ -300,7 +300,7 @@ extension GitClient {
         try await applyPatch(patch, cached: false, reverse: true)
     }
     
-    private func applyPatch(_ patch: String, cached: Bool, reverse: Bool) async throws {
+    func applyPatch(_ patch: String, cached: Bool, reverse: Bool) async throws {
         let tempFile = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString + ".patch")
         

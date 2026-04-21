@@ -105,6 +105,19 @@ extension WorktreeMetadataCoordinator {
         }
         store.refresh(worktreeIds: worktreeIds, reason: reason)
     }
+
+    func setErrorMessage(
+        _ message: String?,
+        for worktreeID: Workspace.ID,
+        in repositoryID: Repository.ID? = nil
+    ) {
+        let targetRepositoryID = repositoryID ?? activeRepositoryID
+        guard let targetRepositoryID,
+              let store = storesByRepositoryID[targetRepositoryID] else {
+            return
+        }
+        store.setErrorMessage(message, for: worktreeID)
+    }
 }
 
 @MainActor

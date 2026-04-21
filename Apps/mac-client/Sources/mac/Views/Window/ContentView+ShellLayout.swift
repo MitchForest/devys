@@ -103,6 +103,10 @@ extension ContentView {
     @discardableResult
     func handleSplitGestureIntent(_ intent: SplitGestureIntent) -> Bool {
         guard let workspaceID = selectedWorkspaceID else { return false }
+        if case let .closePane(paneID) = intent {
+            closeWorkspacePaneAndCleanup(paneID, workspaceID: workspaceID)
+            return true
+        }
         let action = SplitGestureReducerAdapter().action(
             for: intent,
             workspaceID: workspaceID

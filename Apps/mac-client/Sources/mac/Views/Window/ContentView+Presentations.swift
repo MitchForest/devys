@@ -211,14 +211,31 @@ extension ContentView {
     func applyGitPresentations<V: View>(_ view: V) -> some View {
         view
             .sheet(isPresented: gitCommitSheetBinding) {
-                if let gitStore {
-                    presentedSheetContent(CommitSheet(store: gitStore))
+                if let workspaceID = visibleWorkspaceID,
+                   let entry = workspaceOperationalState.metadataEntriesByWorkspaceID[workspaceID] {
+                    presentedSheetContent(
+                        WorkspaceGitCommitSheet(
+                            branchName: entry.repositoryInfo?.currentBranch ?? entry.branchName,
+                            stagedChanges: entry.stagedChanges
+                        ) { message, push in
+                            await workspaceOperationalController.commit(
+                                workspaceID: workspaceID,
+                                message: message,
+                                push: push
+                            )
+                        }
+                    )
                 }
             }
             .sheet(isPresented: createPullRequestSheetBinding) {
-                if let gitStore {
+                if let workspaceID = visibleWorkspaceID,
+                   let entry = workspaceOperationalState.metadataEntriesByWorkspaceID[workspaceID] {
                     presentedSheetContent(
-                        CreatePRSheet(store: gitStore) { _ in
+                        WorkspaceCreatePullRequestSheet(
+                            currentBranch: entry.repositoryInfo?.currentBranch ?? entry.branchName,
+                            workspaceID: workspaceID,
+                            controller: workspaceOperationalController
+                        ) { _ in
                             Task { @MainActor in
                                 await handleCreatedPullRequest()
                             }

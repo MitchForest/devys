@@ -87,7 +87,7 @@ final class AgentWorkspaceBridge {
     private let editorSessionPool: EditorSessionPool
     private let workspaceTerminalRegistry: WorkspaceTerminalRegistry
     private let persistentTerminalHostController: PersistentTerminalHostController
-    private let gitStoreProvider: @MainActor @Sendable () -> GitStore?
+    private let diffTextProvider: @MainActor @Sendable (String, Bool) async throws -> String
     private let terminalStore = AgentInlineTerminalStore()
     private let mentionIndex = AgentMentionIndex()
 
@@ -99,14 +99,14 @@ final class AgentWorkspaceBridge {
         editorSessionPool: EditorSessionPool,
         workspaceTerminalRegistry: WorkspaceTerminalRegistry,
         persistentTerminalHostController: PersistentTerminalHostController,
-        gitStoreProvider: @escaping @MainActor @Sendable () -> GitStore?
+        diffTextProvider: @escaping @MainActor @Sendable (String, Bool) async throws -> String
     ) {
         self.workspaceID = workspaceID
         self.workingDirectoryURL = workingDirectoryURL.standardizedFileURL
         self.editorSessionPool = editorSessionPool
         self.workspaceTerminalRegistry = workspaceTerminalRegistry
         self.persistentTerminalHostController = persistentTerminalHostController
-        self.gitStoreProvider = gitStoreProvider
+        self.diffTextProvider = diffTextProvider
     }
 
     func attachmentSummaries(
@@ -422,11 +422,7 @@ final class AgentWorkspaceBridge {
     ) async throws -> ResolvedAttachmentPayload {
         let attachment = ChatAttachment.gitDiff(path: path, isStaged: isStaged)
         let title = URL(fileURLWithPath: path).lastPathComponent
-        guard let gitStore = gitStoreProvider() else {
-            throw AgentWorkspaceBridgeError.unavailable("Git diff context is unavailable for this workspace.")
-        }
-
-        let diffText = try await gitStore.diffText(for: path, isStaged: isStaged)
+        let diffText = try await diffTextProvider(path, isStaged)
         if capabilities.embeddedContext {
             let resource = AgentEmbeddedResource.Resource(
                 uri: "devys://git-diff/\(workspaceID)/\(path)",

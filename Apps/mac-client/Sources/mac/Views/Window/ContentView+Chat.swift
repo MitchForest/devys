@@ -218,7 +218,7 @@ extension ContentView {
         prefersPreview: Bool,
         fallbackToEditor: Bool = true
     ) -> Bool {
-        let allChanges: [GitFileChange] = runtimeRegistry.gitStore(for: workspaceID)?.allChanges ?? []
+        let allChanges = workspaceOperationalState.metadataEntriesByWorkspaceID[workspaceID]?.changes ?? []
         var matchingChange: GitFileChange?
         for change in allChanges where change.path == diff.path {
             matchingChange = change
@@ -497,8 +497,12 @@ extension ContentView {
               let editorSessionPool = runtimeRegistry.editorSessionPool(for: workspaceID) else {
             return nil
         }
-        let gitStoreProvider: @MainActor @Sendable () -> GitStore? = {
-            self.runtimeRegistry.gitStore(for: workspaceID)
+        let diffTextProvider: @MainActor @Sendable (String, Bool) async throws -> String = { path, isStaged in
+            try await self.workspaceOperationalController.diffText(
+                workspaceID: workspaceID,
+                path: path,
+                isStaged: isStaged
+            )
         }
         return AgentWorkspaceBridge(
             workspaceID: worktree.id,
@@ -506,7 +510,7 @@ extension ContentView {
             editorSessionPool: editorSessionPool,
             workspaceTerminalRegistry: workspaceTerminalRegistry,
             persistentTerminalHostController: persistentTerminalHostController,
-            gitStoreProvider: gitStoreProvider
+            diffTextProvider: diffTextProvider
         )
     }
 

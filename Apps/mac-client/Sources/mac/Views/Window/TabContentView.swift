@@ -19,7 +19,9 @@ struct TabContentView: View {
 
     let tab: Split.Tab
     let content: WorkspaceTabContent?
-    let gitStore: GitStore?
+    let workspaceOperationalController: WorkspaceOperationalController
+    let gitEntry: WorktreeInfoEntry?
+    let onRetargetGitDiff: (Workspace.ID, TabID, Bool) -> Void
     let terminalSession: GhosttyTerminalSession?
     let terminalController: HostedLocalTerminalController?
     let terminalAppearance: GhosttyTerminalAppearance
@@ -163,11 +165,7 @@ struct TabContentView: View {
                     )
                 }
             case .gitDiff:
-                if let store = gitStore {
-                    GitDiffView(store: store)
-                } else {
-                    PlaceholderView(icon: "plus.forwardslash.minus", title: "Diff", subtitle: "No repository open")
-                }
+                gitDiffContentView
             case .settings:
                 SettingsView(
                     repositoryRootURL: selectedRepositoryRootURL,
@@ -231,6 +229,22 @@ struct TabContentView: View {
         }
     }
 
+    @ViewBuilder
+    private var gitDiffContentView: some View {
+        if case .gitDiff(let workspaceID, let path, let isStaged) = content {
+            WorkspaceGitDiffTabView(
+                workspaceID: workspaceID,
+                path: path,
+                isStaged: isStaged,
+                entry: gitEntry,
+                controller: workspaceOperationalController
+            ) { nextIsStaged in
+                onRetargetGitDiff(workspaceID, tab.id, nextIsStaged)
+            }
+        } else {
+            PlaceholderView(icon: "plus.forwardslash.minus", title: "Diff", subtitle: "No repository open")
+        }
+    }
 }
 
 private extension TabContentView {

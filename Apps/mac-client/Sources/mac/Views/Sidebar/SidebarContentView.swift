@@ -100,26 +100,32 @@ private struct SingleFolderTreeView: View {
 
 // MARK: - Preview
 
-#Preview("Single Folder") {
-    @Previewable @State var state = WindowState()
-    let container = AppContainer()
-    state.openRepository(URL(fileURLWithPath: "/Users/test/Code/devys"))
+@MainActor
+private struct SidebarContentViewPreviewHost: View {
+    private let container = AppContainer()
+    private let activeDirectory = URL(fileURLWithPath: "/Users/test/Code/devys")
 
-    return SidebarContentView(
-        model: nil,
-        activeDirectory: state.selectedRepositoryRootURL,
-        gitStatusIndex: nil,
-        onPreviewFile: { _ in },
-        onOpenFile: { _ in },
-        onAddToChat: { _ in },
-        onRenameItem: { _ in },
-        onDeleteItems: { _ in },
-        showsTrailingBorder: true
-    )
-    .frame(width: 240, height: 400)
-    .environment(container)
-    .environment(container.appSettings)
-    .environment(container.recentRepositoriesService)
-    .environment(container.layoutPersistenceService)
-    .environment(\.devysTheme, DevysTheme(isDark: false))
+    var body: some View {
+        SidebarContentView(
+            model: nil,
+            activeDirectory: activeDirectory,
+            gitStatusIndex: nil,
+            onPreviewFile: { _ in },
+            onOpenFile: { _ in },
+            onAddToChat: { _ in },
+            onRenameItem: { _ in },
+            onDeleteItems: { _ in },
+            showsTrailingBorder: true
+        )
+        .frame(width: 240, height: 400)
+        .environment(container)
+        .environment(container.appSettings)
+        .environment(container.recentRepositoriesService)
+        .environment(container.layoutPersistenceService)
+        .environment(\.devysTheme, DevysTheme(isDark: false))
+    }
+}
+
+#Preview("Single Folder") {
+    SidebarContentViewPreviewHost()
 }

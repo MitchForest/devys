@@ -8,7 +8,6 @@ import Observation
 import ACPClientKit
 import AppFeatures
 import Workspace
-import Git
 
 @MainActor
 @Observable
@@ -17,7 +16,6 @@ final class WorktreeRuntimeRegistry {
     private var runtimeFactories: RuntimeFactories?
 
     struct RuntimeFactories {
-        let makeGitStore: @MainActor (URL?) -> GitStore?
         let makeFileTreeModel: @MainActor (URL) -> FileTreeModel?
     }
 
@@ -26,12 +24,10 @@ final class WorktreeRuntimeRegistry {
     private var filesSidebarVisible = true
 
     func configure(
-        makeGitStore: @escaping @MainActor (URL?) -> GitStore?,
         makeFileTreeModel: @escaping @MainActor (URL) -> FileTreeModel?
     ) {
         guard runtimeFactories == nil else { return }
         runtimeFactories = RuntimeFactories(
-            makeGitStore: makeGitStore,
             makeFileTreeModel: makeFileTreeModel
         )
     }
@@ -42,16 +38,6 @@ extension WorktreeRuntimeRegistry {
     var activeWorktree: Worktree? {
         guard let activeWorkspaceID else { return nil }
         return worktree(for: activeWorkspaceID)
-    }
-
-    var activeGitStore: GitStore? {
-        guard let activeWorkspaceID else { return nil }
-        return gitStore(for: activeWorkspaceID)
-    }
-
-    var activeGitStatusIndex: WorkspaceFileTreeGitStatusIndex? {
-        guard let activeWorkspaceID else { return nil }
-        return gitStatusIndex(for: activeWorkspaceID)
     }
 
     var activeFileTreeModel: FileTreeModel? {
@@ -71,16 +57,8 @@ extension WorktreeRuntimeRegistry {
         runtimesByWorkspaceID[workspaceID]?.editorSessionPool
     }
 
-    func gitStore(for workspaceID: Workspace.ID) -> GitStore? {
-        runtimesByWorkspaceID[workspaceID]?.gitStore
-    }
-
     func fileTreeModel(for workspaceID: Workspace.ID) -> FileTreeModel? {
         runtimesByWorkspaceID[workspaceID]?.fileTreeModel
-    }
-
-    func gitStatusIndex(for workspaceID: Workspace.ID) -> WorkspaceFileTreeGitStatusIndex? {
-        runtimesByWorkspaceID[workspaceID]?.gitStatusIndex
     }
 
     func chatSession(id: ChatSessionID, in workspaceID: Workspace.ID) -> ChatSessionRuntime? {
@@ -132,14 +110,12 @@ extension WorktreeRuntimeRegistry {
         if let activeWorkspaceID,
            let activeRuntime = runtimesByWorkspaceID[activeWorkspaceID],
            activeWorkspaceID != worktree.id {
-            activeRuntime.gitStore?.stopWatching()
+            activeRuntime.setFilesSidebarVisible(false, makeFileTreeModel: makeFileTreeModel)
         }
 
         let runtime = ensureRuntime(for: worktree)
         activeWorkspaceID = worktree.id
         self.filesSidebarVisible = filesSidebarVisible
-        runtime.ensureGitStore(using: makeGitStore)
-        runtime.gitStore?.startWatching()
         runtime.setFilesSidebarVisible(filesSidebarVisible, makeFileTreeModel: makeFileTreeModel)
     }
 
@@ -147,7 +123,6 @@ extension WorktreeRuntimeRegistry {
         if let activeWorkspaceID,
            let runtime = runtimesByWorkspaceID[activeWorkspaceID] {
             runtime.setFilesSidebarVisible(false, makeFileTreeModel: makeFileTreeModel)
-            runtime.gitStore?.stopWatching()
         }
         activeWorkspaceID = nil
     }
@@ -161,21 +136,11 @@ extension WorktreeRuntimeRegistry {
         runtime.setFilesSidebarVisible(isVisible, makeFileTreeModel: makeFileTreeModel)
     }
 
-    func hydrateGitRuntimeIfNeeded(for workspaceID: Workspace.ID) async {
-        guard activeWorkspaceID == workspaceID,
-              let runtime = runtimesByWorkspaceID[workspaceID] else {
-            return
-        }
-        await runtime.hydrateGitStoreIfNeeded()
-    }
-
     func discardWorkspace(
         _ workspaceID: Workspace.ID
     ) {
         guard let runtime = runtimesByWorkspaceID.removeValue(forKey: workspaceID) else { return }
         runtime.setFilesSidebarVisible(false, makeFileTreeModel: makeFileTreeModel)
-        runtime.gitStore?.stopWatching()
-        runtime.gitStore?.cleanup()
         if activeWorkspaceID == workspaceID {
             activeWorkspaceID = nil
         }
@@ -194,11 +159,6 @@ private extension WorktreeRuntimeRegistry {
         return runtime
     }
 
-    func makeGitStore(for workingDirectory: URL?) -> GitStore? {
-        guard let runtimeFactories, let workingDirectory else { return nil }
-        return runtimeFactories.makeGitStore(workingDirectory)
-    }
-
     func makeFileTreeModel(rootURL: URL) -> FileTreeModel? {
         guard let runtimeFactories else { return nil }
         return runtimeFactories.makeFileTreeModel(rootURL)
@@ -209,12 +169,8 @@ private extension WorktreeRuntimeRegistry {
 private final class WorktreeRuntimeState {
     let worktree: Worktree
     let editorSessionPool = EditorSessionPool()
-    var gitStore: GitStore?
     private var chatSessionsByID: [ChatSessionID: ChatSessionRuntime] = [:]
     var fileTreeModel: FileTreeModel?
-    var gitStatusIndex: WorkspaceFileTreeGitStatusIndex?
-    private var hasHydratedGitStore = false
-    private var isHydratingGitStore = false
 
     init(worktree: Worktree) {
         self.worktree = worktree
@@ -222,13 +178,6 @@ private final class WorktreeRuntimeState {
 
     var allChatSessions: [ChatSessionRuntime] {
         Array(chatSessionsByID.values)
-    }
-
-    func ensureGitStore(using factory: (URL?) -> GitStore?) {
-        if gitStore == nil {
-            gitStore = factory(worktree.workingDirectory)
-            configureGitStatusIndexBinding()
-        }
     }
 
     func ensureFileTreeModel(using factory: (URL) -> FileTreeModel?) {
@@ -288,40 +237,5 @@ private final class WorktreeRuntimeState {
         } else {
             fileTreeModel?.deactivate()
         }
-    }
-
-    private func configureGitStatusIndexBinding() {
-        guard let gitStore else { return }
-
-        gitStatusIndex = WorkspaceFileTreeGitStatusIndex(
-            rootURL: worktree.workingDirectory,
-            changes: gitStore.allChanges
-        )
-        gitStore.onChangesDidUpdate = { [weak self] changes in
-            guard let self else { return }
-            gitStatusIndex = WorkspaceFileTreeGitStatusIndex(
-                rootURL: worktree.workingDirectory,
-                changes: changes
-            )
-        }
-    }
-
-    func hydrateGitStoreIfNeeded() async {
-        guard let gitStore,
-              !hasHydratedGitStore,
-              !isHydratingGitStore else {
-            return
-        }
-
-        isHydratingGitStore = true
-        defer { isHydratingGitStore = false }
-
-        await gitStore.refresh()
-        gitStatusIndex = WorkspaceFileTreeGitStatusIndex(
-            rootURL: worktree.workingDirectory,
-            changes: gitStore.allChanges
-        )
-        await gitStore.checkPRAvailability()
-        hasHydratedGitStore = true
     }
 }

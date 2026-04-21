@@ -5,9 +5,16 @@
 
 import AppFeatures
 import Foundation
+import Git
 import GhosttyTerminal
 import Observation
 import Workspace
+
+struct WorkspaceOperationalMessageError: LocalizedError, Equatable, Sendable {
+    let message: String
+
+    var errorDescription: String? { message }
+}
 
 @MainActor
 final class WorkspaceOperationalController {
@@ -114,6 +121,170 @@ final class WorkspaceOperationalController {
         broadcastSnapshot()
     }
 
+    func diffText(
+        workspaceID: Workspace.ID,
+        path: String,
+        isStaged: Bool,
+        contextLines: Int = 3,
+        ignoreWhitespace: Bool = false
+    ) async throws -> String {
+        let store = try requireGitCapabilityStore(for: workspaceID)
+        return try await store.diffText(
+            for: path,
+            isStaged: isStaged,
+            contextLines: contextLines,
+            ignoreWhitespace: ignoreWhitespace
+        )
+    }
+
+    func stageFile(path: String, workspaceID: Workspace.ID) async {
+        let store = try? requireGitCapabilityStore(for: workspaceID)
+        await runGitMutation(store, workspaceID: workspaceID) {
+            await store?.stageFile(path)
+        }
+    }
+
+    func unstageFile(path: String, workspaceID: Workspace.ID) async {
+        let store = try? requireGitCapabilityStore(for: workspaceID)
+        await runGitMutation(store, workspaceID: workspaceID) {
+            await store?.unstageFile(path)
+        }
+    }
+
+    func stageAll(workspaceID: Workspace.ID) async {
+        let store = try? requireGitCapabilityStore(for: workspaceID)
+        await runGitMutation(store, workspaceID: workspaceID) {
+            await store?.stageAllChanges()
+        }
+    }
+
+    func unstageAll(workspaceID: Workspace.ID) async {
+        let store = try? requireGitCapabilityStore(for: workspaceID)
+        await runGitMutation(store, workspaceID: workspaceID) {
+            await store?.unstageAllChanges()
+        }
+    }
+
+    func discard(change: GitFileChange, workspaceID: Workspace.ID) async {
+        let store = try? requireGitCapabilityStore(for: workspaceID)
+        await runGitMutation(store, workspaceID: workspaceID) {
+            await store?.discardChange(change)
+        }
+    }
+
+    func commit(
+        workspaceID: Workspace.ID,
+        message: String,
+        push: Bool
+    ) async -> String? {
+        guard let store = try? requireGitCapabilityStore(for: workspaceID) else {
+            return "Git is unavailable for this workspace."
+        }
+        do {
+            try await store.commit(message: message, push: push)
+        } catch {
+            metadataCoordinator.setErrorMessage(error.localizedDescription, for: workspaceID)
+            broadcastSnapshot()
+            return error.localizedDescription
+        }
+
+        refreshGitWorkspace(workspaceID)
+        return nil
+    }
+
+    func loadLocalBranchNames(workspaceID: Workspace.ID) async -> [String] {
+        guard let store = try? requireGitCapabilityStore(for: workspaceID) else {
+            return []
+        }
+        return await store.loadLocalBranchNames()
+    }
+
+    func createPullRequest(
+        workspaceID: Workspace.ID,
+        title: String,
+        body: String,
+        base: String,
+        draft: Bool
+    ) async -> Result<Int, WorkspaceOperationalMessageError> {
+        guard let store = try? requireGitCapabilityStore(for: workspaceID) else {
+            return .failure(WorkspaceOperationalMessageError(message: "Git is unavailable for this workspace."))
+        }
+
+        do {
+            let prNumber = try await store.createPullRequest(
+                title: title,
+                body: body,
+                base: base,
+                draft: draft
+            )
+            refreshGitWorkspace(workspaceID)
+            return .success(prNumber)
+        } catch {
+            let message = error.localizedDescription
+            metadataCoordinator.setErrorMessage(message, for: workspaceID)
+            broadcastSnapshot()
+            return .failure(WorkspaceOperationalMessageError(message: message))
+        }
+    }
+
+    func fetch(workspaceID: Workspace.ID) async {
+        let store = try? requireGitCapabilityStore(for: workspaceID)
+        await runGitMutation(store, workspaceID: workspaceID) {
+            await store?.fetch()
+        }
+    }
+
+    func pull(workspaceID: Workspace.ID) async {
+        let store = try? requireGitCapabilityStore(for: workspaceID)
+        await runGitMutation(store, workspaceID: workspaceID) {
+            await store?.pull()
+        }
+    }
+
+    func push(workspaceID: Workspace.ID) async {
+        let store = try? requireGitCapabilityStore(for: workspaceID)
+        await runGitMutation(store, workspaceID: workspaceID) {
+            await store?.push()
+        }
+    }
+
+    func stageDiffPatch(
+        workspaceID: Workspace.ID,
+        patch: String
+    ) async -> String? {
+        guard let store = try? requireGitCapabilityStore(for: workspaceID) else {
+            return "Git is unavailable for this workspace."
+        }
+        do {
+            try await store.stageDiffPatch(patch)
+        } catch {
+            metadataCoordinator.setErrorMessage(error.localizedDescription, for: workspaceID)
+            broadcastSnapshot()
+            return error.localizedDescription
+        }
+        refreshGitWorkspace(workspaceID)
+        return nil
+    }
+
+    func discardDiffPatch(
+        workspaceID: Workspace.ID,
+        patch: String,
+        wasStaged: Bool
+    ) async -> String? {
+        guard let store = try? requireGitCapabilityStore(for: workspaceID) else {
+            return "Git is unavailable for this workspace."
+        }
+        do {
+            try await store.discardDiffPatch(patch, wasStaged: wasStaged)
+        } catch {
+            metadataCoordinator.setErrorMessage(error.localizedDescription, for: workspaceID)
+            broadcastSnapshot()
+            return error.localizedDescription
+        }
+        refreshGitWorkspace(workspaceID)
+        return nil
+    }
+
     func clearWorkspace(_ workspaceID: Workspace.ID) {
         portCoordinator.clearWorkspace(workspaceID)
         hostedSessionsByID = hostedSessionsByID.filter { $0.value.workspaceID != workspaceID }
@@ -180,6 +351,14 @@ final class WorkspaceOperationalController {
 
 @MainActor
 private extension WorkspaceOperationalController {
+    struct WorkspaceGitCapabilityError: LocalizedError {
+        let message: String
+
+        var errorDescription: String? {
+            message
+        }
+    }
+
     func ensureObservationStarted() {
         guard !isObservingOperationalState else { return }
         isObservingOperationalState = true
@@ -293,5 +472,61 @@ private extension WorkspaceOperationalController {
             snapshot,
             managedProcessesByWorkspace: managedProcessesByWorkspace()
         )
+    }
+
+    func requireGitCapabilityStore(for workspaceID: Workspace.ID) throws -> GitStore {
+        guard let worktree = catalogContext.worktreesByRepository.values
+            .flatMap({ $0 })
+            .first(where: { $0.id == workspaceID }) else {
+            throw WorkspaceGitCapabilityError(message: "Workspace not found.")
+        }
+        return GitStore(projectFolder: worktree.workingDirectory)
+    }
+
+    func repositoryID(for workspaceID: Workspace.ID) -> Repository.ID? {
+        for (repositoryID, worktrees) in catalogContext.worktreesByRepository
+        where worktrees.contains(where: { $0.id == workspaceID }) {
+            return repositoryID
+        }
+        return nil
+    }
+
+    func refreshGitWorkspace(_ workspaceID: Workspace.ID) {
+        metadataCoordinator.setErrorMessage(nil, for: workspaceID, in: repositoryID(for: workspaceID))
+        metadataCoordinator.refresh(
+            worktreeIds: [workspaceID],
+            in: repositoryID(for: workspaceID),
+            reason: .manual
+        )
+        broadcastSnapshot()
+    }
+
+    func runGitMutation(
+        _ store: GitStore?,
+        workspaceID: Workspace.ID,
+        operation: @escaping () async -> Void
+    ) async {
+        guard let store else {
+            metadataCoordinator.setErrorMessage(
+                "Git is unavailable for this workspace.",
+                for: workspaceID,
+                in: repositoryID(for: workspaceID)
+            )
+            broadcastSnapshot()
+            return
+        }
+
+        await operation()
+        if let message = store.errorMessage, !message.isEmpty {
+            metadataCoordinator.setErrorMessage(
+                message,
+                for: workspaceID,
+                in: repositoryID(for: workspaceID)
+            )
+            broadcastSnapshot()
+            return
+        }
+
+        refreshGitWorkspace(workspaceID)
     }
 }

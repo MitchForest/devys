@@ -18,23 +18,25 @@ struct WorktreeInfoStoreTests {
 
         let store = WorktreeInfoStore(
             infoProvider: StubWorktreeInfoProvider(
-                branchName: "feature/navigator",
-                repositoryInfo: GitRepositoryInfo(
-                    currentBranch: "feature/navigator",
-                    aheadCount: 2,
-                    behindCount: 1
+                snapshot: WorktreeGitSnapshot(
+                    isRepositoryAvailable: true,
+                    branchName: "feature/navigator",
+                    repositoryInfo: GitRepositoryInfo(
+                        currentBranch: "feature/navigator",
+                        aheadCount: 2,
+                        behindCount: 1
+                    ),
+                    lineChanges: WorktreeLineChanges(added: 12, removed: 4),
+                    statusSummary: WorktreeStatusSummary(
+                        staged: 1,
+                        unstaged: 2,
+                        untracked: 3,
+                        conflicts: 0
+                    ),
+                    changes: []
                 ),
-                lineChanges: WorktreeLineChanges(added: 12, removed: 4)
             ),
-            infoWatcher: NoopWorktreeInfoWatcher(),
-            statusProvider: StubWorktreeStatusProvider(
-                summary: WorktreeStatusSummary(
-                    staged: 1,
-                    unstaged: 2,
-                    untracked: 3,
-                    conflicts: 0
-                )
-            )
+            infoWatcher: NoopWorktreeInfoWatcher()
         )
 
         _ = store.update(worktrees: [worktree], repositoryRootURL: worktree.repositoryRootURL)
@@ -69,11 +71,9 @@ struct WorktreeInfoStoreTests {
         )
         let watcher = TestWorktreeInfoWatcher()
         let provider = RecordingWorktreeInfoProvider()
-        let statusProvider = RecordingWorktreeStatusProvider()
         let store = WorktreeInfoStore(
             infoProvider: provider,
             infoWatcher: watcher,
-            statusProvider: statusProvider,
             configuration: .init(
                 selectedRefreshInterval: 60,
                 backgroundRefreshInterval: 60,
@@ -87,24 +87,17 @@ struct WorktreeInfoStoreTests {
         store.setSelectedWorktreeId(selected.id)
         await waitForEntry(in: store, worktreeID: selected.id)
         await provider.resetRequestedWorktreeIDs()
-        await statusProvider.resetRequestedWorktreeIDs()
 
         await watcher.waitUntilReady()
         watcher.emit(.filesChanged(worktreeId: background.id))
         try? await Task.sleep(nanoseconds: 100_000_000)
 
         #expect(await provider.requestedWorktreeIDs().isEmpty)
-        #expect(await statusProvider.requestedWorktreeIDs().isEmpty)
 
         watcher.emit(.filesChanged(worktreeId: selected.id))
-        await waitForRecordedRefresh(
-            provider: provider,
-            statusProvider: statusProvider,
-            worktreeID: selected.id
-        )
+        await waitForRecordedRefresh(provider: provider, worktreeID: selected.id)
 
         #expect(await provider.requestedWorktreeIDs() == [selected.id])
-        #expect(await statusProvider.requestedWorktreeIDs() == [selected.id])
         #expect(store.entriesById[background.id] == nil)
     }
 
@@ -124,11 +117,9 @@ struct WorktreeInfoStoreTests {
             repositoryRootURL: URL(fileURLWithPath: "/tmp/devys-repo")
         )
         let provider = RecordingWorktreeInfoProvider()
-        let statusProvider = RecordingWorktreeStatusProvider()
         let store = WorktreeInfoStore(
             infoProvider: provider,
             infoWatcher: NoopWorktreeInfoWatcher(),
-            statusProvider: statusProvider,
             configuration: .init(
                 selectedRefreshInterval: 60,
                 backgroundRefreshInterval: 60,
@@ -143,7 +134,6 @@ struct WorktreeInfoStoreTests {
         await waitForEntry(in: store, worktreeID: selected.id)
 
         #expect(await provider.requestedWorktreeIDs() == [selected.id])
-        #expect(await statusProvider.requestedWorktreeIDs() == [selected.id])
         #expect(store.entriesById[selected.id] != nil)
         #expect(store.entriesById[background.id] == nil)
     }
@@ -162,13 +152,11 @@ struct WorktreeInfoStoreTests {
 
     private func waitForRecordedRefresh(
         provider: RecordingWorktreeInfoProvider,
-        statusProvider: RecordingWorktreeStatusProvider,
         worktreeID: Worktree.ID
     ) async {
         for _ in 0..<50 {
             let infoIDs = await provider.requestedWorktreeIDs()
-            let statusIDs = await statusProvider.requestedWorktreeIDs()
-            if infoIDs == [worktreeID], statusIDs == [worktreeID] {
+            if infoIDs == [worktreeID] {
                 return
             }
             await Task.yield()
@@ -180,23 +168,11 @@ struct WorktreeInfoStoreTests {
 }
 
 private struct StubWorktreeInfoProvider: WorktreeInfoProvider {
-    let branchName: String?
-    let repositoryInfo: GitRepositoryInfo?
-    let lineChanges: WorktreeLineChanges?
+    let snapshot: WorktreeGitSnapshot
 
-    func branchName(for worktreeURL: URL) async -> String? {
+    func snapshot(for worktreeURL: URL) async -> WorktreeGitSnapshot {
         _ = worktreeURL
-        return branchName
-    }
-
-    func lineChanges(for worktreeURL: URL) async -> WorktreeLineChanges? {
-        _ = worktreeURL
-        return lineChanges
-    }
-
-    func repositoryInfo(for worktreeURL: URL) async -> GitRepositoryInfo? {
-        _ = worktreeURL
-        return repositoryInfo
+        return snapshot
     }
 
     func isPullRequestAvailable(for repositoryRoot: URL) async -> Bool {
@@ -208,15 +184,6 @@ private struct StubWorktreeInfoProvider: WorktreeInfoProvider {
         _ = repositoryRoot
         _ = branches
         return [:]
-    }
-}
-
-private struct StubWorktreeStatusProvider: WorktreeStatusProvider {
-    let summary: WorktreeStatusSummary?
-
-    func statusSummary(for worktreeURL: URL) async -> WorktreeStatusSummary? {
-        _ = worktreeURL
-        return summary
     }
 }
 
@@ -262,19 +229,18 @@ private final class TestWorktreeInfoWatcher: WorktreeInfoWatcher, @unchecked Sen
 private actor RecordingWorktreeInfoProvider: WorktreeInfoProvider {
     private var requestedWorktreeIDsStorage: Set<Worktree.ID> = []
 
-    func branchName(for worktreeURL: URL) async -> String? {
+    func snapshot(for worktreeURL: URL) async -> WorktreeGitSnapshot {
         requestedWorktreeIDsStorage.insert(worktreeURL.path)
-        return worktreeURL.lastPathComponent
-    }
-
-    func lineChanges(for worktreeURL: URL) async -> WorktreeLineChanges? {
-        requestedWorktreeIDsStorage.insert(worktreeURL.path)
-        return WorktreeLineChanges(added: 1, removed: 0)
-    }
-
-    func repositoryInfo(for worktreeURL: URL) async -> GitRepositoryInfo? {
-        requestedWorktreeIDsStorage.insert(worktreeURL.path)
-        return GitRepositoryInfo(currentBranch: worktreeURL.lastPathComponent)
+        return WorktreeGitSnapshot(
+            isRepositoryAvailable: true,
+            branchName: worktreeURL.lastPathComponent,
+            repositoryInfo: GitRepositoryInfo(currentBranch: worktreeURL.lastPathComponent),
+            lineChanges: WorktreeLineChanges(added: 1, removed: 0),
+            statusSummary: WorktreeStatusSummary(staged: 0, unstaged: 1, untracked: 0, conflicts: 0),
+            changes: [
+                GitFileChange(path: "notes.txt", status: .modified, isStaged: false)
+            ]
+        )
     }
 
     func isPullRequestAvailable(for repositoryRoot: URL) async -> Bool {
@@ -286,23 +252,6 @@ private actor RecordingWorktreeInfoProvider: WorktreeInfoProvider {
         _ = repositoryRoot
         _ = branches
         return [:]
-    }
-
-    func requestedWorktreeIDs() -> [Worktree.ID] {
-        Array(requestedWorktreeIDsStorage).sorted()
-    }
-
-    func resetRequestedWorktreeIDs() {
-        requestedWorktreeIDsStorage = []
-    }
-}
-
-private actor RecordingWorktreeStatusProvider: WorktreeStatusProvider {
-    private var requestedWorktreeIDsStorage: Set<Worktree.ID> = []
-
-    func statusSummary(for worktreeURL: URL) async -> WorktreeStatusSummary? {
-        requestedWorktreeIDsStorage.insert(worktreeURL.path)
-        return WorktreeStatusSummary(staged: 0, unstaged: 1, untracked: 0, conflicts: 0)
     }
 
     func requestedWorktreeIDs() -> [Worktree.ID] {

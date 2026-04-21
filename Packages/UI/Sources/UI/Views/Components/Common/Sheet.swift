@@ -13,7 +13,7 @@ public struct Sheet<Content: View>: View {
     @Environment(\.theme) private var theme
 
     private let title: String
-    private let content: Content
+    private let content: () -> Content
     private let primaryAction: SheetAction?
     private let secondaryAction: SheetAction?
     private let onDismiss: (() -> Void)?
@@ -25,13 +25,13 @@ public struct Sheet<Content: View>: View {
         primaryAction: SheetAction? = nil,
         secondaryAction: SheetAction? = nil,
         onDismiss: (() -> Void)? = nil,
-        @ViewBuilder content: () -> Content
+        @ViewBuilder content: @escaping () -> Content
     ) {
         self.title = title
         self.primaryAction = primaryAction
         self.secondaryAction = secondaryAction
         self.onDismiss = onDismiss
-        self.content = content()
+        self.content = content
     }
 
     public var body: some View {
@@ -71,7 +71,7 @@ public struct Sheet<Content: View>: View {
                 .frame(height: Spacing.borderWidth)
 
             // Content area
-            content
+            content()
                 .padding(Spacing.space4)
 
             // Action bar (only if actions exist)

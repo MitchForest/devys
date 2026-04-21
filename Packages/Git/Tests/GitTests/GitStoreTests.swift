@@ -265,9 +265,17 @@ private final class StubGitService: GitService {
         _ = path
     }
 
+    func stagePatch(_ patch: String) async throws {
+        _ = patch
+    }
+
     func unstageHunk(_ hunk: DiffHunk, for path: String) async throws {
         _ = hunk
         _ = path
+    }
+
+    func unstagePatch(_ patch: String) async throws {
+        _ = patch
     }
 
     func discard(_ path: String) async throws {
@@ -281,6 +289,10 @@ private final class StubGitService: GitService {
     func discardHunk(_ hunk: DiffHunk, for path: String) async throws {
         _ = hunk
         _ = path
+    }
+
+    func discardPatch(_ patch: String) async throws {
+        _ = patch
     }
 
     func commit(message: String) async throws -> String {

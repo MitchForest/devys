@@ -30,6 +30,53 @@ extension GitStore {
         )
     }
 
+    public func stageFile(_ path: String) async {
+        await stage(path)
+    }
+
+    public func unstageFile(_ path: String) async {
+        await unstage(path)
+    }
+
+    public func stageAllChanges() async {
+        await stageAll()
+    }
+
+    public func unstageAllChanges() async {
+        await unstageAll()
+    }
+
+    public func discardChange(_ change: GitFileChange) async {
+        await discard(change)
+    }
+
+    public func stageDiffPatch(_ patch: String) async throws {
+        guard await ensureRepositoryAvailability() else {
+            throw GitError.notRepository(projectFolder ?? URL(fileURLWithPath: "/"))
+        }
+        try await gitService.stagePatch(patch)
+    }
+
+    public func unstageDiffPatch(_ patch: String) async throws {
+        guard await ensureRepositoryAvailability() else {
+            throw GitError.notRepository(projectFolder ?? URL(fileURLWithPath: "/"))
+        }
+        try await gitService.unstagePatch(patch)
+    }
+
+    public func discardDiffPatch(
+        _ patch: String,
+        wasStaged: Bool
+    ) async throws {
+        guard await ensureRepositoryAvailability() else {
+            throw GitError.notRepository(projectFolder ?? URL(fileURLWithPath: "/"))
+        }
+        if wasStaged {
+            try await gitService.unstagePatch(patch)
+        }
+        try await gitService.discardPatch(patch)
+    }
+
     func setFocusedHunkIndex(_ index: Int?) {
         focusedHunkIndex = index
     }

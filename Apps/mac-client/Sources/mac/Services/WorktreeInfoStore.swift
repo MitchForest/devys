@@ -45,11 +45,13 @@ final class WorktreeInfoStore {
 
     private let infoProvider: WorktreeInfoProvider
     private let infoWatcher: WorktreeInfoWatcher
-    private let statusProvider: WorktreeStatusProvider
     private let configuration: Configuration
     private var watchTask: Task<Void, Never>?
     private var refreshTask: Task<Void, Never>?
     private var refreshTaskToken: UUID?
+    // Worktrees whose refresh request arrived while another refresh was in flight.
+    // Drained when the in-flight refresh completes, so no event is silently lost.
+    private var pendingRefreshWorktreeIDs: Set<Worktree.ID> = []
     private var selectedPeriodicTask: Task<Void, Never>?
     private var backgroundPeriodicTask: Task<Void, Never>?
     private var deferredHydrationTask: Task<Void, Never>?
@@ -69,12 +71,10 @@ final class WorktreeInfoStore {
     init(
         infoProvider: WorktreeInfoProvider = DefaultWorktreeInfoProvider(),
         infoWatcher: WorktreeInfoWatcher = DefaultWorktreeInfoWatcher(),
-        statusProvider: WorktreeStatusProvider = DefaultWorktreeStatusProvider(),
         configuration: Configuration = .default
     ) {
         self.infoProvider = infoProvider
         self.infoWatcher = infoWatcher
-        self.statusProvider = statusProvider
         self.configuration = configuration
         startWatching()
     }
@@ -183,10 +183,15 @@ extension WorktreeInfoStore {
 
         // If a refresh is already in flight, let it complete rather than
         // cancelling and restarting (which wastes the in-flight git work).
-        // File-change and periodic reasons are deferrable; manual/initial are not.
+        // Deferrable reasons are queued onto `pendingRefreshWorktreeIDs` so
+        // they're picked up when the in-flight refresh finishes — otherwise
+        // bursty events (external `git add`, build-driven FS churn) would be
+        // silently dropped and the next refresh would only arrive on the 5s
+        // periodic tick. Manual/initial/branch are authoritative and preempt.
         if refreshTask != nil {
             switch reason {
             case .fileChange, .selectedPeriodic, .backgroundPeriodic, .deferredHydration:
+                pendingRefreshWorktreeIDs.formUnion(filteredIds)
                 return
             case .manual, .initialSelection, .branchChange:
                 refreshTask?.cancel()
@@ -206,6 +211,12 @@ extension WorktreeInfoStore {
             pendingHydrationWorktreeIds.append(worktreeId)
         }
         scheduleDeferredHydrationIfNeeded()
+    }
+
+    func setErrorMessage(_ message: String?, for worktreeId: Worktree.ID) {
+        guard var entry = entriesById[worktreeId] else { return }
+        entry.errorMessage = message
+        entriesById[worktreeId] = entry
     }
 
     private func shouldDedupRefresh(reason: RefreshReason) -> Bool {
@@ -236,6 +247,7 @@ extension WorktreeInfoStore {
         refreshTask?.cancel()
         refreshTask = nil
         refreshTaskToken = nil
+        pendingRefreshWorktreeIDs.removeAll()
         selectedPeriodicTask?.cancel()
         selectedPeriodicTask = nil
         backgroundPeriodicTask?.cancel()
@@ -272,12 +284,15 @@ extension WorktreeInfoStore {
         taskToken: UUID
     ) async {
         guard !worktrees.isEmpty else { return }
+        markEntriesLoading(worktrees.map(\.id), isLoading: true)
         isLoading = true
         defer {
+            markEntriesLoading(worktrees.map(\.id), isLoading: false)
             isLoading = false
             if refreshTaskToken == taskToken {
                 refreshTask = nil
                 refreshTaskToken = nil
+                drainPendingRefreshIfNeeded()
             }
         }
         let now = Date()
@@ -285,37 +300,7 @@ extension WorktreeInfoStore {
             lastRefreshById[worktree.id] = now
         }
         let start = Date()
-
-        let provider = infoProvider
-        let statusProvider = statusProvider
-        let existingPRs = entriesById.compactMapValues { $0.pullRequest }
-        let results = await withTaskGroup(of: (Worktree.ID, WorktreeInfoEntry).self) { group in
-            for worktree in worktrees {
-                group.addTask {
-                    let branchName = await provider.branchName(for: worktree.workingDirectory)
-                    let repositoryInfo = await provider.repositoryInfo(for: worktree.workingDirectory)
-                    let lineChanges = await provider.lineChanges(for: worktree.workingDirectory)
-                    let statusSummary = await statusProvider.statusSummary(for: worktree.workingDirectory)
-                    let existingPR = existingPRs[worktree.id]
-                    return (
-                        worktree.id,
-                        WorktreeInfoEntry(
-                            branchName: branchName,
-                            repositoryInfo: repositoryInfo,
-                            lineChanges: lineChanges,
-                            statusSummary: statusSummary,
-                            pullRequest: existingPR
-                        )
-                    )
-                }
-            }
-
-            var collected: [(Worktree.ID, WorktreeInfoEntry)] = []
-            for await entry in group {
-                collected.append(entry)
-            }
-            return collected
-        }
+        let results = await buildEntries(for: worktrees)
         guard !Task.isCancelled else { return }
 
         var updated = entriesById
@@ -325,6 +310,42 @@ extension WorktreeInfoStore {
         entriesById = updated
 
         logRefresh(reason: reason, worktreeCount: worktrees.count, startedAt: start)
+    }
+
+    private func buildEntries(for worktrees: [Worktree]) async -> [(Worktree.ID, WorktreeInfoEntry)] {
+        let provider = infoProvider
+        let existingPRs = entriesById.compactMapValues { $0.pullRequest }
+        return await withTaskGroup(of: (Worktree.ID, WorktreeInfoEntry).self) { group in
+            for worktree in worktrees {
+                group.addTask {
+                    let snapshot = await provider.snapshot(for: worktree.workingDirectory)
+                    return (worktree.id, Self.makeEntry(from: snapshot, existingPR: existingPRs[worktree.id]))
+                }
+            }
+
+            var collected: [(Worktree.ID, WorktreeInfoEntry)] = []
+            for await entry in group {
+                collected.append(entry)
+            }
+            return collected
+        }
+    }
+
+    private nonisolated static func makeEntry(
+        from snapshot: WorktreeGitSnapshot,
+        existingPR: PullRequest?
+    ) -> WorktreeInfoEntry {
+        WorktreeInfoEntry(
+            refreshToken: UUID(),
+            isRepositoryAvailable: snapshot.isRepositoryAvailable,
+            branchName: snapshot.branchName,
+            repositoryInfo: snapshot.repositoryInfo,
+            lineChanges: snapshot.lineChanges,
+            statusSummary: snapshot.statusSummary,
+            changes: snapshot.changes,
+            errorMessage: snapshot.errorMessage,
+            pullRequest: existingPR
+        )
     }
 
     private func refreshPullRequests() async {
@@ -366,6 +387,26 @@ extension WorktreeInfoStore {
             updated[worktreeId] = nextEntry
         }
         entriesById = updated
+    }
+
+    private func drainPendingRefreshIfNeeded() {
+        guard !pendingRefreshWorktreeIDs.isEmpty else { return }
+        let ids = pendingRefreshWorktreeIDs.filter { worktreesById[$0] != nil }
+        pendingRefreshWorktreeIDs.removeAll()
+        guard !ids.isEmpty else { return }
+        refresh(worktreeIds: Array(ids), reason: .fileChange)
+    }
+
+    private func markEntriesLoading(_ worktreeIds: [Worktree.ID], isLoading: Bool) {
+        guard !worktreeIds.isEmpty else { return }
+        for worktreeId in worktreeIds {
+            var entry = entriesById[worktreeId] ?? WorktreeInfoEntry()
+            entry.isLoading = isLoading
+            if isLoading {
+                entry.errorMessage = nil
+            }
+            entriesById[worktreeId] = entry
+        }
     }
 }
 

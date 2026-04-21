@@ -83,6 +83,13 @@ extension GitStore {
         }
     }
 
+    public func loadLocalBranchNames() async -> [String] {
+        await loadBranches()
+            .filter { !$0.isRemote }
+            .map(\.name)
+            .sorted()
+    }
+
     /// Checkout a branch.
     func checkout(branch: String) async {
         guard await ensureRepositoryAvailability() else { return }

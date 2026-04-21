@@ -184,15 +184,9 @@ struct WorktreeRuntimeRegistryTests {
         )
         let registry = WorktreeRuntimeRegistry()
         let container = AppContainer()
-        registry.configure(
-            makeGitStore: { workingDirectory in
-                guard let workingDirectory else { return nil }
-                return container.makeGitStore(projectFolder: workingDirectory)
-            },
-            makeFileTreeModel: { rootURL in
-                container.makeFileTreeModel(rootURL: rootURL)
-            }
-        )
+        registry.configure { rootURL in
+            container.makeFileTreeModel(rootURL: rootURL)
+        }
 
         registry.activate(worktree: firstWorktree, filesSidebarVisible: true)
 
@@ -200,7 +194,7 @@ struct WorktreeRuntimeRegistryTests {
         #expect(registry.activeWorktree?.id == firstWorktree.id)
         #expect(registry.worktree(for: firstWorktree.id)?.id == firstWorktree.id)
         #expect(registry.editorSessionPool(for: firstWorktree.id) != nil)
-        #expect(registry.activeGitStore != nil)
+        #expect(registry.activeFileTreeModel != nil)
 
         registry.activate(worktree: secondWorktree, filesSidebarVisible: false)
 
@@ -209,45 +203,24 @@ struct WorktreeRuntimeRegistryTests {
         #expect(registry.worktree(for: firstWorktree.id)?.id == firstWorktree.id)
     }
 
-    @Test("Runtime registry caches file-tree Git status index outside view render")
+    @Test("Runtime registry lazily provisions file tree models for the active workspace")
     @MainActor
-    func cachesFileTreeGitStatusIndex() async throws {
-        try await withDependencies {
-            $0.date.now = Date(timeIntervalSince1970: 1_234_567)
-        } operation: {
-            let fixture = try TestWorkspaceRuntimeRepositoryFixture()
-            defer { fixture.cleanup() }
-
-            let worktree = Worktree(
-                workingDirectory: fixture.repositoryRoot,
-                repositoryRootURL: fixture.repositoryRoot
-            )
-            let registry = WorktreeRuntimeRegistry()
-            let container = AppContainer()
-            registry.configure(
-                makeGitStore: { workingDirectory in
-                    guard let workingDirectory else { return nil }
-                    return container.makeGitStore(projectFolder: workingDirectory)
-                },
-                makeFileTreeModel: { rootURL in
-                    container.makeFileTreeModel(rootURL: rootURL)
-                }
-            )
-            registry.activate(worktree: worktree, filesSidebarVisible: false)
-
-            let fileNode = CEWorkspaceFileNode(
-                url: fixture.repositoryRoot.appendingPathComponent("notes.txt"),
-                isDirectory: false
-            )
-
-            #expect(registry.activeGitStore != nil)
-            #expect(registry.activeGitStatusIndex?.summary(for: fileNode) == nil)
-
-            await registry.hydrateGitRuntimeIfNeeded(for: worktree.id)
-
-            let index = try #require(registry.activeGitStatusIndex)
-            #expect(index.summary(for: fileNode)?.label == "?")
+    func provisionsFileTreeModelsLazily() {
+        let worktree = Worktree(
+            workingDirectory: URL(fileURLWithPath: "/tmp/devys/runtime-tree"),
+            repositoryRootURL: URL(fileURLWithPath: "/tmp/devys/runtime-tree-repo")
+        )
+        let registry = WorktreeRuntimeRegistry()
+        let container = AppContainer()
+        registry.configure { rootURL in
+            container.makeFileTreeModel(rootURL: rootURL)
         }
+
+        registry.activate(worktree: worktree, filesSidebarVisible: false)
+        #expect(registry.activeFileTreeModel == nil)
+
+        registry.setFilesSidebarVisible(true)
+        #expect(registry.activeFileTreeModel != nil)
     }
 }
 

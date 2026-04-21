@@ -36,11 +36,14 @@ final class HostedWorkspaceContentBridge {
     private var browserSummariesByWorkspaceID: [Workspace.ID: [UUID: HostedBrowserSessionSummary]] = [:]
 
     private var lastPublishedContentByWorkspaceID: [Workspace.ID: HostedWorkspaceContentState] = [:]
+    private var pendingPublishWorkspaceIDs: Set<Workspace.ID> = []
+    private var forcedPublishWorkspaceIDs: Set<Workspace.ID> = []
+    private var isPublishFlushScheduled = false
 
     func setPublishHandler(_ handler: PublishHandler?) {
         publishHostedContent = handler
         for workspaceID in publishedWorkspaceIDs {
-            publishWorkspaceContent(for: workspaceID, force: true)
+            scheduleWorkspaceContentPublish(for: workspaceID, force: true)
         }
     }
 
@@ -156,7 +159,7 @@ final class HostedWorkspaceContentBridge {
         chatSummariesByWorkspaceID.removeValue(forKey: workspaceID)
         browserSummariesByWorkspaceID.removeValue(forKey: workspaceID)
         lastPublishedContentByWorkspaceID.removeValue(forKey: workspaceID)
-        publishHostedContent?(workspaceID, HostedWorkspaceContentState())
+        scheduleWorkspaceContentPublish(for: workspaceID, force: true)
     }
 }
 
@@ -255,7 +258,7 @@ private extension HostedWorkspaceContentBridge {
         editorSummariesByWorkspaceID[tracking.workspaceID, default: [:]][summary.url] = summary
         tracking.lastPublishedURL = summary.url
         editorTrackingBySessionObjectID[sessionObjectID] = tracking
-        publishWorkspaceContent(for: tracking.workspaceID)
+        scheduleWorkspaceContentPublish(for: tracking.workspaceID)
     }
 
     func publishChatSummary(
@@ -287,7 +290,7 @@ private extension HostedWorkspaceContentBridge {
         chatSummariesByWorkspaceID[tracking.workspaceID, default: [:]][summary.sessionID] = summary
         tracking.lastPublishedSessionID = summary.sessionID
         chatTrackingByRuntimeObjectID[runtimeObjectID] = tracking
-        publishWorkspaceContent(for: tracking.workspaceID)
+        scheduleWorkspaceContentPublish(for: tracking.workspaceID)
     }
 
     func publishBrowserSummary(
@@ -314,7 +317,7 @@ private extension HostedWorkspaceContentBridge {
         browserSummariesByWorkspaceID[tracking.workspaceID, default: [:]][summary.sessionID] = summary
         tracking.lastPublishedSessionID = summary.sessionID
         browserTrackingBySessionObjectID[sessionObjectID] = tracking
-        publishWorkspaceContent(for: tracking.workspaceID)
+        scheduleWorkspaceContentPublish(for: tracking.workspaceID)
     }
 
     func removeEditorSummary(
@@ -327,7 +330,7 @@ private extension HostedWorkspaceContentBridge {
             editorSummariesByWorkspaceID.removeValue(forKey: workspaceID)
         }
         if publish {
-            publishWorkspaceContent(for: workspaceID)
+            scheduleWorkspaceContentPublish(for: workspaceID)
         }
     }
 
@@ -341,7 +344,7 @@ private extension HostedWorkspaceContentBridge {
             chatSummariesByWorkspaceID.removeValue(forKey: workspaceID)
         }
         if publish {
-            publishWorkspaceContent(for: workspaceID)
+            scheduleWorkspaceContentPublish(for: workspaceID)
         }
     }
 
@@ -355,11 +358,43 @@ private extension HostedWorkspaceContentBridge {
             browserSummariesByWorkspaceID.removeValue(forKey: workspaceID)
         }
         if publish {
-            publishWorkspaceContent(for: workspaceID)
+            scheduleWorkspaceContentPublish(for: workspaceID)
         }
     }
 
-    func publishWorkspaceContent(
+    func scheduleWorkspaceContentPublish(
+        for workspaceID: Workspace.ID,
+        force: Bool = false
+    ) {
+        pendingPublishWorkspaceIDs.insert(workspaceID)
+        if force {
+            forcedPublishWorkspaceIDs.insert(workspaceID)
+        }
+        guard !isPublishFlushScheduled else { return }
+        isPublishFlushScheduled = true
+
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            self?.flushPendingWorkspaceContentPublishes()
+        }
+    }
+
+    func flushPendingWorkspaceContentPublishes() {
+        isPublishFlushScheduled = false
+        let workspaceIDs = pendingPublishWorkspaceIDs
+        let forcedWorkspaceIDs = forcedPublishWorkspaceIDs
+        pendingPublishWorkspaceIDs.removeAll()
+        forcedPublishWorkspaceIDs.removeAll()
+
+        for workspaceID in workspaceIDs {
+            publishWorkspaceContentImmediately(
+                for: workspaceID,
+                force: forcedWorkspaceIDs.contains(workspaceID)
+            )
+        }
+    }
+
+    func publishWorkspaceContentImmediately(
         for workspaceID: Workspace.ID,
         force: Bool = false
     ) {
@@ -394,6 +429,7 @@ private extension HostedWorkspaceContentBridge {
         }
 
         lastPublishedContentByWorkspaceID[workspaceID] = nextContent
-        publishHostedContent?(workspaceID, nextContent)
+        guard let publishHostedContent else { return }
+        publishHostedContent(workspaceID, nextContent)
     }
 }
