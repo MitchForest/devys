@@ -15,18 +15,12 @@ enum AppFeaturesBootstrap {
         let windowRelaunchPersistenceStore = TerminalRelaunchPersistenceStore()
         let workflowPersistenceStore = WorkflowPersistenceStore()
         let remoteRepositoryPersistenceStore = RemoteRepositoryPersistenceStore()
-        let notificationSettings = container.appSettings.notifications
-        let initialWindowState = WindowFeature.State(
-            workspaceStatesByID: Dictionary(
-                uniqueKeysWithValues: workspaceCatalogPersistenceClient
-                    .loadWorkspaceStates()
-                    .map { ($0.worktreeId, $0) }
-            ),
-            isNavigatorCollapsed: UserDefaults.standard.bool(
-                forKey: navigatorCollapsedDefaultsKey
-            ),
-            isTerminalActivityNotificationsEnabled: notificationSettings.terminalActivity,
-            isChatActivityNotificationsEnabled: notificationSettings.chatActivity
+        let reviewPersistenceStore = ReviewPersistenceStore()
+        let reviewTriggerInboxStore = ReviewTriggerInboxStore()
+        let reviewAuditController = makeReviewAuditController(container: container)
+        let initialWindowState = makeInitialWindowState(
+            container: container,
+            workspaceCatalogPersistenceClient: workspaceCatalogPersistenceClient
         )
 
         return withDependencies {
@@ -47,14 +41,20 @@ enum AppFeaturesBootstrap {
                 controller: container.workspaceOperationalController
             )
             $0.workspaceAttentionIngressClient = .live()
+            $0.reviewTriggerIngressClient = .live(inboxStore: reviewTriggerInboxStore)
             $0.workflowPersistenceClient = .live(store: workflowPersistenceStore)
+            $0.reviewPersistenceClient = .live(store: reviewPersistenceStore)
             $0.workflowExecutionClient = .live(
                 controller: container.workflowExecutionController
             )
+            $0.reviewExecutionClient = .live(controller: reviewAuditController)
             $0.agentLauncherClient = .live(
                 launcher: container.agentAdapterLauncher,
                 defaultLaunchOptions: defaultLaunchOptions
             )
+            if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+                $0.uuid = .incrementing
+            }
         } operation: {
             Store(initialState: AppFeature.State(window: initialWindowState)) {
                 AppFeature()
@@ -71,6 +71,33 @@ enum AppFeaturesBootstrap {
                 currentDirectoryURL: currentDirectoryURL
             )
         }
+    }
+
+    private static func makeReviewAuditController(
+        container: AppContainer
+    ) -> ReviewAuditController {
+        ReviewAuditController { repositoryRootURL in
+            container.repositorySettingsStore.settings(for: repositoryRootURL)
+        }
+    }
+
+    private static func makeInitialWindowState(
+        container: AppContainer,
+        workspaceCatalogPersistenceClient: WorkspaceCatalogPersistenceClient
+    ) -> WindowFeature.State {
+        let notificationSettings = container.appSettings.notifications
+        return WindowFeature.State(
+            workspaceStatesByID: Dictionary(
+                uniqueKeysWithValues: workspaceCatalogPersistenceClient
+                    .loadWorkspaceStates()
+                    .map { ($0.worktreeId, $0) }
+            ),
+            isNavigatorCollapsed: UserDefaults.standard.bool(
+                forKey: navigatorCollapsedDefaultsKey
+            ),
+            isTerminalActivityNotificationsEnabled: notificationSettings.terminalActivity,
+            isChatActivityNotificationsEnabled: notificationSettings.chatActivity
+        )
     }
 }
 
@@ -158,6 +185,30 @@ private extension WorkflowPersistenceClient {
     }
 }
 
+private extension ReviewPersistenceClient {
+    static func live(store: ReviewPersistenceStore) -> Self {
+        Self(
+            loadWorkspace: { workspaceID, rootURL in
+                try await store.loadWorkspace(workspaceID: workspaceID, rootURL: rootURL)
+            },
+            saveRun: { run, issues, rootURL in
+                try await store.saveRun(run, issues: issues, rootURL: rootURL)
+            },
+            deleteRun: { runID, rootURL in
+                try await store.deleteRun(runID, rootURL: rootURL)
+            }
+        )
+    }
+}
+
+private extension ReviewExecutionClient {
+    static func live(controller: ReviewAuditController) -> Self {
+        Self { request in
+            try await controller.run(request)
+        }
+    }
+}
+
 private extension WorkflowExecutionClient {
     static func live(
         controller: WorkflowExecutionController
@@ -233,6 +284,35 @@ private extension WorkspaceAttentionIngressClient {
                     }
                 }
             }
+        }
+    }
+}
+
+private extension ReviewTriggerIngressClient {
+    @MainActor
+    static func live(
+        inboxStore: ReviewTriggerInboxStore,
+        distributedNotificationCenter: DistributedNotificationCenter = .default()
+    ) -> Self {
+        let bridge = ReviewTriggerIngressBridge(
+            inboxStore: inboxStore,
+            addWakeObserver: { handler in
+                distributedNotificationCenter.addObserver(
+                    forName: .devysReviewTriggerIngress,
+                    object: nil,
+                    queue: .main
+                ) { _ in
+                    Task { @MainActor in
+                        handler()
+                    }
+                }
+            },
+            removeWakeObserver: { observer in
+                distributedNotificationCenter.removeObserver(observer)
+            }
+        )
+        return Self {
+            bridge.updates()
         }
     }
 }

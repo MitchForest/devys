@@ -400,7 +400,8 @@ extension ContentView {
                 case .editor,
                      .gitDiff,
                      .workflowDefinition,
-                     .workflowRun:
+                     .workflowRun,
+                     .reviewRun:
                     continue
                 }
             }

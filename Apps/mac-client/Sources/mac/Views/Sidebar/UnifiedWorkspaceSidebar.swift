@@ -6,9 +6,16 @@
 import SwiftUI
 import UI
 
+struct SidebarSectionActions {
+    let startReview: (() -> Void)?
+    let createAgent: (() -> Void)?
+    let createWorkflow: (() -> Void)?
+}
+
 struct UnifiedWorkspaceSidebar<
     FilesContent: View,
     ChangesContent: View,
+    ReviewsContent: View,
     PortsContent: View,
     AgentsContent: View,
     WorkflowsContent: View
@@ -18,17 +25,21 @@ struct UnifiedWorkspaceSidebar<
     let selection: WorkspaceSidebarMode
     let onSelect: (WorkspaceSidebarMode) -> Void
     let changeCount: Int
+    let reviewCount: Int
     let portCount: Int
     let agentCount: Int
     let workflowCount: Int
+    let sectionActions: SidebarSectionActions
     @ViewBuilder let filesContent: () -> FilesContent
     @ViewBuilder let changesContent: () -> ChangesContent
+    @ViewBuilder let reviewsContent: () -> ReviewsContent
     @ViewBuilder let portsContent: () -> PortsContent
     @ViewBuilder let agentsContent: () -> AgentsContent
     @ViewBuilder let workflowsContent: () -> WorkflowsContent
 
     @State private var isFilesExpanded = true
     @State private var isChangesExpanded = true
+    @State private var isReviewsExpanded = true
     @State private var isPortsExpanded = false
     @State private var isAgentsExpanded = true
     @State private var isWorkflowsExpanded = true
@@ -109,6 +120,19 @@ struct UnifiedWorkspaceSidebar<
                     changesContent()
                 }
 
+                Separator()
+
+                SidebarSection(
+                    "Reviews",
+                    icon: "checklist",
+                    count: reviewCount > 0 ? reviewCount : nil,
+                    actionIcon: sectionActions.startReview == nil ? nil : "plus",
+                    action: sectionActions.startReview,
+                    isExpanded: $isReviewsExpanded
+                ) {
+                    reviewsContent()
+                }
+
                 if portCount > 0 {
                     Separator()
 
@@ -132,6 +156,8 @@ struct UnifiedWorkspaceSidebar<
                     "Agents",
                     icon: "person.2",
                     count: agentCount > 0 ? agentCount : nil,
+                    actionIcon: sectionActions.createAgent == nil ? nil : "plus",
+                    action: sectionActions.createAgent,
                     isExpanded: $isAgentsExpanded
                 ) {
                     agentsContent()
@@ -143,6 +169,8 @@ struct UnifiedWorkspaceSidebar<
                     "Workflows",
                     icon: "point.3.connected.trianglepath.dotted",
                     count: workflowCount > 0 ? workflowCount : nil,
+                    actionIcon: sectionActions.createWorkflow == nil ? nil : "plus",
+                    action: sectionActions.createWorkflow,
                     isExpanded: $isWorkflowsExpanded
                 ) {
                     workflowsContent()

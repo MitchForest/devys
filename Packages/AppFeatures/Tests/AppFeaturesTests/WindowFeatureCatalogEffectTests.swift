@@ -39,10 +39,22 @@ struct WindowFeatureCatalogEffectTests {
             $0.selectedRepositoryID = repository.id
             $0.selectedWorkspaceID = refreshedWorktree.id
         }
+        await store.receive(
+            .reviewWorkspaceLoadRequested(refreshedWorktree.id)
+        ) {
+            $0.reviewWorkspacesByID[refreshedWorktree.id] = WindowFeature.ReviewWorkspaceState(
+                isLoading: true
+            )
+        }
         await store.receive(.workflowWorkspaceLoadRequested(refreshedWorktree.id)) {
             $0.workflowWorkspacesByID[refreshedWorktree.id] = WindowFeature.WorkflowWorkspaceState(
                 isLoading: true
             )
+        }
+        await store.receive(
+            .reviewWorkspaceLoaded(refreshedWorktree.id, ReviewWorkspaceSnapshot())
+        ) {
+            $0.reviewWorkspacesByID[refreshedWorktree.id] = WindowFeature.ReviewWorkspaceState()
         }
         await store.receive(
             .workflowWorkspaceLoaded(refreshedWorktree.id, WorkflowWorkspaceSnapshot())
@@ -97,10 +109,20 @@ struct WindowFeatureCatalogEffectTests {
                 repository.id: WindowFeature.WorkspaceShell(activeSidebar: .files)
             ]
         }
+        await store.receive(.reviewWorkspaceLoadRequested(secondWorktree.id)) {
+            $0.reviewWorkspacesByID[secondWorktree.id] = WindowFeature.ReviewWorkspaceState(
+                isLoading: true
+            )
+        }
         await store.receive(.workflowWorkspaceLoadRequested(secondWorktree.id)) {
             $0.workflowWorkspacesByID[secondWorktree.id] = WindowFeature.WorkflowWorkspaceState(
                 isLoading: true
             )
+        }
+        await store.receive(
+            .reviewWorkspaceLoaded(secondWorktree.id, ReviewWorkspaceSnapshot())
+        ) {
+            $0.reviewWorkspacesByID[secondWorktree.id] = WindowFeature.ReviewWorkspaceState()
         }
         await store.receive(
             .workflowWorkspaceLoaded(secondWorktree.id, WorkflowWorkspaceSnapshot())

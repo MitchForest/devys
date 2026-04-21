@@ -24,7 +24,7 @@ struct FileTreeRow: View {
     let gitStatusSummary: WorkspaceFileTreeGitStatusSummary?
     let isSelected: Bool
     let canRename: Bool
-    let onSelect: (NSEvent.ModifierFlags) -> Void
+    let onPrimaryClick: (NSEvent.ModifierFlags) -> Void
     let onToggleExpand: () -> Void
     let onOpenFile: () -> Void
     let onAddToChat: ((URL) -> Void)?
@@ -36,7 +36,7 @@ struct FileTreeRow: View {
         gitStatusSummary: WorkspaceFileTreeGitStatusSummary? = nil,
         isSelected: Bool,
         canRename: Bool = true,
-        onSelect: @escaping (NSEvent.ModifierFlags) -> Void,
+        onPrimaryClick: @escaping (NSEvent.ModifierFlags) -> Void,
         onToggleExpand: @escaping () -> Void,
         onOpenFile: @escaping () -> Void,
         onAddToChat: ((URL) -> Void)? = nil,
@@ -47,7 +47,7 @@ struct FileTreeRow: View {
         self.gitStatusSummary = gitStatusSummary
         self.isSelected = isSelected
         self.canRename = canRename
-        self.onSelect = onSelect
+        self.onPrimaryClick = onPrimaryClick
         self.onToggleExpand = onToggleExpand
         self.onOpenFile = onOpenFile
         self.onAddToChat = onAddToChat
@@ -109,7 +109,7 @@ struct FileTreeRow: View {
         .contentShape(Rectangle())
         .onTapGesture {
             let modifiers = NSApp.currentEvent?.modifierFlags ?? []
-            onSelect(modifiers)
+            onPrimaryClick(modifiers)
         }
         .simultaneousGesture(
             TapGesture(count: 2).onEnded {

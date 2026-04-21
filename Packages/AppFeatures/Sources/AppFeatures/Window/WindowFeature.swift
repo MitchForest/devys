@@ -13,6 +13,7 @@ public struct WindowFeature {
     @Dependency(\.workspaceCatalogRefreshClient) var workspaceCatalogRefreshClient
     @Dependency(\.workspaceOperationalClient) var workspaceOperationalClient
     @Dependency(\.workspaceAttentionIngressClient) var workspaceAttentionIngressClient
+    @Dependency(\.reviewTriggerIngressClient) var reviewTriggerIngressClient
     @Dependency(\.repositorySettingsClient) var repositorySettingsClient
     @Dependency(\.globalSettingsClient) var globalSettingsClient
     @Dependency(\.windowRelaunchPersistenceClient) var windowRelaunchPersistenceClient
@@ -20,6 +21,8 @@ public struct WindowFeature {
     @Dependency(\.repositoryDiscoveryClient) var repositoryDiscoveryClient
     @Dependency(\.workflowPersistenceClient) var workflowPersistenceClient
     @Dependency(\.workflowExecutionClient) var workflowExecutionClient
+    @Dependency(\.reviewExecutionClient) var reviewExecutionClient
+    @Dependency(\.reviewPersistenceClient) var reviewPersistenceClient
     @Dependency(\.uuid) var uuid
     @Dependency(\.date.now) var now
 
@@ -176,6 +179,9 @@ public struct WindowFeature {
                     || previousWorkspaceID != state.selectedWorkspaceID {
                     state.restoreWorkspaceShell(for: state.selectedWorkspaceID)
                 }
+                let reviewLoadEffect = state.selectedWorkspaceID.map { workspaceID in
+                    Effect<Action>.send(.reviewWorkspaceLoadRequested(workspaceID))
+                } ?? .none
                 let workflowLoadEffect = state.selectedWorkspaceID.map { workspaceID in
                     Effect<Action>.send(.workflowWorkspaceLoadRequested(workspaceID))
                 } ?? .none
@@ -184,6 +190,7 @@ public struct WindowFeature {
                         state.workspaceOperationalCatalogContext,
                         mode: .all
                     ),
+                    reviewLoadEffect,
                     workflowLoadEffect
                 )
 
@@ -301,6 +308,7 @@ public struct WindowFeature {
                 state.reorderWorktrees(in: repositoryID)
                 return .merge(
                     persistWorkspaceStatesEffect(state.workspaceStatesByID),
+                    .send(.reviewWorkspaceLoadRequested(workspaceID)),
                     .send(.workflowWorkspaceLoadRequested(workspaceID)),
                     syncWorkspaceOperationalEffect(
                         state.workspaceOperationalCatalogContext,
@@ -568,6 +576,7 @@ public struct WindowFeature {
                         state.workspaceOperationalCatalogContext,
                         mode: .metadata
                     ),
+                    workspaceID.map { Effect<Action>.send(.reviewWorkspaceLoadRequested($0)) } ?? .none,
                     workspaceID.map { Effect<Action>.send(.workflowWorkspaceLoadRequested($0)) } ?? .none
                 )
 
@@ -575,6 +584,7 @@ public struct WindowFeature {
                 return .merge(
                     observeWorkspaceOperationalSnapshotsEffect(),
                     observeWorkspaceAttentionIngressEffect(),
+                    observeReviewTriggerIngressEffect(),
                     syncWorkspaceOperationalEffect(
                         state.workspaceOperationalCatalogContext,
                         mode: .all
@@ -607,6 +617,23 @@ public struct WindowFeature {
                  .workflowFollowUpTicketAppendFailed,
                  .workflowExecutionUpdated:
                 return reduceWorkflowAction(state: &state, action: action)
+
+            case .reviewWorkspaceLoadRequested,
+                 .reviewWorkspaceLoaded,
+                 .reviewWorkspaceLoadFailed,
+                 .reviewTriggerIngressReceived,
+                 .startManualReview,
+                 .rerunReview,
+                 .reviewExecutionFinished,
+                 .setReviewIssueInvestigationRequest,
+                 .setReviewRunFollowUpHarness,
+                 .deleteReviewRun,
+                 .dismissReviewIssue,
+                 .acceptReviewIssueRisk,
+                 .investigateReviewIssue,
+                 .reviewIssueInvestigationPrepared,
+                 .reviewIssueInvestigationFailed:
+                return reduceReviewAction(state: &state, action: action)
 
             case .workspaceOperationalSnapshotUpdated(let snapshot):
                 state.operational.applySnapshot(
@@ -797,6 +824,7 @@ public struct WindowFeature {
 
             case .setActiveSheet,
                  .setSearchPresentation,
+                 .setReviewEntryPresentation,
                  .setNotificationsPanelPresented,
                  .clearErrorMessage:
                 return reduceShellPresentationAction(state: &state, action: action)
@@ -809,6 +837,7 @@ private extension WindowFeature {
     enum WorkspaceOperationalObservationID: Hashable {
         case snapshots
         case attentionIngress
+        case reviewTriggerIngress
     }
 
     func persistRepositoriesEffect(
@@ -868,6 +897,16 @@ private extension WindowFeature {
             }
         }
         .cancellable(id: WorkspaceOperationalObservationID.attentionIngress, cancelInFlight: true)
+    }
+
+    func observeReviewTriggerIngressEffect() -> Effect<Action> {
+        let reviewTriggerIngressClient = self.reviewTriggerIngressClient
+        return .run { send in
+            for await request in await reviewTriggerIngressClient.updates() {
+                await send(.reviewTriggerIngressReceived(request))
+            }
+        }
+        .cancellable(id: WorkspaceOperationalObservationID.reviewTriggerIngress, cancelInFlight: true)
     }
 
     func clearWorkspaceOperationalEffects(

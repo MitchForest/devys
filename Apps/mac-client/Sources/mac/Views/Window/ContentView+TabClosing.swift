@@ -505,22 +505,32 @@ extension ContentView {
     }
 
     private func handleTabDidClose(_ id: TabID, paneId: PaneID) {
-        guard let content = tabContents[id] else { return }
-        let wasPreview = content.workspaceID.flatMap { workspaceID in
-            paneID(for: id, workspaceID: workspaceID)
-                .flatMap { paneID in
-                    store.workspaceShells[workspaceID]?.layout?.paneLayout(for: paneID)?.previewTabID
-                }
-        } == id
-        if let workspaceID = selectedWorkspaceID {
-            store.send(.closeWorkspaceTab(workspaceID: workspaceID, paneID: paneId, tabID: id))
-        }
+        guard let closedTab = workspaceTabRecord(for: id) else { return }
+        let workspaceID = closedTab.workspaceID
+        let content = closedTab.content
+        let wasPreview = paneID(for: id, workspaceID: workspaceID)
+            .flatMap { paneID in
+                store.workspaceShells[workspaceID]?.layout?.paneLayout(for: paneID)?.previewTabID
+            } == id
+        store.send(.closeWorkspaceTab(workspaceID: workspaceID, paneID: paneId, tabID: id))
         removeTabState(id: id, content: content, wasPreview: wasPreview)
-        renderWorkspaceLayout()
+        renderWorkspaceLayout(for: workspaceID)
+    }
+
+    private func workspaceTabRecord(
+        for tabID: TabID
+    ) -> (workspaceID: Workspace.ID, content: WorkspaceTabContent)? {
+        for (workspaceID, shell) in store.workspaceShells {
+            if let content = shell.tabContents[tabID] {
+                return (workspaceID, content)
+            }
+        }
+        return nil
     }
 
     /// Removes all state associated with a tab ID
     private func removeTabState(id: TabID, content: WorkspaceTabContent, wasPreview: Bool) {
+        tabPresentationById.removeValue(forKey: id)
         removeTabContent(for: id, content: content)
 
         if wasPreview {

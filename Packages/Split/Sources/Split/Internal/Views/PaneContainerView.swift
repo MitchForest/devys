@@ -32,9 +32,9 @@ enum PaneDropZone: Equatable {
 struct PaneContainerView<Content: View, EmptyContent: View>: View {
     @Environment(\.splitColors) private var colors
     @Environment(DevysSplitController.self) private var splitController
+    @Environment(SplitViewController.self) private var controller
     
     @Bindable var pane: PaneState
-    let controller: SplitViewController
     let contentBuilder: (TabItem, PaneID) -> Content
     let emptyPaneBuilder: (PaneID) -> EmptyContent
     var showSplitButtons: Bool = true
@@ -46,11 +46,6 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
         controller.focusedPaneId == pane.id
     }
     
-    /// All drop types to accept: internal tab moves (.text) plus configured external types
-    private var acceptedDropTypes: [UTType] {
-        [.text] + splitController.configuration.acceptedDropTypes
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             // Tab bar
@@ -82,23 +77,38 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
         GeometryReader { geometry in
             let size = geometry.size
 
-            // Content is the primary view and receives ALL events (scroll, mouse, keyboard).
-            // Drop handling is attached directly to the content so it doesn't create an
-            // invisible overlay that intercepts events destined for embedded NSViews (e.g. terminal).
-            contentArea
+            let content = contentArea
                 .frame(width: size.width, height: size.height)
-                .onDrop(of: acceptedDropTypes, delegate: UnifiedPaneDropDelegate(
-                    size: size,
-                    pane: pane,
-                    controller: controller,
-                    splitController: splitController,
-                    activeDropZone: $activeDropZone
-                ))
-                .overlay {
-                    // Visual placeholder (non-interactive, only visible during drag)
-                    dropPlaceholder(for: activeDropZone, in: size)
-                        .allowsHitTesting(false)
-                }
+
+            if splitController.configuration.acceptedDropTypes.isEmpty {
+                content
+                    .overlay {
+                        ZStack {
+                            internalDropReceiver(for: size)
+                            dropPlaceholder(for: activeDropZone, in: size)
+                                .allowsHitTesting(false)
+                        }
+                    }
+            } else {
+                content
+                    .onDrop(
+                        of: splitController.configuration.acceptedDropTypes,
+                        delegate: UnifiedPaneDropDelegate(
+                            size: size,
+                            pane: pane,
+                            controller: controller,
+                            splitController: splitController,
+                            activeDropZone: $activeDropZone
+                        )
+                    )
+                    .overlay {
+                        ZStack {
+                            internalDropReceiver(for: size)
+                            dropPlaceholder(for: activeDropZone, in: size)
+                                .allowsHitTesting(false)
+                        }
+                    }
+            }
         }
         .clipped()
     }
@@ -132,7 +142,24 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
         }
     }
 
-    // Drop handling is now on the contentArea directly in contentAreaWithDropZones.
+    @ViewBuilder
+    private func internalDropReceiver(for size: CGSize) -> some View {
+        // Only mount the overlay while a tab drag is active so it does not block
+        // the pane's interactive content, but make the decision from the observed
+        // environment controller so drag state changes trigger a view update.
+        if controller.draggingTab != nil && controller.dragSourcePaneId != nil {
+            Rectangle()
+                .fill(Color.clear)
+                .contentShape(Rectangle())
+                .onDrop(of: [.text], delegate: UnifiedPaneDropDelegate(
+                    size: size,
+                    pane: pane,
+                    controller: controller,
+                    splitController: splitController,
+                    activeDropZone: $activeDropZone
+                ))
+        }
+    }
 
     // MARK: - Drop Placeholder
 

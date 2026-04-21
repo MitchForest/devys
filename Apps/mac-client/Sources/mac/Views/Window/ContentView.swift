@@ -275,6 +275,21 @@ struct ContentView: View {
     var remoteRepositorySnapshot: String {
         store.remoteRepositories.map(\.id).joined(separator: "|")
     }
+
+    var reviewHookSyncSnapshot: String {
+        store.repositories
+            .map { repository in
+                let settings = repositorySettingsStore.settings(for: repository.rootURL)
+                return [
+                    repository.rootURL.standardizedFileURL.path,
+                    settings.review.isEnabled ? "1" : "0",
+                    settings.review.reviewOnCommit ? "1" : "0"
+                ]
+                .joined(separator: "|")
+            }
+            .sorted()
+            .joined(separator: "||")
+    }
     
     // MARK: - Body
     

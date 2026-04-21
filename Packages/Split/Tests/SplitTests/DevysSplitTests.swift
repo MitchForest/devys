@@ -112,6 +112,27 @@ struct DevysSplitTests {
         #expect(controller.allPaneIds.count == 2)
         #expect(controller.focusedPaneId != paneID)
     }
+
+    @MainActor
+    @Test("Restoring a reducer-owned snapshot preserves active tab drag state")
+    func restoreTreeSnapshotPreservesActiveDragState() throws {
+        let controller = DevysSplitController()
+        let paneID = try #require(controller.focusedPaneId)
+        let tabID = try #require(controller.createTab(title: "Dragged Tab", icon: "doc"))
+        let pane = try #require(controller.internalController.rootNode.findPane(paneID))
+        let draggedTab = try #require(pane.tabs.first(where: { $0.id == tabID.id }))
+
+        controller.internalController.draggingTab = draggedTab
+        controller.internalController.dragSourcePaneId = paneID
+
+        controller.restoreTreeSnapshot(
+            controller.treeSnapshot(),
+            focusedPaneId: paneID
+        )
+
+        #expect(controller.internalController.draggingTab?.id == draggedTab.id)
+        #expect(controller.internalController.dragSourcePaneId == paneID)
+    }
 }
 
 private final class GestureIntentDelegate: DevysSplitDelegate {

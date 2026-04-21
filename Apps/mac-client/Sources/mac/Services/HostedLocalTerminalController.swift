@@ -19,8 +19,9 @@ final class HostedLocalTerminalController {
         let payload: Data
     }
 
-    private let session: GhosttyTerminalSession
+    let session: GhosttyTerminalSession
     private let socketPath: String
+    let outputBurstWindow: Duration
     let scrollbackMax: Int
     let projectionBuilder = GhosttyTerminalProjectionBuilder()
     var appearance: GhosttyTerminalAppearance
@@ -32,7 +33,9 @@ final class HostedLocalTerminalController {
     private var connection: SocketConnection?
     private var attachTask: Task<Void, Never>?
     private var readTask: Task<Void, Never>?
+    var outputFlushTask: Task<Void, Never>?
     private var pendingFrames: [PendingFrame] = []
+    var pendingOutput = Data()
     private var selectionAnchor: GhosttyTerminalSelectionPoint?
     private var hasAppliedStagedCommand = false
     private var hasReportedFirstOutputChunk = false
@@ -49,12 +52,14 @@ final class HostedLocalTerminalController {
         appearance: GhosttyTerminalAppearance,
         performanceObserver: TerminalOpenPerformanceObserver? = nil,
         preferredViewportSize: HostedTerminalViewportSize? = nil,
+        outputBurstWindow: Duration = .milliseconds(16),
         scrollbackMax: Int = 100_000
     ) {
         let normalizedCols = max(1, min(preferredViewportSize?.cols ?? 1, 400))
         let normalizedRows = max(1, min(preferredViewportSize?.rows ?? 1, 200))
         self.session = session
         self.socketPath = socketPath
+        self.outputBurstWindow = outputBurstWindow
         self.scrollbackMax = scrollbackMax
         self.appearance = appearance
         self.performanceObserver = performanceObserver
@@ -69,6 +74,7 @@ final class HostedLocalTerminalController {
         MainActor.assumeIsolated {
             attachTask?.cancel()
             readTask?.cancel()
+            outputFlushTask?.cancel()
             cancelViewportWaiters()
             if let connection {
                 try? TerminalHostSocketIO.writeFrame(type: .close, payload: Data(), to: connection.handle)
@@ -115,6 +121,9 @@ final class HostedLocalTerminalController {
         attachTask = nil
         readTask?.cancel()
         readTask = nil
+        outputFlushTask?.cancel()
+        outputFlushTask = nil
+        pendingOutput.removeAll(keepingCapacity: false)
         cancelViewportWaiters()
 
         if let connection {
@@ -322,6 +331,9 @@ final class HostedLocalTerminalController {
         attachTask = nil
         readTask?.cancel()
         readTask = nil
+        outputFlushTask?.cancel()
+        outputFlushTask = nil
+        pendingOutput.removeAll(keepingCapacity: false)
         cancelViewportWaiters()
 
         if let connection {
@@ -332,9 +344,9 @@ final class HostedLocalTerminalController {
     }
 }
 
-private extension HostedLocalTerminalController {
+extension HostedLocalTerminalController {
     @MainActor
-    func finishAttach(
+    private func finishAttach(
         with handle: FileHandle,
         replayContext: [String: String]
     ) {
@@ -373,7 +385,7 @@ private extension HostedLocalTerminalController {
     }
 
     @MainActor
-    func failAttach(_ error: Error) {
+    private func failAttach(_ error: Error) {
         guard attachTask != nil else { return }
         attachTask = nil
         failStartup(message: error.localizedDescription)
@@ -387,23 +399,13 @@ private extension HostedLocalTerminalController {
                 context: ["output_bytes": String(data.count)]
             )
         }
-        guard let runtime else { return }
-        let result = await runtime.write(data)
-        for outboundWrite in result.outboundWrites {
-            await MainActor.run {
-                self.sendOrQueueFrame(type: .input, payload: outboundWrite)
-            }
-        }
-
-        apply(update: result.surfaceUpdate, advancesStartup: true)
-        session.tabTitle = result.title
-        session.currentDirectory = result.workingDirectory.map { URL(fileURLWithPath: $0).standardizedFileURL }
-        session.bellCount += result.bellCountDelta
-        session.lastErrorDescription = nil
-        session.isRunning = true
+        guard !data.isEmpty else { return }
+        pendingOutput.append(data)
+        scheduleOutputFlushIfNeeded()
     }
 
-    func handleClose(_ payload: Data) async {
+    private func handleClose(_ payload: Data) async {
+        await flushPendingOutputIfNeeded()
         let exitFrame = try? JSONDecoder().decode(TerminalHostExitFrame.self, from: payload)
         session.isRunning = false
         session.lastErrorDescription = TerminalSessionStartupLifecycle.closeDescription(
@@ -417,8 +419,9 @@ private extension HostedLocalTerminalController {
         detach()
     }
 
-    func handleFailure(_ error: Error) async {
+    private func handleFailure(_ error: Error) async {
         guard Task.isCancelled == false else { return }
+        await flushPendingOutputIfNeeded()
         if session.startupPhase != .ready {
             failStartup(message: error.localizedDescription)
             return
@@ -428,7 +431,13 @@ private extension HostedLocalTerminalController {
         detach()
     }
 
-    func writeFrame(
+    func flushPendingOutputIfNeeded() async {
+        outputFlushTask?.cancel()
+        outputFlushTask = nil
+        await flushPendingOutputBuffer()
+    }
+
+    private func writeFrame(
         type: TerminalHostStreamFrameType,
         payload: Data
     ) throws {
@@ -457,7 +466,7 @@ private extension HostedLocalTerminalController {
         }
     }
 
-    func flushPendingFrames() {
+    private func flushPendingFrames() {
         guard !pendingFrames.isEmpty else { return }
         let frames = pendingFrames
         pendingFrames.removeAll(keepingCapacity: true)
@@ -475,7 +484,7 @@ private extension HostedLocalTerminalController {
         }
     }
 
-    func applyStagedCommandIfNeeded() {
+    private func applyStagedCommandIfNeeded() {
         guard hasAppliedStagedCommand == false,
               hasReceivedFirstSurfaceUpdate,
               hasRenderedFirstInteractiveFrame,
@@ -517,14 +526,14 @@ private extension HostedLocalTerminalController {
         applyStagedCommandIfNeeded()
     }
 
-    func sendViewportResizeIfPossible(_ size: HostedTerminalViewportSize) {
+    private func sendViewportResizeIfPossible(_ size: HostedTerminalViewportSize) {
         let payload = terminalHostResizePayload(for: size)
         if let payload {
             sendOrQueueFrame(type: .resize, payload: payload)
         }
     }
 
-    func refreshStartupPresentationState() {
+    private func refreshStartupPresentationState() {
         session.startupPhase = TerminalSessionStartupLifecycle.phaseAfterFirstRenderableFrame(
             from: session.startupPhase,
             hasSurfaceUpdate: hasReceivedFirstSurfaceUpdate,

@@ -31,6 +31,14 @@ struct TabContentView: View {
     let workflowRun: WorkflowRun?
     let workflowLastErrorMessage: String?
     let workflowDiffAvailable: Bool
+    let reviewRun: ReviewRun?
+    let reviewIssues: [ReviewIssue]
+    let onOpenReviewIssueFile: (Workspace.ID, ReviewIssue) -> Void
+    let onOpenReviewArtifact: (Workspace.ID, String) -> Void
+    let onRerunReview: (Workspace.ID, UUID) -> Void
+    let onDismissReviewIssue: (Workspace.ID, UUID, UUID) -> Void
+    let onSetReviewRunFollowUpHarness: (Workspace.ID, UUID, BuiltInLauncherKind) -> Void
+    let onFixReviewIssue: (Workspace.ID, UUID, UUID, BuiltInLauncherKind) -> Void
     let agentComposerSpeechService: any AgentComposerSpeechService
     let onOpenAgentInlineTerminal: (Workspace.ID, UUID) -> Void
     let onOpenAgentFollowTarget: (Workspace.ID, AgentFollowTarget, Bool) -> Void
@@ -123,6 +131,37 @@ struct TabContentView: View {
                     runID: runID,
                     initialMode: .run
                 )
+            case .reviewRun(let workspaceID, let runID):
+                if let reviewRun {
+                    ReviewRunTabView(
+                        run: reviewRun,
+                        issues: reviewIssues,
+                        onRerun: {
+                            onRerunReview(workspaceID, runID)
+                        },
+                        onOpenArtifact: { path in
+                            onOpenReviewArtifact(workspaceID, path)
+                        },
+                        onOpenFile: { issue in
+                            onOpenReviewIssueFile(workspaceID, issue)
+                        },
+                        onDismiss: { issue in
+                            onDismissReviewIssue(workspaceID, runID, issue.id)
+                        },
+                        onSelectFixHarness: { harness in
+                            onSetReviewRunFollowUpHarness(workspaceID, runID, harness)
+                        },
+                        onFix: { issue, harness in
+                            onFixReviewIssue(workspaceID, runID, issue.id, harness)
+                        }
+                    )
+                } else {
+                    PlaceholderView(
+                        icon: "checklist",
+                        title: "Review unavailable",
+                        subtitle: "The selected review could not be restored."
+                    )
+                }
             case .gitDiff:
                 if let store = gitStore {
                     GitDiffView(store: store)
@@ -231,6 +270,14 @@ private extension TabContentView {
                     workflowDefinition?.node(id: run.currentNodeID ?? "")?.displayTitle
                 } ?? "",
                 workflowRun?.currentTerminalID?.uuidString ?? ""
+            ]
+            .joined(separator: "|")
+        case .reviewRun:
+            [
+                reviewRun?.displayStatus ?? "",
+                reviewRun?.target.displayTitle ?? "",
+                reviewRun?.overallRisk?.rawValue ?? "",
+                "\(reviewIssues.count)"
             ]
             .joined(separator: "|")
         case .editor:

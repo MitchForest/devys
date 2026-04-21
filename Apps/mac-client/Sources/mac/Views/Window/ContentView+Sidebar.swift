@@ -166,11 +166,16 @@ extension ContentView {
                 gitStore: sidebarWorkspaceID.flatMap(runtimeRegistry.gitStore(for:)),
                 changeCount: changeCount,
                 chatSessions: hostedChatSessions,
+                reviewState: sidebarWorkspaceID.map { reviewWorkspaceState(for: $0) }
+                    ?? WindowFeature.ReviewWorkspaceState(),
                 workflowState: sidebarWorkspaceID.map { workflowWorkspaceState(for: $0) }
                     ?? WindowFeature.WorkflowWorkspaceState(),
                 portsByWorkspaceID: workspaceOperationalState.portsByWorkspaceID,
                 repositorySettingsStore: repositorySettingsStore,
                 onSelectSidebar: showSidebarItem,
+                onReview: {
+                    store.send(.requestWorkspaceCommand(.runReview))
+                },
                 onPreviewFile: { workspaceID, url in
                     openInPreviewTab(content: .editor(workspaceID: workspaceID, url: url))
                 },
@@ -226,6 +231,12 @@ extension ContentView {
                     openInPermanentTab(content: .workflowRun(workspaceID: workspaceID, runID: runID))
                 },
                 onDeleteWorkflowRun: deleteWorkflowRun,
+                onOpenReviewRun: { workspaceID, runID in
+                    openInPermanentTab(content: .reviewRun(workspaceID: workspaceID, runID: runID))
+                },
+                onDeleteReviewRun: { workspaceID, runID in
+                    store.send(.deleteReviewRun(workspaceID: workspaceID, runID: runID))
+                },
                 onOpenPort: openPort,
                 onCopyPortURL: copyPortURL,
                 onStopPortProcess: stopPortProcess

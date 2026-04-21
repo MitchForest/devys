@@ -61,6 +61,7 @@ private extension ContentViewCommandPaletteCatalog {
             "Navigation",
             "Agents",
             "Workflows",
+            "Review",
             "Execution",
             "Attention"
         ]
@@ -102,6 +103,9 @@ private extension ContentViewCommandPaletteCatalog {
              .command(.openWorkflowDefinition),
              .command(.openWorkflowRun):
             return "Workflows"
+
+        case .command(.runReview):
+            return "Review"
 
         case .command(.launchShell),
              .command(.launchClaude),
@@ -211,6 +215,24 @@ private extension ContentViewCommandPaletteCatalog {
                     subtitle: activeWorktree.workingDirectory.path,
                     systemImage: "person.crop.circle.badge.plus",
                     keywords: ["chat", "assistant", "new"],
+                    accessory: nil
+                )
+            )
+
+            items.append(
+                WorkspaceSearchItem(
+                    action: .command(.runReview),
+                    title: "Review…",
+                    subtitle: "Choose unstaged, staged, last commit, or branch review",
+                    systemImage: "checklist",
+                    keywords: [
+                        "review",
+                        "audit",
+                        "staged",
+                        "unstaged",
+                        "commit",
+                        "branch"
+                    ],
                     accessory: nil
                 )
             )

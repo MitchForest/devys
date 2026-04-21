@@ -38,65 +38,93 @@ public struct Panel<Content: View>: View {
     }
 }
 
-/// A collapsible sidebar section with disclosure.
+/// A collapsible sidebar section with disclosure and optional trailing action.
 public struct SidebarSection<Content: View>: View {
     @Environment(\.theme) private var theme
 
     private let title: String
     private let icon: String?
     private let count: Int?
+    private let actionIcon: String?
+    private let action: (() -> Void)?
     @Binding private var isExpanded: Bool
     private let content: Content
+
+    @State private var isActionHovered = false
 
     public init(
         _ title: String,
         icon: String? = nil,
         count: Int? = nil,
+        actionIcon: String? = nil,
+        action: (() -> Void)? = nil,
         isExpanded: Binding<Bool>,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
         self.icon = icon
         self.count = count
+        self.actionIcon = actionIcon
+        self.action = action
         self._isExpanded = isExpanded
         self.content = content()
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button {
-                withAnimation(Animations.micro) {
-                    isExpanded.toggle()
-                }
-            } label: {
-                HStack(spacing: Spacing.space2) {
-                    Image(systemName: "chevron.right")
-                        .font(Typography.micro.weight(.semibold))
-                        .foregroundStyle(theme.textTertiary)
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                        .animation(Animations.micro, value: isExpanded)
-                        .frame(width: 12)
-
-                    if let icon {
-                        Image(systemName: icon)
-                            .font(Typography.caption.weight(.medium))
+            HStack(spacing: Spacing.space2) {
+                Button {
+                    withAnimation(Animations.micro) {
+                        isExpanded.toggle()
+                    }
+                } label: {
+                    HStack(spacing: Spacing.space2) {
+                        Image(systemName: "chevron.right")
+                            .font(Typography.micro.weight(.semibold))
                             .foregroundStyle(theme.textTertiary)
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                            .animation(Animations.micro, value: isExpanded)
+                            .frame(width: 12)
+
+                        if let icon {
+                            Image(systemName: icon)
+                                .font(Typography.caption.weight(.medium))
+                                .foregroundStyle(theme.textTertiary)
+                        }
+
+                        Text(title)
+                            .font(Typography.heading)
+                            .foregroundStyle(theme.textSecondary)
+
+                        if let count {
+                            Chip(.count(count))
+                        }
+
+                        Spacer()
                     }
-
-                    Text(title)
-                        .font(Typography.heading)
-                        .foregroundStyle(theme.textSecondary)
-
-                    if let count {
-                        Chip(.count(count))
-                    }
-
-                    Spacer()
+                    .contentShape(Rectangle())
                 }
-                .padding(.horizontal, Spacing.space3)
-                .padding(.vertical, Spacing.space2)
+                .buttonStyle(.plain)
+
+                if let actionIcon, let action {
+                    Button(action: action) {
+                        Image(systemName: actionIcon)
+                            .font(Typography.label)
+                            .foregroundStyle(isActionHovered ? theme.text : theme.textTertiary)
+                            .frame(width: 20, height: 20)
+                            .background(
+                                isActionHovered ? theme.hover : .clear,
+                                in: RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { h in
+                        withAnimation(Animations.micro) { isActionHovered = h }
+                    }
+                }
             }
-            .buttonStyle(.plain)
+            .padding(.horizontal, Spacing.space3)
+            .padding(.vertical, Spacing.space2)
 
             if isExpanded {
                 content

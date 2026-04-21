@@ -208,6 +208,20 @@ struct RepositorySettingsStoreTests {
                     executionBehavior: .stageInTerminal
                 ),
                 codexLauncher: .codexDefault,
+                review: ReviewSettings(
+                    isEnabled: true,
+                    reviewOnCommit: true,
+                    reviewOnPullRequestUpdates: true,
+                    auditHarness: .claude,
+                    followUpHarness: .codex,
+                    auditModelOverride: "sonnet",
+                    followUpModelOverride: "gpt-5.2",
+                    auditReasoningOverride: "medium",
+                    followUpReasoningOverride: "high",
+                    auditDangerousPermissionsOverride: false,
+                    followUpDangerousPermissionsOverride: true,
+                    additionalInstructions: "Prefer explicit ownership findings."
+                ),
                 startupProfiles: [
                     StartupProfile(
                         displayName: "Dev",
@@ -231,9 +245,82 @@ struct RepositorySettingsStoreTests {
 
         #expect(firstSettings.workspaceCreation.defaultBaseBranch == "develop")
         #expect(firstSettings.claudeLauncher.model == "opus")
+        #expect(firstSettings.review.reviewOnCommit)
+        #expect(firstSettings.review.reviewOnPullRequestUpdates)
+        #expect(firstSettings.review.auditHarness == .claude)
+        #expect(firstSettings.review.followUpHarness == .codex)
+        #expect(firstSettings.review.auditModelOverride == "sonnet")
+        #expect(firstSettings.review.followUpModelOverride == "gpt-5.2")
+        #expect(firstSettings.review.auditReasoningOverride == "medium")
+        #expect(firstSettings.review.followUpReasoningOverride == "high")
+        #expect(firstSettings.review.auditDangerousPermissionsOverride == false)
+        #expect(firstSettings.review.followUpDangerousPermissionsOverride == true)
+        #expect(firstSettings.review.additionalInstructions == "Prefer explicit ownership findings.")
         #expect(firstSettings.startupProfiles.count == 1)
         #expect(firstSettings.portLabels == [webPortLabel])
         #expect(secondSettings == RepositorySettings())
+    }
+
+    @Test("Repository settings decode default review settings when absent")
+    func repositorySettingsDecodeDefaultsReviewSettings() throws {
+        let data = try JSONSerialization.data(withJSONObject: [
+            "workspaceCreation": [
+                "defaultBaseBranch": "main",
+                "copyIgnoredFiles": false,
+                "copyUntrackedFiles": false
+            ],
+            "claudeLauncher": [
+                "executable": "claude",
+                "dangerousPermissions": true,
+                "extraArguments": [],
+                "executionBehavior": "runImmediately"
+            ],
+            "codexLauncher": [
+                "executable": "codex",
+                "dangerousPermissions": false,
+                "extraArguments": [],
+                "executionBehavior": "runImmediately"
+            ],
+            "startupProfiles": [],
+            "portLabels": []
+        ])
+
+        let decoded = try JSONDecoder().decode(RepositorySettings.self, from: data)
+
+        #expect(decoded.review == ReviewSettings())
+    }
+
+    @Test("Review settings decode explicit overrides")
+    func reviewSettingsDecodeExplicitOverrides() throws {
+        let data = try JSONSerialization.data(withJSONObject: [
+            "isEnabled": false,
+            "reviewOnCommit": true,
+            "reviewOnPullRequestUpdates": true,
+            "auditHarness": "claude",
+            "followUpHarness": "codex",
+            "auditModelOverride": "sonnet",
+            "followUpModelOverride": "gpt-5.2",
+            "auditReasoningOverride": "medium",
+            "followUpReasoningOverride": "high",
+            "auditDangerousPermissionsOverride": false,
+            "followUpDangerousPermissionsOverride": true,
+            "additionalInstructions": "Prefer explicit ownership findings."
+        ])
+
+        let decoded = try JSONDecoder().decode(ReviewSettings.self, from: data)
+
+        #expect(decoded.isEnabled == false)
+        #expect(decoded.reviewOnCommit)
+        #expect(decoded.reviewOnPullRequestUpdates)
+        #expect(decoded.auditHarness == .claude)
+        #expect(decoded.followUpHarness == .codex)
+        #expect(decoded.auditModelOverride == "sonnet")
+        #expect(decoded.followUpModelOverride == "gpt-5.2")
+        #expect(decoded.auditReasoningOverride == "medium")
+        #expect(decoded.followUpReasoningOverride == "high")
+        #expect(decoded.auditDangerousPermissionsOverride == false)
+        #expect(decoded.followUpDangerousPermissionsOverride == true)
+        #expect(decoded.additionalInstructions == "Prefer explicit ownership findings.")
     }
 
     @Test("Port labels are indexed by port per repository")

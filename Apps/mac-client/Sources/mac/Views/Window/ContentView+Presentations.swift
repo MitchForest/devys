@@ -19,6 +19,13 @@ extension ContentView {
         )
     }
 
+    var reviewEntryPresentationBinding: Binding<WindowFeature.ReviewEntryPresentation?> {
+        Binding(
+            get: { store.reviewEntryPresentation },
+            set: { store.send(.setReviewEntryPresentation($0)) }
+        )
+    }
+
     var addRepositoryPresentationBinding: Binding<AddRepositoryPresentation?> {
         Binding(
             get: { store.addRepositoryPresentation },
@@ -80,6 +87,7 @@ extension ContentView {
         view
             .sheet(item: addRepositoryPresentationBinding, content: addRepositorySheet)
             .sheet(item: workspaceCreationPresentationBinding, content: workspaceCreationSheet)
+            .sheet(item: reviewEntryPresentationBinding, content: reviewTargetPickerSheet)
             .sheet(item: chatLaunchPresentationBinding, content: chatProviderSheet)
             .sheet(item: remoteRepositoryPresentationBinding, content: remoteRepositorySheet)
             .sheet(item: remoteWorktreeCreationPresentationBinding, content: remoteWorktreeSheet)
@@ -133,6 +141,22 @@ extension ContentView {
                             tabID: pendingTabID
                         )
                     }
+                }
+            )
+        )
+    }
+
+    func reviewTargetPickerSheet(
+        for presentation: WindowFeature.ReviewEntryPresentation
+    ) -> some View {
+        presentedSheetContent(
+            ReviewTargetPickerSheet(
+                presentation: presentation,
+                onSelect: { targetKind in
+                    store.send(.startManualReview(workspaceID: presentation.workspaceID, targetKind: targetKind))
+                },
+                onCancel: {
+                    store.send(.setReviewEntryPresentation(nil))
                 }
             )
         )

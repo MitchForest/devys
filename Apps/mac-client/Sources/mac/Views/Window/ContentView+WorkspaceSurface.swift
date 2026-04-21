@@ -25,6 +25,14 @@ struct ContentViewWorkspaceSurface: View {
     let workflowRunForContent: (WorkspaceTabContent?) -> WorkflowRun?
     let workflowLastErrorForContent: (WorkspaceTabContent?) -> String?
     let workflowDiffAvailableForContent: (WorkspaceTabContent?) -> Bool
+    let reviewRunForContent: (WorkspaceTabContent?) -> ReviewRun?
+    let reviewIssuesForContent: (WorkspaceTabContent?) -> [ReviewIssue]
+    let onOpenReviewIssueFile: (Workspace.ID, ReviewIssue) -> Void
+    let onOpenReviewArtifact: (Workspace.ID, String) -> Void
+    let onRerunReview: (Workspace.ID, UUID) -> Void
+    let onDismissReviewIssue: (Workspace.ID, UUID, UUID) -> Void
+    let onSetReviewRunFollowUpHarness: (Workspace.ID, UUID, BuiltInLauncherKind) -> Void
+    let onFixReviewIssue: (Workspace.ID, UUID, UUID, BuiltInLauncherKind) -> Void
     let agentComposerSpeechService: any AgentComposerSpeechService
     let onOpenAgentInlineTerminal: (Workspace.ID, UUID) -> Void
     let onOpenAgentFollowTarget: (Workspace.ID, AgentFollowTarget, Bool) -> Void
@@ -86,6 +94,14 @@ struct ContentViewWorkspaceSurface: View {
                     workflowRun: workflowRunForContent(content),
                     workflowLastErrorMessage: workflowLastErrorForContent(content),
                     workflowDiffAvailable: workflowDiffAvailableForContent(content),
+                    reviewRun: reviewRunForContent(content),
+                    reviewIssues: reviewIssuesForContent(content),
+                    onOpenReviewIssueFile: onOpenReviewIssueFile,
+                    onOpenReviewArtifact: onOpenReviewArtifact,
+                    onRerunReview: onRerunReview,
+                    onDismissReviewIssue: onDismissReviewIssue,
+                    onSetReviewRunFollowUpHarness: onSetReviewRunFollowUpHarness,
+                    onFixReviewIssue: onFixReviewIssue,
                     agentComposerSpeechService: agentComposerSpeechService,
                     onOpenAgentInlineTerminal: onOpenAgentInlineTerminal,
                     onOpenAgentFollowTarget: onOpenAgentFollowTarget,

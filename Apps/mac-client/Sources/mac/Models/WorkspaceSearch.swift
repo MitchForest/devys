@@ -16,6 +16,7 @@ enum WorkspaceCommandPaletteAction: Equatable {
     case importWorktrees(Repository.ID)
     case selectWorkspace(repositoryID: Repository.ID, workspaceID: Workspace.ID)
     case openChat
+    case runReview
     case focusChatSession(ChatSessionID)
     case createWorkflow
     case openWorkflowDefinition(String)
@@ -137,6 +138,8 @@ struct WorkspaceSearchItem: Identifiable, Equatable {
                 "command:select-workspace:\(repositoryID):\(workspaceID)"
             case .openChat:
                 "command:open-chat"
+            case .runReview:
+                "command:run-review"
             case .focusChatSession(let sessionID):
                 "command:focus-chat-session:\(sessionID.rawValue)"
             case .createWorkflow:

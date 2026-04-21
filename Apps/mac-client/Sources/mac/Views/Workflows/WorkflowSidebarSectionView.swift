@@ -14,7 +14,6 @@ struct WorkflowSidebarSectionView: View {
 
     let definitions: [WorkflowDefinition]
     let runs: [WorkflowRun]
-    let onCreateWorkflow: () -> Void
     let onOpenDefinition: (String) -> Void
     let onStartDefinition: (String) -> Void
     let onDeleteDefinition: (String) -> Void
@@ -28,9 +27,6 @@ struct WorkflowSidebarSectionView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.space3) {
-            ActionButton("New Workflow", icon: "plus.circle.fill", style: .primary, action: onCreateWorkflow)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
             if definitions.isEmpty, runs.isEmpty {
                 Text("No workflows configured for this workspace.")
                     .font(Typography.caption)

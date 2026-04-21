@@ -224,10 +224,29 @@ private extension WindowFeature.State {
         case .workflowRun(let tabWorkspaceID, let runID):
             guard tabWorkspaceID == workspaceID else { return nil }
             return .workflowRun(runID: runID)
+        case .reviewRun(let tabWorkspaceID, let runID):
+            return persistedReviewTabRecord(
+                workspaceID: workspaceID,
+                tabWorkspaceID: tabWorkspaceID,
+                runID: runID
+            )
 
         case .settings:
             return nil
         }
+    }
+
+    func persistedReviewTabRecord(
+        workspaceID: Workspace.ID,
+        tabWorkspaceID: Workspace.ID,
+        runID: UUID
+    ) -> PersistedWorkspaceTabRecord? {
+        guard tabWorkspaceID == workspaceID else { return nil }
+        if let run = reviewRun(workspaceID: workspaceID, runID: runID),
+           !reviewRunShouldPersist(run) {
+            return nil
+        }
+        return .reviewRun(runID: runID)
     }
 
     func persistedTerminalTabRecord(
@@ -390,6 +409,8 @@ private extension WindowFeature.State {
             return .workflowDefinition(workspaceID: workspaceID, definitionID: definitionID)
         case .workflowRun(let runID):
             return .workflowRun(workspaceID: workspaceID, runID: runID)
+        case .reviewRun(let runID):
+            return .reviewRun(workspaceID: workspaceID, runID: runID)
         }
     }
 

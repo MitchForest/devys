@@ -14,10 +14,12 @@ struct ContentViewSidebarSurface: View {
     let gitStore: GitStore?
     let changeCount: Int
     let chatSessions: [HostedChatSessionSummary]
+    let reviewState: WindowFeature.ReviewWorkspaceState
     let workflowState: WindowFeature.WorkflowWorkspaceState
     let portsByWorkspaceID: [Workspace.ID: [WorkspacePort]]
     let repositorySettingsStore: RepositorySettingsStore
     let onSelectSidebar: (WorkspaceSidebarMode) -> Void
+    let onReview: () -> Void
     let onPreviewFile: (Workspace.ID, URL) -> Void
     let onOpenFile: (Workspace.ID, URL) -> Void
     let onAddFileToChat: (Workspace.ID, URL) -> Void
@@ -33,6 +35,8 @@ struct ContentViewSidebarSurface: View {
     let onDeleteWorkflowDefinition: (Workspace.ID, String) -> Void
     let onOpenWorkflowRun: (Workspace.ID, UUID) -> Void
     let onDeleteWorkflowRun: (Workspace.ID, UUID) -> Void
+    let onOpenReviewRun: (Workspace.ID, UUID) -> Void
+    let onDeleteReviewRun: (Workspace.ID, UUID) -> Void
     let onOpenPort: (WorkspacePort, RepositoryPortLabel?) -> Void
     let onCopyPortURL: (WorkspacePort, RepositoryPortLabel?) -> Void
     let onStopPortProcess: (WorkspacePort, Int32) -> Void
@@ -44,9 +48,23 @@ struct ContentViewSidebarSurface: View {
             selection: activeSidebar,
             onSelect: onSelectSidebar,
             changeCount: changeCount,
+            reviewCount: reviewState.runs.filter {
+                $0.status.isActive || $0.status == .failed || $0.issueCounts.open > 0
+            }.count,
             portCount: ports.count,
             agentCount: chatSessions.count,
-            workflowCount: workflowState.definitions.count + workflowState.runs.count
+            workflowCount: workflowState.definitions.count + workflowState.runs.count,
+            sectionActions: SidebarSectionActions(
+                startReview: onReview,
+                createAgent: {
+                    guard let selectedWorkspaceID else { return }
+                    onCreateChatSession(selectedWorkspaceID)
+                },
+                createWorkflow: {
+                    guard let selectedWorkspaceID else { return }
+                    onCreateWorkflowDefinition(selectedWorkspaceID)
+                }
+            )
         ) {
             SidebarContentView(
                 model: fileTreeModel,
@@ -92,6 +110,18 @@ struct ContentViewSidebarSurface: View {
                     }
                 )
             }
+        } reviewsContent: {
+            ReviewSidebarSectionView(
+                reviewState: reviewState,
+                onOpenRun: { runID in
+                    guard let selectedWorkspaceID else { return }
+                    onOpenReviewRun(selectedWorkspaceID, runID)
+                },
+                onDeleteRun: { runID in
+                    guard let selectedWorkspaceID else { return }
+                    onDeleteReviewRun(selectedWorkspaceID, runID)
+                }
+            )
         } portsContent: {
             WorkspacePortsSidebarView(
                 ports: ports,
@@ -103,25 +133,14 @@ struct ContentViewSidebarSurface: View {
                 onStopProcess: onStopPortProcess
             )
         } agentsContent: {
-            ChatSessionsSidebarSection(
-                sessions: chatSessions,
-                onCreateSession: {
-                    guard let selectedWorkspaceID else { return }
-                    onCreateChatSession(selectedWorkspaceID)
-                },
-                onOpenSession: { sessionID in
-                    guard let selectedWorkspaceID else { return }
-                    onOpenChatSession(selectedWorkspaceID, sessionID)
-                }
-            )
+            ChatSessionsSidebarSection(sessions: chatSessions) { sessionID in
+                guard let selectedWorkspaceID else { return }
+                onOpenChatSession(selectedWorkspaceID, sessionID)
+            }
         } workflowsContent: {
             WorkflowSidebarSectionView(
                 definitions: workflowState.definitions,
                 runs: workflowState.runs,
-                onCreateWorkflow: {
-                    guard let selectedWorkspaceID else { return }
-                    onCreateWorkflowDefinition(selectedWorkspaceID)
-                },
                 onOpenDefinition: { definitionID in
                     guard let selectedWorkspaceID else { return }
                     onOpenWorkflowDefinition(selectedWorkspaceID, definitionID)
@@ -152,16 +171,10 @@ private struct ChatSessionsSidebarSection: View {
     @Environment(\.devysTheme) private var theme
 
     let sessions: [HostedChatSessionSummary]
-    let onCreateSession: () -> Void
     let onOpenSession: (ChatSessionID) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: DevysSpacing.space2) {
-            ActionButton("New Chat", icon: "person.crop.circle.badge.plus") {
-                onCreateSession()
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
             if sessions.isEmpty {
                 Text("No active chats in this workspace.")
                     .font(DevysTypography.caption)

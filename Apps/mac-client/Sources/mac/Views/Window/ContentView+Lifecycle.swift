@@ -75,6 +75,16 @@ extension ContentView {
                     )
                 )
             }
+            .onAppear {
+                Task { @MainActor in
+                    synchronizeReviewTriggerHooks()
+                }
+            }
+            .onChange(of: reviewHookSyncSnapshot) { _, _ in
+                Task { @MainActor in
+                    synchronizeReviewTriggerHooks()
+                }
+            }
     }
 
     private func handleRootContentAppear() {
@@ -125,5 +135,31 @@ extension ContentView {
                 container.makeFileTreeModel(rootURL: rootURL)
             }
         )
+    }
+
+    private func synchronizeReviewTriggerHooks() {
+        let configurations = store.repositories.map { repository in
+            let settings = repositorySettingsStore.settings(for: repository.rootURL)
+            return ReviewPostCommitHookConfiguration(
+                repositoryRootURL: repository.rootURL,
+                isEnabled: settings.review.isEnabled && settings.review.reviewOnCommit
+            )
+        }
+
+        do {
+            try ReviewTriggerHooks.syncPostCommitHooks(
+                for: configurations,
+                executablePath: currentExecutablePath()
+            )
+        } catch {
+            showLauncherUnavailableAlert(
+                title: "Review Hook Sync Failed",
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    private func currentExecutablePath() -> String? {
+        Bundle.main.executableURL?.path ?? ProcessInfo.processInfo.arguments.first
     }
 }

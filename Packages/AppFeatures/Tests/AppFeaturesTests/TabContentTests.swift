@@ -108,6 +108,7 @@ struct TabContentTests {
     @Test("Workflow tabs participate in workspace-scoped identity")
     func workflowMetadata() {
         let runID = UUID()
+        let reviewRunID = UUID()
         let definition = WorkspaceTabContent.workflowDefinition(
             workspaceID: "/tmp/devys/worktrees/a",
             definitionID: "delivery"
@@ -116,10 +117,17 @@ struct TabContentTests {
             workspaceID: "/tmp/devys/worktrees/a",
             runID: runID
         )
+        let review = WorkspaceTabContent.reviewRun(
+            workspaceID: "/tmp/devys/worktrees/a",
+            runID: reviewRunID
+        )
 
         #expect(definition.fallbackTitle == "Workflow")
         #expect(run.fallbackIcon == "point.3.connected.trianglepath.dotted")
+        #expect(review.fallbackTitle == "Review")
+        #expect(review.fallbackIcon == "checklist")
         #expect(definition.stableId == "workflowDefinition:/tmp/devys/worktrees/a:delivery")
         #expect(run.stableId == "workflowRun:/tmp/devys/worktrees/a:\(runID.uuidString)")
+        #expect(review.stableId == "reviewRun:/tmp/devys/worktrees/a:\(reviewRunID.uuidString)")
     }
 }

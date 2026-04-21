@@ -139,10 +139,20 @@ struct WindowFeatureSelectionTests {
             $0.worktreesByRepository = [repository.id: [secondWorkspace, firstWorkspace]]
             $0.selectedWorkspaceID = secondWorkspace.id
         }
+        await store.receive(.reviewWorkspaceLoadRequested(secondWorkspace.id)) {
+            $0.reviewWorkspacesByID[secondWorkspace.id] = WindowFeature.ReviewWorkspaceState(
+                isLoading: true
+            )
+        }
         await store.receive(.workflowWorkspaceLoadRequested(secondWorkspace.id)) {
             $0.workflowWorkspacesByID[secondWorkspace.id] = WindowFeature.WorkflowWorkspaceState(
                 isLoading: true
             )
+        }
+        await store.receive(
+            .reviewWorkspaceLoaded(secondWorkspace.id, ReviewWorkspaceSnapshot())
+        ) {
+            $0.reviewWorkspacesByID[secondWorkspace.id] = WindowFeature.ReviewWorkspaceState()
         }
         await store.receive(
             .workflowWorkspaceLoaded(secondWorkspace.id, WorkflowWorkspaceSnapshot())
@@ -176,10 +186,20 @@ struct WindowFeatureSelectionTests {
             $0.selectedRepositoryID = fixture.repository.id
             $0.selectedWorkspaceID = fixture.pinnedWorkspace.id
         }
+        await store.receive(.reviewWorkspaceLoadRequested(fixture.pinnedWorkspace.id)) {
+            $0.reviewWorkspacesByID[fixture.pinnedWorkspace.id] = WindowFeature.ReviewWorkspaceState(
+                isLoading: true
+            )
+        }
         await store.receive(.workflowWorkspaceLoadRequested(fixture.pinnedWorkspace.id)) {
             $0.workflowWorkspacesByID[fixture.pinnedWorkspace.id] = WindowFeature.WorkflowWorkspaceState(
                 isLoading: true
             )
+        }
+        await store.receive(
+            .reviewWorkspaceLoaded(fixture.pinnedWorkspace.id, ReviewWorkspaceSnapshot())
+        ) {
+            $0.reviewWorkspacesByID[fixture.pinnedWorkspace.id] = WindowFeature.ReviewWorkspaceState()
         }
         await store.receive(
             .workflowWorkspaceLoaded(fixture.pinnedWorkspace.id, WorkflowWorkspaceSnapshot())

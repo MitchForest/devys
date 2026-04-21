@@ -88,6 +88,7 @@ public enum PersistedWorkspaceTabRecord: Codable, Equatable, Sendable {
     case gitDiff(path: String, isStaged: Bool)
     case workflowDefinition(definitionID: String)
     case workflowRun(runID: UUID)
+    case reviewRun(runID: UUID)
 
     private enum CodingKeys: String, CodingKey {
         case kind
@@ -100,6 +101,7 @@ public enum PersistedWorkspaceTabRecord: Codable, Equatable, Sendable {
         case isStaged
         case definitionID
         case runID
+        case reviewRunID
     }
 
     private enum Kind: String, Codable {
@@ -111,6 +113,7 @@ public enum PersistedWorkspaceTabRecord: Codable, Equatable, Sendable {
         case gitDiff
         case workflowDefinition
         case workflowRun
+        case reviewRun
     }
 
     public init(from decoder: Decoder) throws {
@@ -146,6 +149,10 @@ public enum PersistedWorkspaceTabRecord: Codable, Equatable, Sendable {
             self = .workflowRun(
                 runID: try container.decode(UUID.self, forKey: .runID)
             )
+        case .reviewRun:
+            self = .reviewRun(
+                runID: try container.decode(UUID.self, forKey: .reviewRunID)
+            )
         }
     }
 
@@ -175,6 +182,9 @@ public enum PersistedWorkspaceTabRecord: Codable, Equatable, Sendable {
         case .workflowRun(let runID):
             try container.encode(Kind.workflowRun, forKey: .kind)
             try container.encode(runID, forKey: .runID)
+        case .reviewRun(let runID):
+            try container.encode(Kind.reviewRun, forKey: .kind)
+            try container.encode(runID, forKey: .reviewRunID)
         }
     }
 }

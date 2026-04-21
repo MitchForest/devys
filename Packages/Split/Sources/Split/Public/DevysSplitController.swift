@@ -473,7 +473,20 @@ public extension DevysSplitController {
         _ snapshot: ExternalTreeNode,
         focusedPaneId: PaneID? = nil
     ) {
+        let priorContainerFrame = internalController.containerFrame
+        let priorExternalUpdateFlag = internalController.isExternalUpdateInProgress
+        let priorDraggingTab = internalController.draggingTab
+        let priorDragSourcePaneId = internalController.dragSourcePaneId
+
         internalController = SplitViewController(rootNode: internalTreeNode(from: snapshot))
+        internalController.containerFrame = priorContainerFrame
+        internalController.isExternalUpdateInProgress = priorExternalUpdateFlag
+
+        if let priorDragSourcePaneId,
+           internalController.rootNode.findPane(priorDragSourcePaneId) != nil {
+            internalController.draggingTab = priorDraggingTab
+            internalController.dragSourcePaneId = priorDragSourcePaneId
+        }
 
         if let focusedPaneId,
            internalController.rootNode.findPane(focusedPaneId) != nil {

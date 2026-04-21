@@ -71,6 +71,31 @@ struct TerminalHostTransportTests {
         #expect(secondParsed?.1 == Data("two".utf8))
         #expect(buffer.isEmpty)
     }
+
+    @Test("Descriptor reads coalesce all currently buffered bytes into one payload")
+    func readAvailableBytesCoalescesBufferedOutput() throws {
+        let (reader, writer) = try makeSocketPair()
+        defer {
+            Darwin.close(reader)
+            Darwin.close(writer)
+        }
+        try setNonBlockingForTest(reader)
+
+        let firstChunk = Data("cod".utf8)
+        let secondChunk = Data("ex".utf8)
+
+        _ = firstChunk.withUnsafeBytes { pointer in
+            Darwin.write(writer, pointer.baseAddress, firstChunk.count)
+        }
+        _ = secondChunk.withUnsafeBytes { pointer in
+            Darwin.write(writer, pointer.baseAddress, secondChunk.count)
+        }
+
+        let read = try TerminalHostSocketIO.readAvailableBytes(from: reader)
+
+        #expect(read.reachedEOF == false)
+        #expect(read.data == Data("codex".utf8))
+    }
 }
 
 private func makeSocketPair() throws -> (Int32, Int32) {
@@ -88,4 +113,14 @@ private func makeFrame(type: TerminalHostStreamFrameType, payload: Data) -> Data
     withUnsafeBytes(of: &length) { frame.append(contentsOf: $0) }
     frame.append(payload)
     return frame
+}
+
+private func setNonBlockingForTest(_ fd: Int32) throws {
+    let flags = fcntl(fd, F_GETFL)
+    guard flags >= 0 else {
+        throw TerminalHostSocketError.socketOptionFailed(errno)
+    }
+    guard fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0 else {
+        throw TerminalHostSocketError.socketOptionFailed(errno)
+    }
 }

@@ -84,6 +84,7 @@ extension ContentView {
             || handleNavigationPaletteAction(action)
             || handleAgentPaletteAction(action)
             || handleWorkflowPaletteAction(action)
+            || handleReviewPaletteAction(action)
             || handleExecutionPaletteAction(action)
             || handleAttentionPaletteAction(action) {
             return
@@ -149,6 +150,18 @@ extension ContentView {
             openWorkflowDefinition(workspaceID: workspaceID, definitionID: definitionID)
         case .openWorkflowRun(let runID):
             openInPermanentTab(content: .workflowRun(workspaceID: workspaceID, runID: runID))
+        default:
+            return false
+        }
+        return true
+    }
+
+    private func handleReviewPaletteAction(
+        _ action: WorkspaceCommandPaletteAction
+    ) -> Bool {
+        switch action {
+        case .runReview:
+            store.send(.requestWorkspaceCommand(.runReview))
         default:
             return false
         }

@@ -43,6 +43,17 @@ struct RepositorySettingsSection: View {
 
                 Separator()
 
+                ReviewSettingsEditorView(
+                    review: Binding(
+                        get: { settings.review },
+                        set: { newValue in
+                            updateSettings { $0.review = newValue }
+                        }
+                    )
+                )
+
+                Separator()
+
                 LauncherTemplateEditorView(
                     title: "Claude",
                     template: launcherBinding(\.claudeLauncher)

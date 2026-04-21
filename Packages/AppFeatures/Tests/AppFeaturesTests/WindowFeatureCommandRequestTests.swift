@@ -1,10 +1,11 @@
 import ACPClientKit
-import AppFeatures
 import ComposableArchitecture
 import Foundation
+import Git
 import Split
 import Testing
 import Workspace
+@testable import AppFeatures
 
 @Suite("WindowFeature Command Request Tests")
 struct WindowFeatureCommandRequestTests {
@@ -258,6 +259,111 @@ struct WindowFeatureCommandRequestTests {
 
         await store.receive(.runProfileLaunchRequestResolved(.ready(expectedRequest))) {
             $0.runProfileLaunchRequest = expectedRequest
+        }
+    }
+
+    @Test("Review command presents the reducer-owned target picker instead of a host command request")
+    @MainActor
+    func reviewCommandPresentsTargetPicker() async {
+        let requestID = UUID(17)
+        let repository = Repository(rootURL: URL(fileURLWithPath: "/tmp/devys-project"))
+        let workspace = Worktree(
+            name: "feature/login-review",
+            detail: "feature/login-review",
+            workingDirectory: repository.rootURL.appendingPathComponent("feature-login-review"),
+            repositoryRootURL: repository.rootURL
+        )
+        let store = TestStore(
+            initialState: WindowFeature.State(
+                repositories: [repository],
+                worktreesByRepository: [repository.id: [workspace]],
+                selectedRepositoryID: repository.id,
+                selectedWorkspaceID: workspace.id
+            )
+        ) {
+            WindowFeature()
+        } withDependencies: {
+            $0.uuid = .constant(requestID)
+        }
+
+        await store.send(.requestWorkspaceCommand(.runReview)) {
+            $0.reviewEntryPresentation = WindowFeature.ReviewEntryPresentation(
+                id: requestID,
+                workspaceID: workspace.id,
+                repositoryRootURL: repository.rootURL,
+                workspaceName: workspace.name,
+                branchName: workspace.name
+            )
+            $0.workspaceCommandRequest = nil
+        }
+
+        await store.send(.setReviewEntryPresentation(nil)) {
+            $0.reviewEntryPresentation = nil
+        }
+    }
+
+    @Test("Review command exposes pull-request target when workspace PR metadata exists")
+    @MainActor
+    func reviewCommandIncludesPullRequestTarget() async {
+        let requestID = UUID(18)
+        let repository = Repository(rootURL: URL(fileURLWithPath: "/tmp/devys-project"))
+        let workspace = Worktree(
+            name: "feature/login-review",
+            detail: "feature/login-review",
+            workingDirectory: repository.rootURL.appendingPathComponent("feature-login-review"),
+            repositoryRootURL: repository.rootURL
+        )
+        let pullRequest = PullRequest(
+            id: 42,
+            number: 42,
+            title: "Harden login review flow",
+            body: nil,
+            state: .open,
+            author: "devys",
+            headBranch: workspace.name,
+            baseBranch: "main",
+            createdAt: Date(timeIntervalSince1970: 100),
+            updatedAt: Date(timeIntervalSince1970: 200),
+            isDraft: false,
+            checksStatus: .passing,
+            reviewDecision: .reviewRequired,
+            additions: 10,
+            deletions: 2,
+            changedFiles: 3
+        )
+        let store = TestStore(
+            initialState: WindowFeature.State(
+                repositories: [repository],
+                worktreesByRepository: [repository.id: [workspace]],
+                selectedRepositoryID: repository.id,
+                selectedWorkspaceID: workspace.id,
+                operational: {
+                    var operational = WorkspaceOperationalState()
+                    operational.metadataEntriesByWorkspaceID[workspace.id] = WorktreeInfoEntry(
+                        branchName: workspace.name,
+                        pullRequest: pullRequest
+                    )
+                    return operational
+                }()
+            )
+        ) {
+            WindowFeature()
+        } withDependencies: {
+            $0.uuid = .constant(requestID)
+        }
+
+        await store.send(.requestWorkspaceCommand(.runReview)) {
+            $0.reviewEntryPresentation = WindowFeature.ReviewEntryPresentation(
+                id: requestID,
+                workspaceID: workspace.id,
+                repositoryRootURL: repository.rootURL,
+                workspaceName: workspace.name,
+                branchName: workspace.name,
+                pullRequestNumber: 42,
+                pullRequestTitle: "Harden login review flow",
+                availableTargets: ReviewTargetKind.manualEntryTargets + [.pullRequest]
+            )
+            $0.workspaceCommandRequest = nil
         }
     }
 
@@ -520,6 +626,7 @@ struct WindowFeatureCommandRequestTests {
         let editorTabID = TabID()
         let workflowDefinitionTabID = TabID()
         let workflowRunTabID = TabID()
+        let reviewRunTabID = TabID()
         let hostedSession = HostedTerminalSessionRecord(
             id: UUID(uuidString: "12345678-1234-1234-1234-123456789012")!,
             workspaceID: workspace.id,
@@ -581,6 +688,10 @@ struct WindowFeatureCommandRequestTests {
                                 workspaceID: workspace.id,
                                 runID: UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")!
                             ),
+                            reviewRunTabID: .reviewRun(
+                                workspaceID: workspace.id,
+                                runID: UUID(uuidString: "11111111-2222-3333-4444-555555555555")!
+                            ),
                             editorTabID: .editor(
                                 workspaceID: workspace.id,
                                 url: workspace.workingDirectory.appendingPathComponent("App.swift")
@@ -597,6 +708,7 @@ struct WindowFeatureCommandRequestTests {
                                     agentTabID,
                                     workflowDefinitionTabID,
                                     workflowRunTabID,
+                                    reviewRunTabID,
                                     editorTabID
                                 ],
                                 selectedTabID: editorTabID
@@ -630,7 +742,7 @@ struct WindowFeatureCommandRequestTests {
         #expect(savedSnapshot?.selectedRepositoryID == repository.id)
         #expect(savedSnapshot?.selectedWorkspaceID == workspace.id)
         #expect(savedSnapshot?.workspaceStates.first?.sidebarMode == .agents)
-        #expect(savedSnapshot?.workspaceStates.first?.persistedTabs.count == 6)
+        #expect(savedSnapshot?.workspaceStates.first?.persistedTabs.count == 7)
         #expect(
             savedSnapshot?.workspaceStates.first?.persistedTabs.contains(
                 .browser(
@@ -638,6 +750,126 @@ struct WindowFeatureCommandRequestTests {
                     url: URL(string: "http://localhost:3000/dashboard")!
                 )
             ) == true
+        )
+        #expect(
+            savedSnapshot?.workspaceStates.first?.persistedTabs.contains(
+                .reviewRun(runID: UUID(uuidString: "11111111-2222-3333-4444-555555555555")!)
+            ) == true
+        )
+    }
+
+    @Test("Persisting the window relaunch snapshot skips handled review tabs")
+    @MainActor
+    func persistWindowRelaunchSnapshotSkipsHandledReviewTabs() async {
+        let repository = Repository(rootURL: URL(fileURLWithPath: "/tmp/devys-project"))
+        let workspace = Worktree(
+            name: "feature",
+            detail: "feature",
+            workingDirectory: repository.rootURL.appendingPathComponent("feature"),
+            repositoryRootURL: repository.rootURL
+        )
+        let paneID = PaneID()
+        let editorTabID = TabID()
+        let reviewRunTabID = TabID()
+        let reviewRunID = UUID(uuidString: "11111111-2222-3333-4444-555555555555")!
+        let issueID = UUID(uuidString: "aaaaaaaa-2222-3333-4444-555555555555")!
+        let snapshotBox = SnapshotBox()
+
+        let store = TestStore(
+            initialState: WindowFeature.State(
+                repositories: [repository],
+                worktreesByRepository: [repository.id: [workspace]],
+                reviewWorkspacesByID: [
+                    workspace.id: WindowFeature.ReviewWorkspaceState(
+                        runs: [
+                            ReviewRun(
+                                id: reviewRunID,
+                                target: ReviewTarget(
+                                    id: "\(workspace.id):stagedChanges",
+                                    kind: .stagedChanges,
+                                    workspaceID: workspace.id,
+                                    repositoryRootURL: repository.rootURL,
+                                    title: "Staged Changes",
+                                    branchName: workspace.name
+                                ),
+                                trigger: ReviewTrigger(source: .manual),
+                                profile: ReviewProfile(),
+                                status: .completed,
+                                issueCounts: ReviewIssueCounts(total: 1, dismissed: 1, critical: 1),
+                                issueIDs: [issueID]
+                            )
+                        ],
+                        issuesByRunID: [
+                            reviewRunID: [
+                                ReviewIssue(
+                                    id: issueID,
+                                    runID: reviewRunID,
+                                    severity: .critical,
+                                    confidence: .high,
+                                    title: "Handled issue",
+                                    summary: "Already handled.",
+                                    rationale: "No further action needed.",
+                                    dedupeKey: "handled-issue",
+                                    status: .dismissed
+                                )
+                            ]
+                        ]
+                    )
+                ],
+                selectedRepositoryID: repository.id,
+                selectedWorkspaceID: workspace.id,
+                workspaceShells: [
+                    workspace.id: WindowFeature.WorkspaceShell(
+                        tabContents: [
+                            editorTabID: .editor(
+                                workspaceID: workspace.id,
+                                url: workspace.workingDirectory.appendingPathComponent("App.swift")
+                            ),
+                            reviewRunTabID: .reviewRun(
+                                workspaceID: workspace.id,
+                                runID: reviewRunID
+                            )
+                        ],
+                        focusedPaneID: paneID,
+                        layout: WindowFeature.WorkspaceLayout(
+                            root: .pane(
+                                WindowFeature.WorkspacePaneLayout(
+                                    id: paneID,
+                                    tabIDs: [editorTabID, reviewRunTabID],
+                                    selectedTabID: editorTabID
+                                )
+                            )
+                        )
+                    )
+                ]
+            )
+        ) {
+            WindowFeature()
+        } withDependencies: {
+            $0.globalSettingsClient.load = {
+                var settings = GlobalSettings()
+                settings.restore.restoreSelectedWorkspace = true
+                settings.restore.restoreWorkspaceLayoutAndTabs = true
+                return settings
+            }
+            $0.windowRelaunchPersistenceClient.save = { snapshot in
+                snapshotBox.set(snapshot)
+            }
+            $0.windowRelaunchPersistenceClient.clear = {}
+        }
+
+        await store.send(.persistWindowRelaunchSnapshot([]))
+
+        let savedSnapshot = snapshotBox.value
+        #expect(
+            savedSnapshot?.workspaceStates.first?.persistedTabs.contains(
+                .editor(fileURL: workspace.workingDirectory.appendingPathComponent("App.swift"))
+            ) == true
+        )
+        #expect(
+            savedSnapshot?.workspaceStates.first?.persistedTabs.contains(
+                .reviewRun(runID: reviewRunID)
+            ) == false
         )
     }
 
@@ -677,7 +909,8 @@ struct WindowFeatureCommandRequestTests {
                                 )
                             ),
                             .workflowDefinition(definitionID: "delivery"),
-                            .workflowRun(runID: UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")!)
+                            .workflowRun(runID: UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")!),
+                            .reviewRun(runID: UUID(uuidString: "11111111-2222-3333-4444-555555555555")!)
                         ]
                     )
                 )
@@ -697,15 +930,13 @@ struct WindowFeatureCommandRequestTests {
             repositories: [repository],
             worktreesByRepository: [repository.id: [workspace]]
         )
-        let reducer = WindowFeature()
-
-        _ = reducer.reduce(into: &state, action: .applyWindowRelaunchRestore(request))
+        state.applyWindowRelaunchRestore(request)
 
         #expect(state.selectedRepositoryID == repository.id)
         #expect(state.selectedWorkspaceID == workspace.id)
         #expect(state.activeSidebar == .agents)
         #expect(state.workspaceShells[workspace.id]?.activeSidebar == .agents)
-        #expect(state.workspaceShells[workspace.id]?.tabContents.count == 5)
+        #expect(state.workspaceShells[workspace.id]?.tabContents.count == 6)
         #expect(state.workspaceShells[workspace.id]?.layout != nil)
         #expect(
             state.workspaceShells[workspace.id]?.tabContents.values.contains(
@@ -729,6 +960,63 @@ struct WindowFeatureCommandRequestTests {
                 )
             ) == true
         )
+        #expect(
+            state.workspaceShells[workspace.id]?.tabContents.values.contains(
+                .reviewRun(
+                    workspaceID: workspace.id,
+                    runID: UUID(uuidString: "11111111-2222-3333-4444-555555555555")!
+                )
+            ) == true
+        )
+    }
+
+    @Test("Applying a window relaunch restore reloads review and workflow data for the restored workspace")
+    @MainActor
+    func applyWindowRelaunchRestoreLoadsSelectedWorkspaceData() async {
+        let repository = Repository(rootURL: URL(fileURLWithPath: "/tmp/devys-project"))
+        let workspace = Worktree(
+            name: "feature",
+            detail: "feature",
+            workingDirectory: repository.rootURL.appendingPathComponent("feature"),
+            repositoryRootURL: repository.rootURL
+        )
+        let request = WindowFeature.WindowRelaunchRestoreRequest(
+            snapshot: WindowRelaunchSnapshot(
+                repositoryRootURLs: [repository.rootURL],
+                selectedRepositoryID: repository.id,
+                selectedWorkspaceID: workspace.id,
+                hostedSessions: [],
+                workspaceStates: []
+            ),
+            settings: RelaunchSettingsSnapshot(
+                restoreRepositoriesOnLaunch: true,
+                restoreSelectedWorkspace: true,
+                restoreWorkspaceLayoutAndTabs: true,
+                restoreTerminalSessions: true,
+                restoreChatSessions: true
+            )
+        )
+        let store = TestStore(
+            initialState: WindowFeature.State(
+                repositories: [repository],
+                worktreesByRepository: [repository.id: [workspace]]
+            )
+        ) {
+            WindowFeature()
+        }
+        store.exhaustivity = .off
+
+        await store.send(.applyWindowRelaunchRestore(request))
+        await store.receive(.reviewWorkspaceLoadRequested(workspace.id)) {
+            $0.reviewWorkspacesByID[workspace.id] = WindowFeature.ReviewWorkspaceState(
+                isLoading: true
+            )
+        }
+        await store.receive(.workflowWorkspaceLoadRequested(workspace.id)) {
+            $0.workflowWorkspacesByID[workspace.id] = WindowFeature.WorkflowWorkspaceState(
+                isLoading: true
+            )
+        }
     }
 }
 

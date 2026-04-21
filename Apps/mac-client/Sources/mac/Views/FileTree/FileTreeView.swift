@@ -12,8 +12,8 @@ import UI
 ///
 /// Renders a flattened list of file nodes with:
 /// - Lazy loading (only visible rows rendered)
-/// - Expand/collapse directories
-/// - Single-click: preview file (VS Code-style reusable tab)
+/// - Single-click folders: select and toggle expansion
+/// - Single-click files: preview file (VS Code-style reusable tab)
 /// - Double-click: open file permanently
 /// - Context menus
 public struct FileTreeView: View {
@@ -114,8 +114,8 @@ public struct FileTreeView: View {
                         gitStatusSummary: gitStatusIndex?.summary(for: flatNode.node),
                         isSelected: model.isSelected(flatNode.node.url),
                         canRename: resolvedRenameTarget != nil,
-                        onSelect: { modifiers in
-                            handleSelection(for: flatNode.node, modifiers: modifiers)
+                        onPrimaryClick: { modifiers in
+                            handlePrimaryClick(for: flatNode.node, modifiers: modifiers)
                         },
                         onToggleExpand: {
                             model.toggleExpansion(flatNode.node)
@@ -145,21 +145,25 @@ public struct FileTreeView: View {
         model.flattenedNodes.map { $0.node.url.standardizedFileURL }
     }
 
-    private func handleSelection(for node: CEWorkspaceFileNode, modifiers: NSEvent.ModifierFlags) {
+    private func handlePrimaryClick(
+        for node: CEWorkspaceFileNode,
+        modifiers: NSEvent.ModifierFlags
+    ) {
         let normalizedURL = node.url.standardizedFileURL
 
-        if modifiers.contains(.shift) {
+        switch fileTreePrimaryClickBehavior(
+            isDirectory: node.isDirectory,
+            modifiers: modifiers
+        ) {
+        case .selectRange:
             model.selectRange(to: normalizedURL, visibleURLs: visibleURLs)
-            return
-        }
-
-        if modifiers.contains(.command) {
+        case .toggleSelection:
             model.toggleSelection(of: normalizedURL)
-            return
-        }
-
-        model.replaceSelection(with: normalizedURL)
-        if !node.isDirectory {
+        case .selectAndToggleDirectory:
+            model.replaceSelection(with: normalizedURL)
+            model.toggleExpansion(node)
+        case .selectAndPreviewFile:
+            model.replaceSelection(with: normalizedURL)
             onPreviewFile?(normalizedURL)
         }
     }

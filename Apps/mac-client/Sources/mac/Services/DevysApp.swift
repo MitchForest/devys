@@ -368,6 +368,16 @@ enum DevysMain {
             }
         }
 
+        if arguments.contains("--review-trigger") {
+            do {
+                try handleReviewTrigger(arguments: arguments)
+                exit(0)
+            } catch {
+                fputs("review trigger failed: \(error.localizedDescription)\n", stderr)
+                exit(1)
+            }
+        }
+
         if let socketIndex = arguments.firstIndex(of: "--terminal-host"),
            socketIndex + 2 < arguments.count,
            arguments[socketIndex + 1] == "--socket" {
@@ -425,6 +435,36 @@ enum DevysMain {
             .devysWorkspaceAttentionIngress,
             object: nil,
             userInfo: [WorkspaceAttentionIngress.userInfoPayloadKey: encodedPayload],
+            options: [.deliverImmediately]
+        )
+    }
+
+    private static func handleReviewTrigger(arguments: [String]) throws {
+        let payload = try ReviewTriggerIngress.makePayload(
+            .init(
+                workspaceID: argumentValue("--workspace-id", in: arguments)
+                    ?? ProcessInfo.processInfo.environment["DEVYS_WORKSPACE_ID"],
+                repositoryRootPath: argumentValue("--repository-root", in: arguments)
+                    ?? ProcessInfo.processInfo.environment["DEVYS_REPOSITORY_ROOT"],
+                triggerSource: try requiredArgumentValue("--trigger-source", in: arguments),
+                targetKind: try requiredArgumentValue("--target", in: arguments),
+                commitSHA: argumentValue("--commit-sha", in: arguments)
+                    ?? ProcessInfo.processInfo.environment["DEVYS_COMMIT_SHA"],
+                branchName: argumentValue("--branch-name", in: arguments)
+                    ?? ProcessInfo.processInfo.environment["DEVYS_BRANCH_NAME"],
+                title: argumentValue("--title", in: arguments)
+            )
+        )
+        try postReviewTrigger(payload)
+    }
+
+    private static func postReviewTrigger(
+        _ payload: ReviewTriggerRequest
+    ) throws {
+        try ReviewTriggerInboxStore().enqueue(payload)
+        DistributedNotificationCenter.default().postNotificationName(
+            .devysReviewTriggerIngress,
+            object: nil,
             options: [.deliverImmediately]
         )
     }

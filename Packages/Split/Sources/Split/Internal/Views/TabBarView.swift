@@ -65,6 +65,8 @@ struct TabBarView: View {
                             }
                         )
                     }
+                    .contentShape(Rectangle())
+                    .onDrop(of: [.text], delegate: appendDropDelegate)
                     .coordinateSpace(name: "tabScroll")
                     .onAppear {
                         containerWidth = containerGeo.size.width
@@ -153,6 +155,15 @@ struct TabBarView: View {
         return NSItemProvider()
     }
 
+    private var appendDropDelegate: TabDropDelegate {
+        TabDropDelegate(
+            targetIndex: pane.tabs.count,
+            pane: pane,
+            splitController: controller,
+            dropTargetIndex: $dropTargetIndex
+        )
+    }
+
     // MARK: - Drop Zone at End
 
     @ViewBuilder
@@ -161,12 +172,7 @@ struct TabBarView: View {
             .fill(Color.clear)
             .frame(width: 30, height: layoutMetrics.tabHeight)
             .contentShape(Rectangle())
-            .onDrop(of: [.text], delegate: TabDropDelegate(
-                targetIndex: pane.tabs.count,
-                pane: pane,
-                splitController: controller,
-                dropTargetIndex: $dropTargetIndex
-            ))
+            .onDrop(of: [.text], delegate: appendDropDelegate)
             .overlay(alignment: .leading) {
                 if dropTargetIndex == pane.tabs.count {
                     dropIndicator

@@ -230,9 +230,11 @@ extension WindowFeature {
 
         case .applyWindowRelaunchRestore(let request):
             state.applyWindowRelaunchRestore(request)
-            return request.snapshot.selectedWorkspaceID.map { workspaceID in
+            guard let workspaceID = state.selectedWorkspaceID else { return .none }
+            return .merge(
+                .send(.reviewWorkspaceLoadRequested(workspaceID)),
                 .send(.workflowWorkspaceLoadRequested(workspaceID))
-            } ?? .none
+            )
 
         case .persistWindowRelaunchSnapshot(let hostedTerminalSessions):
             return makePersistWindowRelaunchSnapshotEffect(
@@ -293,9 +295,21 @@ extension WindowFeature {
         state.lastErrorMessage = nil
 
         switch command {
+        case .runReview:
+            guard let worktree = state.selectedWorktree else {
+                state.lastErrorMessage = "Select a local workspace to review."
+                return .none
+            }
+            state.reviewEntryPresentation = state.reviewPresentation(
+                for: worktree,
+                id: uuid()
+            )
+            return .none
+
         case .runWorkspaceProfile:
             guard let worktree = state.selectedWorktree else { return .none }
             return prepareRunProfileLaunchEffect(for: worktree)
+
         case .openChat,
              .launchShell,
              .launchClaude,
@@ -428,6 +442,10 @@ extension WindowFeature {
 
         case .setSearchPresentation(let presentation):
             state.searchPresentation = presentation
+            return .none
+
+        case .setReviewEntryPresentation(let presentation):
+            state.reviewEntryPresentation = presentation
             return .none
 
         case .setNotificationsPanelPresented(let isPresented):

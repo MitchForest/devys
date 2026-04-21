@@ -8,7 +8,7 @@ import SwiftUI
 /// An individual tab in the tab bar.
 ///
 /// Supports selection, preview (italic), dirty indicators, agent identity stripes,
-/// hover/press micro-interactions, and an inline close button.
+/// hover micro-interactions, and an inline close button.
 public struct TabPill: View {
     @Environment(\.theme) private var theme
     @Environment(\.densityLayout) private var layout
@@ -29,7 +29,6 @@ public struct TabPill: View {
 
     @State private var isHovered = false
     @State private var isCloseHovered = false
-    @State private var isPressed = false
     @State private var dirtyDotScale: CGFloat = 1.0
 
     public init(
@@ -63,75 +62,66 @@ public struct TabPill: View {
     }
 
     public var body: some View {
-        Button(action: onSelect) {
-            HStack(spacing: 0) {
-                // Agent identity stripe on leading edge
-                if let agentColor {
-                    AgentIdentityStripe(
-                        color: agentColor,
-                        status: agentStatus ?? .idle,
-                        width: 2,
-                        edge: .leading
-                    )
-                }
-
-                HStack(spacing: Spacing.space1) {
-                    // Icon
-                    if let icon {
-                        DevysIcon(icon, size: 14)
-                            .foregroundStyle(iconColor)
-                    }
-
-                    // Title
-                    Text(title)
-                        .font(Typography.label)
-                        .italic(isPreview)
-                        .foregroundStyle(titleColor)
-                        .lineLimit(1)
-
-                    if let activityStatus {
-                        StatusDot(activityStatus, size: 6)
-                    }
-
-                    Spacer(minLength: Spacing.space1)
-
-                    // Dirty dot + close button area
-                    closeArea
-                }
-                .padding(.horizontal, Spacing.space2)
+        HStack(spacing: 0) {
+            // Agent identity stripe on leading edge
+            if let agentColor {
+                AgentIdentityStripe(
+                    color: agentColor,
+                    status: agentStatus ?? .idle,
+                    width: 2,
+                    edge: .leading
+                )
             }
-            .frame(height: height ?? layout.tabHeight)
-            .frame(
-                minWidth: minWidth ?? Spacing.tabMinWidth,
-                maxWidth: maxWidth ?? Spacing.tabMaxWidth
-            )
-            .background(backgroundColor, in: RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
-            .overlay(alignment: .bottom) {
-                // Accent bottom border for selected tab
-                if isSelected {
-                    RoundedRectangle(cornerRadius: 1, style: .continuous)
-                        .fill(theme.accent)
-                        .frame(height: 2)
-                        .padding(.horizontal, Spacing.space1)
+
+            HStack(spacing: Spacing.space1) {
+                // Icon
+                if let icon {
+                    DevysIcon(icon, size: 14)
+                        .foregroundStyle(iconColor)
                 }
+
+                // Title
+                Text(title)
+                    .font(Typography.label)
+                    .italic(isPreview)
+                    .foregroundStyle(titleColor)
+                    .lineLimit(1)
+
+                if let activityStatus {
+                    StatusDot(activityStatus, size: 6)
+                }
+
+                Spacer(minLength: Spacing.space1)
+
+                // Dirty dot + close button area
+                closeArea
             }
-            .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
-            .opacity(isPreview ? 0.85 : 1.0)
-            .scaleEffect(isPressed ? 0.97 : 1.0)
+            .padding(.horizontal, Spacing.space2)
         }
-        .buttonStyle(.plain)
+        .frame(height: height ?? layout.tabHeight)
+        .frame(
+            minWidth: minWidth ?? Spacing.tabMinWidth,
+            maxWidth: maxWidth ?? Spacing.tabMaxWidth
+        )
+        .background(backgroundColor, in: RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
+        .overlay(alignment: .bottom) {
+            // Accent bottom border for selected tab
+            if isSelected {
+                RoundedRectangle(cornerRadius: 1, style: .continuous)
+                    .fill(theme.accent)
+                    .frame(height: 2)
+                    .padding(.horizontal, Spacing.space1)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: Spacing.radius, style: .continuous))
+        .contentShape(Rectangle())
+        .opacity(isPreview ? 0.85 : 1.0)
         .onHover { hovering in
             withAnimation(Animations.micro) { isHovered = hovering }
         }
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    withAnimation(Animations.micro) { isPressed = true }
-                }
-                .onEnded { _ in
-                    withAnimation(Animations.micro) { isPressed = false }
-                }
-        )
+        // Tabs are drag sources, so avoid Button/DragGesture wrappers that can
+        // consume the mouse-drag sequence before the ancestor .onDrag starts.
+        .onTapGesture(perform: onSelect)
         .onChange(of: isDirty) { _, newValue in
             guard newValue else { return }
             // Pulse the dirty dot once: scale 1.0 → 1.3 → 1.0

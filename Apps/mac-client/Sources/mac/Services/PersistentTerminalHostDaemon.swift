@@ -255,29 +255,18 @@ private extension PersistentTerminalHostDaemon {
 
     private func drainOutput(for sessionID: UUID) {
         guard let session = sessionsByID[sessionID] else { return }
-
-        var buffer = [UInt8](repeating: 0, count: 4096)
-        while true {
-            let count = Darwin.read(session.primaryFD, &buffer, buffer.count)
-            if count > 0 {
-                let data = Data(buffer.prefix(Int(count)))
-                session.outputBuffer.append(data)
+        do {
+            let read = try TerminalHostSocketIO.readAvailableBytes(from: session.primaryFD)
+            if !read.data.isEmpty {
+                session.outputBuffer.append(read.data)
                 trimOutputBuffer(for: session)
-                broadcast(type: .output, payload: data, in: session)
-                continue
+                broadcast(type: .output, payload: read.data, in: session)
             }
-
-            if count == 0 {
+            if read.reachedEOF {
                 finishSession(sessionID)
-                return
             }
-
-            if errno == EWOULDBLOCK || errno == EAGAIN {
-                return
-            }
-
+        } catch {
             finishSession(sessionID)
-            return
         }
     }
 

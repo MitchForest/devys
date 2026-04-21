@@ -67,20 +67,52 @@ extension ContentView {
                     : definition.name
             }
         case .workflowRun(let workspaceID, let runID):
-            if let run = workflowRun(workspaceID: workspaceID, runID: runID) {
-                title = run.currentPhaseTitle
-                    ?? workflowDefinition(
-                        workspaceID: workspaceID,
-                        definitionID: run.definitionID
-                    )?.node(id: run.currentNodeID ?? "")?.displayTitle
-                    ?? definitionTitleForRun(run, workspaceID: workspaceID)
-                icon = run.status.isActive ? "play.circle.fill" : content.fallbackIcon
-            }
+            (title, icon) = workflowRunTabMetadata(
+                workspaceID: workspaceID,
+                runID: runID,
+                fallback: (title, icon)
+            )
+        case .reviewRun(let workspaceID, let runID):
+            (title, icon) = reviewRunTabMetadata(
+                workspaceID: workspaceID,
+                runID: runID,
+                fallback: (title, icon)
+            )
         default:
             title = content.fallbackTitle
             icon = content.fallbackIcon
         }
         return (title, icon)
+    }
+
+    private func workflowRunTabMetadata(
+        workspaceID: Workspace.ID,
+        runID: UUID,
+        fallback: (title: String, icon: String)
+    ) -> (title: String, icon: String) {
+        guard let run = workflowRun(workspaceID: workspaceID, runID: runID) else {
+            return fallback
+        }
+        let title = run.currentPhaseTitle
+            ?? workflowDefinition(
+                workspaceID: workspaceID,
+                definitionID: run.definitionID
+            )?.node(id: run.currentNodeID ?? "")?.displayTitle
+            ?? definitionTitleForRun(run, workspaceID: workspaceID)
+        let icon = run.status.isActive ? "play.circle.fill" : fallback.icon
+        return (title, icon)
+    }
+
+    private func reviewRunTabMetadata(
+        workspaceID: Workspace.ID,
+        runID: UUID,
+        fallback: (title: String, icon: String)
+    ) -> (title: String, icon: String) {
+        guard let run = reviewRun(workspaceID: workspaceID, runID: runID) else {
+            return fallback
+        }
+        let icon = run.status.isActive ? "clock.badge" : fallback.icon
+        return (run.target.displayTitle, icon)
     }
 
     private func definitionTitleForRun(

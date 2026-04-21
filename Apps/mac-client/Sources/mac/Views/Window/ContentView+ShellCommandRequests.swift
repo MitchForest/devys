@@ -99,6 +99,13 @@ extension ContentView {
                     await executeRemoteTerminalLaunch(request)
                 }
             }
+            .onChange(of: store.reviewIssueInvestigationRequest) { _, request in
+                guard let request else { return }
+                store.send(.setReviewIssueInvestigationRequest(nil))
+                Task { @MainActor in
+                    await executeReviewIssueInvestigation(request)
+                }
+            }
     }
 
     private func applyRunProfileRequestModifiers<V: View>(_ view: V) -> some View {
@@ -149,6 +156,8 @@ extension ContentView {
         switch command {
         case .openChat:
             openDefaultOrPromptChatForSelectedWorkspace()
+        case .runReview:
+            break
         case .launchShell:
             openShellForSelectedWorkspace()
         case .launchClaude:

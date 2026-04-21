@@ -39,6 +39,45 @@ extension ContentView {
             workflowRunForContent: workflowRunForContent,
             workflowLastErrorForContent: workflowLastErrorForContent,
             workflowDiffAvailableForContent: workflowDiffAvailableForContent,
+            reviewRunForContent: reviewRunForContent,
+            reviewIssuesForContent: reviewIssuesForContent,
+            onOpenReviewIssueFile: { workspaceID, issue in
+                openReviewIssueFile(workspaceID: workspaceID, issue: issue)
+            },
+            onOpenReviewArtifact: { workspaceID, path in
+                openReviewArtifact(workspaceID: workspaceID, path: path)
+            },
+            onRerunReview: { workspaceID, runID in
+                rerunReview(workspaceID: workspaceID, runID: runID)
+            },
+            onDismissReviewIssue: { workspaceID, runID, issueID in
+                store.send(
+                    .dismissReviewIssue(
+                        workspaceID: workspaceID,
+                        runID: runID,
+                        issueID: issueID
+                    )
+                )
+            },
+            onSetReviewRunFollowUpHarness: { workspaceID, runID, harness in
+                store.send(
+                    .setReviewRunFollowUpHarness(
+                        workspaceID: workspaceID,
+                        runID: runID,
+                        harness: harness
+                    )
+                )
+            },
+            onFixReviewIssue: { workspaceID, runID, issueID, harness in
+                store.send(
+                    .investigateReviewIssue(
+                        workspaceID: workspaceID,
+                        runID: runID,
+                        issueID: issueID,
+                        harness: harness
+                    )
+                )
+            },
             agentComposerSpeechService: container.agentComposerSpeechService,
             onOpenAgentInlineTerminal: { workspaceID, terminalID in
                 openInPermanentTab(content: .terminal(workspaceID: workspaceID, id: terminalID))

@@ -14,6 +14,7 @@ public enum WorkspaceTabContent: Equatable, Sendable {
     case gitDiff(workspaceID: Workspace.ID, path: String, isStaged: Bool)
     case workflowDefinition(workspaceID: Workspace.ID, definitionID: String)
     case workflowRun(workspaceID: Workspace.ID, runID: UUID)
+    case reviewRun(workspaceID: Workspace.ID, runID: UUID)
     case settings
 
     public var workspaceID: Workspace.ID? {
@@ -24,7 +25,8 @@ public enum WorkspaceTabContent: Equatable, Sendable {
              .editor(let workspaceID, _),
              .gitDiff(let workspaceID, _, _),
              .workflowDefinition(let workspaceID, _),
-             .workflowRun(let workspaceID, _):
+             .workflowRun(let workspaceID, _),
+             .reviewRun(let workspaceID, _):
             return workspaceID
         case .settings:
             return nil
@@ -45,6 +47,8 @@ public enum WorkspaceTabContent: Equatable, Sendable {
             "Workflow"
         case .workflowRun:
             "Workflow Run"
+        case .reviewRun:
+            "Review"
         case .settings:
             "Settings"
         case .editor(_, let url):
@@ -66,6 +70,8 @@ public enum WorkspaceTabContent: Equatable, Sendable {
             return "square.and.pencil"
         case .workflowRun:
             return "point.3.connected.trianglepath.dotted"
+        case .reviewRun:
+            return "checklist"
         case .settings:
             return "gearshape"
         case .editor(_, let url):
@@ -88,6 +94,8 @@ public enum WorkspaceTabContent: Equatable, Sendable {
             "workflowDefinition:\(workspaceID):\(definitionID)"
         case .workflowRun(let workspaceID, let runID):
             "workflowRun:\(workspaceID):\(runID.uuidString)"
+        case .reviewRun(let workspaceID, let runID):
+            "reviewRun:\(workspaceID):\(runID.uuidString)"
         case .settings:
             "settings"
         case .editor(let workspaceID, let url):
@@ -113,6 +121,8 @@ public enum WorkspaceTabContent: Equatable, Sendable {
         case let (.workflowDefinition(workspaceIDA, definitionIDA), .workflowDefinition(workspaceIDB, definitionIDB)):
             return workspaceIDA == workspaceIDB && definitionIDA == definitionIDB
         case let (.workflowRun(workspaceIDA, runIDA), .workflowRun(workspaceIDB, runIDB)):
+            return workspaceIDA == workspaceIDB && runIDA == runIDB
+        case let (.reviewRun(workspaceIDA, runIDA), .reviewRun(workspaceIDB, runIDB)):
             return workspaceIDA == workspaceIDB && runIDA == runIDB
         case (.settings, .settings):
             return true

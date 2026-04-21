@@ -5,7 +5,6 @@ import AppKit
 /// Unlike AnyView, this preserves type information so SwiftUI can optimize re-renders
 struct SplitChildView<Content: View, EmptyContent: View>: View {
     let node: SplitNode
-    let controller: SplitViewController
     let contentBuilder: (TabItem, PaneID) -> Content
     let emptyPaneBuilder: (PaneID) -> EmptyContent
     let showSplitButtons: Bool
@@ -16,7 +15,6 @@ struct SplitChildView<Content: View, EmptyContent: View>: View {
         case .pane(let paneState):
             PaneContainerView(
                 pane: paneState,
-                controller: controller,
                 contentBuilder: contentBuilder,
                 emptyPaneBuilder: emptyPaneBuilder,
                 showSplitButtons: showSplitButtons,
@@ -25,7 +23,6 @@ struct SplitChildView<Content: View, EmptyContent: View>: View {
         case .split(let nestedSplitState):
             SplitContainerView(
                 splitState: nestedSplitState,
-                controller: controller,
                 contentBuilder: contentBuilder,
                 emptyPaneBuilder: emptyPaneBuilder,
                 showSplitButtons: showSplitButtons,
@@ -39,7 +36,6 @@ struct SplitChildView<Content: View, EmptyContent: View>: View {
 struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentable {
     @Environment(DevysSplitController.self) private var devysController
     @Bindable var splitState: SplitState
-    let controller: SplitViewController
     let contentBuilder: (TabItem, PaneID) -> Content
     let emptyPaneBuilder: (PaneID) -> EmptyContent
     var showSplitButtons: Bool = true
@@ -115,7 +111,6 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
     private func makeChildView(for node: SplitNode) -> ChildView {
         SplitChildView(
             node: node,
-            controller: controller,
             contentBuilder: contentBuilder,
             emptyPaneBuilder: emptyPaneBuilder,
             showSplitButtons: showSplitButtons,

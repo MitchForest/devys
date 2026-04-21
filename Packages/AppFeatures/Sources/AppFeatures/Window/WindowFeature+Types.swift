@@ -14,6 +14,7 @@ public extension WindowFeature {
         public var workspaceStatesByID: [Worktree.ID: WorktreeState] = [:]
         public var hostedWorkspaceContentByID: [Workspace.ID: HostedWorkspaceContentState] = [:]
         public var workflowWorkspacesByID: [Workspace.ID: WorkflowWorkspaceState] = [:]
+        public var reviewWorkspacesByID: [Workspace.ID: ReviewWorkspaceState] = [:]
         public var selectedRepositoryID: Repository.ID?
         public var selectedRemoteRepositoryID: RemoteRepositoryAuthority.ID?
         public var selectedRemoteWorktreeID: RemoteWorktree.ID?
@@ -26,6 +27,8 @@ public extension WindowFeature {
         public var navigatorRevealRequest: NavigatorRevealRequest?
         public var activeSheet: Sheet?
         public var searchPresentation: SearchPresentation?
+        public var reviewEntryPresentation: ReviewEntryPresentation?
+        public var reviewIssueInvestigationRequest: ReviewIssueInvestigationRequest?
         public var addRepositoryPresentation: AddRepositoryPresentation?
         public var workspaceCreationPresentation: WorkspaceCreationPresentation?
         public var chatLaunchPresentation: ChatLaunchPresentation?
@@ -62,6 +65,7 @@ public extension WindowFeature {
             workspaceStatesByID: [Worktree.ID: WorktreeState] = [:],
             hostedWorkspaceContentByID: [Workspace.ID: HostedWorkspaceContentState] = [:],
             workflowWorkspacesByID: [Workspace.ID: WorkflowWorkspaceState] = [:],
+            reviewWorkspacesByID: [Workspace.ID: ReviewWorkspaceState] = [:],
             selectedRepositoryID: Repository.ID? = nil,
             selectedRemoteRepositoryID: RemoteRepositoryAuthority.ID? = nil,
             selectedRemoteWorktreeID: RemoteWorktree.ID? = nil,
@@ -74,6 +78,8 @@ public extension WindowFeature {
             navigatorRevealRequest: NavigatorRevealRequest? = nil,
             activeSheet: Sheet? = nil,
             searchPresentation: SearchPresentation? = nil,
+            reviewEntryPresentation: ReviewEntryPresentation? = nil,
+            reviewIssueInvestigationRequest: ReviewIssueInvestigationRequest? = nil,
             addRepositoryPresentation: AddRepositoryPresentation? = nil,
             workspaceCreationPresentation: WorkspaceCreationPresentation? = nil,
             chatLaunchPresentation: ChatLaunchPresentation? = nil,
@@ -109,6 +115,7 @@ public extension WindowFeature {
             self.workspaceStatesByID = workspaceStatesByID
             self.hostedWorkspaceContentByID = hostedWorkspaceContentByID
             self.workflowWorkspacesByID = workflowWorkspacesByID
+            self.reviewWorkspacesByID = reviewWorkspacesByID
             self.selectedRepositoryID = selectedRepositoryID
             self.selectedRemoteRepositoryID = selectedRemoteRepositoryID
             self.selectedRemoteWorktreeID = selectedRemoteWorktreeID
@@ -121,6 +128,8 @@ public extension WindowFeature {
             self.navigatorRevealRequest = navigatorRevealRequest
             self.activeSheet = activeSheet
             self.searchPresentation = searchPresentation
+            self.reviewEntryPresentation = reviewEntryPresentation
+            self.reviewIssueInvestigationRequest = reviewIssueInvestigationRequest
             self.addRepositoryPresentation = addRepositoryPresentation
             self.workspaceCreationPresentation = workspaceCreationPresentation
             self.chatLaunchPresentation = chatLaunchPresentation
@@ -256,6 +265,7 @@ public extension WindowFeature {
         case requestNavigatorReveal(Workspace.ID)
         case setNavigatorRevealRequest(NavigatorRevealRequest?)
         case openSearch(SearchMode, initialQuery: String)
+        case setReviewEntryPresentation(ReviewEntryPresentation?)
         case requestAddRepository
         case setAddRepositoryPresentation(AddRepositoryPresentation?)
         case presentWorkspaceCreation(repositoryID: Repository.ID, mode: WorkspaceCreationMode)
@@ -290,6 +300,16 @@ public extension WindowFeature {
         case setSaveDefaultLayoutRequestID(UUID?)
         case requestWorkspaceCommand(WorkspaceCommand)
         case setWorkspaceCommandRequest(WorkspaceCommandRequest?)
+        case reviewWorkspaceLoadRequested(Workspace.ID)
+        case reviewWorkspaceLoaded(Workspace.ID, ReviewWorkspaceSnapshot)
+        case reviewWorkspaceLoadFailed(Workspace.ID, String)
+        case startManualReview(workspaceID: Workspace.ID, targetKind: ReviewTargetKind)
+        case rerunReview(workspaceID: Workspace.ID, runID: UUID)
+        case reviewExecutionFinished(
+            workspaceID: Workspace.ID,
+            runID: UUID,
+            result: TaskResult<ReviewExecutionResult>
+        )
         case requestFocusChatSession(ChatSessionID)
         case setFocusChatSessionRequest(FocusChatSessionRequest?)
         case refreshRemoteRepository(RemoteRepositoryAuthority.ID)
@@ -419,6 +439,7 @@ public extension WindowFeature {
         case workflowExecutionUpdated(WorkflowExecutionUpdate)
         case workspaceOperationalSnapshotUpdated(WorkspaceOperationalSnapshot)
         case workspaceAttentionIngressReceived(WorkspaceAttentionIngressPayload)
+        case reviewTriggerIngressReceived(ReviewTriggerRequest)
         case syncWorkspaceOperationalState(WorkspaceOperationalSyncMode)
         case markTerminalAttentionRead(workspaceID: Workspace.ID?, terminalID: UUID)
         case clearAttentionNotification(UUID)
@@ -432,5 +453,13 @@ public extension WindowFeature {
         case setSearchPresentation(SearchPresentation?)
         case setNotificationsPanelPresented(Bool)
         case clearErrorMessage
+        case setReviewIssueInvestigationRequest(ReviewIssueInvestigationRequest?)
+        case setReviewRunFollowUpHarness(workspaceID: Workspace.ID, runID: UUID, harness: BuiltInLauncherKind)
+        case deleteReviewRun(workspaceID: Workspace.ID, runID: UUID)
+        case dismissReviewIssue(workspaceID: Workspace.ID, runID: UUID, issueID: UUID)
+        case acceptReviewIssueRisk(workspaceID: Workspace.ID, runID: UUID, issueID: UUID)
+        case investigateReviewIssue(workspaceID: Workspace.ID, runID: UUID, issueID: UUID, harness: BuiltInLauncherKind)
+        case reviewIssueInvestigationPrepared(workspaceID: Workspace.ID, runID: UUID, draft: ReviewFixDraft)
+        case reviewIssueInvestigationFailed(workspaceID: Workspace.ID, runID: UUID, issueID: UUID, message: String)
     }
 }

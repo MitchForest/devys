@@ -8,4 +8,6 @@ import Foundation
 extension Notification.Name {
     /// Cross-process workspace attention ingress
     static let devysWorkspaceAttentionIngress = Notification.Name("devys.workspaceAttentionIngress")
+    /// Cross-process review trigger wake signal
+    static let devysReviewTriggerIngress = Notification.Name("devys.reviewTriggerIngress")
 }
