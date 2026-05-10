@@ -1,0 +1,20 @@
+# sample.yaml
+name: devys
+version: "1.0.0"
+private: true
+scripts:
+  build: "swift build"
+  test: "swift test"
+tags:
+  - editor
+  - syntax
+  - highlight
+nested:
+  count: 3
+  enabled: false
+  null_value: null
+  items:
+    - name: alpha
+      id: 1
+    - name: beta
+      id: 2

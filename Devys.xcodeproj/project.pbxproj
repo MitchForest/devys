@@ -1,0 +1,558 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 71;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		DVTBF3 /* UI in Frameworks */ = {isa = PBXBuildFile; productRef = PKG003 /* UI */; };
+		DVTBF7 /* Diff in Frameworks */ = {isa = PBXBuildFile; productRef = PKG009 /* Diff */; };
+		DVTBF8 /* Browser in Frameworks */ = {isa = PBXBuildFile; productRef = PKG030 /* Browser */; };
+		DVTBF9 /* Git in Frameworks */ = {isa = PBXBuildFile; productRef = PKG040 /* Git */; };
+		DVTBFA /* ComposableArchitecture in Frameworks */ = {isa = PBXBuildFile; productRef = PKG050 /* ComposableArchitecture */; };
+		DVTBF1 /* TerminalProduct in Frameworks */ = {isa = PBXBuildFile; productRef = PKG020 /* TerminalProduct */; };
+		DVTBF2 /* Editor in Frameworks */ = {isa = PBXBuildFile; productRef = PKG005 /* Editor */; };
+		RES003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = RES004 /* Assets.xcassets */; };
+		RES005 /* terminfo in Resources */ = {isa = PBXBuildFile; fileRef = RES006 /* terminfo */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		PRD001 /* Devys Terminal.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Devys Terminal.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		RES001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		RES002 /* Devys.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Devys.entitlements; sourceTree = "<group>"; };
+		RES004 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		RES006 /* terminfo */ = {isa = PBXFileReference; lastKnownFileType = folder; path = terminfo; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		GRP001 /* Apps/mac-client/Sources/mac_client */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = "Apps/mac-client/Sources/mac_client";
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		FRM001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DVTBF7 /* Diff in Frameworks */,
+				DVTBF3 /* UI in Frameworks */,
+				DVTBF8 /* Browser in Frameworks */,
+				DVTBF9 /* Git in Frameworks */,
+				DVTBFA /* ComposableArchitecture in Frameworks */,
+				DVTBF1 /* TerminalProduct in Frameworks */,
+				DVTBF2 /* Editor in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		235EF703524B1A2B92B601A6 /* mac-client */ = {
+			isa = PBXGroup;
+			children = (
+				7C2DBA1B4E55CD2D5BFC97D2 /* Sources */,
+			);
+			name = "mac-client";
+			path = "mac-client";
+			sourceTree = "<group>";
+		};
+		2C22DF7A297F2FAD5B4473C5 /* Apps */ = {
+			isa = PBXGroup;
+			children = (
+				235EF703524B1A2B92B601A6 /* mac-client */,
+			);
+			name = Apps;
+			path = Apps;
+			sourceTree = "<group>";
+		};
+		7C2DBA1B4E55CD2D5BFC97D2 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Sources;
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		GRP000 = {
+			isa = PBXGroup;
+			children = (
+				GRP001 /* Apps/mac-client/Sources/mac_client */,
+				GRP005 /* mac Resources */,
+				GRP002 /* Packages */,
+				GRP003 /* Products */,
+				2C22DF7A297F2FAD5B4473C5 /* Apps */,
+			);
+			sourceTree = "<group>";
+		};
+		GRP002 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Packages;
+			sourceTree = "<group>";
+		};
+		GRP003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				PRD001 /* Devys Terminal.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		GRP005 /* mac Resources */ = {
+			isa = PBXGroup;
+			children = (
+				RES001 /* Info.plist */,
+				RES002 /* Devys.entitlements */,
+				RES004 /* Assets.xcassets */,
+				RES006 /* terminfo */,
+			);
+			name = "mac Resources";
+			path = "Apps/mac-client/Resources";
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		TGT001 /* mac-client */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CFG002 /* Build configuration list for PBXNativeTarget "mac-client" */;
+			buildPhases = (
+				SRC000 /* Sources */,
+				FRM001 /* Frameworks */,
+				RES000 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				GRP001 /* Apps/mac-client/Sources/mac_client */,
+			);
+			name = "mac-client";
+			packageProductDependencies = (
+				PKG020 /* TerminalProduct */,
+				PKG005 /* Editor */,
+				PKG003 /* UI */,
+				PKG009 /* Diff */,
+				PKG030 /* Browser */,
+				PKG040 /* Git */,
+				PKG050 /* ComposableArchitecture */,
+			);
+			productName = "Devys Terminal";
+			productReference = PRD001 /* Devys Terminal.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		PRJ001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 2610;
+				TargetAttributes = {
+					TGT001 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = CFG001 /* Build configuration list for PBXProject "Devys" */;
+			compatibilityVersion = "Xcode 16.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = GRP000;
+			packageReferences = (
+				PKR002 /* XCLocalSwiftPackageReference "Syntax" */,
+				PKR003 /* XCLocalSwiftPackageReference "UI" */,
+				PKR005 /* XCLocalSwiftPackageReference "Editor" */,
+				PKR006 /* XCLocalSwiftPackageReference "Text" */,
+				PKR008 /* XCLocalSwiftPackageReference "Rendering" */,
+				PKR009 /* XCLocalSwiftPackageReference "Diff" */,
+				PKR020 /* XCLocalSwiftPackageReference "Terminal" */,
+				PKR030 /* XCLocalSwiftPackageReference "Browser" */,
+				PKR040 /* XCLocalSwiftPackageReference "Git" */,
+				PKR050 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */,
+				A6D471E7A8DBC4092D017A3F /* XCLocalSwiftPackageReference "RemoteCore" */,
+				93C37752794007D153BF7FFF /* XCLocalSwiftPackageReference "SSH" */,
+			);
+			productRefGroup = GRP003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				TGT001 /* mac-client */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		RES000 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				RES003 /* Assets.xcassets in Resources */,
+				RES005 /* terminfo in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		SRC000 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		CFG003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				SWIFT_WARN_CONCURRENCY = YES;
+				SWIFT_WARN_STRICT_CONCURRENCY = YES;
+			};
+			name = Debug;
+		};
+		CFG004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				SWIFT_WARN_CONCURRENCY = YES;
+				SWIFT_WARN_STRICT_CONCURRENCY = YES;
+			};
+			name = Release;
+		};
+		CFG005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "Apps/mac-client/Resources/Devys.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Apps/mac-client/Resources/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Devys Terminal";
+				INFOPLIST_KEY_CFBundleName = "Devys Terminal";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Devys. All rights reserved.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.devys.terminal";
+				PRODUCT_MODULE_NAME = mac_client;
+				PRODUCT_NAME = "Devys Terminal";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				SWIFT_WARN_CONCURRENCY = YES;
+				SWIFT_WARN_STRICT_CONCURRENCY = YES;
+			};
+			name = Debug;
+		};
+		CFG006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "Apps/mac-client/Resources/Devys.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Apps/mac-client/Resources/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Devys Terminal";
+				INFOPLIST_KEY_CFBundleName = "Devys Terminal";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Devys. All rights reserved.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.devys.terminal";
+				PRODUCT_MODULE_NAME = mac_client;
+				PRODUCT_NAME = "Devys Terminal";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				SWIFT_WARN_CONCURRENCY = YES;
+				SWIFT_WARN_STRICT_CONCURRENCY = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		CFG001 /* Build configuration list for PBXProject "Devys" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CFG003 /* Debug */,
+				CFG004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CFG002 /* Build configuration list for PBXNativeTarget "mac-client" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CFG005 /* Debug */,
+				CFG006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		93C37752794007D153BF7FFF /* XCLocalSwiftPackageReference "SSH" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/SSH;
+		};
+		A6D471E7A8DBC4092D017A3F /* XCLocalSwiftPackageReference "RemoteCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/RemoteCore;
+		};
+		PKR002 /* XCLocalSwiftPackageReference "Syntax" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/Syntax;
+		};
+		PKR003 /* XCLocalSwiftPackageReference "UI" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/UI;
+		};
+		PKR005 /* XCLocalSwiftPackageReference "Editor" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/Editor;
+		};
+		PKR006 /* XCLocalSwiftPackageReference "Text" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/Text;
+		};
+		PKR008 /* XCLocalSwiftPackageReference "Rendering" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/Rendering;
+		};
+		PKR009 /* XCLocalSwiftPackageReference "Diff" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/Diff;
+		};
+		PKR020 /* XCLocalSwiftPackageReference "Terminal" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/Terminal;
+		};
+		PKR030 /* XCLocalSwiftPackageReference "Browser" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/Browser;
+		};
+		PKR040 /* XCLocalSwiftPackageReference "Git" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/Git;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		PKR050 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/pointfreeco/swift-composable-architecture";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.24.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		PKG002 /* Syntax */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = PKR002 /* XCLocalSwiftPackageReference "Syntax" */;
+			productName = Syntax;
+		};
+		PKG003 /* UI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = PKR003 /* XCLocalSwiftPackageReference "UI" */;
+			productName = UI;
+		};
+		PKG005 /* Editor */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = PKR005 /* XCLocalSwiftPackageReference "Editor" */;
+			productName = Editor;
+		};
+		PKG006 /* Text */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = PKR006 /* XCLocalSwiftPackageReference "Text" */;
+			productName = Text;
+		};
+		PKG008 /* Rendering */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = PKR008 /* XCLocalSwiftPackageReference "Rendering" */;
+			productName = Rendering;
+		};
+		PKG009 /* Diff */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = PKR009 /* XCLocalSwiftPackageReference "Diff" */;
+			productName = Diff;
+		};
+		PKG020 /* TerminalProduct */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = PKR020 /* XCLocalSwiftPackageReference "Terminal" */;
+			productName = TerminalProduct;
+		};
+		PKG030 /* Browser */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = PKR030 /* XCLocalSwiftPackageReference "Browser" */;
+			productName = Browser;
+		};
+		PKG040 /* Git */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = PKR040 /* XCLocalSwiftPackageReference "Git" */;
+			productName = Git;
+		};
+		PKG050 /* ComposableArchitecture */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = PKR050 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */;
+			productName = ComposableArchitecture;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = PRJ001 /* Project object */;
+}

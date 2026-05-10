@@ -1,0 +1,100 @@
+# Xcode
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcshareddata/
+*.xcuserstate
+*.xccheckout
+*.moved-aside
+DerivedData/
+.derivedData/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+xcuserdata/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Packages/*/Package.resolved
+Package.resolved
+
+# CocoaPods
+Pods/
+
+# Carthage
+Carthage/Build/
+Carthage/Checkouts/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Build artifacts
+build/
+*.o
+*.a
+*.dylib
+
+# Test outputs
+*.xcresult
+*.profraw
+coverage/
+test-results/
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Archives
+*.zip
+*.tar.gz
+*.tgz
+*.dmg
+*.pkg
+*.xcarchive
+
+# Secrets (never commit)
+.env
+.env.local
+*.pem
+*.key
+credentials.json
+secrets.json
+
+# Repo-local planning/reference material not published to GitHub
+/.docs/
+
+# Local dependency/reference clones and bootstrap artifacts
+/.deps/
+/.deps/ghostty-build/
+/.deps/ghostty-src/
+/.deps/tools/
+**/.deps/
+**/.onig-build/
+
+# GitHub automation is local-only for this repo branch
+/.github/workflows/
+
+# Archived source/reference material is intentionally excluded from GitHub
+**/_archive/
+
+# Local agent/tool state
+/.claude/
+
+# Ghostty generated artifacts
+/Vendor/Ghostty/GhosttyKit.xcframework/
+/Vendor/Ghostty/share/
