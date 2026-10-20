@@ -4,6 +4,17 @@
  * one loopback server and its token.
  */
 
+/** Ids the host accepts in a scope, a path segment or an assignment. */
+export const hostId = /^[A-Za-z0-9-]{1,64}$/;
+
+/** A request's business and employee, or a 400 refusal. */
+export function scopeOf(value: unknown): { businessId: string; employeeId: string } {
+  const scope = value as Partial<{ businessId: string; employeeId: string }> | undefined;
+  if (!scope || !hostId.test(scope.businessId ?? "") || !hostId.test(scope.employeeId ?? ""))
+    throw new HostRefusal(400, "Missing or invalid scope");
+  return { businessId: scope.businessId!, employeeId: scope.employeeId! };
+}
+
 /** A refusal the host answers with this HTTP status and message. */
 export class HostRefusal extends Error {
   constructor(

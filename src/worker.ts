@@ -1,4 +1,4 @@
-import type { Env } from "../infra/api.ts";
+import type { Env } from "./app/env.ts";
 import { WebhookError } from "./channels/photon.ts";
 import { createStartHandler, defaultStreamHandler } from "@tanstack/react-start/server";
 import { apiRoute } from "./app/http.ts";

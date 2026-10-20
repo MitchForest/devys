@@ -1,6 +1,5 @@
 import { WorkerEntrypoint } from "cloudflare:workers";
 import { isIP } from "node:net";
-import type { Env } from "../../infra/api.ts";
 import { readBounded } from "../protocol/bytes.ts";
 import { packageHosts } from "./contract.ts";
 
@@ -68,7 +67,18 @@ async function checkDns(host: string) {
     throw new Error("Destination is not public");
 }
 
-export async function publicFetch(value: string, env: Env, maxBytes = 1_000_000, method = "GET") {
+/** Hosts public reads must never reach: Devys itself and the iMessage relay. */
+export interface EgressBindings {
+  PUBLIC_URL: string;
+  PHOTON_HTTP_ADDRESS: string;
+}
+
+export async function publicFetch(
+  value: string,
+  env: EgressBindings,
+  maxBytes = 1_000_000,
+  method = "GET",
+) {
   const blocked = [env.PUBLIC_URL, env.PHOTON_HTTP_ADDRESS]
     .filter(Boolean)
     .map((value) => new URL(value).hostname);
@@ -99,7 +109,7 @@ export async function publicFetch(value: string, env: Env, maxBytes = 1_000_000,
   throw new Error("Too many redirects");
 }
 
-export class PublicEgress extends WorkerEntrypoint<Env> {
+export class PublicEgress extends WorkerEntrypoint<EgressBindings> {
   async fetch(request: Request) {
     if (
       !["GET", "HEAD"].includes(request.method) ||

@@ -78,10 +78,24 @@ function tableOwners() {
       if (heading && components.includes(heading)) owner = heading;
       const table = /^CREATE TABLE (\w+)/.exec(line)?.[1];
       if (table) owners.set(table, owner);
+      // A later migration may change a table only under its owner's heading (migrations from
+      // before headings were required name no owner and are never edited).
+      const altered = /^ALTER TABLE (\w+)/.exec(line)?.[1];
+      if (altered && owner && owners.get(altered) !== owner)
+        throw new Error(
+          `${migration} alters ${owners.get(altered)}'s table ${altered} under ${owner}`,
+        );
     }
   }
   return owners;
 }
+it("every migration since headings were introduced names its component first", () => {
+  for (const migration of readdirSync("migrations").filter((name) => name >= "20261020020000"))
+    expect(components, `${migration} starts with a component heading`).toContain(
+      /^-- (\w+)/.exec(read(join("migrations", migration, "migration.sql")))?.[1],
+    );
+});
+
 it("each table is read and written only by the component that owns it", () => {
   const owners = tableOwners();
   expect(owners.size).toBeGreaterThan(10);
@@ -131,6 +145,50 @@ it("components reach each other only through contract.ts; only wiring selects ad
         expect(resolved, `${path} reaches into ${resolved}`).toMatch(/^src\/[^/]+\/contract\.ts$/);
     }
   }
+});
+
+it("only wiring reads the deployment files; components declare the bindings they use", () => {
+  for (const path of files("src")) {
+    if (wiring(path)) continue;
+    for (const target of imports(path).filter((value) => value.startsWith(".")))
+      expect(resolve(path, target), `${path} imports ${target}`).toMatch(/^src\//);
+  }
+});
+
+it("a contract's functions and values are used by another component or wiring", () => {
+  const unused: string[] = [];
+  for (const contract of files("src").filter((path) => path.endsWith("/contract.ts"))) {
+    const owner = component(contract);
+    const exported = [
+      ...read(contract).matchAll(
+        // Types also describe records wiring receives from services, so only values are checked.
+        /^export (?:declare )?(?:const|function|class) (\w+)/gm,
+      ),
+    ].map((match) => match[1]!);
+    const used = new Set<string>();
+    for (const path of [...files("src"), ...files("infra")]) {
+      if (component(path) === owner) continue;
+      for (const match of read(path).matchAll(
+        /import\s+(?:type\s+)?\{([^}]*)\}\s+from\s+["']([^"']+)["']/g,
+      ))
+        if (resolve(path, match[2]!) === contract)
+          for (const name of match[1]!.split(","))
+            used.add(
+              name
+                .replace(/^\s*type\s+/, "")
+                .split(/\s+as\s+/)[0]!
+                .trim(),
+            );
+    }
+    // A name used only by its own component belongs in an internal module, unless another
+    // export's signature names it (a port's argument types are part of the port).
+    const text = read(contract);
+    const internal = exported.filter(
+      (name) => !used.has(name) && text.match(new RegExp(`\\b${name}\\b`, "g"))!.length === 1,
+    );
+    unused.push(...internal.map((name) => `${contract}: ${name}`));
+  }
+  expect(unused, "contract exports no other component uses").toEqual([]);
 });
 
 it("document surfaces depend on no component, so every client can host them", () => {

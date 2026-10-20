@@ -1,7 +1,7 @@
-import type { Env } from "../../infra/api.ts";
+import type { Env } from "./env.ts";
 import type { MemoryFactory } from "../memory/contract.ts";
 import { memoryFor } from "./memory.ts";
-import { runnerFor } from "./runner.ts";
+import { modeOf } from "./mode.ts";
 import { teamCapabilities } from "./team.ts";
 import { memoryCapabilities } from "../memory/capabilities.ts";
 import { driveCapabilities } from "../connections/capabilities.ts";
@@ -21,7 +21,7 @@ export function capabilities(
   env: Env,
   memory: MemoryFactory = (owner) => memoryFor(env, owner),
 ): Capability[] {
-  const runner = runnerFor(env);
+  const runner = modeOf(env).runner();
   const catalog = [
     ...driveCapabilities(env),
     ...publicCapabilities(env),

@@ -7,7 +7,6 @@ import type { ConversationId, EntryId } from "@earendil-works/pi-durable";
 import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { Effect, Schema } from "effect";
-import type { Env } from "../../infra/api.ts";
 import {
   contextOf,
   Inbound,
@@ -73,7 +72,9 @@ export interface AgentDependencies {
   ) => Promise<{ provider: string; id: string; thinkingLevel: ModelThinkingLevel }>;
 }
 
-export abstract class AgentRuntime extends DurableObject<Env> {
+export abstract class AgentRuntime<
+  Bindings extends { LOADER: WorkerLoader } = { LOADER: WorkerLoader },
+> extends DurableObject<Bindings> {
   protected abstract dependencies(): AgentDependencies;
   private wired?: AgentDependencies;
   private get services() {
@@ -110,7 +111,7 @@ export abstract class AgentRuntime extends DurableObject<Env> {
     defaults: { thinkingLevel: "low" },
   });
 
-  constructor(ctx: DurableObjectState, env: Env) {
+  constructor(ctx: DurableObjectState, env: Bindings) {
     super(ctx, env);
     this.lifecycle.use(this.harness);
   }

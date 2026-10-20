@@ -1,5 +1,4 @@
-import type { Env } from "../../infra/api.ts";
-import { assertGoogle, googleAccess, type GoogleAccess } from "./google.ts";
+import { assertGoogle, googleAccess, type GoogleAccess, type GoogleBindings } from "./google.ts";
 import { query, type Database } from "../data/database.ts";
 import { readBounded, sha256 } from "../protocol/bytes.ts";
 
@@ -18,7 +17,7 @@ const fileId = (id: string) => {
   return encodeURIComponent(id);
 };
 async function request(
-  env: Env,
+  env: GoogleBindings,
   business: string,
   access: GoogleAccess,
   url: string,
@@ -39,7 +38,7 @@ async function request(
   }
   return response;
 }
-async function metadata(env: Env, business: string, access: GoogleAccess, id: string) {
+async function metadata(env: GoogleBindings, business: string, access: GoogleAccess, id: string) {
   const response = await request(
     env,
     business,
@@ -50,7 +49,7 @@ async function metadata(env: Env, business: string, access: GoogleAccess, id: st
   if (file.trashed) throw new Error("File is in the trash");
   return { file, etag: response.headers.get("etag") ?? "" };
 }
-async function selected(env: Env, business: string, access: GoogleAccess, id: string) {
+async function selected(env: GoogleBindings, business: string, access: GoogleAccess, id: string) {
   fileId(id);
   const known = await query(env.HYPERDRIVE, (sql) =>
     sql.row(
@@ -62,7 +61,12 @@ async function selected(env: Env, business: string, access: GoogleAccess, id: st
   );
   if (!known) throw new Error("Choose this file in the Google Drive picker first");
 }
-async function saveSelection(env: Env, business: string, access: GoogleAccess, file: DriveFile) {
+async function saveSelection(
+  env: GoogleBindings,
+  business: string,
+  access: GoogleAccess,
+  file: DriveFile,
+) {
   await query(env.HYPERDRIVE, (sql) =>
     sql.run(
       `INSERT INTO drive_files (business_id, connection_id, file_id, name, mime_type)
@@ -74,7 +78,7 @@ async function saveSelection(env: Env, business: string, access: GoogleAccess, f
     ),
   );
 }
-export async function selectDrive(env: Env, business: string, ids: string[]) {
+export async function selectDrive(env: GoogleBindings, business: string, ids: string[]) {
   if (!ids.length || ids.length > 20) throw new Error("Select 1–20 files");
   const access = await googleAccess(env, business);
   for (const id of ids) {
@@ -84,7 +88,7 @@ export async function selectDrive(env: Env, business: string, ids: string[]) {
   }
   return { selected: ids.length };
 }
-export async function listDrive(env: Env, business: string) {
+export async function listDrive(env: GoogleBindings, business: string) {
   return query(env.HYPERDRIVE, (sql) =>
     sql.rows<{ id: string; name: string; mimeType: string }>(
       `SELECT f.file_id AS id, f.name, f.mime_type AS "mimeType" FROM drive_files f
@@ -94,7 +98,12 @@ export async function listDrive(env: Env, business: string) {
     ),
   );
 }
-async function content(env: Env, business: string, access: GoogleAccess, file: DriveFile) {
+async function content(
+  env: GoogleBindings,
+  business: string,
+  access: GoogleAccess,
+  file: DriveFile,
+) {
   const native = file.mimeType === "application/vnd.google-apps.document";
   if (!native && !/^(text\/|application\/(json|xml)$)/.test(file.mimeType))
     throw new Error("This capability reads text files and Google Docs only");
@@ -106,7 +115,7 @@ async function content(env: Env, business: string, access: GoogleAccess, file: D
   );
   return new TextDecoder("utf-8", { fatal: true }).decode(await readBounded(response.body, 64_000));
 }
-export async function readDrive(env: Env, business: string, id: string) {
+export async function readDrive(env: GoogleBindings, business: string, id: string) {
   const access = await googleAccess(env, business);
   await selected(env, business, access, id);
   const { file, etag } = await metadata(env, business, access, id);
@@ -132,7 +141,7 @@ interface Receipt {
   status: "prepared" | "uncertain" | "completed";
 }
 export async function writeDrive(
-  env: Env,
+  env: GoogleBindings,
   business: string,
   operation: string,
   input: { name: string; content: string } | { id: string; content: string; etag: string },

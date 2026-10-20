@@ -10,7 +10,7 @@ const DateString = Schema.String.check(
 );
 export const EvidenceSchema = Schema.Struct({
   id: Key,
-  kind: Schema.Literals(["owner", "external", "legacy"]),
+  kind: Schema.Literals(["owner", "external"]),
   observedAt: DateString,
 });
 export const ClaimSchema = Schema.Struct({

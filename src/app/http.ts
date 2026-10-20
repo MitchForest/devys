@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import type { Env } from "../../infra/api.ts";
+import type { Env } from "./env.ts";
 import { addressOf } from "../channels/contract.ts";
 import { authenticatePhoton } from "../channels/photon.ts";
 import { finishGoogle } from "../connections/google.ts";
@@ -14,7 +14,7 @@ import {
   memberBusiness,
 } from "../identity/service.ts";
 import { atomically } from "../data/database.ts";
-import { onTheMac } from "./runner.ts";
+import { modeOf } from "./mode.ts";
 import { readBounded } from "../protocol/bytes.ts";
 import { sameOrigin } from "../protocol/http.ts";
 import { grantAll } from "../authority/service.ts";
@@ -79,7 +79,7 @@ export async function apiRoute(request: Request, env: Env): Promise<Response | u
     });
   if (path === "/api/businesses" && request.method === "POST") {
     if (!trusted) return new Response("Forbidden", { status: 403 });
-    if (onTheMac(env) && !(await Effect.runPromise(isMachineOwner(env.HYPERDRIVE, person.id))))
+    if (modeOf(env).host && !(await Effect.runPromise(isMachineOwner(env.HYPERDRIVE, person.id))))
       return new Response("On a Mac in local mode only its owner creates businesses", {
         status: 403,
       });

@@ -6,7 +6,7 @@ export class MemoryError extends Schema.TaggedError<MemoryError>()("MemoryError"
 }) {}
 export interface Evidence {
   id: string;
-  kind: "owner" | "external" | "legacy";
+  kind: "owner" | "external";
   observedAt: string;
 }
 export interface Claim {

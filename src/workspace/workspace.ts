@@ -2,7 +2,6 @@ import { DurableObject } from "cloudflare:workers";
 import { DirectoryBackup, Files } from "@cloudflare/sandbox";
 import type { DirectoryBackupRecord } from "@cloudflare/sandbox";
 import { Schema } from "effect";
-import type { Env } from "../../infra/api.ts";
 import { FilePath } from "../protocol/capability.ts";
 import { captureOutput, readBounded, sha256, sha256Bytes } from "../protocol/bytes.ts";
 import { withinCommandLimits } from "../protocol/limits.ts";
@@ -30,7 +29,7 @@ function sandboxPath(path: string) {
 }
 
 /** A private workspace. Only trusted Worker/agent bindings may reach this class. */
-export class Workspace extends DurableObject<Env> implements WorkspacePort {
+export class Workspace extends DurableObject<{ FILES: R2Bucket }> implements WorkspacePort {
   private active = false;
   private stopped = false;
   private readonly boot = crypto.randomUUID();

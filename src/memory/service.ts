@@ -425,16 +425,8 @@ export function createMemory(
         const state = await s.state();
         const current = await Promise.all(keys.map(get));
         const selected = JSON.stringify(keys);
-        const unknownEvidence =
-          current.some(
-            (c) => c && (!c.evidence.length || c.evidence.some((e) => e.kind === "legacy")),
-          ) ||
-          Boolean(
-            await s.row(
-              "SELECT 1 FROM memory_links WHERE scope_id=$1 AND key IN (SELECT jsonb_array_elements_text($2::jsonb)) AND evidence->>'kind'='legacy' LIMIT 1",
-              selected,
-            ),
-          );
+        // A claim without evidence could have come from anything said before now.
+        const unknownEvidence = current.some((c) => c && !c.evidence.length);
         const before = new Date().toISOString();
         // SQL performs the transitive source exclusion without loading the owner's corpus.
         if (

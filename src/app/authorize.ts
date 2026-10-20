@@ -1,5 +1,5 @@
 import { Effect, Schema } from "effect";
-import type { Env } from "../../infra/api.ts";
+import type { Env } from "./env.ts";
 import type { Outcome } from "../authority/contract.ts";
 import { activeGrant, decide, settleAsk } from "../authority/service.ts";
 import type { Scope } from "../identity/contract.ts";

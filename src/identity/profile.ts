@@ -1,4 +1,3 @@
-import type { Env } from "../../infra/api.ts";
 import { readBounded } from "../protocol/bytes.ts";
 
 const imageTypes = new Set(["image/jpeg", "image/png", "image/heic", "image/webp"]);
@@ -6,7 +5,7 @@ const maxBytes = 2_000_000;
 const key = (personId: string) => `profiles/${personId}/photo`;
 
 /** A person's profile photo, stored privately in R2 under their own key. */
-export async function profilePhoto(request: Request, env: Env, personId: string) {
+export async function profilePhoto(request: Request, env: { FILES: R2Bucket }, personId: string) {
   if (request.method === "GET") {
     const object = await env.FILES.get(key(personId));
     if (!object) return new Response(null, { status: 404 });

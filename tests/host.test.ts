@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import type { Env } from "../infra/api.ts";
-import { runnerFor } from "../src/app/runner.ts";
+import { modeOf } from "../src/app/mode.ts";
 import type { WorkspacePort } from "../src/workspace/contract.ts";
 import { hostRunner, type HostConnection } from "../src/workspace/host.ts";
 import { startHost } from "../src/workspace/host/server.ts";
@@ -171,25 +171,35 @@ describe("Mac host", () => {
   });
 });
 
-describe("runner selection", () => {
+describe("deployment mode", () => {
   const base = { FILES: bucket(), WORKSPACE: { getByName: (name: string) => ({ name }) } };
-  it("uses the sandbox in cloud mode", () => {
-    const runner = runnerFor({ ...base, DEVYS_MODE: "cloud" } as unknown as Env);
-    expect(runner(scope)).toEqual({ name: JSON.stringify([scope.businessId, scope.employeeId]) });
+  const local = {
+    ...base,
+    DEVYS_MODE: "local",
+    DEVYS_HOST_URL: "http://127.0.0.1:1",
+    DEVYS_HOST_TOKEN: token,
+    DEVYS_HOST_HOME: "/Users/owner",
+  };
+  it("uses the sandbox in cloud mode, with no Mac and no business folder", () => {
+    const mode = modeOf({ ...base, DEVYS_MODE: "cloud" } as unknown as Env);
+    expect(mode.runner()(scope)).toEqual({
+      name: JSON.stringify([scope.businessId, scope.employeeId]),
+    });
+    expect(mode.host).toBeUndefined();
+    expect(mode.businessFolder("b")).toBeUndefined();
   });
   it("uses the Mac host in local mode and says so when it is not configured", () => {
-    const configured = runnerFor({
-      ...base,
-      DEVYS_MODE: "local",
-      DEVYS_HOST_URL: "http://127.0.0.1:1",
-      DEVYS_HOST_TOKEN: token,
-    } as unknown as Env);
-    expect(configured(scope).checkpoint).toBeTypeOf("function");
-    const missing = runnerFor({ ...base, DEVYS_MODE: "local" } as unknown as Env);
-    expect(() => missing(scope)).toThrow("not configured");
+    const configured = modeOf(local as unknown as Env);
+    expect(configured.runner()(scope).checkpoint).toBeTypeOf("function");
+    expect(configured.businessFolder("b")).toBe("/Users/owner/Devys/b");
+    expect(configured.host).toEqual({ url: local.DEVYS_HOST_URL, token, home: "/Users/owner" });
+    const missing = modeOf({ ...base, DEVYS_MODE: "local" } as unknown as Env);
+    expect(missing.host).toBeUndefined();
+    expect(() => missing.runner()(scope)).toThrow("not configured");
+    expect(() => missing.delegates(scope)).toThrow("not configured");
   });
   it("refuses an unknown mode", () => {
-    expect(() => runnerFor({ ...base } as unknown as Env)).toThrow("DEVYS_MODE");
+    expect(() => modeOf({ ...base } as unknown as Env)).toThrow("DEVYS_MODE");
   });
 });
 

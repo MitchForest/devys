@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import type { Env } from "../../infra/api.ts";
+import type { Env } from "./env.ts";
 import { expireDecisions } from "../authority/service.ts";
 import { workChat } from "../channels/work.ts";
 import { scopeName } from "../identity/contract.ts";

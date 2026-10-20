@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import type { Env } from "../../infra/api.ts";
+import type { Env } from "./env.ts";
 import { memoryFor } from "./memory.ts";
 import { listArtifacts } from "../artifacts/service.ts";
 import { exportDrive } from "../connections/drive.ts";

@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import type { Env } from "../../infra/api.ts";
+import type { Env } from "./env.ts";
 import { appChannel } from "../channels/app.ts";
 import { channelOf, type Channel } from "../channels/contract.ts";
 import { imessageChannel } from "../channels/photon-adapter.ts";

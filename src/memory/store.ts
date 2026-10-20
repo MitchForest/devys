@@ -22,9 +22,7 @@ export function claim(row: Row): Claim {
     scope: details.scope ?? "unspecified",
     validFrom: details.validFrom ?? null,
     validUntil: details.validUntil ?? null,
-    evidence: details.evidence ?? [
-      { id: row.source_operation_id, kind: "legacy", observedAt: row.updated_at },
-    ],
+    evidence: details.evidence ?? [],
     relations: details.relations ?? [],
   };
 }

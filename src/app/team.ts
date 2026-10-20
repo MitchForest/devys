@@ -1,5 +1,5 @@
 import { Effect, Schema } from "effect";
-import type { Env } from "../../infra/api.ts";
+import type { Env } from "./env.ts";
 import { modelsConfig } from "../../config/models.ts";
 import { grantAll } from "../authority/service.ts";
 import { atomically, type Database } from "../data/database.ts";

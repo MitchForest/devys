@@ -1,9 +1,11 @@
-import type { Env } from "../../infra/api.ts";
-import { photon } from "./photon.ts";
+import { photon, type PhotonConfig } from "./photon.ts";
 import type { Inbound } from "./contract.ts";
 import { sha256 } from "../protocol/bytes.ts";
 
-export async function readMessageText(env: Env, input: Inbound): Promise<string> {
+/** Photon access plus the bucket attachments are saved to. */
+export type InputBindings = PhotonConfig & { FILES: R2Bucket };
+
+export async function readMessageText(env: InputBindings, input: Inbound): Promise<string> {
   const client = photon(env);
   try {
     const message = await client.messages.get(input.messageId);
@@ -19,7 +21,11 @@ export async function readMessageText(env: Env, input: Inbound): Promise<string>
   }
 }
 
-export async function loadInput(env: Env, businessId: string, input: Inbound): Promise<string> {
+export async function loadInput(
+  env: InputBindings,
+  businessId: string,
+  input: Inbound,
+): Promise<string> {
   const client = photon(env);
   try {
     const message = await client.messages.get(input.messageId);

@@ -1,10 +1,9 @@
-import { publishArtifact } from "./service.ts";
+import { publishArtifact, type ArtifactBindings } from "./service.ts";
 import { Effect, Schema } from "effect";
-import type { Env } from "../../infra/api.ts";
 import type { Runner } from "../workspace/contract.ts";
 import { capability, Invocation, FilePath } from "../protocol/capability.ts";
 
-export function artifactCapabilities(env: Env, runner: Runner) {
+export function artifactCapabilities(env: ArtifactBindings, runner: Runner) {
   return [
     capability({
       name: "publishArtifact",

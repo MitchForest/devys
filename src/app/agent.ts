@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import type { Env } from "../../infra/api.ts";
+import type { Env } from "./env.ts";
 import { grantsFor } from "../authority/service.ts";
 import { authorize } from "./authorize.ts";
 import { activeEmployee, businessBrief, businessName, employeesOf } from "../identity/service.ts";
@@ -9,16 +9,16 @@ import { capabilities } from "./capabilities.ts";
 import { channelFor } from "./channel.ts";
 import { memoryFor } from "./memory.ts";
 import { applicationModels, modelChoice } from "./models.ts";
-import { runnerFor, workplaceFor } from "./runner.ts";
+import { modeOf } from "./mode.ts";
 import { interruptAssignments } from "./delegates.ts";
 
 /** The only production selection of the employee runtime's adapters. */
 export function agentDependencies(env: Env): AgentDependencies {
   return {
     capabilities: capabilities(env),
-    runner: runnerFor(env),
+    runner: modeOf(env).runner(),
     interruptDelegates: (scope) => interruptAssignments(env, scope),
-    workplace: workplaceFor(env),
+    workplace: modeOf(env).workplace,
     channel: channelFor(env),
     memory: (businessId, signal) => memoryFor(env, businessId, signal),
     employee: async (scope) => {
@@ -58,7 +58,7 @@ export function agentDependencies(env: Env): AgentDependencies {
   };
 }
 
-export class DevysAgent extends AgentRuntime {
+export class DevysAgent extends AgentRuntime<Env> {
   protected dependencies() {
     return agentDependencies(this.env);
   }

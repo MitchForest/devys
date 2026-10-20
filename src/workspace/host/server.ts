@@ -14,7 +14,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { dirname, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Readable } from "node:stream";
-import { HostRefusal as Refusal, type HostRoutes } from "../../protocol/host.ts";
+import { HostRefusal as Refusal, scopeOf, type HostRoutes } from "../../protocol/host.ts";
 import { withinCommandLimits } from "../../protocol/limits.ts";
 import type { CommandResult } from "../contract.ts";
 import { listWorkspaceSkills } from "../skills.ts";
@@ -50,14 +50,6 @@ const revisionOf = (content: string | Buffer) => createHash("sha256").update(con
 const fileBytes = 20_000_000;
 
 const sha256 = (value: string) => createHash("sha256").update(value).digest();
-
-function scopeOf(value: unknown): Scope {
-  const scope = value as Partial<Scope> | undefined;
-  const id = /^[A-Za-z0-9-]{1,64}$/;
-  if (!scope || !id.test(scope.businessId ?? "") || !id.test(scope.employeeId ?? ""))
-    throw new Refusal(400, "Missing or invalid scope");
-  return scope as Scope;
-}
 
 function absolute(path: unknown): string {
   if (
@@ -152,13 +144,31 @@ export async function startHost(options: HostOptions) {
 
   const active = new Map<string, { child: ChildProcess; stopped: boolean }>();
   const writing = new Map<string, Promise<unknown>>();
-  /** The next write to `path` waits for this one; the entry goes once nothing is waiting. */
-  const queue = (path: string, done: Promise<unknown>) => {
+  /**
+   * Writes a file if it is still at `expected` (its SHA-256; null: it must not exist yet;
+   * undefined: overwrite). Writes to one path go one at a time, so a stale save cannot slip
+   * in between the comparison and the write.
+   */
+  const compareAndWrite = (
+    path: string,
+    expected: string | null | undefined,
+    content: string | Buffer,
+  ) => {
+    const done = (writing.get(path) ?? Promise.resolve()).then(async () => {
+      if (expected !== undefined) {
+        const current = await readFile(path).catch(() => undefined);
+        if ((current === undefined ? null : revisionOf(current)) !== expected)
+          throw new Refusal(409, "Revision conflict: the file changed since it was read");
+      }
+      await mkdir(dirname(path), { recursive: true });
+      await writeFile(path, content);
+    });
     const settled = done.catch(() => undefined);
     writing.set(path, settled);
     void settled.then(() => {
       if (writing.get(path) === settled) writing.delete(path);
     });
+    return done;
   };
   let spawned = 0;
   const scopeKey = (scope: Scope) => `${scope.businessId}/${scope.employeeId}`;
@@ -308,20 +318,11 @@ export async function startHost(options: HostOptions) {
       );
       const bytes = await body(request, fileBytes);
       const expected = url.searchParams.get("expected");
-      // Compare and write one at a time per file, as for text.
-      const previous = writing.get(path) ?? Promise.resolve();
-      const done = previous.then(async () => {
-        if (expected !== null) {
-          const current = await readFile(path).catch(() => undefined);
-          const revision = current === undefined ? "none" : revisionOf(current);
-          if (revision !== expected)
-            throw new Refusal(409, "Revision conflict: the file changed since it was read");
-        }
-        await mkdir(dirname(path), { recursive: true });
-        await writeFile(path, bytes);
-      });
-      queue(path, done);
-      await done;
+      await compareAndWrite(
+        path,
+        expected === null ? undefined : expected === "none" ? null : expected,
+        bytes,
+      );
       return json({ path, revision: revisionOf(bytes) });
     }
     if (request.method !== "POST") throw new Refusal(404, "Not found");
@@ -364,20 +365,7 @@ export async function startHost(options: HostOptions) {
         const content = typeof input.content === "string" ? input.content : "";
         if (Buffer.byteLength(content) > textBytes)
           throw new Refusal(413, "File exceeds the text write limit");
-        // Compare and write one at a time per file, so a stale save cannot slip in between.
-        const previous = writing.get(path) ?? Promise.resolve();
-        const done = previous.then(async () => {
-          if (input.expectedRevision !== undefined) {
-            const current = await readFile(path).catch(() => undefined);
-            const revision = current === undefined ? null : revisionOf(current);
-            if (revision !== input.expectedRevision)
-              throw new Refusal(409, "Revision conflict: the file changed since it was read");
-          }
-          await mkdir(dirname(path), { recursive: true });
-          await writeFile(path, content);
-        });
-        queue(path, done);
-        await done;
+        await compareAndWrite(path, input.expectedRevision as string | null | undefined, content);
         return json({ path, revision: revisionOf(content) });
       }
       case "/print": {

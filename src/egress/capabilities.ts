@@ -1,8 +1,7 @@
 import { Effect, Schema } from "effect";
-import type { Env } from "../../infra/api.ts";
 import { capability, CapabilityError } from "../protocol/capability.ts";
 
-import { publicFetch } from "./public.ts";
+import { publicFetch, type EgressBindings } from "./public.ts";
 
 /** True when the URL's host is one of `hosts` or a subdomain of one. */
 export function allowedHost(url: string, hosts: readonly string[]) {
@@ -18,7 +17,7 @@ export function allowedHost(url: string, hosts: readonly string[]) {
   });
 }
 
-export function publicCapabilities(env: Env) {
+export function publicCapabilities(env: EgressBindings) {
   return [
     capability({
       name: "readPublicUrl",

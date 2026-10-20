@@ -1,9 +1,8 @@
 import { Effect } from "effect";
-import type { Env } from "../../infra/api.ts";
+import type { Env } from "./env.ts";
 import { workChat } from "../channels/work.ts";
 import { providerName, type DelegateDependencies } from "../delegates/capabilities.ts";
-import type { DelegateEvent, Delegates } from "../delegates/contract.ts";
-import { hostDelegates, unavailableDelegates } from "../delegates/host-client.ts";
+import type { DelegateEvent } from "../delegates/contract.ts";
 import { assignmentById, assignmentsFor, employeeAssignments } from "../delegates/service.ts";
 import { scopeName, type Scope } from "../identity/contract.ts";
 import { activeEmployee } from "../identity/service.ts";
@@ -11,31 +10,12 @@ import { sha256 } from "../protocol/bytes.ts";
 import type { Commitment } from "../work/contract.ts";
 import { addEvidence } from "../work/service.ts";
 import { postEvent } from "./conversations.ts";
-
-type LocalVariables = Partial<Record<"DEVYS_HOST_URL" | "DEVYS_HOST_TOKEN", string>>;
-
-/** The deployment mode decides the delegate runner: the Mac host locally, none in the cloud yet. */
-export function delegatesFor(env: Env): (scope: Scope) => Delegates {
-  switch (env.DEVYS_MODE) {
-    case "local": {
-      const { DEVYS_HOST_URL: url, DEVYS_HOST_TOKEN: token } = env as Env & LocalVariables;
-      return (scope) => {
-        if (!url || !token)
-          throw new Error("The Mac host is not configured; run `bun run local install`.");
-        return hostDelegates({ url, token }, scope);
-      };
-    }
-    case "cloud":
-      return () => unavailableDelegates();
-    default:
-      throw new Error(`Unknown DEVYS_MODE: ${String(env.DEVYS_MODE)}`);
-  }
-}
+import { modeOf } from "./mode.ts";
 
 export function delegateDependencies(env: Env): DelegateDependencies {
   return {
     db: env.HYPERDRIVE,
-    delegates: delegatesFor(env),
+    delegates: modeOf(env).delegates,
     note: async (scope, commitmentId, note) => {
       await postEvent(env, scope.businessId, `work:${commitmentId}`, note);
     },
@@ -69,7 +49,7 @@ export async function codingIncomplete(env: Env, businessId: string, work: Commi
 
 /** Employee Stop also interrupts its coding sessions, so no child keeps working unnoticed. */
 export async function interruptAssignments(env: Env, scope: Scope) {
-  const delegates = delegatesFor(env)(scope);
+  const delegates = modeOf(env).delegates(scope);
   for (const item of await Effect.runPromise(
     employeeAssignments(env.HYPERDRIVE, scope.businessId, scope.employeeId),
   ))
@@ -92,7 +72,7 @@ const changeSummary = (diffStat: string) => {
  * Both are keyed by the event id, so a repeated delivery changes nothing.
  */
 export async function delegateEventsRoute(request: Request, env: Env) {
-  const token = (env as Env & LocalVariables).DEVYS_HOST_TOKEN;
+  const token = env.DEVYS_HOST_TOKEN;
   const offered = await sha256(request.headers.get("authorization") ?? "");
   if (!token || offered !== (await sha256(`Bearer ${token}`)))
     return new Response("Unauthorized", { status: 401 });

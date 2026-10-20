@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import type { Env } from "../../infra/api.ts";
+import type { Env } from "./env.ts";
 import { workChat } from "../channels/work.ts";
 import { delegateInstructions, providerName } from "../delegates/capabilities.ts";
 import {
@@ -18,7 +18,7 @@ import { scopeName, type Business, type Person, type Scope } from "../identity/c
 import { activeEmployee } from "../identity/service.ts";
 import { sha256 } from "../protocol/bytes.ts";
 import { commitment, createCommitment, requeue, setTakeover } from "../work/service.ts";
-import { delegatesFor } from "./delegates.ts";
+import { modeOf } from "./mode.ts";
 import { postEvent } from "./conversations.ts";
 
 type Access = { person: Person; business: Business; trusted: boolean; path: string };
@@ -35,7 +35,7 @@ export async function codingRoute(
   request: Request,
   env: Env,
   access: Access,
-  delegates: (scope: Scope) => Delegates = delegatesFor(env),
+  delegates: (scope: Scope) => Delegates = modeOf(env).delegates,
 ) {
   const { person, business, trusted, path } = access;
   if (path === "/coding" && request.method === "POST")
@@ -192,7 +192,7 @@ export async function handBack(
   env: Env,
   businessId: string,
   workId: string,
-  delegates: (scope: Scope) => Delegates = delegatesFor(env),
+  delegates: (scope: Scope) => Delegates = modeOf(env).delegates,
 ) {
   const work = await Effect.runPromise(commitment(env.HYPERDRIVE, businessId, workId));
   if (!work) return;

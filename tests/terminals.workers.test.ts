@@ -26,6 +26,7 @@ it("terminals are local-only, and acting on the Mac needs a trusted request", as
     DEVYS_MODE: "local",
     DEVYS_HOST_URL: "http://127.0.0.1:1",
     DEVYS_HOST_TOKEN: "t",
+    DEVYS_HOST_HOME: "/Users/owner",
   } as unknown as Env;
   const opened = await terminalRoute(
     new Request("http://devys.test/terminals", { method: "POST", body: "{}" }),

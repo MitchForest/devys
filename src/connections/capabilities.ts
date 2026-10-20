@@ -1,10 +1,10 @@
 import { Effect, Schema } from "effect";
-import type { Env } from "../../infra/api.ts";
 import { capability, CapabilityError, Invocation, Text } from "../protocol/capability.ts";
 
 import { listDrive, readDrive, writeDrive } from "./drive.ts";
+import type { GoogleBindings } from "./google.ts";
 
-export function driveCapabilities(env: Env) {
+export function driveCapabilities(env: GoogleBindings) {
   const drive = <A>(operation: () => Promise<A>) =>
     Effect.tryPromise({
       try: operation,

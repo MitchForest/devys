@@ -1,8 +1,16 @@
 import * as oauth from "oauth4webapi";
-import type { Env } from "../../infra/api.ts";
 import { query, transaction, type Database } from "../data/database.ts";
 import { sha256 } from "../protocol/bytes.ts";
 import { sessionCookie } from "../identity/contract.ts";
+
+/** What the Google connection needs from the deployment: its OAuth client and storage key. */
+export interface GoogleBindings {
+  HYPERDRIVE: Database;
+  PUBLIC_URL: string;
+  GOOGLE_CLIENT_ID: string;
+  GOOGLE_CLIENT_SECRET: string;
+  CONNECTIONS_KEY: string;
+}
 
 export const driveScope = "https://www.googleapis.com/auth/drive.file";
 const server: oauth.AuthorizationServer = {
@@ -10,16 +18,16 @@ const server: oauth.AuthorizationServer = {
   authorization_endpoint: "https://accounts.google.com/o/oauth2/v2/auth",
   token_endpoint: "https://oauth2.googleapis.com/token",
 };
-const client = (env: Env): oauth.Client => ({ client_id: env.GOOGLE_CLIENT_ID });
-const redirect = (env: Env) => `${env.PUBLIC_URL}/api/connections/google/callback`;
-export const googleConfigured = (env: Env) =>
+const client = (env: GoogleBindings): oauth.Client => ({ client_id: env.GOOGLE_CLIENT_ID });
+const redirect = (env: GoogleBindings) => `${env.PUBLIC_URL}/api/connections/google/callback`;
+export const googleConfigured = (env: GoogleBindings) =>
   Boolean(
     env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && /^[a-f0-9]{64}$/.test(env.CONNECTIONS_KEY),
   );
 
 /** Ciphertext is bound to both the business and this grant; no token reaches a model tool. */
 export async function protect(
-  env: Env,
+  env: GoogleBindings,
   business: string,
   grant: string,
   value: string,
@@ -59,7 +67,12 @@ const sessionHash = (request: Request) =>
       ?.slice(sessionCookie.length + 1) ?? "",
   );
 
-export async function beginGoogle(request: Request, env: Env, business: string, person: string) {
+export async function beginGoogle(
+  request: Request,
+  env: GoogleBindings,
+  business: string,
+  person: string,
+) {
   if (!googleConfigured(env))
     return new Response("Google Drive is not configured", { status: 503 });
   const state = oauth.generateRandomState();
@@ -101,7 +114,7 @@ export async function beginGoogle(request: Request, env: Env, business: string, 
 /** The callback URL is fixed, so the business comes from the stored state; wiring confirms membership. */
 export async function finishGoogle(
   request: Request,
-  env: Env,
+  env: GoogleBindings,
   person: string,
   member: (business: string) => Promise<boolean>,
 ) {
@@ -160,7 +173,7 @@ export interface GoogleAccess {
   id: string;
   token: string;
 }
-export async function googleAccess(env: Env, business: string): Promise<GoogleAccess> {
+export async function googleAccess(env: GoogleBindings, business: string): Promise<GoogleAccess> {
   const row = await query(env.HYPERDRIVE, (sql) =>
     sql.row<{ id: string; refresh_token: string }>(
       "SELECT id, refresh_token FROM google_connections WHERE business_id = $1",
@@ -193,7 +206,7 @@ export async function googleAccess(env: Env, business: string): Promise<GoogleAc
   return { id: row.id, token: tokens.access_token };
 }
 
-export async function assertGoogle(env: Env, business: string, access: GoogleAccess) {
+export async function assertGoogle(env: GoogleBindings, business: string, access: GoogleAccess) {
   const current = await query(env.HYPERDRIVE, (sql) =>
     sql.row("SELECT id FROM google_connections WHERE business_id = $1 AND id = $2", [
       business,
@@ -203,7 +216,7 @@ export async function assertGoogle(env: Env, business: string, access: GoogleAcc
   if (!current) throw new Error("Google Drive access disconnected");
 }
 
-export async function disconnectGoogle(env: Env, business: string) {
+export async function disconnectGoogle(env: GoogleBindings, business: string) {
   const row = await transaction(env.HYPERDRIVE, async (sql) => {
     await sql.run("DELETE FROM google_oauth_states WHERE business_id = $1", [business]);
     return sql.row<{ id: string; refresh_token: string }>(

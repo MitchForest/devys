@@ -1,5 +1,5 @@
 import { Effect, Schema } from "effect";
-import type { Env } from "../../infra/api.ts";
+import type { Env } from "./env.ts";
 import { appChat, composeAppMessage } from "../channels/app.ts";
 import { addressOf, contextOf, type Binding } from "../channels/contract.ts";
 import {

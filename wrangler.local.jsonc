@@ -6,8 +6,8 @@
   "compatibility_flags": ["nodejs_compat"],
   "durable_objects": {
     "bindings": [
+      // No WORKSPACE: local mode runs commands on the Mac host, never the cloud sandbox.
       { "name": "AGENT", "class_name": "DevysAgent" },
-      { "name": "WORKSPACE", "class_name": "Workspace" },
     ],
   },
   "migrations": [
@@ -27,7 +27,8 @@
     "PUBLIC_URL": "http://localhost:5173",
     "PHOTON_HTTP_ADDRESS": "",
     "PHOTON_SERVER": "",
-    // Local mode (.docs/COMPONENTS.md#deployment-modes). The launcher adds the host token.
+    // Local mode (.docs/COMPONENTS.md#deployment-modes). The launcher adds the owner's home
+    // folder and the host token (in the vars file, never on a command line).
     "DEVYS_MODE": "local",
     "DEVYS_HOST_URL": "http://127.0.0.1:8788",
   },

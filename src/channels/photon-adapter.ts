@@ -1,6 +1,5 @@
-import type { Env } from "../../infra/api.ts";
 import { addressOf, type Binding, type Channel, type Inbound } from "./contract.ts";
-import { loadInput, readMessageText } from "./input.ts";
+import { loadInput, readMessageText, type InputBindings } from "./input.ts";
 import { sendReply } from "./photon.ts";
 
 /** Photon names a chat by its own GUID; Devys prefixes it with the channel id. */
@@ -8,7 +7,7 @@ const raw = (input: Inbound): Inbound => ({ ...input, chatId: addressOf(input.ch
 
 /** iMessage through Photon. Binding lookup is supplied by wiring; channels do not read identity storage. */
 export function imessageChannel(
-  env: Env,
+  env: InputBindings,
   bindingFor: (sender: string, chat: string) => Promise<Binding | undefined>,
 ): Channel {
   return {

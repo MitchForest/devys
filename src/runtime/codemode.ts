@@ -4,7 +4,6 @@ import type { Extension } from "@earendil-works/pi-durable";
 import { Type } from "@earendil-works/pi-ai";
 import { Effect, Schema } from "effect";
 import type { JSONSchema7 } from "json-schema";
-import type { Env } from "../../infra/api.ts";
 import { Invocation } from "../protocol/capability.ts";
 import type { Capability, CapabilityError } from "../protocol/capability.ts";
 import { defaultLimits } from "../protocol/limits.ts";
@@ -79,7 +78,11 @@ export function describeCapabilities(contracts: Capability[], names: string[] = 
   );
 }
 
-export function devysExtension(env: Pick<Env, "LOADER">, contracts: Capability[], host: ToolHost) {
+export function devysExtension(
+  env: { LOADER: WorkerLoader },
+  contracts: Capability[],
+  host: ToolHost,
+) {
   const invoke = async (
     contract: Capability,
     args: unknown,

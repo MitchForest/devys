@@ -12,7 +12,8 @@ import { startHost } from "./workspace/host/server.ts";
 const token = process.env.DEVYS_HOST_TOKEN;
 if (!token) throw new Error("DEVYS_HOST_TOKEN is required");
 const home = process.env.HOME ?? "";
-const work = process.env.DEVYS_HOST_WORK ?? join(home, "Devys");
+// Each business works in ~/Devys/<business>, where the Worker expects it (src/app/mode.ts).
+const work = join(home, "Devys");
 const data = process.env.DEVYS_HOST_DATA ?? join(work, ".host");
 const worker = process.env.DEVYS_WORKER_URL ?? "http://127.0.0.1:8787";
 const port = Number(process.env.DEVYS_HOST_PORT ?? 8788);

@@ -1,4 +1,3 @@
-import type { Env } from "../../infra/api.ts";
 import { readBounded } from "../protocol/bytes.ts";
 import { palettes, shapes, tints, type Look } from "./contract.ts";
 
@@ -39,7 +38,7 @@ export function parseLook(value: unknown): Exclude<Look, { kind: "photo" }> | nu
 /** Reads or replaces a look's photo. A successful upload returns the photo look to save. */
 export async function lookPhoto(
   request: Request,
-  env: Env,
+  env: { FILES: R2Bucket },
   businessId: string,
   subject: string,
 ): Promise<Response | Look> {
@@ -65,5 +64,5 @@ export async function lookPhoto(
 }
 
 /** Deletes a photo once the look no longer uses it. */
-export const removeLookPhoto = (env: Env, businessId: string, subject: string) =>
+export const removeLookPhoto = (env: { FILES: R2Bucket }, businessId: string, subject: string) =>
   env.FILES.delete(key(businessId, subject));

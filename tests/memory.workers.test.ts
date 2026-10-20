@@ -269,29 +269,19 @@ it("expired and future context stays out of current recall; search is bounded an
   expect(JSON.stringify(metadata.items).length).toBeLessThanOrEqual(2048);
   expect(JSON.stringify(tiny.items).length).toBeLessThanOrEqual(2048);
 });
-it("portable pages validate versions, reject excerpts and overwrite conflicts, and preserve legacy provenance", async () => {
-  const { memory, id } = await owner();
-  await sql.run(
-    "INSERT INTO memories(scope_id,key,content,source_kind,source_operation_id) VALUES ($1,'legacy','old context','user','old-tool-call')",
-    [id],
-  );
+it("portable pages validate versions, reject excerpts and overwrite conflicts, and keep provenance", async () => {
+  const { memory } = await owner();
+  await run(memory.observe([source("said-home")]));
+  const saved = await remember(memory, "home", "said-home");
   const data = await portable(memory);
-  expect(data[0]).toMatchObject({
+  expect(data.find((record) => record.kind === "claim")).toMatchObject({
     kind: "claim",
-    claim: { evidence: [{ id: "old-tool-call", kind: "legacy" }] },
+    claim: { key: "home", evidence: saved.claim.evidence },
   });
   const other = await owner();
   await run(other.memory.import(data, "import"));
   await run(other.memory.import(data, "import"));
-  expect(await portable(other.memory)).toEqual([
-    ...data,
-    {
-      version: 1,
-      kind: "evidence-link",
-      key: "legacy",
-      evidence: (data[0] as Extract<PortableRecord, { kind: "claim" }>).claim.evidence[0],
-    },
-  ]);
+  expect(await portable(other.memory)).toEqual(data);
   const bad = await run(
     other.memory
       .import([{ version: 2, kind: "excluded-key", key: "x" } as unknown as PortableRecord], "bad")
@@ -299,7 +289,7 @@ it("portable pages validate versions, reject excerpts and overwrite conflicts, a
   );
   expect(bad.code).toBe("invalid");
   await run(
-    other.memory.remember({ key: "legacy", content: "changed", expectedRevision: 1 }, "change"),
+    other.memory.remember({ key: "home", content: "changed", expectedRevision: 1 }, "change"),
   );
   expect((await run(other.memory.import(data, "overwrite").pipe(Effect.flip))).code).toBe(
     "conflict",
@@ -549,14 +539,12 @@ it("relationship lookup brings a partner's preferences into task context without
   const found = await run(memory.search({ query: "partner" }));
   expect(found.items.map((c) => c.key).sort()).toEqual(["alex-food", "partner"]);
 });
-it("forgetting legacy knowledge with unknown provenance fences historical re-learning without deleting other current facts", async () => {
-  const { memory, id } = await owner();
-  await sql.run(
-    "INSERT INTO memories(scope_id,key,content,source_kind,source_operation_id) VALUES ($1,'legacy-home','Old address','user','legacy-call')",
-    [id],
-  );
+it("forgetting knowledge with unknown provenance fences historical re-learning without deleting other current facts", async () => {
+  const { memory } = await owner();
+  // Remembered without evidence: it could have come from anything said before.
+  await run(memory.remember({ key: "old-home", content: "Old address" }, "old-home"));
   await run(memory.remember({ key: "seat", content: "Aisle" }, "seat"));
-  await run(memory.forget(["legacy-home"], "forget-legacy"));
+  await run(memory.forget(["old-home"], "forget-old"));
   await run(memory.observe([source("historical", "Old address", -50000)]));
   expect(await run(memory.maintain({ maxSources: 4 }))).toEqual({ processed: 0, more: false });
   expect((await run(memory.inspect())).items.map((c) => c.key)).toEqual(["seat"]);

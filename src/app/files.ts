@@ -1,15 +1,14 @@
 import { Effect } from "effect";
-import type { Env } from "../../infra/api.ts";
+import type { Env } from "./env.ts";
 import { conversationKey } from "../conversations/contract.ts";
 import type { Business, Person } from "../identity/contract.ts";
 import { activeEmployee } from "../identity/service.ts";
 import { readBounded, sha256Bytes } from "../protocol/bytes.ts";
 import { revisionConflict } from "../workspace/contract.ts";
 import { postFromPerson } from "./conversations.ts";
-import { runnerFor } from "./runner.ts";
+import { modeOf } from "./mode.ts";
 
 type Access = { person: Person; business: Business; trusted: boolean; path: string };
-type LocalVariables = Partial<Record<"DEVYS_HOST_HOME", string>>;
 
 const types: Record<string, string> = {
   pdf: "application/pdf",
@@ -37,10 +36,9 @@ type Anchor =
 
 /** A path in the business's folder on the Mac, or undefined (also outside local mode). */
 export function businessFile(env: Env, businessId: string, candidate: unknown) {
-  const home = (env as Env & LocalVariables).DEVYS_HOST_HOME;
-  if (env.DEVYS_MODE !== "local" || !home) return undefined;
-  const root = `${home}/Devys/${businessId}`;
-  return typeof candidate === "string" &&
+  const root = modeOf(env).businessFolder(businessId);
+  return root &&
+    typeof candidate === "string" &&
     candidate.length <= 1024 &&
     (candidate === root || candidate.startsWith(`${root}/`)) &&
     !candidate.split("/").some((part) => part === ".." || part === ".")
@@ -57,12 +55,11 @@ export function businessFile(env: Env, businessId: string, candidate: unknown) {
 export async function filesRoute(request: Request, env: Env, access: Access) {
   const { person, business, trusted, path } = access;
   if (path !== "/files" && !path.startsWith("/files/")) return undefined;
-  const home = (env as Env & LocalVariables).DEVYS_HOST_HOME;
-  if (env.DEVYS_MODE !== "local" || !home)
-    return new Response("Files run in local mode only for now.", { status: 503 });
-  const root = `${home}/Devys/${business.id}`;
+  const mode = modeOf(env);
+  const root = mode.businessFolder(business.id);
+  if (!root) return new Response("Files run in local mode only for now.", { status: 503 });
   // Built when a file is touched, so comments work without asking the host anything.
-  const runner = () => runnerFor(env, root)({ businessId: business.id, employeeId: "owner" });
+  const runner = () => mode.runner(root)({ businessId: business.id, employeeId: "owner" });
   const url = new URL(request.url);
   const inside = (candidate: unknown) => businessFile(env, business.id, candidate);
   const failure = (error: unknown) => {

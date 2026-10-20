@@ -26,7 +26,7 @@ import type {
   Started,
 } from "../contract.ts";
 import { cloneRepository, githubName, publishBranch } from "./github.ts";
-import { HostRefusal, type HostRoutes } from "../../protocol/host.ts";
+import { HostRefusal, hostId, scopeOf, type HostRoutes } from "../../protocol/host.ts";
 import type { ProviderAdapter, ProviderEvents } from "./provider.ts";
 import {
   commitAll,
@@ -78,15 +78,6 @@ export interface DelegatesHostOptions {
 }
 
 const checkOutputBytes = 16_000;
-const id = /^[A-Za-z0-9-]{1,64}$/;
-
-function scopeOf(value: unknown): Scope {
-  const scope = value as Partial<Scope> | undefined;
-  if (!scope || !id.test(scope.businessId ?? "") || !id.test(scope.employeeId ?? ""))
-    throw new HostRefusal(400, "Missing or invalid scope");
-  return scope as Scope;
-}
-
 export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
   mkdirSync(options.data, { recursive: true });
   const ledger = join(options.data, "delegates.jsonl");
@@ -382,7 +373,7 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
         case "/delegates/start": {
           const request = input.request as StartRequest;
           scopeOf(request?.scope);
-          if (!id.test(request.id ?? "")) throw new HostRefusal(400, "Invalid assignment id");
+          if (!hostId.test(request.id ?? "")) throw new HostRefusal(400, "Invalid assignment id");
           const pending = starting.get(request.id) ?? start(request);
           starting.set(request.id, pending);
           try {

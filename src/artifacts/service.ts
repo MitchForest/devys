@@ -1,13 +1,18 @@
 import { Effect } from "effect";
-import type { Env } from "../../infra/api.ts";
 import { database, type Database } from "../data/database.ts";
 import type { Scope } from "../identity/contract.ts";
 import type { Runner } from "../workspace/contract.ts";
 import { sha256 } from "../protocol/bytes.ts";
 import { defaultLimits } from "../protocol/limits.ts";
 import { rpc } from "../protocol/rpc.ts";
+/** What publishing needs from the deployment: records and the public address of links. */
+export interface ArtifactBindings {
+  HYPERDRIVE: Database;
+  PUBLIC_URL: string;
+}
+
 export function publishArtifact(
-  env: Pick<Env, "HYPERDRIVE" | "PUBLIC_URL">,
+  env: ArtifactBindings,
   runner: Runner,
   scope: Scope,
   operationId: string,

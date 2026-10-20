@@ -1,32 +1,15 @@
 import { Effect } from "effect";
-import type { Env } from "../../infra/api.ts";
+import type { Env } from "./env.ts";
 import { providerName } from "../delegates/capabilities.ts";
 import type { Provider } from "../delegates/contract.ts";
 import { assignment, assignmentsFor } from "../delegates/service.ts";
 import type { Business, Person } from "../identity/contract.ts";
-import type { Terminals } from "../terminal/contract.ts";
-import { hostTerminals, relayTerminal, unavailableTerminals } from "../terminal/host-client.ts";
+import { relayTerminal } from "../terminal/host-client.ts";
 import { commitment, setTakeover } from "../work/service.ts";
 import { postEvent } from "./conversations.ts";
-import { delegatesFor } from "./delegates.ts";
+import { modeOf } from "./mode.ts";
 
 type Access = { person: Person; business: Business; trusted: boolean; path: string };
-type LocalVariables = Partial<
-  Record<"DEVYS_HOST_URL" | "DEVYS_HOST_TOKEN" | "DEVYS_HOST_HOME", string>
->;
-
-const host = (env: Env) => {
-  const { DEVYS_HOST_URL: url, DEVYS_HOST_TOKEN: token } = env as Env & LocalVariables;
-  return url && token && env.DEVYS_MODE === "local" ? { url, token } : undefined;
-};
-
-/** The deployment mode decides where terminals run: the Mac host locally, nowhere in the cloud yet. */
-export function terminalsFor(env: Env): (businessId: string) => Terminals {
-  const where = host(env);
-  return (businessId) =>
-    where ? hostTerminals(where, { businessId, employeeId: "owner" }) : unavailableTerminals();
-}
-
 /**
  * The owner's terminals (.docs/PRODUCT_EXPERIENCE.md#first-class-coding-workspace): a business
  * terminal in its folder, a work item's build worktree, or a coding agent's own CLI resumed on
@@ -36,8 +19,9 @@ export function terminalsFor(env: Env): (businessId: string) => Terminals {
 export async function terminalRoute(request: Request, env: Env, access: Access) {
   const { person, business, trusted, path } = access;
   if (path !== "/terminals" && !path.startsWith("/terminals/")) return undefined;
-  if (!host(env)) return new Response("Terminals run in local mode only.", { status: 503 });
-  const terminals = terminalsFor(env)(business.id);
+  const mode = modeOf(env);
+  if (!mode.host) return new Response("Terminals run in local mode only.", { status: 503 });
+  const terminals = mode.terminals(business.id);
   if (path === "/terminals" && request.method === "GET")
     return Response.json({
       terminals: await terminals.list({ businessId: business.id, employeeId: "owner" }),
@@ -46,8 +30,7 @@ export async function terminalRoute(request: Request, env: Env, access: Access) 
   if (!trusted) return new Response("Forbidden", { status: 403 });
   const socket = /^\/terminals\/([A-Za-z0-9-]{1,64})\/socket$/.exec(path)?.[1];
   if (socket && request.headers.get("upgrade")?.toLowerCase() === "websocket") {
-    const where = host(env);
-    if (!where) return new Response("Terminals run in local mode only.", { status: 503 });
+    const where = mode.host;
     const pair = new WebSocketPair();
     const [client, server] = [pair[0], pair[1]];
     server.accept();
@@ -78,7 +61,8 @@ export async function terminalRoute(request: Request, env: Env, access: Access) 
     const item = await Effect.runPromise(assignment(env.HYPERDRIVE, business.id, input.resume));
     if (!item?.session_id || !item.worktree)
       return new Response("No such coding session", { status: 404 });
-    await delegatesFor(env)({ businessId: business.id, employeeId: item.employee_id })
+    await mode
+      .delegates({ businessId: business.id, employeeId: item.employee_id })
       .interrupt(item.id)
       .catch(() => undefined);
     await takeOver(
@@ -123,13 +107,11 @@ export async function terminalRoute(request: Request, env: Env, access: Access) 
     );
   }
   // The business's own folder on the Mac.
-  const home = (env as Env & LocalVariables).DEVYS_HOST_HOME;
-  if (!home) return new Response("Terminals run in local mode only.", { status: 503 });
   return Response.json(
     await terminals.open({
       scope,
       title: business.name,
-      cwd: `${home}/Devys/${business.id}`,
+      cwd: mode.businessFolder(business.id)!,
       ...size,
     }),
     { status: 201 },

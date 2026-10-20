@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import type { Env } from "../../infra/api.ts";
+import type { Database } from "../data/database.ts";
 import {
   deleteSession,
   devices,
@@ -32,7 +32,13 @@ function cookieToken(request: Request) {
  * A request carrying an Authorization header is judged on it alone, never on a cookie.
  * Bearer requests cannot be forged cross-site, so they skip the browser Origin check.
  */
-export async function requestPerson(request: Request, env: Env) {
+/** 32 random bytes as hex: a session token or a one-use code. */
+const randomToken = () =>
+  crypto
+    .getRandomValues(new Uint8Array(32))
+    .reduce((text, byte) => text + byte.toString(16).padStart(2, "0"), "");
+
+export async function requestPerson(request: Request, env: { HYPERDRIVE: Database }) {
   const authorization = request.headers.get("authorization");
   const bearer = authorization !== null;
   const token = bearer ? /^Bearer ([a-f0-9]{64})$/.exec(authorization)?.[1] : cookieToken(request);
@@ -42,7 +48,7 @@ export async function requestPerson(request: Request, env: Env) {
   return person ? { person, bearer, device: sessionHash.slice(0, 16) } : undefined;
 }
 
-async function redeem(request: Request, env: Env, fallbackLabel: string) {
+async function redeem(request: Request, env: { HYPERDRIVE: Database }, fallbackLabel: string) {
   const body = JSON.parse(new TextDecoder().decode(await readBounded(request.body, 2_000))) as {
     token?: unknown;
     name?: unknown;
@@ -52,9 +58,7 @@ async function redeem(request: Request, env: Env, fallbackLabel: string) {
     typeof body.name === "string" && body.name.trim()
       ? body.name.trim().slice(0, 80)
       : fallbackLabel;
-  const session = crypto
-    .getRandomValues(new Uint8Array(32))
-    .reduce((text, byte) => text + byte.toString(16).padStart(2, "0"), "");
+  const session = randomToken();
   const redeemed = await Effect.runPromise(
     redeemEnrollment(env.HYPERDRIVE, await sha256(body.token), await sha256(session), label),
   );
@@ -62,14 +66,14 @@ async function redeem(request: Request, env: Env, fallbackLabel: string) {
 }
 
 /** Exchanges a one-time enrollment code for a device session returned in the body. */
-export async function enrollDevice(request: Request, env: Env) {
+export async function enrollDevice(request: Request, env: { HYPERDRIVE: Database }) {
   const session = await redeem(request, env, "Device");
   if (session === "invalid") return new Response("Invalid enrollment token", { status: 400 });
   if (session === "expired") return new Response("Token expired or already used", { status: 401 });
   return Response.json({ sessionToken: session, expiresInSeconds: 60 * 60 * 24 * 7 });
 }
 
-export async function enroll(request: Request, env: Env) {
+export async function enroll(request: Request, env: { HYPERDRIVE: Database }) {
   if (!sameOrigin(request)) return new Response("Forbidden", { status: 403 });
   const session = await redeem(request, env, "Web browser");
   if (session === "invalid") return new Response("Invalid enrollment token", { status: 400 });
@@ -77,7 +81,7 @@ export async function enroll(request: Request, env: Env) {
   return Response.json({ enrolled: true }, { headers: { "set-cookie": cookie(session) } });
 }
 
-export async function logout(request: Request, env: Env) {
+export async function logout(request: Request, env: { HYPERDRIVE: Database }) {
   const authorization = request.headers.get("authorization");
   if (authorization === null && !sameOrigin(request))
     return new Response("Forbidden", { status: 403 });
@@ -96,7 +100,7 @@ export async function logout(request: Request, env: Env) {
  */
 export async function devicesRoute(
   request: Request,
-  env: Env,
+  env: { HYPERDRIVE: Database },
   access: { personId: string; device: string; trusted: boolean; path: string },
 ) {
   if (access.path === "/api/devices" && request.method === "GET")
@@ -108,9 +112,7 @@ export async function devicesRoute(
   if (request.method !== "POST") return new Response("Not found", { status: 404 });
   if (!access.trusted) return new Response("Forbidden", { status: 403 });
   if (access.path === "/api/devices/codes") {
-    const code = crypto
-      .getRandomValues(new Uint8Array(32))
-      .reduce((text, byte) => text + byte.toString(16).padStart(2, "0"), "");
+    const code = randomToken();
     await Effect.runPromise(issueDeviceCode(env.HYPERDRIVE, access.personId, await sha256(code)));
     return Response.json(
       { code, expiresAt: new Date(Date.now() + 10 * 60_000).toISOString() },
