@@ -18,8 +18,9 @@ also verified live. No public product has launched.
 - **Two deployment modes, never mixed.** Local mode runs everything on the owner's Mac
   and is reached over Tailscale ([local mode](#local-mode-the-owners-mac)); cloud mode
   runs on Cloudflare with PlanetScale ([cloud mode](#cloud-mode)). `DEVYS_MODE`
-  (`local` or `cloud`) selects the adapter set in `src/app/runner.ts`. Local mode runs
-  commands and file access on the trusted Mac host; cloud mode uses Cloudflare Sandbox.
+  (`local` or `cloud`) selects the whole adapter set in one switch, `src/app/mode.ts`. Local
+  mode runs commands and file access on the trusted Mac host; cloud mode uses Cloudflare
+  Sandbox.
 - **Businesses and teams.** A business has a brief and a starting team. Role templates
   live in code (`src/app/team.ts`: Head of Operations, Engineering, Growth, Business
   Operations, Custom). Hiring copies a template and its grants; employees can be edited
@@ -27,9 +28,12 @@ also verified live. No public product has launched.
   Operations holds `hireEmployee` in `ask` mode, so its hire proposals arrive as
   decisions. Each employee is one Pi Durable Object running on its chosen model.
 - **Authority.** Grants with typed limits in `auto` or `ask` mode; no grant denies.
-  Single-use decisions bind the exact input and are approved in a signed-in session
-  (device signatures arrive with V0). Every call re-reads the grant and the employee, so
-  revoke, pause and takeover apply to the next action.
+  Single-use decisions bind the exact input and the work item and are approved in a
+  signed-in session (device signatures arrive with V0). Unanswered requests expire after
+  24 hours, checked every minute; an owner's rejection stands for that time, so the same
+  request is not asked again. Every call re-reads the grant and the employee, so revoke,
+  pause and takeover apply to the next action. Hiring, creating a business and retiring
+  are single transactions.
 - **Work and spaces.** Commitments (work items) with an owner, next action, wait
   condition, conditions and evidence. A one-minute dispatcher hands ready work to its
   employee under `<commitment>:<revision>`. Spaces have a lead employee and reference
@@ -61,12 +65,16 @@ also verified live. No public product has launched.
   Each turn's end, failure, interruption and check is a card in the work item's thread and
   wakes the employee, which steers with follow-ups, starts read-only reviews, and accepts:
   Devys commits on the branch, runs the repository's check and records commit and check as
-  evidence. Employees can then push the branch and open a pull request on the business's
-  GitHub repository (`codingPublish`, through the owner's `gh` login); nothing is merged or
-  deployed. The owner sees each session's latest reply
-  and live diff (with line comments) on every client, takes over to steer it directly, hands
-  back, or starts a **New coding session** from Work on the web. Stop interrupts sessions and
-  stops what they left running. Cloud mode reports delegates as unavailable.
+  evidence. Employees can then push the accepted commit and open a pull request on the
+  business's GitHub repository (`codingPublish`, through the owner's `gh` login, only after
+  a passing check); nothing is merged or deployed. Completing work with a coding build also
+  needs a passing check. The owner sees each session's latest reply and live diff on every
+  client, takes over to steer it directly ("Taken over by <name>" for everyone else), hands
+  back, or starts a **New coding session** from Work on the web. Diff line comments are always
+  sendable: to the session while you have taken it over, otherwise as one review message in
+  the work item's thread. A work item's panel shows its pending and decided requests. Stop
+  interrupts sessions and stops what they left running. Cloud mode reports delegates as
+  unavailable.
 - **Terminals (local mode).** A terminal on the owner's Mac (the business folder, a work item's
   worktree, or Codex/Claude Code's own CLI resumed on a coding session) opens in its own window on
   web, macOS and iPad and full screen on iPhone, rendered by Ghostty (native, or WebAssembly on the
@@ -105,20 +113,24 @@ billing, and automated customer provisioning are not implemented.
 
 ## Verification status
 
-At `cb66776` (2026-10-20), on the owner's MacBook standing in for the Mac mini:
-`bun run verify` (format, lint, types, 70 unit tests, 102 Workers tests, build),
-`bun run test:browser` (9), `bun run test:channel` and `bun run test:apple` passed. A live
-conversation with real models passed: asked in Engineering's DM to consult Growth,
-Engineering wrote "@Growth …", Growth answered, the answer returned to Engineering, and
-follow-ups routed by the rules. Each slice's evidence is in the delivery plan.
+On 2026-10-20, on the owner's MacBook standing in for the Mac mini, after the security and
+correctness repairs: `bun run verify` (format, lint, types, 114 unit tests, 4 Bun host tests,
+122 Workers tests of which 4 are live-model tests skipped by default, build), `bun run test:browser` (12) and `bun run test:apple`. `bun run test:channel` last
+passed at the conversations closeout.
+Live: a conversation with real models routed by the rules (Engineering consulted Growth by
+@mention and got the answer back), and an employee opened a real pull request through
+Devys. Each slice's evidence is in the delivery plan.
 
 Not yet verified:
 
 - HTTPS Tailscale Serve and Funnel (the tailnet admin has not enabled Serve; the TCP
   forward works and the iPad signs in through it).
-- The conversation-first screens by hand on the physical iPad and Mac.
+- The conversation-first, coding, terminal and document screens by hand on the physical
+  iPad and Mac, and an accessibility pass (VoiceOver, Dynamic Type, keyboard).
+- Plain HTTP to the tailnet name from a physical iPhone.
 - iMessage end to end (no Photon credentials configured).
-- A cloud deploy of the local-mode slices onward, and a real reboot of the Mac.
+- A cloud deploy of the local-mode slices onward, a real reboot of the Mac, and a coding
+  turn across the Mac sleeping.
 
 Workers tests substitute workspace storage. `test:workspace` builds the actual
 Linux image and checks script/file work and reuse across fresh containers with a
@@ -178,9 +190,10 @@ is present. Model arguments never select credentials.
 
 ## Active roadmap
 
-Next: deploys run by employees, then the browser and sandboxed artifacts, routines, the broker
-and signed decisions, the tool registry, purchases and mail, launch connectors (analytics and
-ads), desktop control, voice and push, cloud mode and coding runners, and distribution.
+Next: a hands-on check of every client, then completing the coding workspace (outcome card,
+Follow), deploys run by employees, the browser and sandboxed artifacts, routines, the broker
+and signed decisions, a live event stream and push, the tool registry, mail, purchases,
+desktop control, voice, cloud mode and coding runners, and distribution.
 
 ## Native clients (macOS, iPhone, iPad)
 
@@ -308,9 +321,17 @@ bun run local uninstall  # stops it; data is kept
 
 `install` reads secrets from `.env` like development does. Re-run it after pulling
 changes. The launcher (`scripts/local.ts`) supervises two processes: the Worker on
-127.0.0.1:8787 and the Mac host (`src/workspace/host/server.ts`) on 127.0.0.1:8788,
-which runs employees' commands and file access behind a token. It calls the
-scheduled handler every minute so ready work is dispatched.
+127.0.0.1:8787 and the Mac host (`src/host.ts`) on 127.0.0.1:8788, which runs employees'
+commands, file access, coding delegates and terminals behind a token. The token is written
+to the Worker's vars file, not its command line. The host's environment excludes what
+`.env` supplies (the model gateway key and other secrets) and its own `DEVYS_*` settings,
+so employees' shells, coding delegates and terminals see neither. The launcher calls the
+scheduled handler every minute so ready work is dispatched and unanswered decisions expire.
+
+Because employees work as the Mac's owner, only that person (the earliest active person,
+the one `bun run local code` signs in) can create businesses and open coding sessions,
+terminals and files on the Mac from the apps. The owner's file views stay inside the
+business folder, with symbolic links resolved.
 
 Other devices on the tailnet sign in to `http://<this Mac>:8787` (a Tailscale TCP
 forward, encrypted by WireGuard, no admin step). When the tailnet admin enables Serve,
@@ -379,10 +400,12 @@ Everything under `/api/` needs a web session or a device bearer token; business 
 
 - `/api/me`, `/api/models`, `/api/roles`, `/api/devices` (`/codes` issues a code),
   `/api/profile/photo`, `POST /api/businesses`.
-- `/api/businesses/:id`: `GET`/`PUT` (name, brief), `/look`, `POST /employees` (hire),
-  `/export`, `/memory`, `/work` (create, update at a revision, `takeover`, `release`),
-  `/decisions/:id/approve|reject`, `/spaces` (and `/spaces/:id/items`),
-  `/artifacts/:id`, `/connections/google/…`.
+- `/api/businesses/:id`: `GET` (the business, its employees, `members` and artifacts)/`PUT`
+  (name, brief), `/look`, `POST /employees` (hire), `/export`, `/memory`, `/work` (create,
+  update at a revision, `takeover`, `release`), `GET /decisions` (pending;
+  `?commitment=<id>` lists one work item's requests with their answers),
+  `/decisions/:id/approve|reject`, `/spaces` (and `/spaces/:id/items`), `/artifacts/:id`,
+  `/connections/google/…`.
 - `/api/businesses/:id/conversations`: `GET` lists conversations with unread counts;
   `GET …/:key` returns a page of messages and who would answer; `POST …/:key/messages`
   posts; `POST …/:key/read` marks it read.
