@@ -1,0 +1,52 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "devys-channel-test",
+  "main": "./src/worker.ts",
+  "compatibility_date": "2026-10-03",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "AGENT",
+        "class_name": "DevysAgent",
+      },
+      {
+        "name": "WORKSPACE",
+        "class_name": "Workspace",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["DevysAgent", "Workspace", "CodemodeRuntime"],
+    },
+    { "tag": "v2", "deleted_classes": ["CodemodeRuntime"] },
+  ],
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "devys-local-files",
+    },
+  ],
+  "worker_loaders": [
+    {
+      "binding": "LOADER",
+    },
+  ],
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "devys-channel",
+      "localConnectionString": "postgres://devys:devys@127.0.0.1:54331/devys",
+    },
+  ],
+  "vars": {
+    "DEVYS_MODE": "local",
+    "PUBLIC_URL": "http://127.0.0.1:5180",
+    "PHOTON_HTTP_ADDRESS": "http://127.0.0.1:55433",
+    "PHOTON_SERVER": "",
+    "PHOTON_TOKEN": "fixture",
+    "PHOTON_WEBHOOK_SECRET": "channel-test-secret",
+  },
+}

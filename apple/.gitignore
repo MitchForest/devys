@@ -1,0 +1,5 @@
+.build/
+Devys.xcodeproj/
+DerivedData/
+*.xcuserstate
+Local.xcconfig

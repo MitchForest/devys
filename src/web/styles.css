@@ -1,0 +1,230 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/*
+ * Devys design tokens for the web. Values are exactly DevysColors.swift; a test fails
+ * if they drift. Light is the default; `.dark` (or the system setting, unless `.light`)
+ * switches. shadcn's semantic variables point at these, so every component matches.
+ */
+:root {
+  --frame: #ececef;
+  --sheet: #ffffff;
+  --sheet-tint: #f7f7f9;
+  --track: #e2e2e7;
+  --well: #f0f0f3;
+  --ink: #1b1b20;
+  --ink2: #5d5d68;
+  --ink3: #9b9ba6;
+  --hairline: rgb(22 22 44 / 0.08);
+  --indigo: #5a68f0;
+  --amber: #d99a14;
+  --green: #2ea25a;
+  --red: #e0564e;
+  --gray: #a0a0aa;
+  --green-tint: #dcf3e3;
+  --aurora-peach: #f6b07a;
+  --aurora-rose: #ec6aa6;
+  --aurora-indigo: #5a68f0;
+  --shadow-strength: 1;
+  /* Read by the shared Face renderer to pick eye ink or glow. */
+  --is-dark: 0;
+  color-scheme: light;
+}
+
+.dark {
+  --frame: #141417;
+  --sheet: #1e1e23;
+  --sheet-tint: #25252b;
+  --track: #2a2a31;
+  --well: #26262c;
+  --ink: #f1f1f4;
+  --ink2: #a9a9b4;
+  --ink3: #6e6e7a;
+  --hairline: rgb(255 255 255 / 0.08);
+  --indigo: #7b87ff;
+  --amber: #f0b43a;
+  --green: #3cc46e;
+  --red: #ff6b62;
+  --gray: #7a7a86;
+  --green-tint: #1d3526;
+  --aurora-peach: #f6b07a;
+  --aurora-rose: #ec6aa6;
+  --aurora-indigo: #6e7bff;
+  --shadow-strength: 4;
+  --is-dark: 1;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --frame: #141417;
+    --sheet: #1e1e23;
+    --sheet-tint: #25252b;
+    --track: #2a2a31;
+    --well: #26262c;
+    --ink: #f1f1f4;
+    --ink2: #a9a9b4;
+    --ink3: #6e6e7a;
+    --hairline: rgb(255 255 255 / 0.08);
+    --indigo: #7b87ff;
+    --amber: #f0b43a;
+    --green: #3cc46e;
+    --red: #ff6b62;
+    --gray: #7a7a86;
+    --green-tint: #1d3526;
+    --aurora-peach: #f6b07a;
+    --aurora-rose: #ec6aa6;
+    --aurora-indigo: #6e7bff;
+    --shadow-strength: 4;
+    --is-dark: 1;
+    color-scheme: dark;
+  }
+}
+
+/* shadcn's semantic names, mapped onto Devys tokens. */
+:root {
+  --background: var(--sheet);
+  --foreground: var(--ink);
+  --card: var(--sheet);
+  --card-foreground: var(--ink);
+  --popover: var(--sheet);
+  --popover-foreground: var(--ink);
+  --primary: var(--indigo);
+  --primary-foreground: #ffffff;
+  --secondary: var(--well);
+  --secondary-foreground: var(--ink);
+  --muted: var(--track);
+  --muted-foreground: var(--ink2);
+  --accent: var(--track);
+  --accent-foreground: var(--ink);
+  --destructive: var(--red);
+  --border: var(--hairline);
+  --input: var(--hairline);
+  --ring: var(--indigo);
+  --radius: 10px;
+  --sidebar: var(--sheet-tint);
+  --sidebar-foreground: var(--ink);
+  --sidebar-primary: var(--indigo);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--sheet);
+  --sidebar-accent-foreground: var(--ink);
+  --sidebar-border: var(--hairline);
+  --sidebar-ring: var(--indigo);
+}
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro", system-ui, sans-serif;
+  --font-heading: var(--font-sans);
+  --font-serif: "New York", ui-serif, "Iowan Old Style", Georgia, serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* DevysTypography (macOS sizes). */
+  --text-greeting: 34px;
+  --text-title: 22px;
+  --text-heading: 15px;
+  --text-body: 13.5px;
+  --text-detail: 12.5px;
+  --text-label: 11px;
+  --text-caption: 12px;
+  --text-control: 13px;
+  --text-data: 12px;
+
+  /* DevysRadius. */
+  --radius-small: 8px;
+  --radius-control: 10px;
+  --radius-workspace: 14px;
+  --radius-card: 16px;
+  --radius-sheet: 22px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+
+  /* DevysElevation: two levels, four times stronger in dark mode. */
+  --shadow-resting:
+    0 1px 0.5px rgb(0 0 0 / calc(0.04 * var(--shadow-strength))),
+    0 2px 4px rgb(0 0 0 / calc(0.05 * var(--shadow-strength)));
+  --shadow-raised:
+    0 1px 1px rgb(0 0 0 / calc(0.06 * var(--shadow-strength))),
+    0 10px 15px rgb(0 0 0 / calc(0.1 * var(--shadow-strength)));
+
+  --color-frame: var(--frame);
+  --color-sheet: var(--sheet);
+  --color-sheet-tint: var(--sheet-tint);
+  --color-track: var(--track);
+  --color-well: var(--well);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink2);
+  --color-ink-3: var(--ink3);
+  --color-hairline: var(--hairline);
+  --color-indigo: var(--indigo);
+  --color-amber: var(--amber);
+  --color-green: var(--green);
+  --color-red: var(--red);
+  --color-gray: var(--gray);
+  --color-green-tint: var(--green-tint);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html,
+  body {
+    @apply h-full bg-frame font-sans text-body text-ink antialiased;
+  }
+}
+
+@keyframes dash {
+  to {
+    stroke-dashoffset: var(--dash);
+  }
+}
+
+/* The aurora: reserved for agency (Ask, Approve, Send). */
+.aurora {
+  background:
+    radial-gradient(120% 120% at 0% 0%, var(--aurora-peach) 0%, transparent 55%),
+    radial-gradient(120% 120% at 100% 100%, var(--aurora-indigo) 0%, transparent 60%),
+    radial-gradient(120% 120% at 60% 40%, var(--aurora-rose) 0%, transparent 70%),
+    var(--aurora-rose);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

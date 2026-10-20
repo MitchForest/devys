@@ -1,0 +1,86 @@
+included:
+  - Devys-iOS
+  - Devys-macOS
+  - Packages/DevysKit/Sources
+  - Packages/DevysKit/Tests
+excluded:
+  - Packages/DevysKit/.build
+  - DerivedData
+
+analyzer_rules:
+  - unused_declaration
+  - unused_import
+
+opt_in_rules:
+  - closure_spacing
+  - contains_over_filter_count
+  - contains_over_filter_is_empty
+  - contains_over_first_not_nil
+  - discouraged_object_literal
+  - empty_collection_literal
+  - empty_count
+  - empty_string
+  - fatal_error_message
+  - first_where
+  - flatmap_over_map_reduce
+  - identical_operands
+  - last_where
+  - legacy_multiple
+  - prefer_self_type_over_type_of_self
+  - redundant_nil_coalescing
+  - sorted_first_last
+  - toggle_bool
+  - unneeded_parentheses_in_closure_argument
+  - yoda_condition
+
+# Domain-correct short names: geometry axes, language identifiers
+# (Go, C) from the ported review engines, and the terminal surface's
+# VT-engine handle (vt).
+identifier_name:
+  excluded: [x, y, c, go, id, vt]
+
+line_length:
+  warning: 220
+  error: 260
+file_length:
+  warning: 900
+  error: 1200
+function_body_length:
+  warning: 140
+  error: 180
+type_body_length:
+  warning: 360
+  error: 500
+cyclomatic_complexity:
+  warning: 20
+  error: 25
+
+reporter: xcode
+
+custom_rules:
+  no_unchecked_sendable:
+    name: "No unchecked Sendable"
+    regex: "@unchecked Sendable|nonisolated\\(unsafe\\)"
+    message: "Strict concurrency escape hatches are banned (AGENTS.md)."
+    severity: error
+  no_legacy_observation:
+    name: "No legacy SwiftUI observation"
+    regex: "@StateObject|@ObservedObject|@EnvironmentObject|@Published|ObservableObject"
+    message: "TCA 2 owns state; legacy observation wrappers are banned (AGENTS.md)."
+    severity: error
+  banned_type_names:
+    name: "Banned type name parts"
+    regex: "(actor|class|struct|enum|protocol)\\s+\\w*(Manager|Service|Helper|Util|Common|Shared|ViewModel|Network|API)\\b"
+    message: "Use Client, Store, Provider, Model, Screen, or Component."
+    severity: error
+  no_store_construction_in_views:
+    name: "Views do not construct Stores"
+    regex: "Store\\(initialState:"
+    included: ".*Screen\\.swift|.*View\\.swift|.*Component\\.swift"
+    message: "Views receive scoped Stores; composition roots construct them."
+    severity: error
+  no_live_outside_composition:
+    name: "Live clients only at composition roots"
+    regex: "sessionClient\\s*=\\s*\\.live\\("
+    message: "Live implementations are assembled only in composition roots."
+    severity: error

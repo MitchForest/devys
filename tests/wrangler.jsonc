@@ -1,0 +1,44 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "devys-runtime-test",
+  "main": "./fixtures/worker.ts",
+  "compatibility_date": "2026-10-03",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [
+      { "name": "AGENT_STATUS", "class_name": "AgentStatusProbe" },
+      { "name": "SESSIONS", "class_name": "SessionsProbe" },
+      {
+        "name": "PROBE",
+        "class_name": "RecoveryProbe",
+      },
+      {
+        "name": "PI",
+        "class_name": "PiRecoveryProbe",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["RecoveryProbe", "CodemodeRuntime", "PiRecoveryProbe"],
+    },
+    { "tag": "v2", "deleted_classes": ["CodemodeRuntime"] },
+    { "tag": "v3", "new_sqlite_classes": ["AgentStatusProbe"] },
+    { "tag": "v4", "new_sqlite_classes": ["SessionsProbe"] },
+  ],
+  "vars": { "DEVYS_MODE": "cloud" },
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "devys-test",
+      "localConnectionString": "postgres://devys:devys@127.0.0.1:54331/devys_test",
+    },
+  ],
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "devys-unit-test-files" }],
+  "worker_loaders": [
+    {
+      "binding": "LOADER",
+    },
+  ],
+}

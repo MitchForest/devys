@@ -1,0 +1,314 @@
+import { execFileSync, spawn } from "node:child_process";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, expect, it } from "vitest";
+import type { DelegateEvent, StartRequest } from "../src/delegates/contract.ts";
+import { hostDelegates } from "../src/delegates/host-client.ts";
+import type { ProviderAdapter, ProviderEvents } from "../src/delegates/host/provider.ts";
+import { delegatesHost } from "../src/delegates/host/server.ts";
+import { startHost } from "../src/workspace/host/server.ts";
+
+const token = "test-token";
+const scope = { businessId: "business-1", employeeId: "employee-1" };
+const running: { close(): Promise<void> }[] = [];
+afterAll(() => Promise.all(running.map((host) => host.close())));
+
+const git = (cwd: string, ...args: string[]) =>
+  execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8" }).trim();
+
+/** A provider that edits files when told to and ends turns when the test says so. */
+function fakeProvider() {
+  let events!: ProviderEvents;
+  const calls: { kind: string; sessionId?: string; text?: string; readOnly?: boolean }[] = [];
+  let sessions = 0;
+  const turns = new Map<string, string>();
+  const adapter: ProviderAdapter = {
+    async start({ cwd, prompt, readOnly }) {
+      const sessionId = `session-${++sessions}`;
+      calls.push({ kind: "start", sessionId, text: prompt, readOnly });
+      if (!readOnly) writeFileSync(join(cwd, "feature.txt"), `${prompt}\n`);
+      turns.set(sessionId, `${sessionId}-turn-1`);
+      return { sessionId, turnId: `${sessionId}-turn-1` };
+    },
+    async send({ sessionId, text }) {
+      const steered = turns.has(sessionId);
+      const turnId = steered ? turns.get(sessionId)! : `${sessionId}-turn-${calls.length + 1}`;
+      turns.set(sessionId, turnId);
+      calls.push({ kind: steered ? "steer" : "turn", sessionId, text });
+      return { turnId, steered };
+    },
+    async interrupt(sessionId) {
+      calls.push({ kind: "interrupt", sessionId });
+      const turnId = turns.get(sessionId);
+      turns.delete(sessionId);
+      if (turnId)
+        events.turnEnded({ sessionId, turnId, status: "interrupted", reply: null, error: null });
+    },
+    // Like a real harness process, a closed adapter forgets its running turns.
+    async close() {
+      turns.clear();
+    },
+  };
+  return {
+    calls,
+    factory: (given: ProviderEvents) => {
+      events = given;
+      return { codex: adapter };
+    },
+    finish(sessionId: string, reply: string) {
+      const turnId = turns.get(sessionId)!;
+      turns.delete(sessionId);
+      events.turnEnded({ sessionId, turnId, status: "completed", reply, error: null });
+    },
+  };
+}
+
+async function host() {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "devys-delegates-")));
+  const repository = join(root, "repo");
+  mkdirSync(repository);
+  git(repository, "init", "--initial-branch=main");
+  writeFileSync(join(repository, "README.md"), "hello\n");
+  git(repository, "add", ".");
+  git(repository, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "init");
+  const delivered: DelegateEvent[] = [];
+  let refuse = false;
+  const provider = fakeProvider();
+  const data = join(root, "data");
+  const env = {
+    ...process.env,
+    GIT_AUTHOR_NAME: "Owner",
+    GIT_AUTHOR_EMAIL: "owner@example.com",
+    GIT_COMMITTER_NAME: "Owner",
+    GIT_COMMITTER_EMAIL: "owner@example.com",
+  };
+  Object.assign(process.env, {
+    GIT_AUTHOR_NAME: env.GIT_AUTHOR_NAME,
+    GIT_AUTHOR_EMAIL: env.GIT_AUTHOR_EMAIL,
+    GIT_COMMITTER_NAME: env.GIT_COMMITTER_NAME,
+    GIT_COMMITTER_EMAIL: env.GIT_COMMITTER_EMAIL,
+  });
+  const open = async () => {
+    const server = await startHost({
+      token,
+      data,
+      work: join(root, "work"),
+      skills: join(root, "skills"),
+      port: 0,
+      shell: "/bin/sh",
+      env,
+      routes: [
+        delegatesHost({
+          work: join(root, "work"),
+          data,
+          providers: provider.factory,
+          shell: "/bin/sh",
+          env,
+          retryMs: 20,
+          deliver: async (events) => {
+            if (refuse) throw new Error("Worker down");
+            delivered.push(...events);
+          },
+        }),
+      ],
+    });
+    running.push(server);
+    return server;
+  };
+  let server = await open();
+  const client = (as = scope) =>
+    hostDelegates({ url: `http://127.0.0.1:${server.port}`, token }, as);
+  return {
+    root,
+    repository,
+    provider,
+    delivered,
+    data,
+    client,
+    refuse: (value: boolean) => {
+      refuse = value;
+    },
+    restart: async () => {
+      await server.close();
+      server = await open();
+    },
+  };
+}
+
+const request = (id: string, repository: StartRequest["repository"]): StartRequest => ({
+  id,
+  scope,
+  provider: "codex",
+  purpose: "build",
+  repository,
+  objective: "Add the feature",
+  instructions: "Work only in the worktree.",
+});
+
+const until = async <T>(read: () => T, done: (value: T) => boolean) => {
+  for (let attempt = 0; attempt < 200; attempt++) {
+    const value = read();
+    if (done(value)) return value;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error("Timed out");
+};
+
+it("each assignment gets its own worktree and branch from the repository's head, once", async () => {
+  const state = await host();
+  const head = git(state.repository, "rev-parse", "HEAD");
+  const started = await state.client().start(request("a-1", { path: state.repository }));
+  expect(started).toMatchObject({
+    repository: state.repository,
+    baseCommit: head,
+    branch: "devys/a-1",
+  });
+  expect(git(started.worktree, "rev-parse", "--abbrev-ref", "HEAD")).toBe("devys/a-1");
+  // Starting the same assignment again returns it without a second session.
+  expect(await state.client().start(request("a-1", { path: state.repository }))).toEqual(started);
+  expect(state.provider.calls.filter((call) => call.kind === "start")).toHaveLength(1);
+  await until(
+    () => state.delivered,
+    (events) => events.some((event) => event.kind === "started"),
+  );
+  // Another business cannot see it.
+  await expect(
+    state.client({ businessId: "business-2", employeeId: "employee-1" }).inspect("a-1"),
+  ).rejects.toThrow(/No such assignment/);
+});
+
+it("a new repository starts empty with a first commit to branch from", async () => {
+  const state = await host();
+  const started = await state.client().start(request("a-new", { create: "launch-site" }));
+  expect(started.repository).toBe(
+    join(state.root, "work", scope.businessId, "repos", "launch-site"),
+  );
+  expect(git(started.repository, "log", "--format=%s")).toBe("Start");
+  await expect(state.client().start(request("a-bad", { create: "../escape" }))).rejects.toThrow();
+});
+
+it("a finished turn is delivered with what changed; steering only while it works", async () => {
+  const state = await host();
+  const started = await state.client().start(request("a-2", { path: state.repository }));
+  expect(await state.client().send("a-2", "Also add tests")).toEqual({ steered: true });
+  state.provider.finish(started.sessionId, "Added the feature and its tests.");
+  const finished = await until(
+    () => state.delivered.find((event) => event.kind === "finished"),
+    Boolean,
+  );
+  expect(finished).toMatchObject({ assignmentId: "a-2", text: "Added the feature and its tests." });
+  expect(finished!.diffStat).toContain("feature.txt (new)");
+  expect(await state.client().inspect("a-2")).toMatchObject({
+    state: "idle",
+    reply: "Added the feature and its tests.",
+  });
+  expect(await state.client().send("a-2", "Rename it")).toEqual({ steered: false });
+});
+
+it("accepting commits on the branch and reports the check against that commit", async () => {
+  const state = await host();
+  const started = await state.client().start(request("a-3", { path: state.repository }));
+  await expect(state.client().accept("a-3", { message: "x", check: "true" })).rejects.toThrow(
+    /still working/,
+  );
+  state.provider.finish(started.sessionId, "Done.");
+  await until(
+    () => state.delivered,
+    (events) => events.some((event) => event.kind === "finished"),
+  );
+  const accepted = await state.client().accept("a-3", {
+    message: "Add the feature",
+    check: "test -f feature.txt && echo checked",
+  });
+  expect(git(started.worktree, "log", "-1", "--format=%H %s")).toBe(
+    `${accepted.commit} Add the feature`,
+  );
+  expect(accepted.patch).toContain("+Add the feature");
+  const checked = await until(
+    () => state.delivered.find((event) => event.kind === "checked"),
+    Boolean,
+  );
+  expect(checked!.check).toMatchObject({ commit: accepted.commit, exitCode: 0 });
+  expect(checked!.check!.output).toContain("checked");
+  // The repository's own branch is untouched; the work lives on the assignment's branch.
+  expect(git(state.repository, "log", "-1", "--format=%s", "main")).toBe("init");
+});
+
+it("events wait for the Worker, and a host restart reports a working session interrupted", async () => {
+  const state = await host();
+  state.refuse(true);
+  await state.client().start(request("a-4", { path: state.repository }));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(state.delivered).toHaveLength(0);
+  expect(readFileSync(join(state.data, "delegate-events.json"), "utf8")).toContain("a-4:started");
+  await state.restart();
+  state.refuse(false);
+  const kinds = await until(
+    () =>
+      state.delivered.filter((event) => event.assignmentId === "a-4").map((event) => event.kind),
+    (seen) => seen.includes("started") && seen.includes("interrupted"),
+  );
+  expect(kinds.filter((kind) => kind === "started")).toHaveLength(1);
+  expect(await state.client().inspect("a-4")).toMatchObject({ state: "interrupted" });
+  // A follow-up continues the same native session; nothing was replayed.
+  expect(await state.client().send("a-4", "Continue")).toEqual({ steered: false });
+});
+
+it("interrupting ends the turn; a review reads the build's worktree without editing", async () => {
+  const state = await host();
+  const build = await state.client().start(request("a-5", { path: state.repository }));
+  await state.client().interrupt("a-5");
+  await until(
+    () => state.delivered,
+    (events) => events.some((event) => event.kind === "interrupted"),
+  );
+  const review = await state.client().start({
+    ...request("a-6", { path: state.repository }),
+    purpose: "review",
+    reviews: "a-5",
+  });
+  expect(review.worktree).toBe(build.worktree);
+  expect(state.provider.calls.at(-1)).toMatchObject({ kind: "start", readOnly: true });
+  await expect(state.client().accept("a-6", { message: "x", check: "true" })).rejects.toThrow(
+    /nothing to accept/,
+  );
+  expect(existsSync(join(build.worktree, "feature.txt"))).toBe(true);
+});
+
+it("interrupting a build stops what still runs in its worktree", async () => {
+  const state = await host();
+  const started = await state.client().start(request("a-7", { path: state.repository }));
+  const leftover = spawn("sleep", ["30"], { cwd: started.worktree, stdio: "ignore" });
+  const exited = new Promise((resolve) => leftover.on("exit", resolve));
+  await state.client().interrupt("a-7");
+  expect(
+    await Promise.race([
+      exited.then(() => "stopped"),
+      new Promise((r) => setTimeout(() => r("running"), 5_000)),
+    ]),
+  ).toBe("stopped");
+});
+
+it("a moving repository head doesn't move an assignment's base", async () => {
+  const state = await host();
+  const started = await state.client().start(request("a-8", { path: state.repository }));
+  writeFileSync(join(state.repository, "other.txt"), "meanwhile\n");
+  git(state.repository, "add", ".");
+  git(state.repository, "commit", "-m", "Someone else's change");
+  state.provider.finish(started.sessionId, "Done.");
+  await until(
+    () => state.delivered,
+    (events) => events.some((event) => event.kind === "finished"),
+  );
+  const accepted = await state.client().accept("a-8", { message: "Feature", check: "true" });
+  expect(git(started.worktree, "rev-parse", `${accepted.commit}~1`)).toBe(started.baseCommit);
+  expect(accepted.patch).not.toContain("other.txt");
+});

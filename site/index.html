@@ -1,0 +1,1871 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Devys — Agent-operated companies</title>
+    <meta
+      name="description"
+      content="Stop running your company. Start owning it. Devys gives your business agents that do the work inside the systems and limits you set, and bring you only the decisions that need you."
+    />
+    <meta name="theme-color" content="#ececef" />
+    <script>
+      // Follow the system appearance; the native apps do the same.
+      (() => {
+        const media = matchMedia("(prefers-color-scheme: dark)");
+        const apply = () => document.documentElement.classList.toggle("dark", media.matches);
+        apply();
+        media.addEventListener("change", apply);
+      })();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script type="module" src="js/main.js"></script>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <symbol id="i-check" viewBox="0 0 16 16">
+          <path
+            d="M3.5 8.5l3 3 6-7"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.4"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </symbol>
+        <symbol id="i-excl" viewBox="0 0 16 16">
+          <path d="M8 3.5v5.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" />
+          <circle cx="8" cy="12.4" r="1.5" fill="currentColor" />
+        </symbol>
+        <symbol id="i-clock" viewBox="0 0 16 16">
+          <path
+            d="M8 4.5V8l2.4 1.6"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </symbol>
+        <symbol id="i-dots" viewBox="0 0 16 16">
+          <circle cx="4.5" cy="8" r="1.4" fill="currentColor" />
+          <circle cx="8" cy="8" r="1.4" fill="currentColor" />
+          <circle cx="11.5" cy="8" r="1.4" fill="currentColor" />
+        </symbol>
+        <symbol id="i-faceid" viewBox="0 0 24 24">
+          <g
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path
+              d="M3 8V6a3 3 0 0 1 3-3h2M16 3h2a3 3 0 0 1 3 3v2M21 16v2a3 3 0 0 1-3 3h-2M8 21H6a3 3 0 0 1-3-3v-2"
+            />
+            <path d="M8.5 9v1.5M15.5 9v1.5M12 9v4.2h-1M9 16.2c1.7 1.3 4.3 1.3 6 0" />
+          </g>
+        </symbol>
+        <symbol id="i-home" viewBox="0 0 24 24">
+          <path
+            d="M4 10.5 12 4l8 6.5V19a1.5 1.5 0 0 1-1.5 1.5H15v-5.5H9v5.5H5.5A1.5 1.5 0 0 1 4 19z"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linejoin="round"
+          />
+        </symbol>
+        <symbol id="i-tray" viewBox="0 0 24 24">
+          <path
+            d="M4 13.5 6.5 5h11l2.5 8.5V18a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18zM4 13.5h4.5l1 2h5l1-2H20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linejoin="round"
+          />
+        </symbol>
+        <symbol id="i-work" viewBox="0 0 24 24">
+          <g
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="m4.5 7 1.5 1.5L9 5.5M4.5 13l1.5 1.5L9 11.5M4.5 19l1.5 1.5L9 17.5" />
+            <path d="M12.5 7.5h7M12.5 13.5h7M12.5 19.5h7" />
+          </g>
+        </symbol>
+        <symbol id="i-team" viewBox="0 0 24 24">
+          <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+            <circle cx="9" cy="8.5" r="3.2" />
+            <path d="M3.5 19c.8-3 3-4.5 5.5-4.5s4.7 1.5 5.5 4.5" />
+            <circle cx="16.5" cy="9.5" r="2.5" />
+            <path d="M16 14.6c2.2 0 3.9 1.3 4.5 3.9" />
+          </g>
+        </symbol>
+        <symbol id="i-money" viewBox="0 0 24 24">
+          <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+            <rect x="3" y="6" width="18" height="12.5" rx="2.5" />
+            <circle cx="12" cy="12.25" r="2.6" />
+            <path d="M6.5 9.5v.01M17.5 15v.01" />
+          </g>
+        </symbol>
+        <symbol id="i-apps" viewBox="0 0 24 24">
+          <g fill="none" stroke="currentColor" stroke-width="1.8">
+            <rect x="4" y="4" width="6.5" height="6.5" rx="1.8" />
+            <rect x="13.5" y="4" width="6.5" height="6.5" rx="1.8" />
+            <rect x="4" y="13.5" width="6.5" height="6.5" rx="1.8" />
+            <rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.8" />
+          </g>
+        </symbol>
+        <symbol id="i-search" viewBox="0 0 24 24">
+          <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="10.5" cy="10.5" r="6" />
+            <path d="m15 15 4.5 4.5" />
+          </g>
+        </symbol>
+        <symbol id="i-sidebar" viewBox="0 0 24 24">
+          <g fill="none" stroke="currentColor" stroke-width="1.8">
+            <rect x="3.5" y="5" width="17" height="14" rx="3" />
+            <path d="M9.5 5v14" />
+          </g>
+        </symbol>
+        <symbol id="i-inspector" viewBox="0 0 24 24">
+          <g fill="none" stroke="currentColor" stroke-width="1.8">
+            <rect x="3.5" y="5" width="17" height="14" rx="3" />
+            <path d="M14.5 5v14" />
+          </g>
+        </symbol>
+        <symbol id="i-up" viewBox="0 0 16 16">
+          <path
+            d="M8 13V3.5M3.8 7.5 8 3.3l4.2 4.2"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </symbol>
+        <symbol id="i-arrow" viewBox="0 0 16 16">
+          <path
+            d="M3 8h9.5M8.5 3.8 12.7 8l-4.2 4.2"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.9"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </symbol>
+        <symbol id="i-github" viewBox="0 0 16 16">
+          <path
+            fill="currentColor"
+            d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8"
+          />
+        </symbol>
+        <symbol id="i-key" viewBox="0 0 24 24">
+          <g
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="8" cy="15" r="4" />
+            <path d="m11 12 8-8M16 7l2.5 2.5M14 9l2 2" />
+          </g>
+        </symbol>
+        <symbol id="i-receipt" viewBox="0 0 24 24">
+          <g
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M6 3.5h12v17l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4-2 1.4z" />
+            <path d="M9 8h6M9 11.5h6M9 15h3.5" />
+          </g>
+        </symbol>
+        <symbol id="i-sliders" viewBox="0 0 24 24">
+          <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+            <path d="M4 7h9M17 7h3M4 17h3M11 17h9" />
+            <circle cx="15" cy="7" r="2.2" />
+            <circle cx="9" cy="17" r="2.2" />
+          </g>
+        </symbol>
+        <symbol id="i-star" viewBox="0 0 16 16">
+          <path
+            fill="currentColor"
+            d="M8 1.4l1.95 4 4.4.62-3.2 3.1.76 4.38L8 11.43 4.09 13.5l.76-4.38-3.2-3.1 4.4-.62z"
+          />
+        </symbol>
+        <symbol id="i-phone" viewBox="0 0 24 24">
+          <rect
+            x="7"
+            y="3"
+            width="10"
+            height="18"
+            rx="2.6"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+          />
+          <path d="M10.5 18h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+        </symbol>
+        <symbol id="i-tablet" viewBox="0 0 24 24">
+          <rect
+            x="4.5"
+            y="3"
+            width="15"
+            height="18"
+            rx="2.6"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+          />
+          <path d="M11 18h2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+        </symbol>
+        <symbol id="i-laptop" viewBox="0 0 24 24">
+          <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">
+            <rect x="5" y="5" width="14" height="10" rx="1.8" />
+            <path d="M3 18.5h18" stroke-linecap="round" />
+          </g>
+        </symbol>
+        <symbol id="i-globe" viewBox="0 0 24 24">
+          <g fill="none" stroke="currentColor" stroke-width="1.8">
+            <circle cx="12" cy="12" r="8.5" />
+            <path d="M3.5 12h17M12 3.5c2.5 2.6 2.5 14.4 0 17M12 3.5c-2.5 2.6-2.5 14.4 0 17" />
+          </g>
+        </symbol>
+        <symbol id="i-plus" viewBox="0 0 16 16">
+          <path
+            d="M8 3.5v9M3.5 8h9"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+          />
+        </symbol>
+        <symbol id="i-chev" viewBox="0 0 16 16">
+          <path
+            d="m4.5 6.5 3.5 3.5 3.5-3.5"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </symbol>
+        <symbol id="i-cloud" viewBox="0 0 24 24">
+          <path
+            d="M7 18.5h10.5a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.6 9.6 4.5 4.5 0 0 0 7 18.5z"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linejoin="round"
+          />
+        </symbol>
+        <symbol id="i-code" viewBox="0 0 24 24">
+          <path
+            d="m8.5 7-5 5 5 5M15.5 7l5 5-5 5M13.5 4.5l-3 15"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </symbol>
+        <symbol id="i-spark" viewBox="0 0 24 24">
+          <path
+            d="M12 3.5c.6 4.4 2.6 6.9 8 8.5-5.4 1.6-7.4 4.1-8 8.5-.6-4.4-2.6-6.9-8-8.5 5.4-1.6 7.4-4.1 8-8.5z"
+            fill="currentColor"
+          />
+        </symbol>
+      </defs>
+    </svg>
+
+    <!-- Floating glass navigation -->
+    <header class="nav" data-nav>
+      <a class="nav-brand" href="#top" aria-label="Devys home">
+        <canvas
+          class="face"
+          data-palette="blue"
+          data-shape="roundedSquare"
+          data-seed="7"
+          data-size="26"
+          data-budget="full"
+          data-brand
+        ></canvas>
+        <span>Devys</span>
+      </a>
+      <nav class="nav-links" aria-label="Sections">
+        <a href="#how">How it works</a>
+        <a href="#where">Where it runs</a>
+        <a href="#authority">Authority</a>
+        <a href="#manifesto">Manifesto</a>
+      </nav>
+      <div class="nav-ctas">
+        <a class="btn btn-star btn-compact" href="#" aria-label="Star Devys on GitHub"
+          ><svg class="ico"><use href="#i-github" /></svg><span>Star</span></a
+        >
+        <a class="btn btn-aurora btn-compact" href="#">Get started</a>
+      </div>
+    </header>
+
+    <main id="top">
+      <!-- 1 · Hero -->
+      <section class="hero scope-dark">
+        <div class="glow hero-glow" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="grain" aria-hidden="true"></div>
+        <div class="wrap hero-grid">
+          <div class="hero-copy">
+            <div class="eyebrow-pill reveal">
+              <span class="aurora-dot"></span>Agent-operated companies
+            </div>
+            <h1 class="display reveal" style="--i: 1">
+              Stop running your company.<br /><em>Start owning it.</em>
+            </h1>
+            <p class="hero-lede reveal" style="--i: 2">
+              Devys gives your business a team of agents that build, sell, buy and follow through
+              inside the systems and limits you set. They bring you the few decisions only you can
+              make. You approve with a glance, from anywhere.
+            </p>
+            <div class="hero-actions reveal" style="--i: 3">
+              <a class="btn btn-aurora" href="#">Get started</a>
+              <a class="btn btn-star" href="#"
+                ><svg class="ico"><use href="#i-github" /></svg>Star on GitHub<span
+                  class="star-badge"
+                  ><svg class="ico ico-xs"><use href="#i-star" /></svg></span
+              ></a>
+            </div>
+            <div class="hero-meta reveal" style="--i: 4">
+              <span>Your Mac or your cloud</span>
+              <span>Mac · iPhone · iPad · Web</span>
+              <span>No revenue share. Ever.</span>
+            </div>
+          </div>
+
+          <div class="hero-device reveal" style="--i: 2">
+            <div class="push" data-push>
+              <canvas
+                class="face"
+                data-palette="orange"
+                data-shape="blob"
+                data-seed="11"
+                data-mood="waiting"
+                data-size="34"
+              ></canvas>
+              <div>
+                <div class="push-top"><strong>Growth</strong><span>now</span></div>
+                <p>Ready to send the PR pricing inquiry. You're in CC.</p>
+              </div>
+            </div>
+            <div class="iphone">
+              <div class="iphone-island"></div>
+              <div class="iphone-screen">
+                <div class="iphone-status">
+                  <span>9:41</span><span class="iphone-status-icons">●●● ◖</span>
+                </div>
+                <button class="iphone-business" type="button" tabindex="-1">
+                  <span class="biz-tile biz-blue" style="--s: 24px">E</span>Acme<svg
+                    class="ico ico-xs"
+                  >
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+                <h3 class="greeting">Good afternoon, Mitch.</h3>
+                <p class="iphone-sub">Launch prep is on track. One thing needs you.</p>
+                <div class="decision mini" data-decision>
+                  <span class="chip chip-needs" data-chip
+                    ><svg class="glyph"><use href="#i-excl" /></svg
+                    ><span>Needs approval</span></span
+                  >
+                  <h4>Send PR pricing inquiry</h4>
+                  <p>To Search Intelligence, you in CC.</p>
+                  <div class="decision-actions">
+                    <button class="btn btn-aurora btn-compact" data-approve type="button">
+                      <svg class="ico"><use href="#i-faceid" /></svg>Approve
+                    </button>
+                    <button class="btn btn-raised btn-compact" type="button">Review</button>
+                  </div>
+                  <div class="seal" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                  </div>
+                </div>
+                <div class="iphone-section">In motion</div>
+                <div class="presence">
+                  <canvas
+                    class="face"
+                    data-palette="blue"
+                    data-shape="roundedSquare"
+                    data-seed="7"
+                    data-mood="working"
+                    data-size="30"
+                  ></canvas>
+                  <div><strong>Operations</strong><span>Updating launch plan</span></div>
+                </div>
+                <div class="presence">
+                  <canvas
+                    class="face"
+                    data-palette="purple"
+                    data-shape="capsule"
+                    data-seed="5"
+                    data-mood="working"
+                    data-size="30"
+                  ></canvas>
+                  <div><strong>Business Ops</strong><span>Comparing Workspace plans</span></div>
+                </div>
+                <div class="presence">
+                  <canvas
+                    class="face"
+                    data-palette="green"
+                    data-shape="hexagon"
+                    data-seed="3"
+                    data-mood="idle"
+                    data-size="30"
+                  ></canvas>
+                  <div><strong>Engineering</strong><span>Preview verified</span></div>
+                </div>
+              </div>
+              <div class="iphone-tabs">
+                <div class="glass-tabbar">
+                  <span class="on"
+                    ><svg class="ico"><use href="#i-home" /></svg>Home</span
+                  >
+                  <span
+                    ><svg class="ico"><use href="#i-tray" /></svg>Inbox</span
+                  >
+                  <span
+                    ><svg class="ico"><use href="#i-work" /></svg>Work</span
+                  >
+                  <span
+                    ><svg class="ico"><use href="#i-team" /></svg>Team</span
+                  >
+                </div>
+                <span class="ask-orb"
+                  ><svg class="ico"><use href="#i-spark" /></svg
+                ></span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <a class="scroll-cue" href="#trap" aria-label="Scroll"><span></span></a>
+      </section>
+
+      <!-- 2 · The trap: chaos easing into calm -->
+      <section class="trap scope-dark" id="trap" data-journey>
+        <div class="trap-sticky">
+          <canvas class="ascii" data-ascii="journey"></canvas>
+          <div class="trap-fade"></div>
+          <div class="wrap trap-beats">
+            <div class="beat">
+              <p class="eyebrow">Owner-operated</p>
+              <h2 class="display-2">You didn't start a company to answer Slack.</h2>
+              <p class="lede">
+                You started it to build something. Now you're the support desk, the bookkeeper, the
+                recruiter, the project manager, and the only person who remembers everything. The
+                business runs because you do.
+              </p>
+            </div>
+            <div class="beat">
+              <p class="eyebrow">Then AI arrived</p>
+              <h2 class="display-2">And you became the glue.</h2>
+              <p class="lede">
+                You copy a draft from one tab, paste it into another, check its work and remember
+                what it forgot. You've become the API between your AI tools.
+              </p>
+            </div>
+            <div class="beat beat-calm">
+              <p class="eyebrow">There's another way</p>
+              <h2 class="display-2">Owning and operating were always two different jobs.</h2>
+              <p class="lede">You've been doing both. You only need to do one of them.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3 · The shift -->
+      <section class="shift" id="shift" data-mode="owner">
+        <div class="shift-bg shift-bg-owner" aria-hidden="true"></div>
+        <div class="glow shift-bg shift-bg-agent" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="wrap">
+          <div class="section-head center reveal">
+            <p class="eyebrow">The shift</p>
+            <h2 class="display-2">From owner-operated<br />to agent-operated.</h2>
+            <p class="lede">
+              You keep the goals, the systems, the limits and the judgment. Agents do the work
+              inside them. Same company, same Tuesday.
+            </p>
+          </div>
+
+          <div class="shift-stage reveal" style="--i: 1" data-seg-root data-seg-auto>
+            <div class="seg" role="tablist" aria-label="Operating model">
+              <span class="seg-thumb" aria-hidden="true"></span>
+              <button role="tab" aria-selected="true" data-seg="owner" type="button">
+                Owner-operated
+              </button>
+              <button role="tab" aria-selected="false" data-seg="agent" type="button">
+                Agent-operated
+              </button>
+            </div>
+
+            <div class="tuesday sheet">
+              <div class="tuesday-head">
+                <div>
+                  <span class="label">Your Tuesday</span>
+                  <h3 data-seg-text="owner">10 things need you</h3>
+                  <h3 data-seg-text="agent" hidden>1 thing needs you</h3>
+                </div>
+              </div>
+
+              <ol class="tuesday-list" data-seg-panel="owner">
+                <li style="--i: 0">
+                  <time>8:02</time><span>Answer the supplier who emailed at midnight</span
+                  ><span class="chip chip-needs sm"
+                    ><svg class="glyph"><use href="#i-excl" /></svg>You</span
+                  >
+                </li>
+                <li style="--i: 1">
+                  <time>8:40</time><span>Figure out why last night's deploy failed</span
+                  ><span class="chip chip-needs sm"
+                    ><svg class="glyph"><use href="#i-excl" /></svg>You</span
+                  >
+                </li>
+                <li style="--i: 2">
+                  <time>9:15</time><span>Standup with the contractor</span
+                  ><span class="chip chip-needs sm"
+                    ><svg class="glyph"><use href="#i-excl" /></svg>You</span
+                  >
+                </li>
+                <li style="--i: 3">
+                  <time>10:30</time><span>Reconcile payouts against invoices</span
+                  ><span class="chip chip-needs sm"
+                    ><svg class="glyph"><use href="#i-excl" /></svg>You</span
+                  >
+                </li>
+                <li style="--i: 4">
+                  <time>11:10</time><span>Rewrite the ad copy, again</span
+                  ><span class="chip chip-needs sm"
+                    ><svg class="glyph"><use href="#i-excl" /></svg>You</span
+                  >
+                </li>
+                <li style="--i: 5">
+                  <time>12:45</time><span>Chase the domain registrar</span
+                  ><span class="chip chip-needs sm"
+                    ><svg class="glyph"><use href="#i-excl" /></svg>You</span
+                  >
+                </li>
+                <li style="--i: 6">
+                  <time>2:00</time><span>Interview a virtual assistant</span
+                  ><span class="chip chip-needs sm"
+                    ><svg class="glyph"><use href="#i-excl" /></svg>You</span
+                  >
+                </li>
+                <li style="--i: 7">
+                  <time>3:30</time><span>Re: Re: Re: pricing question</span
+                  ><span class="chip chip-needs sm"
+                    ><svg class="glyph"><use href="#i-excl" /></svg>You</span
+                  >
+                </li>
+                <li style="--i: 8">
+                  <time>5:15</time><span>Update the roadmap nobody reads</span
+                  ><span class="chip chip-needs sm"
+                    ><svg class="glyph"><use href="#i-excl" /></svg>You</span
+                  >
+                </li>
+                <li style="--i: 9">
+                  <time>9:40</time><span>Catch up on Slack before bed</span
+                  ><span class="chip chip-needs sm"
+                    ><svg class="glyph"><use href="#i-excl" /></svg>You</span
+                  >
+                </li>
+              </ol>
+
+              <div class="tuesday-agent" data-seg-panel="agent" hidden>
+                <div class="decision" style="--i: 0">
+                  <span class="chip chip-needs"
+                    ><svg class="glyph"><use href="#i-excl" /></svg>Needs approval</span
+                  >
+                  <h4>Send PR pricing inquiry</h4>
+                  <p>
+                    Growth. To Search Intelligence, you in CC. Asks what one campaign unit includes
+                    and the price for ten.
+                  </p>
+                </div>
+                <div class="done-list">
+                  <span class="label">Done while you were out</span>
+                  <ol>
+                    <li style="--i: 1">
+                      <span class="chip chip-done sm"
+                        ><svg class="glyph"><use href="#i-check" /></svg>Done</span
+                      ><span>Deploy fixed, preview verified</span><em>Engineering</em>
+                    </li>
+                    <li style="--i: 2">
+                      <span class="chip chip-done sm"
+                        ><svg class="glyph"><use href="#i-check" /></svg>Done</span
+                      ><span>Supplier answered, follow-up set for Friday</span><em>Growth</em>
+                    </li>
+                    <li style="--i: 3">
+                      <span class="chip chip-done sm"
+                        ><svg class="glyph"><use href="#i-check" /></svg>Done</span
+                      ><span>Payouts reconciled, receipts filed</span><em>Business Ops</em>
+                    </li>
+                    <li style="--i: 4">
+                      <span class="chip chip-done sm"
+                        ><svg class="glyph"><use href="#i-check" /></svg>Done</span
+                      ><span>Three ad variants drafted inside budget</span><em>Growth</em>
+                    </li>
+                    <li style="--i: 5">
+                      <span class="chip chip-waiting sm"
+                        ><svg class="glyph"><use href="#i-clock" /></svg>Waiting</span
+                      ><span>Registrar quote expected by 4 PM</span><em>Business Ops</em>
+                    </li>
+                    <li style="--i: 6">
+                      <span class="chip chip-done sm"
+                        ><svg class="glyph"><use href="#i-check" /></svg>Done</span
+                      ><span>Launch plan updated, briefing ready</span><em>Operations</em>
+                    </li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4 · The product -->
+      <section class="product" id="product">
+        <div class="product-glow" aria-hidden="true"></div>
+        <div class="wrap">
+          <div class="section-head center reveal">
+            <p class="eyebrow">One company, every surface</p>
+            <h2 class="display-2">Open it the way an owner walks into a well-run company.</h2>
+            <p class="lede">
+              A short briefing, the few decisions that need you, and your team talking it through in
+              the open. The same office on your Mac, iPad, iPhone and the web, in sync within a
+              second.
+            </p>
+          </div>
+
+          <div class="mac-fit reveal" style="--i: 1" data-fit>
+            <div class="mac" data-fit-inner>
+              <div class="mac-toolbar">
+                <span class="lights"><i></i><i></i><i></i></span>
+                <svg class="ico tb"><use href="#i-sidebar" /></svg>
+                <span class="crumb"><b>Acme</b> / Today</span>
+                <span class="tb-spacer"></span>
+                <span class="tb-presence">
+                  <span class="stack">
+                    <canvas
+                      class="face"
+                      data-palette="blue"
+                      data-shape="roundedSquare"
+                      data-seed="7"
+                      data-mood="working"
+                      data-size="20"
+                    ></canvas>
+                    <canvas
+                      class="face"
+                      data-palette="purple"
+                      data-shape="capsule"
+                      data-seed="5"
+                      data-mood="working"
+                      data-size="20"
+                    ></canvas>
+                    <canvas
+                      class="face"
+                      data-palette="orange"
+                      data-shape="blob"
+                      data-seed="11"
+                      data-mood="waiting"
+                      data-size="20"
+                    ></canvas>
+                  </span>
+                  2 working · 1 needs you
+                </span>
+                <span class="tb-search"
+                  ><svg class="ico"><use href="#i-search" /></svg>Search or ask<kbd>⌘K</kbd></span
+                >
+                <svg class="ico tb"><use href="#i-inspector" /></svg>
+              </div>
+              <div class="mac-body">
+                <nav class="mac-rail" aria-hidden="true">
+                  <span class="biz-tile biz-blue on" style="--s: 34px">E</span>
+                  <span class="biz-tile biz-orange" style="--s: 34px">S</span>
+                  <span class="rail-add"
+                    ><svg class="ico"><use href="#i-plus" /></svg
+                  ></span>
+                  <span class="rail-rule"></span>
+                  <span class="rail-ico on"
+                    ><svg class="ico"><use href="#i-home" /></svg
+                  ></span>
+                  <span class="rail-ico"
+                    ><svg class="ico"><use href="#i-tray" /></svg><b>3</b></span
+                  >
+                  <span class="rail-ico"
+                    ><svg class="ico"><use href="#i-work" /></svg
+                  ></span>
+                  <span class="rail-ico"
+                    ><svg class="ico"><use href="#i-team" /></svg
+                  ></span>
+                  <span class="rail-ico"
+                    ><svg class="ico"><use href="#i-money" /></svg
+                  ></span>
+                  <span class="rail-ico"
+                    ><svg class="ico"><use href="#i-apps" /></svg
+                  ></span>
+                </nav>
+                <div class="mac-workspace">
+                  <aside class="mac-sidebar">
+                    <div class="sb-title">Acme<span>Launch · Nov 2026</span></div>
+                    <span class="sb-row on">Today</span>
+                    <span class="sb-row">Approvals<b>1</b></span>
+                    <span class="sb-label">Spaces</span>
+                    <span class="sb-row"
+                      ><span class="space-dot" style="--c: var(--aurora-rose)">L</span>Launch</span
+                    >
+                    <span class="sb-row"
+                      ><span class="space-dot" style="--c: var(--green)">E</span>Engineering</span
+                    >
+                    <span class="sb-row"
+                      ><span class="space-dot" style="--c: var(--aurora-peach)">G</span>Growth</span
+                    >
+                    <span class="sb-label">Team</span>
+                    <span class="sb-row"
+                      ><canvas
+                        class="face"
+                        data-palette="blue"
+                        data-shape="roundedSquare"
+                        data-seed="7"
+                        data-mood="working"
+                        data-size="20"
+                      ></canvas
+                      >Operations</span
+                    >
+                    <span class="sb-row"
+                      ><canvas
+                        class="face"
+                        data-palette="green"
+                        data-shape="hexagon"
+                        data-seed="3"
+                        data-size="20"
+                      ></canvas
+                      >Engineering</span
+                    >
+                    <span class="sb-row"
+                      ><canvas
+                        class="face"
+                        data-palette="orange"
+                        data-shape="blob"
+                        data-seed="11"
+                        data-mood="waiting"
+                        data-size="20"
+                      ></canvas
+                      >Growth<i class="amber-dot"></i
+                    ></span>
+                    <span class="sb-row"
+                      ><canvas
+                        class="face"
+                        data-palette="purple"
+                        data-shape="capsule"
+                        data-seed="5"
+                        data-mood="working"
+                        data-size="20"
+                      ></canvas
+                      >Business Ops</span
+                    >
+                  </aside>
+                  <div class="mac-page">
+                    <h3 class="greeting lg">Good afternoon, Mitch.</h3>
+                    <div class="ops-line">
+                      <canvas
+                        class="face"
+                        data-palette="blue"
+                        data-shape="roundedSquare"
+                        data-seed="7"
+                        data-mood="working"
+                        data-size="28"
+                      ></canvas>
+                      Operations is updating the launch plan.
+                      <span class="live-tag"><i></i>Live</span>
+                    </div>
+                    <div class="page-section">
+                      <div class="section-label">Needs you <span>1</span></div>
+                      <div class="decision-row">
+                        <div class="decision" data-decision data-sync="pr">
+                          <span class="chip chip-needs" data-chip
+                            ><svg class="glyph"><use href="#i-excl" /></svg
+                            ><span>Needs approval</span></span
+                          >
+                          <h4>Send PR pricing inquiry</h4>
+                          <p>
+                            Growth. To Search Intelligence, you in CC. Asks what one campaign unit
+                            includes.
+                          </p>
+                          <div class="decision-actions">
+                            <button class="btn btn-aurora btn-compact" data-approve type="button">
+                              <svg class="ico"><use href="#i-faceid" /></svg>Approve
+                            </button>
+                            <button class="btn btn-raised btn-compact" type="button">Review</button>
+                          </div>
+                          <div class="seal" aria-hidden="true">
+                            <svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                          </div>
+                        </div>
+                        <div class="decision">
+                          <span class="chip chip-waiting"
+                            ><svg class="glyph"><use href="#i-clock" /></svg>Waiting on quote</span
+                          >
+                          <h4>Buy acme.example</h4>
+                          <p>
+                            Business Ops. Registrar quote expected by 4 PM, then it comes to you
+                            with exact terms.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="page-section">
+                      <div class="section-label">In motion</div>
+                      <div class="presence-row">
+                        <canvas
+                          class="face"
+                          data-palette="blue"
+                          data-shape="roundedSquare"
+                          data-seed="7"
+                          data-mood="working"
+                          data-size="32"
+                        ></canvas>
+                        <div>
+                          <strong>Head of Operations</strong
+                          ><span>Updating the launch plan after your note on email</span>
+                        </div>
+                        <span class="chip chip-progress"
+                          ><svg class="glyph spin" viewBox="0 0 16 16">
+                            <circle cx="8" cy="8" r="6.4" /></svg
+                          >In progress</span
+                        >
+                      </div>
+                      <div class="presence-row">
+                        <canvas
+                          class="face"
+                          data-palette="orange"
+                          data-shape="blob"
+                          data-seed="11"
+                          data-mood="waiting"
+                          data-size="32"
+                        ></canvas>
+                        <div>
+                          <strong>Growth</strong
+                          ><span>Waiting on your approval to send the PR inquiry</span>
+                        </div>
+                        <span class="chip chip-needs"
+                          ><svg class="glyph"><use href="#i-excl" /></svg>Needs you</span
+                        >
+                      </div>
+                      <div class="presence-row">
+                        <canvas
+                          class="face"
+                          data-palette="purple"
+                          data-shape="capsule"
+                          data-seed="5"
+                          data-mood="working"
+                          data-size="32"
+                        ></canvas>
+                        <div>
+                          <strong>Business Operations</strong><span>Comparing Workspace plans</span>
+                        </div>
+                        <span class="chip chip-progress"
+                          ><svg class="glyph spin" viewBox="0 0 16 16">
+                            <circle cx="8" cy="8" r="6.4" /></svg
+                          >In progress</span
+                        >
+                      </div>
+                    </div>
+                    <div class="page-section">
+                      <div class="section-label">Done today</div>
+                      <div class="done-line">
+                        <time>10:05 AM</time>Checked the Acme launch gates
+                      </div>
+                      <div class="done-line">
+                        <time>11:40 AM</time>Saved the launch checklist to Files
+                      </div>
+                    </div>
+                  </div>
+                  <aside class="mac-inspector">
+                    <div class="insp-head">
+                      <span class="space-dot" style="--c: var(--aurora-rose)">L</span
+                      ><strong>Launch</strong>
+                      <span class="stack"
+                        ><canvas
+                          class="face"
+                          data-palette="blue"
+                          data-shape="roundedSquare"
+                          data-seed="7"
+                          data-size="18"
+                        ></canvas
+                        ><canvas
+                          class="face"
+                          data-palette="green"
+                          data-shape="hexagon"
+                          data-seed="3"
+                          data-size="18"
+                        ></canvas
+                        ><canvas
+                          class="face"
+                          data-palette="orange"
+                          data-shape="blob"
+                          data-seed="11"
+                          data-size="18"
+                          data-mood="waiting"
+                        ></canvas
+                      ></span>
+                    </div>
+                    <div class="chat thread">
+                      <div class="bubble me">@Growth where are we on PR?</div>
+                      <div class="msg">
+                        <canvas
+                          class="face"
+                          data-palette="orange"
+                          data-shape="blob"
+                          data-seed="11"
+                          data-size="22"
+                        ></canvas>
+                        <div>
+                          <b>Growth</b>
+                          <p>
+                            Inquiry's drafted. <span class="mention">@Engineering</span> is the
+                            pricing page live? I want to link it.
+                          </p>
+                        </div>
+                      </div>
+                      <div class="msg">
+                        <canvas
+                          class="face"
+                          data-palette="green"
+                          data-shape="hexagon"
+                          data-seed="3"
+                          data-size="22"
+                          data-mood="celebrate"
+                        ></canvas>
+                        <div>
+                          <b>Engineering</b>
+                          <p data-stream>Live and verified in production. Link is in the thread.</p>
+                        </div>
+                      </div>
+                      <div class="msg">
+                        <canvas
+                          class="face"
+                          data-palette="orange"
+                          data-shape="blob"
+                          data-seed="11"
+                          data-size="22"
+                          data-mood="waiting"
+                        ></canvas>
+                        <div>
+                          <b>Growth</b>
+                          <p>Thanks. Sending it once you approve, Mitch.</p>
+                        </div>
+                      </div>
+                      <div class="handoff">
+                        <svg class="ico"><use href="#i-arrow" /></svg
+                        ><span
+                          ><b>Operations</b> handed <b>Buy acme.example</b> to
+                          <b>Business Ops</b></span
+                        >
+                      </div>
+                    </div>
+                    <div class="composer">
+                      <span>Message Launch · @ to mention</span
+                      ><span class="send"
+                        ><svg class="ico"><use href="#i-up" /></svg
+                      ></span>
+                    </div>
+                  </aside>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="surfaces">
+            <figure class="surface reveal" style="--i: 0">
+              <div class="surface-ui lock">
+                <span class="lock-time">9:41</span>
+                <div class="decision mini" data-decision data-sync="pr">
+                  <div class="push-top">
+                    <canvas
+                      class="face"
+                      data-palette="orange"
+                      data-shape="blob"
+                      data-seed="11"
+                      data-size="22"
+                      data-mood="waiting"
+                    ></canvas
+                    ><strong>Growth</strong><span>now</span>
+                  </div>
+                  <p>Send the PR pricing inquiry? You're in CC.</p>
+                  <div class="decision-actions">
+                    <button class="btn btn-aurora btn-compact" data-approve type="button">
+                      <svg class="ico"><use href="#i-faceid" /></svg>Approve
+                    </button>
+                  </div>
+                  <div class="seal" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                  </div>
+                </div>
+              </div>
+              <figcaption><b>iPhone</b>Approve from the lock screen with Face ID.</figcaption>
+            </figure>
+            <figure class="surface reveal" style="--i: 1">
+              <div class="surface-ui imessage" data-decision data-sync="pr">
+                <div class="im-thread">
+                  <div class="im out">Where are we on PR?</div>
+                  <div class="im in">Inquiry's ready. Reply "send" and it goes out, you in CC.</div>
+                  <div class="im out reply">send</div>
+                  <div class="im in done-only">Sent. I'll tell you when they reply.</div>
+                </div>
+                <div class="im-compose">
+                  <span class="typed">send</span><span class="placeholder">iMessage</span>
+                  <button type="button" data-approve aria-label="Send">
+                    <svg class="ico"><use href="#i-up" /></svg>
+                  </button>
+                </div>
+              </div>
+              <figcaption><b>iMessage</b>Text your team like anyone else.</figcaption>
+            </figure>
+            <figure class="surface reveal" style="--i: 2">
+              <div class="surface-ui voice" data-voice>
+                <div class="keys"><kbd>⌥</kbd><kbd>Space</kbd></div>
+                <p class="voice-text">
+                  <span data-voice-final>Tell Growth to</span>
+                  <span class="tail" data-voice-tail>send it</span>
+                </p>
+                <div class="meter" aria-hidden="true">
+                  <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+                </div>
+              </div>
+              <figcaption>
+                <b>Voice</b>Hold a key on your Mac, or press the Action Button.
+              </figcaption>
+            </figure>
+            <figure class="surface reveal" style="--i: 3">
+              <div class="surface-ui browser">
+                <div class="browser-bar">
+                  <span class="lights"><i></i><i></i><i></i></span
+                  ><span class="url">mac-mini.your-tailnet.ts.net</span>
+                </div>
+                <div class="decision mini" data-decision data-sync="pr">
+                  <span class="chip chip-needs sm" data-chip
+                    ><svg class="glyph"><use href="#i-excl" /></svg
+                    ><span>Needs approval</span></span
+                  >
+                  <h4>Send PR pricing inquiry</h4>
+                  <div class="decision-actions">
+                    <button class="btn btn-aurora btn-compact" data-approve type="button">
+                      Approve
+                    </button>
+                  </div>
+                  <div class="seal" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                  </div>
+                </div>
+              </div>
+              <figcaption><b>Web</b>Any browser, the same workspace.</figcaption>
+            </figure>
+          </div>
+          <p class="surfaces-note reveal">Approve it anywhere. It's signed everywhere.</p>
+        </div>
+      </section>
+
+      <!-- 5 · How it works -->
+      <section class="how sheet-bg" id="how">
+        <div class="wrap">
+          <div class="section-head reveal">
+            <p class="eyebrow">How it works</p>
+            <h2 class="display-2">Design the machine.<br />Agents run it.</h2>
+          </div>
+          <div class="steps">
+            <article class="step reveal" style="--i: 0">
+              <span class="step-n">01</span>
+              <h3>Hire the team.</h3>
+              <p>
+                Describe the business, then hire from role templates. Pick each employee's model and
+                limits in plain language. No prompt engineering. No workflow builder.
+              </p>
+              <div class="step-ui card-ui" data-hire>
+                <div class="templates" role="tablist" aria-label="Role templates">
+                  <button type="button" data-template="engineering">Engineering</button>
+                  <button type="button" data-template="growth" aria-selected="true">Growth</button>
+                  <button type="button" data-template="ops">Business Ops</button>
+                </div>
+                <div class="emp-head">
+                  <canvas
+                    class="face"
+                    data-palette="orange"
+                    data-shape="blob"
+                    data-seed="11"
+                    data-size="40"
+                    data-hire-face
+                  ></canvas>
+                  <div>
+                    <strong data-hire-name>Growth</strong
+                    ><span data-hire-role>Measurement, PR and campaigns</span>
+                  </div>
+                </div>
+                <span class="model-chip"
+                  ><svg class="ico"><use href="#i-spark" /></svg
+                  ><span data-hire-model>Claude Opus 5.5</span
+                  ><em data-hire-price>~4¢ a turn</em></span
+                >
+                <ul class="access" data-hire-access></ul>
+              </div>
+            </article>
+            <article class="step reveal" style="--i: 1">
+              <span class="step-n">02</span>
+              <h3>Agents do the work.</h3>
+              <p>
+                Employees own responsibilities and keep commitments: ship code, chase suppliers,
+                reconcile spend, follow up. Work continues when your laptop closes.
+              </p>
+              <div class="step-ui card-ui" data-cycle>
+                <div class="presence-row compact">
+                  <canvas
+                    class="face"
+                    data-palette="green"
+                    data-shape="hexagon"
+                    data-seed="3"
+                    data-mood="working"
+                    data-size="32"
+                    data-cycle-face
+                  ></canvas>
+                  <div>
+                    <strong>Engineering</strong
+                    ><span data-cycle-text>Deploying a preview of the pricing page</span>
+                  </div>
+                  <span class="chip chip-progress" data-cycle-chip
+                    ><svg class="glyph spin" viewBox="0 0 16 16">
+                      <circle cx="8" cy="8" r="6.4" /></svg
+                    >In progress</span
+                  >
+                </div>
+                <div class="presence-row compact">
+                  <canvas
+                    class="face"
+                    data-palette="purple"
+                    data-shape="capsule"
+                    data-seed="5"
+                    data-mood="working"
+                    data-size="32"
+                  ></canvas>
+                  <div><strong>Business Ops</strong><span>Filing this week's receipts</span></div>
+                  <span class="chip chip-progress"
+                    ><svg class="glyph spin" viewBox="0 0 16 16">
+                      <circle cx="8" cy="8" r="6.4" /></svg
+                    >In progress</span
+                  >
+                </div>
+                <div class="presence-row compact">
+                  <canvas
+                    class="face"
+                    data-palette="orange"
+                    data-shape="blob"
+                    data-seed="11"
+                    data-mood="idle"
+                    data-size="32"
+                  ></canvas>
+                  <div><strong>Growth</strong><span>Supplier follow-up set for Friday</span></div>
+                  <span class="chip chip-waiting"
+                    ><svg class="glyph"><use href="#i-clock" /></svg>Waiting</span
+                  >
+                </div>
+              </div>
+            </article>
+            <article class="step reveal" style="--i: 2">
+              <span class="step-n">03</span>
+              <h3>You sign the exceptions.</h3>
+              <p>
+                When something needs your judgment, you get the exact action, cost and consequence.
+                Approve with Face ID. Change the terms and the approval no longer applies.
+              </p>
+              <div class="step-ui">
+                <div class="decision" data-decision>
+                  <span class="chip chip-needs" data-chip
+                    ><svg class="glyph"><use href="#i-excl" /></svg
+                    ><span>Needs approval</span></span
+                  >
+                  <h4>Deploy pricing page to production</h4>
+                  <p>Engineering. Tests and preview verified. Rollback ready.</p>
+                  <div class="decision-actions">
+                    <button class="btn btn-aurora btn-compact" data-approve type="button">
+                      <svg class="ico"><use href="#i-faceid" /></svg>Approve
+                    </button>
+                    <button class="btn btn-raised btn-compact" type="button">Review</button>
+                  </div>
+                  <div class="seal" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                  </div>
+                </div>
+                <p class="try">Try it: tap Approve.</p>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5b · Engineering: Codex and Claude Code -->
+      <section class="engineers scope-dark" id="engineers">
+        <div class="glow" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="grain" aria-hidden="true"></div>
+        <div class="wrap engineers-grid">
+          <div class="section-head reveal">
+            <p class="eyebrow">Engineering</p>
+            <h2 class="display-2">Your engineers are Codex and Claude Code.</h2>
+            <p class="lede">
+              Bring the subscriptions you already pay for. Every assignment gets its own worktree on
+              your Mac, with your toolchain and Xcode. Engineering reads the diff, runs the tests
+              and checks the preview. Nothing ships until you accept it.
+            </p>
+            <ul class="facts">
+              <li>
+                <svg class="ico"><use href="#i-check" /></svg>From a blank repository to production
+              </li>
+              <li>
+                <svg class="ico"><use href="#i-check" /></svg>Your CLI logins, no new keys
+              </li>
+              <li>
+                <svg class="ico"><use href="#i-check" /></svg>One worktree per job, so jobs never
+                collide
+              </li>
+            </ul>
+          </div>
+          <div class="assignment reveal" style="--i: 1" data-assignment>
+            <div class="assignment-head">
+              <div>
+                <span class="label">Assignment</span>
+                <h4>Redesign the pricing page</h4>
+              </div>
+              <span class="chip chip-progress" data-assignment-chip
+                ><svg class="glyph spin" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.4" /></svg
+                >In progress</span
+              >
+            </div>
+            <div class="assignment-who">
+              <canvas
+                class="face"
+                data-palette="green"
+                data-shape="hexagon"
+                data-seed="3"
+                data-size="26"
+                data-mood="working"
+                data-assignment-face
+              ></canvas>
+              <span><b>Engineering</b> · Claude Code on the Mac mini</span>
+              <code>worktree/pricing-page</code>
+            </div>
+            <pre class="diff" data-diff><span class="file">src/pages/pricing.tsx</span>
+<span class="del">-  &lt;Plans layout="list" /&gt;</span>
+<span class="add">+  &lt;Plans layout="columns" highlight="team" /&gt;</span>
+<span class="add">+  &lt;Faq items={pricingFaq} /&gt;</span>
+<span class="file">src/pages/pricing.test.tsx</span>
+<span class="add">+  it("highlights the Team plan", …)</span></pre>
+            <div class="assignment-checks">
+              <span class="check" data-tests
+                ><svg class="ico"><use href="#i-check" /></svg><b data-tests-count>0</b> tests
+                passed</span
+              >
+              <span class="check"
+                ><svg class="ico"><use href="#i-check" /></svg>Preview verified</span
+              >
+            </div>
+            <div class="preview" aria-hidden="true">
+              <div class="browser-bar">
+                <span class="lights"><i></i><i></i><i></i></span
+                ><span class="url">preview · pricing</span>
+              </div>
+              <div class="plans"><i></i><i class="hi"></i><i></i></div>
+            </div>
+            <div class="decision-actions" data-decision>
+              <button class="btn btn-aurora" data-accept type="button">Accept</button>
+              <button class="btn btn-raised" type="button">Request changes</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5c · Where it runs -->
+      <section class="where sheet-bg" id="where">
+        <div class="wrap">
+          <div class="section-head center reveal">
+            <p class="eyebrow">Where it runs</p>
+            <h2 class="display-2">Your office is a Mac mini.</h2>
+            <p class="lede">
+              Your company doesn't need a data center. Devys runs on an always-on Mac: employees
+              work in your files, with your tools, your logins and a browser you can watch. Your
+              iPhone reaches it from anywhere over your own private network. Prefer the cloud? The
+              same Devys runs in your Cloudflare account.
+            </p>
+          </div>
+          <div class="where-stage reveal" style="--i: 1" data-seg-root>
+            <div class="seg" role="tablist" aria-label="Deployment mode">
+              <span class="seg-thumb" aria-hidden="true"></span>
+              <button role="tab" aria-selected="true" data-seg="local" type="button">
+                On your Mac
+              </button>
+              <button role="tab" aria-selected="false" data-seg="cloud" type="button">
+                In your cloud
+              </button>
+            </div>
+            <div class="topology">
+              <div class="devices">
+                <span class="device"
+                  ><svg class="ico"><use href="#i-phone" /></svg>iPhone</span
+                >
+                <span class="device"
+                  ><svg class="ico"><use href="#i-tablet" /></svg>iPad</span
+                >
+              </div>
+              <div class="wire">
+                <span data-seg-text="local">Tailscale</span
+                ><span data-seg-text="cloud" hidden>HTTPS</span>
+              </div>
+              <div class="hub">
+                <div class="hub-team">
+                  <canvas
+                    class="face"
+                    data-palette="blue"
+                    data-shape="roundedSquare"
+                    data-seed="7"
+                    data-size="30"
+                    data-mood="working"
+                  ></canvas
+                  ><canvas
+                    class="face"
+                    data-palette="green"
+                    data-shape="hexagon"
+                    data-seed="3"
+                    data-size="30"
+                    data-mood="working"
+                  ></canvas
+                  ><canvas
+                    class="face"
+                    data-palette="orange"
+                    data-shape="blob"
+                    data-seed="11"
+                    data-size="30"
+                    data-mood="idle"
+                  ></canvas
+                  ><canvas
+                    class="face"
+                    data-palette="purple"
+                    data-shape="capsule"
+                    data-seed="5"
+                    data-size="30"
+                    data-mood="working"
+                  ></canvas>
+                </div>
+                <div data-seg-panel="local">
+                  <div class="macmini"><i></i></div>
+                  <h4>Mac mini · always on</h4>
+                  <div class="pills">
+                    <span>Your files</span><span>Xcode</span><span>Codex · Claude Code</span
+                    ><span>Chrome, Devys profile</span>
+                  </div>
+                </div>
+                <div data-seg-panel="cloud" hidden>
+                  <div class="cloud-mark">
+                    <svg class="ico"><use href="#i-cloud" /></svg>
+                  </div>
+                  <h4>Your Cloudflare account</h4>
+                  <div class="pills">
+                    <span>Workers</span><span>Postgres</span><span>Sandboxed runners</span
+                    ><span>Cloud browser</span>
+                  </div>
+                </div>
+              </div>
+              <div class="wire">
+                <span data-seg-text="local">Tailscale</span
+                ><span data-seg-text="cloud" hidden>HTTPS</span>
+              </div>
+              <div class="devices">
+                <span class="device"
+                  ><svg class="ico"><use href="#i-laptop" /></svg>MacBook</span
+                >
+                <span class="device"
+                  ><svg class="ico"><use href="#i-globe" /></svg>Any browser</span
+                >
+              </div>
+            </div>
+            <ul class="where-facts" data-seg-panel="local">
+              <li><b>Nothing leaves your machine</b>unless you send it.</li>
+              <li><b>Works with the laptop closed</b>as long as the Mac is on.</li>
+              <li><b>Your logins, deliberately</b>Cards stay in the vault.</li>
+            </ul>
+            <ul class="where-facts" data-seg-panel="cloud" hidden>
+              <li><b>Sandboxed by default</b>Every job in its own runner.</li>
+              <li><b>Nothing to keep plugged in</b>It runs while everything is off.</li>
+              <li><b>Same apps, same rules</b>Switch modes, keep the company.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- 6 · Authority -->
+      <section class="authority" id="authority">
+        <div class="wrap authority-grid">
+          <div class="authority-copy">
+            <div class="section-head reveal">
+              <p class="eyebrow">Authority</p>
+              <h2 class="display-2">Autonomy without authority is just slop.</h2>
+              <p class="lede">
+                Other tools remove the owner and hope for the best. Devys keeps you above the loop:
+                agents act inside grants you can read, budgets you set and decisions you sign.
+              </p>
+            </div>
+            <div class="principles">
+              <div class="principle reveal" style="--i: 0">
+                <svg class="ico"><use href="#i-sliders" /></svg>
+                <div>
+                  <h4>Grants, not vibes</h4>
+                  <p>
+                    Every employee's access is explicit: what it does alone, what asks first, what
+                    it can never touch.
+                  </p>
+                </div>
+              </div>
+              <div class="principle reveal" style="--i: 1">
+                <svg class="ico"><use href="#i-faceid" /></svg>
+                <div>
+                  <h4>Signed decisions</h4>
+                  <p>
+                    Approvals are signed on your iPhone or Mac and bound to the exact recipients,
+                    amounts and terms.
+                  </p>
+                </div>
+              </div>
+              <div class="principle reveal" style="--i: 2">
+                <svg class="ico"><use href="#i-key" /></svg>
+                <div>
+                  <h4>Agents never hold your cards</h4>
+                  <p>
+                    Card numbers and payment credentials stay in a separate vault. Agents hold
+                    handles, never the card.
+                  </p>
+                </div>
+              </div>
+              <div class="principle reveal" style="--i: 3">
+                <svg class="ico"><use href="#i-receipt" /></svg>
+                <div>
+                  <h4>Receipts, not claims</h4>
+                  <p>
+                    "Done" links to evidence: the deploy, the receipt, the reply. Uncertain outcomes
+                    get checked, never assumed.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="authority-card reveal" style="--i: 1">
+            <div class="decision big" data-decision>
+              <div class="decision-top">
+                <span class="chip chip-needs" data-chip
+                  ><svg class="glyph"><use href="#i-excl" /></svg><span>Needs approval</span></span
+                >
+              </div>
+              <h4>Buy acme.example</h4>
+              <p>Business Ops prepared this purchase under the launch budget.</p>
+              <dl class="terms">
+                <div>
+                  <dt>Merchant</dt>
+                  <dd>Cloudflare Registrar</dd>
+                </div>
+                <div>
+                  <dt>Total</dt>
+                  <dd class="mono">$10.44 <span>incl. fees</span></dd>
+                </div>
+                <div>
+                  <dt>Renewal</dt>
+                  <dd>$10.44 / year, reminder 30 days before</dd>
+                </div>
+                <div>
+                  <dt>Pays with</dt>
+                  <dd>Ramp card ·· 4021, limit $50</dd>
+                </div>
+                <div>
+                  <dt>Registrant</dt>
+                  <dd>Acme, Inc.</dd>
+                </div>
+                <div>
+                  <dt>Expires</dt>
+                  <dd>in 24 hours</dd>
+                </div>
+              </dl>
+              <div class="decision-actions">
+                <button class="btn btn-aurora" data-approve type="button">
+                  <svg class="ico"><use href="#i-faceid" /></svg>Approve with Face ID
+                </button>
+                <button class="btn btn-raised" type="button">Review</button>
+              </div>
+              <div class="seal" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+              </div>
+              <div class="faceid-scan" aria-hidden="true">
+                <svg class="ico"><use href="#i-faceid" /></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="wrap live reveal">
+          <div class="live-copy">
+            <h3>Watch it work. Take the wheel.</h3>
+            <p>
+              Employees drive a real browser you can see. Take over at any moment; the employee
+              pauses on that work until you hand it back.
+            </p>
+          </div>
+          <div class="live-session" data-live>
+            <div class="browser-bar">
+              <span class="lights"><i></i><i></i><i></i></span
+              ><span class="url">registrar · checkout</span>
+              <span class="live-tag"><i></i>Live</span>
+            </div>
+            <div class="live-body">
+              <div class="checkout">
+                <div class="row"><b>acme.example</b><span>$10.44 / year</span></div>
+                <span class="field"></span><span class="field short"></span
+                ><span class="field"></span>
+                <span class="pay">Complete purchase</span>
+              </div>
+              <span class="cursor" aria-hidden="true"></span>
+            </div>
+            <div class="live-foot">
+              <canvas
+                class="face"
+                data-palette="purple"
+                data-shape="capsule"
+                data-seed="5"
+                data-size="26"
+                data-mood="working"
+                data-live-face
+              ></canvas>
+              <span data-live-status><b>Business Ops</b> is buying acme.example</span>
+              <button class="btn btn-raised btn-compact" data-takeover type="button">
+                Take over
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 8 · Anywhere: a pinned sunrise over ASCII water -->
+      <section class="anywhere scope-dark" data-horizon>
+        <div class="anywhere-sticky">
+          <canvas class="ascii" data-ascii="horizon"></canvas>
+          <div class="anywhere-veil"></div>
+          <div class="wrap anywhere-grid">
+            <div class="anywhere-copy" data-horizon-copy>
+              <p class="eyebrow">From anywhere</p>
+              <h2 class="display-2">The company runs between your decisions.</h2>
+              <p class="lede">
+                Not passive income. Not a dashboard to babysit. A company that keeps its commitments
+                while you're offline, on a plane or starting the next one, and taps you only when it
+                needs your judgment.
+              </p>
+            </div>
+            <div class="notes" data-horizon-notes>
+              <div class="note glass">
+                <canvas
+                  class="face"
+                  data-palette="orange"
+                  data-shape="blob"
+                  data-seed="11"
+                  data-mood="waiting"
+                  data-size="34"
+                ></canvas>
+                <div>
+                  <div class="note-top">
+                    <strong>Growth</strong
+                    ><span class="chip chip-needs sm"
+                      ><svg class="glyph"><use href="#i-excl" /></svg>Needs you</span
+                    >
+                  </div>
+                  <p>Send the PR pricing inquiry to Search Intelligence. You're in CC.</p>
+                </div>
+              </div>
+              <div class="note glass">
+                <canvas
+                  class="face"
+                  data-palette="green"
+                  data-shape="hexagon"
+                  data-seed="3"
+                  data-mood="celebrate"
+                  data-size="34"
+                ></canvas>
+                <div>
+                  <div class="note-top">
+                    <strong>Engineering</strong
+                    ><span class="chip chip-done sm"
+                      ><svg class="glyph"><use href="#i-check" /></svg>Done</span
+                    >
+                  </div>
+                  <p>Pricing page deployed and verified in production.</p>
+                </div>
+              </div>
+              <div class="note glass">
+                <canvas
+                  class="face"
+                  data-palette="blue"
+                  data-shape="roundedSquare"
+                  data-seed="7"
+                  data-size="34"
+                  data-mood="celebrate"
+                ></canvas>
+                <div>
+                  <div class="note-top">
+                    <strong>Operations</strong
+                    ><span class="chip chip-waiting sm"
+                      ><svg class="glyph"><use href="#i-clock" /></svg>Every Monday</span
+                    >
+                  </div>
+                  <p>Your weekly report is ready: 412 signups, up 18%.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 10 · A real week -->
+      <section class="proof" id="proof">
+        <div class="wrap proof-grid">
+          <div class="section-head reveal">
+            <p class="eyebrow">A real week</p>
+            <h2 class="display-2">A whole company. Forty minutes of your week.</h2>
+            <p class="lede">
+              Acme runs on Devys. Engineering ships the product, Growth runs PR and campaigns,
+              Business Ops handles accounts and spend, and Operations keeps it all moving. The owner
+              signs a handful of decisions and gets on with their life.
+            </p>
+            <div class="minutes">
+              <span class="label">Owner minutes this week</span>
+              <span class="minutes-value">38<small>min</small></span>
+              <span class="minutes-note">6 decisions signed · 214 commitments kept</span>
+            </div>
+          </div>
+          <div class="worklist sheet reveal" style="--i: 1">
+            <div class="worklist-head">
+              <span class="biz-tile biz-blue" style="--s: 26px">E</span
+              ><strong>Acme · This week</strong><span class="label">Work</span>
+            </div>
+            <ol>
+              <li>
+                <span class="chip chip-done sm"
+                  ><svg class="glyph"><use href="#i-check" /></svg>Done</span
+                ><span>Shipped the new pricing page, tests and preview verified</span
+                ><em>Engineering</em>
+              </li>
+              <li>
+                <span class="chip chip-done sm"
+                  ><svg class="glyph"><use href="#i-check" /></svg>Done</span
+                ><span>Bought acme.example and configured DNS and TLS</span><em>Business Ops</em>
+              </li>
+              <li>
+                <span class="chip chip-done sm"
+                  ><svg class="glyph"><use href="#i-check" /></svg>Done</span
+                ><span>Set up Workspace email, analytics and Search Console</span
+                ><em>Business Ops</em>
+              </li>
+              <li>
+                <span class="chip chip-done sm"
+                  ><svg class="glyph"><use href="#i-check" /></svg>Done</span
+                ><span>Negotiated ten PR campaigns, owner in CC</span><em>Growth</em>
+              </li>
+              <li>
+                <span class="chip chip-done sm"
+                  ><svg class="glyph"><use href="#i-check" /></svg>Done</span
+                ><span>Onboarded four UGC creators with signed usage rights</span><em>Growth</em>
+              </li>
+              <li>
+                <span class="chip chip-done sm"
+                  ><svg class="glyph"><use href="#i-check" /></svg>Done</span
+                ><span>Reconciled every charge against its receipt</span><em>Business Ops</em>
+              </li>
+              <li>
+                <span class="chip chip-done sm"
+                  ><svg class="glyph"><use href="#i-check" /></svg>Done</span
+                ><span>Wrote Friday's briefing and next week's plan</span><em>Operations</em>
+              </li>
+            </ol>
+          </div>
+        </div>
+      </section>
+
+      <!-- 9 · Manifesto: pinned, one tenet at a time -->
+      <section class="manifesto scope-dark" id="manifesto" data-manifesto>
+        <div class="manifesto-sticky">
+          <canvas class="ascii" data-ascii="waves"></canvas>
+          <div class="manifesto-veil"></div>
+          <div class="wrap manifesto-stage">
+            <div class="manifesto-head">
+              <p class="eyebrow">Manifesto</p>
+              <h2 class="display-2">Some people will hate this. <em>Good.</em></h2>
+            </div>
+            <ol class="tenets-stage">
+              <li>
+                <span class="n">01</span>
+                <h3>Headcount is a vanity metric.</h3>
+                <p>
+                  Leverage used to need permission: investors, hires. Agents don't. Judge a company
+                  by what it ships and how little of your attention it takes.
+                </p>
+              </li>
+              <li>
+                <span class="n">02</span>
+                <h3>This is not passive income.</h3>
+                <p>
+                  You design the system and make the hard calls. Agents do everything else. Anyone
+                  promising less is selling slop.
+                </p>
+              </li>
+              <li>
+                <span class="n">03</span>
+                <h3>Chat is not work.</h3>
+                <p>A message saying "done" isn't done. Commitments, records and receipts are.</p>
+              </li>
+              <li>
+                <span class="n">04</span>
+                <h3>Not in the loop. Above it.</h3>
+                <p>
+                  You don't approve every step. You set the boundaries and decide the exceptions.
+                </p>
+              </li>
+              <li>
+                <span class="n">05</span>
+                <h3>If you're busy, the system is broken.</h3>
+                <p>
+                  Every interruption is a flaw in how the company is designed. Fix the system, not
+                  the symptom.
+                </p>
+              </li>
+              <li>
+                <span class="n">06</span>
+                <h3>Stop managing. Start designing.</h3>
+                <p>Your job isn't to supervise work. It's to build the machine that does it.</p>
+              </li>
+              <li>
+                <span class="n">07</span>
+                <h3>Your company is yours.</h3>
+                <p>
+                  Your records, accounts, domains and exit. We will never take a cut of your
+                  revenue.
+                </p>
+              </li>
+              <li>
+                <span class="n">08</span>
+                <h3>Receipts, not demos.</h3>
+                <p>Every claim we make will link to evidence, starting with our own.</p>
+              </li>
+            </ol>
+            <div class="manifesto-progress" aria-hidden="true">
+              <span data-manifesto-count>01</span
+              ><span class="bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span
+              ><span>08</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 11 · Own it -->
+      <section class="own sheet-bg">
+        <div class="wrap">
+          <div class="section-head center reveal">
+            <p class="eyebrow">Ownership</p>
+            <h2 class="display-2">Own the machine, too.</h2>
+          </div>
+          <div class="own-grid">
+            <div class="own-card reveal" style="--i: 0">
+              <svg class="ico"><use href="#i-code" /></svg>
+              <h4>Open source</h4>
+              <p>The whole platform is open source. Read it, fork it, run it, change it.</p>
+            </div>
+            <div class="own-card reveal" style="--i: 1">
+              <svg class="ico"><use href="#i-cloud" /></svg>
+              <h4>Your Mac or your cloud</h4>
+              <p>
+                Run everything on your own Mac, or in your own Cloudflare account. Same apps, same
+                rules.
+              </p>
+            </div>
+            <div class="own-card reveal" style="--i: 2">
+              <svg class="ico"><use href="#i-receipt" /></svg>
+              <h4>No revenue share. Ever.</h4>
+              <p>
+                Your company's upside is yours. Your records, domains and accounts stay in your
+                name.
+              </p>
+            </div>
+            <div class="own-card reveal" style="--i: 3">
+              <svg class="ico"><use href="#i-spark" /></svg>
+              <h4>Any model, per employee</h4>
+              <p>
+                Claude, GPT or Gemini, chosen for each employee, with the cost of every turn in
+                view.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 12 · Close -->
+      <section class="close scope-dark" id="start">
+        <div class="close-glow" aria-hidden="true"></div>
+        <div class="wrap close-inner">
+          <canvas
+            class="face hero-face reveal"
+            data-palette="pink"
+            data-shape="circle"
+            data-seed="21"
+            data-size="112"
+            data-tile="true"
+            aria-label="A Devys employee. Tap to say hello."
+          ></canvas>
+          <h2 class="display reveal" style="--i: 1">
+            Build the company.<br /><em>Not the job.</em>
+          </h2>
+          <p class="lede reveal" style="--i: 2">
+            Hand Devys your business. Keep the decisions. Get your weeks back.
+          </p>
+          <div class="hero-actions center reveal" style="--i: 3">
+            <a class="btn btn-aurora" href="#">Get started</a>
+            <a class="btn btn-star" href="#"
+              ><svg class="ico"><use href="#i-github" /></svg>Star on GitHub<span class="star-badge"
+                ><svg class="ico ico-xs"><use href="#i-star" /></svg></span
+            ></a>
+          </div>
+        </div>
+        <footer class="wrap footer">
+          <span class="nav-brand"
+            ><canvas
+              class="face"
+              data-palette="blue"
+              data-shape="roundedSquare"
+              data-seed="7"
+              data-size="22"
+              data-budget="full"
+              data-brand
+            ></canvas
+            ><span>Devys</span></span
+          >
+          <span>A quiet office that runs itself.</span>
+          <span>© 2026 Devys</span>
+        </footer>
+      </section>
+    </main>
+  </body>
+</html>

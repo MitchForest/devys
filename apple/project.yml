@@ -1,0 +1,98 @@
+name: Devys
+options:
+  bundleIdPrefix: com.mitchwhite
+  deploymentTarget:
+    iOS: "27.0"
+    macOS: "27.0"
+configFiles:
+  Debug: Devys.xcconfig
+  Release: Devys.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    GENERATE_INFOPLIST_FILE: YES
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+    SWIFT_STRICT_CONCURRENCY: complete
+    OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny -enable-upcoming-feature InternalImportsByDefault -enable-upcoming-feature MemberImportVisibility -enable-upcoming-feature NonisolatedNonsendingByDefault"
+packages:
+  DevysKit:
+    path: Packages/DevysKit
+targets:
+  Devys-iOS:
+    type: application
+    platform: iOS
+    productName: Devys
+    sources:
+      - path: Devys-iOS
+    dependencies:
+      - package: DevysKit
+        product: DevysWorkspace
+      - package: DevysKit
+        product: DevysDesignSystem
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mitchwhite.DevysBusiness
+        PRODUCT_NAME: Devys
+        TARGETED_DEVICE_FAMILY: "1,2"
+        # libghostty-vt's simulator slice is Apple silicon only.
+        "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSupportsMultipleScenes: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_CFBundleDisplayName: Devys
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: Devys listens when you dictate or talk with your team.
+        INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: Devys turns your speech into text on this device.
+    info:
+      path: Devys-iOS/App/Info.plist
+      properties:
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        # devys://enroll?server=…&code=… signs this device in from a QR code or link.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.mitchwhite.DevysBusiness.enroll
+            CFBundleURLSchemes: [devys]
+  Devys-macOS:
+    type: application
+    platform: macOS
+    productName: Devys
+    sources:
+      - path: Devys-macOS
+    dependencies:
+      - package: DevysKit
+        product: DevysWorkspace
+      - package: DevysKit
+        product: DevysDesignSystem
+    entitlements:
+      path: Devys-macOS/App/Devys.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+        com.apple.security.device.audio-input: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mitchwhite.DevysBusiness
+        PRODUCT_NAME: Devys
+        INFOPLIST_KEY_CFBundleDisplayName: Devys
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.business
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: Devys listens when you dictate or talk with your team.
+        INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: Devys turns your speech into text on this device.
+    info:
+      path: Devys-macOS/App/Info.plist
+      properties:
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        # devys://enroll?server=…&code=… signs this device in from a QR code or link.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.mitchwhite.DevysBusiness.enroll
+            CFBundleURLSchemes: [devys]
+schemes:
+  Devys-iOS:
+    build:
+      targets:
+        Devys-iOS: all
+  Devys-macOS:
+    build:
+      targets:
+        Devys-macOS: all

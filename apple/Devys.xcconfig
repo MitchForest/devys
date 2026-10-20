@@ -1,0 +1,3 @@
+// Shared build settings. Put your own DEVELOPMENT_TEAM in Local.xcconfig (gitignored)
+// so signed builds can use the data-protection Keychain.
+#include? "Local.xcconfig"

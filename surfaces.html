@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'none'"
+    />
+    <title>Devys surface</title>
+    <link rel="stylesheet" href="/src/web/styles.css" />
+  </head>
+  <body class="bg-sheet">
+    <div id="surface"></div>
+    <!-- The Apple apps' bundle of document surfaces (.docs/COMPONENTS.md#surfaces). -->
+    <script type="module" src="/src/surfaces/host.tsx"></script>
+  </body>
+</html>
