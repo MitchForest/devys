@@ -1,3 +1,4 @@
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   ChevronDown,
   FileText,
@@ -64,11 +65,18 @@ export function SpacePage({ id }: { id: string }) {
     <div className="flex h-full flex-col">
       <div className="flex flex-col gap-3 border-b border-hairline px-5 pt-4 pb-3">
         <div className="flex flex-wrap items-center gap-3">
-          <BusinessTile name={space.name} tint={tint} size={30} />
-          <div className="flex min-w-0 flex-col">
-            <h1 className="truncate text-heading font-semibold text-ink">{space.name}</h1>
-            {space.purpose && <p className="truncate text-detail text-ink-3">{space.purpose}</p>}
-          </div>
+          <Popover>
+            <PopoverTrigger
+              aria-label={`About ${space.name}`}
+              className="-mx-1.5 flex min-w-0 items-center gap-3 rounded-[10px] px-1.5 py-1 text-left hover:bg-sheet-tint"
+            >
+              <BusinessTile name={space.name} tint={tint} size={30} />
+              <h1 className="truncate text-heading font-semibold text-ink">{space.name}</h1>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-80 gap-3 rounded-card bg-sheet p-4">
+              <SpaceAbout space={space} />
+            </PopoverContent>
+          </Popover>
           <span className="ml-auto" />
           <DevysButton compact onClick={() => actions.newTask({ spaceId: space.id })}>
             <Plus /> New task
@@ -128,7 +136,35 @@ export function SpacePage({ id }: { id: string }) {
 }
 
 /** The lead, and every employee who has spoken in the space's conversation. */
-export function useParticipants(space: Space) {
+/** What a space is for and who is in it, on demand from its header. */
+function SpaceAbout({ space }: { space: Space }) {
+  const { actions } = useWorkspace();
+  const participants = useParticipants(space);
+  return (
+    <>
+      {space.purpose && <p className="text-detail text-ink-2">{space.purpose}</p>}
+      <div className="flex flex-col gap-0.5" aria-label="Who's here">
+        <span className="text-label font-medium text-ink-3">Who's here</span>
+        {participants.map((employee) => (
+          <button
+            key={employee.id}
+            type="button"
+            onClick={() => actions.message(employee.id)}
+            className="-mx-2 flex items-center gap-2 rounded-[8px] px-2 py-1 text-left text-detail text-ink hover:bg-sheet-tint"
+          >
+            <EmployeePortrait employee={employee} size={20} />
+            <span className="truncate">{employee.name}</span>
+            {employee.id === space.lead_employee_id && (
+              <span className="ml-auto text-caption text-ink-3">Lead</span>
+            )}
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function useParticipants(space: Space) {
   const { main, employees } = useWorkspace();
   const ids = new Set([
     ...(space.lead_employee_id ? [space.lead_employee_id] : []),

@@ -13,16 +13,22 @@ struct DirectPage: View {
         if let employee = store.snapshot.employees.first(where: { $0.id == employeeID }) {
             VStack(spacing: 0) {
                 HStack(spacing: 10) {
-                    Portrait(store.state.portrait(for: employee), size: 32, mood: mood(employee), label: employee.name)
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(employee.name).font(DevysTypography.heading).foregroundStyle(DevysColors.ink)
-                        Text(EmployeeLine.status(employee, working: store.state.isWorking(employee.id)))
-                            .font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3)
+                    AboutButton(name: employee.name) {
+                        HStack(spacing: 10) {
+                            Portrait(store.state.portrait(for: employee), size: 32, mood: mood(employee), label: employee.name)
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text(employee.name).font(DevysTypography.heading).foregroundStyle(DevysColors.ink)
+                                // Only what's changing; who they are is a click away.
+                                if employee.paused || store.state.isWorking(employee.id) {
+                                    Text(EmployeeLine.status(employee, working: store.state.isWorking(employee.id)))
+                                        .font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3)
+                                }
+                            }
+                        }
+                    } about: {
+                        DirectInfo(store: store, employeeID: employee.id)
                     }
                     Spacer(minLength: 8)
-                    Button("Profile", systemImage: "person.crop.circle") { store.send(.pageSelected(.employee(employee.id))) }
-                        .buttonStyle(DevysButtonStyle(.quiet, compact: true))
-                        .fixedSize()
                 }
                 .padding(.horizontal, DevysSpacing.regular)
                 .padding(.vertical, 10)

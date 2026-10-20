@@ -5,9 +5,9 @@ import DevysDesignSystem
 import SwiftUI
 
 extension Workspace.State {
-    /// The right panel has something to show: a work item, or the open conversation's info.
+    /// The right panel has something to show: it only ever holds a work item.
     var hasInspectorContent: Bool {
-        selectedWorkID != nil || main != nil
+        selectedWorkID != nil
     }
 
     /// Conversations with unread messages, for the Home badge.
@@ -16,32 +16,43 @@ extension Workspace.State {
     }
 }
 
-/// The right panel: the selected work item with its own thread, otherwise who is in the
-/// open conversation.
+/// The right panel: the selected work item with its own thread. Who an employee or a space is
+/// lives in a popover on the conversation's header, so nothing stays on screen unasked.
 struct Inspector: View {
     let store: StoreOf<Workspace>
 
     var body: some View {
         if let id = store.state.selectedWorkID {
             WorkPanel(store: store, commitmentID: id, closable: true)
-        } else {
-            ScrollView {
-                VStack(alignment: .leading, spacing: DevysSpacing.compact) {
-                    switch store.page {
-                    case .direct(let id): DirectInfo(store: store, employeeID: id)
-                    case .space(let id): SpaceInfo(store: store, spaceID: id)
-                    default: EmptyView()
-                    }
-                }
-                .padding(14)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
         }
     }
 }
 
+/// Wraps a conversation header's title so a click shows who or what it is.
+struct AboutButton<Label: View, About: View>: View {
+    let name: String
+    @ViewBuilder let label: () -> Label
+    @ViewBuilder let about: () -> About
+    @State private var shown = false
+
+    var body: some View {
+        Button { shown = true } label: { label().contentShape(Rectangle()) }
+            .buttonStyle(.plain)
+            .accessibilityLabel("About \(name)")
+            .popover(isPresented: $shown, arrowEdge: .bottom) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: DevysSpacing.compact) { about() }
+                        .padding(14)
+                        .frame(width: 300, alignment: .leading)
+                }
+                .frame(maxHeight: 420)
+                .presentationCompactAdaptation(.popover)
+            }
+    }
+}
+
 /// A DM's employee: who they are, what they're doing, and their open work.
-private struct DirectInfo: View {
+struct DirectInfo: View {
     let store: StoreOf<Workspace>
     let employeeID: String
 
@@ -65,7 +76,7 @@ private struct DirectInfo: View {
 }
 
 /// A space: its purpose, its lead, who's here, and its open work.
-private struct SpaceInfo: View {
+struct SpaceInfo: View {
     let store: StoreOf<Workspace>
     let spaceID: String
 

@@ -202,10 +202,12 @@ private struct InspectorToggle: View {
     let store: StoreOf<Workspace>
 
     var body: some View {
-        ToolbarIconButton(store.isInspectorVisible ? "Hide inspector (⌥⌘0)" : "Show inspector (⌥⌘0)", symbol: "sidebar.right") {
-            store.send(.inspectorToggled)
+        // The right panel only holds a work item, so its toggle shows only then.
+        if store.state.hasInspectorContent {
+            ToolbarIconButton(store.isInspectorVisible ? "Hide inspector (⌥⌘0)" : "Show inspector (⌥⌘0)", symbol: "sidebar.right") {
+                store.send(.inspectorToggled)
+            }
         }
-        .disabled(!store.state.hasInspectorContent)
     }
 }
 

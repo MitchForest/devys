@@ -40,12 +40,13 @@ struct SpacePage: View {
     private func header(_ space: Space) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
-                BusinessTile(String(space.name.prefix(1)), tint: .blue, size: 30)
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(space.name).font(DevysTypography.heading).foregroundStyle(DevysColors.ink)
-                    if !space.purpose.isEmpty {
-                        Text(space.purpose).font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3).lineLimit(1)
+                AboutButton(name: space.name) {
+                    HStack(spacing: 10) {
+                        BusinessTile(String(space.name.prefix(1)), tint: .blue, size: 30)
+                        Text(space.name).font(DevysTypography.heading).foregroundStyle(DevysColors.ink)
                     }
+                } about: {
+                    SpaceInfo(store: store, spaceID: space.id)
                 }
                 Spacer(minLength: 8)
                 Button("New task", systemImage: "plus") { store.send(.newTaskTapped(space: space.id)) }

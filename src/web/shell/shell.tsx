@@ -24,16 +24,7 @@ import {
 } from "lucide-react";
 import { EmployeePortrait, BusinessPortrait } from "../design/portrait.tsx";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import {
-  moodFor,
-  moodOf,
-  operationsMood,
-  pageTitle,
-  presence,
-  templateTitle,
-  type Presence,
-} from "../app/names.ts";
-import type { Space } from "../app/api.ts";
+import { moodFor, operationsMood, pageTitle, presence, type Presence } from "../app/names.ts";
 import { useWorkspace, valueOf, type Destination } from "../app/workspace.tsx";
 import { ToolbarIconButton } from "../design/buttons.tsx";
 import { PersonPortrait } from "../design/face.tsx";
@@ -41,7 +32,7 @@ import { EmptyNote, PageBody } from "../design/primitives.tsx";
 import { ApprovalsPage, WorkDetail, WorkPage } from "../pages/work.tsx";
 import { FilesPage } from "../pages/files.tsx";
 import { TodayGreeting, TodayPage, TodayWork } from "../pages/today.tsx";
-import { SpacePage, useParticipants } from "../pages/space.tsx";
+import { SpacePage } from "../pages/space.tsx";
 import { EmployeePage } from "../pages/employee.tsx";
 import { DirectPage } from "../pages/direct.tsx";
 import { AppsPage, InboxPage, MoneyPage } from "../pages/other.tsx";
@@ -129,11 +120,11 @@ export function Shell() {
 
 /** One gray frame (toolbar and rail) around one rounded workspace holding the sidebar, the page and the inspector. */
 function RegularShell() {
-  const { sidebarVisible, inspectorVisible, expanded, selectedWork, page } = useWorkspace();
+  const { sidebarVisible, inspectorVisible, expanded, selectedWork } = useWorkspace();
   const [ref, width] = useWidth<HTMLDivElement>();
   const [preferred, setPreferred] = useState(savedWidth);
-  // The right panel holds the open work item, or who's in the open conversation.
-  const hasPanel = Boolean(selectedWork) || page.kind === "direct" || page.kind === "space";
+  // The right panel holds the open work item and nothing else.
+  const hasPanel = Boolean(selectedWork);
   const columns = layout(
     width,
     sidebarVisible,
@@ -271,7 +262,7 @@ function ResizeHandle({
 
 function Toolbar() {
   const state = useWorkspace();
-  const { actions, sidebarVisible, inspectorVisible, business } = state;
+  const { actions, sidebarVisible, inspectorVisible, business, selectedWork } = state;
   return (
     <header className="flex h-[52px] shrink-0 items-center gap-1.5 pr-2.5 pl-[18px]">
       <ToolbarIconButton
@@ -300,12 +291,15 @@ function Toolbar() {
         <Search className="size-3" strokeWidth={2.4} />
         <span className="text-caption">⌘K</span>
       </button>
-      <ToolbarIconButton
-        label={inspectorVisible ? "Hide inspector (⌥⌘0)" : "Show inspector (⌥⌘0)"}
-        onClick={actions.toggleInspector}
-      >
-        <PanelRight />
-      </ToolbarIconButton>
+      {/* The right panel only ever holds a work item, so its toggle shows only then. */}
+      {selectedWork && (
+        <ToolbarIconButton
+          label={inspectorVisible ? "Hide inspector (⌥⌘0)" : "Show inspector (⌥⌘0)"}
+          onClick={actions.toggleInspector}
+        >
+          <PanelRight />
+        </ToolbarIconButton>
+      )}
     </header>
   );
 }
@@ -540,15 +534,12 @@ export function MainPane() {
 }
 
 /**
- * The right panel: the selected work item with its own thread and composer, or, beside a
- * conversation, who is in it.
+ * The right panel: the selected work item with its own thread and composer. Nothing else
+ * opens it; who an employee or a space is lives in a popover on the conversation's header.
  */
 export function RightPanel({ allowExpand = true }: { allowExpand?: boolean }) {
-  const { selectedWork, page } = useWorkspace();
-  if (selectedWork) return <WorkPanel id={selectedWork} allowExpand={allowExpand} />;
-  if (page.kind === "direct") return <DirectInfo employeeId={page.employeeId} />;
-  if (page.kind === "space") return <SpaceInfo id={page.id} />;
-  return null;
+  const { selectedWork } = useWorkspace();
+  return selectedWork ? <WorkPanel id={selectedWork} allowExpand={allowExpand} /> : null;
 }
 
 /** A work item: its detail above its thread (`work:<id>`), which has its own composer. */
@@ -614,82 +605,6 @@ function WorkPanel({ id, allowExpand }: { id: string; allowExpand: boolean }) {
         </>
       )}
     </section>
-  );
-}
-
-/** Beside a DM: who the employee is and what they're doing. */
-function DirectInfo({ employeeId }: { employeeId: string }) {
-  const state = useWorkspace();
-  const { employees, actions } = state;
-  const employee = employees.find((e) => e.id === employeeId);
-  if (!employee) return null;
-  const open = (valueOf(state.work) ?? []).filter(
-    (item) =>
-      item.owner_employee_id === employee.id &&
-      item.state !== "completed" &&
-      item.state !== "cancelled",
-  );
-  return (
-    <div className="flex h-full flex-col gap-4 overflow-y-auto p-4">
-      <div className="flex flex-col items-center gap-2 pt-2 text-center">
-        <EmployeePortrait employee={employee} size={56} mood={moodOf(state, employee)} />
-        <span className="text-heading font-semibold text-ink">{employee.name}</span>
-        <span className="text-detail text-ink-3">{templateTitle(employee.template)}</span>
-      </div>
-      <p className="line-clamp-6 text-detail text-ink-2">{employee.role}</p>
-      <div className="flex flex-col gap-1">
-        <span className="text-label font-medium text-ink-3">Open work · {open.length}</span>
-        {open.length === 0 && <span className="text-detail text-ink-3">Nothing open.</span>}
-        {open.slice(0, 8).map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => actions.openWork(item.id)}
-            className="truncate rounded-[8px] px-2 py-1.5 text-left text-detail text-ink hover:bg-sheet-tint"
-          >
-            {item.title}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** Beside a space's conversation: its lead and who has spoken there. */
-function SpaceInfo({ id }: { id: string }) {
-  const state = useWorkspace();
-  const space = valueOf(state.spaces)?.find((s) => s.id === id);
-  if (!space) return null;
-  return <SpacePeople space={space} />;
-}
-
-function SpacePeople({ space }: { space: Space }) {
-  const { actions } = useWorkspace();
-  const participants = useParticipants(space);
-  return (
-    <div className="flex h-full flex-col gap-4 overflow-y-auto p-4">
-      <div className="flex flex-col gap-0.5">
-        <span className="text-heading font-semibold text-ink">{space.name}</span>
-        {space.purpose && <span className="text-detail text-ink-2">{space.purpose}</span>}
-      </div>
-      <div className="flex flex-col gap-1" aria-label="Who's here">
-        <span className="text-label font-medium text-ink-3">Who's here</span>
-        {participants.map((employee) => (
-          <button
-            key={employee.id}
-            type="button"
-            onClick={() => actions.message(employee.id)}
-            className="flex items-center gap-2 rounded-[8px] px-2 py-1.5 text-left text-control text-ink hover:bg-sheet-tint"
-          >
-            <EmployeePortrait employee={employee} size={22} />
-            <span className="truncate">{employee.name}</span>
-            {employee.id === space.lead_employee_id && (
-              <span className="ml-auto text-caption text-ink-3">Lead</span>
-            )}
-          </button>
-        ))}
-      </div>
-    </div>
   );
 }
 
