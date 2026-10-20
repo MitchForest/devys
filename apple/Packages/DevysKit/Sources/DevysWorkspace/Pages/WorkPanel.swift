@@ -1,4 +1,5 @@
 import ComposableArchitecture2
+import Dependencies
 import DevysClient
 import DevysDesignSystem
 import SwiftUI
@@ -10,6 +11,9 @@ struct WorkPanel: View {
     let commitmentID: String
     /// In the right panel it closes; on iPhone navigation pops it instead.
     var closable = false
+    @Dependency(\.runtimeClient) private var runtime
+    /// This item's requests the owner already answered.
+    @State private var answered: [Decision] = []
 
     private var key: ConversationKey { .work(commitmentID) }
 
@@ -23,7 +27,9 @@ struct WorkPanel: View {
                             Text(item.objective).font(DevysTypography.body).foregroundStyle(DevysColors.ink2)
                         }
                         decisions(item)
+                        // Attached to a view that always exists, so it runs with no decisions yet.
                         WorkItemFields(store: store, item: item)
+                            .task(id: item.revision) { await loadAnswered(item) }
                         WorkItemNotes(store: store, item: item)
                         CodingSessions(store: store, item: item)
                         evidence(item)
@@ -71,6 +77,20 @@ struct WorkPanel: View {
                 ForEach(decisions) { DecisionCard(store: store, decision: $0) }
             }
         }
+        if !answered.isEmpty {
+            VStack(alignment: .leading, spacing: DevysSpacing.small) {
+                SectionHeader("Decided", count: answered.count)
+                ForEach(answered) { decision in
+                    Text("\(decision.status == "rejected" ? "Declined" : "Approved"): \(DecisionText.title(decision))\(decision.status == "used" ? " · used" : "")")
+                        .font(DevysTypography.caption).foregroundStyle(DevysColors.ink2)
+                }
+            }
+        }
+    }
+
+    /// Reloads the answered requests when the item changes (its revision moves on each answer).
+    private func loadAnswered(_ item: Commitment) async {
+        answered = ((try? await runtime.workDecisions(store.businessID, item.id)) ?? []).filter { $0.status != "pending" }
     }
 
     @ViewBuilder private func evidence(_ item: Commitment) -> some View {

@@ -170,12 +170,16 @@ export const formatBytes = (bytes: number) =>
  * Who has taken a work item over, as the signed-in person reads it; undefined while its
  * employee has it. The client knows only its own person's name, so anyone else is unnamed.
  */
-export const takeoverTitle = (takenOverBy: string | null, me: string | undefined) =>
+export const takeoverTitle = (
+  takenOverBy: string | null,
+  me: string | undefined,
+  members: readonly { id: string; display_name: string }[] = [],
+) =>
   takenOverBy === null
     ? undefined
     : takenOverBy === me
       ? "You have it"
-      : "Taken over by another person";
+      : `Taken over by ${members.find((member) => member.id === takenOverBy)?.display_name ?? "another person"}`;
 
 /** Inbox until a mailbox is connected, said the same on every client. */
 export const inboxEmpty =

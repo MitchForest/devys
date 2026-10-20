@@ -52,7 +52,7 @@ export default function SessionView({
   onClose: () => void;
   onChanged: () => void;
 }) {
-  const { businessId, person, actions, panel, employeeName } = useWorkspace();
+  const { businessId, person, members, actions, panel, employeeName } = useWorkspace();
   const dark = useDark();
   const [diff, setDiff] = useState<WorkingDiff | null>(null);
   const [selection, setSelection] = useState<DiffSelection | null>(null);
@@ -61,7 +61,7 @@ export default function SessionView({
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const mine = item.taken_over_by !== null && item.taken_over_by === person?.id;
-  const takeover = takeoverTitle(item.taken_over_by, person?.id);
+  const takeover = takeoverTitle(item.taken_over_by, person?.id, members);
   const chip = stateChip[session.state];
 
   useEffect(() => {
@@ -82,7 +82,15 @@ export default function SessionView({
   const addComment = async () => {
     if (!selection || !draftComment.trim() || !diff) return;
     const hunk = await hunkHash(hunkText(diff.patch, selection));
-    setComments((items) => [...items, { ...selection, hunk, text: draftComment.trim() }]);
+    setComments((items) => [
+      ...items,
+      {
+        ...selection,
+        hunk,
+        ...(session.base_commit ? { base: session.base_commit } : {}),
+        text: draftComment.trim(),
+      },
+    ]);
     setDraftComment("");
     setSelection(null);
   };

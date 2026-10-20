@@ -221,6 +221,17 @@ export const pendingDecisions = (db: Database, businessId: string) =>
     ),
   );
 
+/** A work item's requests, newest first, whatever their answer: its page shows them. */
+export const decisionsFor = (db: Database, businessId: string, commitmentId: string) =>
+  database(db, (sql) =>
+    sql.rows<Decision>(
+      `SELECT ${decisionColumns} FROM decisions
+       WHERE business_id = $1 AND commitment_id = $2
+       ORDER BY requested_at DESC LIMIT 20`,
+      [businessId, commitmentId],
+    ),
+  );
+
 /** Approves or rejects a pending, unexpired request once. Returns it, or null if it can't. */
 export const answerDecision = (
   db: Database,

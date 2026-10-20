@@ -4,7 +4,7 @@ import { type Business, type Person } from "../identity/contract.ts";
 import { conversationKey } from "../conversations/contract.ts";
 import { postFromPerson } from "./conversations.ts";
 import { activeEmployee } from "../identity/service.ts";
-import { answerDecision, pendingDecisions } from "../authority/service.ts";
+import { answerDecision, decisionsFor, pendingDecisions } from "../authority/service.ts";
 import {
   commitments,
   createCommitment,
@@ -165,10 +165,17 @@ export async function decisionRoute(
   access: { person: Person; business: Business; trusted: boolean; path: string },
 ) {
   const { person, business, trusted, path } = access;
-  if (path === "/decisions" && request.method === "GET")
+  if (path === "/decisions" && request.method === "GET") {
+    // `?commitment=` lists one work item's requests with their answers, not only pending ones.
+    const commitmentId = new URL(request.url).searchParams.get("commitment");
     return Response.json({
-      decisions: await Effect.runPromise(pendingDecisions(env.HYPERDRIVE, business.id)),
+      decisions: await Effect.runPromise(
+        commitmentId
+          ? decisionsFor(env.HYPERDRIVE, business.id, commitmentId)
+          : pendingDecisions(env.HYPERDRIVE, business.id),
+      ),
     });
+  }
   const answer = /^\/decisions\/([A-Za-z0-9-]{1,64})\/(approve|reject)$/.exec(path);
   if (!answer || request.method !== "POST") return notFound();
   if (!trusted) return forbidden();

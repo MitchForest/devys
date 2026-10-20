@@ -140,5 +140,8 @@ describe("who has taken work over", () => {
     expect(takeoverTitle("p1", "p1")).toBe("You have it");
     expect(takeoverTitle("p2", "p1")).toBe("Taken over by another person");
     expect(takeoverTitle("p2", undefined)).toBe("Taken over by another person");
+    expect(takeoverTitle("p2", "p1", [{ id: "p2", display_name: "Sam" }])).toBe(
+      "Taken over by Sam",
+    );
   });
 });

@@ -186,8 +186,7 @@ struct SessionScreen: View {
     private func addComment() {
         guard let selection, !draftComment.trimmingCharacters(in: .whitespaces).isEmpty else { return }
         let text = draftComment.trimmingCharacters(in: .whitespacesAndNewlines)
-        // The server doesn't say which base commit the patch is against, so comments leave it out.
-        comments.append(DiffComment(selection, in: patch, base: nil, text: text))
+        comments.append(DiffComment(selection, in: patch, base: session.baseCommit, text: text))
         draftComment = ""
         self.selection = nil
     }

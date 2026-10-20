@@ -121,9 +121,12 @@ public struct DevysHTTPClient: Sendable {
         ))
     }
 
-    public func decisions(_ session: DeviceSession, businessID: String) async throws -> [Decision] {
+    /// Pending requests, or one work item's requests with their answers.
+    public func decisions(_ session: DeviceSession, businessID: String, commitmentID: String? = nil) async throws -> [Decision] {
         struct Page: Decodable { let decisions: [Decision] }
-        let page: Page = try await send(authorized(session, path: "api/businesses/\(businessID)/decisions"))
+        var request = authorized(session, path: "api/businesses/\(businessID)/decisions")
+        if let commitmentID { request.url?.append(queryItems: [URLQueryItem(name: "commitment", value: commitmentID)]) }
+        let page: Page = try await send(request)
         return page.decisions
     }
 

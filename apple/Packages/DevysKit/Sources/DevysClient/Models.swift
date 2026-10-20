@@ -42,11 +42,14 @@ public struct Account: Equatable, Sendable, Decodable {
 public struct BusinessDetail: Equatable, Sendable, Decodable {
     public let business: Business
     public let employees: [Employee]
+    /// The people who are members, so a client can name who took work over.
+    public let members: [Person]
     public let artifacts: [Artifact]
 
-    public init(business: Business, employees: [Employee], artifacts: [Artifact]) {
+    public init(business: Business, employees: [Employee], members: [Person] = [], artifacts: [Artifact]) {
         self.business = business
         self.employees = employees
+        self.members = members
         self.artifacts = artifacts
     }
 }
@@ -413,6 +416,8 @@ public struct Decision: Equatable, Sendable, Decodable, Identifiable {
     public let capability: String
     public let input: JSONValue
     public let commitmentID: String?
+    /// pending, approved, rejected, or used (an approval that ran).
+    public let status: String
     public let requestedAt: String
     public let expiresAt: String
 
@@ -422,6 +427,7 @@ public struct Decision: Equatable, Sendable, Decodable, Identifiable {
         capability: String,
         input: JSONValue,
         commitmentID: String? = nil,
+        status: String = "pending",
         requestedAt: String = "2026-10-19T00:00:00.000Z",
         expiresAt: String = "2026-10-20T00:00:00.000Z"
     ) {
@@ -430,12 +436,13 @@ public struct Decision: Equatable, Sendable, Decodable, Identifiable {
         self.capability = capability
         self.input = input
         self.commitmentID = commitmentID
+        self.status = status
         self.requestedAt = requestedAt
         self.expiresAt = expiresAt
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, capability, input
+        case id, capability, input, status
         case employeeID = "employee_id"
         case commitmentID = "commitment_id"
         case requestedAt = "requested_at"

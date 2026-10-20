@@ -58,6 +58,8 @@ package struct Workspace {
         package var spaces: Loadable<[Space]> = .loading
         /// The business's saved files, newest first.
         package var artifacts: [Artifact] = []
+        /// The business's members, to name who took work over.
+        package var members: [Person] = []
         /// Text of Markdown files opened inline in a space.
         package var artifactTexts: [String: Loadable<String>] = [:]
         /// The open employee's grants, loaded when its Access tab shows.
@@ -197,6 +199,7 @@ package struct Workspace {
                 guard detail.business.id == state.businessID else { return }
                 state.snapshot.business = detail.business
                 state.snapshot.employees = detail.employees
+                state.members = detail.members
                 state.artifacts = detail.artifacts
                 loadLookPhotos(state)
                 loadStatus(state)
@@ -217,6 +220,7 @@ package struct Workspace {
                 guard detail.business.id == state.businessID else { return }
                 state.snapshot.business = detail.business
                 state.snapshot.employees = detail.employees
+                state.members = detail.members
                 state.artifacts = detail.artifacts
                 loadLookPhotos(state)
 

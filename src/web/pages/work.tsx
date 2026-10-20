@@ -11,8 +11,8 @@ import {
   Redo2,
   Undo2,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
-import type { Commitment, Decision } from "../app/api.ts";
+import { useEffect, useState, type ReactNode } from "react";
+import { api, type Commitment, type Decision } from "../app/api.ts";
 import {
   accessTitle,
   chipFor,
@@ -145,8 +145,8 @@ export function WithWorkActions({
 
 /** One commitment: what, who, what's next and its state. Click to open it. */
 export function WorkRow({ item, extra }: { item: Commitment; extra?: ReactNode }) {
-  const { employeeName, actions, person } = useWorkspace();
-  const takeover = takeoverTitle(item.taken_over_by, person?.id);
+  const { employeeName, actions, person, members } = useWorkspace();
+  const takeover = takeoverTitle(item.taken_over_by, person?.id, members);
   const owner = employeeName(item.owner_employee_id);
   const done = item.evidence[item.evidence.length - 1];
   const detail =
@@ -471,14 +471,32 @@ function WorkPlan({ item, editable }: { item: Commitment; editable: boolean }) {
   );
 }
 
+/** A work item's answered requests, reloaded when the item changes. */
+function useAnswered(item: Commitment) {
+  const { businessId } = useWorkspace();
+  const [answered, setAnswered] = useState<Decision[]>([]);
+  useEffect(() => {
+    let live = true;
+    api
+      .workDecisions(businessId, item.id)
+      .then((result) => live && setAnswered(result.decisions.filter((d) => d.status !== "pending")))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [businessId, item.id, item.revision]);
+  return answered;
+}
+
 /**
  * One work item, as the right panel shows it above its thread: who owns it, where it
  * stands, what's next, its evidence and decisions, with takeover and reassignment.
  */
 export function WorkDetail({ item }: { item: Commitment }) {
-  const { employees, actions, employeeName, spaces, person, decisions } = useWorkspace();
-  const takeover = takeoverTitle(item.taken_over_by, person?.id);
+  const { employees, actions, employeeName, spaces, person, members, decisions } = useWorkspace();
+  const takeover = takeoverTitle(item.taken_over_by, person?.id, members);
   const waiting = (valueOf(decisions) ?? []).filter((d) => d.commitment_id === item.id);
+  const answered = useAnswered(item);
   const owner = employees.find((e) => e.id === item.owner_employee_id);
   const chip = chipFor(item.state);
   const inSpaces = (valueOf(spaces) ?? []).filter((s) =>
@@ -587,6 +605,17 @@ export function WorkDetail({ item }: { item: Commitment }) {
           </span>
           {waiting.map((decision) => (
             <DecisionCard key={decision.id} decision={decision} />
+          ))}
+        </div>
+      )}
+      {answered.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <span className="text-label font-medium text-ink-3">Decided</span>
+          {answered.map((decision) => (
+            <p key={decision.id} className="text-caption text-ink-2">
+              {decision.status === "rejected" ? "Declined" : "Approved"}: {decisionTitle(decision)}
+              {decision.status === "used" ? " · used" : ""}
+            </p>
           ))}
         </div>
       )}

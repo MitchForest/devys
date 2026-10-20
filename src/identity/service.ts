@@ -52,6 +52,16 @@ export const memberBusiness = (db: Database, personId: string, businessId: strin
     ),
   );
 
+/** The business's active members, so clients can name who took work over or answered. */
+export const membersOf = (db: Database, businessId: string) =>
+  database(db, (sql) =>
+    sql.rows<Person>(
+      `SELECT p.id, p.display_name FROM people p JOIN memberships m ON m.person_id = p.id
+       WHERE m.business_id = $1 AND p.revoked_at IS NULL ORDER BY p.display_name, p.id`,
+      [businessId],
+    ),
+  );
+
 export const businessName = (db: Database, businessId: string) =>
   database(
     db,

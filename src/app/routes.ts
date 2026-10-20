@@ -6,8 +6,9 @@ import {
   activeEmployee,
   employeesOf,
   isMachineOwner,
-  updateBusiness,
+  membersOf,
   setBusinessLook,
+  updateBusiness,
 } from "../identity/service.ts";
 import { memoryRoute } from "../memory/http.ts";
 import { modeOf } from "./mode.ts";
@@ -34,11 +35,12 @@ export async function businessRoute(
   const { person, business, trusted, path } = access;
   const method = request.method;
   if (path === "" && method === "GET") {
-    const [employees, artifacts] = await Promise.all([
+    const [employees, members, artifacts] = await Promise.all([
       Effect.runPromise(employeesOf(env.HYPERDRIVE, business.id)),
+      Effect.runPromise(membersOf(env.HYPERDRIVE, business.id)),
       Effect.runPromise(listArtifacts(env.HYPERDRIVE, business.id)),
     ]);
-    return Response.json({ business, employees, artifacts });
+    return Response.json({ business, employees, members, artifacts });
   }
   if (path === "" && method === "PUT") {
     if (!trusted) return forbidden();

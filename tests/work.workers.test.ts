@@ -357,13 +357,32 @@ it("members manage work and answer requests over HTTP; stale revisions conflict"
   expect(listed.commitments.map((c) => c.id)).toContain(created.id);
 
   await Effect.runPromise(grant(db, scope, { capability: named("driveCreate"), mode: "ask" }));
-  await authorize(bindings, scope, named("driveCreate"), { name: "n.txt", content: "c" });
+  // Asked for a work item the employee still holds (a taken-over one fences it).
+  const asking = (await (
+    await call("/work", { title: "Draft the note", owner: scope.employeeId })
+  ).json()) as { id: string };
+  await authorize(
+    bindings,
+    scope,
+    named("driveCreate"),
+    { name: "n.txt", content: "c" },
+    { commitmentId: asking.id },
+  );
   const { decisions } = (await (await call("/decisions")).json()) as {
     decisions: { id: string }[];
   };
   expect(decisions).toHaveLength(1);
   expect((await call(`/decisions/${decisions[0]!.id}/approve`, {})).status).toBe(200);
   expect((await call(`/decisions/${decisions[0]!.id}/reject`, {})).status).toBe(409);
+  // The work item still lists the request once answered; the business names its members.
+  const forItem = (await (await call(`/decisions?commitment=${asking.id}`)).json()) as {
+    decisions: { id: string; status: string }[];
+  };
+  expect(forItem.decisions).toEqual([
+    expect.objectContaining({ id: decisions[0]!.id, status: "approved" }),
+  ]);
+  const detail = (await (await call("")).json()) as { members: { id: string }[] };
+  expect(detail.members.map((member) => member.id)).toEqual([person]);
 });
 
 it("spaces reference records without copying them, refuse other businesses' records, and grant nothing", async () => {

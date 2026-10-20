@@ -52,6 +52,7 @@ struct DevysHTTPClientTests {
             body: """
             {"business":{"id":"b1","name":"Acme"},
              "employees":[{"id":"e1","business_id":"b1","name":"Head of Operations","role":"Runs the business.","model":"gpt-6.1-sol"}],
+             "members":[{"id":"p1","display_name":"Mitch"}],
              "artifacts":[{"id":"a1","filename":"x.md","content_type":"text/markdown","byte_length":3,"created_at":"2026-10-19"}]}
             """,
             recorder: recorder
@@ -60,6 +61,7 @@ struct DevysHTTPClientTests {
         #expect(detail.employees.first?.summary == "Runs the business.")
         #expect(detail.employees.first?.model == "gpt-6.1-sol")
         #expect(detail.artifacts.first?.byteLength == 3)
+        #expect(detail.members.map(\.displayName) == ["Mitch"])
         let paths = await recorder.requests.map { $0.url?.path() }
         #expect(paths == ["/api/me", "/api/businesses/b1"])
     }

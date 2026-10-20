@@ -166,6 +166,8 @@ export interface CodingSession {
   purpose: "build" | "review";
   objective: string;
   repository: string | null;
+  /** The commit the session's branch started from, which its diff is against. */
+  base_commit: string | null;
   branch: string | null;
   worktree: string | null;
   created_at: string;
@@ -220,6 +222,7 @@ export interface Decision {
   capability: string;
   input: unknown;
   commitment_id: string | null;
+  status: "pending" | "approved" | "rejected" | "used";
   requested_at: string;
   expires_at: string;
 }
@@ -301,7 +304,12 @@ export const api = {
   updateBusiness: (id: string, change: { name?: string; brief?: string }) =>
     put<{ business: Business }>(business(id), change),
   business: (id: string) =>
-    get<{ business: Business; employees: Employee[]; artifacts: Artifact[] }>(business(id)),
+    get<{
+      business: Business;
+      employees: Employee[];
+      members: Person[];
+      artifacts: Artifact[];
+    }>(business(id)),
   roles: () => get<{ roles: RoleTemplate[] }>("/api/roles"),
   hire: (
     b: string,
@@ -448,6 +456,11 @@ export const api = {
   terminalSocket: (b: string, id: string, offset: number) =>
     `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${business(b)}/terminals/${id}/socket?offset=${offset}`,
   decisions: (b: string) => get<{ decisions: Decision[] }>(`${business(b)}/decisions`),
+  /** One work item's requests, answered ones included. */
+  workDecisions: (b: string, commitment: string) =>
+    get<{ decisions: Decision[] }>(
+      `${business(b)}/decisions?commitment=${encodeURIComponent(commitment)}`,
+    ),
   answer: (b: string, id: string, approve: boolean) =>
     post(`${business(b)}/decisions/${id}/${approve ? "approve" : "reject"}`),
   spaces: (b: string) => get<{ spaces: Space[] }>(`${business(b)}/spaces`),

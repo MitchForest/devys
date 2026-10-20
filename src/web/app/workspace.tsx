@@ -124,6 +124,7 @@ function useWorkspaceState() {
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [businessId, setBusinessId] = useState("");
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [members, setMembers] = useState<Person[]>([]);
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [statuses, setStatuses] = useState<Record<string, Loadable<RuntimeState>>>({});
   const [summaries, setSummaries] = useState<Record<string, ConversationSummary>>({});
@@ -201,6 +202,7 @@ function useWorkspaceState() {
         const detail = await api.business(id);
         if (current.current !== id) return;
         setEmployees(detail.employees);
+        setMembers(detail.members);
         setArtifacts(detail.artifacts);
       } catch (error) {
         failed(error);
@@ -832,6 +834,7 @@ function useWorkspaceState() {
     business,
     businessId,
     employees,
+    members,
     operations,
     artifacts,
     status,

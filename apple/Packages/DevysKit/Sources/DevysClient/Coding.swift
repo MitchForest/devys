@@ -11,12 +11,19 @@ public struct CodingSession: Equatable, Sendable, Decodable, Identifiable {
     public let provider: String
     public let purpose: String
     public let objective: String
+    /// The commit the session's branch started from, which its diff is against.
+    public let baseCommit: String?
     public let branch: String?
     public let worktree: String?
     public let state: State
     public let reply: String?
     public let diffStat: String
     public let error: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, provider, purpose, objective, branch, worktree, state, reply, diffStat, error
+        case baseCommit = "base_commit"
+    }
 
     public var providerName: String { provider == "codex" ? "Codex" : "Claude Code" }
 
@@ -31,6 +38,7 @@ public struct CodingSession: Equatable, Sendable, Decodable, Identifiable {
         provider: String,
         purpose: String = "build",
         objective: String,
+        baseCommit: String? = nil,
         branch: String? = nil,
         worktree: String? = nil,
         state: State,
@@ -42,6 +50,7 @@ public struct CodingSession: Equatable, Sendable, Decodable, Identifiable {
         self.provider = provider
         self.purpose = purpose
         self.objective = objective
+        self.baseCommit = baseCommit
         self.branch = branch
         self.worktree = worktree
         self.state = state

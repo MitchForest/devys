@@ -75,10 +75,11 @@ extension Workspace.State {
     }
 
     /// Who has taken the work item over, as the signed-in person reads it; nil while its
-    /// employee has it. Only the signed-in person's own name is known, so anyone else is unnamed.
+    /// employee has it.
     func takeoverTitle(_ item: Commitment) -> String? {
-        guard item.takenOverBy != nil else { return nil }
-        return isMine(item) ? "You have it" : "Taken over by another person"
+        guard let person = item.takenOverBy else { return nil }
+        if isMine(item) { return "You have it" }
+        return "Taken over by \(members.first { $0.id == person }?.displayName ?? "another person")"
     }
 
     /// The owner's decisions waiting on this work item.

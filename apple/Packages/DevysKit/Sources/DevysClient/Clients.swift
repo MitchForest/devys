@@ -65,6 +65,8 @@ public struct RuntimeClient: Sendable {
     public var updateCommitment: @Sendable (_ businessID: String, _ commitmentID: String, CommitmentChange) async throws -> Commitment
     public var setTakeover: @Sendable (_ businessID: String, _ commitmentID: String, _ takeOver: Bool) async throws -> Void
     public var decisions: @Sendable (_ businessID: String) async throws -> [Decision]
+    /// One work item's requests, answered ones included.
+    public var workDecisions: @Sendable (_ businessID: String, _ commitmentID: String) async throws -> [Decision]
     public var answer: @Sendable (_ businessID: String, _ decisionID: String, _ approve: Bool) async throws -> Void
     public var spaces: @Sendable (_ businessID: String) async throws -> [Space]
     public var createSpace: @Sendable (_ businessID: String, NewSpace) async throws -> Void
@@ -118,6 +120,7 @@ public struct RuntimeClient: Sendable {
         },
         setTakeover: @escaping @Sendable (String, String, Bool) async throws -> Void = { _, _, _ in },
         decisions: @escaping @Sendable (String) async throws -> [Decision] = { _ in [] },
+        workDecisions: @escaping @Sendable (String, String) async throws -> [Decision] = { _, _ in [] },
         answer: @escaping @Sendable (String, String, Bool) async throws -> Void = { _, _, _ in },
         spaces: @escaping @Sendable (String) async throws -> [Space] = { _ in [] },
         createSpace: @escaping @Sendable (String, NewSpace) async throws -> Void = { _, _ in },
@@ -157,6 +160,7 @@ public struct RuntimeClient: Sendable {
         self.updateCommitment = updateCommitment
         self.setTakeover = setTakeover
         self.decisions = decisions
+        self.workDecisions = workDecisions
         self.answer = answer
         self.spaces = spaces
         self.createSpace = createSpace
@@ -316,6 +320,9 @@ extension RuntimeClient {
                 try await hub.call { api, session in try await api.setTakeover(session, businessID: id, id: commitment, takeOver: takeOver) }
             },
             decisions: { id in try await hub.call { api, session in try await api.decisions(session, businessID: id) } },
+            workDecisions: { id, commitment in
+                try await hub.call { api, session in try await api.decisions(session, businessID: id, commitmentID: commitment) }
+            },
             answer: { id, decision, approve in
                 try await hub.call { api, session in try await api.answer(session, businessID: id, decisionID: decision, approve: approve) }
             },
