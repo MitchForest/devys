@@ -31,7 +31,7 @@ struct WorkRow: View {
                 Text(detail).font(DevysTypography.secondary).foregroundStyle(DevysColors.ink2).lineLimit(2)
             }
             Spacer(minLength: DevysSpacing.compact)
-            if let takeover = store.state.takeoverTitle(item) {
+            if item.state.isOpen, let takeover = store.state.takeoverTitle(item) {
                 Text(takeover).font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
             }
             item.state.chip

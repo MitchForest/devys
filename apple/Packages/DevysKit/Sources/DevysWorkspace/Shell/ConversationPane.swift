@@ -169,7 +169,7 @@ struct ConversationComposer: View {
         switch key.kind {
         case .direct: "Message \(store.state.employeeName(key.ref))…"
         case .space: "Message \(store.spaces.value?.first { $0.id == key.ref }?.name ?? "the space")…"
-        case .work: "Message about this work…"
+        case .work: "Reply…"
         }
     }
 }

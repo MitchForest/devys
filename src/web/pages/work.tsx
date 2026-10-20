@@ -170,7 +170,9 @@ export function WorkRow({ item, extra }: { item: Commitment; extra?: ReactNode }
           <span className="line-clamp-2 text-detail text-ink-2">{detail}</span>
         </div>
         <span className="ml-auto" />
-        {takeover && <span className="shrink-0 text-caption text-ink-3">{takeover}</span>}
+        {takeover && isOpen(item.state) && (
+          <span className="shrink-0 text-caption text-ink-3">{takeover}</span>
+        )}
         <StatusChip tone={chip.tone}>{chip.title}</StatusChip>
       </button>
     </WithWorkActions>

@@ -450,11 +450,7 @@ function CommentBar({
             <MessageSquarePlus /> Add
           </DevysButton>
         </div>
-      ) : (
-        <span className="text-caption text-ink-3">
-          Select text, or drag over part of a PDF page, to comment on it.
-        </span>
-      )}
+      ) : null}
       {comments.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-caption text-ink-3">

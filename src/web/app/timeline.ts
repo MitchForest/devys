@@ -10,6 +10,7 @@ export interface Bubble {
   mine: boolean;
   kind: "message" | "event";
   text: string;
+  /** The message it answers, quoted only when that isn't the message right above it. */
   replyTo: string | null;
   viaVoice: boolean;
   reactions: string[];
@@ -53,13 +54,13 @@ export function timeline(
   now: Date,
 ): TimelineItem[] {
   const bubbles: Bubble[] = [
-    ...history.map((m) => ({
+    ...history.map((m, index) => ({
       id: m.id,
       author: m.author,
       mine: m.author === me,
       kind: m.kind,
       text: m.text,
-      replyTo: m.reply_to,
+      replyTo: m.reply_to === history[index - 1]?.id ? null : m.reply_to,
       viaVoice: m.via_voice,
       reactions: m.reactions,
       ref: m.ref,

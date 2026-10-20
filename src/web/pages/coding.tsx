@@ -232,7 +232,9 @@ export function Terminals() {
   return (
     <div className="flex flex-col gap-1.5" data-testid="terminals">
       <div className="flex items-center gap-2">
-        <span className="text-label font-medium text-ink-3">Terminals · {terminals.length}</span>
+        {terminals.length > 0 && (
+          <span className="text-label font-medium text-ink-3">Terminals · {terminals.length}</span>
+        )}
         <DevysButton
           kind="quiet"
           compact

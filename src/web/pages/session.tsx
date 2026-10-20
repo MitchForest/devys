@@ -148,8 +148,8 @@ export default function SessionView({
           <StatusChip tone={chip.tone} small>
             {chip.title}
           </StatusChip>
-          <span className="truncate text-caption text-ink-3">
-            {session.branch} · {session.worktree}
+          <span className="truncate text-caption text-ink-3" title={session.worktree ?? undefined}>
+            {session.branch}
           </span>
           <span className="ml-auto" />
           <DevysButton

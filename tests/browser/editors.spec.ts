@@ -68,7 +68,7 @@ test("a spreadsheet edits in the surface and saves as xlsx with its formulas", a
     version: "1",
   });
   const editor = page.getByTestId("sheet-editor");
-  await expect(editor).toContainText("not cell styling");
+  await expect(editor.locator("[title*='not cell styling']")).toHaveCount(1);
   // Drawn (the sheet tab shows and the loading skeleton is gone), and opening it is not an edit.
   await expect(editor.getByText("Budget", { exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(editor.locator('[aria-busy="true"]')).toHaveCount(0);

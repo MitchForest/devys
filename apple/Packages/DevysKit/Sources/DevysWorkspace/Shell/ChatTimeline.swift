@@ -65,7 +65,8 @@ package struct ChatTimeline: Equatable {
         func quote(_ id: String?) -> Quote? {
             id.flatMap { byID[$0] }.map { Quote(messageID: $0.id, text: $0.text, employeeID: $0.employeeID) }
         }
-        var entries: [(date: Date?, item: Item)] = messages.map { message in
+        // A reply to the message right above it needs no quote; the order already says it.
+        var entries: [(date: Date?, item: Item)] = messages.enumerated().map { index, message in
             if message.isEvent {
                 return (message.date, .event(Event(id: message.id, text: message.text, ref: message.ref)))
             }
@@ -74,7 +75,7 @@ package struct ChatTimeline: Equatable {
                 employeeID: message.employeeID,
                 isOwner: message.employeeID == nil,
                 text: message.text,
-                quote: quote(message.replyTo),
+                quote: index > 0 && messages[index - 1].id == message.replyTo ? nil : quote(message.replyTo),
                 viaVoice: message.viaVoice,
                 reactions: message.reactions,
                 sentAt: message.date,

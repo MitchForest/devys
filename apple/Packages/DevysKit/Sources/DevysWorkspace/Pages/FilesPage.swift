@@ -391,8 +391,6 @@ private struct CommentBar: View {
                     FieldBox { TextField("Comment on this", text: $text).onSubmit(add) }
                     Button("Add", action: add).buttonStyle(DevysButtonStyle(.raised, compact: true))
                 }
-            } else {
-                Text("Select text, or text in a PDF, to comment on it.").font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
             }
             if !comments.isEmpty {
                 HStack(spacing: 8) {

@@ -499,6 +499,8 @@ function useWorkspaceState() {
       if (next.kind === "space" && !(page.kind === "space" && page.id === next.id))
         setSpaceTab("conversation");
       if (!lists(destination, next)) setDestination(destinationOf(next));
+      // Files are a full-width editor; an open work item would only crowd it.
+      if (next.kind === "files") setSelectedWork(undefined);
       setPage(next);
     },
     /** Opens the DM with an employee in the main pane. */

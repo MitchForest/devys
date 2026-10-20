@@ -74,6 +74,24 @@ describe("conversation timeline, as native ChatTimeline", () => {
     ]);
   });
 
+  it("quotes a reply only when it answers something earlier than the message above", () => {
+    const items = timeline(
+      [
+        message(1, me, "2026-10-19T10:00:00Z"),
+        { ...message(2, "employee:e1", "2026-10-19T10:01:00Z"), reply_to: "m1" },
+        { ...message(3, "employee:e2", "2026-10-19T10:02:00Z"), reply_to: "m1" },
+      ],
+      [],
+      me,
+      new Date("2026-10-19T12:00:00Z"),
+    );
+    expect(items.flatMap((i) => (i.kind === "bubble" ? [i.bubble.replyTo] : []))).toEqual([
+      null,
+      null,
+      "m1",
+    ]);
+  });
+
   it("puts unsent messages last as the owner's, with their delivery state and error", () => {
     const now = new Date("2026-10-19T10:00:30Z");
     const items = timeline(

@@ -567,7 +567,8 @@ export function Composer({
             <InputGroupTextarea
               ref={field}
               aria-label={label}
-              placeholder={listening ? "Listening…" : `${label} · @ to mention`}
+              // The work thread's field names no title: the panel already shows it.
+              placeholder={listening ? "Listening…" : which === "panel" ? "Reply" : label}
               rows={1}
               value={draft}
               onChange={(event) => conversation.setDraft(event.target.value)}

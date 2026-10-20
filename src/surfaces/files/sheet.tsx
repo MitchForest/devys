@@ -75,12 +75,15 @@ export function SheetEditor({
     return <p className="p-4 text-body text-ink-2">This spreadsheet couldn't be read.</p>;
   return (
     <div className="flex size-full flex-col" data-testid="sheet-editor">
-      <div ref={root} className="min-h-0 flex-1" />
-      <p className="border-t border-hairline px-3 py-1 text-caption text-ink-3">
-        {sheetFormat(name) === "csv"
-          ? "CSV saves the first sheet's values."
-          : "Saving keeps values, formulas, merged cells and column widths, not cell styling."}
-      </p>
+      <div
+        ref={root}
+        className="min-h-0 flex-1"
+        title={
+          sheetFormat(name) === "csv"
+            ? "CSV saves the first sheet's values."
+            : "Saving keeps values, formulas, merged cells and column widths, not cell styling."
+        }
+      />
     </div>
   );
 }

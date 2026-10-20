@@ -51,16 +51,23 @@ struct ChatTimelineTests {
         #expect(events == [ChatTimeline.Event(id: "m7", text: "m7", ref: "c1")])
     }
 
-    @Test("An hour's silence adds a time heading; replies quote their message; unposted sends come last")
+    @Test("An hour's silence adds a time heading; replies quote an earlier message; unposted sends come last")
     func headingsQuotesAndPending() {
         let timeline = ChatTimeline(
-            messages: [message(1, "person:p1", after: 0), message(2, "employee:ops", after: 2 * 3600, replyTo: "m1")],
+            messages: [
+                message(1, "person:p1", after: 0),
+                message(3, "employee:growth", after: 60),
+                message(2, "employee:ops", after: 2 * 3600, replyTo: "m1"),
+                message(4, "employee:growth", after: 2 * 3600 + 5, replyTo: "m2")
+            ],
             pending: [PendingMessage(id: "local", text: "Next", replyTo: "m2", delivery: .failed)],
             now: start.addingTimeInterval(2 * 3600 + 10),
             calendar: Calendar(identifier: .gregorian)
         )
         #expect(timeline.items.filter { if case .heading = $0 { true } else { false } }.count == 2)
-        #expect(bubbles(timeline)[1].quote == ChatTimeline.Quote(messageID: "m1", text: "m1", employeeID: nil))
+        #expect(bubbles(timeline)[2].quote == ChatTimeline.Quote(messageID: "m1", text: "m1", employeeID: nil))
+        // A reply to the message right above it shows no quote.
+        #expect(bubbles(timeline)[3].quote == nil)
         #expect(bubbles(timeline).last?.delivery == .failed)
         #expect(bubbles(timeline).last?.isOwner == true)
         #expect(bubbles(timeline).last?.quote?.employeeID == "ops")

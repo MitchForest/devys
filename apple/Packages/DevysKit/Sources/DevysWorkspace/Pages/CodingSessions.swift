@@ -128,7 +128,8 @@ struct SessionScreen: View {
                     .buttonStyle(DevysButtonStyle(.quiet, compact: true))
                 ToolbarIconButton("Close", symbol: "xmark") { dismiss() }
             }
-            Text("\(session.branch ?? "") · \(session.worktree ?? "")").font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3).lineLimit(1)
+            Text(session.branch ?? "").font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3).lineLimit(1)
+                .help(session.worktree ?? "")
             if !session.objective.isEmpty {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Objective").font(DevysTypography.label).foregroundStyle(DevysColors.ink3)
