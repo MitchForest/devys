@@ -31,8 +31,8 @@ struct WorkRow: View {
                 Text(detail).font(DevysTypography.secondary).foregroundStyle(DevysColors.ink2).lineLimit(2)
             }
             Spacer(minLength: DevysSpacing.compact)
-            if item.takenOverBy != nil {
-                Text("You have it").font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
+            if let takeover = store.state.takeoverTitle(item) {
+                Text(takeover).font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
             }
             item.state.chip
         }
@@ -66,7 +66,7 @@ struct WorkActions: View {
         Button("Open", systemImage: "arrow.up.right.square") { store.send(.workOpened(item.id)) }
         if item.state.isOpen {
             Menu("Reassign to") {
-                ForEach(store.preview.employees.filter { $0.id != item.ownerEmployeeID }) { employee in
+                ForEach(store.snapshot.employees.filter { $0.id != item.ownerEmployeeID }) { employee in
                     Button(employee.name) { store.send(.reassigned(item.id, to: employee.id)) }
                 }
             }
@@ -74,9 +74,7 @@ struct WorkActions: View {
             if item.state != .waiting { Button("Mark waiting", systemImage: "clock") { store.send(.commitmentStateSet(item.id, .waiting)) } }
             Button("Mark done", systemImage: "checkmark.circle") { store.send(.commitmentStateSet(item.id, .completed)) }
             Divider()
-            Button(item.takenOverBy == nil ? "Take over" : "Hand back", systemImage: item.takenOverBy == nil ? "hand.raised" : "arrowshape.turn.up.left") {
-                store.send(.takeoverToggled(item.id))
-            }
+            TakeoverButton(store: store, item: item)
             Button("Cancel", systemImage: "xmark.circle", role: .destructive) { store.send(.commitmentStateSet(item.id, .cancelled)) }
             if let spaces = store.spaces.value, !spaces.isEmpty {
                 Menu("Add to space") {
@@ -87,6 +85,21 @@ struct WorkActions: View {
             }
         } else {
             Button("Reopen", systemImage: "arrow.uturn.backward") { store.send(.commitmentStateSet(item.id, .ready)) }
+        }
+    }
+}
+
+/// Take over a work item from its employee, or hand it back when the signed-in person has it.
+/// Nothing when someone else has taken it over.
+struct TakeoverButton: View {
+    let store: StoreOf<Workspace>
+    let item: Commitment
+
+    var body: some View {
+        if item.takenOverBy == nil {
+            Button("Take over", systemImage: "hand.raised") { store.send(.takeoverToggled(item.id)) }
+        } else if store.state.isMine(item) {
+            Button("Hand back", systemImage: "arrowshape.turn.up.left") { store.send(.takeoverToggled(item.id)) }
         }
     }
 }

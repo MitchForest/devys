@@ -3,7 +3,7 @@ import Foundation
 
 /// The open business and its team as the workspace shows them. Every section
 /// renders real records or an honest empty state; nothing here is sample data.
-public struct WorkspacePreview: Equatable, Sendable {
+public struct WorkspaceSnapshot: Equatable, Sendable {
     public var business: Business
     public var employees: [Employee]
 
@@ -52,14 +52,8 @@ public struct Business: Equatable, Sendable, Identifiable, Decodable {
     }
 }
 
-public struct PreviewEvent: Equatable, Sendable, Identifiable {
-    public let id: String
-    public let time: String
-    public let text: String
-}
-
-/// An employee of the current business, from `GET /api/businesses/:id`. Activity, events and
-/// access are filled in from other sources as they become real; until then they stay empty.
+/// An employee of the current business, from `GET /api/businesses/:id`. What it is doing comes
+/// from its runtime status, not from this record.
 public struct Employee: Equatable, Sendable, Identifiable, Decodable {
     public let id: String
     public var name: String
@@ -68,9 +62,7 @@ public struct Employee: Equatable, Sendable, Identifiable, Decodable {
     /// The role template it was hired from: operations, engineering, growth, business-operations or custom.
     public var template: String
     public var avatar: AvatarSpec
-    public var activity: Activity = .idle
     public var summary: String
-    public var events: [PreviewEvent] = []
     /// Takes no actions until the owner resumes it.
     public var paused = false
     /// nil shows `avatar`, the default Face.
@@ -78,21 +70,13 @@ public struct Employee: Equatable, Sendable, Identifiable, Decodable {
     /// The id of the model the employee thinks with, from the model catalog.
     public var model: String
 
-    public enum Activity: String, Equatable, Sendable {
-        case working
-        case waiting
-        case idle
-    }
-
     public init(
         id: String,
         name: String,
         role: String,
         template: String = "custom",
         avatar: AvatarSpec? = nil,
-        activity: Activity = .idle,
         summary: String? = nil,
-        events: [PreviewEvent] = [],
         paused: Bool = false,
         look: Look? = nil,
         model: String = ModelCatalog.fixture.defaults.employee
@@ -102,9 +86,7 @@ public struct Employee: Equatable, Sendable, Identifiable, Decodable {
         self.role = role
         self.template = template
         self.avatar = avatar ?? Self.face(for: id)
-        self.activity = activity
         self.summary = summary ?? role
-        self.events = events
         self.paused = paused
         self.look = look
         self.model = model
@@ -140,70 +122,7 @@ public struct Employee: Equatable, Sendable, Identifiable, Decodable {
     enum CodingKeys: String, CodingKey { case id, name, role, template, paused, look, model }
 }
 
-extension WorkspacePreview {
+extension WorkspaceSnapshot {
     /// Nothing loaded yet: no business and no team.
-    public static let empty = WorkspacePreview(business: Business(id: "", name: ""), employees: [])
-
-    /// Fixture businesses for previews and tests; the live app never shows them.
-    public static let acmeLaunch = WorkspacePreview(
-        business: Business(id: "acme", name: "Acme"),
-        employees: [
-            Employee(
-                id: "ops",
-                name: "Head of Operations",
-                role: "Coordinates launch work and brings you decisions",
-                template: "operations",
-                avatar: AvatarSpec(palette: .blue, shape: .roundedSquare, seed: 7),
-                activity: .working,
-                summary: "Updating the launch plan after your note on email",
-                events: [
-                    PreviewEvent(id: "ops-1", time: "2:40 PM", text: "Asked Business Ops to compare Workspace plans"),
-                    PreviewEvent(id: "ops-2", time: "11:40 AM", text: "Saved the launch checklist to Files")
-                ]
-            ),
-            Employee(
-                id: "engineering",
-                name: "Engineering",
-                role: "Builds, verifies and deploys Acme",
-                template: "engineering",
-                avatar: AvatarSpec(palette: .green, shape: .hexagon, seed: 3),
-                activity: .idle,
-                summary: "Ready to deploy a preview once GitHub is connected",
-                events: [PreviewEvent(id: "eng-1", time: "10:05 AM", text: "Checked the Acme launch gates locally")]
-            ),
-            Employee(
-                id: "growth",
-                name: "Growth",
-                role: "Measurement, PR and campaigns",
-                template: "growth",
-                avatar: AvatarSpec(palette: .orange, shape: .blob, seed: 11),
-                activity: .waiting,
-                summary: "Waiting on your approval to send the PR inquiry"
-            ),
-            Employee(
-                id: "business-ops",
-                name: "Business Operations",
-                role: "Accounts, purchases and suppliers",
-                template: "business-operations",
-                avatar: AvatarSpec(palette: .purple, shape: .capsule, seed: 5),
-                activity: .working,
-                summary: "Comparing Workspace plans"
-            )
-        ]
-    )
-
-    public static let globexGrowth = WorkspacePreview(
-        business: Business(id: "globex", name: "Globex"),
-        employees: [
-            Employee(
-                id: "globex-ops",
-                name: "Head of Operations",
-                role: "Coordinates Globex's growth work",
-                template: "operations",
-                avatar: AvatarSpec(palette: .teal, shape: .circle, seed: 2),
-                activity: .idle,
-                summary: "Watching sign-ups and support"
-            )
-        ]
-    )
+    public static let empty = WorkspaceSnapshot(business: Business(id: "", name: ""), employees: [])
 }

@@ -30,12 +30,12 @@ extension Workspace {
         }
     }
 
-    static func defaultPage(for destination: Destination, preview: WorkspacePreview) -> Page {
+    static func defaultPage(for destination: Destination, snapshot: WorkspaceSnapshot) -> Page {
         switch destination {
         case .home: .today
         case .inbox: .inbox
         case .work: .work(.all)
-        case .team: .employee(preview.employees.first?.id)
+        case .team: .employee(snapshot.employees.first?.id)
         case .money: .money
         case .apps: .apps(.installed)
         }
@@ -60,9 +60,9 @@ extension Workspace {
             case "approvals": state.page = .approvals
             case "files": state.page = .files(nil)
             case "space": state.page = state.spaces.value?.first.map { .space($0.id) } ?? .today
-            case "team": state.page = .employee(state.preview.employees.first?.id)
+            case "team": state.page = .employee(state.snapshot.employees.first?.id)
             case "memory":
-                state.page = .employee(state.preview.employees.first?.id)
+                state.page = .employee(state.snapshot.employees.first?.id)
                 state.employeeTab = .memory
             case "work": state.page = .work(.all)
             case "board":

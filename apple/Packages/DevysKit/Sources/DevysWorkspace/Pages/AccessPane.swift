@@ -10,7 +10,7 @@ struct PausedBanner: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "pause.circle.fill").foregroundStyle(DevysColors.gray)
+            Image(systemName: "pause.circle.fill").foregroundStyle(DevysColors.gray).accessibilityHidden(true)
             Text("\(employee.name) is paused and takes no actions.")
                 .font(DevysTypography.body).foregroundStyle(DevysColors.ink2)
             Spacer(minLength: 8)
@@ -81,6 +81,7 @@ private struct GrantRow: View {
             Image(systemName: grant.mode == .ask ? "faceid" : "key")
                 .foregroundStyle(grant.mode == .ask ? DevysColors.amber : DevysColors.ink3)
                 .frame(width: 18)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(AccessNames.title(grant.capability)).font(DevysTypography.body.weight(.semibold)).foregroundStyle(DevysColors.ink)

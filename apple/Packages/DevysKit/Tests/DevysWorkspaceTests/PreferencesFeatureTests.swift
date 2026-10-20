@@ -46,7 +46,7 @@ struct PreferencesFeatureTests {
         let store = makeStore(box: Box())
         await settle { store.ownerName != nil }
         #expect(store.businesses.map(\.id) == ["acme", "globex"])
-        #expect(store.selectedEmployeeID == WorkspacePreview.acmeLaunch.employees.first?.id)
+        #expect(store.selectedEmployeeID == WorkspaceSnapshot.acmeLaunch.employees.first?.id)
         #expect(store.ownerName == "Mitch")
     }
 

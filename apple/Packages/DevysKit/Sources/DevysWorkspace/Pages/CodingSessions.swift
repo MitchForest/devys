@@ -15,6 +15,7 @@ struct CodingSessions: View {
     @State private var sessions: [CodingSession] = []
     @State private var open: CodingSession?
     @State private var terminal: TerminalRef?
+    @State private var problem: String?
 
     var body: some View {
         Group {
@@ -25,11 +26,12 @@ struct CodingSessions: View {
                         Spacer(minLength: 4)
                         if sessions.contains(where: { $0.purpose == "build" }) {
                             Button("Open terminal", systemImage: "terminal") {
-                                Task { terminal = await openTerminal(store.businessID, .work(item.id), terminals) }
+                                Task { await openTerminal(store.businessID, .work(item.id), terminals, presented: $terminal, problem: $problem) }
                             }
                             .buttonStyle(DevysButtonStyle(.quiet, compact: true))
                         }
                     }
+                    if let problem { Text(problem).font(DevysTypography.caption).foregroundStyle(DevysColors.ink2) }
                     ForEach(sessions) { session in
                         Button { open = session } label: { row(session) }
                             .buttonStyle(.plain)
@@ -46,7 +48,7 @@ struct CodingSessions: View {
 
     private func row(_ session: CodingSession) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: "chevron.left.forwardslash.chevron.right").foregroundStyle(DevysColors.ink3)
+            Image(systemName: "chevron.left.forwardslash.chevron.right").foregroundStyle(DevysColors.ink3).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.providerName + (session.purpose == "review" ? " · review" : ""))
                     .font(DevysTypography.body).foregroundStyle(DevysColors.ink)
@@ -67,14 +69,17 @@ struct CodingSessions: View {
     }
 }
 
-/// One coding session: its latest reply, the running diff with line comments (the web diff
-/// surface), and a composer that talks to the session once the owner has taken the work over.
+/// One coding session: its objective and latest reply, the running diff with line comments (the
+/// web diff surface), and a composer that talks to the session once the owner has taken the work
+/// over. Comments are always sendable: with the owner's message while they drive, otherwise as
+/// one message in the work item's thread for its employee.
 struct SessionScreen: View {
     let store: StoreOf<Workspace>
     let item: Commitment
     let session: CodingSession
     @Dependency(\.codingClient) private var coding
     @Dependency(\.terminalsClient) private var terminals
+    @Dependency(\.runtimeClient) private var runtime
     @Environment(\.dismiss) private var dismiss
     @State private var terminal: TerminalRef?
     @State private var patch = ""
@@ -85,7 +90,9 @@ struct SessionScreen: View {
     @State private var problem: String?
 
     private var current: Commitment { store.work.value?.first { $0.id == item.id } ?? item }
-    private var mine: Bool { current.takenOverBy != nil }
+    private var mine: Bool { store.state.isMine(current) }
+    private var owner: String { store.state.employeeName(current.ownerEmployeeID) }
+    private var count: String { "\(comments.count) comment\(comments.count == 1 ? "" : "s")" }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -110,20 +117,27 @@ struct SessionScreen: View {
                 session.state.chip
                 Spacer(minLength: 4)
                 Button("Open in \(session.providerName)", systemImage: "terminal") {
-                    Task { terminal = await openTerminal(store.businessID, .resume(assignmentID: session.id), terminals) }
+                    Task { await openTerminal(store.businessID, .resume(assignmentID: session.id), terminals, presented: $terminal, problem: $problem) }
                 }
                 .buttonStyle(DevysButtonStyle(.quiet, compact: true))
                 if session.state == .working {
-                    Button("Stop", systemImage: "stop.fill") { Task { try? await coding.stop(store.businessID, item.id, session.id) } }
+                    Button("Stop", systemImage: "stop.fill", action: stop)
                         .buttonStyle(DevysButtonStyle(.quiet, compact: true))
                 }
-                Button(mine ? "Hand back" : "Take over", systemImage: mine ? "arrowshape.turn.up.left" : "hand.raised") {
-                    store.send(.takeoverToggled(item.id))
-                }
-                .buttonStyle(DevysButtonStyle(.quiet, compact: true))
+                TakeoverButton(store: store, item: current)
+                    .buttonStyle(DevysButtonStyle(.quiet, compact: true))
                 ToolbarIconButton("Close", symbol: "xmark") { dismiss() }
             }
             Text("\(session.branch ?? "") · \(session.worktree ?? "")").font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3).lineLimit(1)
+            if !session.objective.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Objective").font(DevysTypography.label).foregroundStyle(DevysColors.ink3)
+                    Text(session.objective)
+                        .font(DevysTypography.secondary).foregroundStyle(DevysColors.ink2)
+                        .lineLimit(4).textSelection(.enabled)
+                }
+                .accessibilityElement(children: .combine)
+            }
             if let reply = session.reply {
                 ScrollView { MarkdownView(reply).frame(maxWidth: .infinity, alignment: .leading) }.frame(maxHeight: 140)
             } else if let error = session.error {
@@ -144,14 +158,23 @@ struct SessionScreen: View {
                 }
             }
             if !comments.isEmpty {
-                Text("\(comments.count) comment\(comments.count == 1 ? "" : "s") will be sent with your message.")
-                    .font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
+                if mine {
+                    Text("\(count) will be sent with your message.").font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
+                } else {
+                    HStack(spacing: 8) {
+                        Text("\(count) for \(owner), in this work item's thread.").font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
+                        Button("Send \(count)", systemImage: "paperplane", action: sendComments)
+                            .buttonStyle(DevysButtonStyle(.raised, compact: true))
+                    }
+                }
             }
             if mine {
                 HStack(alignment: .bottom, spacing: 8) {
                     FieldBox { TextField("Tell \(session.providerName) what to do", text: $text, axis: .vertical).lineLimit(1...5) }
                     Button("Send", action: send).buttonStyle(DevysButtonStyle(.raised, compact: true))
                 }
+            } else if let takeover = store.state.takeoverTitle(current) {
+                Text("\(takeover); they steer this session.").font(DevysTypography.body).foregroundStyle(DevysColors.ink3)
             } else {
                 Text("Take over the work item to steer this session yourself; until then its employee steers it.")
                     .font(DevysTypography.body).foregroundStyle(DevysColors.ink3)
@@ -162,14 +185,16 @@ struct SessionScreen: View {
 
     private func addComment() {
         guard let selection, !draftComment.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        comments.append(DiffComment(path: selection.path, side: selection.side, start: selection.start, end: selection.end, text: draftComment))
+        let text = draftComment.trimmingCharacters(in: .whitespacesAndNewlines)
+        // The server doesn't say which base commit the patch is against, so comments leave it out.
+        comments.append(DiffComment(selection, in: patch, base: nil, text: text))
         draftComment = ""
         self.selection = nil
     }
 
     private func send() {
-        let lines = (comments.isEmpty ? [] : ["Review comments:"] + comments.map { "- \($0.line)" }) + [text.trimmingCharacters(in: .whitespacesAndNewlines)]
-        let message = lines.filter { !$0.isEmpty }.joined(separator: "\n")
+        let review = comments.isEmpty ? "" : DiffComment.review(current.title, comments)
+        let message = [review, text.trimmingCharacters(in: .whitespacesAndNewlines)].filter { !$0.isEmpty }.joined(separator: "\n")
         guard !message.isEmpty else { return }
         Task {
             do {
@@ -179,6 +204,37 @@ struct SessionScreen: View {
                 problem = nil
             } catch {
                 problem = "That couldn't be sent."
+            }
+        }
+    }
+
+    /// Until the owner drives, comments go to the work item's employee as one message in its thread.
+    private func sendComments() {
+        guard !comments.isEmpty else { return }
+        let key = ConversationKey.work(item.id)
+        let message = NewMessage(id: UUID().uuidString.lowercased(), text: DiffComment.review(current.title, comments), mentions: [current.ownerEmployeeID])
+        let owner = owner
+        Task {
+            do {
+                let posted = try await runtime.postMessage(store.businessID, key, message)
+                store.send(Workspace.Action(.conversation(.posted(key, clientID: message.id, posted))))
+                comments = []
+                problem = nil
+            } catch DevysHTTPError.rejected(status: 409, _) {
+                problem = "\(owner) is paused, so the comments weren't sent."
+            } catch {
+                problem = "The comments couldn't be sent."
+            }
+        }
+    }
+
+    private func stop() {
+        Task {
+            do {
+                try await coding.stop(store.businessID, item.id, session.id)
+                problem = nil
+            } catch {
+                problem = failure("Couldn't stop \(session.providerName).", error)
             }
         }
     }
@@ -203,8 +259,25 @@ extension CodingSession.State {
     }
 }
 
-/// Opens a terminal on the Mac and names the window that will show it; nil if the Mac refused.
-func openTerminal(_ businessID: String, _ target: TerminalTarget, _ terminals: TerminalsClient) async -> TerminalRef? {
-    guard let opened = try? await terminals.open(businessID, target) else { return nil }
-    return TerminalRef(businessID: businessID, terminalID: opened.id, title: opened.title)
+/// Opens a terminal on the Mac and presents the window that shows it, or says why it couldn't.
+func openTerminal(
+    _ businessID: String,
+    _ target: TerminalTarget,
+    _ terminals: TerminalsClient,
+    presented: Binding<TerminalRef?>,
+    problem: Binding<String?>
+) async {
+    do {
+        let opened = try await terminals.open(businessID, target)
+        problem.wrappedValue = nil
+        presented.wrappedValue = TerminalRef(businessID: businessID, terminalID: opened.id, title: opened.title)
+    } catch {
+        problem.wrappedValue = failure("The Mac couldn't open a terminal.", error)
+    }
+}
+
+/// What failed, then why, in the workspace's words for server errors.
+func failure(_ what: String, _ error: any Error) -> String {
+    guard let error = error as? DevysHTTPError else { return "\(what) Try again." }
+    return "\(what) \(Workspace.message(for: error))"
 }

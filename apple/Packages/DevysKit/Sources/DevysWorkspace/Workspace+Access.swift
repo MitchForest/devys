@@ -7,7 +7,7 @@ import Foundation
 
 extension Workspace {
     func scope(of employeeID: String, in state: State) -> EmployeeScope? {
-        state.preview.employees.contains { $0.id == employeeID }
+        state.snapshot.employees.contains { $0.id == employeeID }
             ? EmployeeScope(businessID: state.businessID, employeeID: employeeID)
             : nil
     }
@@ -44,11 +44,11 @@ extension Workspace {
 
     /// Pausing also stops running work; the change shows at once and the team reloads.
     func togglePause(_ employeeID: String, state: inout State) {
-        guard let index = state.preview.employees.firstIndex(where: { $0.id == employeeID }),
+        guard let index = state.snapshot.employees.firstIndex(where: { $0.id == employeeID }),
               let scope = scope(of: employeeID, in: state)
         else { return }
-        let paused = !state.preview.employees[index].paused
-        state.preview.employees[index].paused = paused
+        let paused = !state.snapshot.employees[index].paused
+        state.snapshot.employees[index].paused = paused
         let runtime = runtime
         let businessID = state.businessID
         store.addTask {

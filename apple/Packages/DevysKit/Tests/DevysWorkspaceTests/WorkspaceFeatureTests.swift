@@ -153,8 +153,8 @@ struct WorkspaceFeatureTests {
         let store = makeStore(calls: Calls())
         await settle("status and memory") { store.status.value != nil && store.memory.value != nil }
         #expect(store.businesses.map(\.name) == ["Acme", "Globex"])
-        #expect(store.preview.businessName == "Acme")
-        #expect(store.preview.employees.first?.name == "Head of Operations")
+        #expect(store.snapshot.businessName == "Acme")
+        #expect(store.snapshot.employees.first?.name == "Head of Operations")
         #expect(store.operationsScope == EmployeeScope(businessID: "acme", employeeID: "ops"))
         #expect(store.status.value == .fixture)
         #expect(store.memory.value == MemoryClaim.fixtures)
@@ -201,21 +201,21 @@ struct WorkspaceFeatureTests {
         await settle("team") { store.operationsScope != nil }
         store.send(.pageSelected(.approvals))
         store.send(.businessSelected("globex"))
-        #expect(store.preview.businessName == "Globex")
+        #expect(store.snapshot.businessName == "Globex")
         #expect(store.page == .today)
         await settle("Globex's team") { store.operationsScope?.businessID == "globex" }
         // A status answer for the business just left is ignored.
         store.send(Workspace.Action(.statusLoaded(EmployeeScope(businessID: "acme", employeeID: "ops"), .fixture)))
         #expect(store.status.value == nil)
         store.send(.businessSelected("acme"))
-        #expect(store.preview.businessName == "Acme")
+        #expect(store.snapshot.businessName == "Acme")
     }
 
     @Test("Each rail destination opens its default page")
     func destinationsOpenDefaults() {
         let store = makeStore(calls: Calls())
         store.send(.destinationSelected(.team))
-        #expect(store.page == .employee(WorkspacePreview.acmeLaunch.employees.first?.id))
+        #expect(store.page == .employee(WorkspaceSnapshot.acmeLaunch.employees.first?.id))
         store.send(.destinationSelected(.inbox))
         #expect(store.page == .inbox)
         store.send(.destinationSelected(.work))
@@ -323,11 +323,11 @@ struct AccessFeatureTests {
         let store = makeStore(server)
         await settle("team", until: { store.operationsScope != nil })
         store.send(.pauseToggled("growth"))
-        #expect(store.preview.employees.first { $0.id == "growth" }?.paused == true)
+        #expect(store.snapshot.employees.first { $0.id == "growth" }?.paused == true)
         await settle("server", until: { store.state.presence.first { $0.id == "growth" }?.signal == .paused })
         #expect(await server.pauses == [true])
         store.send(.pauseToggled("growth"))
-        await settle("resumed", until: { store.preview.employees.first { $0.id == "growth" }?.paused == false })
+        await settle("resumed", until: { store.snapshot.employees.first { $0.id == "growth" }?.paused == false })
         for _ in 0..<2_000 where await server.pauses.count < 2 { await Task.yield() }
         #expect(await server.pauses == [true, false])
     }
@@ -501,7 +501,7 @@ struct ModelFeatureTests {
     }
 
     private func model(_ store: StoreOf<Workspace>, _ id: String) -> String? {
-        store.preview.employees.first { $0.id == id }?.model
+        store.snapshot.employees.first { $0.id == id }?.model
     }
 
     @Test("Opening an employee loads the catalog and that employee's spend")

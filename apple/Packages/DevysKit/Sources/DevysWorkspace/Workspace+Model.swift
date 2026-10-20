@@ -43,7 +43,7 @@ extension Workspace {
             loadUsage(employeeID, state: state)
         case .allUsageRequested:
             if state.models.catalog == nil { loadCatalog() }
-            for employee in state.preview.employees { loadUsage(employee.id, state: state) }
+            for employee in state.snapshot.employees { loadUsage(employee.id, state: state) }
         case .catalogLoaded(let catalog):
             state.models.catalog = catalog
         case .usageLoaded(let employeeID, let usage):
@@ -77,7 +77,7 @@ extension Workspace {
 
     /// The change shows at once; a refusal puts the previous model back and says why.
     func selectModel(_ model: String, for employeeID: String, state: inout State) {
-        guard let previous = state.preview.employees.first(where: { $0.id == employeeID })?.model,
+        guard let previous = state.snapshot.employees.first(where: { $0.id == employeeID })?.model,
               previous != model,
               let scope = scope(of: employeeID, in: state)
         else { return }
@@ -103,8 +103,8 @@ extension Workspace {
     }
 
     func setModel(_ model: String, for employeeID: String, state: inout State) {
-        guard let index = state.preview.employees.firstIndex(where: { $0.id == employeeID }) else { return }
-        state.preview.employees[index].model = model
+        guard let index = state.snapshot.employees.firstIndex(where: { $0.id == employeeID }) else { return }
+        state.snapshot.employees[index].model = model
     }
 
     static func modelMessage(for error: DevysHTTPError) -> String {

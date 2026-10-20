@@ -96,12 +96,12 @@ struct CompactShell: View {
                 Button("Sign out of this device", role: .destructive) { store.send(.signOutTapped) }
             } label: {
                 HStack(spacing: 8) {
-                    Portrait(store.state.portrait(for: store.preview.business), size: 26, isAnimated: false)
-                    Text(store.preview.businessName).font(DevysTypography.heading).foregroundStyle(DevysColors.ink)
-                    Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold)).foregroundStyle(DevysColors.ink3)
+                    Portrait(store.state.portrait(for: store.snapshot.business), size: 26, isAnimated: false)
+                    Text(store.snapshot.businessName).font(DevysTypography.heading).foregroundStyle(DevysColors.ink)
+                    Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold)).foregroundStyle(DevysColors.ink3).accessibilityHidden(true)
                 }
             }
-            .accessibilityLabel("Switch business, currently \(store.preview.businessName)")
+            .accessibilityLabel("Switch business, currently \(store.snapshot.businessName)")
         }
         ToolbarItem(placement: .topBarTrailing) {
             if let ops = store.operations {

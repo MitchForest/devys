@@ -168,7 +168,7 @@ struct ConversationFeatureTests {
         let store = await makeStore(server)
         let key = ConversationKey.space("s1")
         await open(.space("s1"), in: store)
-        let team = store.preview.employees
+        let team = store.snapshot.employees
         store.send(.draftChanged(key, "Ask @gro"))
         let typing = store.main?.draft ?? ""
         #expect(Mentions.suggestions(for: typing, team: team).map(\.id) == ["growth"])

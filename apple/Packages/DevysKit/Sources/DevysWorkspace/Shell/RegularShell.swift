@@ -214,7 +214,7 @@ private struct Breadcrumb: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Text(store.preview.businessName).foregroundStyle(DevysColors.ink3)
+            Text(store.snapshot.businessName).foregroundStyle(DevysColors.ink3)
             Text("/").foregroundStyle(DevysColors.ink3)
             Text(store.pageTitle).foregroundStyle(DevysColors.ink).fontWeight(.semibold)
                 .contentTransition(.opacity)
@@ -246,6 +246,7 @@ private struct PresenceFace: View {
     let store: StoreOf<Workspace>
     let presence: Presence
     @State private var hovering = false
+    @ScaledMetric(relativeTo: .caption2) private var countSize = 9.0
 
     private var isOperations: Bool { presence.employee.id == store.operations?.id }
 
@@ -297,7 +298,7 @@ private struct PresenceFace: View {
             EmptyView()
         case .needsYou(let count):
             Text("\(count)")
-                .font(.system(size: 9, weight: .bold).monospacedDigit())
+                .font(.system(size: countSize, weight: .bold).monospacedDigit())
                 .foregroundStyle(.white)
                 .frame(minWidth: 14, minHeight: 14)
                 .background(DevysColors.amber, in: Capsule())
@@ -426,6 +427,7 @@ private struct RailButton: View {
     let badge: Int
     let action: () -> Void
     @State private var hovering = false
+    @ScaledMetric(relativeTo: .caption2) private var badgeSize = 9.5
 
     var body: some View {
         Button(action: action) {
@@ -444,7 +446,7 @@ private struct RailButton: View {
                 .overlay(alignment: .topTrailing) {
                     if badge > 0 {
                         Text("\(badge)")
-                            .font(.system(size: 9.5, weight: .bold))
+                            .font(.system(size: badgeSize, weight: .bold))
                             .foregroundStyle(.white)
                             .frame(minWidth: 15, minHeight: 15)
                             .background(DevysColors.auroraRose, in: Capsule())

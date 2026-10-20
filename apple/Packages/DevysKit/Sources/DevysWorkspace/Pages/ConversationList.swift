@@ -35,14 +35,14 @@ struct ConversationList: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             SectionHeader("Direct messages").padding(.bottom, 4)
-            ForEach(store.preview.employees) { employee in
+            ForEach(store.snapshot.employees) { employee in
                 let key = ConversationKey.direct(employee.id)
                 ConversationRow(
                     title: employee.name,
                     preview: preview(key, working: store.state.isWorking(employee.id) ? employee : nil),
                     unread: store.state.unread(key)
                 ) {
-                    Portrait(store.state.portrait(for: employee), size: 36, mood: employee.activity.mood, isAnimated: false)
+                    Portrait(store.state.portrait(for: employee), size: 36, mood: store.state.mood(for: employee), isAnimated: false)
                 } open: {
                     store.send(.pageSelected(.direct(employee.id)))
                 }
@@ -94,7 +94,7 @@ private struct ConversationRow<Leading: View>: View {
                 }
                 Spacer(minLength: 8)
                 if unread > 0 { UnreadBadge(count: unread) }
-                Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(DevysColors.ink3)
+                Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(DevysColors.ink3).accessibilityHidden(true)
             }
             .padding(.vertical, 8)
             .contentShape(Rectangle())

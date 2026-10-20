@@ -173,6 +173,8 @@ private struct FileView: View {
     @State private var deck = false
     @State private var conflict = false
     @State private var problem: String?
+    /// A save, reload or export that failed; the file stays open.
+    @State private var actionError: String?
     @State private var selection: FileAnchor?
     @State private var comments: [FileComment] = []
     @State private var saved: String?
@@ -204,6 +206,13 @@ private struct FileView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
+            if let actionError {
+                Text(actionError)
+                    .font(DevysTypography.caption).foregroundStyle(DevysColors.ink2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 8)
+            }
             if conflict {
                 HStack(spacing: 8) {
                     Text("This file changed on the Mac since you opened it.").font(DevysTypography.body)
@@ -276,7 +285,11 @@ private struct FileView: View {
     }
 
     private func reload() async {
-        guard let newer = try? await read() else { return }
+        guard let newer = try? await read() else {
+            actionError = "The newer version couldn't be loaded."
+            return
+        }
+        actionError = nil
         loaded = newer
         draft = nil
         edited = false
@@ -309,18 +322,25 @@ private struct FileView: View {
             edited = false
             conflict = false
             saved = Date.now.formatted(date: .omitted, time: .shortened)
+            actionError = nil
         case .conflict:
             conflict = true
         case nil:
-            problem = "The file couldn't be saved."
+            actionError = "The file couldn't be saved. Your changes are still here."
         }
     }
 
     private func exportDeck() async {
-        guard let data = await surface.exportDeck() else { return }
+        guard let data = await surface.exportDeck() else {
+            actionError = "The deck couldn't be exported."
+            return
+        }
         let target = pptxPath(file.path)
         if case .saved = try? await files.saveBytes(store.businessID, target, data, .overwrite) {
             saved = "· exported \((target as NSString).lastPathComponent)"
+            actionError = nil
+        } else {
+            actionError = "The PowerPoint copy couldn't be saved."
         }
     }
 }
@@ -360,9 +380,10 @@ private struct CommentBar: View {
     @Dependency(\.filesClient) private var files
     @State private var text = ""
     @State private var recipient: String?
+    @State private var problem: String?
 
     var body: some View {
-        let employees = store.preview.employees
+        let employees = store.snapshot.employees
         VStack(alignment: .leading, spacing: 8) {
             if let selection {
                 HStack(spacing: 8) {
@@ -385,6 +406,7 @@ private struct CommentBar: View {
                     .buttonStyle(DevysButtonStyle(.raised, compact: true))
                 }
             }
+            if let problem { Text(problem).font(DevysTypography.caption).foregroundStyle(DevysColors.ink2) }
         }
     }
 
@@ -392,8 +414,13 @@ private struct CommentBar: View {
         guard let employee = recipient ?? first else { return }
         let sending = comments
         Task {
-            try? await files.comment(store.businessID, path, employee, sending)
-            comments = []
+            do {
+                try await files.comment(store.businessID, path, employee, sending)
+                comments = []
+                problem = nil
+            } catch {
+                problem = "The comments couldn't be sent. They're still here."
+            }
         }
     }
 

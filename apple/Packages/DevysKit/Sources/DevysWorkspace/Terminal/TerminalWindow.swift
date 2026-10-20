@@ -187,6 +187,7 @@ struct TerminalsSection: View {
     @Dependency(\.terminalsClient) private var terminals
     @State private var open: [TerminalInfo] = []
     @State private var presented: TerminalRef?
+    @State private var problem: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: DevysSpacing.small) {
@@ -194,10 +195,11 @@ struct TerminalsSection: View {
                 SectionHeader("Terminals", count: open.count)
                 Spacer(minLength: 4)
                 Button("New terminal", systemImage: "terminal") {
-                    Task { presented = await openTerminal(businessID, .business, terminals) }
+                    Task { await openTerminal(businessID, .business, terminals, presented: $presented, problem: $problem) }
                 }
                 .buttonStyle(DevysButtonStyle(.quiet, compact: true))
             }
+            if let problem { Text(problem).font(DevysTypography.caption).foregroundStyle(DevysColors.ink2) }
             ForEach(open) { terminal in
                 Button {
                     presented = TerminalRef(businessID: businessID, terminalID: terminal.id, title: terminal.title)

@@ -69,7 +69,7 @@ public struct DesignGallery: View {
                     HStack(spacing: 16) {
                         SegmentedTabs(selection: $tab, options: ["List", "Board", "Timeline"].map { (value: $0, title: $0) })
                         FilterChip("Owner", count: 2) {}
-                        SectionHeader("Needs you", count: 2, sample: true)
+                        SectionHeader("Needs you", count: 2)
                     }
                 }
                 panel("Presence") {

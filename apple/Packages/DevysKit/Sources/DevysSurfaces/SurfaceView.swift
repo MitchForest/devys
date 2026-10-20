@@ -47,35 +47,19 @@ public struct TextSelection: Equatable, Sendable, Decodable {
     public let quote: String
 }
 
-/// A review comment anchored to lines of one file in a patch.
-public struct DiffComment: Equatable, Sendable, Codable {
-    public let path: String
-    public let side: String
-    public let start: Int
-    public let end: Int
-    public let text: String
-
-    public init(path: String, side: String, start: Int, end: Int, text: String) {
-        self.path = path
-        self.side = side
-        self.start = start
-        self.end = end
-        self.text = text
-    }
-
-    /// How the comment reads in the message that carries it.
-    public var line: String {
-        let lines = start == end ? "line \(start)" : "lines \(start)–\(end)"
-        return "\(path) \(side == "deletions" ? "old " : "")\(lines): \(text)"
-    }
-}
-
 /// Lines the reader selected in a diff, to comment on.
 public struct DiffSelection: Equatable, Sendable, Decodable {
     public let path: String
     public let side: String
     public let start: Int
     public let end: Int
+
+    public init(path: String, side: String, start: Int, end: Int) {
+        self.path = path
+        self.side = side
+        self.start = start
+        self.end = end
+    }
 }
 
 /// The bundled web surfaces in a web view (.docs/COMPONENTS.md#surfaces): loaded offline from the

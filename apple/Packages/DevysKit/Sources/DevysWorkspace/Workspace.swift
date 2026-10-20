@@ -25,7 +25,7 @@ package struct Workspace {
         package var businesses: [Business] = []
         package var businessID = ""
         /// The open business and its team.
-        package var preview = WorkspacePreview.empty
+        package var snapshot = WorkspaceSnapshot.empty
         package var page: Page = .today
         /// Chosen in the rail; it decides the sidebar. Pages never change it implicitly.
         package var destination: Destination = .home
@@ -37,8 +37,8 @@ package struct Workspace {
         package var workLayout: WorkLayout = .list
         /// The Head of Operations' runtime state.
         package var status: Loadable<EmployeeStatus> = .loading
-        /// Whether Pi is running something for each employee, from their latest status.
-        package var runs: [String: Bool] = [:]
+        /// Each employee's latest runtime status, refreshed every tick; presence derives from it.
+        package var statuses: [String: EmployeeStatus] = [:]
         /// The DM or space conversation in the main pane.
         package var main: OpenConversation?
         /// The work item in the right panel, with its thread.
@@ -50,7 +50,7 @@ package struct Workspace {
         /// The task being written in the New task sheet.
         package var newTask: TaskDraft?
         /// The business's Google Drive connection, loaded when Connections opens.
-        package var google: GoogleConnection?
+        package var google: Loadable<GoogleConnection>?
         package var memory: Loadable<[MemoryClaim]> = .loading
         /// The business's commitments and the requests waiting on the owner.
         package var work: Loadable<[Commitment]> = .loading
@@ -88,7 +88,7 @@ package struct Workspace {
 
         package var isRunning: Bool { status.value?.isRunning ?? false }
         /// Every business starts with its Head of Operations; the server lists it first.
-        package var operations: Employee? { preview.employees.first }
+        package var operations: Employee? { snapshot.employees.first }
         /// Where Operations' runtime and conversation live, once the team has loaded.
         package var operationsScope: EmployeeScope? {
             operations.map { EmployeeScope(businessID: businessID, employeeID: $0.id) }
@@ -130,7 +130,7 @@ package struct Workspace {
         case conversation(ConversationIntent)
         case task(TaskIntent)
         case connectionsRequested
-        case googleLoaded(GoogleConnection)
+        case googleLoaded(Loadable<GoogleConnection>)
         case workLoaded(businessID: String, [Commitment], [Decision], [Space])
         case spaceCreateTapped(NewSpace)
         case spaceLeadChanged(spaceID: String, leadID: String)
@@ -195,8 +195,8 @@ package struct Workspace {
 
             case .detailLoaded(let detail):
                 guard detail.business.id == state.businessID else { return }
-                state.preview.business = detail.business
-                state.preview.employees = detail.employees
+                state.snapshot.business = detail.business
+                state.snapshot.employees = detail.employees
                 state.artifacts = detail.artifacts
                 loadLookPhotos(state)
                 loadStatus(state)
@@ -215,8 +215,8 @@ package struct Workspace {
 
             case .teamRefreshed(let detail):
                 guard detail.business.id == state.businessID else { return }
-                state.preview.business = detail.business
-                state.preview.employees = detail.employees
+                state.snapshot.business = detail.business
+                state.snapshot.employees = detail.employees
                 state.artifacts = detail.artifacts
                 loadLookPhotos(state)
 
@@ -260,7 +260,7 @@ package struct Workspace {
             case .destinationSelected(let destination):
                 guard destination != state.destination else { return }
                 state.destination = destination
-                open(Self.defaultPage(for: destination, preview: state.preview), state: &state)
+                open(Self.defaultPage(for: destination, snapshot: state.snapshot), state: &state)
 
             case .pageSelected(let page):
                 open(page, state: &state)
@@ -274,7 +274,7 @@ package struct Workspace {
 
             case .statusLoaded(let scope, let snapshot):
                 guard scope.businessID == state.businessID else { return }
-                state.runs[scope.employeeID] = snapshot.isRunning
+                state.statuses[scope.employeeID] = snapshot
                 if scope == state.operationsScope { state.status = .loaded(snapshot) }
                 settleAwaiting(&state)
 
@@ -296,10 +296,15 @@ package struct Workspace {
                 state.isStopping = true
                 let runtime = runtime
                 store.addTask {
-                    let stopped = (try? await runtime.stop(scope)) ?? false
-                    try store.send(Action(.stopFinished(
-                        stopped ? "Stop requested. Work already sent cannot be unsent." : "Nothing was running."
-                    )))
+                    let notice: String
+                    do {
+                        notice = try await runtime.stop(scope) ? "Stop requested. Work already sent cannot be unsent." : "Nothing was running."
+                    } catch let error as DevysHTTPError {
+                        notice = "Couldn't stop. \(Self.message(for: error))"
+                    } catch {
+                        notice = "Couldn't stop. Try again."
+                    }
+                    try store.send(Action(.stopFinished(notice)))
                     try await status(runtime, scope)
                 }
 
@@ -384,9 +389,9 @@ extension Workspace {
     /// Switches to a business; its team, work and conversations load from the server.
     func select(_ id: String, state: inout State) {
         state.businessID = id
-        state.preview = WorkspacePreview(business: state.businesses.first { $0.id == id } ?? Business(id: id, name: ""), employees: [])
+        state.snapshot = WorkspaceSnapshot(business: state.businesses.first { $0.id == id } ?? Business(id: id, name: ""), employees: [])
         state.status = .loading
-        state.runs = [:]
+        state.statuses = [:]
         if state.isConversationMode { endConversation(&state) } else if state.voice.isCapturing { cancelCapture(&state) }
         state.main = nil
         state.panel = nil
@@ -430,7 +435,7 @@ extension Workspace {
     /// Downloads photos for photo looks not yet on hand; each upload has its own version.
     func loadLookPhotos(_ state: State) {
         let targets = state.businesses.map { (LookTarget.business($0.id), $0.look) }
-            + state.preview.employees.map { (LookTarget.employee(business: state.businessID, employee: $0.id), $0.look) }
+            + state.snapshot.employees.map { (LookTarget.employee(business: state.businessID, employee: $0.id), $0.look) }
         let missing = targets.compactMap { target, look -> (LookTarget, String)? in
             guard case .photo(let version) = look, state.lookPhotos[target.photoKey(version)] == nil else { return nil }
             return (target, target.photoKey(version))
@@ -455,10 +460,17 @@ extension Workspace {
         }
     }
 
+    /// Operations first, whose failures show; then everyone else, whose presence derives from it.
     func loadStatus(_ state: State) {
         guard let scope = state.operationsScope else { return }
+        let others = state.snapshot.employees.dropFirst().map { EmployeeScope(businessID: state.businessID, employeeID: $0.id) }
         let runtime = runtime
-        store.addTask { try await status(runtime, scope) }
+        store.addTask {
+            try await status(runtime, scope)
+            for other in others {
+                if let status = try? await runtime.status(other) { try store.send(Action(.statusLoaded(other, status))) }
+            }
+        }
     }
 
     func status(_ runtime: RuntimeClient, _ scope: EmployeeScope) async throws {

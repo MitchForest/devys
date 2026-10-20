@@ -26,7 +26,7 @@ struct NewSpaceButton: View {
                     FieldBox {
                         TextField("What it's for (optional)", text: $purpose, axis: .vertical).lineLimit(2...4)
                     }
-                    EmployeePicker(title: "Lead", employees: store.preview.employees, selection: $lead)
+                    EmployeePicker(title: "Lead", employees: store.snapshot.employees, selection: $lead)
                     HStack {
                         Spacer()
                         Button("Cancel") { naming = false }.buttonStyle(DevysButtonStyle(.quiet, compact: true))

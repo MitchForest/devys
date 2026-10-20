@@ -70,7 +70,7 @@ struct MessageRow: View {
     }
 
     private var author: Employee? {
-        bubble.employeeID.flatMap { id in store.preview.employees.first { $0.id == id } }
+        bubble.employeeID.flatMap { id in store.snapshot.employees.first { $0.id == id } }
     }
 
     private func quoteAuthor(_ quote: ChatTimeline.Quote) -> String {
@@ -210,6 +210,7 @@ private struct QuotedReply: View {
             Image(systemName: "arrowshape.turn.up.left.fill")
                 .imageScale(.small)
                 .foregroundStyle(DevysColors.ink3)
+                .accessibilityHidden(true)
             Text("\(Text(author).fontWeight(.semibold)) \(text)")
                 .font(DevysTypography.secondary)
                 .foregroundStyle(DevysColors.ink2)
@@ -230,10 +231,11 @@ private struct QuotedReply: View {
 private struct ReactionBadge: View {
     let emoji: [String]
     let isOwner: Bool
+    @ScaledMetric(relativeTo: .footnote) private var size = 13.0
 
     var body: some View {
         Text(emoji.joined())
-            .font(.system(size: 13))
+            .font(.system(size: size))
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
             .background(DevysColors.sheet, in: Capsule())
@@ -318,6 +320,7 @@ struct EventCard: View {
             HStack(spacing: 8) {
                 Image(systemName: event.ref == nil ? "info.circle" : "arrow.triangle.branch")
                     .foregroundStyle(DevysColors.indigo)
+                    .accessibilityHidden(true)
                 Text(event.text)
                     .font(DevysTypography.secondary)
                     .foregroundStyle(DevysColors.ink2)

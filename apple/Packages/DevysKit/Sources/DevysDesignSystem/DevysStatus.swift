@@ -100,7 +100,7 @@ private struct StatusGlyph: View {
     }
 }
 
-/// Dashed means not real yet: a draft, sample data, or a slot to fill.
+/// Dashed means not real yet: a draft or a slot to fill.
 public struct DashedTag: View {
     let text: String
 
@@ -137,23 +137,20 @@ public struct LiveTag: View {
     }
 }
 
-/// A small section label with an optional count and a dashed Sample tag.
+/// A small section label with an optional count.
 public struct SectionHeader: View {
     let title: String
     let count: Int?
-    let sample: Bool
 
-    public init(_ title: String, count: Int? = nil, sample: Bool = false) {
+    public init(_ title: String, count: Int? = nil) {
         self.title = title
         self.count = count
-        self.sample = sample
     }
 
     public var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(title).font(DevysTypography.heading.weight(.semibold)).foregroundStyle(DevysColors.ink)
             if let count { Text("\(count)").font(DevysTypography.body).foregroundStyle(DevysColors.ink3) }
-            if sample { DashedTag("Sample") }
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)

@@ -149,7 +149,7 @@ struct NewTaskSheet: View {
             VStack(alignment: .leading, spacing: DevysSpacing.regular) {
                 Text("New task").font(DevysTypography.title).foregroundStyle(DevysColors.ink)
                 FieldBox { TextField("Title", text: binding(\.title)) }
-                EmployeePicker(title: "Owner", employees: store.preview.employees, selection: binding(\.ownerID))
+                EmployeePicker(title: "Owner", employees: store.snapshot.employees, selection: binding(\.ownerID))
                 FieldBox { TextField("Objective (optional)", text: binding(\.objective), axis: .vertical).lineLimit(3...8) }
                 HStack {
                     Toggle("Due", isOn: Binding(get: { draft.hasDue }, set: { value in edit { $0.hasDue = value } }))

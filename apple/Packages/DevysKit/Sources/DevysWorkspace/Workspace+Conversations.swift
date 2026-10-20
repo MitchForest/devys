@@ -42,10 +42,17 @@ extension Workspace.State {
 
     /// Who the composer's draft goes to, for the To chip.
     package func recipients(in key: ConversationKey) -> [String] {
-        conversation(key)?.recipients(team: preview.employees, fallback: defaultResponder(for: key)) ?? []
+        conversation(key)?.recipients(team: snapshot.employees, fallback: defaultResponder(for: key)) ?? []
     }
 
-    package func isWorking(_ employeeID: String) -> Bool { runs[employeeID] == true }
+    /// Pi is running something for the employee, it owes an answer in an open conversation, or
+    /// its inbox has unfinished messages. The same rule as the web's `workingOf`.
+    package func isWorking(_ employeeID: String) -> Bool {
+        let status = statuses[employeeID]
+        let unfinished = status?.state.inbox.contains { $0.status != "done" && $0.status != "failed" } ?? false
+        let answering = [main, panel].contains { $0?.awaiting.contains(employeeID) == true }
+        return status?.isRunning == true || answering || unfinished
+    }
 
     /// The main pane's conversation is on screen (a space shows it on its Conversation tab).
     var isMainVisible: Bool {
@@ -58,13 +65,6 @@ extension Workspace.State {
 
     func isVisible(_ key: ConversationKey) -> Bool {
         key == main?.key ? isMainVisible : key == panel?.key
-    }
-
-    /// Employees whose status matters now: those asked to answer, and the open DM's employee.
-    var watchedEmployees: [String] {
-        var ids = (main?.awaiting ?? []) + (panel?.awaiting ?? [])
-        if case .direct(let id) = page { ids.append(id) }
-        return ids.reduce(into: []) { unique, id in if !unique.contains(id) { unique.append(id) } }
     }
 }
 
@@ -153,7 +153,7 @@ extension Workspace {
                 }
             }
         case .mentionPicked(let key, let employeeID):
-            guard let name = state.preview.employees.first(where: { $0.id == employeeID })?.name else { return }
+            guard let name = state.snapshot.employees.first(where: { $0.id == employeeID })?.name else { return }
             update(key, &state) { conversation in
                 conversation.draft = Mentions.insert(name, into: conversation.draft)
                 if !conversation.mentions.contains(employeeID) { conversation.mentions.append(employeeID) }
@@ -225,13 +225,6 @@ extension Workspace {
     func refreshConversations(_ state: State) {
         loadSummaries(state)
         for key in [state.main?.key, state.panel?.key].compactMap(\.self) { loadPage(key, state: state) }
-        let runtime = runtime
-        for id in state.watchedEmployees where id != state.operations?.id {
-            let scope = EmployeeScope(businessID: state.businessID, employeeID: id)
-            store.addTask {
-                if let status = try? await runtime.status(scope) { try store.send(Action(.statusLoaded(scope, status))) }
-            }
-        }
     }
 
     /// While a conversation is on screen, everything in it up to the newest message is read.
@@ -249,12 +242,12 @@ extension Workspace {
     /// An employee stops being waited on once it has answered and stopped working, or
     /// stopped working after fast polling gave up.
     func settleAwaiting(_ state: inout State) {
-        let runs = state.runs
+        let statuses = state.statuses
         for key in [state.main?.key, state.panel?.key].compactMap(\.self) {
             update(key, &state) { conversation in
                 let open = conversation
                 conversation.awaiting.removeAll { id in
-                    runs[id] != true && (open.hasAnswered(id) || open.stoppedPolling)
+                    statuses[id]?.isRunning != true && (open.hasAnswered(id) || open.stoppedPolling)
                 }
             }
         }
@@ -269,7 +262,7 @@ extension Workspace {
             id: uuid().uuidString.lowercased(),
             text: text,
             replyTo: open.replyingTo,
-            mentions: open.mentioned(team: state.preview.employees),
+            mentions: open.mentioned(team: state.snapshot.employees),
             viaVoice: viaVoice
         )
         update(key, &state) { conversation in
@@ -381,7 +374,11 @@ extension Workspace {
         let scope = EmployeeScope(businessID: state.businessID, employeeID: author)
         let runtime = runtime
         store.addTask {
-            for change in changes { try? await runtime.react(scope, change) }
+            do {
+                for change in changes { try await runtime.react(scope, change) }
+            } catch {
+                try store.send(Action(.stopFinished("That reaction couldn't be saved.")))
+            }
         }
     }
 

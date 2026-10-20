@@ -42,7 +42,7 @@ let package = Package(
             dependencies: ["DevysCharacter"],
             swiftSettings: uiSwiftSettings
         ),
-        // The Devys HTTP API contract, device session storage, and preview data.
+        // The Devys HTTP API contract and device session storage; fixtures in debug builds only.
         .target(
             name: "DevysClient",
             dependencies: [

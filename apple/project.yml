@@ -47,8 +47,15 @@ targets:
     info:
       path: Devys-iOS/App/Info.plist
       properties:
+        # Local networking covers unqualified tailnet names (http://<mac>:8787). A MagicDNS name
+        # (<mac>.<tailnet>.ts.net) is fully qualified, so ATS would refuse plain HTTP to it;
+        # tailnet traffic is WireGuard-encrypted, so ts.net may use HTTP.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+          NSExceptionDomains:
+            ts.net:
+              NSIncludesSubdomains: true
+              NSExceptionAllowsInsecureHTTPLoads: true
         # devys://enroll?server=…&code=… signs this device in from a QR code or link.
         CFBundleURLTypes:
           - CFBundleURLName: com.mitchwhite.DevysBusiness.enroll
@@ -81,8 +88,15 @@ targets:
     info:
       path: Devys-macOS/App/Info.plist
       properties:
+        # Local networking covers unqualified tailnet names (http://<mac>:8787). A MagicDNS name
+        # (<mac>.<tailnet>.ts.net) is fully qualified, so ATS would refuse plain HTTP to it;
+        # tailnet traffic is WireGuard-encrypted, so ts.net may use HTTP.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+          NSExceptionDomains:
+            ts.net:
+              NSIncludesSubdomains: true
+              NSExceptionAllowsInsecureHTTPLoads: true
         # devys://enroll?server=…&code=… signs this device in from a QR code or link.
         CFBundleURLTypes:
           - CFBundleURLName: com.mitchwhite.DevysBusiness.enroll

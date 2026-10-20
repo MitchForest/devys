@@ -75,7 +75,7 @@ struct ConversationMessages: View {
                         ))
                 }
             }
-            ForEach(store.preview.employees.filter { open.awaiting.contains($0.id) }) { employee in
+            ForEach(store.snapshot.employees.filter { open.awaiting.contains($0.id) }) { employee in
                 WorkingIndicator(store: store, employee: employee).padding(.top, 10)
             }
             ForEach(decisions) { decision in
@@ -90,7 +90,7 @@ struct ConversationMessages: View {
 
     private var empty: some View {
         VStack(spacing: 10) {
-            if key.kind == .direct, let employee = store.preview.employees.first(where: { $0.id == key.ref }) {
+            if key.kind == .direct, let employee = store.snapshot.employees.first(where: { $0.id == key.ref }) {
                 Portrait(store.state.portrait(for: employee), size: 48)
             }
             Text(emptyText)
@@ -184,7 +184,7 @@ struct ToChip: View {
         let picked = store.state.conversation(key)?.responderOverride
         Menu {
             Section("Who answers") {
-                ForEach(store.preview.employees) { employee in
+                ForEach(store.snapshot.employees) { employee in
                     Button {
                         store.send(.responderPicked(key, employee.id))
                     } label: {
@@ -204,7 +204,7 @@ struct ToChip: View {
             HStack(spacing: 6) {
                 Text("To").font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
                 HStack(spacing: -4) {
-                    ForEach(store.preview.employees.filter { recipients.contains($0.id) }) { employee in
+                    ForEach(store.snapshot.employees.filter { recipients.contains($0.id) }) { employee in
                         Portrait(store.state.portrait(for: employee), size: 16, isAnimated: false)
                     }
                 }
@@ -212,7 +212,7 @@ struct ToChip: View {
                     .font(DevysTypography.caption.weight(.semibold))
                     .foregroundStyle(DevysColors.ink)
                     .lineLimit(1)
-                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).foregroundStyle(DevysColors.ink3)
+                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).foregroundStyle(DevysColors.ink3).accessibilityHidden(true)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
@@ -235,7 +235,7 @@ private struct MentionSuggestions: View {
     let draft: String
 
     var body: some View {
-        let matches = Mentions.suggestions(for: draft, team: store.preview.employees)
+        let matches = Mentions.suggestions(for: draft, team: store.snapshot.employees)
         if !matches.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(matches.prefix(5)) { employee in
@@ -270,7 +270,7 @@ private struct InlineNotice: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "exclamationmark.circle.fill").foregroundStyle(tone)
+            Image(systemName: "exclamationmark.circle.fill").foregroundStyle(tone).accessibilityHidden(true)
             Text(text).font(DevysTypography.secondary).foregroundStyle(DevysColors.ink2)
             Spacer(minLength: 4)
             Button("Dismiss", systemImage: "xmark", action: dismiss)

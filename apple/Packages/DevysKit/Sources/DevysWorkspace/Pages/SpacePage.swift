@@ -107,11 +107,16 @@ private struct SpaceOverview: View {
             HStack(spacing: 10) {
                 ForEach(participants) { employee in
                     VStack(spacing: 4) {
-                        Portrait(store.state.portrait(for: employee), size: 32, mood: employee.activity.mood, label: employee.name, isAnimated: false)
+                        Portrait(store.state.portrait(for: employee), size: 32, mood: store.state.mood(for: employee), label: employee.name, isAnimated: false)
                         Text(employee.name).font(DevysTypography.caption).foregroundStyle(DevysColors.ink2).lineLimit(1)
                     }
                     .frame(maxWidth: 88)
                     .onTapGesture { store.send(.pageSelected(.direct(employee.id))) }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(employee.name)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityHint("Opens a direct message")
+                    .accessibilityAction { store.send(.pageSelected(.direct(employee.id))) }
                 }
             }
         }
@@ -135,7 +140,7 @@ private struct SpaceOverview: View {
     }
 
     @ViewBuilder private var lead: some View {
-        let lead = space.leadEmployeeID.flatMap { id in store.preview.employees.first { $0.id == id } }
+        let lead = space.leadEmployeeID.flatMap { id in store.snapshot.employees.first { $0.id == id } }
         HStack(spacing: 10) {
             if let lead {
                 Portrait(store.state.portrait(for: lead), size: 26, isAnimated: false)
@@ -146,7 +151,7 @@ private struct SpaceOverview: View {
             }
             Spacer(minLength: 8)
             Menu {
-                ForEach(store.preview.employees.filter { $0.id != lead?.id }) { employee in
+                ForEach(store.snapshot.employees.filter { $0.id != lead?.id }) { employee in
                     Button(employee.name) { store.send(.spaceLeadChanged(space.id, employee.id)) }
                 }
             } label: {

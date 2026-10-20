@@ -37,7 +37,7 @@ struct SpaceFiles: View {
             ForEach(onMac) { item in
                 Button { store.send(.pageSelected(.files(item.ref))) } label: {
                     HStack(spacing: 10) {
-                        Image(systemName: "folder").foregroundStyle(DevysColors.ink3)
+                        Image(systemName: "folder").foregroundStyle(DevysColors.ink3).accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 1) {
                             Text((item.ref as NSString).lastPathComponent).font(DevysTypography.body.weight(.semibold)).foregroundStyle(DevysColors.ink)
                             Text("On the Mac").font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3)
@@ -74,7 +74,7 @@ private struct FileRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
-                Image(systemName: isMarkdown ? "doc.richtext" : "doc").foregroundStyle(DevysColors.ink3)
+                Image(systemName: isMarkdown ? "doc.richtext" : "doc").foregroundStyle(DevysColors.ink3).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(file.filename).font(DevysTypography.body.weight(.semibold)).foregroundStyle(DevysColors.ink)
                     Text(ByteCountFormatter.string(fromByteCount: Int64(file.byteLength), countStyle: .file))

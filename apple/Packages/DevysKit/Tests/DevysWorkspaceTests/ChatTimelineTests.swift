@@ -66,22 +66,57 @@ struct ChatTimelineTests {
         #expect(bubbles(timeline).last?.quote?.employeeID == "ops")
     }
 
-    @Test("Presence hides idle teammates and reflects Operations' live state")
+    @Test("Presence derives every teammate's signal from their runtime status and decisions, like the web")
     func presence() {
         var state = Workspace.State(server: URL(string: "http://127.0.0.1:5173")!)
-        state.preview = .acmeLaunch
+        state.snapshot = .acmeLaunch
         let idle = EmployeeStatus(state: RuntimeState(run: nil, inbox: [], outbox: []))
-        state.status = .loaded(idle)
-        let shown = state.presence
-        #expect(shown.allSatisfy { $0.employee.activity != .idle || $0.employee.id == state.operations?.id })
-        #expect(!shown.contains { $0.employee.id == state.operations?.id && $0.signal == .working })
-
         let running = EmployeeStatus(state: RuntimeState(run: .init(id: "r", stopped: false, deadline: nil), inbox: [], outbox: []))
-        state.status = .loaded(running)
-        #expect(state.presence.first { $0.employee.id == state.operations?.id }?.signal == .working)
-
         let stopped = EmployeeStatus(state: RuntimeState(run: .init(id: "r", stopped: true, deadline: nil), inbox: [], outbox: []))
-        state.status = .loaded(stopped)
-        #expect(state.presence.first { $0.employee.id == state.operations?.id }?.signal == .paused)
+        let unfinished = EmployeeStatus(state: RuntimeState(run: nil, inbox: [InboxEntry(id: "m", text: "Go", receivedAt: 1, status: "queued")], outbox: []))
+        let failed = EmployeeStatus(state: RuntimeState(run: nil, inbox: [InboxEntry(id: "m", text: "Go", receivedAt: 1, status: "failed")], outbox: []))
+        func signal(_ id: String) -> Presence.Signal? { state.presence.first { $0.employee.id == id }?.signal }
+
+        state.status = .loaded(idle)
+        state.statuses = ["ops": idle, "engineering": idle, "growth": idle, "business-ops": idle]
+        #expect(state.presence.isEmpty)
+
+        state.status = .loaded(running)
+        state.statuses["ops"] = running
+        state.statuses["engineering"] = running
+        state.statuses["growth"] = unfinished
+        state.statuses["business-ops"] = failed
+        #expect(signal("ops") == .working)
+        #expect(signal("engineering") == .working)
+        #expect(signal("growth") == .working)
+        #expect(signal("business-ops") == .failed)
+
+        state.statuses["engineering"] = stopped
+        state.statuses["growth"] = idle
+        state.decisions = .loaded([Decision(id: "d1", employeeID: "growth", capability: "email.send", input: .object([:]))])
+        #expect(signal("engineering") == .paused)
+        #expect(signal("growth") == .needsYou(1))
+        #expect(state.mood(for: state.snapshot.employees[1]) == .idle)
+        #expect(state.mood(for: state.snapshot.employees[3]) == .idle)
+        state.statuses["business-ops"] = running
+        #expect(state.mood(for: state.snapshot.employees[3]) == .working)
+    }
+
+    @Test("Take-over is mine only when the signed-in person has it; a work item shows its own decisions")
+    func takeoverAndWorkDecisions() {
+        var state = Workspace.State(server: URL(string: "http://127.0.0.1:5173")!)
+        state.account = .fixture
+        let free = Commitment(id: "c1", ownerEmployeeID: "growth", title: "PR")
+        let mine = Commitment(id: "c2", ownerEmployeeID: "growth", title: "PR", takenOverBy: "person-preview")
+        let theirs = Commitment(id: "c3", ownerEmployeeID: "growth", title: "PR", takenOverBy: "person-other")
+        #expect(!state.isMine(free) && state.takeoverTitle(free) == nil)
+        #expect(state.isMine(mine) && state.takeoverTitle(mine) == "You have it")
+        #expect(!state.isMine(theirs) && state.takeoverTitle(theirs) == "Taken over by another person")
+        state.decisions = .loaded([
+            Decision(id: "d1", employeeID: "growth", capability: "email.send", input: .object([:]), commitmentID: "c1"),
+            Decision(id: "d2", employeeID: "growth", capability: "email.send", input: .object([:]))
+        ])
+        #expect(state.decisions(for: free).map(\.id) == ["d1"])
+        #expect(state.decisions(for: mine).isEmpty)
     }
 }

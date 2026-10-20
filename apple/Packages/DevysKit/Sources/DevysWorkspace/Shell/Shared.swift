@@ -3,16 +3,6 @@ package import DevysClient
 import DevysDesignSystem
 import SwiftUI
 
-extension Employee.Activity {
-    var mood: BotMood {
-        switch self {
-        case .working: .working
-        case .waiting: .waiting
-        case .idle: .idle
-        }
-    }
-}
-
 extension Business {
     var tileTint: BusinessTile.Tint { BusinessTile.Tint(rawValue: tint) ?? .blue }
 }
@@ -47,7 +37,7 @@ extension Workspace.State {
         case .files: "Files"
         case .direct(let id): employeeName(id)
         case .space(let id): spaces.value?.first { $0.id == id }?.name ?? "Space"
-        case .employee(let id): preview.employees.first { $0.id == id }?.name ?? "Team"
+        case .employee(let id): snapshot.employees.first { $0.id == id }?.name ?? "Team"
         case .inbox: "Inbox"
         case .work(let filter): filter == .all ? "Work" : filter.rawValue
         case .money: "Money"
@@ -73,6 +63,29 @@ extension Workspace.State {
         }
     }
 
+    /// An employee's face: Operations follows its live state; everyone else their runtime.
+    func mood(for employee: Employee) -> BotMood {
+        if employee.id == operations?.id { return operationsMood }
+        return isWorking(employee.id) ? .working : .idle
+    }
+
+    /// Whether the signed-in person has taken the work item over from its employee.
+    func isMine(_ item: Commitment) -> Bool {
+        item.takenOverBy != nil && item.takenOverBy == account?.person.id
+    }
+
+    /// Who has taken the work item over, as the signed-in person reads it; nil while its
+    /// employee has it. Only the signed-in person's own name is known, so anyone else is unnamed.
+    func takeoverTitle(_ item: Commitment) -> String? {
+        guard item.takenOverBy != nil else { return nil }
+        return isMine(item) ? "You have it" : "Taken over by another person"
+    }
+
+    /// The owner's decisions waiting on this work item.
+    func decisions(for item: Commitment) -> [Decision] {
+        decisions.value?.filter { $0.commitmentID == item.id } ?? []
+    }
+
     func work(_ filter: WorkFilter) -> [Commitment] {
         let items = work.value ?? []
         return filter == .all ? items : items.filter { $0.state.filter == filter }
@@ -84,7 +97,7 @@ extension Workspace.State {
     }
 
     func employeeName(_ id: String) -> String {
-        preview.employees.first { $0.id == id }?.name ?? "A former employee"
+        snapshot.employees.first { $0.id == id }?.name ?? "A former employee"
     }
 }
 
@@ -217,32 +230,24 @@ package struct Presence: Equatable, Identifiable {
 }
 
 extension Workspace.State {
-    /// Operations reports live runtime state; other teammates show their recorded activity.
+    /// Teammates worth a glance: working, waiting on you, failed or paused. The same rule as the
+    /// web's `presence`, from each employee's runtime status and the decisions they're waiting on.
     package var presence: [Presence] {
-        preview.employees.compactMap { employee in
+        snapshot.employees.compactMap { employee in
             let decisions = decisions.value?.filter { $0.employeeID == employee.id }.count ?? 0
+            let status = employee.id == operations?.id ? status.value : statuses[employee.id]
+            let latest = status?.state.inbox.max { $0.receivedAt < $1.receivedAt }
             let signal: Presence.Signal?
-            if employee.paused {
+            if employee.paused || status?.state.run?.stopped == true {
                 signal = .paused
-            } else if employee.id == operations?.id {
-                let latest = status.value?.state.inbox.max { $0.receivedAt < $1.receivedAt }
-                if status.value?.state.run?.stopped == true {
-                    signal = .paused
-                } else if isRunning {
-                    signal = .working
-                } else if decisions > 0 {
-                    signal = .needsYou(decisions)
-                } else if latest?.status == "failed" {
-                    signal = .failed
-                } else {
-                    signal = nil
-                }
+            } else if isWorking(employee.id) {
+                signal = .working
+            } else if decisions > 0 {
+                signal = .needsYou(decisions)
+            } else if latest?.status == "failed" {
+                signal = .failed
             } else {
-                switch employee.activity {
-                case .waiting: signal = .needsYou(max(decisions, 1))
-                case .working: signal = .working
-                case .idle: signal = nil
-                }
+                signal = nil
             }
             return signal.map { Presence(employee: employee, signal: $0) }
         }

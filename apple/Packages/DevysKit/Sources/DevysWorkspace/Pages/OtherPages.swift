@@ -8,7 +8,7 @@ struct InboxPage: View {
     var body: some View {
         PageBody {
             PageHeader(title: "Inbox")
-            EmptyNote(text: "Mail arrives with E1, when the business's mailbox is connected. Until then, nothing here is real, so nothing is shown.")
+            EmptyNote(text: "No mailbox is connected yet. The business's mail appears here once one is.")
         }
     }
 }
@@ -67,6 +67,9 @@ struct WorkPage: View {
                         .contentShape(Rectangle())
                         .onTapGesture { store.send(.workOpened(item.id)) }
                         .contextMenu { WorkActions(store: store, item: item) }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityAction { store.send(.workOpened(item.id)) }
                     }
                 }
                 .frame(minWidth: 150, maxWidth: .infinity, alignment: .top)
@@ -80,7 +83,7 @@ struct MoneyPage: View {
     let store: StoreOf<Workspace>
 
     var body: some View {
-        let employees = store.preview.employees
+        let employees = store.snapshot.employees
         let total = employees.reduce(0) { $0 + (store.state.usage(of: $1.id)?.totalCost ?? 0) }
         PageBody {
             PageHeader(title: "Money", subtitle: "Model spend so far: \(ModelText.dollars(total))")
@@ -103,9 +106,12 @@ struct MoneyPage: View {
                     .padding(.vertical, 8)
                     .contentShape(Rectangle())
                     .onTapGesture { store.send(.pageSelected(.employee(employee.id))) }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction { store.send(.pageSelected(.employee(employee.id))) }
                 }
             }
-            EmptyNote(text: "Budgets and spending limits arrive with P1. Nothing can be purchased until then.")
+            EmptyNote(text: "Budgets and spending limits aren't available yet, so nothing can be purchased.")
         }
         .onAppear { store.send(.allUsageRequested) }
     }
@@ -118,7 +124,13 @@ struct AppsPage: View {
 
     var body: some View {
         PageBody {
-            PageHeader(title: section.rawValue)
+            PageHeader(title: section.rawValue) {
+                // The sidebar lists both sections on wide layouts; iPhone has only this.
+                SegmentedTabs(
+                    selection: Binding(get: { section }, set: { store.send(.pageSelected(.apps($0))) }),
+                    options: AppsSection.allCases.map { (value: $0, title: $0.rawValue) }
+                )
+            }
             switch section {
             case .installed:
                 EmptyNote(text: "Installed apps arrive with T1, the tool registry.")
@@ -127,6 +139,7 @@ struct AppsPage: View {
                     SectionHeader("Accounts")
                     HStack(spacing: DevysSpacing.compact) {
                         Image(systemName: "externaldrive.connected.to.line.below").frame(width: 28).foregroundStyle(DevysColors.ink2)
+                            .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 1) {
                             Text("Google Drive").font(DevysTypography.body.weight(.semibold)).foregroundStyle(DevysColors.ink)
                             Text("Files your employees read and write").font(DevysTypography.secondary).foregroundStyle(DevysColors.ink2)
@@ -136,6 +149,7 @@ struct AppsPage: View {
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
+                    .accessibilityElement(children: .combine)
                     EmptyNote(text: "Other connections arrive with T1, the tool registry.")
                 }
                 .onAppear { store.send(.connectionsRequested) }
@@ -145,11 +159,14 @@ struct AppsPage: View {
 
     @ViewBuilder private var googleState: some View {
         switch store.google {
-        case nil: ProgressView().controlSize(.small)
-        case .some(let google) where google.connected: StatusChip("Connected", tone: .done)
-        case .some(let google) where google.configured:
-            Text("Connect from the web app").font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3)
-        case .some: Text("Not set up on this server").font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3)
+        case nil, .loading: ProgressView().controlSize(.small)
+        case .failed(let message): Text(message).font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3)
+        case .loaded(let google) where google.connected: StatusChip("Connected", tone: .done)
+        case .loaded(let google) where google.configured:
+            // Google's consent flow runs in the browser; this app doesn't start it.
+            Text("Not connected · connect it in Devys on the web, under Connections")
+                .font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3).multilineTextAlignment(.trailing)
+        case .loaded: Text("Not set up on this server").font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3)
         }
     }
 }

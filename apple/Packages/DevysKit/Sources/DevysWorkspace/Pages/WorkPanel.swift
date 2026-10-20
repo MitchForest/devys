@@ -22,6 +22,7 @@ struct WorkPanel: View {
                         if !item.objective.isEmpty {
                             Text(item.objective).font(DevysTypography.body).foregroundStyle(DevysColors.ink2)
                         }
+                        decisions(item)
                         WorkItemFields(store: store, item: item)
                         WorkItemNotes(store: store, item: item)
                         CodingSessions(store: store, item: item)
@@ -47,8 +48,8 @@ struct WorkPanel: View {
                 Text(item?.title ?? "Work").font(DevysTypography.heading).foregroundStyle(DevysColors.ink).lineLimit(3)
                 HStack(spacing: 6) {
                     item?.state.chip
-                    if item?.takenOverBy != nil {
-                        Text("You have it").font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
+                    if let takeover = item.flatMap(store.state.takeoverTitle) {
+                        Text(takeover).font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
                     }
                 }
             }
@@ -60,6 +61,16 @@ struct WorkPanel: View {
         .padding(.horizontal, 14)
         .padding(.top, 14)
         .padding(.bottom, 8)
+    }
+
+    @ViewBuilder private func decisions(_ item: Commitment) -> some View {
+        let decisions = store.state.decisions(for: item)
+        if !decisions.isEmpty {
+            VStack(alignment: .leading, spacing: DevysSpacing.small) {
+                SectionHeader("Waiting on you", count: decisions.count)
+                ForEach(decisions) { DecisionCard(store: store, decision: $0) }
+            }
+        }
     }
 
     @ViewBuilder private func evidence(_ item: Commitment) -> some View {
@@ -87,16 +98,16 @@ private struct WorkItemFields: View {
         VStack(alignment: .leading, spacing: 12) {
             row("Owner") {
                 Menu {
-                    ForEach(store.preview.employees.filter { $0.id != item.ownerEmployeeID }) { employee in
+                    ForEach(store.snapshot.employees.filter { $0.id != item.ownerEmployeeID }) { employee in
                         Button("Reassign to \(employee.name)") { store.send(.reassigned(item.id, to: employee.id)) }
                     }
                 } label: {
                     HStack(spacing: 6) {
-                        if let owner = store.preview.employees.first(where: { $0.id == item.ownerEmployeeID }) {
+                        if let owner = store.snapshot.employees.first(where: { $0.id == item.ownerEmployeeID }) {
                             Portrait(store.state.portrait(for: owner), size: 20, isAnimated: false)
                         }
                         Text(store.state.employeeName(item.ownerEmployeeID))
-                        Image(systemName: "chevron.up.chevron.down").imageScale(.small).foregroundStyle(DevysColors.ink3)
+                        Image(systemName: "chevron.up.chevron.down").imageScale(.small).foregroundStyle(DevysColors.ink3).accessibilityHidden(true)
                     }
                 }
                 .menuIndicator(.hidden)
@@ -118,19 +129,22 @@ private struct WorkItemFields: View {
             }
             row("Due") { due }
             row("Handled by") {
-                Text(item.takenOverBy == nil ? store.state.employeeName(item.ownerEmployeeID) : "You").foregroundStyle(DevysColors.ink)
+                Text(handler).foregroundStyle(DevysColors.ink)
                 Spacer(minLength: 8)
                 if item.state.isOpen {
-                    Button(item.takenOverBy == nil ? "Take over" : "Hand back", systemImage: item.takenOverBy == nil ? "hand.raised" : "arrowshape.turn.up.left") {
-                        store.send(.takeoverToggled(item.id))
-                    }
-                    .buttonStyle(DevysButtonStyle(.quiet, compact: true))
-                    .fixedSize()
+                    TakeoverButton(store: store, item: item)
+                        .buttonStyle(DevysButtonStyle(.quiet, compact: true))
+                        .fixedSize()
                 }
             }
         }
         .font(DevysTypography.body)
         .devysCard()
+    }
+
+    private var handler: String {
+        if item.takenOverBy == nil { return store.state.employeeName(item.ownerEmployeeID) }
+        return store.state.isMine(item) ? "You" : "Another person"
     }
 
     @ViewBuilder private var due: some View {

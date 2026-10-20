@@ -66,7 +66,7 @@ extension Workspace {
             hire(state: &state)
         case .hired(let employee):
             state.team.hiring = nil
-            if !state.preview.employees.contains(where: { $0.id == employee.id }) { state.preview.employees.append(employee) }
+            if !state.snapshot.employees.contains(where: { $0.id == employee.id }) { state.snapshot.employees.append(employee) }
             state.page = .employee(employee.id)
             if !state.destination.lists(state.page) { state.destination = .team }
             refreshTeam(state)
@@ -81,7 +81,7 @@ extension Workspace {
         case .retireConfirmed(let employeeID, let successorID):
             retire(employeeID, successorID: successorID, state: state)
         case .retired(let employeeID, let successorID):
-            state.preview.employees.removeAll { $0.id == employeeID }
+            state.snapshot.employees.removeAll { $0.id == employeeID }
             if state.page == .direct(employeeID) { open(.today, state: &state) }
             if state.page == .employee(employeeID) { state.page = .employee(successorID) }
             refreshTeam(state)
@@ -141,19 +141,19 @@ extension Workspace {
     func saveProfile(_ employeeID: String, name: String, responsibilities: String, state: inout State) {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let responsibilities = responsibilities.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let index = state.preview.employees.firstIndex(where: { $0.id == employeeID }),
+        guard let index = state.snapshot.employees.firstIndex(where: { $0.id == employeeID }),
               let scope = scope(of: employeeID, in: state),
               !name.isEmpty, !responsibilities.isEmpty
         else { return }
-        let current = state.preview.employees[index]
+        let current = state.snapshot.employees[index]
         let change = ProfileChange(
             name: name == current.name ? nil : String(name.prefix(80)),
             responsibilities: responsibilities == current.role ? nil : String(responsibilities.prefix(2000))
         )
         guard change.name != nil || change.responsibilities != nil else { return }
-        state.preview.employees[index].name = change.name ?? current.name
-        state.preview.employees[index].role = change.responsibilities ?? current.role
-        state.preview.employees[index].summary = state.preview.employees[index].role
+        state.snapshot.employees[index].name = change.name ?? current.name
+        state.snapshot.employees[index].role = change.responsibilities ?? current.role
+        state.snapshot.employees[index].summary = state.snapshot.employees[index].role
         let runtime = runtime
         let businessID = state.businessID
         store.addTask {
@@ -168,8 +168,8 @@ extension Workspace {
 
     /// Open work moves to the successor first; the Head of Operations can't be retired.
     func retire(_ employeeID: String, successorID: String, state: State) {
-        guard let employee = state.preview.employees.first(where: { $0.id == employeeID }), !employee.isOperations,
-              successorID != employeeID, state.preview.employees.contains(where: { $0.id == successorID }),
+        guard let employee = state.snapshot.employees.first(where: { $0.id == employeeID }), !employee.isOperations,
+              successorID != employeeID, state.snapshot.employees.contains(where: { $0.id == successorID }),
               let scope = scope(of: employeeID, in: state)
         else { return }
         let runtime = runtime

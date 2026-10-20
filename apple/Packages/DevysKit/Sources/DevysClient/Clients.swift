@@ -344,17 +344,6 @@ extension RuntimeClient {
         stop: { _ in throw DevysHTTPError.unauthorized },
         memory: { _ in throw DevysHTTPError.unauthorized }
     )
-
-    public static let fixture = Self(
-        account: { .fixture },
-        business: { id in BusinessDetail.fixture(id) },
-        createBusiness: { business in Business(id: business.name.lowercased(), name: business.name, brief: business.brief) },
-        status: { _ in .fixture },
-        stop: { _ in true },
-        memory: { _ in MemoryClaim.fixtures },
-        conversation: { _, key, _ in .fixture(key) },
-        models: { .fixture }
-    )
 }
 
 nonisolated enum SessionClientKey: DependencyKey {
@@ -366,7 +355,11 @@ nonisolated enum SessionClientKey: DependencyKey {
 nonisolated enum RuntimeClientKey: DependencyKey {
     static let liveValue = RuntimeClient.live(.shared)
     static let testValue = RuntimeClient.unimplemented
-    static let previewValue = RuntimeClient.fixture
+    #if DEBUG
+        static let previewValue = RuntimeClient.fixture
+    #else
+        static let previewValue = RuntimeClient.unimplemented
+    #endif
 }
 
 nonisolated enum LookClientKey: DependencyKey {
@@ -400,84 +393,5 @@ extension DependencyValues {
     public var runtimeClient: RuntimeClient {
         get { self[RuntimeClientKey.self] }
         set { self[RuntimeClientKey.self] = newValue }
-    }
-}
-
-extension Account {
-    public static let fixture = Account(
-        person: Person(id: "person-preview", displayName: "Mitch"),
-        businesses: [WorkspacePreview.acmeLaunch.business, WorkspacePreview.globexGrowth.business]
-    )
-}
-
-extension BusinessDetail {
-    /// The sample team for a sample business, for previews and tests.
-    public static func fixture(_ id: String) -> Self {
-        let sample = id == WorkspacePreview.globexGrowth.business.id ? WorkspacePreview.globexGrowth : .acmeLaunch
-        return BusinessDetail(business: sample.business, employees: sample.employees, artifacts: [])
-    }
-}
-
-extension EmployeeStatus {
-    public static let fixture = EmployeeStatus(
-        state: RuntimeState(
-            run: nil,
-            inbox: [
-                InboxEntry(id: "m2", text: "Draft the PR pricing inquiry", receivedAt: 1_760_880_000_000, status: "done"),
-                InboxEntry(id: "m1", text: "What is blocking launch?", receivedAt: 1_760_870_000_000, status: "done")
-            ],
-            outbox: [
-                OutboxEntry(id: "m2", text: "Draft ready for your review.", status: "sent"),
-                OutboxEntry(id: "m1", text: "Domain, mailbox and measurement.", status: "sent")
-            ],
-            usage: RuntimeUsage(models: [
-                "gateway/claude-opus-5-5": RuntimeUsage.ModelUsage(
-                    input: 3_000,
-                    output: 1_500,
-                    cacheRead: 20_000,
-                    cacheWrite: 0,
-                    cost: RuntimeUsage.Cost(total: 0.0625)
-                )
-            ])
-        )
-    )
-}
-
-extension MemoryClaim {
-    public static let fixtures = [
-        MemoryClaim(
-            key: "acme.launch-window",
-            content: "Acme launch work runs November 2026 through April 2027.",
-            sourceKind: "user",
-            revision: 1,
-            updatedAt: "2026-10-19T15:00:00.000Z"
-        )
-    ]
-}
-
-extension ConversationPage {
-    /// A short sample exchange in any conversation, for previews.
-    public static func fixture(_ key: ConversationKey) -> Self {
-        let employee = key.kind == .direct ? key.ref : "ops"
-        func message(_ id: String, _ author: String, _ text: String, at seconds: Int, replyTo: String? = nil, reactions: [String] = []) -> ConversationMessage {
-            ConversationMessage(
-                id: id,
-                conversation: key.rawValue,
-                author: author,
-                text: text,
-                replyTo: replyTo,
-                createdAt: Date(timeIntervalSince1970: 1_760_870_000 + Double(seconds)).formatted(.iso8601),
-                reactions: reactions
-            )
-        }
-        return ConversationPage(
-            messages: [
-                message("m1", "person:person-preview", "What is blocking launch?", at: 0),
-                message("m2", "employee:\(employee)", "Domain, mailbox and measurement. The domain quote needs your approval.", at: 10, reactions: ["👍"]),
-                message("m3", "person:person-preview", "Draft the PR pricing inquiry", at: 10_000, replyTo: "m2"),
-                message("m4", "employee:\(employee)", "Draft ready for your review.", at: 10_020)
-            ],
-            respondent: employee
-        )
     }
 }

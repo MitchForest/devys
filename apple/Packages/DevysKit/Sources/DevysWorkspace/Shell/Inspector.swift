@@ -46,9 +46,9 @@ private struct DirectInfo: View {
     let employeeID: String
 
     var body: some View {
-        if let employee = store.preview.employees.first(where: { $0.id == employeeID }) {
+        if let employee = store.snapshot.employees.first(where: { $0.id == employeeID }) {
             HStack(spacing: 10) {
-                Portrait(store.state.portrait(for: employee), size: 40, mood: employee.activity.mood, label: employee.name)
+                Portrait(store.state.portrait(for: employee), size: 40, mood: store.state.mood(for: employee), label: employee.name)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(employee.name).font(DevysTypography.heading).foregroundStyle(DevysColors.ink)
                     Text(EmployeeLine.status(employee, working: store.state.isWorking(employee.id)))
@@ -78,7 +78,7 @@ private struct SpaceInfo: View {
             Text("Who's here").font(DevysTypography.label).foregroundStyle(DevysColors.ink3).padding(.top, 6)
             ForEach(store.state.participants(in: space)) { employee in
                 HStack(spacing: 8) {
-                    Portrait(store.state.portrait(for: employee), size: 22, mood: employee.activity.mood, isAnimated: false)
+                    Portrait(store.state.portrait(for: employee), size: 22, mood: store.state.mood(for: employee), isAnimated: false)
                     Text(employee.name).font(DevysTypography.control).foregroundStyle(DevysColors.ink)
                     if employee.id == space.leadEmployeeID {
                         Text("Lead").font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
@@ -87,6 +87,10 @@ private struct SpaceInfo: View {
                 }
                 .contentShape(Rectangle())
                 .onTapGesture { store.send(.pageSelected(.direct(employee.id))) }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint("Opens a direct message")
+                .accessibilityAction { store.send(.pageSelected(.direct(employee.id))) }
             }
             let refs = Set(space.refs(.commitment))
             OpenWork(store: store, items: (store.work.value ?? []).filter { refs.contains($0.id) && $0.state.isOpen })
@@ -123,7 +127,7 @@ extension Workspace.State {
         var ids = Set((work.value ?? []).filter { refs.contains($0.id) }.map(\.ownerEmployeeID))
         if let lead = space.leadEmployeeID { ids.insert(lead) }
         if main?.key == .space(space.id) { ids.formUnion((main?.messages.value ?? []).compactMap(\.employeeID)) }
-        return preview.employees.filter { ids.contains($0.id) }
+        return snapshot.employees.filter { ids.contains($0.id) }
     }
 }
 

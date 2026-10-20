@@ -12,7 +12,7 @@ struct EmployeePage: View {
     @State private var retiring = false
 
     var body: some View {
-        if let employee = store.preview.employees.first(where: { $0.id == employeeID }) ?? store.preview.employees.first {
+        if let employee = store.snapshot.employees.first(where: { $0.id == employeeID }) ?? store.snapshot.employees.first {
             PageBody {
                 HStack(spacing: DevysSpacing.regular) {
                     Portrait(store.state.portrait(for: employee), size: 56, mood: mood(employee), label: employee.name)
@@ -85,24 +85,30 @@ struct EmployeePage: View {
     }
 
     private func mood(_ employee: Employee) -> BotMood {
-        employee.id == store.operations?.id ? store.operationsMood : employee.activity.mood
+        store.state.mood(for: employee)
     }
 
+    /// Its open work, what it's waiting on you for, and the work it finished most recently.
     @ViewBuilder private func activity(_ employee: Employee) -> some View {
-        let owned = (store.work.value ?? []).filter { $0.ownerEmployeeID == employee.id && $0.state.isOpen }
+        let all = (store.work.value ?? []).filter { $0.ownerEmployeeID == employee.id }
+        let owned = all.filter(\.state.isOpen)
+        let finished = all.filter { $0.state == .completed }.sorted { $0.updatedAt > $1.updatedAt }.prefix(5)
+        let decisions = store.decisions.value?.filter { $0.employeeID == employee.id } ?? []
         VStack(alignment: .leading, spacing: DevysSpacing.small) {
             SectionHeader("Open work", count: owned.count)
-            if owned.isEmpty { EmptyNote(text: "\(employee.name) owns no open work.") }
+            if owned.isEmpty { EmptyNote(text: "Nothing open. Give \(employee.name) a task.") }
             ForEach(owned) { WorkRow(store: store, item: $0) }
         }
-        VStack(alignment: .leading, spacing: DevysSpacing.compact) {
-            SectionHeader("Recent")
-            if employee.events.isEmpty { EmptyNote(text: "No activity yet.") }
-            ForEach(employee.events) { event in
-                HStack(alignment: .firstTextBaseline, spacing: DevysSpacing.compact) {
-                    Text(event.time).font(DevysTypography.secondary).monospacedDigit().foregroundStyle(DevysColors.ink3).frame(width: 64, alignment: .leading)
-                    Text(event.text).font(DevysTypography.body).foregroundStyle(DevysColors.ink2)
-                }
+        if !decisions.isEmpty {
+            VStack(alignment: .leading, spacing: DevysSpacing.small) {
+                SectionHeader("Waiting on you", count: decisions.count)
+                ForEach(decisions) { DecisionCard(store: store, decision: $0) }
+            }
+        }
+        if !finished.isEmpty {
+            VStack(alignment: .leading, spacing: DevysSpacing.small) {
+                SectionHeader("Recently finished")
+                ForEach(finished) { WorkRow(store: store, item: $0) }
             }
         }
     }
@@ -192,7 +198,7 @@ private struct RetireSheet: View {
     @State private var successor = ""
 
     var body: some View {
-        let others = store.preview.employees.filter { $0.id != employee.id }
+        let others = store.snapshot.employees.filter { $0.id != employee.id }
         let open = (store.work.value ?? []).filter { $0.ownerEmployeeID == employee.id && $0.state.isOpen }.count
         VStack(alignment: .leading, spacing: DevysSpacing.regular) {
             Text("Retire \(employee.name)?").font(DevysTypography.title).foregroundStyle(DevysColors.ink)

@@ -24,7 +24,7 @@ struct CommandPalette: View {
                 .onTapGesture { store.send(.paletteToggled(false)) }
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 10) {
-                    Image(systemName: "magnifyingglass").foregroundStyle(DevysColors.ink3)
+                    Image(systemName: "magnifyingglass").foregroundStyle(DevysColors.ink3).accessibilityHidden(true)
                     TextField("Jump to a conversation, page, space or work", text: $query)
                         .textFieldStyle(.plain)
                         .font(DevysTypography.heading.weight(.regular))
@@ -38,7 +38,7 @@ struct CommandPalette: View {
                         ForEach(results) { target in
                             Button { go(target.action) } label: {
                                 HStack(spacing: 12) {
-                                    Image(systemName: target.symbol).frame(width: 20).foregroundStyle(DevysColors.ink2)
+                                    Image(systemName: target.symbol).frame(width: 20).foregroundStyle(DevysColors.ink2).accessibilityHidden(true)
                                     Text(target.title).foregroundStyle(DevysColors.ink)
                                     Spacer()
                                     Text(target.detail).foregroundStyle(DevysColors.ink3)
@@ -72,7 +72,7 @@ struct CommandPalette: View {
     }
 
     private var targets: [Target] {
-        let preview = store.preview
+        let snapshot = store.snapshot
         var all = [
             Target(id: "today", title: "Today", detail: "Home", symbol: "sun.max", action: .pageSelected(.today)),
             Target(id: "approvals", title: "Approvals", detail: "Home", symbol: "faceid", action: .pageSelected(.approvals)),
@@ -83,8 +83,8 @@ struct CommandPalette: View {
             Target(id: "connections", title: "Connections", detail: "Accounts", symbol: "link", action: .pageSelected(.apps(.connections)))
         ]
         all += (store.spaces.value ?? []).map { Target(id: $0.id, title: $0.name, detail: "Space", symbol: "square.grid.2x2", action: .pageSelected(.space($0.id))) }
-        all += preview.employees.map { Target(id: "dm-\($0.id)", title: $0.name, detail: "Direct message", symbol: "bubble.left", action: .pageSelected(.direct($0.id))) }
-        all += preview.employees.map { Target(id: $0.id, title: $0.name, detail: "Team", symbol: "person", action: .pageSelected(.employee($0.id))) }
+        all += snapshot.employees.map { Target(id: "dm-\($0.id)", title: $0.name, detail: "Direct message", symbol: "bubble.left", action: .pageSelected(.direct($0.id))) }
+        all += snapshot.employees.map { Target(id: $0.id, title: $0.name, detail: "Team", symbol: "person", action: .pageSelected(.employee($0.id))) }
         all += (store.work.value ?? []).map { Target(id: $0.id, title: $0.title, detail: "Work", symbol: "checklist", action: .workOpened($0.id)) }
         return all
     }

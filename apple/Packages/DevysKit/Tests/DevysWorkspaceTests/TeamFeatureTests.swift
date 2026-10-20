@@ -135,7 +135,7 @@ struct TeamFeatureTests {
         store.send(.hireConfirmed)
         await settle("hired", until: { store.team.hiring == nil })
         #expect(await server.hires == [Hire(template: "engineering", name: "Ada", responsibilities: "Owns the code and releases.", model: "gpt-6.1-sol")])
-        #expect(store.preview.employees.last?.name == "Ada")
+        #expect(store.snapshot.employees.last?.name == "Ada")
         #expect(store.page == .employee("e1"))
     }
 
@@ -156,7 +156,7 @@ struct TeamFeatureTests {
         let server = TeamServer()
         let store = await makeStore(server)
         store.send(.profileSaved("growth", name: "Growth", responsibilities: "  PR and paid social  "))
-        #expect(store.preview.employees.first { $0.id == "growth" }?.role == "PR and paid social")
+        #expect(store.snapshot.employees.first { $0.id == "growth" }?.role == "PR and paid social")
         await settle("saved", until: { await server.profiles.count == 1 })
         let change = await server.profiles.first?.1
         #expect(change == ProfileChange(responsibilities: "PR and paid social"))
@@ -169,7 +169,7 @@ struct TeamFeatureTests {
         store.send(.pageSelected(.employee("growth")))
         store.send(.retireConfirmed("ops", successor: "growth"))
         store.send(.retireConfirmed("growth", successor: "engineering"))
-        await settle("retired", until: { !store.preview.employees.contains { $0.id == "growth" } })
+        await settle("retired", until: { !store.snapshot.employees.contains { $0.id == "growth" } })
         let retirements = await server.retirements
         #expect(retirements.count == 1 && retirements.first?.0 == "growth" && retirements.first?.1 == "engineering")
         #expect(store.page == .employee("engineering"))

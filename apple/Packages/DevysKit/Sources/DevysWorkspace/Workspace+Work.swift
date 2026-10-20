@@ -100,7 +100,11 @@ extension Workspace {
         guard !businessID.isEmpty else { return }
         let runtime = runtime
         store.addTask {
-            if let connection = try? await runtime.googleConnection(businessID) { try store.send(Action(.googleLoaded(connection))) }
+            do {
+                try store.send(Action(.googleLoaded(.loaded(try await runtime.googleConnection(businessID)))))
+            } catch let error as DevysHTTPError {
+                try store.send(Action(.googleLoaded(.failed(Self.message(for: error)))))
+            }
         }
     }
 
@@ -140,9 +144,11 @@ extension Workspace {
     }
 
     func reloadWork(_ runtime: RuntimeClient, _ businessID: String) async throws {
-        let work = (try? await runtime.work(businessID)) ?? []
-        let decisions = (try? await runtime.decisions(businessID)) ?? []
-        let spaces = (try? await runtime.spaces(businessID)) ?? []
+        // A failed reload keeps what's on screen; the next tick tries again.
+        guard let work = try? await runtime.work(businessID),
+              let decisions = try? await runtime.decisions(businessID),
+              let spaces = try? await runtime.spaces(businessID)
+        else { return }
         try store.send(Action(.workLoaded(businessID: businessID, work, decisions, spaces)))
     }
 }

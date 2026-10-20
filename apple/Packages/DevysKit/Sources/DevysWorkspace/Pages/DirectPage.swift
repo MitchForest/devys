@@ -10,7 +10,7 @@ struct DirectPage: View {
     let employeeID: String
 
     var body: some View {
-        if let employee = store.preview.employees.first(where: { $0.id == employeeID }) {
+        if let employee = store.snapshot.employees.first(where: { $0.id == employeeID }) {
             VStack(spacing: 0) {
                 HStack(spacing: 10) {
                     Portrait(store.state.portrait(for: employee), size: 32, mood: mood(employee), label: employee.name)
@@ -36,6 +36,6 @@ struct DirectPage: View {
 
     /// While talking by voice, the face follows the conversation.
     private func mood(_ employee: Employee) -> BotMood {
-        store.state.voiceMood ?? (store.state.isWorking(employee.id) ? .working : employee.activity.mood)
+        store.state.voiceMood ?? store.state.mood(for: employee)
     }
 }

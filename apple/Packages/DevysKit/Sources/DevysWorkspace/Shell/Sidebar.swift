@@ -27,28 +27,28 @@ struct Sidebar: View {
 
     @ViewBuilder private var header: some View {
         if store.destination == .home {
-            Text(store.preview.businessName).font(DevysTypography.heading).foregroundStyle(DevysColors.ink)
+            Text(store.snapshot.businessName).font(DevysTypography.heading).foregroundStyle(DevysColors.ink)
         } else {
             Text(store.destination.title).font(DevysTypography.heading).foregroundStyle(DevysColors.ink)
         }
     }
 
     @ViewBuilder private var rows: some View {
-        let preview = store.preview
+        let snapshot = store.snapshot
         switch store.destination {
         case .home:
             row(.today, "Today", symbol: "sun.max")
             row(.approvals, "Approvals", symbol: "faceid", count: store.decisions.value?.count ?? 0)
             row(.files(nil), "Files", symbol: "folder")
-            if !preview.employees.isEmpty {
+            if !snapshot.employees.isEmpty {
                 HStack {
                     label("Direct messages")
                     Spacer()
                     SidebarAddButton(title: "Hire") { store.send(.hireTapped) }
                 }
-                ForEach(preview.employees) { employee in
+                ForEach(snapshot.employees) { employee in
                     row(.direct(employee.id), employee.name, unread: store.state.unread(.direct(employee.id)), trailing: trailing(for: employee)) {
-                        Portrait(store.state.portrait(for: employee), size: 20, mood: employee.activity.mood, isAnimated: false)
+                        Portrait(store.state.portrait(for: employee), size: 20, mood: store.state.mood(for: employee), isAnimated: false)
                     }
                 }
             }
@@ -63,16 +63,15 @@ struct Sidebar: View {
                 }
             }
         case .inbox:
-            row(.inbox, "All mail", symbol: "tray")
-            quiet("Mail arrives with E1.")
+            quiet("No mailbox is connected yet. The business's mail appears here once one is.")
         case .work:
             ForEach(WorkFilter.allCases, id: \.self) { filter in
                 row(.work(filter), filter.rawValue, symbol: symbol(for: filter), count: store.state.work(filter).count)
             }
         case .team:
-            ForEach(preview.employees) { employee in
+            ForEach(snapshot.employees) { employee in
                 row(.employee(employee.id), employee.name, detail: employee.summary, trailing: trailing(for: employee)) {
-                    Portrait(store.state.portrait(for: employee), size: 26, mood: employee.activity.mood, isAnimated: false)
+                    Portrait(store.state.portrait(for: employee), size: 26, mood: store.state.mood(for: employee), isAnimated: false)
                 }
             }
             Button { store.send(.hireTapped) } label: {
@@ -94,11 +93,7 @@ struct Sidebar: View {
     private func trailing(for employee: Employee) -> SidebarTrailing {
         if employee.paused { return .paused }
         if store.state.isWorking(employee.id) { return .working }
-        return switch employee.activity {
-        case .working: .working
-        case .waiting: .needsYou
-        case .idle: .none
-        }
+        return store.decisions.value?.contains { $0.employeeID == employee.id } == true ? .needsYou : .none
     }
 
     private func symbol(for filter: WorkFilter) -> String {
@@ -136,7 +131,7 @@ struct Sidebar: View {
     ) -> some View {
         row(page, title, detail: detail, count: count, unread: unread, trailing: trailing) {
             if let symbol {
-                Image(systemName: symbol).font(.system(size: 13, weight: .medium)).frame(width: 20)
+                Image(systemName: symbol).font(.system(size: 13, weight: .medium)).frame(width: 20).accessibilityHidden(true)
             }
         }
     }
@@ -238,10 +233,11 @@ private struct SidebarRow<Leading: View>: View {
 /// The number of unread messages in a conversation.
 struct UnreadBadge: View {
     let count: Int
+    @ScaledMetric(relativeTo: .caption2) private var size = 10.5
 
     var body: some View {
         Text(count > 99 ? "99+" : "\(count)")
-            .font(.system(size: 10.5, weight: .bold).monospacedDigit())
+            .font(.system(size: size, weight: .bold).monospacedDigit())
             .foregroundStyle(.white)
             .padding(.horizontal, 5)
             .frame(minWidth: 18, minHeight: 18)
