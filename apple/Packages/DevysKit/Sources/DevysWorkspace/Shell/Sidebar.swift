@@ -52,6 +52,26 @@ struct Sidebar: View {
                     }
                 }
             }
+            // Work the owner follows; the section is absent until they follow something.
+            let followed = (store.work.value ?? []).filter { store.state.isFollowing($0.id) }
+            if !followed.isEmpty {
+                label("Following")
+                ForEach(followed) { item in
+                    Button { store.send(.workOpened(item.id)) } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "checklist").frame(width: 20).foregroundStyle(DevysColors.ink3).accessibilityHidden(true)
+                            Text(item.title).lineLimit(1)
+                            Spacer(minLength: 4)
+                            let unread = store.state.unread(.work(item.id))
+                            if unread > 0 { UnreadBadge(count: unread) }
+                        }
+                        .font(DevysTypography.control).foregroundStyle(DevysColors.ink2)
+                        .padding(.horizontal, 10).padding(.vertical, 7)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
             HStack {
                 label("Spaces")
                 Spacer()

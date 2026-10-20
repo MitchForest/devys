@@ -152,11 +152,37 @@ export const markSeen = (
     );
   });
 
-/** Every conversation of the business with its latest message and this person's unread count. */
+/** Starts or stops a person following a conversation. */
+export const setFollowing = (
+  db: Database,
+  businessId: string,
+  key: ConversationKey,
+  personId: string,
+  on: boolean,
+) =>
+  database(db, async (sql) => {
+    await sql.run(
+      "INSERT INTO conversations (business_id, key) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+      [businessId, key],
+    );
+    await sql.run(
+      on
+        ? "INSERT INTO follows (business_id, conversation, person_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING"
+        : "DELETE FROM follows WHERE business_id = $1 AND conversation = $2 AND person_id = $3",
+      [businessId, key, personId],
+    );
+  });
+
+/**
+ * Every conversation of the business with its latest message, this person's unread count and
+ * whether they follow it.
+ */
 export const conversationSummaries = (db: Database, businessId: string, personId: string) =>
   database(db, (sql) =>
-    sql.rows<{ key: ConversationKey; last: Message | null; unread: number }>(
+    sql.rows<{ key: ConversationKey; last: Message | null; unread: number; following: boolean }>(
       `SELECT c.key,
+         EXISTS (SELECT 1 FROM follows f WHERE f.business_id = c.business_id
+           AND f.conversation = c.key AND f.person_id = $2) AS following,
          (SELECT to_jsonb(m) - 'business_id' - 'client_id' - 'seq' FROM messages m
           WHERE m.business_id = c.business_id AND m.conversation = c.key
           ORDER BY m.created_at DESC, m.seq DESC LIMIT 1) AS last,

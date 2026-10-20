@@ -26,6 +26,10 @@ export interface Commitment {
     at: string;
     commit?: string;
     check?: { command: string; exitCode: number | null };
+    /** What a commit changed, as "3 files changed, 10 insertions(+)". */
+    changes?: string;
+    /** The pull request the work was published as. */
+    pullRequest?: string;
     /** The event this was recorded from; evidence from one source is recorded once. */
     source?: string;
   }[];

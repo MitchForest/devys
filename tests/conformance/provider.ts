@@ -87,6 +87,21 @@ export function providerConformance(name: string, harness: () => ProviderHarness
     await second.adapter.close();
   });
 
+  it(`${name}: the transcript reads what it was told and what it replied`, async () => {
+    const { adapter, next } = harness();
+    const ended = next();
+    const started = await begin(adapter, "build it");
+    await ended;
+    const entries = await adapter.transcript({ sessionId: started.sessionId, cwd });
+    expect(entries).toEqual(
+      expect.arrayContaining([
+        { kind: "prompt", text: "build it" },
+        { kind: "reply", text: "did: build it" },
+      ]),
+    );
+    await adapter.close();
+  });
+
   it(`${name}: a harness that exits mid-turn is reported lost`, async () => {
     const { adapter, lost } = harness();
     const started = await begin(adapter, "slow work");

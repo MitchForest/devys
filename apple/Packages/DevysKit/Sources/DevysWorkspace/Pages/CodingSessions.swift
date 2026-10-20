@@ -144,6 +144,7 @@ struct SessionScreen: View {
             } else if let error = session.error {
                 Text(error).font(DevysTypography.body).foregroundStyle(DevysColors.ink2)
             }
+            SessionSteps(businessID: store.businessID, workID: item.id, session: session)
         }
         .padding(14)
     }
@@ -280,4 +281,71 @@ func openTerminal(
 func failure(_ what: String, _ error: any Error) -> String {
     guard let error = error as? DevysHTTPError else { return "\(what) Try again." }
     return "\(what) \(Workspace.message(for: error))"
+}
+
+/// What the session actually did, closed until asked for: read from the harness each time it
+/// opens (and while it works), never kept by Devys.
+private struct SessionSteps: View {
+    let businessID: String
+    let workID: String
+    let session: CodingSession
+    @Dependency(\.codingClient) private var coding
+    @State private var open = false
+    @State private var entries: [TranscriptEntry]?
+    @State private var problem: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button(open ? "Hide details" : "Details") { open.toggle() }
+                .buttonStyle(.plain).font(DevysTypography.label).foregroundStyle(DevysColors.ink3)
+            if open {
+                if let problem {
+                    Text(problem).font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
+                } else if let entries {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in step(entry) }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: 220)
+                } else {
+                    ProgressView()
+                }
+            }
+        }
+        .task(id: open ? "\(session.id):\(session.state)" : nil) { await load() }
+    }
+
+    private func load() async {
+        guard open else { return }
+        repeat {
+            do {
+                entries = try await coding.transcript(businessID, workID, session.id)
+                problem = nil
+            } catch {
+                problem = error.localizedDescription
+            }
+            guard session.state == .working else { return }
+            try? await Task.sleep(for: .seconds(5))
+        } while !Task.isCancelled
+    }
+
+    private func step(_ entry: TranscriptEntry) -> some View {
+        let label = switch entry.kind {
+        case .prompt: "Told"
+        case .reply: "Said"
+        case .plan: "Plan"
+        case .command: "Ran"
+        case .files: "Edited"
+        case .tool: "Used"
+        }
+        return VStack(alignment: .leading, spacing: 1) {
+            Text(label).font(DevysTypography.caption).foregroundStyle(entry.failed == true ? DevysColors.red : DevysColors.ink3)
+            Text(entry.text)
+                .font(entry.kind == .command || entry.kind == .files ? DevysTypography.caption.monospaced() : DevysTypography.secondary)
+                .foregroundStyle(DevysColors.ink2).lineLimit(6).textSelection(.enabled)
+        }
+        .accessibilityElement(children: .combine)
+    }
 }

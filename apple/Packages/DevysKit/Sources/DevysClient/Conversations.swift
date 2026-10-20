@@ -117,11 +117,14 @@ public struct ConversationSummary: Equatable, Sendable, Decodable {
     public let key: String
     public let last: ConversationMessage?
     public let unread: Int
+    /// The signed-in person follows it: a work thread they hear each milestone of.
+    public let following: Bool
 
-    public init(key: String, last: ConversationMessage?, unread: Int) {
+    public init(key: String, last: ConversationMessage?, unread: Int, following: Bool = false) {
         self.key = key
         self.last = last
         self.unread = unread
+        self.following = following
     }
 }
 
@@ -214,6 +217,14 @@ extension DevysHTTPClient {
         _ = try await raw(request)
     }
 
+    /// Starts or stops following a conversation.
+    public func follow(_ session: DeviceSession, businessID: String, key: ConversationKey, following: Bool) async throws {
+        var request = conversationRequest(session, businessID: businessID, key: key, action: "follow", method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "content-type")
+        request.httpBody = try JSONEncoder().encode(FollowBody(following: following))
+        _ = try await raw(request)
+    }
+
     /// The key goes in the path percent-encoded, so ":" survives every proxy.
     private func conversationRequest(
         _ session: DeviceSession,
@@ -231,6 +242,12 @@ extension DevysHTTPClient {
 }
 
 /// `POST …/read`: the created_at of the newest message seen.
+private struct FollowBody: Encodable {
+    let following: Bool
+
+    enum CodingKeys: String, CodingKey { case following = "on" }
+}
+
 private struct ReadPosition: Encodable {
     let seen: String
 

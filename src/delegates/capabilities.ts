@@ -20,7 +20,7 @@ export interface DelegateDependencies {
   evidence(
     scope: Scope,
     commitmentId: string,
-    entry: { note: string; commit: string },
+    entry: { note: string; commit: string; changes?: string; pullRequest?: string },
   ): Promise<void>;
 }
 
@@ -277,6 +277,11 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
           yield* rpc(() =>
             dependencies.evidence(scope, commitmentId, {
               commit: accepted.commit,
+              changes:
+                accepted.diffStat
+                  .split("\n")
+                  .find((line) => /files? changed/.test(line))
+                  ?.trim() ?? "",
               note: `Committed ${accepted.commit.slice(0, 12)} on ${found.branch} in ${found.repository}: ${message}\n${accepted.diffStat}`.slice(
                 0,
                 2000,
@@ -321,6 +326,7 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
           yield* rpc(() =>
             dependencies.evidence(scope, commitmentId, {
               commit: published.commit,
+              pullRequest: published.pullRequest,
               note: `Published ${published.commit.slice(0, 12)} to ${published.branch} on github.com/${published.repository} (repository ${published.repositoryId}), pull request into ${published.base}: ${published.pullRequest}`,
             }),
           );

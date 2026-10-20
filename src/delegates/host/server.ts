@@ -27,7 +27,7 @@ import type {
 } from "../contract.ts";
 import { cloneRepository, githubName, publishBranch } from "./github.ts";
 import { HostRefusal, hostId, scopeOf, type HostRoutes } from "../../protocol/host.ts";
-import type { ProviderAdapter, ProviderEvents } from "./provider.ts";
+import { bounded, type ProviderAdapter, type ProviderEvents } from "./provider.ts";
 import {
   commitAll,
   createWorktree,
@@ -78,6 +78,22 @@ export interface DelegatesHostOptions {
 }
 
 const checkOutputBytes = 16_000;
+/**
+ * A failure that reads like a missing or expired login, with how to fix it: the owner signs
+ * the CLI in on the Mac (in a Devys terminal or their own); Devys never holds the login.
+ */
+export function signInHint(provider: Provider, error: string) {
+  if (
+    !/not logged in|log ?in|logged out|unauthori[sz]ed|\b401\b|authenticat|api key|credential/i.test(
+      error,
+    )
+  )
+    return undefined;
+  const command = provider === "codex" ? "codex login" : "claude, then /login";
+  const name = provider === "codex" ? "Codex" : "Claude Code";
+  return `${name} isn't signed in on this Mac (${error.slice(0, 200)}). Sign in with \`${command}\` in a terminal, then send the session a follow-up to continue.`;
+}
+
 export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
   mkdirSync(options.data, { recursive: true });
   const ledger = join(options.data, "delegates.jsonl");
@@ -160,14 +176,15 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
         return;
       }
       const state = status === "completed" ? "idle" : status;
-      save({ ...job, state, reply: reply ?? job.reply, error });
+      const failure = error && signInHint(job.provider, error);
+      save({ ...job, state, reply: reply ?? job.reply, error: failure || error });
       void ended(
         job,
         status === "completed" ? "finished" : status,
         turnId,
         status === "completed"
           ? (reply ?? "Finished with no reply.")
-          : (error ?? `The turn ${status}.`),
+          : failure || error || `The turn ${status}.`,
       );
     },
     lost(sessionIds) {
@@ -435,6 +452,14 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
         case "/delegates/diff": {
           const job = jobOf(input);
           return workingDiff(job.worktree, job.baseCommit);
+        }
+        case "/delegates/transcript": {
+          const job = jobOf(input);
+          const entries = await adapter(job.provider).transcript({
+            sessionId: job.sessionId,
+            cwd: job.worktree,
+          });
+          return { entries: bounded(entries) };
         }
         case "/delegates/flush":
           await flush();

@@ -3,6 +3,8 @@
 // the first line after input names the session; each message is a turn unless one is running
 // ("slow" turns take 300 ms; "crash" exits); SIGINT ends a running turn as the CLI does, then exits.
 import { randomUUID } from "node:crypto";
+import { appendFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 const args = process.argv.slice(2);
 const resumed = args.indexOf("--resume");
 const session = resumed >= 0 ? args[resumed + 1] : randomUUID();
@@ -10,7 +12,17 @@ const out = (line) => process.stdout.write(`${JSON.stringify(line)}\n`);
 let announced = false;
 let running = null;
 let texts = [];
+// Like the CLI, keeps the session in the config directory's projects folder.
+const folder = join(process.env.CLAUDE_CONFIG_DIR ?? "/tmp", "projects", "-fake-cwd");
+mkdirSync(folder, { recursive: true });
+const record = (line) =>
+  appendFileSync(join(folder, `${session}.jsonl`), `${JSON.stringify(line)}\n`);
 const finish = () => {
+  for (const text of texts) record({ type: "user", message: { role: "user", content: text } });
+  record({
+    type: "assistant",
+    message: { content: [{ type: "text", text: `did: ${texts.join(" + ")}` }] },
+  });
   out({
     type: "result",
     subtype: "success",

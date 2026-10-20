@@ -33,13 +33,16 @@ export const createCommitment = (
     dueAt?: string;
     conditions?: Commitment["conditions"];
     createdBy: string;
+    /** A person who drives it from the start: in progress and never dispatched until handed back. */
+    takenOverBy?: string;
   },
 ) =>
   database(db, async (sql) => {
     const created = await sql.row<Commitment>(
       `INSERT INTO commitments (id, business_id, owner_employee_id, title, objective, next_action,
-         due_at, conditions, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING ${columns}`,
+         due_at, conditions, created_by, taken_over_by, state)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+         CASE WHEN $10::text IS NULL THEN 'ready' ELSE 'in_progress' END) RETURNING ${columns}`,
       [
         crypto.randomUUID(),
         businessId,
@@ -50,6 +53,7 @@ export const createCommitment = (
         input.dueAt ?? null,
         JSON.stringify(input.conditions ?? {}),
         input.createdBy,
+        input.takenOverBy ?? null,
       ],
     );
     return created!;

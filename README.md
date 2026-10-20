@@ -63,14 +63,20 @@ also verified live. No public product has launched.
   `codex app-server`) or Claude Code (through the installed CLI) in its own git worktree
   and branch, on the owner's own logins (`DEVYS_CODEX_HOME`, `DEVYS_CLAUDE_CONFIG_DIR`).
   Each turn's end, failure, interruption and check is a card in the work item's thread and
-  wakes the employee, which steers with follow-ups, starts read-only reviews, and accepts:
+  wakes the employee (not while a person holds the work: it is briefed once on hand-back), which
+  steers with follow-ups, starts read-only reviews, and accepts:
   Devys commits on the branch, runs the repository's check and records commit and check as
   evidence. Employees can then push the accepted commit and open a pull request on the
   business's GitHub repository (`codingPublish`, through the owner's `gh` login, only after
   a passing check); nothing is merged or deployed. Completing work with a coding build also
   needs a passing check. The owner sees each session's latest reply and live diff on every
   client, takes over to steer it directly ("Taken over by <name>" for everyone else), hands
-  back, or starts a **New coding session** from Work on the web. Diff line comments are always
+  back, or starts a **New coding session** from Work (web, macOS, iPad). A finished result
+  reads as one line (check, files changed, pull request, commit) that opens the full evidence;
+  a session's **Details** show what the agent did (prompts, replies, plan, commands, edits), read
+  from Codex or Claude Code when opened and never stored. **Follow** a work item to keep it in
+  the sidebar and see each step; a signed-out CLI says how to sign in, and approvals Codex asks
+  for are declined and reported. Diff line comments are always
   sendable: to the session while you have taken it over, otherwise as one review message in
   the work item's thread. A work item's panel shows its pending and decided requests. Stop
   interrupts sessions and stops what they left running. Cloud mode reports delegates as
@@ -86,7 +92,7 @@ also verified live. No public product has launched.
   markdown slide decks (Marp slides beside the source, exported to `.pptx`) and Excalidraw
   whiteboards, on web, Mac, iPad and iPhone. PDFs, Word, presentations, code and images open in
   viewers (PDFKit and QuickLook on Apple). Any file can be shown in a space; comments on a text
-  range or a PDF region go to an employee as one message. Employees print HTML to PDF with the
+  range or a PDF region go to an employee or a work item's thread as one message. Employees print HTML to PDF with the
   Mac's Chrome (`printPdf`).
 - **Not built:** browser and desktop control, the broker and vault, signed decisions, the tool
   registry, purchases, mail and launch connectors.

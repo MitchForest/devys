@@ -2,6 +2,7 @@ import { FolderInput, MessageSquarePlus, Presentation, Save, Send } from "lucide
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { api, type FileAnchor, type FileEntry } from "../app/api.ts";
 import { useDark } from "../app/theme.ts";
+import { isOpen } from "../app/names.ts";
 import { useWorkspace, valueOf } from "../app/workspace.tsx";
 import { DevysButton } from "../design/buttons.tsx";
 import { EmptyNote } from "../design/primitives.tsx";
@@ -393,7 +394,8 @@ function CommentBar({
   onAdd: (comment: Comment) => void;
   onSent: () => void;
 }) {
-  const { employees } = useWorkspace();
+  const { employees, work } = useWorkspace();
+  const openWork = (valueOf(work) ?? []).filter((item) => isOpen(item.state));
   const [text, setText] = useState("");
   const [to, setTo] = useState(
     employees.find((e) => e.template === "engineering")?.id ?? employees[0]?.id ?? "",
@@ -409,7 +411,8 @@ function CommentBar({
       await api.commentOnFile(businessId, {
         id: crypto.randomUUID(),
         path,
-        employee: to,
+        // A work item's thread (addressed to its owner) or an employee's DM.
+        ...(to.startsWith("work:") ? { work: to.slice("work:".length) } : { employee: to }),
         comments,
       });
       onSent();
@@ -467,6 +470,15 @@ function CommentBar({
                 {employee.name}
               </option>
             ))}
+            {openWork.length > 0 && (
+              <optgroup label="A work item's thread">
+                {openWork.map((item) => (
+                  <option key={item.id} value={`work:${item.id}`}>
+                    {item.title}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
           <DevysButton compact onClick={() => void send()}>
             <Send /> Send

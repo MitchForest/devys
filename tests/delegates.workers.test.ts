@@ -60,6 +60,7 @@ function harness() {
     },
     inspect: async () => ({ state: "idle", reply: "Done.", diffStat: " a.ts | 2 +-", error: null }),
     diff: async () => ({ files: [], patch: "" }),
+    transcript: async () => ({ entries: [{ kind: "command", text: "bun test" }] }),
     send: async (_id, text) => {
       sent.push(text);
       return { steered: false };
@@ -337,6 +338,10 @@ it("the owner steers a session only after taking the work over; handing back wak
     sessions: { id: string; state: string; provider: string }[];
   };
   expect(listed.sessions).toMatchObject([{ id: assignment, state: "idle", provider: "claude" }]);
+  // What the session did is read from the provider on request.
+  expect(await (await call(`/work/${work.id}/sessions/${assignment}/transcript`))!.json()).toEqual({
+    entries: [{ kind: "command", text: "bun test" }],
+  });
   const steer = (text: string) =>
     call(`/work/${work.id}/sessions/${assignment}/send`, {
       method: "POST",
@@ -350,6 +355,23 @@ it("the owner steers a session only after taking the work over; handing back wak
     messages(db, scope.businessId, `work:${work.id}`, { limit: 50 }),
   );
   expect(thread.at(-1)?.text).toBe("Owner → Claude Code: Use a grid");
+  // While the owner holds the work, the session's turns post cards but wake no one.
+  const woken = received.length;
+  await event(bindings, [
+    {
+      id: `${assignment}:owner-turn:finished`,
+      assignmentId: assignment,
+      kind: "finished",
+      text: "Used a grid.",
+      diffStat: "",
+    },
+  ]);
+  expect(received.length).toBe(woken);
+  expect(
+    (await Effect.runPromise(messages(db, scope.businessId, `work:${work.id}`, { limit: 50 }))).at(
+      -1,
+    )?.text,
+  ).toContain("Used a grid.");
 
   const before = received.length;
   await Effect.runPromise(setTakeover(db, scope.businessId, work.id, null));
@@ -391,8 +413,21 @@ it("a new coding session is a work item already taken over by the owner", async 
   const again = (await (await start())!.json()) as { work: string; assignment: string };
   expect(again).toMatchObject({ work: first.work, assignment: first.assignment });
   const item = (await Effect.runPromise(commitment(db, scope.businessId, first.work)))!;
-  expect(item).toMatchObject({ title: "Prototype the landing page", taken_over_by: person });
+  expect(item).toMatchObject({
+    title: "Prototype the landing page",
+    taken_over_by: person,
+    state: "in_progress",
+  });
   expect(starts.at(-1)).toMatchObject({ provider: "codex", repository: { create: "landing" } });
+  // The owner follows what they drive; following can be turned off.
+  const { conversationSummaries, setFollowing } = await import("../src/conversations/service.ts");
+  const following = async () =>
+    (await Effect.runPromise(conversationSummaries(db, scope.businessId, person))).find(
+      (summary) => summary.key === `work:${first.work}`,
+    )?.following;
+  expect(await following()).toBe(true);
+  await Effect.runPromise(setFollowing(db, scope.businessId, `work:${first.work}`, person, false));
+  expect(await following()).toBe(false);
 });
 
 it("comments on a file reach the chosen employee's DM as one message with their anchors", async () => {
@@ -438,4 +473,35 @@ it("comments on a file reach the chosen employee's DM as one message with their 
   expect(dm.at(-1)?.text).toContain('"Plan" (characters 2–6): Call it the launch plan');
   expect(dm.at(-1)?.text).toContain("page 2, region 10,20 100×40: Wrong figure");
   expect(received.at(-1)).toMatchObject({ employee: scope.employeeId });
+  // Or to a work item's thread, addressed to its owner.
+  const own = await Effect.runPromise(
+    createCommitment(db, scope.businessId, {
+      owner: scope.employeeId,
+      title: "Fix the plan",
+      createdBy: "person:test",
+    }),
+  );
+  const toWork = await filesRoute(
+    new Request("http://devys.test/files/comments", {
+      method: "POST",
+      body: JSON.stringify({
+        id: "file-comments-0002",
+        path: `/Users/owner/Devys/${scope.businessId}/docs/plan.md`,
+        work: own.id,
+        comments: [{ anchor: { kind: "lines", start: 3, end: 4 }, text: "Shorter" }],
+      }),
+    }),
+    local,
+    {
+      person: { id: person, display_name: "Owner" } as never,
+      business: { id: scope.businessId } as never,
+      trusted: true,
+      path: "/files/comments",
+    },
+  );
+  expect(toWork?.status).toBe(201);
+  const thread = await Effect.runPromise(
+    messages(db, scope.businessId, `work:${own.id}`, { limit: 5 }),
+  );
+  expect(thread.at(-1)?.text).toContain("Shorter");
 });

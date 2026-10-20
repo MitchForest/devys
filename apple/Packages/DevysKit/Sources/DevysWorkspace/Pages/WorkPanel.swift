@@ -14,6 +14,7 @@ struct WorkPanel: View {
     @Dependency(\.runtimeClient) private var runtime
     /// This item's requests the owner already answered.
     @State private var answered: [Decision] = []
+    @State private var showsEvidence = false
 
     private var key: ConversationKey { .work(commitmentID) }
 
@@ -60,6 +61,13 @@ struct WorkPanel: View {
                 }
             }
             Spacer(minLength: 4)
+            if let item {
+                let following = store.state.isFollowing(item.id)
+                ToolbarIconButton(
+                    following ? "Following: told at each step. Stop following" : "Follow each step",
+                    symbol: following ? "bell.fill" : "bell"
+                ) { store.send(.followToggled(item.id)) }
+            }
             if closable {
                 ToolbarIconButton("Close", symbol: "xmark") { store.send(.workClosed) }
             }
@@ -93,18 +101,45 @@ struct WorkPanel: View {
         answered = ((try? await runtime.workDecisions(store.businessID, item.id)) ?? []).filter { $0.status != "pending" }
     }
 
+    /// For coding work one line (check, changes, pull request, commit) that opens the record;
+    /// otherwise the evidence notes themselves.
     @ViewBuilder private func evidence(_ item: Commitment) -> some View {
-        if !item.evidence.isEmpty {
+        if let outcome = CodingOutcome(item.evidence) {
+            VStack(alignment: .leading, spacing: DevysSpacing.small) {
+                HStack(spacing: 8) {
+                    if let passed = outcome.checkPassed {
+                        StatusChip(passed ? "Check passed" : "Check failed", tone: passed ? .done : .failed)
+                    }
+                    if let changes = outcome.changes {
+                        Text(changes).font(DevysTypography.secondary).foregroundStyle(DevysColors.ink2).lineLimit(1)
+                    }
+                    if let url = outcome.pullRequest, let label = outcome.pullRequestLabel {
+                        Link(label, destination: url).font(DevysTypography.secondary.weight(.medium))
+                    }
+                    Text(outcome.commit).font(DevysTypography.caption.monospaced()).foregroundStyle(DevysColors.ink3)
+                    Spacer(minLength: 4)
+                    Button(showsEvidence ? "Hide" : "Details") { showsEvidence.toggle() }
+                        .buttonStyle(.plain).font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
+                }
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .background(DevysColors.sheetTint, in: RoundedRectangle(cornerRadius: 10))
+                if showsEvidence { notes(item) }
+            }
+        } else if !item.evidence.isEmpty {
             VStack(alignment: .leading, spacing: DevysSpacing.small) {
                 SectionHeader("Evidence", count: item.evidence.count)
-                ForEach(Array(item.evidence.enumerated()), id: \.offset) { _, entry in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(entry.note).font(DevysTypography.body).foregroundStyle(DevysColors.ink).textSelection(.enabled)
-                        Text("\(entry.author) · \(entry.recordedAt.prefix(10))").font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3)
-                    }
-                    .devysCard()
-                }
+                notes(item)
             }
+        }
+    }
+
+    private func notes(_ item: Commitment) -> some View {
+        ForEach(Array(item.evidence.enumerated()), id: \.offset) { _, entry in
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.note).font(DevysTypography.body).foregroundStyle(DevysColors.ink).textSelection(.enabled)
+                Text("\(entry.author) · \(entry.recordedAt.prefix(10))").font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3)
+            }
+            .devysCard()
         }
     }
 }

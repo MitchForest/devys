@@ -60,6 +60,43 @@ public struct CodingSession: Equatable, Sendable, Decodable, Identifiable {
     }
 }
 
+/// One step of what a coding session did, read from the harness when asked.
+public struct TranscriptEntry: Equatable, Sendable, Decodable {
+    public enum Kind: String, Sendable, Decodable { case prompt, reply, plan, command, files, tool }
+
+    public let kind: Kind
+    public let text: String
+    public let detail: String?
+    public let failed: Bool?
+
+    public init(kind: Kind, text: String, detail: String? = nil, failed: Bool? = nil) {
+        self.kind = kind
+        self.text = text
+        self.detail = detail
+        self.failed = failed
+    }
+}
+
+/// A coding session the owner drives from the start: its new work item.
+public struct NewCodingSession: Encodable, Sendable {
+    public let clientId: String
+    /// Who it goes to on hand-back.
+    public let employee: String
+    public let provider: String
+    public let objective: String
+    public let repository: String?
+    public let newRepository: String?
+
+    public init(employee: String, provider: String, objective: String, repository: String?, newRepository: String?) {
+        self.clientId = UUID().uuidString.lowercased()
+        self.employee = employee
+        self.provider = provider
+        self.objective = objective
+        self.repository = repository
+        self.newRepository = newRepository
+    }
+}
+
 /// A worktree's changes against its base: a unified patch for the diff surface.
 public struct WorkingDiff: Equatable, Sendable, Decodable {
     public let patch: String
@@ -74,6 +111,19 @@ extension DevysHTTPClient {
         struct Page: Decodable { let sessions: [CodingSession] }
         let page: Page = try await send(authorized(session, path: "api/businesses/\(businessID)/work/\(workID)/sessions"))
         return page.sessions
+    }
+
+    public func sessionTranscript(_ session: DeviceSession, businessID: String, workID: String, sessionID: String) async throws -> [TranscriptEntry] {
+        struct Page: Decodable { let entries: [TranscriptEntry] }
+        let page: Page = try await send(authorized(session, path: "api/businesses/\(businessID)/work/\(workID)/sessions/\(sessionID)/transcript"))
+        return page.entries
+    }
+
+    /// Starts a session the owner drives; returns its new work item's id.
+    public func startCoding(_ session: DeviceSession, businessID: String, _ start: NewCodingSession) async throws -> String {
+        struct Started: Decodable { let work: String }
+        let started: Started = try await send(json(session, path: "api/businesses/\(businessID)/coding", method: "POST", body: start))
+        return started.work
     }
 
     public func sessionDiff(_ session: DeviceSession, businessID: String, workID: String, sessionID: String) async throws -> WorkingDiff {
@@ -97,17 +147,24 @@ public struct CodingClient: Sendable {
     public var diff: @Sendable (_ businessID: String, _ workID: String, _ sessionID: String) async throws -> WorkingDiff
     public var steer: @Sendable (_ businessID: String, _ workID: String, _ sessionID: String, _ text: String) async throws -> Void
     public var stop: @Sendable (_ businessID: String, _ workID: String, _ sessionID: String) async throws -> Void
+    public var transcript: @Sendable (_ businessID: String, _ workID: String, _ sessionID: String) async throws -> [TranscriptEntry]
+    /// Returns the new work item's id.
+    public var start: @Sendable (_ businessID: String, NewCodingSession) async throws -> String
 
     public init(
         sessions: @escaping @Sendable (String, String) async throws -> [CodingSession],
         diff: @escaping @Sendable (String, String, String) async throws -> WorkingDiff,
         steer: @escaping @Sendable (String, String, String, String) async throws -> Void,
-        stop: @escaping @Sendable (String, String, String) async throws -> Void
+        stop: @escaping @Sendable (String, String, String) async throws -> Void,
+        transcript: @escaping @Sendable (String, String, String) async throws -> [TranscriptEntry] = { _, _, _ in [] },
+        start: @escaping @Sendable (String, NewCodingSession) async throws -> String = { _, _ in "" }
     ) {
         self.sessions = sessions
         self.diff = diff
         self.steer = steer
         self.stop = stop
+        self.transcript = transcript
+        self.start = start
     }
 
     public static func live(_ hub: SessionHub) -> Self {
@@ -121,6 +178,12 @@ public struct CodingClient: Sendable {
             },
             stop: { business, work, id in
                 try await hub.call { api, session in try await api.stopSession(session, businessID: business, workID: work, sessionID: id) }
+            },
+            transcript: { business, work, id in
+                try await hub.call { api, session in try await api.sessionTranscript(session, businessID: business, workID: work, sessionID: id) }
+            },
+            start: { business, start in
+                try await hub.call { api, session in try await api.startCoding(session, businessID: business, start) }
             }
         )
     }

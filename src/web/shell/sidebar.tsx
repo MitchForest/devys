@@ -13,6 +13,7 @@ import {
   Inbox,
   UserPlus,
   type LucideIcon,
+  ListChecks,
 } from "lucide-react";
 import { EmployeePortrait } from "../design/portrait.tsx";
 import { useState, type ReactNode } from "react";
@@ -188,6 +189,7 @@ export function ConversationList() {
           </Row>
         ))}
       </div>
+      <Following />
       <div className="flex items-center">
         <Label>Spaces</Label>
         <span className="ml-auto" />
@@ -206,6 +208,47 @@ export function ConversationList() {
         ))}
       </div>
     </div>
+  );
+}
+
+/** Work items the owner follows, each opening its thread; absent when they follow none. */
+function Following() {
+  const { followed, work, actions, selectedWork, unreadOf } = useWorkspace();
+  const items = (valueOf(work) ?? []).filter((item) => followed.includes(item.id));
+  if (!items.length) return null;
+  return (
+    <>
+      <Label>Following</Label>
+      <div role="group" aria-label="Following" className="flex flex-col gap-0.5">
+        {items.map((item) => {
+          const unread = unreadOf(`work:${item.id}`);
+          return (
+            <button
+              key={item.id}
+              type="button"
+              aria-label={unread ? `${item.title}, ${unread} unread` : item.title}
+              onClick={() => actions.openWork(item.id)}
+              className={cn(
+                "flex w-full items-center gap-2.5 rounded-[9px] px-2.5 py-[7px] text-left text-control transition-colors duration-200",
+                selectedWork === item.id
+                  ? "bg-sheet text-ink shadow-resting"
+                  : "text-ink-2 hover:text-ink",
+                unread > 0 && selectedWork !== item.id && "font-semibold text-ink",
+              )}
+            >
+              <ListChecks className="size-[15px] w-5 shrink-0" strokeWidth={1.9} />
+              <span className="truncate">{item.title}</span>
+              <span className="ml-auto" />
+              {unread > 0 && (
+                <span className="grid h-[17px] min-w-[17px] shrink-0 place-items-center rounded-full bg-indigo px-1 text-[10.5px] font-bold text-white tabular-nums">
+                  {unread}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </>
   );
 }
 

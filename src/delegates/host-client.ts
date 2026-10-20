@@ -25,6 +25,7 @@ export function hostDelegates(host: { url: string; token: string }, scope: Scope
     start: (request) => call("start", { request }),
     inspect: (id) => call("inspect", { id }),
     diff: (id) => call("diff", { id }),
+    transcript: (id) => call("transcript", { id }),
     send: (id, text) => call("send", { id, text }),
     interrupt: async (id) => {
       await call("interrupt", { id });
@@ -46,6 +47,7 @@ export function unavailableDelegates(): Delegates {
     start: refuse,
     inspect: refuse,
     diff: refuse,
+    transcript: refuse,
     send: refuse,
     interrupt: refuse,
     accept: refuse,

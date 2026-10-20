@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils";
 import {
   Code2,
   Hand,
@@ -15,6 +16,7 @@ import {
   type CodingSession,
   type Commitment,
   type WorkingDiff,
+  type TranscriptEntry,
 } from "../app/api.ts";
 import { useWorkspace } from "../app/workspace.tsx";
 import { DevysButton } from "../design/buttons.tsx";
@@ -194,6 +196,7 @@ export default function SessionView({
             {session.error && <span className="text-detail text-ink-2">{session.error}</span>}
             <span className="text-label font-medium text-ink-3">Objective</span>
             <p className="text-detail whitespace-pre-wrap text-ink-2">{session.objective}</p>
+            <SessionSteps businessId={businessId} workId={item.id} session={session} />
           </div>
           <div className="h-full min-h-0 p-3">
             {diff === null ? (
@@ -268,5 +271,95 @@ export default function SessionView({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+const stepLabel: Record<TranscriptEntry["kind"], string> = {
+  prompt: "Told",
+  reply: "Said",
+  plan: "Plan",
+  command: "Ran",
+  files: "Edited",
+  tool: "Used",
+};
+
+/**
+ * What the session actually did, closed until asked for: read from the harness's own record
+ * each time it opens (and while it works), never kept by Devys.
+ */
+function SessionSteps({
+  businessId,
+  workId,
+  session,
+}: {
+  businessId: string;
+  workId: string;
+  session: CodingSession;
+}) {
+  const [open, setOpen] = useState(false);
+  const [entries, setEntries] = useState<TranscriptEntry[] | null>(null);
+  const [problem, setProblem] = useState<string>();
+  useEffect(() => {
+    if (!open) return;
+    let live = true;
+    const load = () =>
+      api
+        .sessionTranscript(businessId, workId, session.id)
+        .then((result) => live && (setEntries(result.entries), setProblem(undefined)))
+        .catch(
+          (cause: unknown) =>
+            live && setProblem(cause instanceof Error ? cause.message : "Unavailable"),
+        );
+    void load();
+    const timer = session.state === "working" ? setInterval(() => void load(), 5_000) : undefined;
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [open, businessId, workId, session.id, session.state]);
+  return (
+    <div className="flex flex-col gap-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className="self-start text-label font-medium text-ink-3 hover:text-ink-2"
+      >
+        {open ? "Hide details" : "Details"}
+      </button>
+      {open &&
+        (problem ? (
+          <span className="text-detail text-ink-3">{problem}</span>
+        ) : entries === null ? (
+          <span className="text-detail text-ink-3">Loading…</span>
+        ) : (
+          <ol className="flex flex-col gap-1.5" data-testid="session-steps">
+            {entries.map((entry, index) => (
+              <li key={index} className="flex flex-col gap-0.5">
+                <span className={cn("text-caption", entry.failed ? "text-red" : "text-ink-3")}>
+                  {stepLabel[entry.kind]}
+                </span>
+                <span
+                  className={cn(
+                    "text-detail whitespace-pre-wrap text-ink-2",
+                    (entry.kind === "command" || entry.kind === "files") &&
+                      "font-mono text-caption",
+                  )}
+                >
+                  {entry.text}
+                </span>
+                {entry.detail && (
+                  <details className="text-caption text-ink-3">
+                    <summary className="cursor-pointer">Output</summary>
+                    <pre className="max-h-48 overflow-auto font-mono whitespace-pre-wrap">
+                      {entry.detail}
+                    </pre>
+                  </details>
+                )}
+              </li>
+            ))}
+          </ol>
+        ))}
+    </div>
   );
 }

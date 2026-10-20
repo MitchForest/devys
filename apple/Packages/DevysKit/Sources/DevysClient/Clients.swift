@@ -51,6 +51,7 @@ public struct RuntimeClient: Sendable {
     public var conversation: @Sendable (_ businessID: String, ConversationKey, _ before: String?) async throws -> ConversationPage
     public var postMessage: @Sendable (_ businessID: String, ConversationKey, NewMessage) async throws -> PostedMessage
     public var markRead: @Sendable (_ businessID: String, ConversationKey, _ seenAt: String) async throws -> Void
+    public var follow: @Sendable (_ businessID: String, ConversationKey, _ on: Bool) async throws -> Void
     /// A tapback on a message, addressed to the employee who wrote it.
     public var react: @Sendable (EmployeeScope, Reaction) async throws -> Void
     public var access: @Sendable (EmployeeScope) async throws -> AccessList
@@ -104,6 +105,7 @@ public struct RuntimeClient: Sendable {
             )
         },
         markRead: @escaping @Sendable (String, ConversationKey, String) async throws -> Void = { _, _, _ in },
+        follow: @escaping @Sendable (String, ConversationKey, Bool) async throws -> Void = { _, _, _ in },
         react: @escaping @Sendable (EmployeeScope, Reaction) async throws -> Void = { _, _ in },
         access: @escaping @Sendable (EmployeeScope) async throws -> AccessList = { _ in AccessList(grants: [], available: []) },
         grant: @escaping @Sendable (EmployeeScope, String, AccessMode) async throws -> Void = { _, _, _ in },
@@ -148,6 +150,7 @@ public struct RuntimeClient: Sendable {
         self.conversation = conversation
         self.postMessage = postMessage
         self.markRead = markRead
+        self.follow = follow
         self.react = react
         self.access = access
         self.grant = grant
@@ -302,6 +305,9 @@ extension RuntimeClient {
                 try await hub.call { api, session in try await api.postMessage(session, businessID: id, key: key, message) }
             },
             markRead: { id, key, seen in try await hub.call { api, session in try await api.markRead(session, businessID: id, key: key, at: seen) } },
+            follow: { id, key, following in
+                try await hub.call { api, session in try await api.follow(session, businessID: id, key: key, following: following) }
+            },
             react: { scope, reaction in try await hub.call { api, session in try await api.react(session, scope, reaction) } },
             access: { scope in try await hub.call { api, session in try await api.access(session, scope) } },
             grant: { scope, capability, mode in

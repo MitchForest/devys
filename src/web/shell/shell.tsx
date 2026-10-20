@@ -21,6 +21,8 @@ import {
   UserRound,
   X,
   type LucideIcon,
+  Bell,
+  BellRing,
 } from "lucide-react";
 import { EmployeePortrait, BusinessPortrait } from "../design/portrait.tsx";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -544,8 +546,9 @@ export function RightPanel({ allowExpand = true }: { allowExpand?: boolean }) {
 
 /** A work item: its detail above its thread (`work:<id>`), which has its own composer. */
 function WorkPanel({ id, allowExpand }: { id: string; allowExpand: boolean }) {
-  const { work, panel, expanded, actions, employeeName } = useWorkspace();
+  const { work, panel, expanded, actions, employeeName, followed } = useWorkspace();
   const item = valueOf(work)?.find((w) => w.id === id);
+  const following = followed.includes(id);
   return (
     <section aria-label="Work item" className="flex h-full flex-col">
       <div className="flex items-center gap-2.5 px-3.5 pt-3.5 pb-2.5">
@@ -561,6 +564,14 @@ function WorkPanel({ id, allowExpand }: { id: string; allowExpand: boolean }) {
           </span>
         </div>
         <span className="ml-auto" />
+        {item && (
+          <ToolbarIconButton
+            label={following ? "Following: told at each step. Stop following" : "Follow each step"}
+            onClick={() => void actions.setFollowing(item.id, !following)}
+          >
+            {following ? <BellRing /> : <Bell />}
+          </ToolbarIconButton>
+        )}
         {allowExpand && (
           <ToolbarIconButton
             label={expanded ? "Move to side panel" : "Expand conversation"}

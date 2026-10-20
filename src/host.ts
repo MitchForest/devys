@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { claudeAdapter } from "./delegates/host/claude.ts";
 import { codexAdapter } from "./delegates/host/codex.ts";
 import { delegatesHost } from "./delegates/host/server.ts";
+import { forgetHostSettings } from "./protocol/host.ts";
 import { bunPty, terminalsHost } from "./terminal/host/server.ts";
 import { startHost } from "./workspace/host/server.ts";
 
@@ -22,8 +23,7 @@ const codexHome = process.env.DEVYS_CODEX_HOME ?? join(home, ".codex");
 const claudeConfig = process.env.DEVYS_CLAUDE_CONFIG_DIR ?? join(home, ".claude");
 // Everything below inherits this environment: employees' shells, coding delegates and
 // terminals. The host's settings, including its token, stop here.
-for (const name of Object.keys(process.env))
-  if (name.startsWith("DEVYS_")) delete process.env[name];
+forgetHostSettings(process.env);
 /** The owner's environment without Anthropic or Claude Code settings that override a login. */
 const ownLogin = Object.fromEntries(
   Object.entries(process.env).filter(

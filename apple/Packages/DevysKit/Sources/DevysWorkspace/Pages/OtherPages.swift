@@ -16,6 +16,7 @@ struct InboxPage: View {
 struct WorkPage: View {
     let store: StoreOf<Workspace>
     let filter: WorkFilter
+    @State private var codingSession = false
 
     var body: some View {
         let items = store.state.work(filter)
@@ -29,8 +30,12 @@ struct WorkPage: View {
                     Button("New task", systemImage: "plus") { store.send(.newTaskTapped()) }
                         .buttonStyle(DevysButtonStyle(.raised, compact: true))
                         .fixedSize()
+                    Button("New coding session", systemImage: "chevron.left.forwardslash.chevron.right") { codingSession = true }
+                        .buttonStyle(DevysButtonStyle(.quiet, compact: true))
+                        .fixedSize()
                 }
             }
+            .sheet(isPresented: $codingSession) { NewCodingSessionSheet(store: store, isPresented: $codingSession) }
             TerminalsSection(businessID: store.businessID)
             if case .loading = store.work {
                 ProgressView().frame(maxWidth: .infinity, alignment: .leading)

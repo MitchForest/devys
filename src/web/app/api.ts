@@ -120,6 +120,8 @@ export interface ConversationSummary {
   key: ConversationKey;
   last: Message | null;
   unread: number;
+  /** The signed-in person follows it: a work thread they hear each milestone of. */
+  following: boolean;
 }
 export interface OutgoingMessage {
   /** The sender's own id, so a retried post is stored once. */
@@ -152,6 +154,8 @@ export interface Commitment {
     at: string;
     commit?: string;
     check?: { command: string; exitCode: number | null };
+    changes?: string;
+    pullRequest?: string;
   }[];
   revision: number;
   taken_over_by: string | null;
@@ -175,6 +179,13 @@ export interface CodingSession {
   reply: string | null;
   diffStat: string;
   error: string | null;
+}
+/** One step of what a coding session did, read from the harness when asked. */
+export interface TranscriptEntry {
+  kind: "prompt" | "reply" | "plan" | "command" | "files" | "tool";
+  text: string;
+  detail?: string;
+  failed?: boolean;
 }
 export interface WorkingDiff {
   files: { path: string; status: string; added: number; removed: number }[];
@@ -339,6 +350,10 @@ export const api = {
     post(`${employee(b, e)}/access`, { capability, mode }),
   revoke: (b: string, e: string, grantId: string) =>
     post(`${employee(b, e)}/access/${grantId}/revoke`),
+  follow: (b: string, key: ConversationKey, on: boolean) =>
+    post<{ following: boolean }>(`${business(b)}/conversations/${encodeURIComponent(key)}/follow`, {
+      on,
+    }),
   conversations: (b: string) =>
     get<{ conversations: ConversationSummary[] }>(`${business(b)}/conversations`),
   /** The newest 50 messages, oldest first, or the 50 before a message. */
@@ -373,6 +388,10 @@ export const api = {
     post(`${business(b)}/work/${id}/${takeOver ? "takeover" : "release"}`),
   codingSessions: (b: string, work: string) =>
     get<{ sessions: CodingSession[] }>(`${business(b)}/work/${work}/sessions`),
+  sessionTranscript: (b: string, work: string, session: string) =>
+    get<{ entries: TranscriptEntry[] }>(
+      `${business(b)}/work/${work}/sessions/${session}/transcript`,
+    ),
   sessionDiff: (b: string, work: string, session: string) =>
     get<WorkingDiff>(`${business(b)}/work/${work}/sessions/${session}/diff`),
   steerSession: (b: string, work: string, session: string, text: string) =>
@@ -445,7 +464,9 @@ export const api = {
     comment: {
       id: string;
       path: string;
-      employee: string;
+      /** An employee's DM, or a work item's thread (addressed to its owner). */
+      employee?: string;
+      work?: string;
       comments: { anchor: FileAnchor; text: string }[];
     },
   ) => post(`${business(b)}/files/comments`, comment),

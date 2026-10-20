@@ -1,4 +1,4 @@
-import type { CommitmentState, Employee, RoleTemplateId } from "./api.ts";
+import type { Commitment, CommitmentState, Employee, RoleTemplateId } from "./api.ts";
 import type { Tone } from "../design/primitives.tsx";
 import type { Mood } from "../design/face.tsx";
 import type { Page, WorkFilter, WorkspaceState } from "./workspace.tsx";
@@ -184,3 +184,22 @@ export const takeoverTitle = (
 /** Inbox until a mailbox is connected, said the same on every client. */
 export const inboxEmpty =
   "No mailbox is connected yet. The business's mail appears here once one is.";
+
+/** A coding result at a glance, from a work item's evidence; undefined when it has none. */
+export function outcomeOf(evidence: Commitment["evidence"]) {
+  const coding = evidence.filter((entry) => entry.commit);
+  if (!coding.length) return undefined;
+  const check = coding.findLast((entry) => entry.check)?.check;
+  const pullRequest = coding.findLast((entry) => entry.pullRequest)?.pullRequest;
+  return {
+    commit: coding.at(-1)!.commit!.slice(0, 7),
+    changes: coding.findLast((entry) => entry.changes)?.changes,
+    check: check && { passed: check.exitCode === 0, command: check.command },
+    pullRequest: pullRequest && {
+      url: pullRequest,
+      label: /\/pull\/(\d+)/.exec(pullRequest)?.[1]
+        ? `PR #${/\/pull\/(\d+)/.exec(pullRequest)![1]}`
+        : "Pull request",
+    },
+  };
+}

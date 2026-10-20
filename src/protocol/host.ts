@@ -4,6 +4,16 @@
  * one loopback server and its token.
  */
 
+/**
+ * Removes the host's own settings (its token, ports, folders: every `DEVYS_` variable) from an
+ * environment in place, so the shells, coding delegates and terminals that inherit it never see
+ * them. The launcher already leaves out everything `.env` holds.
+ */
+export function forgetHostSettings(env: Record<string, string | undefined>) {
+  for (const name of Object.keys(env)) if (name.startsWith("DEVYS_")) delete env[name];
+  return env;
+}
+
 /** Ids the host accepts in a scope, a path segment or an assignment. */
 export const hostId = /^[A-Za-z0-9-]{1,64}$/;
 

@@ -17,7 +17,8 @@ import {
 import { scopeName, type Business, type Person, type Scope } from "../identity/contract.ts";
 import { activeEmployee } from "../identity/service.ts";
 import { sha256 } from "../protocol/bytes.ts";
-import { commitment, createCommitment, requeue, setTakeover } from "../work/service.ts";
+import { setFollowing } from "../conversations/service.ts";
+import { commitment, createCommitment, requeue } from "../work/service.ts";
 import { modeOf } from "./mode.ts";
 import { postEvent } from "./conversations.ts";
 
@@ -41,7 +42,7 @@ export async function codingRoute(
   if (path === "/coding" && request.method === "POST")
     return trusted ? startOwned(request, env, access, delegates) : forbidden();
   const match =
-    /^\/work\/([A-Za-z0-9-]{1,64})\/sessions(?:\/([A-Za-z0-9-]{1,64})(?:\/(diff|send|interrupt))?)?$/.exec(
+    /^\/work\/([A-Za-z0-9-]{1,64})\/sessions(?:\/([A-Za-z0-9-]{1,64})(?:\/(diff|transcript|send|interrupt))?)?$/.exec(
       path,
     );
   if (!match) return undefined;
@@ -62,6 +63,8 @@ export async function codingRoute(
   if (!item || item.commitment_id !== work.id || !item.session_id) return notFound();
   const host = delegates({ businessId: business.id, employeeId: item.employee_id });
   if (action === "diff" && request.method === "GET") return Response.json(await host.diff(item.id));
+  if (action === "transcript" && request.method === "GET")
+    return Response.json(await host.transcript(item.id));
   if (request.method !== "POST") return notFound();
   if (!trusted) return forbidden();
   if (action === "interrupt") {
@@ -157,10 +160,11 @@ async function startOwned(
           title: input.objective.split("\n")[0]!.slice(0, 200),
           objective: input.objective.slice(0, 4000),
           createdBy: `person:${person.id}`,
+          // Created taken over, so the dispatcher never hands it to the employee meanwhile.
+          takenOverBy: person.id,
         }),
       )
     ).id;
-  await Effect.runPromise(setTakeover(env.HYPERDRIVE, business.id, workId, person.id));
   await Effect.runPromise(
     recordAssignment(env.HYPERDRIVE, business.id, {
       id,
@@ -181,6 +185,10 @@ async function startOwned(
     instructions: delegateInstructions("build"),
   });
   await Effect.runPromise(recordStarted(env.HYPERDRIVE, business.id, id, started));
+  // The owner drives this one, so they follow each milestone of it.
+  await Effect.runPromise(
+    setFollowing(env.HYPERDRIVE, business.id, `work:${workId}`, person.id, true),
+  );
   return Response.json({ work: workId, assignment: id, ...started }, { status: 201 });
 }
 

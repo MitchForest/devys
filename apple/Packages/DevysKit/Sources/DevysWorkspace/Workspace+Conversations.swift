@@ -31,6 +31,11 @@ extension Workspace.State {
 
     package func unread(_ key: ConversationKey) -> Int { summaries[key.rawValue]?.unread ?? 0 }
 
+    /// Work items the signed-in person follows.
+    package func isFollowing(_ commitmentID: String) -> Bool {
+        summaries[ConversationKey.work(commitmentID).rawValue]?.following ?? false
+    }
+
     /// Who answers when nobody has spoken yet: a DM's employee, a space's lead, a work item's owner.
     package func defaultResponder(for key: ConversationKey) -> String? {
         switch key.kind {
@@ -71,9 +76,8 @@ extension Workspace.State {
 extension Workspace {
     func reduceConversation(_ intent: ConversationIntent, state: inout State) {
         switch intent {
-        case .summariesLoaded(let businessID, let summaries):
-            guard businessID == state.businessID else { return }
-            loadedSummaries(summaries, state: &state)
+        case .summariesLoaded, .followToggled:
+            reduceSummaries(intent, state: &state)
         case .pageLoaded(let key, let page, let older):
             update(key, &state) { $0.merge(page, older: older) }
             settleAwaiting(&state)
@@ -127,7 +131,7 @@ extension Workspace {
         state.summaries = Dictionary(summaries.map { ($0.key, $0) }) { first, _ in first }
         for open in [state.main, state.panel].compactMap(\.self) where state.isVisible(open.key) {
             guard let seen = state.summaries[open.key.rawValue], seen.last?.createdAt == open.readAt else { continue }
-            state.summaries[open.key.rawValue] = ConversationSummary(key: seen.key, last: seen.last, unread: 0)
+            state.summaries[open.key.rawValue] = ConversationSummary(key: seen.key, last: seen.last, unread: 0, following: seen.following)
         }
     }
 
@@ -227,12 +231,36 @@ extension Workspace {
         for key in [state.main?.key, state.panel?.key].compactMap(\.self) { loadPage(key, state: state) }
     }
 
+    /// The conversation list: loaded from the server, or a work thread followed or not.
+    func reduceSummaries(_ intent: ConversationIntent, state: inout State) {
+        switch intent {
+        case .summariesLoaded(let businessID, let summaries):
+            guard businessID == state.businessID else { return }
+            loadedSummaries(summaries, state: &state)
+        case .followToggled(let commitmentID):
+            toggleFollowing(commitmentID, state: &state)
+        default:
+            return
+        }
+    }
+
+    /// Follows a work item's thread, or stops; the sidebar and bell update before the server answers.
+    func toggleFollowing(_ commitmentID: String, state: inout State) {
+        let key = ConversationKey.work(commitmentID)
+        let following = !state.isFollowing(commitmentID)
+        let summary = state.summaries[key.rawValue]
+        state.summaries[key.rawValue] = ConversationSummary(key: key.rawValue, last: summary?.last, unread: summary?.unread ?? 0, following: following)
+        let businessID = state.businessID
+        let runtime = runtime
+        store.addTask { try? await runtime.follow(businessID, key, following) }
+    }
+
     /// While a conversation is on screen, everything in it up to the newest message is read.
     func markRead(_ key: ConversationKey, state: inout State) {
         guard state.isVisible(key), let open = state.conversation(key), let newest = open.messages.value?.last, newest.createdAt != open.readAt else { return }
         update(key, &state) { $0.readAt = newest.createdAt }
         if let summary = state.summaries[key.rawValue] {
-            state.summaries[key.rawValue] = ConversationSummary(key: summary.key, last: summary.last, unread: 0)
+            state.summaries[key.rawValue] = ConversationSummary(key: summary.key, last: summary.last, unread: 0, following: summary.following)
         }
         let businessID = state.businessID
         let runtime = runtime

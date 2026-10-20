@@ -62,6 +62,7 @@ function fakeProvider() {
       if (turnId)
         events.turnEnded({ sessionId, turnId, status: "interrupted", reply: null, error: null });
     },
+    transcript: async () => [{ kind: "reply", text: "Done." }],
     // Like a real harness process, a closed adapter forgets its running turns.
     async close() {
       turns.clear();
@@ -255,7 +256,11 @@ it("a turn that ends before its start or follow-up returns is not lost", async (
     () => state.delivered,
     (events) => events.some((event) => event.kind === "failed"),
   );
-  expect(await state.client().inspect("a-fast")).toMatchObject({ state: "failed" });
+  expect(await state.client().inspect("a-fast")).toMatchObject({
+    state: "failed",
+    error: expect.stringContaining("Codex isn't signed in on this Mac"),
+  });
+  expect(state.delivered.find((event) => event.kind === "failed")?.text).toContain("codex login");
   await state.client().send("a-fast", "Try again");
   expect(await state.client().inspect("a-fast")).toMatchObject({ state: "failed" });
   expect(state.delivered.filter((event) => event.kind === "failed")).toHaveLength(2);

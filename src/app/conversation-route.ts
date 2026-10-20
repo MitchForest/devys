@@ -3,7 +3,7 @@ import type { Env } from "./env.ts";
 import { appReactions } from "../channels/app.ts";
 import { type Business, type Person } from "../identity/contract.ts";
 import { conversationKey, employeeOf } from "../conversations/contract.ts";
-import { conversationSummaries, markSeen } from "../conversations/service.ts";
+import { conversationSummaries, markSeen, setFollowing } from "../conversations/service.ts";
 import { conversationExists, conversationPage, postFromPerson } from "./conversations.ts";
 import { body, forbidden, notFound } from "./request.ts";
 
@@ -23,7 +23,8 @@ export async function conversationRoute(
         conversationSummaries(env.HYPERDRIVE, business.id, person.id),
       ),
     });
-  const [, raw, action] = /^\/conversations\/([^/]+)(?:\/(messages|read))?$/.exec(path) ?? [];
+  const [, raw, action] =
+    /^\/conversations\/([^/]+)(?:\/(messages|read|follow))?$/.exec(path) ?? [];
   const key = conversationKey(decodeURIComponent(raw ?? ""));
   if (!key || !(await conversationExists(env, business.id, key))) return notFound();
   if (!action && request.method === "GET") {
@@ -58,6 +59,12 @@ export async function conversationRoute(
       markSeen(env.HYPERDRIVE, business.id, key, `person:${person.id}`, { at }),
     );
     return Response.json({ read: true });
+  }
+  if (action === "follow") {
+    const { on } = await body<{ on: boolean }>(request, 1_000);
+    if (typeof on !== "boolean") return new Response("Send on: true or false", { status: 400 });
+    await Effect.runPromise(setFollowing(env.HYPERDRIVE, business.id, key, person.id, on));
+    return Response.json({ following: on });
   }
   if (action !== "messages") return notFound();
   const input = await body<{

@@ -18,6 +18,7 @@ import {
   chipFor,
   filterTitle,
   isOpen,
+  outcomeOf,
   takeoverTitle,
   templateTitle,
   workFilters,
@@ -622,28 +623,78 @@ export function WorkDetail({ item }: { item: Commitment }) {
         </div>
       )}
       <CodingSessions item={item} />
-      {item.evidence.length > 0 && (
-        <div className="flex flex-col gap-1">
-          <span className="text-label font-medium text-ink-3">
-            Evidence · {item.evidence.length}
+      <Evidence item={item} />
+    </div>
+  );
+}
+
+/**
+ * What was done: for coding work one line (check, files changed, pull request, commit) that
+ * opens the full record; otherwise the evidence notes themselves.
+ */
+function Evidence({ item }: { item: Commitment }) {
+  const { employeeName } = useWorkspace();
+  const [open, setOpen] = useState(false);
+  const outcome = outcomeOf(item.evidence);
+  if (!item.evidence.length) return null;
+  const notes = (
+    <div className="flex flex-col gap-1">
+      {item.evidence.map((entry, index) => (
+        <div key={index} className="flex flex-col gap-px py-1">
+          <span className="text-detail text-ink">{entry.note}</span>
+          <span className="text-caption text-ink-3">
+            {entry.by.startsWith("employee:")
+              ? employeeName(entry.by.slice("employee:".length))
+              : entry.by === "devys"
+                ? "Devys"
+                : "You"}{" "}
+            ·{" "}
+            {new Date(entry.at).toLocaleString(undefined, {
+              dateStyle: "medium",
+              timeStyle: "short",
+            })}
           </span>
-          {item.evidence.map((entry, index) => (
-            <div key={index} className="flex flex-col gap-px py-1">
-              <span className="text-detail text-ink">{entry.note}</span>
-              <span className="text-caption text-ink-3">
-                {entry.by.startsWith("employee:")
-                  ? employeeName(entry.by.slice("employee:".length))
-                  : "You"}{" "}
-                ·{" "}
-                {new Date(entry.at).toLocaleString(undefined, {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                })}
-              </span>
-            </div>
-          ))}
         </div>
-      )}
+      ))}
+    </div>
+  );
+  if (!outcome)
+    return (
+      <div className="flex flex-col gap-1">
+        <span className="text-label font-medium text-ink-3">Evidence</span>
+        {notes}
+      </div>
+    );
+  return (
+    <div className="flex flex-col gap-1" data-testid="outcome">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[10px] bg-sheet-tint px-3 py-2 text-detail">
+        {outcome.check && (
+          <StatusChip tone={outcome.check.passed ? "done" : "failed"} small>
+            {outcome.check.passed ? "Check passed" : "Check failed"}
+          </StatusChip>
+        )}
+        {outcome.changes && <span className="text-ink-2">{outcome.changes}</span>}
+        {outcome.pullRequest && (
+          <a
+            href={outcome.pullRequest.url}
+            target="_blank"
+            rel="noreferrer"
+            className="font-medium text-ink hover:underline"
+          >
+            {outcome.pullRequest.label}
+          </a>
+        )}
+        <span className="font-mono text-caption text-ink-3">{outcome.commit}</span>
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          className="ml-auto text-caption text-ink-3 hover:text-ink-2"
+          aria-expanded={open}
+        >
+          {open ? "Hide" : "Details"}
+        </button>
+      </div>
+      {open && notes}
     </div>
   );
 }

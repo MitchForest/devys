@@ -120,9 +120,23 @@ export interface WorkingDiff {
   patch: string;
 }
 
+/**
+ * One step of what a coding session did, read from the harness's own record on demand
+ * (Devys keeps no copy): what it was told, its replies and plan, commands and file changes.
+ */
+export interface TranscriptEntry {
+  kind: "prompt" | "reply" | "plan" | "command" | "files" | "tool";
+  text: string;
+  /** A command's output, a tool's result; cut short. */
+  detail?: string;
+  failed?: boolean;
+}
+
 /** The delegate runner: the trusted Mac host in local mode. */
 export interface Delegates {
   diff(assignmentId: string): Promise<WorkingDiff>;
+  /** The session's latest steps, at most 200, oldest first. */
+  transcript(assignmentId: string): Promise<{ entries: TranscriptEntry[] }>;
   start(request: StartRequest): Promise<Started>;
   inspect(assignmentId: string): Promise<DelegateStatus>;
   send(assignmentId: string, text: string): Promise<{ steered: boolean }>;

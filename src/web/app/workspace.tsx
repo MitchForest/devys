@@ -514,6 +514,19 @@ function useWorkspaceState() {
       setSelectedWork(undefined);
       setExpanded(false);
     },
+    /** Hear each milestone of a work item (and keep it in the sidebar), or only its outcome. */
+    setFollowing: async (workId: string, on: boolean) => {
+      const key = `work:${workId}` as ConversationKey;
+      setSummaries((all) => ({
+        ...all,
+        [key]: { key, last: all[key]?.last ?? null, unread: all[key]?.unread ?? 0, following: on },
+      }));
+      try {
+        await api.follow(businessId, key, on);
+      } catch (error) {
+        failed(error);
+      }
+    },
     toggleSidebar: () => setSidebarVisible((v) => !v),
     toggleInspector: () => (expanded ? setExpanded(false) : setInspectorVisible((v) => !v)),
     /** The work item's thread over the page, or back beside it. */
@@ -881,6 +894,10 @@ function useWorkspaceState() {
     workingOf: (employeeId: string) =>
       runningOf(employeeId) || answering(employeeId) || unfinished(valueOf(statusOf(employeeId))),
     unreadOf: (key: ConversationKey) => summaries[key]?.unread ?? 0,
+    /** Work items the signed-in person follows, by id. */
+    followed: Object.values(summaries)
+      .filter((summary) => summary.following && summary.key.startsWith("work:"))
+      .map((summary) => summary.key.slice("work:".length)),
     modelOf: (id: string) => valueOf(models)?.models.find((m) => m.id === id),
     employeeName: (id: string) => employees.find((e) => e.id === id)?.name ?? "A former employee",
     actions,

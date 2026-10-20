@@ -5,6 +5,7 @@ import type { Business, Person } from "../identity/contract.ts";
 import { activeEmployee } from "../identity/service.ts";
 import { readBounded, sha256Bytes } from "../protocol/bytes.ts";
 import { revisionConflict } from "../workspace/contract.ts";
+import { commitment } from "../work/service.ts";
 import { postFromPerson } from "./conversations.ts";
 import { modeOf } from "./mode.ts";
 
@@ -170,24 +171,32 @@ export async function filesRoute(request: Request, env: Env, access: Access) {
       id?: string;
       path?: string;
       employee?: string;
+      /** A work item whose thread gets the comments, addressed to its owner, instead of a DM. */
+      work?: string;
       comments?: { anchor: Anchor; text: string }[];
       message?: string;
     };
     const file = inside(input.path);
+    const work =
+      typeof input.work === "string"
+        ? await Effect.runPromise(commitment(env.HYPERDRIVE, business.id, input.work))
+        : undefined;
+    const employeeId = work?.owner_employee_id ?? input.employee;
     const employee =
-      typeof input.employee === "string"
+      typeof employeeId === "string" && (work || input.work === undefined)
         ? await Effect.runPromise(
-            activeEmployee(env.HYPERDRIVE, { businessId: business.id, employeeId: input.employee }),
+            activeEmployee(env.HYPERDRIVE, { businessId: business.id, employeeId }),
           )
         : undefined;
     const comments = (input.comments ?? []).filter(
       (comment) => typeof comment.text === "string" && comment.text.trim(),
     );
     if (!file || !employee || !comments.length || typeof input.id !== "string")
-      return new Response("Send a file, an employee, a client id and at least one comment", {
-        status: 400,
-      });
-    const key = conversationKey(`direct:${employee.id}`)!;
+      return new Response(
+        "Send a file, an employee or a work item, a client id and at least one comment",
+        { status: 400 },
+      );
+    const key = conversationKey(work ? `work:${work.id}` : `direct:${employee.id}`)!;
     const text = [
       `Comments on ${file}:`,
       ...comments.map((comment) => `- ${describe(comment.anchor)}: ${comment.text.trim()}`),

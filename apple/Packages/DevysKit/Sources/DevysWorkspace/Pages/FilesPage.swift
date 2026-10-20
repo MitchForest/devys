@@ -397,6 +397,10 @@ private struct CommentBar: View {
                     Text("\(comments.count) comment\(comments.count == 1 ? "" : "s") for").font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
                     Picker("Send to", selection: Binding(get: { recipient ?? employees.first?.id ?? "" }, set: { recipient = $0 })) {
                         ForEach(employees) { Text($0.name).tag($0.id) }
+                        // Or a work item's thread, addressed to its owner.
+                        ForEach((store.work.value ?? []).filter(\.state.isOpen)) { item in
+                            Text("Thread: \(item.title)").tag("work:\(item.id)")
+                        }
                     }
                     .labelsHidden()
                     .fixedSize()

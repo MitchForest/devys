@@ -161,6 +161,8 @@ package enum ConversationIntent {
     case retryTapped(ConversationKey, clientID: String)
     case reactionTapped(ConversationKey, messageID: String, emoji: String)
     case errorDismissed(ConversationKey)
+    /// Hear each milestone of a work item and keep it in the sidebar, or only its outcome.
+    case followToggled(commitmentID: String)
     /// Fast polling after a message ended, answered or not.
     case waitEnded(ConversationKey, after: String)
     /// A hand-off card, a Work row or a space's Work tab: the work item opens in the right panel.

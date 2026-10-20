@@ -7,7 +7,72 @@
  * own login in `CLAUDE_CONFIG_DIR` is used, never an API key from the environment.
  */
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { readdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
+import type { TranscriptEntry } from "../contract.ts";
 import type { ProviderAdapter, ProviderEvents } from "./provider.ts";
+
+type Part =
+  | { type: "text"; text: string }
+  | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
+  | { type: "tool_result"; tool_use_id: string; content: unknown; is_error?: boolean };
+
+/** A tool call as a transcript step: shell commands, file edits, the to-do plan, the rest by name. */
+function toolEntry(name: string, input: Record<string, unknown>): TranscriptEntry {
+  if (name === "Bash") return { kind: "command", text: String(input.command ?? "") };
+  if (["Edit", "Write", "MultiEdit", "NotebookEdit"].includes(name))
+    return { kind: "files", text: String(input.file_path ?? input.notebook_path ?? "") };
+  if (name === "TodoWrite")
+    return {
+      kind: "plan",
+      text: ((input.todos as { content?: string; status?: string }[] | undefined) ?? [])
+        .map((todo) => `${todo.status === "completed" ? "✓" : "·"} ${todo.content ?? ""}`)
+        .join("\n"),
+    };
+  return { kind: "tool", text: name };
+}
+
+/**
+ * The steps in a Claude Code session file (`projects/<folder>/<session>.jsonl` in the config
+ * directory): prompts, replies and tool calls, each tool's result attached to its call.
+ */
+export function claudeEntries(jsonl: string): TranscriptEntry[] {
+  const entries: TranscriptEntry[] = [];
+  const calls = new Map<string, TranscriptEntry>();
+  for (const line of jsonl.split("\n")) {
+    if (!line.trim()) continue;
+    let record: { type?: string; message?: { content?: string | Part[] } };
+    try {
+      record = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (record.type !== "user" && record.type !== "assistant") continue;
+    const content = record.message?.content;
+    if (typeof content === "string") {
+      entries.push({ kind: record.type === "user" ? "prompt" : "reply", text: content });
+      continue;
+    }
+    for (const part of content ?? []) {
+      if (part.type === "text" && part.text.trim())
+        entries.push({ kind: record.type === "user" ? "prompt" : "reply", text: part.text });
+      else if (part.type === "tool_use") {
+        const entry = toolEntry(part.name, part.input);
+        calls.set(part.id, entry);
+        entries.push(entry);
+      } else if (part.type === "tool_result") {
+        const call = calls.get(part.tool_use_id);
+        if (!call) continue;
+        const output = Array.isArray(part.content)
+          ? part.content.map((item: { text?: string }) => item.text ?? "").join("\n")
+          : String(part.content ?? "");
+        if (output) call.detail = output;
+        if (part.is_error) call.failed = true;
+      }
+    }
+  }
+  return entries;
+}
 
 export interface ClaudeOptions {
   /** The Claude config directory holding the owner's login and sessions. */
@@ -175,6 +240,18 @@ export function claudeAdapter(options: ClaudeOptions, events: ProviderEvents): P
       // The CLI ends its turn cleanly on SIGINT; the session resumes on the next message.
       session.interrupting = true;
       session.child.kill("SIGINT");
+    },
+
+    async transcript({ sessionId }) {
+      // The session's folder is named after its working directory; the id is unique.
+      const projects = join(options.configDir, "projects");
+      for (const folder of await readdir(projects).catch(() => [] as string[])) {
+        const text = await readFile(join(projects, folder, `${sessionId}.jsonl`), "utf8").catch(
+          () => undefined,
+        );
+        if (text !== undefined) return claudeEntries(text);
+      }
+      return [];
     },
 
     async close() {

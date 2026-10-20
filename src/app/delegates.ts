@@ -8,7 +8,7 @@ import { scopeName, type Scope } from "../identity/contract.ts";
 import { activeEmployee } from "../identity/service.ts";
 import { sha256 } from "../protocol/bytes.ts";
 import type { Commitment } from "../work/contract.ts";
-import { addEvidence } from "../work/service.ts";
+import { addEvidence, commitment } from "../work/service.ts";
 import { postEvent } from "./conversations.ts";
 import { modeOf } from "./mode.ts";
 
@@ -117,6 +117,12 @@ async function deliverEvent(env: Env, event: DelegateEvent) {
       }),
     );
   if (event.kind === "started") return;
+  // While a person holds the work they drive the session; its employee is briefed once, on
+  // hand-back, rather than woken by every turn it may not act on.
+  const work = await Effect.runPromise(
+    commitment(env.HYPERDRIVE, item.business_id, item.commitment_id),
+  );
+  if (work?.taken_over_by) return;
   const text = [
     `Your ${who} session ${item.id} (${item.purpose}) on this work item: ${card}`,
     event.diffStat &&

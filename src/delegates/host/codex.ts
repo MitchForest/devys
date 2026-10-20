@@ -7,6 +7,9 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import type { InitializeParams } from "./codex-protocol/InitializeParams";
 import type { ItemCompletedNotification } from "./codex-protocol/v2/ItemCompletedNotification";
+import type { ThreadItem } from "./codex-protocol/v2/ThreadItem";
+import type { ThreadReadParams } from "./codex-protocol/v2/ThreadReadParams";
+import type { ThreadReadResponse } from "./codex-protocol/v2/ThreadReadResponse";
 import type { ThreadResumeParams } from "./codex-protocol/v2/ThreadResumeParams";
 import type { ThreadStartParams } from "./codex-protocol/v2/ThreadStartParams";
 import type { ThreadStartResponse } from "./codex-protocol/v2/ThreadStartResponse";
@@ -17,7 +20,54 @@ import type { TurnStartParams } from "./codex-protocol/v2/TurnStartParams";
 import type { TurnStartResponse } from "./codex-protocol/v2/TurnStartResponse";
 import type { TurnSteerParams } from "./codex-protocol/v2/TurnSteerParams";
 import type { TurnSteerResponse } from "./codex-protocol/v2/TurnSteerResponse";
+import type { TranscriptEntry } from "../contract.ts";
 import type { ProviderAdapter, ProviderEvents } from "./provider.ts";
+
+/** A command without the shell wrapper Codex runs it in (`/bin/zsh -lc "…"`). */
+export function unwrapped(command: string) {
+  const inner = /^\/bin\/(?:ba|z)?sh -lc (["'])([\s\S]*)\1$/.exec(command.trim())?.[2];
+  return inner === undefined ? command : inner.replace(/\\(["\\$`])/g, "$1");
+}
+
+/** One Codex thread item as a transcript step; items with nothing to show are skipped. */
+function codexEntry(item: ThreadItem): TranscriptEntry[] {
+  switch (item.type) {
+    case "userMessage":
+      return [
+        {
+          kind: "prompt",
+          text: item.content
+            .flatMap((part) => (part.type === "text" ? [part.text] : []))
+            .join("\n"),
+        },
+      ];
+    case "agentMessage":
+      return item.text ? [{ kind: "reply", text: item.text }] : [];
+    case "plan":
+      return [{ kind: "plan", text: item.text }];
+    case "commandExecution":
+      return [
+        {
+          kind: "command",
+          text: unwrapped(item.command),
+          ...(item.aggregatedOutput ? { detail: item.aggregatedOutput } : {}),
+          ...(item.exitCode !== null && item.exitCode !== 0 ? { failed: true } : {}),
+        },
+      ];
+    case "fileChange":
+      return [{ kind: "files", text: item.changes.map((change) => change.path).join(", ") }];
+    case "mcpToolCall":
+      return [
+        {
+          kind: "tool",
+          text: `${item.server}.${item.tool}`,
+          ...(item.error ? { failed: true } : {}),
+        },
+      ];
+    default:
+      return [];
+  }
+}
 
 type Message = {
   id?: number | string;
@@ -38,6 +88,8 @@ export function codexAdapter(options: CodexOptions, events: ProviderEvents): Pro
   let server: Promise<Connection> | undefined;
   /** The running turn and latest reply of each thread this process has loaded. */
   const threads = new Map<string, { turn: string | null; reply: string | null }>();
+  /** What Codex asked approval for and Devys declined, per thread, said with the turn's end. */
+  const declined = new Map<string, string[]>();
 
   interface Connection {
     child: ChildProcessWithoutNullStreams;
@@ -82,8 +134,18 @@ export function codexAdapter(options: CodexOptions, events: ProviderEvents): Pro
             if (message.error) pending?.reject(new Error(message.error.message ?? "Codex error"));
             else pending?.resolve(message.result);
           } else if (message.id !== undefined) {
-            // Sessions run without approvals; anything Codex still asks is declined.
+            // Sessions run without approvals; anything Codex still asks is declined, and said.
             write({ id: message.id, result: { decision: "decline" } });
+            const asked = (message.params ?? {}) as {
+              threadId?: string;
+              command?: string;
+              reason?: string;
+            };
+            if (asked.threadId)
+              declined.set(asked.threadId, [
+                ...(declined.get(asked.threadId) ?? []),
+                asked.command ?? asked.reason ?? message.method,
+              ]);
           } else notify(message.method, message.params);
         }
       });
@@ -122,11 +184,16 @@ export function codexAdapter(options: CodexOptions, events: ProviderEvents): Pro
       const thread = threads.get(threadId);
       threads.set(threadId, { turn: null, reply: thread?.reply ?? null });
       if (turn.status === "inProgress") return;
+      const refused = declined.get(threadId) ?? [];
+      declined.delete(threadId);
+      const note = refused.length
+        ? `Devys declined what Codex asked to approve (sessions run without approvals): ${refused.join("; ").slice(0, 500)}`
+        : "";
       events.turnEnded({
         sessionId: threadId,
         turnId: turn.id,
         status: turn.status,
-        reply: thread?.reply ?? null,
+        reply: [thread?.reply, note].filter(Boolean).join("\n\n") || null,
         error: turn.error?.message ?? null,
       });
     }
@@ -185,6 +252,16 @@ export function codexAdapter(options: CodexOptions, events: ProviderEvents): Pro
       await (
         await connect()
       ).call("turn/interrupt", { threadId: sessionId, turnId: turn } satisfies TurnInterruptParams);
+    },
+
+    async transcript({ sessionId }) {
+      const { thread } = await (
+        await connect()
+      ).call<ThreadReadResponse>("thread/read", {
+        threadId: sessionId,
+        includeTurns: true,
+      } satisfies ThreadReadParams);
+      return thread.turns.flatMap((turn) => turn.items.flatMap(codexEntry));
     },
 
     async close() {

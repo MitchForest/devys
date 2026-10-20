@@ -1,3 +1,13 @@
+import type { TranscriptEntry } from "../contract.ts";
+
+/** Keeps a transcript readable: the latest 200 steps, each cut to a few thousand characters. */
+export const bounded = (entries: TranscriptEntry[]): TranscriptEntry[] =>
+  entries.slice(-200).map((entry) => ({
+    ...entry,
+    text: entry.text.slice(0, 2000),
+    ...(entry.detail !== undefined ? { detail: entry.detail.slice(-4000) } : {}),
+  }));
+
 /** How the host drives one coding harness. Each adapter maps its native protocol onto this. */
 export interface ProviderAdapter {
   /** Opens a session in `cwd` and starts its first turn. */
@@ -13,6 +23,8 @@ export interface ProviderAdapter {
     readOnly: boolean;
   }): Promise<{ turnId: string; steered: boolean }>;
   interrupt(sessionId: string): Promise<void>;
+  /** The session's steps from the harness's own record, oldest first. */
+  transcript(input: { sessionId: string; cwd: string }): Promise<TranscriptEntry[]>;
   /** Stops every process the adapter started. */
   close(): Promise<void>;
 }

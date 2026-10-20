@@ -119,6 +119,7 @@ extension Workspace.Action {
         Self(.conversation(.responderPicked(key, employeeID: employeeID)))
     }
     package static func sendTapped(_ key: ConversationKey) -> Self { Self(.conversation(.sendTapped(key))) }
+    package static func followToggled(_ commitmentID: String) -> Self { Self(.conversation(.followToggled(commitmentID: commitmentID))) }
     package static func retryTapped(_ key: ConversationKey, _ clientID: String) -> Self { Self(.conversation(.retryTapped(key, clientID: clientID))) }
     package static func replyTapped(_ key: ConversationKey, _ messageID: String) -> Self { Self(.conversation(.replyTapped(key, messageID: messageID))) }
     package static func replyCancelled(_ key: ConversationKey) -> Self { Self(.conversation(.replyCancelled(key))) }

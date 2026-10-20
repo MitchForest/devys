@@ -163,3 +163,48 @@ describe("who has taken work over", () => {
     );
   });
 });
+
+describe("a coding outcome at a glance", () => {
+  it("reads the latest check, changes, pull request and commit from evidence", async () => {
+    const { outcomeOf } = await import("../src/web/app/names.ts");
+    const at = "2026-10-20T10:00:00Z";
+    expect(outcomeOf([{ by: "employee:e1", note: "Wrote the plan", at }])).toBeUndefined();
+    expect(
+      outcomeOf([
+        {
+          by: "employee:e1",
+          note: "Committed",
+          at,
+          commit: "a".repeat(40),
+          changes: "2 files changed",
+        },
+        {
+          by: "devys",
+          note: "failed",
+          at,
+          commit: "a".repeat(40),
+          check: { command: "bun test", exitCode: 1 },
+        },
+        {
+          by: "devys",
+          note: "passed",
+          at,
+          commit: "b".repeat(40),
+          check: { command: "bun test", exitCode: 0 },
+        },
+        {
+          by: "employee:e1",
+          note: "Published",
+          at,
+          commit: "b".repeat(40),
+          pullRequest: "https://github.com/acme/site/pull/12",
+        },
+      ]),
+    ).toEqual({
+      commit: "bbbbbbb",
+      changes: "2 files changed",
+      check: { passed: true, command: "bun test" },
+      pullRequest: { url: "https://github.com/acme/site/pull/12", label: "PR #12" },
+    });
+  });
+});

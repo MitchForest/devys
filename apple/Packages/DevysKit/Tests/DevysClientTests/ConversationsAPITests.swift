@@ -43,11 +43,12 @@ struct ConversationsAPITests {
     func list() async throws {
         let recorder = Recorder()
         let summaries = try await api(
-            body: #"{"conversations":[{"key":"space:s1","last":\#(Self.message),"unread":2},{"key":"direct:ops","last":null,"unread":0}]}"#,
+            body: #"{"conversations":[{"key":"space:s1","last":\#(Self.message),"unread":2,"following":false},{"key":"work:c1","last":null,"unread":0,"following":true}]}"#,
             recorder: recorder
         ).conversations(Self.session, businessID: "b1")
-        #expect(summaries.map(\.key) == ["space:s1", "direct:ops"])
+        #expect(summaries.map(\.key) == ["space:s1", "work:c1"])
         #expect(summaries[0].unread == 2)
+        #expect(summaries.map(\.following) == [false, true])
         #expect(summaries[0].last?.employeeID == "growth")
         #expect(summaries[1].last == nil)
         let request = try #require(await recorder.requests.last)

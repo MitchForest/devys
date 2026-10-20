@@ -143,9 +143,12 @@ extension DevysHTTPClient {
         }
     }
 
-    public func commentOnFile(_ session: DeviceSession, businessID: String, path: String, employee: String, comments: [FileComment]) async throws {
-        struct Body: Encodable { let id: String; let path: String; let employee: String; let comments: [FileComment] }
-        _ = try await raw(json(session, path: "api/businesses/\(businessID)/files/comments", method: "POST", body: Body(id: UUID().uuidString, path: path, employee: employee, comments: comments)))
+    /// Sends comments to an employee's DM, or to a work item's thread when `to` is `work:<id>`.
+    public func commentOnFile(_ session: DeviceSession, businessID: String, path: String, employee recipient: String, comments: [FileComment]) async throws {
+        struct Body: Encodable { let id: String; let path: String; let employee: String?; let work: String?; let comments: [FileComment] }
+        let work = recipient.hasPrefix("work:") ? String(recipient.dropFirst("work:".count)) : nil
+        let body = Body(id: UUID().uuidString, path: path, employee: work == nil ? recipient : nil, work: work, comments: comments)
+        _ = try await raw(json(session, path: "api/businesses/\(businessID)/files/comments", method: "POST", body: body))
     }
 
     private func authorizedQuery(_ session: DeviceSession, _ base: String, path: String, method: String = "GET") -> URLRequest {

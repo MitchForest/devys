@@ -344,14 +344,72 @@ public enum CommitmentState: String, Equatable, Sendable, Decodable, CaseIterabl
 
 /// What was done and by whom, recorded when work completes.
 public struct CommitmentEvidence: Equatable, Sendable, Decodable {
+    public struct Check: Equatable, Sendable, Decodable {
+        public let command: String
+        public let exitCode: Int?
+
+        public init(command: String, exitCode: Int?) {
+            self.command = command
+            self.exitCode = exitCode
+        }
+    }
+
     public let author: String
     public let note: String
     public let recordedAt: String
+    /// A coding result names its commit, the check run against it, what changed and its pull request.
+    public let commit: String?
+    public let check: Check?
+    public let changes: String?
+    public let pullRequest: String?
+
+    public init(
+        author: String,
+        note: String,
+        recordedAt: String,
+        commit: String? = nil,
+        check: Check? = nil,
+        changes: String? = nil,
+        pullRequest: String? = nil
+    ) {
+        self.author = author
+        self.note = note
+        self.recordedAt = recordedAt
+        self.commit = commit
+        self.check = check
+        self.changes = changes
+        self.pullRequest = pullRequest
+    }
 
     enum CodingKeys: String, CodingKey {
-        case note
+        case note, commit, check, changes, pullRequest
         case author = "by"
         case recordedAt = "at"
+    }
+}
+
+/// A coding result at a glance, read from a work item's evidence (the web's `outcomeOf`).
+public struct CodingOutcome: Equatable, Sendable {
+    public let commit: String
+    public let changes: String?
+    public let checkPassed: Bool?
+    public let pullRequest: URL?
+
+    /// The pull request's "PR #12", or nil without one.
+    public var pullRequestLabel: String? {
+        guard let pullRequest else { return nil }
+        let parts = pullRequest.pathComponents
+        if let index = parts.firstIndex(of: "pull"), index + 1 < parts.count { return "PR #\(parts[index + 1])" }
+        return "Pull request"
+    }
+
+    public init?(_ evidence: [CommitmentEvidence]) {
+        let coding = evidence.filter { $0.commit != nil }
+        guard let last = coding.last?.commit else { return nil }
+        commit = String(last.prefix(7))
+        changes = coding.last { $0.changes?.isEmpty == false }?.changes
+        checkPassed = coding.last { $0.check != nil }?.check.map { $0.exitCode == 0 }
+        pullRequest = coding.last { $0.pullRequest != nil }?.pullRequest.flatMap(URL.init(string:))
     }
 }
 

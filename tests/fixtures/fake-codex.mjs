@@ -6,6 +6,7 @@
 import { randomUUID } from "node:crypto";
 const out = (message) => process.stdout.write(`${JSON.stringify(message)}\n`);
 const running = new Map(); // threadId -> { turn, texts, timer }
+const history = new Map(); // threadId -> turns, for thread/read
 let approvals = 0;
 let declined = "unasked";
 
@@ -14,6 +15,19 @@ function finish(threadId, status) {
   if (!current) return;
   clearTimeout(current.timer);
   running.delete(threadId);
+  const items = current.texts.map((text) => ({
+    type: "userMessage",
+    id: randomUUID(),
+    clientId: null,
+    content: [{ type: "text", text }],
+  }));
+  if (status === "completed")
+    items.push({
+      type: "agentMessage",
+      id: randomUUID(),
+      text: `did: ${current.texts.join(" + ")}`,
+    });
+  history.set(threadId, [...(history.get(threadId) ?? []), { id: current.turn, items }]);
   if (status === "completed")
     out({
       method: "item/completed",
@@ -37,10 +51,17 @@ function startTurn(threadId, text) {
     out({
       id: `approval-${++approvals}`,
       method: "item/commandExecution/requestApproval",
-      params: {},
+      params: { threadId, command: "rm -rf /tmp/outside" },
     });
     texts.push(`home ${process.env.CODEX_HOME}`);
   }
+  // "env" reports what the harness inherited, as a delegate's shell would see it.
+  if (text === "env")
+    texts.push(
+      Object.keys(process.env)
+        .filter((name) => /DEVYS_|TOKEN|KEY/.test(name))
+        .join(","),
+    );
   texts.push(text);
   const timer = setTimeout(
     () => {
@@ -67,6 +88,11 @@ const handle = ({ id, method, params, result }) => {
       return out({ id, result: {} });
     case "thread/start":
       return out({ id, result: { thread: { id: randomUUID() } } });
+    case "thread/read":
+      return out({
+        id,
+        result: { thread: { id: params.threadId, turns: history.get(params.threadId) ?? [] } },
+      });
     case "thread/resume":
       return out({ id, result: { thread: { id: params.threadId } } });
     case "turn/start":
