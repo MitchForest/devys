@@ -167,13 +167,13 @@ struct DevicesAndBusinessesTests {
         store.send(.newBusinessTapped)
         guard var draft = store.newBusiness else { return #expect(Bool(false), "the sheet opens") }
         #expect(draft.team == Set(RoleTemplate.startingTeam))
-        draft.name = " Scribble "
+        draft.name = " Globex "
         draft.brief = "Shared notes for families"
         draft.team.remove("growth")
         store.send(.newBusinessEdited(draft))
         store.send(.createBusinessTapped)
         await settle("created", until: { store.newBusiness == nil })
-        #expect(await server.created == [NewBusiness(name: "Scribble", brief: "Shared notes for families", team: ["engineering", "business-operations"])])
+        #expect(await server.created == [NewBusiness(name: "Globex", brief: "Shared notes for families", team: ["engineering", "business-operations"])])
     }
 
     @Test("Editing a business sends only what changed")

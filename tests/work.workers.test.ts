@@ -277,7 +277,7 @@ it("members manage work and answer requests over HTTP; stale revisions conflict"
 
 it("spaces reference records without copying them, refuse other businesses' records, and grant nothing", async () => {
   const acme = await business("Acme");
-  const scribble = await business("Scribble");
+  const globex = await business("Globex");
   const signIn = async (person: string, use: Env = bindings) => {
     const token = Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) =>
       b.toString(16).padStart(2, "0"),
@@ -311,8 +311,8 @@ it("spaces reference records without copying them, refuse other businesses' reco
     }),
   );
   const theirs = await Effect.runPromise(
-    createCommitment(db, scribble.business.id, {
-      owner: scribble.scope.employeeId,
+    createCommitment(db, globex.business.id, {
+      owner: globex.scope.employeeId,
       title: "Theirs",
       createdBy: "person:t",
     }),
@@ -346,19 +346,19 @@ it("spaces reference records without copying them, refuse other businesses' reco
     local(acme.business.id, `/spaces/${growth.id}/items`, { kind: "file", ref });
   expect((await addFile(`${folder}/plan.xlsx`)).status).toBe(201);
   expect((await addFile(`${folder}/../other/plan.xlsx`)).status).toBe(400);
-  expect((await addFile(`/Users/owner/Devys/${scribble.business.id}/x.md`)).status).toBe(400);
+  expect((await addFile(`/Users/owner/Devys/${globex.business.id}/x.md`)).status).toBe(400);
   const withFile = (await (await local(acme.business.id, "/spaces")).json()) as {
     spaces: { name: string; items: { kind: string; ref: string }[] }[];
   };
   expect(withFile.spaces.find((s) => s.name === "Growth")?.items).toContainEqual(
     expect.objectContaining({ kind: "file", ref: `${folder}/plan.xlsx` }),
   );
-  // Scribble's owner can't see Acme's spaces, and can't add into them through Scribble.
-  const other = await signIn(scribble.person);
+  // Globex's owner can't see Acme's spaces, and can't add into them through Globex.
+  const other = await signIn(globex.person);
   expect((await other(acme.business.id, "/spaces")).status).toBe(404);
   expect(
     (
-      await other(scribble.business.id, `/spaces/${launch.id}/items`, {
+      await other(globex.business.id, `/spaces/${launch.id}/items`, {
         kind: "commitment",
         ref: theirs.id,
       })

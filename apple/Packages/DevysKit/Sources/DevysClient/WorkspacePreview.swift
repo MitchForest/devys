@@ -192,13 +192,13 @@ extension WorkspacePreview {
         ]
     )
 
-    public static let scribbleGrowth = WorkspacePreview(
-        business: Business(id: "scribble", name: "Scribble"),
+    public static let globexGrowth = WorkspacePreview(
+        business: Business(id: "globex", name: "Globex"),
         employees: [
             Employee(
-                id: "scribble-ops",
+                id: "globex-ops",
                 name: "Head of Operations",
-                role: "Coordinates Scribble's growth work",
+                role: "Coordinates Globex's growth work",
                 template: "operations",
                 avatar: AvatarSpec(palette: .teal, shape: .circle, seed: 2),
                 activity: .idle,

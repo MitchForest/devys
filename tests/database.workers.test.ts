@@ -64,7 +64,7 @@ it("a chat on a channel reaches exactly one employee, only while the person and 
 
 it("a chat bound to one business cannot be moved to another, and binding needs membership", async () => {
   const acme = await business("Acme");
-  const scribble = await business("Scribble");
+  const globex = await business("Globex");
   const chat = { sender: crypto.randomUUID(), chat: crypto.randomUUID() };
   await Effect.runPromise(
     bindChannel(db, {
@@ -78,8 +78,8 @@ it("a chat bound to one business cannot be moved to another, and binding needs m
     Effect.runPromise(
       bindChannel(db, {
         channel: "imessage",
-        personId: scribble.person,
-        scope: scribble.scope,
+        personId: globex.person,
+        scope: globex.scope,
         ...chat,
       }),
     ),
@@ -87,12 +87,12 @@ it("a chat bound to one business cannot be moved to another, and binding needs m
   expect(
     (await Effect.runPromise(channelBinding(db, "imessage", chat.sender, chat.chat)))?.businessId,
   ).toBe(acme.scope.businessId);
-  // Scribble's owner is not a member of Acme, so cannot bind into it.
+  // Globex's owner is not a member of Acme, so cannot bind into it.
   await expect(
     Effect.runPromise(
       bindChannel(db, {
         channel: "imessage",
-        personId: scribble.person,
+        personId: globex.person,
         scope: acme.scope,
         sender: "x",
         chat: "y",

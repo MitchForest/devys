@@ -73,7 +73,7 @@ it("a new business starts with its brief and the chosen team, each with its temp
     as("/api/businesses", {
       method: "POST",
       body: JSON.stringify({
-        name: "Scribble",
+        name: "Globex",
         brief: "Handwriting practice for children.",
         team: ["engineering", "growth"],
       }),

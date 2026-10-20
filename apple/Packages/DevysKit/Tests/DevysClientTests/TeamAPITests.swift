@@ -96,16 +96,16 @@ struct TeamAPITests {
 
         let business = try await api(
             status: 201,
-            body: #"{"business":{"id":"b2","name":"Scribble","look":null,"brief":"Notes app"},"operations":{},"team":[]}"#,
+            body: #"{"business":{"id":"b2","name":"Globex","look":null,"brief":"Notes app"},"operations":{},"team":[]}"#,
             recorder: recorder
-        ).createBusiness(Self.session, NewBusiness(name: "Scribble", brief: "Notes app", team: ["engineering", "growth"]))
+        ).createBusiness(Self.session, NewBusiness(name: "Globex", brief: "Notes app", team: ["engineering", "growth"]))
         #expect(business.brief == "Notes app")
         var (request, body) = try await sent(recorder)
         #expect(request.url?.path() == "/api/businesses" && request.httpMethod == "POST")
         #expect(body["brief"] as? String == "Notes app")
         #expect(body["team"] as? [String] == ["engineering", "growth"])
 
-        let saved = try await api(body: #"{"business":{"id":"b2","name":"Scribble","brief":"Shared notes"}}"#, recorder: recorder)
+        let saved = try await api(body: #"{"business":{"id":"b2","name":"Globex","brief":"Shared notes"}}"#, recorder: recorder)
             .updateBusiness(Self.session, id: "b2", name: nil, brief: "Shared notes")
         #expect(saved.brief == "Shared notes")
         (request, body) = try await sent(recorder)

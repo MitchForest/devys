@@ -406,14 +406,14 @@ extension DependencyValues {
 extension Account {
     public static let fixture = Account(
         person: Person(id: "person-preview", displayName: "Mitch"),
-        businesses: [WorkspacePreview.acmeLaunch.business, WorkspacePreview.scribbleGrowth.business]
+        businesses: [WorkspacePreview.acmeLaunch.business, WorkspacePreview.globexGrowth.business]
     )
 }
 
 extension BusinessDetail {
     /// The sample team for a sample business, for previews and tests.
     public static func fixture(_ id: String) -> Self {
-        let sample = id == WorkspacePreview.scribbleGrowth.business.id ? WorkspacePreview.scribbleGrowth : .acmeLaunch
+        let sample = id == WorkspacePreview.globexGrowth.business.id ? WorkspacePreview.globexGrowth : .acmeLaunch
         return BusinessDetail(business: sample.business, employees: sample.employees, artifacts: [])
     }
 }

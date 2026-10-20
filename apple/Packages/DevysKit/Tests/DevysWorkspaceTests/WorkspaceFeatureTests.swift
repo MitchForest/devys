@@ -152,7 +152,7 @@ struct WorkspaceFeatureTests {
     func loadsLive() async {
         let store = makeStore(calls: Calls())
         await settle("status and memory") { store.status.value != nil && store.memory.value != nil }
-        #expect(store.businesses.map(\.name) == ["Acme", "Scribble"])
+        #expect(store.businesses.map(\.name) == ["Acme", "Globex"])
         #expect(store.preview.businessName == "Acme")
         #expect(store.preview.employees.first?.name == "Head of Operations")
         #expect(store.operationsScope == EmployeeScope(businessID: "acme", employeeID: "ops"))
@@ -200,10 +200,10 @@ struct WorkspaceFeatureTests {
         let store = makeStore(calls: Calls())
         await settle("team") { store.operationsScope != nil }
         store.send(.pageSelected(.approvals))
-        store.send(.businessSelected("scribble"))
-        #expect(store.preview.businessName == "Scribble")
+        store.send(.businessSelected("globex"))
+        #expect(store.preview.businessName == "Globex")
         #expect(store.page == .today)
-        await settle("Scribble's team") { store.operationsScope?.businessID == "scribble" }
+        await settle("Globex's team") { store.operationsScope?.businessID == "globex" }
         // A status answer for the business just left is ignored.
         store.send(Workspace.Action(.statusLoaded(EmployeeScope(businessID: "acme", employeeID: "ops"), .fixture)))
         #expect(store.status.value == nil)

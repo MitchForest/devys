@@ -83,7 +83,7 @@ it("the employee hears the quoted reply, voice provenance and reactions since it
 
 it("reactions belong to one employee's conversation", async () => {
   const acme = await business("Acme");
-  const scribble = await business("Scribble");
+  const globex = await business("Globex");
   await run(
     setAppReaction(db, acme.scope, {
       targetId: "pi-1",
@@ -92,8 +92,8 @@ it("reactions belong to one employee's conversation", async () => {
       on: true,
     }),
   );
-  expect(await run(appReactions(db, scribble.scope))).toEqual([]);
-  expect(await run(composeAppMessage(db, scribble.scope, { id: "msg-0000000a", text: "Hi" }))).toBe(
+  expect(await run(appReactions(db, globex.scope))).toEqual([]);
+  expect(await run(composeAppMessage(db, globex.scope, { id: "msg-0000000a", text: "Hi" }))).toBe(
     "Hi",
   );
 });

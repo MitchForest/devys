@@ -38,17 +38,17 @@ it("a person sees only their businesses and can create one staffed with a Head o
   expect(me.businesses.map((b) => b.name)).toEqual(["Acme"]);
   const created = await as("/api/businesses", {
     method: "POST",
-    body: JSON.stringify({ name: "Scribble" }),
+    body: JSON.stringify({ name: "Globex" }),
   });
   expect(created.status).toBe(201);
-  const { business: scribble, operations } = (await created.json()) as {
+  const { business: globex, operations } = (await created.json()) as {
     business: { id: string };
     operations: { name: string };
   };
   expect(operations.name).toBe("Head of Operations");
   const after = (await (await as("/api/me")).json()) as { businesses: { name: string }[] };
-  expect(after.businesses.map((b) => b.name)).toEqual(["Acme", "Scribble"]);
-  const detail = (await (await as(`/api/businesses/${scribble.id}`)).json()) as {
+  expect(after.businesses.map((b) => b.name)).toEqual(["Acme", "Globex"]);
+  const detail = (await (await as(`/api/businesses/${globex.id}`)).json()) as {
     employees: { name: string }[];
   };
   expect(detail.employees.map((e) => e.name)).toEqual(["Head of Operations"]);
@@ -56,32 +56,32 @@ it("a person sees only their businesses and can create one staffed with a Head o
 
 it("another business's routes, employees, memory, files and connections do not exist for a non-member", async () => {
   const acme = await business("Acme");
-  const scribble = await business("Scribble");
+  const globex = await business("Globex");
   await sql.run(
     `INSERT INTO artifacts (id, business_id, operation_id, object_key, filename, content_type, byte_length)
      VALUES ('00000000-0000-4000-a000-000000000001', $1, 'op', $1 || '/a', 'a.txt', 'text/plain', 1)`,
-    [scribble.business.id],
+    [globex.business.id],
   );
   const as = await session(acme.person);
-  const other = `/api/businesses/${scribble.business.id}`;
+  const other = `/api/businesses/${globex.business.id}`;
   for (const path of [
     other,
     `${other}/memory`,
     `${other}/export`,
     `${other}/connections/google`,
     `${other}/artifacts/00000000-0000-4000-a000-000000000001`,
-    `${other}/employees/${scribble.operations.id}/status`,
-    `${other}/conversations/direct:${scribble.operations.id}`,
+    `${other}/employees/${globex.operations.id}/status`,
+    `${other}/conversations/direct:${globex.operations.id}`,
   ])
     expect((await as(path)).status, path).toBe(404);
   for (const path of [
     `${other}/employees`,
-    `${other}/conversations/direct:${scribble.operations.id}/messages`,
-    `${other}/employees/${scribble.operations.id}/stop`,
+    `${other}/conversations/direct:${globex.operations.id}/messages`,
+    `${other}/employees/${globex.operations.id}/stop`,
   ])
     expect((await as(path, { method: "POST", body: "{}" })).status, path).toBe(404);
   // Inside its own business, a member still cannot reach an employee of another business.
-  const mine = `/api/businesses/${acme.business.id}/employees/${scribble.operations.id}`;
+  const mine = `/api/businesses/${acme.business.id}/employees/${globex.operations.id}`;
   expect((await as(`${mine}/status`)).status).toBe(404);
   expect(
     (await as(`/api/businesses/${acme.business.id}/artifacts/00000000-0000-4000-a000-000000000001`))

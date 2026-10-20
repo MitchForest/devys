@@ -150,7 +150,7 @@ it("coding starts only from a work item, once per call, within the grant's repos
     grant(db, scope, {
       capability: start,
       mode: "auto",
-      constraints: { repositories: ["/Users/owner/scribble"] },
+      constraints: { repositories: ["/Users/owner/globex"] },
     }),
   );
   const refused = await Effect.runPromise(

@@ -28,7 +28,7 @@ const call = (scope: { businessId: string; employeeId: string }, name: string, i
 
 it("B0 exit: an employee's capabilities see only its own business's work, spaces and memory", async () => {
   const acme = await business("Acme");
-  const scribble = await business("Scribble");
+  const globex = await business("Globex");
   await Effect.runPromise(
     createCommitment(db, acme.business.id, {
       owner: acme.scope.employeeId,
@@ -45,14 +45,14 @@ it("B0 exit: an employee's capabilities see only its own business's work, spaces
   );
   const theirs = (await call(acme.scope, "commitmentList", {})) as { commitments: unknown[] };
   expect(theirs.commitments).toHaveLength(1);
-  expect(await call(scribble.scope, "commitmentList", {})).toEqual({ commitments: [] });
-  expect(await call(scribble.scope, "spaceList", {})).toEqual({ spaces: [] });
-  const recalled = (await call(scribble.scope, "recall", { query: "launch November" })) as {
+  expect(await call(globex.scope, "commitmentList", {})).toEqual({ commitments: [] });
+  expect(await call(globex.scope, "spaceList", {})).toEqual({ spaces: [] });
+  const recalled = (await call(globex.scope, "recall", { query: "launch November" })) as {
     items: unknown[];
   };
   expect(recalled.items).toEqual([]);
-  // A Scribble employee cannot put itself in charge of Acme work.
+  // A Globex employee cannot put itself in charge of Acme work.
   await expect(
-    call(scribble.scope, "commitmentCreate", { title: "x", owner: acme.scope.employeeId }),
+    call(globex.scope, "commitmentCreate", { title: "x", owner: acme.scope.employeeId }),
   ).rejects.toMatchObject({ code: "invalid_input" });
 });
