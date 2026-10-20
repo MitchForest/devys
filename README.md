@@ -12,9 +12,8 @@ this repository.
 
 ## What runs today (2026-10-20)
 
-Everything below is implemented and verified locally. Nothing is verified live and no
-public product has launched. The delivery plan
-records evidence, gaps and what is next (C1, coding delegation).
+Everything below is implemented and verified locally; employees publishing pull requests is
+also verified live. No public product has launched.
 
 - **Two deployment modes, never mixed.** Local mode runs everything on the owner's Mac
   and is reached over Tailscale ([local mode](#local-mode-the-owners-mac)); cloud mode
@@ -62,7 +61,9 @@ records evidence, gaps and what is next (C1, coding delegation).
   Each turn's end, failure, interruption and check is a card in the work item's thread and
   wakes the employee, which steers with follow-ups, starts read-only reviews, and accepts:
   Devys commits on the branch, runs the repository's check and records commit and check as
-  evidence. Nothing is pushed, merged or deployed. The owner sees each session's latest reply
+  evidence. Employees can then push the branch and open a pull request on the business's
+  GitHub repository (`codingPublish`, through the owner's `gh` login); nothing is merged or
+  deployed. The owner sees each session's latest reply
   and live diff (with line comments) on every client, takes over to steer it directly, hands
   back, or starts a **New coding session** from Work on the web. Stop interrupts sessions and
   stops what they left running. Cloud mode reports delegates as unavailable.
@@ -177,9 +178,9 @@ is present. Model arguments never select credentials.
 
 ## Active roadmap
 
-Next: repository publication and deploys run by employees, browser and desktop control, the
-broker and signed decisions, the tool registry, and the operations a launch needs (workspace
-accounts, analytics, ads, and domain purchases with Ramp or Link).
+Next: deploys run by employees, then the browser and sandboxed artifacts, routines, the broker
+and signed decisions, the tool registry, purchases and mail, launch connectors (analytics and
+ads), desktop control, voice and push, cloud mode and coding runners, and distribution.
 
 ## Native clients (macOS, iPhone, iPad)
 
