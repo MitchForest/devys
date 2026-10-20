@@ -99,6 +99,51 @@ it("an approval is bound to the grant revision and expires to rejected", async (
   expect(
     (await Effect.runPromise(pendingDecisions(db, scope.businessId))).map((d) => d.id),
   ).not.toContain(lateId);
+  // The minute tick records the expiry; no one decided it, so the same request may ask again.
+  const { expireDecisions } = await import("../src/authority/service.ts");
+  await Effect.runPromise(expireDecisions(db));
+  expect(
+    (await sql.row<{ status: string }>("SELECT status FROM decisions WHERE id = $1", [lateId]))
+      ?.status,
+  ).toBe("rejected");
+  expect((await authorize(bindings, scope, create, { ...draft, name: "late.txt" })).outcome).toBe(
+    "ask",
+  );
+});
+
+it("an owner's rejection stands, and an approval covers only the work item it was asked for", async () => {
+  const { person, scope } = await business();
+  const create = named("driveCreate");
+  const draft = { name: "b.txt", content: "B" };
+  await Effect.runPromise(grant(db, scope, { capability: create, mode: "ask" }));
+  const asked = await authorize(bindings, scope, create, draft);
+  const id = asked.outcome === "ask" ? asked.decisionId! : "";
+  await Effect.runPromise(answerDecision(db, scope.businessId, id, { approve: false, by: person }));
+  expect((await authorize(bindings, scope, create, draft)).outcome).toBe("deny");
+
+  const [one, two] = await Promise.all(
+    ["One", "Two"].map((title) =>
+      Effect.runPromise(
+        createCommitment(db, scope.businessId, {
+          owner: scope.employeeId,
+          title,
+          createdBy: "person:test",
+        }),
+      ),
+    ),
+  );
+  const other = { name: "c.txt", content: "C" };
+  const forOne = await authorize(bindings, scope, create, other, { commitmentId: one!.id });
+  const oneId = forOne.outcome === "ask" ? forOne.decisionId! : "";
+  await Effect.runPromise(
+    answerDecision(db, scope.businessId, oneId, { approve: true, by: person }),
+  );
+  expect((await authorize(bindings, scope, create, other, { commitmentId: two!.id })).outcome).toBe(
+    "ask",
+  );
+  expect((await authorize(bindings, scope, create, other, { commitmentId: one!.id })).outcome).toBe(
+    "allow",
+  );
 });
 
 it("work's conditions only narrow, and taking it over stops the employee acting on it", async () => {
@@ -213,6 +258,52 @@ it("due work reaches its employee once per revision, and a lost hand-off is resu
   );
   await dispatchDue(agentEnv);
   expect(received.some((item) => item.chatId.endsWith(later.id))).toBe(false);
+});
+
+it("paused employees' work and a failing hand-off never hold up other work", async () => {
+  const paused = await business();
+  for (let index = 0; index < 21; index++)
+    await Effect.runPromise(
+      createCommitment(db, paused.scope.businessId, {
+        owner: paused.scope.employeeId,
+        title: `Waiting ${index}`,
+        createdBy: "person:test",
+      }),
+    );
+  await sql.run("UPDATE employees SET paused_at = now() WHERE id = $1", [paused.scope.employeeId]);
+  const { scope } = await business();
+  const broken = await Effect.runPromise(
+    createCommitment(db, scope.businessId, {
+      owner: scope.employeeId,
+      title: "Fails",
+      createdBy: "person:test",
+    }),
+  );
+  const fine = await Effect.runPromise(
+    createCommitment(db, scope.businessId, {
+      owner: scope.employeeId,
+      title: "Works",
+      createdBy: "person:test",
+    }),
+  );
+  const received: string[] = [];
+  const agentEnv = {
+    ...bindings,
+    AGENT: {
+      getByName: () => ({
+        receive: async (_: unknown, input: { chatId: string }) => {
+          if (input.chatId.endsWith(broken.id)) throw new Error("runtime unavailable");
+          received.push(input.chatId);
+          return { accepted: true };
+        },
+      }),
+    },
+  } as unknown as Env;
+  await dispatchDue(agentEnv);
+  expect(received.some((chat) => chat.endsWith(fine.id))).toBe(true);
+  expect((await Effect.runPromise(commitment(db, scope.businessId, broken.id)))?.state).toBe(
+    "ready",
+  );
 });
 
 it("members manage work and answer requests over HTTP; stale revisions conflict", async () => {
@@ -364,4 +455,22 @@ it("spaces reference records without copying them, refuse other businesses' reco
       })
     ).status,
   ).toBe(400);
+});
+
+it("handing back work with no coding sessions puts it back in the dispatcher's hands", async () => {
+  const { handBack } = await import("../src/app/coding.ts");
+  const { markSubmitted } = await import("../src/work/service.ts");
+  const { scope } = await business();
+  const work = await Effect.runPromise(
+    createCommitment(db, scope.businessId, {
+      owner: scope.employeeId,
+      title: "Taken and returned",
+      createdBy: "person:test",
+    }),
+  );
+  await Effect.runPromise(markSubmitted(db, work.id, work.revision));
+  await handBack(bindings, scope.businessId, work.id);
+  const after = (await Effect.runPromise(commitment(db, scope.businessId, work.id)))!;
+  expect(after.state).toBe("ready");
+  expect(after.revision).toBeGreaterThan(work.revision);
 });

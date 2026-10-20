@@ -4,10 +4,11 @@ import { workChat } from "../channels/work.ts";
 import { providerName, type DelegateDependencies } from "../delegates/capabilities.ts";
 import type { DelegateEvent, Delegates } from "../delegates/contract.ts";
 import { hostDelegates, unavailableDelegates } from "../delegates/host-client.ts";
-import { assignmentById, employeeAssignments } from "../delegates/service.ts";
+import { assignmentById, assignmentsFor, employeeAssignments } from "../delegates/service.ts";
 import { scopeName, type Scope } from "../identity/contract.ts";
 import { activeEmployee } from "../identity/service.ts";
 import { sha256 } from "../protocol/bytes.ts";
+import type { Commitment } from "../work/contract.ts";
 import { addEvidence } from "../work/service.ts";
 import { postEvent } from "./conversations.ts";
 
@@ -49,6 +50,23 @@ export function delegateDependencies(env: Env): DelegateDependencies {
   };
 }
 
+/**
+ * Work with a coding build is complete only once its last accepted commit passed the
+ * repository's check (the check's result is recorded as evidence when it reports).
+ */
+export async function codingIncomplete(env: Env, businessId: string, work: Commitment) {
+  const builds = (
+    await Effect.runPromise(assignmentsFor(env.HYPERDRIVE, businessId, work.id))
+  ).filter((item) => item.purpose === "build");
+  if (!builds.length) return undefined;
+  const check = work.evidence.findLast((entry) => entry.check)?.check;
+  if (!check)
+    return "This work has a coding session: accept it with codingAccept and wait for the check to pass before completing.";
+  if (check.exitCode !== 0)
+    return "The last check failed: fix it with codingSend, accept again, and complete once the check passes.";
+  return undefined;
+}
+
 /** Employee Stop also interrupts its coding sessions, so no child keeps working unnoticed. */
 export async function interruptAssignments(env: Env, scope: Scope) {
   const delegates = delegatesFor(env)(scope);
@@ -79,8 +97,14 @@ export async function delegateEventsRoute(request: Request, env: Env) {
   if (!token || offered !== (await sha256(`Bearer ${token}`)))
     return new Response("Unauthorized", { status: 401 });
   const { events } = (await request.json()) as { events: DelegateEvent[] };
-  for (const event of events ?? []) await deliverEvent(env, event);
-  return Response.json({ accepted: events?.length ?? 0 });
+  // Each event is answered on its own, so one that keeps failing never holds up the rest.
+  const delivered: string[] = [];
+  for (const event of events ?? [])
+    await deliverEvent(env, event).then(
+      () => delivered.push(event.id),
+      (error: unknown) => console.error(`Delegate event ${event.id} failed:`, error),
+    );
+  return Response.json({ delivered });
 }
 
 async function deliverEvent(env: Env, event: DelegateEvent) {
@@ -95,7 +119,7 @@ async function deliverEvent(env: Env, event: DelegateEvent) {
     finished: `${who} finished${changed ? ` · ${changed}` : ""}: ${event.text.slice(0, 600)}`,
     failed: `${who} failed: ${event.text.slice(0, 600)}`,
     interrupted: `${who} was interrupted: ${event.text.slice(0, 600)}`,
-    checked: event.text,
+    checked: event.text.slice(0, 2000),
   }[event.kind];
   await postEvent(env, item.business_id, `work:${item.commitment_id}`, {
     clientId: `delegate:${event.id}`,
@@ -109,12 +133,14 @@ async function deliverEvent(env: Env, event: DelegateEvent) {
         note: `\`${event.check.command}\` ${event.check.exitCode === 0 ? "passed" : `failed (exit ${event.check.exitCode ?? "killed"})`} on ${event.check.commit.slice(0, 12)}.`,
         commit: event.check.commit,
         check: { command: event.check.command, exitCode: event.check.exitCode },
+        source: `delegate:${event.id}`,
       }),
     );
   if (event.kind === "started") return;
   const text = [
     `Your ${who} session ${item.id} (${item.purpose}) on this work item: ${card}`,
-    event.diffStat && `Changes in its worktree ${item.worktree}:\n${event.diffStat}`,
+    event.diffStat &&
+      `Changes in its worktree ${item.worktree}:\n${event.diffStat.length > 8000 ? `${event.diffStat.slice(0, 8000)}\n… (run git diff --stat in the worktree for the rest)` : event.diffStat}`,
     event.check?.output && `Check output (end):\n${event.check.output.slice(-6000)}`,
     event.kind === "checked"
       ? event.check?.exitCode === 0

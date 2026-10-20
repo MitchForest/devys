@@ -55,6 +55,8 @@ interface Job {
   error: string | null;
   /** A check started by accept and not yet finished. */
   check: { id: string; commit: string; command: string } | null;
+  /** The last accepted commit and whether its check passed (null while it runs). */
+  accepted?: { commit: string; passed: boolean | null };
 }
 
 export interface DelegatesHostOptions {
@@ -63,7 +65,8 @@ export interface DelegatesHostOptions {
   data: string;
   providers: (events: ProviderEvents) => Partial<Record<Provider, ProviderAdapter>>;
   /** Hands events to the Worker; resolving means they were accepted. */
-  deliver(events: readonly DelegateEvent[]): Promise<void>;
+  /** Sends events to the Worker; resolves with the ids it delivered (the rest are retried). */
+  deliver(events: readonly DelegateEvent[]): Promise<readonly string[]>;
   shell?: string;
   env?: NodeJS.ProcessEnv;
   /** The `gh` the owner is logged in with; tests pass a stand-in. */
@@ -114,17 +117,19 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
     flushing ??= (async () => {
       const batch = [...outbox];
       if (!batch.length) return;
+      let sent = new Set<string>();
       try {
-        await options.deliver(batch);
-        const sent = new Set(batch.map((event) => event.id));
+        sent = new Set(await options.deliver(batch));
+      } catch {}
+      if (sent.size) {
         outbox = outbox.filter((event) => !sent.has(event.id));
         saveOutbox();
-      } catch {
+      }
+      if (outbox.length)
         retry ??= setTimeout(() => {
           retry = undefined;
           void flush();
         }, options.retryMs ?? 15_000);
-      }
     })().finally(() => {
       flushing = undefined;
     });
@@ -152,10 +157,17 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
       diffStat: await statOf(job),
     });
 
+  // A turn can end before start() has saved its job (a fast failure); it is applied then.
+  const early = new Map<string, Parameters<ProviderEvents["turnEnded"]>[0]>();
   const events: ProviderEvents = {
-    turnEnded({ sessionId, turnId, status, reply, error }) {
+    turnEnded(end) {
+      const { sessionId, turnId, status, reply, error } = end;
       const job = [...jobs.values()].find((candidate) => candidate.sessionId === sessionId);
-      if (!job) return;
+      if (!job) {
+        early.set(sessionId, end);
+        setTimeout(() => early.delete(sessionId), 60_000).unref();
+        return;
+      }
       const state = status === "completed" ? "idle" : status;
       save({ ...job, state, reply: reply ?? job.reply, error });
       void ended(
@@ -269,7 +281,12 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
       kind: "started",
       text: request.objective,
     });
-    return startedOf(job);
+    const ended = early.get(session.sessionId);
+    if (ended) {
+      early.delete(session.sessionId);
+      events.turnEnded(ended);
+    }
+    return startedOf(jobs.get(job.id)!);
   }
 
   function jobOf(input: Record<string, unknown>) {
@@ -286,12 +303,19 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
     if (job.check) throw new HostRefusal(409, "A check is already running");
     const commit = await commitAll(job.worktree, message);
     const check = { id: crypto.randomUUID(), commit, command };
-    save({ ...job, check });
+    save({ ...job, check, accepted: { commit, passed: null } });
+    // Its own process group, so a timeout stops everything the check started.
     const child = spawn(options.shell ?? "/bin/zsh", ["-lc", command], {
       cwd: job.worktree,
       env: options.env ?? process.env,
+      detached: true,
       stdio: ["ignore", "pipe", "pipe"],
     });
+    const stop = () => {
+      try {
+        process.kill(-child.pid!, "SIGKILL");
+      } catch {}
+    };
     let output = "";
     const decoder = new TextDecoder();
     const keep = (chunk: Uint8Array) => {
@@ -299,12 +323,17 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
     };
     child.stdout.on("data", keep);
     child.stderr.on("data", keep);
-    const deadline = setTimeout(() => child.kill("SIGKILL"), options.checkTimeoutMs ?? 30 * 60_000);
-    child.on("close", (exitCode) => {
+    const deadline = setTimeout(stop, options.checkTimeoutMs ?? 30 * 60_000);
+    let finished = false;
+    const done = (exitCode: number | null) => {
+      if (finished) return;
+      finished = true;
       clearTimeout(deadline);
+      // Anything the check left running in the background goes with it.
+      stop();
       const latest = jobs.get(job.id)!;
       if (latest.check?.id !== check.id) return;
-      save({ ...latest, check: null });
+      save({ ...latest, check: null, accepted: { commit, passed: exitCode === 0 } });
       emit({
         id: `${job.id}:checked:${check.id}`,
         assignmentId: job.id,
@@ -315,7 +344,9 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
             : `\`${command}\` failed (exit ${exitCode ?? "killed"}).`,
         check: { commit, command, exitCode, output },
       });
-    });
+    };
+    child.on("error", () => done(null));
+    child.on("close", done);
     return {
       commit,
       diffStat: await statOf(job),
@@ -327,16 +358,21 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
     if (job.readOnly) throw new HostRefusal(409, "A review session has nothing to publish");
     if (job.state === "working") throw new HostRefusal(409, "The session is still working");
     if (job.check) throw new HostRefusal(409, "Wait for the check to finish");
+    if (!job.accepted) throw new HostRefusal(409, "Nothing is accepted yet: accept the work first");
+    if (!job.accepted.passed)
+      throw new HostRefusal(409, "The accepted commit's check failed: fix it and accept again");
     const { repository: name, title, body } = input;
     if (typeof name !== "string" || !githubName.test(name))
       throw new HostRefusal(400, "Name the GitHub repository as owner/name");
     if (typeof title !== "string" || !title.trim() || typeof body !== "string")
       throw new HostRefusal(400, "Give the pull request a title and a body");
-    return publishBranch(job, { repository: name, title, body }, options.gh).catch(
-      (error: unknown) => {
-        throw new HostRefusal(409, error instanceof Error ? error.message : "Publishing failed");
-      },
-    );
+    return publishBranch(
+      { ...job, commit: job.accepted.commit },
+      { repository: name, title, body },
+      options.gh,
+    ).catch((error: unknown) => {
+      throw new HostRefusal(409, error instanceof Error ? error.message : "Publishing failed");
+    });
   }
 
   return {
@@ -368,13 +404,21 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
           const job = jobOf(input);
           if (typeof input.text !== "string" || !input.text.trim())
             throw new HostRefusal(400, "Say what to do");
-          const sent = await adapter(job.provider).send({
-            sessionId: job.sessionId,
-            cwd: job.worktree,
-            text: input.text,
-            readOnly: job.readOnly,
-          });
-          save({ ...jobs.get(job.id)!, state: "working", error: null });
+          // Working before the turn starts, so a turn that ends at once is not overwritten.
+          const before = jobs.get(job.id)!;
+          save({ ...before, state: "working", error: null });
+          const sent = await adapter(job.provider)
+            .send({
+              sessionId: job.sessionId,
+              cwd: job.worktree,
+              text: input.text,
+              readOnly: job.readOnly,
+            })
+            .catch((error: unknown) => {
+              if (jobs.get(job.id)!.state === "working")
+                save({ ...jobs.get(job.id)!, state: before.state, error: before.error });
+              throw error;
+            });
           return { steered: sent.steered };
         }
         case "/delegates/interrupt": {

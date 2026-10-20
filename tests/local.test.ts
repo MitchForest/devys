@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appPort, launchAgent, tailnetUrl } from "../scripts/local.ts";
+import { appPort, hostEnvironment, launchAgent, tailnetUrl, withVar } from "../scripts/local.ts";
 
 describe("local mode launcher", () => {
   it("prefers HTTPS Serve, then the TCP forward, and only when they reach the app", () => {
@@ -28,5 +28,36 @@ describe("local mode launcher", () => {
     expect(plist).toContain("<key>KeepAlive</key><true/>");
     expect(plist).toContain("<string>/logs/launcher.log</string>");
     expect(plist).toContain("<key>PATH</key><string>/a:/b</string>");
+  });
+
+  it("gives the Mac host no secret from .env, only its login folders and settings", () => {
+    const dotenv =
+      "DEVYS_MODEL_GATEWAY_KEY=k\nexport CONNECTIONS_KEY=c\nDEVYS_CODEX_HOME=/codex\n# NOTE=x\n";
+    const env = hostEnvironment(
+      {
+        PATH: "/bin",
+        HOME: "/home",
+        DEVYS_MODEL_GATEWAY_KEY: "k",
+        CONNECTIONS_KEY: "c",
+        DEVYS_CODEX_HOME: "/codex",
+        NOTE: "kept",
+      },
+      dotenv,
+      { DEVYS_HOST_TOKEN: "t" },
+    );
+    expect(env).toEqual({
+      PATH: "/bin",
+      HOME: "/home",
+      DEVYS_CODEX_HOME: "/codex",
+      NOTE: "kept",
+      DEVYS_HOST_TOKEN: "t",
+    });
+  });
+
+  it("writes the host token into the Worker's vars file, replacing an old one", () => {
+    expect(withVar("A=1\nDEVYS_HOST_TOKEN=old\n", "DEVYS_HOST_TOKEN", "new")).toBe(
+      "A=1\nDEVYS_HOST_TOKEN=new\n",
+    );
+    expect(withVar("", "X", "1")).toBe("X=1\n");
   });
 });

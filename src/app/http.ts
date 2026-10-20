@@ -10,8 +10,11 @@ import {
   businessesFor,
   channelBinding,
   createBusiness,
+  isMachineOwner,
   memberBusiness,
 } from "../identity/service.ts";
+import { atomically } from "../data/database.ts";
+import { onTheMac } from "./runner.ts";
 import { readBounded } from "../protocol/bytes.ts";
 import { sameOrigin } from "../protocol/http.ts";
 import { grantAll } from "../authority/service.ts";
@@ -76,6 +79,10 @@ export async function apiRoute(request: Request, env: Env): Promise<Response | u
     });
   if (path === "/api/businesses" && request.method === "POST") {
     if (!trusted) return new Response("Forbidden", { status: 403 });
+    if (onTheMac(env) && !(await Effect.runPromise(isMachineOwner(env.HYPERDRIVE, person.id))))
+      return new Response("On a Mac in local mode only its owner creates businesses", {
+        status: 403,
+      });
     const body = JSON.parse(new TextDecoder().decode(await readBounded(request.body, 8_000))) as {
       name?: unknown;
       brief?: unknown;
@@ -93,28 +100,32 @@ export async function apiRoute(request: Request, env: Env): Promise<Response | u
         status: 400,
       });
     const operations = roleTemplate("operations")!;
-    const created = await Effect.runPromise(
-      createBusiness(env.HYPERDRIVE, person.id, {
-        name,
-        brief,
-        model: modelsConfig.defaults.employee,
-        operations: { name: operations.name, role: operations.responsibilities },
-      }),
-    );
     const catalog = capabilities(env);
-    await Effect.runPromise(
-      grantAll(
-        env.HYPERDRIVE,
-        { businessId: created.business.id, employeeId: created.operations.id },
-        templateGrants(operations, catalog),
-      ),
-    );
-    const hired = [];
-    for (const template of team) {
-      const input = hireInput({ template: template!.id });
-      if (typeof input !== "string")
-        hired.push(await hire(env, created.business.id, input, catalog));
-    }
+    // The business, its Head of Operations, their grants and the starting team, or nothing.
+    const { created, hired } = await atomically(env.HYPERDRIVE, async (db) => {
+      const created = await Effect.runPromise(
+        createBusiness(db, person.id, {
+          name,
+          brief,
+          model: modelsConfig.defaults.employee,
+          operations: { name: operations.name, role: operations.responsibilities },
+        }),
+      );
+      await Effect.runPromise(
+        grantAll(
+          db,
+          { businessId: created.business.id, employeeId: created.operations.id },
+          templateGrants(operations, catalog),
+        ),
+      );
+      const hired = [];
+      for (const template of team) {
+        const input = hireInput({ template: template!.id });
+        if (typeof input !== "string")
+          hired.push(await hire(db, created.business.id, input, catalog));
+      }
+      return { created, hired };
+    });
     return Response.json({ ...created, team: hired }, { status: 201 });
   }
   if (path === "/api/connections/google/callback" && request.method === "GET")

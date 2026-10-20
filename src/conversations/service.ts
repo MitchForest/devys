@@ -43,7 +43,7 @@ export const postMessage = (
         `INSERT INTO messages
            (id, business_id, conversation, author, kind, text, reply_to, mentions, via_voice, ref, client_id)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-         ON CONFLICT (business_id, client_id) DO NOTHING
+         ON CONFLICT (business_id, conversation, client_id) DO NOTHING
          RETURNING ${columns}`,
         [
           crypto.randomUUID(),
@@ -61,8 +61,9 @@ export const postMessage = (
       );
       if (inserted) return { message: inserted, created: true };
       const existing = await sql.row<Message>(
-        `SELECT ${columns} FROM messages WHERE business_id = $1 AND client_id = $2`,
-        [businessId, input.clientId],
+        `SELECT ${columns} FROM messages
+         WHERE business_id = $1 AND conversation = $2 AND client_id = $3`,
+        [businessId, key, input.clientId],
       );
       return { message: existing!, created: false };
     },
@@ -88,63 +89,66 @@ export const messages = (
     ).reverse(),
   );
 
-/** Messages after a moment (exclusive), oldest first, at most `limit`, the newest kept. */
-export const messagesSince = (
+/** One message of a conversation by id, if it is there. */
+export const messageIn = (db: Database, businessId: string, key: ConversationKey, id: string) =>
+  database(db, (sql) =>
+    sql.row<Message>(
+      `SELECT ${columns} FROM messages WHERE business_id = $1 AND conversation = $2 AND id = $3`,
+      [businessId, key, id],
+    ),
+  );
+
+/**
+ * Messages a participant (`person:<id>` or `employee:<id>`) has not been shown, oldest first,
+ * at most `limit`, the newest kept.
+ */
+export const unseenBy = (
   db: Database,
   businessId: string,
   key: ConversationKey,
-  since: string | null,
+  participant: string,
   limit: number,
 ) =>
   database(db, async (sql) =>
     (
       await sql.rows<Message>(
         `SELECT ${columns} FROM messages
-         WHERE business_id = $1 AND conversation = $2 AND ($3::timestamptz IS NULL OR created_at > $3)
-         ORDER BY created_at DESC, seq DESC LIMIT $4`,
-        [businessId, key, since, limit],
+         WHERE business_id = $1 AND conversation = $2
+           AND seq > coalesce((SELECT seen_seq FROM conversation_reads
+             WHERE business_id = $1 AND conversation = $2 AND participant = $3), 0)
+         ORDER BY seq DESC LIMIT $4`,
+        [businessId, key, participant, limit],
       )
     ).reverse(),
   );
 
-/** When a participant (`person:<id>` or `employee:<id>`) last read or was shown this. */
-export const seenAt = (
-  db: Database,
-  businessId: string,
-  key: ConversationKey,
-  participant: string,
-) =>
-  database(
-    db,
-    async (sql) =>
-      (
-        await sql.row<{ seen_at: string }>(
-          `SELECT seen_at FROM conversation_reads
-           WHERE business_id = $1 AND conversation = $2 AND participant = $3`,
-          [businessId, key, participant],
-        )
-      )?.seen_at ?? null,
-  );
-
-/** Moves a participant's read position forward; it never moves back. */
+/**
+ * Moves a participant's read position forward to a message (by id), or to the last message
+ * stored at or before a time (`{ at }`, what clients report). It never moves back.
+ */
 export const markSeen = (
   db: Database,
   businessId: string,
   key: ConversationKey,
   participant: string,
-  at: string,
+  upTo: { message: string } | { at: string },
 ) =>
   database(db, async (sql) => {
     await sql.run(
       "INSERT INTO conversations (business_id, key) VALUES ($1, $2) ON CONFLICT DO NOTHING",
       [businessId, key],
     );
+    const position =
+      "message" in upTo
+        ? "(SELECT seq FROM messages WHERE business_id = $1 AND conversation = $2 AND id = $4)"
+        : `(SELECT max(seq) FROM messages
+            WHERE business_id = $1 AND conversation = $2 AND created_at <= $4::timestamptz)`;
     await sql.run(
-      `INSERT INTO conversation_reads (business_id, conversation, participant, seen_at)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO conversation_reads (business_id, conversation, participant, seen_seq)
+       SELECT $1, $2, $3, seq FROM (SELECT ${position} AS seq) found WHERE seq IS NOT NULL
        ON CONFLICT (business_id, conversation, participant)
-       DO UPDATE SET seen_at = greatest(conversation_reads.seen_at, excluded.seen_at)`,
-      [businessId, key, participant, at],
+       DO UPDATE SET seen_seq = greatest(conversation_reads.seen_seq, excluded.seen_seq)`,
+      [businessId, key, participant, "message" in upTo ? upTo.message : upTo.at],
     );
   });
 
@@ -159,9 +163,9 @@ export const conversationSummaries = (db: Database, businessId: string, personId
          (SELECT count(*)::int FROM messages m
           WHERE m.business_id = c.business_id AND m.conversation = c.key
             AND m.author <> 'person:' || $2
-            AND m.created_at > coalesce((SELECT r.seen_at FROM conversation_reads r
+            AND m.seq > coalesce((SELECT r.seen_seq FROM conversation_reads r
               WHERE r.business_id = c.business_id AND r.conversation = c.key
-                AND r.participant = 'person:' || $2), '-infinity')) AS unread
+                AND r.participant = 'person:' || $2), 0)) AS unread
        FROM conversations c WHERE c.business_id = $1`,
       [businessId, personId],
     ),

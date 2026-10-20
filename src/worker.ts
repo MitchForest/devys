@@ -2,7 +2,7 @@ import type { Env } from "../infra/api.ts";
 import { WebhookError } from "./channels/photon.ts";
 import { createStartHandler, defaultStreamHandler } from "@tanstack/react-start/server";
 import { apiRoute } from "./app/http.ts";
-import { dispatchDue } from "./app/dispatch.ts";
+import { minuteTick } from "./app/dispatch.ts";
 export { DevysAgent } from "./app/agent.ts";
 export { Workspace } from "./workspace/workspace.ts";
 export { PublicEgress } from "./egress/public.ts";
@@ -20,17 +20,20 @@ export default {
       response.headers.set("referrer-policy", "no-referrer");
       return response;
     } catch (error) {
-      return new Response(
-        error instanceof WebhookError ? error.message : "Request could not be completed",
-        {
-          status: error instanceof WebhookError ? error.status : 503,
-          headers: { "cache-control": "no-store" },
-        },
-      );
+      const headers = { "cache-control": "no-store" };
+      if (error instanceof WebhookError)
+        return new Response(error.message, { status: error.status, headers });
+      // Malformed or oversized input is the sender's to fix, not an outage.
+      if (error instanceof SyntaxError)
+        return new Response("Send valid JSON", { status: 400, headers });
+      if (error instanceof Error && error.message === "Input exceeds limit")
+        return new Response("The request is too large", { status: 413, headers });
+      console.error("Request failed:", error);
+      return new Response("Request could not be completed", { status: 503, headers });
     }
   },
-  /** Every minute: hand ready work to its employees. */
+  /** Every minute: unanswered decisions expire and ready work reaches its employees. */
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(dispatchDue(env));
+    ctx.waitUntil(minuteTick(env));
   },
 } satisfies ExportedHandler<Env>;

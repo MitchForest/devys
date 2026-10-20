@@ -444,6 +444,7 @@ export abstract class AgentRuntime extends DurableObject<Env> {
         return candidate;
       });
     }
+    if (accepted) await this.forgetOldMessages();
     // Stop/status must not wait behind an attachment download or model response.
     // Intent is already durable, so a lost ingress response safely retries it.
     if (message.control) await this.processMessage(message.id);
@@ -515,6 +516,24 @@ export abstract class AgentRuntime extends DurableObject<Env> {
   private reaches(binding: Scope | undefined) {
     const scope = this.scope();
     return binding?.businessId === scope.businessId && binding.employeeId === scope.employeeId;
+  }
+
+  /**
+   * Channel receipts older than 30 days go, a batch at a time: redeliveries arrive within
+   * minutes, and status shows only recent messages. Pi keeps the conversation itself.
+   */
+  protected async forgetOldMessages() {
+    const cutoff = String(Date.now() - 30 * 24 * 60 * 60_000).padStart(16, "0");
+    const old = await this.ctx.storage.list<string>({
+      prefix: "recent:",
+      end: `recent:${cutoff}`,
+      limit: 50,
+    });
+    if (!old.size) return;
+    await this.ctx.storage.delete([
+      ...old.keys(),
+      ...[...old.values()].flatMap((id) => [`message:${id}`, `outbox:${id}`]),
+    ]);
   }
 
   private recentKey(message: ChannelMessage) {
@@ -744,15 +763,22 @@ export abstract class AgentRuntime extends DurableObject<Env> {
     message: ChannelMessage,
     context: ConversationContext | undefined,
   ): Promise<string | { rescheduleAt: number }> {
-    await this.scheduleMemory();
     const session = await this.openSession(context);
-    await this.configureIdleAgent(session);
-    const turn = message.text ?? "";
-    await this.harness.submit(withMemory(turn, await this.memoryContext(turn)), {
-      session,
-      operationId: message.id,
-      whenBusy: "followUp",
-    });
+    // Submitted once; the polls that follow only wait (no memory search per poll).
+    if (!message.submitted) {
+      await this.scheduleMemory();
+      await this.configureIdleAgent(session);
+      const turn = message.text ?? "";
+      await this.harness.submit(withMemory(turn, await this.memoryContext(turn)), {
+        session,
+        operationId: message.id,
+        whenBusy: "followUp",
+      });
+      await this.ctx.storage.transaction(async (tx) => {
+        const latest = await tx.get<ChannelMessage>(`message:${message.id}`);
+        if (latest) await tx.put(`message:${message.id}`, { ...latest, submitted: true });
+      });
+    }
     if ((await this.ctx.storage.get<ChannelMessage>(`message:${message.id}`))?.cancelled)
       await this.harness.abort({ operationId: message.id, session });
     const signal = AbortSignal.timeout(5_000);

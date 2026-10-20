@@ -26,6 +26,8 @@ export interface Commitment {
     at: string;
     commit?: string;
     check?: { command: string; exitCode: number | null };
+    /** The event this was recorded from; evidence from one source is recorded once. */
+    source?: string;
   }[];
   revision: number;
   /** The person who took this over from the employee, if anyone. */

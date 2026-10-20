@@ -15,9 +15,14 @@ const home = process.env.HOME ?? "";
 const work = process.env.DEVYS_HOST_WORK ?? join(home, "Devys");
 const data = process.env.DEVYS_HOST_DATA ?? join(work, ".host");
 const worker = process.env.DEVYS_WORKER_URL ?? "http://127.0.0.1:8787";
+const port = Number(process.env.DEVYS_HOST_PORT ?? 8788);
 
 const codexHome = process.env.DEVYS_CODEX_HOME ?? join(home, ".codex");
 const claudeConfig = process.env.DEVYS_CLAUDE_CONFIG_DIR ?? join(home, ".claude");
+// Everything below inherits this environment: employees' shells, coding delegates and
+// terminals. The host's settings, including its token, stop here.
+for (const name of Object.keys(process.env))
+  if (name.startsWith("DEVYS_")) delete process.env[name];
 /** The owner's environment without Anthropic or Claude Code settings that override a login. */
 const ownLogin = Object.fromEntries(
   Object.entries(process.env).filter(
@@ -59,6 +64,7 @@ const delegates = delegatesHost({
       body: JSON.stringify({ events }),
     });
     if (!response.ok) throw new Error(`The Worker refused delegate events: ${response.status}`);
+    return ((await response.json()) as { delivered: string[] }).delivered;
   },
 });
 
@@ -67,7 +73,7 @@ const host = await startHost({
   data,
   work,
   skills: join(work, "skills"),
-  port: Number(process.env.DEVYS_HOST_PORT ?? 8788),
+  port,
   routes: [delegates, terminals],
 });
 console.log(`Devys Mac host on 127.0.0.1:${host.port}`);

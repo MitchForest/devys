@@ -252,7 +252,7 @@ test("a space opens on its conversation; a hand-off card opens the work item's t
           (
             await sql.row<{ n: number }>(
               `SELECT count(*)::int AS n FROM messages m WHERE m.business_id = $1 AND m.conversation = $2
-                 AND m.created_at > (SELECT seen_at FROM conversation_reads r WHERE r.business_id = $1
+                 AND m.seq > (SELECT seen_seq FROM conversation_reads r WHERE r.business_id = $1
                    AND r.conversation = $2 AND r.participant = $3)`,
               [owner.business, `space:${space.id}`, `person:${owner.person}`],
             )

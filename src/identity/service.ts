@@ -8,6 +8,30 @@ export const activePerson = (db: Database, personId: string) =>
     ]),
   );
 
+/**
+ * Whether this person owns the machine in local mode: the earliest active person, the one
+ * `bun run local code` and `enroll.ts --owner` sign in. Employees' shells, files and coding run
+ * as the Mac's owner, so where the Mac host is configured only they may create businesses or
+ * open those surfaces.
+ */
+export const isMachineOwner = (db: Database, personId: string) =>
+  database(db, async (sql) => {
+    const first = await sql.row<{ id: string }>(
+      "SELECT id FROM people WHERE revoked_at IS NULL ORDER BY created_at, id LIMIT 1",
+    );
+    return first?.id === personId;
+  });
+
+/** Employees who take no work now: paused or retired, in every business. */
+export const unavailableEmployees = (db: Database) =>
+  database(db, async (sql) =>
+    (
+      await sql.rows<{ id: string }>(
+        "SELECT id FROM employees WHERE paused_at IS NOT NULL OR revoked_at IS NOT NULL",
+      )
+    ).map((row) => row.id),
+  );
+
 export const businessesFor = (db: Database, personId: string) =>
   database(db, (sql) =>
     sql.rows<Business>(

@@ -7,6 +7,7 @@ import {
   mkdtempSync,
   readFileSync,
   realpathSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -102,6 +103,16 @@ describe("Mac host", () => {
     expect(state.spawned()).toBe(1);
   });
 
+  it("runs a command once when the same operation arrives twice at the same moment", async () => {
+    const state = await host();
+    const [first, second] = await Promise.all([
+      state.port().run("twice", "sleep 0.2; echo ran", 5_000, 10_000),
+      state.port().run("twice", "sleep 0.2; echo ran", 5_000, 10_000),
+    ]);
+    expect(state.spawned()).toBe(1);
+    expect([first.status, second.status].sort()).toEqual(["completed", "uncertain"]);
+  });
+
   it("stops a running command", async () => {
     const state = await host();
     const runner = state.port();
@@ -126,6 +137,30 @@ describe("Mac host", () => {
     await runner.importFile(join(state.root, "copy.md"), "artifact");
     expect(readFileSync(join(state.root, "copy.md"), "utf8")).toBe("hello");
     expect(await runner.checkpoint()).toEqual({ kind: "durable" });
+  });
+
+  it("keeps the owner's file views inside the business folder, links followed", async () => {
+    const state = await host();
+    const folder = join(state.root, "work", scope.businessId);
+    mkdirSync(join(state.root, "private"), { recursive: true });
+    mkdirSync(folder, { recursive: true });
+    writeFileSync(join(state.root, "private", "key"), "secret");
+    symlinkSync(join(state.root, "private"), join(folder, "linked"));
+    const views = hostRunner(
+      { url: state.url(), token, files: state.files, within: folder },
+      scope,
+    );
+    await views.write(join(folder, "new", "notes.md"), "hello");
+    expect((await views.read(join(folder, "new", "notes.md"))).content).toBe("hello");
+    await expect(views.read(join(folder, "linked", "key"))).rejects.toThrow("inside");
+    await expect(views.list(join(folder, "linked"))).rejects.toThrow("inside");
+    await expect(views.write(join(folder, "linked", "planted"), "x")).rejects.toThrow("inside");
+    await expect(views.exportFile(join(folder, "linked", "key"), "k", 100)).rejects.toThrow(
+      "inside",
+    );
+    await expect(views.read(join(state.root, "private", "key"))).rejects.toThrow("inside");
+    // Employees are not confined on the trusted host.
+    expect((await state.port().read(join(folder, "linked", "key"))).content).toBe("secret");
   });
 
   it("refuses a wrong token and relative paths", async () => {

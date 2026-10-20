@@ -2,7 +2,13 @@ import { Effect, Schema } from "effect";
 import type { Database } from "../data/database.ts";
 import { capability, CapabilityError, Invocation } from "../protocol/capability.ts";
 import type { Commitment } from "./contract.ts";
-import { commitments, createCommitment, updateCommitment, type Change } from "./service.ts";
+import {
+  commitment,
+  commitments,
+  createCommitment,
+  updateCommitment,
+  type Change,
+} from "./service.ts";
 import { addToSpace, createSpace, spaces } from "./spaces.ts";
 
 const Id = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(64));
@@ -43,6 +49,8 @@ export function workCapabilities(
   db: Database,
   employeeIn: (businessId: string, employeeId: string) => Promise<boolean>,
   artifactIn: (businessId: string, artifactId: string) => Promise<boolean>,
+  /** Why this work cannot be completed yet (such as a coding check that has not passed). */
+  completionBlocked: (businessId: string, work: Commitment) => Promise<string | undefined>,
 ) {
   const change = (id: string, expectedRevision: number, value: Change) =>
     Effect.gen(function* () {
@@ -154,7 +162,11 @@ export function workCapabilities(
       output: Summary,
       execute: ({ id, expectedRevision, evidence }) =>
         Effect.gen(function* () {
-          const { employeeId } = yield* Invocation;
+          const { businessId, employeeId } = yield* Invocation;
+          const work = yield* run(commitment(db, businessId, id));
+          const blocked =
+            work && (yield* run(Effect.promise(() => completionBlocked(businessId, work))));
+          if (blocked) return yield* new CapabilityError({ code: "conflict", message: blocked });
           return yield* change(id, expectedRevision, {
             state: "completed",
             evidence: { by: `employee:${employeeId}`, note: evidence },

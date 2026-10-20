@@ -21,6 +21,7 @@ const terminals = terminalsHost({
     argv: ["/bin/echo", `resumed ${provider} ${session}`],
     env: process.env,
   }),
+  exitedKeptMs: 1_500,
 });
 const host = await startHost({
   token,
@@ -164,6 +165,10 @@ it("an exit is reported, resumed agents run their own command, and other busines
   expect(await hostTerminals(where, otherBusiness).list(otherBusiness)).toEqual([]);
   const other = attach(resumed.id, 0, "business-2");
   await expect(other.done).rejects.toThrow("No such terminal");
+  // An exited session is dropped after a while, with its output.
+  expect((await client.list(scope)).some((each) => each.id === resumed.id)).toBe(true);
+  await Bun.sleep(1_800);
+  expect((await client.list(scope)).some((each) => each.id === resumed.id)).toBe(false);
 });
 
 it("worktree cleanup spares the owner's terminals and stops everything else", async () => {

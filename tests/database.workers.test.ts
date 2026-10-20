@@ -335,3 +335,26 @@ it("conversation history reads the conversation the turn answers, never one the 
   expect(older.before).toBeNull();
   await expect(read({})).rejects.toMatchObject({ code: "invalid_input" });
 });
+
+it("several components' writes commit together or not at all", async () => {
+  const { atomically } = await import("../src/data/database.ts");
+  const { createEmployee } = await import("../src/identity/service.ts");
+  const { grantAll } = await import("../src/authority/service.ts");
+  const { scope } = await business("Atomic");
+  const input = { name: "Temp", role: "Helps", model: "m", template: "custom" as const };
+  let created = "";
+  await expect(
+    atomically(db, async (db) => {
+      created = (await Effect.runPromise(createEmployee(db, scope.businessId, input))).id;
+      await Effect.runPromise(
+        grantAll(db, { businessId: scope.businessId, employeeId: created }, [
+          { capability: { name: "x" } as never, mode: "auto" },
+        ]),
+      );
+      throw new Error("A later step failed");
+    }),
+  ).rejects.toThrow("A later step failed");
+  expect(created).not.toBe("");
+  expect(await sql.row("SELECT id FROM employees WHERE id = $1", [created])).toBeUndefined();
+  expect(await sql.row("SELECT id FROM grants WHERE employee_id = $1", [created])).toBeUndefined();
+});

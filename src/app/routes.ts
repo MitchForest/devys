@@ -24,6 +24,7 @@ import {
   activeEmployee,
   bindChannel,
   employeesOf,
+  isMachineOwner,
   retireEmployee,
   updateBusiness,
   updateEmployee,
@@ -35,6 +36,8 @@ import {
 import { lookPhoto, parseLook, removeLookPhoto } from "../identity/looks.ts";
 import type { Look } from "../identity/contract.ts";
 import { memoryRoute } from "../memory/http.ts";
+import { atomically } from "../data/database.ts";
+import { onTheMac } from "./runner.ts";
 import { readBounded } from "../protocol/bytes.ts";
 import {
   answerDecision,
@@ -132,7 +135,7 @@ export async function businessRoute(
     }>(request, 8_000);
     const hireable = hireInput(input);
     if (typeof hireable === "string") return new Response(hireable, { status: 400 });
-    return Response.json(await hire(env, business.id, hireable, capabilities(env)), {
+    return Response.json(await hire(env.HYPERDRIVE, business.id, hireable, capabilities(env)), {
       status: 201,
     });
   }
@@ -151,6 +154,13 @@ export async function businessRoute(
       trusted,
     );
   if (path.startsWith("/connections/google")) return googleRoute(request, env, access);
+  // Coding, terminals and files run on the Mac as its owner.
+  if (
+    /^\/(coding|terminals|files)(\/|$)|^\/work\/[^/]+\/sessions/.test(path) &&
+    onTheMac(env) &&
+    !(await Effect.runPromise(isMachineOwner(env.HYPERDRIVE, person.id)))
+  )
+    return forbidden();
   const coding = await codingRoute(request, env, access);
   if (coding) return coding;
   const terminal = await terminalRoute(request, env, access);
@@ -238,11 +248,11 @@ async function employeeRoute(
       return new Response("Choose another employee to take over the open work", { status: 400 });
     if (record.template === "operations")
       return new Response("The Head of Operations can't be retired", { status: 409 });
-    // Hand the work over first: a retired employee must never hold open work.
-    await Effect.runPromise(
-      reassignOpen(env.HYPERDRIVE, scope.businessId, scope.employeeId, successor.id),
-    );
-    await Effect.runPromise(retireEmployee(env.HYPERDRIVE, scope));
+    // Retire and hand the work over together: a retired employee must never hold open work.
+    await atomically(env.HYPERDRIVE, async (db) => {
+      await Effect.runPromise(retireEmployee(db, scope));
+      await Effect.runPromise(reassignOpen(db, scope.businessId, scope.employeeId, successor.id));
+    });
     await agent().stop(scope);
     return Response.json({ retired: true, reassignedTo: successor.id });
   }
@@ -683,7 +693,9 @@ async function conversationRoute(
     const { at } = await body<{ at: string }>(request, 1_000);
     if (typeof at !== "string" || !Number.isFinite(Date.parse(at)))
       return new Response("Send the time of the last message read", { status: 400 });
-    await Effect.runPromise(markSeen(env.HYPERDRIVE, business.id, key, `person:${person.id}`, at));
+    await Effect.runPromise(
+      markSeen(env.HYPERDRIVE, business.id, key, `person:${person.id}`, { at }),
+    );
     return Response.json({ read: true });
   }
   if (action !== "messages") return notFound();

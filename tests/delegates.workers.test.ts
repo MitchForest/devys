@@ -3,7 +3,11 @@ import { Effect } from "effect";
 import { expect, it } from "vitest";
 import type { Env } from "../infra/api.ts";
 import { authorize } from "../src/app/authorize.ts";
-import { delegateDependencies, delegateEventsRoute } from "../src/app/delegates.ts";
+import {
+  codingIncomplete,
+  delegateDependencies,
+  delegateEventsRoute,
+} from "../src/app/delegates.ts";
 import { grant } from "../src/authority/service.ts";
 import type { Inbound } from "../src/channels/contract.ts";
 import { messages } from "../src/conversations/service.ts";
@@ -273,15 +277,24 @@ it("host events become thread cards, wake the employee under a stable id, and re
       .execute({ assignment, message: "Add the waitlist page", check: "bun test" })
       .pipe(as(bindings, scope, work.id)),
   );
-  await event(bindings, [
-    {
-      id: `${assignment}:checked:c1`,
-      assignmentId: assignment,
-      kind: "checked",
-      text: "`bun test` passed.",
-      check: { commit: "b".repeat(40), command: "bun test", exitCode: 0, output: "ok" },
-    },
-  ]);
+  const current = async () => (await Effect.runPromise(commitment(db, scope.businessId, work.id)))!;
+  // Not complete until the accepted commit's check passes.
+  expect(await codingIncomplete(bindings, scope.businessId, await current())).toMatch(
+    /codingAccept/,
+  );
+  const checked = {
+    id: `${assignment}:checked:c1`,
+    assignmentId: assignment,
+    kind: "checked",
+    text: "`bun test` passed.",
+    // A huge diff stat is cut to fit rather than failing the event forever.
+    diffStat: " x.ts | 1 +\n".repeat(20_000),
+    check: { commit: "b".repeat(40), command: "bun test", exitCode: 0, output: "ok" },
+  };
+  expect(await (await event(bindings, [checked])).json()).toEqual({ delivered: [checked.id] });
+  // Redelivered: the check is recorded once.
+  await event(bindings, [checked]);
+  expect(await codingIncomplete(bindings, scope.businessId, await current())).toBeUndefined();
   const thread = await Effect.runPromise(
     messages(db, scope.businessId, `work:${work.id}`, { limit: 50 }),
   );
@@ -298,7 +311,7 @@ it("host events become thread cards, wake the employee under a stable id, and re
     ["b", null],
     ["b", 0],
   ]);
-  expect(received).toHaveLength(3);
+  expect(received).toHaveLength(4);
 });
 
 it("the owner steers a session only after taking the work over; handing back wakes its employee", async () => {

@@ -9,9 +9,9 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
-import { lstat, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Readable } from "node:stream";
 import { HostRefusal as Refusal, type HostRoutes } from "../../protocol/host.ts";
@@ -68,6 +68,27 @@ function absolute(path: unknown): string {
     path.split("/").some((part) => part === "." || part === "..")
   )
     throw new Refusal(400, "Use an absolute path without . or .. segments");
+  return path;
+}
+
+/**
+ * `path` itself when it stays inside `within` after following symbolic links (a missing file
+ * is judged by its nearest existing folder). Without `within` any absolute path is allowed:
+ * employees on the trusted host work anywhere the owner can.
+ */
+async function confined(path: string, within: unknown) {
+  if (within === undefined || within === null) return path;
+  const root = await realpath(absolute(within)).catch(() => undefined);
+  let existing = path;
+  let real: string | undefined;
+  for (;;) {
+    real = await realpath(existing).catch(() => undefined);
+    if (real || existing === "/") break;
+    existing = dirname(existing);
+  }
+  const resolved = real && join(real, relative(existing, path));
+  if (!root || !resolved || (resolved !== root && !resolved.startsWith(`${root}/`)))
+    throw new Refusal(403, "Stay inside the business folder");
   return path;
 }
 
@@ -131,6 +152,14 @@ export async function startHost(options: HostOptions) {
 
   const active = new Map<string, { child: ChildProcess; stopped: boolean }>();
   const writing = new Map<string, Promise<unknown>>();
+  /** The next write to `path` waits for this one; the entry goes once nothing is waiting. */
+  const queue = (path: string, done: Promise<unknown>) => {
+    const settled = done.catch(() => undefined);
+    writing.set(path, settled);
+    void settled.then(() => {
+      if (writing.get(path) === settled) writing.delete(path);
+    });
+  };
   let spawned = 0;
   const scopeKey = (scope: Scope) => `${scope.businessId}/${scope.employeeId}`;
   const stopGroup = (child: ChildProcess, signal: NodeJS.Signals) => {
@@ -173,7 +202,9 @@ export async function startHost(options: HostOptions) {
     }
     if (active.has(scopeKey(scope))) throw new Refusal(409, "Workspace is busy");
     const cwd = join(options.work, scope.businessId);
-    await mkdir(cwd, { recursive: true });
+    // No await between the checks above and recording the receipt: a retried operation arriving
+    // meanwhile must find it, not start the command a second time.
+    mkdirSync(cwd, { recursive: true });
     record({ key, fingerprint });
     spawned++;
     const child = spawn(options.shell ?? "/bin/zsh", ["-lc", command], {
@@ -258,7 +289,10 @@ export async function startHost(options: HostOptions) {
       return;
     }
     if (url.pathname === "/file" && request.method === "GET") {
-      const path = absolute(url.searchParams.get("path"));
+      const path = await confined(
+        absolute(url.searchParams.get("path")),
+        url.searchParams.get("within"),
+      );
       const maximum = Math.min(Number(url.searchParams.get("max") ?? fileBytes), fileBytes);
       const info = await stat(path).catch(() => undefined);
       if (!info?.isFile()) throw new Refusal(404, "File is unavailable");
@@ -268,7 +302,10 @@ export async function startHost(options: HostOptions) {
       return;
     }
     if (url.pathname === "/file" && request.method === "PUT") {
-      const path = absolute(url.searchParams.get("path"));
+      const path = await confined(
+        absolute(url.searchParams.get("path")),
+        url.searchParams.get("within"),
+      );
       const bytes = await body(request, fileBytes);
       const expected = url.searchParams.get("expected");
       // Compare and write one at a time per file, as for text.
@@ -283,10 +320,7 @@ export async function startHost(options: HostOptions) {
         await mkdir(dirname(path), { recursive: true });
         await writeFile(path, bytes);
       });
-      writing.set(
-        path,
-        done.catch(() => undefined),
-      );
+      queue(path, done);
       await done;
       return json({ path, revision: revisionOf(bytes) });
     }
@@ -309,7 +343,7 @@ export async function startHost(options: HostOptions) {
         return json({ stopped: true });
       }
       case "/read": {
-        const path = absolute(input.path);
+        const path = await confined(absolute(input.path), input.within);
         const maximum = Math.min(Number(input.maximum ?? inlineBytes) || inlineBytes, textBytes);
         const info = await stat(path).catch(() => undefined);
         if (!info?.isFile()) throw new Refusal(404, "File is unavailable");
@@ -326,7 +360,7 @@ export async function startHost(options: HostOptions) {
         });
       }
       case "/write": {
-        const path = absolute(input.path);
+        const path = await confined(absolute(input.path), input.within);
         const content = typeof input.content === "string" ? input.content : "";
         if (Buffer.byteLength(content) > textBytes)
           throw new Refusal(413, "File exceeds the text write limit");
@@ -342,10 +376,7 @@ export async function startHost(options: HostOptions) {
           await mkdir(dirname(path), { recursive: true });
           await writeFile(path, content);
         });
-        writing.set(
-          path,
-          done.catch(() => undefined),
-        );
+        queue(path, done);
         await done;
         return json({ path, revision: revisionOf(content) });
       }
@@ -377,6 +408,11 @@ export async function startHost(options: HostOptions) {
             { stdio: "ignore" },
           );
           const timer = setTimeout(() => child.kill("SIGKILL"), 60_000);
+          // A failed spawn is reported as a failed print rather than ending the host.
+          child.on("error", () => {
+            clearTimeout(timer);
+            resolve(null);
+          });
           child.on("close", (code) => {
             clearTimeout(timer);
             resolve(code);
@@ -388,7 +424,7 @@ export async function startHost(options: HostOptions) {
         return json({ path: target, size: printed.size });
       }
       case "/list": {
-        const path = absolute(input.path);
+        const path = await confined(absolute(input.path), input.within);
         const entries = await readdir(path, { withFileTypes: true }).catch(() => {
           throw new Refusal(404, "Folder is unavailable");
         });

@@ -37,7 +37,7 @@ async function owner() {
   const acme = await business("Conversations");
   const { received, bindings } = recording();
   const growth = await hire(
-    bindings,
+    bindings.HYPERDRIVE,
     acme.business.id,
     hireInput({ template: "growth" }) as Exclude<ReturnType<typeof hireInput>, string>,
     capabilities(bindings),
@@ -70,9 +70,11 @@ it("a DM continues with its employee; a reply from the employee lands in the sam
   const first = await say(`direct:${ops}`, { id: "dm-message-0001", text: "What is next?" });
   expect(first.to).toEqual([ops]);
   expect(received.at(-1)?.input.chatId).toBe(`app:${acme.business.id}:${ops}`);
-  // Retrying the same post stores it once and wakes nobody again.
+  // Retrying the same post stores it once and delivers it again under the same message id
+  // (the runtime admits it once), so a retry after a failed delivery still wakes the employee.
   await say(`direct:${ops}`, { id: "dm-message-0001", text: "What is next?" });
-  expect(received).toHaveLength(1);
+  expect(received).toHaveLength(2);
+  expect(received[1]!.input.messageId).toBe(received[0]!.input.messageId);
 
   await postFromEmployee(
     bindings,
@@ -212,4 +214,37 @@ it("approving a request says so where the employee asked, which wakes it", async
   expect(page.messages.at(-1)?.text).toMatch(/^Approved: driveCreate/);
   expect(received.at(-1)).toMatchObject({ employee: growth.id });
   expect(received.at(-1)?.input.chatId).toBe(`app:${acme.business.id}:${growth.id}`);
+});
+
+it("client ids are per conversation, and read positions follow insertion order", async () => {
+  const { postMessage, markSeen, unseenBy } = await import("../src/conversations/service.ts");
+  const { db } = await import("./fixtures/postgres.ts");
+  const { scope } = await business("Reads");
+  const post = (key: `direct:${string}` | `space:${string}`, text: string) =>
+    Effect.runPromise(
+      postMessage(db, scope.businessId, key, { author: "system", text, clientId: "same-id" }),
+    );
+  const a = await post(`direct:${scope.employeeId}`, "In the DM");
+  const b = await post("space:s1", "In a space");
+  expect(b.created).toBe(true);
+  expect(b.message.id).not.toBe(a.message.id);
+  // Two messages stored in the same millisecond: reading the first leaves the second unread.
+  const key = "space:s2" as const;
+  const [first, second] = ["one", "two"].map(() => crypto.randomUUID());
+  await sql.run("INSERT INTO conversations (business_id, key) VALUES ($1, $2)", [
+    scope.businessId,
+    key,
+  ]);
+  for (const [id, text] of [
+    [first, "one"],
+    [second, "two"],
+  ])
+    await sql.run(
+      `INSERT INTO messages (id, business_id, conversation, author, text, client_id, created_at)
+       VALUES ($1, $2, $3, 'system', $4, $1, '2026-10-20T12:00:00.000Z')`,
+      [id, scope.businessId, key, text],
+    );
+  await Effect.runPromise(markSeen(db, scope.businessId, key, "employee:x", { message: first! }));
+  const unseen = await Effect.runPromise(unseenBy(db, scope.businessId, key, "employee:x", 10));
+  expect(unseen.map((message) => message.text)).toEqual(["two"]);
 });

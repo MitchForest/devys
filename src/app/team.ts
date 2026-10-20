@@ -2,6 +2,7 @@ import { Effect, Schema } from "effect";
 import type { Env } from "../../infra/api.ts";
 import { modelsConfig } from "../../config/models.ts";
 import { grantAll } from "../authority/service.ts";
+import { atomically, type Database } from "../data/database.ts";
 import type { RoleTemplateId, Scope } from "../identity/contract.ts";
 import { createEmployee } from "../identity/service.ts";
 import {
@@ -148,25 +149,28 @@ export function hireInput(input: {
 }
 
 /** Creates the employee and gives it its template's grants. */
-export async function hire(
-  env: Env,
+/** Creates the employee and its template's grants together: no employee without its grants. */
+export function hire(
+  db: Database,
   businessId: string,
   input: Hire,
   catalog: readonly Capability[],
 ) {
-  const employee = await Effect.runPromise(
-    createEmployee(env.HYPERDRIVE, businessId, {
-      name: input.name,
-      role: input.responsibilities,
-      model: input.model,
-      template: input.template,
-    }),
-  );
-  const scope: Scope = { businessId, employeeId: employee.id };
-  await Effect.runPromise(
-    grantAll(env.HYPERDRIVE, scope, templateGrants(roleTemplate(input.template)!, catalog)),
-  );
-  return employee;
+  return atomically(db, async (db) => {
+    const employee = await Effect.runPromise(
+      createEmployee(db, businessId, {
+        name: input.name,
+        role: input.responsibilities,
+        model: input.model,
+        template: input.template,
+      }),
+    );
+    const scope: Scope = { businessId, employeeId: employee.id };
+    await Effect.runPromise(
+      grantAll(db, scope, templateGrants(roleTemplate(input.template)!, catalog)),
+    );
+    return employee;
+  });
 }
 
 /**
@@ -180,7 +184,8 @@ export function teamCapabilities(env: Env, catalog: () => readonly Capability[])
       description:
         "Hire a new employee from a role template (engineering, growth, business-operations or custom) with a name, responsibilities and optionally a model id. The owner approves each hire.",
       effect: "change",
-      replay: "idempotent",
+      // Each call hires someone new: after an interruption, list the team before trying again.
+      replay: "reconcile",
       input: Schema.Struct({
         template: Schema.Literals(["engineering", "growth", "business-operations", "custom"]),
         name: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(80)),
@@ -196,7 +201,11 @@ export function teamCapabilities(env: Env, catalog: () => readonly Capability[])
             return yield* Effect.fail(
               new CapabilityError({ code: "invalid_input", message: checked }),
             );
-          const employee = yield* Effect.promise(() => hire(env, businessId, checked, catalog()));
+          const employee = yield* Effect.tryPromise({
+            try: () => hire(env.HYPERDRIVE, businessId, checked, catalog()),
+            catch: () =>
+              new CapabilityError({ code: "unavailable", message: "Hiring failed; try again" }),
+          });
           return { id: employee.id, name: employee.name };
         }),
     }),

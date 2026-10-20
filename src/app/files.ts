@@ -3,7 +3,7 @@ import type { Env } from "../../infra/api.ts";
 import { conversationKey } from "../conversations/contract.ts";
 import type { Business, Person } from "../identity/contract.ts";
 import { activeEmployee } from "../identity/service.ts";
-import { sha256Bytes } from "../protocol/bytes.ts";
+import { readBounded, sha256Bytes } from "../protocol/bytes.ts";
 import { revisionConflict } from "../workspace/contract.ts";
 import { postFromPerson } from "./conversations.ts";
 import { runnerFor } from "./runner.ts";
@@ -62,7 +62,7 @@ export async function filesRoute(request: Request, env: Env, access: Access) {
     return new Response("Files run in local mode only for now.", { status: 503 });
   const root = `${home}/Devys/${business.id}`;
   // Built when a file is touched, so comments work without asking the host anything.
-  const runner = () => runnerFor(env)({ businessId: business.id, employeeId: "owner" });
+  const runner = () => runnerFor(env, root)({ businessId: business.id, employeeId: "owner" });
   const url = new URL(request.url);
   const inside = (candidate: unknown) => businessFile(env, business.id, candidate);
   const failure = (error: unknown) => {
@@ -146,8 +146,9 @@ export async function filesRoute(request: Request, env: Env, access: Access) {
     const file = inside(url.searchParams.get("path"));
     if (!file) return new Response("Stay inside the business folder", { status: 400 });
     const expected = url.searchParams.get("expectedRevision");
-    const bytes = await request.arrayBuffer();
-    if (bytes.byteLength > rawBytes) return new Response("The file is too large", { status: 413 });
+    // Counted while it arrives, so an oversized upload is refused without holding all of it.
+    const bytes = await readBounded(request.body, rawBytes).catch(() => undefined);
+    if (!bytes) return new Response("The file is too large", { status: 413 });
     // The runner reads the bytes from R2; this copy exists only for this save.
     const key = `${business.id}/file-saves/${crypto.randomUUID()}`;
     await env.FILES.put(key, bytes);

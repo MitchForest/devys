@@ -23,3 +23,13 @@ it("status returns the latest 100 messages with their matching replies", async (
     );
   }
 });
+
+it("channel receipts older than 30 days are forgotten, newer ones kept", async () => {
+  const scope = { businessId: crypto.randomUUID(), employeeId: crypto.randomUUID() };
+  const probe = (
+    env as { AGENT_STATUS: DurableObjectNamespace<AgentStatusProbe> }
+  ).AGENT_STATUS.getByName(scopeName(scope));
+  await probe.seed();
+  // 150 old messages with their recent index and replies go; the new message and its index stay.
+  expect(await probe.prune()).toBe(2);
+});

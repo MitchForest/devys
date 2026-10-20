@@ -99,10 +99,6 @@ export const revokeGrant = (db: Database, scope: Scope, grantId: string) =>
     ),
   );
 
-/**
- * The Head of Operations' starting grants: everything the business can do today,
- * running inside the grant. A role preset is a template; the owner edits the result.
- */
 /** JSON with object keys sorted at every depth, so equal inputs hash equally. */
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
@@ -114,9 +110,16 @@ function canonical(value: unknown): string {
   return JSON.stringify(value);
 }
 
-/** Binds a request to the capability, the grant (its revision) and the exact input. */
-export const requestHash = (grantId: string, capability: string, input: unknown) =>
-  sha256(canonical({ capability, grantId, input }));
+/**
+ * Binds a request to the capability, the grant (its revision), the exact input and the work
+ * it is for: approving it for one work item does not approve it for another.
+ */
+export const requestHash = (
+  grantId: string,
+  capability: string,
+  input: unknown,
+  commitmentId: string | null,
+) => sha256(canonical({ capability, commitmentId, grantId, input }));
 
 const decisionLife = "24 hours";
 const decisionColumns =
@@ -140,13 +143,30 @@ export const settleAsk = (
   database(
     db,
     async (sql): Promise<Outcome> => {
-      const hash = await requestHash(ask.grantId, ask.capability, ask.input);
+      const hash = await requestHash(
+        ask.grantId,
+        ask.capability,
+        ask.input,
+        ask.commitmentId ?? null,
+      );
       const used = await sql.run(
         `UPDATE decisions SET status = 'used', used_at = now()
          WHERE grant_id = $1 AND input_hash = $2 AND status = 'approved' AND expires_at > now()`,
         [ask.grantId, hash],
       );
       if (used === 1) return { outcome: "allow", grantId: ask.grantId };
+      // The owner said no to exactly this: it is not asked again while that answer stands.
+      const refused = await sql.row<{ id: string }>(
+        `SELECT id FROM decisions WHERE grant_id = $1 AND input_hash = $2 AND status = 'rejected'
+           AND decided_by IS NOT NULL AND decided_at > now() - interval '${decisionLife}'`,
+        [ask.grantId, hash],
+      );
+      if (refused)
+        return {
+          outcome: "deny",
+          reason:
+            "The owner rejected exactly this request. Do not retry it another way; change the proposal or ask the owner in the conversation.",
+        };
       // An expired open request is rejected, so a fresh one can be made.
       await sql.run(
         `UPDATE decisions SET status = 'rejected', decided_at = now()
@@ -179,6 +199,15 @@ export const settleAsk = (
       return { outcome: "ask", grantId: ask.grantId, ...(open ? { decisionId: open.id } : {}) };
     },
     { transaction: true },
+  );
+
+/** Pending requests past their expiry become rejected (no one decided them). Run every minute. */
+export const expireDecisions = (db: Database) =>
+  database(db, (sql) =>
+    sql.run(
+      `UPDATE decisions SET status = 'rejected', decided_at = now()
+       WHERE status = 'pending' AND expires_at <= now()`,
+    ),
   );
 
 /** Requests waiting on the owner, newest first. Expired ones are not shown. */

@@ -27,6 +27,9 @@ function sql(client: pg.Client): Sql {
   };
 }
 
+/** Databases bound to an open transaction by `atomically`: their calls join it. */
+const joined = new WeakMap<Database, Sql>();
+
 /**
  * One connection per call: Hyperdrive pools connections, so Workers open and close
  * a client per operation. `transaction` commits everything `use` does, or nothing.
@@ -34,10 +37,11 @@ function sql(client: pg.Client): Sql {
 async function connected<A>(db: Database, use: (client: pg.Client) => Promise<A>) {
   const client = new pg.Client({ connectionString: db.connectionString });
   let ending = false;
-  // Failed queries reject on their own. On Workers the socket's read loop also
-  // rejects once `end()` closes it; that teardown error is expected.
+  // Failed queries reject on their own. On Workers the socket's read loop also rejects once
+  // `end()` closes it; that teardown error is expected. Anything else is logged, never thrown
+  // from the emitter, where it would escape the caller.
   client.on("error", (error) => {
-    if (!ending) throw error;
+    if (!ending) console.error("Postgres connection error:", error);
   });
   await client.connect();
   try {
@@ -49,10 +53,14 @@ async function connected<A>(db: Database, use: (client: pg.Client) => Promise<A>
 }
 
 export async function query<A>(db: Database, use: (sql: Sql) => Promise<A>) {
+  const open = joined.get(db);
+  if (open) return use(open);
   return connected(db, (client) => use(sql(client)));
 }
 
 export async function transaction<A>(db: Database, use: (sql: Sql) => Promise<A>) {
+  const open = joined.get(db);
+  if (open) return use(open);
   return connected(db, async (client) => {
     await client.query("BEGIN");
     try {
@@ -66,7 +74,19 @@ export async function transaction<A>(db: Database, use: (sql: Sql) => Promise<A>
   });
 }
 
-/** Keep database failures in the Effect capability error channel. */
+/**
+ * Runs several components' writes as one transaction: `use` receives a database whose
+ * calls all join it. Each component still writes only its own tables through its own module.
+ */
+export async function atomically<A>(db: Database, use: (db: Database) => Promise<A>) {
+  return transaction(db, (open) => {
+    const within: Database = { connectionString: db.connectionString };
+    joined.set(within, open);
+    return use(within);
+  });
+}
+
+/** Keep database failures in the Effect capability error channel; the cause is logged. */
 export function database<A>(
   db: Database,
   use: (sql: Sql) => Promise<A>,
@@ -74,6 +94,9 @@ export function database<A>(
 ): Effect.Effect<A, CapabilityError> {
   return Effect.tryPromise({
     try: () => (options.transaction ? transaction(db, use) : query(db, use)),
-    catch: () => new CapabilityError({ code: "unavailable", message: "Database operation failed" }),
+    catch: (cause) => {
+      console.error("Database operation failed:", cause);
+      return new CapabilityError({ code: "unavailable", message: "Database operation failed" });
+    },
   });
 }

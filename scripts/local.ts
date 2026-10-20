@@ -324,6 +324,34 @@ function supervise(
   };
 }
 
+/**
+ * The Mac host's environment: the launcher's own, without anything `.env` supplied (the model
+ * key and other Worker secrets), except the two login folders the host needs. Employees' shells,
+ * coding delegates and terminals inherit what the host has, and secrets must not reach them.
+ */
+export function hostEnvironment(
+  env: NodeJS.ProcessEnv,
+  dotenv: string,
+  settings: Record<string, string>,
+) {
+  const fromFile = new Set(
+    [...dotenv.matchAll(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/gm)].map((m) => m[1]),
+  );
+  const kept = ["DEVYS_CODEX_HOME", "DEVYS_CLAUDE_CONFIG_DIR"];
+  return {
+    ...Object.fromEntries(
+      Object.entries(env).filter(([name]) => !fromFile.has(name) || kept.includes(name)),
+    ),
+    ...settings,
+  };
+}
+
+/** Puts `name=value` in a `.dev.vars` file's text, replacing an earlier value. */
+export function withVar(text: string, name: string, value: string) {
+  const lines = text.split("\n").filter((line) => line && !line.startsWith(`${name}=`));
+  return [...lines, `${name}=${value}`, ""].join("\n");
+}
+
 /** The Mac host's token, created once and kept in the data directory. */
 function hostToken() {
   const file = join(home, "host-token");
@@ -343,18 +371,27 @@ async function run() {
     throw new Error("No installed app; run `bun scripts/local.ts install` first.");
   must(process.execPath, ["scripts/db.ts", "migrate"], postgresEnv);
   const token = hostToken();
+  // The Worker reads the token from its vars file rather than its command line, which any
+  // process on the Mac can list.
+  const vars = join(paths.app, "server/.dev.vars");
+  writeFileSync(
+    vars,
+    withVar(existsSync(vars) ? readFileSync(vars, "utf8") : "", "DEVYS_HOST_TOKEN", token),
+    { mode: 0o600 },
+  );
   let url = publicUrl();
+  const dotenv = join(checkout, ".env");
   const host = supervise("Mac host", () => ({
     command: process.execPath,
-    args: [join(paths.app, "host.js")],
-    env: {
-      ...process.env,
+    // Bun would otherwise load the checkout's .env into the host again.
+    args: ["--no-env-file", join(paths.app, "host.js")],
+    env: hostEnvironment(process.env, existsSync(dotenv) ? readFileSync(dotenv, "utf8") : "", {
       DEVYS_HOST_TOKEN: token,
       DEVYS_HOST_PORT: String(hostPort),
       DEVYS_HOST_DATA: paths.host,
       // Delegate events come back to the Worker on loopback.
       DEVYS_WORKER_URL: `http://127.0.0.1:${appPort}`,
-    },
+    }),
   }));
   const worker = supervise("Worker", () => ({
     command: join(checkout, "node_modules/.bin/wrangler"),
@@ -365,7 +402,6 @@ async function run() {
       "--ip=127.0.0.1",
       `--port=${appPort}`,
       `--var=PUBLIC_URL:${url}`,
-      `--var=DEVYS_HOST_TOKEN:${token}`,
       `--var=DEVYS_HOST_HOME:${homedir()}`,
       "--show-interactive-dev-session=false",
     ],

@@ -37,6 +37,8 @@ export interface TerminalsHostOptions {
   shell: string;
   /** How a coding agent's CLI is started on its session, with the owner's own login. */
   resume: (command: ResumeCommand) => { argv: string[]; env: Record<string, string | undefined> };
+  /** How long an exited session stays listed with its output, so a device can still see how it ended. */
+  exitedKeptMs?: number;
 }
 
 /** Output frames: a type byte, a 4-byte length, then the payload (bytes, or JSON). */
@@ -119,6 +121,12 @@ export function terminalsHost(
       session.exit = { code };
       broadcast(live, event({ type: "exit", code }));
       for (const listener of live.listeners) listener(new Uint8Array(0));
+      setTimeout(
+        () => {
+          if (sessions.get(id) === live) sessions.delete(id);
+        },
+        options.exitedKeptMs ?? 10 * 60_000,
+      ).unref?.();
     });
     sessions.set(id, live);
     return session;

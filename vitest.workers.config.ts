@@ -32,8 +32,9 @@ export default defineConfig({
   test: {
     include: ["tests/**/*.workers.test.ts"],
     globalSetup: ["tests/setup/database.ts"],
-
-    testTimeout: 30_000,
+    // A Durable Object's first Pi or Code Mode start is cold (about 7 s alone); with every file
+    // running in parallel on a busy machine that has exceeded 30 s, failing correct tests.
+    testTimeout: 90_000,
     // ctx.abort deliberately breaks the output gate in the crash-recovery test.
     // All other unhandled errors remain failures.
     onUnhandledError(error) {

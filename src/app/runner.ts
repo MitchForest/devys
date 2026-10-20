@@ -12,7 +12,7 @@ type LocalVariables = Partial<
  * The deployment mode decides the runner (.docs/COMPONENTS.md#deployment-modes): the
  * trusted Mac host in local mode, the Cloudflare Sandbox in cloud mode. No fallback.
  */
-export function runnerFor(env: Env): Runner {
+export function runnerFor(env: Env, within?: string): Runner {
   const mode = env.DEVYS_MODE;
   switch (mode) {
     case "local": {
@@ -21,7 +21,7 @@ export function runnerFor(env: Env): Runner {
         // Checked per call so a missing host breaks only file and command tools.
         if (!url || !token)
           throw new Error("The Mac host is not configured; run `bun run local install`.");
-        return hostRunner({ url, token, files: env.FILES }, scope);
+        return hostRunner({ url, token, files: env.FILES, within }, scope);
       };
     }
     case "cloud":
@@ -30,6 +30,12 @@ export function runnerFor(env: Env): Runner {
       throw new Error(`Unknown DEVYS_MODE: ${String(mode)}`);
   }
 }
+
+/** Whether commands run on the owner's Mac: local mode with its host configured. */
+export const onTheMac = (env: Env) => {
+  const { DEVYS_HOST_URL: url, DEVYS_HOST_TOKEN: token } = env as Env & LocalVariables;
+  return env.DEVYS_MODE === "local" && Boolean(url && token);
+};
 
 /** Where an employee's files and commands live, stated in its instructions. */
 export function workplaceFor(env: Env): string {

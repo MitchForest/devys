@@ -14,7 +14,7 @@ import { activeEmployee } from "../identity/service.ts";
 import { artifactLocation } from "../artifacts/service.ts";
 import { Effect } from "effect";
 import { delegateCapabilities } from "../delegates/capabilities.ts";
-import { delegateDependencies } from "./delegates.ts";
+import { codingIncomplete, delegateDependencies } from "./delegates.ts";
 import type { Capability } from "../protocol/capability.ts";
 /** Composition only: implementations and SQL belong to their domains. */
 export function capabilities(
@@ -38,6 +38,7 @@ export function capabilities(
         ),
       async (businessId, artifactId) =>
         Boolean(await Effect.runPromise(artifactLocation(env.HYPERDRIVE, businessId, artifactId))),
+      (businessId, work) => codingIncomplete(env, businessId, work),
     ),
   ];
   return [...catalog, ...teamCapabilities(env, () => capabilities(env, memory))];

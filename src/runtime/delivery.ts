@@ -9,6 +9,8 @@ export interface ChannelMessage {
   control?: "stop" | "status";
   targets?: string[];
   preparationAttempts?: number;
+  /** Pi has the turn; later polls only wait for it. */
+  submitted?: boolean;
 }
 export interface Outbox {
   id: string;

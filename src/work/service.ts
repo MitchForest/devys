@@ -114,7 +114,8 @@ export const updateCommitment = (
 
 /**
  * Records a fact about the work, such as an accepted commit or the check run against it.
- * Evidence is appended even while a person holds the work: it says what happened.
+ * Evidence is appended even while a person holds the work: it says what happened. An entry
+ * with a `source` already recorded changes nothing, so redelivered events add nothing.
  */
 export const addEvidence = (
   db: Database,
@@ -127,8 +128,9 @@ export const addEvidence = (
       `UPDATE commitments SET
          evidence = evidence || jsonb_build_array($3::jsonb || jsonb_build_object('at', now())),
          revision = revision + 1, updated_at = now()
-       WHERE business_id = $1 AND id = $2`,
-      [businessId, id, JSON.stringify(entry)],
+       WHERE business_id = $1 AND id = $2
+         AND ($4::text IS NULL OR NOT evidence @> jsonb_build_array(jsonb_build_object('source', $4::text)))`,
+      [businessId, id, JSON.stringify(entry), entry.source ?? null],
     ),
   );
 
@@ -148,6 +150,16 @@ export const reassignOpen = (db: Database, businessId: string, from: string, to:
     ),
   );
 
+/** Work in progress goes back to ready, so the dispatcher hands it to its employee again. */
+export const requeue = (db: Database, businessId: string, id: string) =>
+  database(db, (sql) =>
+    sql.run(
+      `UPDATE commitments SET state = 'ready', revision = revision + 1, updated_at = now()
+       WHERE business_id = $1 AND id = $2 AND state = 'in_progress'`,
+      [businessId, id],
+    ),
+  );
+
 /** A person takes the work from its employee, or hands it back. */
 export const setTakeover = (db: Database, businessId: string, id: string, person: string | null) =>
   database(db, (sql) =>
@@ -159,14 +171,15 @@ export const setTakeover = (db: Database, businessId: string, id: string, person
   );
 
 /** Ready work whose current revision hasn't been handed to its employee yet. */
-export const dueCommitments = (db: Database, limit = 20) =>
+/** Ready, due work, skipping owners who take no work now so they cannot hold up the rest. */
+export const dueCommitments = (db: Database, skipOwners: readonly string[], limit = 20) =>
   database(db, (sql) =>
     sql.rows<Commitment & { business_id: string }>(
       `SELECT business_id, ${columns} FROM commitments
        WHERE state = 'ready' AND (due_at IS NULL OR due_at <= now()) AND taken_over_by IS NULL
-         AND submitted_revision IS DISTINCT FROM revision
+         AND submitted_revision IS DISTINCT FROM revision AND owner_employee_id <> ALL($2::text[])
        ORDER BY coalesce(due_at, created_at) LIMIT $1`,
-      [limit],
+      [limit, skipOwners],
     ),
   );
 

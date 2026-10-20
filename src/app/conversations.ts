@@ -12,13 +12,7 @@ import {
   type ConversationKey,
   type Message,
 } from "../conversations/contract.ts";
-import {
-  markSeen,
-  messages,
-  messagesSince,
-  postMessage,
-  seenAt,
-} from "../conversations/service.ts";
+import { markSeen, messages, postMessage, unseenBy, messageIn } from "../conversations/service.ts";
 import { scopeName, type Employee, type Scope } from "../identity/contract.ts";
 import { activePerson, employeesOf } from "../identity/service.ts";
 import { capability, CapabilityError, Invocation } from "../protocol/capability.ts";
@@ -109,16 +103,13 @@ async function deliver(
     const employee = employees.find((candidate) => candidate.id === target);
     if (!employee || employee.paused) continue;
     const scope = { businessId, employeeId: target };
-    const seen = await Effect.runPromise(
-      seenAt(env.HYPERDRIVE, businessId, key, `employee:${target}`),
-    );
     const earlier = (
-      await Effect.runPromise(messagesSince(env.HYPERDRIVE, businessId, key, seen, catchUp + 1))
+      await Effect.runPromise(
+        unseenBy(env.HYPERDRIVE, businessId, key, `employee:${target}`, catchUp + 1),
+      )
     ).filter((item) => item.id !== message.id && employeeOf(item.author) !== target);
     const replied = message.reply_to
-      ? (await Effect.runPromise(messages(env.HYPERDRIVE, businessId, key, { limit: 200 }))).find(
-          (item) => item.id === message.reply_to,
-        )
+      ? await Effect.runPromise(messageIn(env.HYPERDRIVE, businessId, key, message.reply_to))
       : undefined;
     const about = [
       place,
@@ -155,7 +146,7 @@ async function deliver(
       text,
     });
     await Effect.runPromise(
-      markSeen(env.HYPERDRIVE, businessId, key, `employee:${target}`, message.created_at),
+      markSeen(env.HYPERDRIVE, businessId, key, `employee:${target}`, { message: message.id }),
     );
   }
 }
@@ -167,16 +158,19 @@ async function post(
   key: ConversationKey,
   input: Parameters<typeof postMessage>[3],
 ) {
-  const history = await Effect.runPromise(messages(env.HYPERDRIVE, businessId, key, { limit: 50 }));
-  const { message, created } = await Effect.runPromise(
-    postMessage(env.HYPERDRIVE, businessId, key, input),
+  const { message } = await Effect.runPromise(postMessage(env.HYPERDRIVE, businessId, key, input));
+  // The history before this message, so a repeated post answers to the same people.
+  const history = await Effect.runPromise(
+    messages(env.HYPERDRIVE, businessId, key, { before: message.id, limit: 50 }),
   );
   const to = responders({
     message,
     history,
     defaultResponder: await defaultResponder(env, businessId, key),
   });
-  if (created) await deliver(env, businessId, key, message, to);
+  // Delivered on a repeat too: a retry after a failed delivery must still wake whoever answers,
+  // and the runtime admits each message id once.
+  await deliver(env, businessId, key, message, to);
   return { message, to };
 }
 
@@ -211,7 +205,9 @@ export async function postFromPerson(
     viaVoice: input.viaVoice === true,
   });
   await Effect.runPromise(
-    markSeen(env.HYPERDRIVE, businessId, key, `person:${personId}`, posted.message.created_at),
+    markSeen(env.HYPERDRIVE, businessId, key, `person:${personId}`, {
+      message: posted.message.id,
+    }),
   );
   return posted;
 }
@@ -279,7 +275,7 @@ export async function recordChannelMessage(
   );
   for (const participant of [`person:${binding.personId}`, `employee:${binding.employeeId}`])
     await Effect.runPromise(
-      markSeen(env.HYPERDRIVE, binding.businessId, key, participant, message.created_at),
+      markSeen(env.HYPERDRIVE, binding.businessId, key, participant, { message: message.id }),
     );
 }
 

@@ -30,12 +30,21 @@ function fakeProvider() {
   const calls: { kind: string; sessionId?: string; text?: string; readOnly?: boolean }[] = [];
   let sessions = 0;
   const turns = new Map<string, string>();
+  // Ends each turn before start or send returns, like a harness failing at once.
+  const fast = { endAtOnce: undefined as "failed" | undefined };
+  const endNow = (sessionId: string, turnId: string) => {
+    if (!fast.endAtOnce) return false;
+    turns.delete(sessionId);
+    events.turnEnded({ sessionId, turnId, status: fast.endAtOnce, reply: null, error: "No login" });
+    return true;
+  };
   const adapter: ProviderAdapter = {
     async start({ cwd, prompt, readOnly }) {
       const sessionId = `session-${++sessions}`;
       calls.push({ kind: "start", sessionId, text: prompt, readOnly });
       if (!readOnly) writeFileSync(join(cwd, "feature.txt"), `${prompt}\n`);
       turns.set(sessionId, `${sessionId}-turn-1`);
+      endNow(sessionId, `${sessionId}-turn-1`);
       return { sessionId, turnId: `${sessionId}-turn-1` };
     },
     async send({ sessionId, text }) {
@@ -43,6 +52,7 @@ function fakeProvider() {
       const turnId = steered ? turns.get(sessionId)! : `${sessionId}-turn-${calls.length + 1}`;
       turns.set(sessionId, turnId);
       calls.push({ kind: steered ? "steer" : "turn", sessionId, text });
+      endNow(sessionId, turnId);
       return { turnId, steered };
     },
     async interrupt(sessionId) {
@@ -59,6 +69,9 @@ function fakeProvider() {
   };
   return {
     calls,
+    set endAtOnce(value: "failed" | undefined) {
+      fast.endAtOnce = value;
+    },
     factory: (given: ProviderEvents) => {
       events = given;
       return { codex: adapter };
@@ -81,6 +94,8 @@ async function host() {
   git(repository, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "init");
   const delivered: DelegateEvent[] = [];
   let refuse = false;
+  // Event kinds the stand-in Worker fails to deliver, as with an event it cannot process.
+  const poison = new Set<string>();
   const provider = fakeProvider();
   const data = join(root, "data");
   // Stands in for the owner's `gh`: one repository, pull requests kept in a file.
@@ -131,7 +146,9 @@ esac
           retryMs: 20,
           deliver: async (events) => {
             if (refuse) throw new Error("Worker down");
-            delivered.push(...events);
+            const accepted = events.filter((event) => !poison.has(event.kind));
+            delivered.push(...accepted);
+            return accepted.map((event) => event.id);
           },
         }),
       ],
@@ -152,6 +169,7 @@ esac
     refuse: (value: boolean) => {
       refuse = value;
     },
+    poison,
     restart: async () => {
       await server.close();
       server = await open();
@@ -229,6 +247,37 @@ it("a finished turn is delivered with what changed; steering only while it works
   expect(await state.client().send("a-2", "Rename it")).toEqual({ steered: false });
 });
 
+it("a turn that ends before its start or follow-up returns is not lost", async () => {
+  const state = await host();
+  state.provider.endAtOnce = "failed";
+  await state.client().start(request("a-fast", { path: state.repository }));
+  await until(
+    () => state.delivered,
+    (events) => events.some((event) => event.kind === "failed"),
+  );
+  expect(await state.client().inspect("a-fast")).toMatchObject({ state: "failed" });
+  await state.client().send("a-fast", "Try again");
+  expect(await state.client().inspect("a-fast")).toMatchObject({ state: "failed" });
+  expect(state.delivered.filter((event) => event.kind === "failed")).toHaveLength(2);
+});
+
+it("an event the Worker cannot deliver is retried without holding up later events", async () => {
+  const state = await host();
+  state.poison.add("started");
+  const started = await state.client().start(request("a-poison", { path: state.repository }));
+  state.provider.finish(started.sessionId, "Done.");
+  await until(
+    () => state.delivered,
+    (events) => events.some((event) => event.kind === "finished"),
+  );
+  expect(state.delivered.some((event) => event.kind === "started")).toBe(false);
+  state.poison.clear();
+  await until(
+    () => state.delivered,
+    (events) => events.some((event) => event.kind === "started"),
+  );
+});
+
 it("accepting commits on the branch and reports the check against that commit", async () => {
   const state = await host();
   const started = await state.client().start(request("a-3", { path: state.repository }));
@@ -284,14 +333,25 @@ it("an assignment clones the business's GitHub repository and publishes accepted
       (events) => events.some((event) => event.kind === "finished"),
     );
     await expect(publish()).rejects.toThrow(/Nothing is accepted yet/);
-    await expect(
-      state.client().publish("a-p", { repository: "acme/other", title: "x", body: "x" }),
-    ).rejects.toThrow(/origin is https:\/\/github.com\/acme\/site.git/);
-    const accepted = await state.client().accept("a-p", { message: "Add it", check: "true" });
+    // A failed check is never published.
+    await state.client().accept("a-p", { message: "Try it", check: "false" });
     await until(
       () => state.delivered,
       (events) => events.some((event) => event.kind === "checked"),
     );
+    await expect(publish()).rejects.toThrow(/check failed/);
+    const accepted = await state.client().accept("a-p", { message: "Add it", check: "true" });
+    await until(
+      () => state.delivered.filter((event) => event.kind === "checked"),
+      (events) => events.length === 2,
+    );
+    await expect(
+      state.client().publish("a-p", { repository: "acme/other", title: "x", body: "x" }),
+    ).rejects.toThrow(/origin is https:\/\/github.com\/acme\/site.git/);
+    // A commit made after accepting was never checked, so the accepted one is pushed.
+    writeFileSync(join(started.worktree, "later.txt"), "unchecked\n");
+    git(started.worktree, "add", ".");
+    git(started.worktree, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "later");
     const published = await publish();
     expect(published).toEqual({
       repository: "acme/site",

@@ -17,7 +17,7 @@ import {
 import { scopeName, type Business, type Person, type Scope } from "../identity/contract.ts";
 import { activeEmployee } from "../identity/service.ts";
 import { sha256 } from "../protocol/bytes.ts";
-import { commitment, createCommitment, setTakeover } from "../work/service.ts";
+import { commitment, createCommitment, requeue, setTakeover } from "../work/service.ts";
 import { delegatesFor } from "./delegates.ts";
 import { postEvent } from "./conversations.ts";
 
@@ -199,7 +199,9 @@ export async function handBack(
   const items = (
     await Effect.runPromise(assignmentsFor(env.HYPERDRIVE, businessId, workId))
   ).filter((item) => item.session_id);
-  if (!items.length) return;
+  // Without coding sessions there is nothing to brief: the dispatcher hands the work over again.
+  if (!items.length)
+    return void (await Effect.runPromise(requeue(env.HYPERDRIVE, businessId, workId)));
   const scope = { businessId, employeeId: work.owner_employee_id };
   const sessions = await Promise.all(items.map((item) => sessionOf(delegates, businessId, item)));
   const text = [

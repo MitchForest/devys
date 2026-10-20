@@ -12,6 +12,8 @@ export interface HostConnection {
   url: string;
   token: string;
   files: Pick<R2Bucket, "get" | "put" | "head">;
+  /** A folder file access must stay inside, symbolic links followed (the owner's file views). */
+  within?: string;
 }
 
 const inputBytes = 20_000_000;
@@ -41,11 +43,11 @@ export function hostRunner(host: HostConnection, scope: Scope): WorkspacePort {
       await call(path, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ scope, ...input }),
+        body: JSON.stringify({ scope, within: host.within, ...input }),
       })
     ).json()) as T;
   const file = (path: string, maximum?: number) =>
-    `/file?path=${encodeURIComponent(path)}${maximum ? `&max=${maximum}` : ""}`;
+    `/file?path=${encodeURIComponent(path)}${maximum ? `&max=${maximum}` : ""}${host.within ? `&within=${encodeURIComponent(host.within)}` : ""}`;
 
   return {
     listSkills: () => post<SkillCatalog>("/skills"),

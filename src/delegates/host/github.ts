@@ -43,9 +43,9 @@ export async function cloneRepository(business: string, name: string) {
   return path;
 }
 
-/** Pushes the worktree's head to its branch and opens (or finds) the pull request for it. */
+/** Pushes the accepted commit to its branch and opens (or finds) the pull request for it. */
 export async function publishBranch(
-  place: { worktree: string; branch: string; baseCommit: string },
+  place: { worktree: string; branch: string; commit: string },
   request: PublishRequest,
   gh = "gh",
 ): Promise<Published> {
@@ -54,9 +54,7 @@ export async function publishBranch(
     throw new Error(
       `This repository's origin is ${configured || "not set"}, not github.com/${request.repository}`,
     );
-  const commit = await git(place.worktree, "rev-parse", "HEAD");
-  if (commit === place.baseCommit)
-    throw new Error("Nothing is accepted yet: accept the work first");
+  const commit = place.commit;
   const run = async (...args: string[]) =>
     (await exec(gh, args, { cwd: place.worktree, maxBuffer: 4_000_000 })).stdout.trim();
   const repository = JSON.parse(
