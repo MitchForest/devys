@@ -1,15 +1,16 @@
 import { useWorkspace, valueOf } from "../app/workspace.tsx";
-import { templateTitle } from "../app/names.ts";
+import { inboxEmpty, templateTitle } from "../app/names.ts";
 import { EmployeePortrait } from "../design/portrait.tsx";
 import { dollars, spend } from "../design/model-picker.tsx";
 import { EmptyNote, LiveTag, PageBody, PageHeader, SectionHeader } from "../design/primitives.tsx";
+import { SegmentedTabs } from "../design/tabs.tsx";
 import { DriveConnection } from "./drive.tsx";
 
 export function InboxPage() {
   return (
     <PageBody>
       <PageHeader title="Inbox" />
-      <EmptyNote>Mail arrives with E1.</EmptyNote>
+      <EmptyNote>{inboxEmpty}</EmptyNote>
     </PageBody>
   );
 }
@@ -19,12 +20,12 @@ export function MoneyPage() {
   const { employees, statusOf, modelOf } = useWorkspace();
   const rows = employees.map((employee) => {
     const usage = valueOf(statusOf(employee.id))?.usage;
-    return { employee, total: usage ? spend(usage.models).total : 0 };
+    return { employee, total: usage ? spend(usage.models).total : undefined };
   });
-  const total = rows.reduce((sum, row) => sum + row.total, 0);
+  const total = rows.reduce((sum, row) => sum + (row.total ?? 0), 0);
   return (
     <PageBody>
-      <PageHeader title="Money" subtitle={`${dollars(total)} spent on models`} />
+      <PageHeader title="Money" subtitle={`Model spend so far: ${dollars(total)}`} />
       <div className="flex flex-col gap-2">
         <SectionHeader title="Spend by employee" count={rows.length}>
           <LiveTag />
@@ -49,23 +50,38 @@ export function MoneyPage() {
                   .join(" · ")}
               </span>
             </div>
-            <span className="ml-auto text-body tabular-nums text-ink">{dollars(spent)}</span>
+            <span className="ml-auto text-body tabular-nums text-ink">
+              {spent === undefined ? "Nothing yet" : dollars(spent)}
+            </span>
           </div>
         ))}
       </div>
       <div className="flex flex-col gap-2">
         <SectionHeader title="Budgets" />
-        <EmptyNote>Budgets arrive with P1.</EmptyNote>
+        <EmptyNote>
+          Budgets and spending limits aren't available yet, so nothing can be purchased.
+        </EmptyNote>
       </div>
     </PageBody>
   );
 }
 
+/** Installed apps and account connections, switched in the page so a phone reaches both. */
 export function AppsPage({ section }: { section: "installed" | "connections" }) {
-  const { businessId } = useWorkspace();
+  const { businessId, actions } = useWorkspace();
   return (
     <PageBody>
-      <PageHeader title={section === "installed" ? "Installed" : "Connections"} />
+      <PageHeader title={section === "installed" ? "Installed" : "Connections"}>
+        <SegmentedTabs
+          label="Apps and connections"
+          value={section}
+          options={[
+            { value: "installed", title: "Installed" },
+            { value: "connections", title: "Connections" },
+          ]}
+          onChange={(next) => actions.selectPage({ kind: "apps", section: next })}
+        />
+      </PageHeader>
       {section === "installed" ? (
         <EmptyNote>Installed apps arrive with T1.</EmptyNote>
       ) : (

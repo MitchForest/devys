@@ -44,12 +44,39 @@ test("the web workspace adds work and approves an exact request through the same
         ?.status,
     ).toBe("approved");
     await page.getByRole("button", { name: "Work", exact: true }).click();
-    await page.getByLabel("New commitment").fill("Draft the PR inquiry");
-    await page.getByRole("button", { name: "Add" }).click();
+    await expect(page.getByLabel("New commitment")).toHaveCount(0);
+    await page.getByRole("main").getByRole("button", { name: "New task" }).click();
+    const dialog = page.getByRole("dialog", { name: "New task" });
+    await dialog.getByLabel("Title").fill("Draft the PR inquiry");
+    await dialog.getByRole("button", { name: "Create task" }).click();
     await expect(page.getByText("Draft the PR inquiry")).toBeVisible();
     await page.getByText("Draft the PR inquiry").click({ button: "right" });
     await expect(page.getByRole("menuitem", { name: "Take over" })).toBeVisible();
     await page.keyboard.press("Escape");
+    // The owner edits what's next and what it waits on at the revision on screen.
+    await page.getByText("Draft the PR inquiry").click();
+    const panel = page.getByRole("region", { name: "Work item" });
+    await panel.getByRole("button", { name: /^Edit/ }).click();
+    await panel.getByLabel("Next").fill("Email three editors");
+    await panel.getByLabel("Waiting on").fill("The press kit");
+    await panel.getByRole("button", { name: "Save" }).click();
+    await expect(panel.getByText("Email three editors")).toBeVisible();
+    expect(
+      await sql.row<{ next_action: string; wait_condition: string | null }>(
+        "SELECT next_action, wait_condition FROM commitments WHERE business_id = $1",
+        [owner.business],
+      ),
+    ).toEqual({ next_action: "Email three editors", wait_condition: "The press kit" });
+    // On a phone, the business menu reaches what the rail and sidebar hold on a desktop.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByLabel("Close work item").click();
+    await page.getByRole("button", { name: "Home", exact: true }).click();
+    await page.getByRole("button", { name: /^Switch business/ }).click();
+    for (const name of ["New task", "Hire", "Files", "Approvals", "Money", "Settings"])
+      await expect(page.getByRole("menuitem", { name, exact: true })).toBeVisible();
+    await page.getByRole("menuitem", { name: "Apps and connections" }).click();
+    await page.getByRole("tab", { name: "Connections" }).click();
+    await expect(page.getByRole("region", { name: "Google Drive" })).toBeVisible();
     expect(
       (
         await sql.row<{ owner_employee_id: string }>(

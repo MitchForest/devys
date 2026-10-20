@@ -4,6 +4,7 @@ import {
   CircleUserRound,
   Check,
   Copy,
+  Download,
   Image,
   Laptop,
   Play,
@@ -477,6 +478,20 @@ function BusinessDetails({ business }: { business: Business }) {
         set={(look) => void actions.setBusinessLook(business.id, look)}
         photo={(file) => void actions.uploadLookPhoto({ businessId: business.id }, file)}
       />
+      <div className="flex flex-col items-start gap-1.5">
+        <span className="text-label font-medium text-ink-3">Your data</span>
+        <a
+          href={api.exportUrl(business.id)}
+          download
+          className="inline-flex items-center gap-1.5 rounded-full bg-sheet px-3.5 py-2 text-control font-medium text-ink shadow-resting transition duration-150 hover:-translate-y-px [&_svg]:size-[14px]"
+        >
+          <Download /> Export business data
+        </a>
+        <span className="text-detail text-ink-3">
+          {business.name}'s conversations, memory and file index as one file. Credentials are left
+          out, and saved files download separately.
+        </span>
+      </div>
     </div>
   );
 }
@@ -973,7 +988,7 @@ function LookEditor({
                 set({ kind: "emoji", emoji: found, tint });
                 setCustom("");
               }}
-              className="w-24 rounded-control bg-well py-[5px] text-center text-[15px] text-ink outline-none placeholder:text-detail placeholder:text-ink-3"
+              className="w-24 rounded-control bg-well py-[5px] text-center text-[15px] text-ink outline-none placeholder:text-detail placeholder:text-ink-3 focus-visible:ring-2 focus-visible:ring-indigo/40"
             />
             <Smile className="size-4 text-ink-2" aria-hidden />
           </div>
@@ -1087,7 +1102,7 @@ function VoicePane() {
             aria-label="Reply voice"
             value={settings.voiceURI ?? ""}
             onChange={(event) => change({ voiceURI: event.target.value || null })}
-            className="h-[30px] max-w-[280px] min-w-0 flex-1 rounded-small bg-well px-2 text-control text-ink outline-none"
+            className="h-[30px] max-w-[280px] min-w-0 flex-1 rounded-small bg-well px-2 text-control text-ink outline-none focus-visible:ring-2 focus-visible:ring-indigo/40"
           >
             <option value="">Best available</option>
             {voices.map((voice) => (

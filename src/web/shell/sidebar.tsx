@@ -17,7 +17,7 @@ import {
 import { EmployeePortrait } from "../design/portrait.tsx";
 import { useState, type ReactNode } from "react";
 import type { Employee } from "../app/api.ts";
-import { moodOf, templateTitle, workFilters } from "../app/names.ts";
+import { inboxEmpty, moodOf, templateTitle, workFilters } from "../app/names.ts";
 import {
   filterOf,
   useWorkspace,
@@ -84,7 +84,7 @@ export function Sidebar() {
             <ConversationList />
           </>
         )}
-        {destination === "inbox" && <Quiet>Mail arrives with E1.</Quiet>}
+        {destination === "inbox" && <Quiet>{inboxEmpty}</Quiet>}
         {destination === "work" &&
           workFilters.map((filter) => (
             <Row

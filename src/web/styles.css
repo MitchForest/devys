@@ -203,6 +203,11 @@
   body {
     @apply h-full bg-frame font-sans text-body text-ink antialiased;
   }
+  /* Keyboard focus is always visible; components with their own ring replace this one. */
+  :focus-visible {
+    outline: 2px solid var(--indigo);
+    outline-offset: 2px;
+  }
 }
 
 @keyframes dash {

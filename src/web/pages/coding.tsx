@@ -143,7 +143,8 @@ export function NewCodingSession({ open, onClose }: { open: boolean; onClose: ()
       setError(cause instanceof Error ? cause.message : "The session couldn't start.");
     }
   };
-  const field = "rounded-[8px] bg-sheet-tint px-2.5 py-1.5 text-body text-ink outline-none";
+  const field =
+    "rounded-[8px] bg-sheet-tint px-2.5 py-1.5 text-body text-ink outline-none focus-visible:ring-2 focus-visible:ring-indigo/40";
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
       <DialogContent className="sm:max-w-lg">

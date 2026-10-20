@@ -165,3 +165,18 @@ export const formatBytes = (bytes: number) =>
     : bytes < 1024 * 1024
       ? `${(bytes / 1024).toFixed(0)} KB`
       : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+
+/**
+ * Who has taken a work item over, as the signed-in person reads it; undefined while its
+ * employee has it. The client knows only its own person's name, so anyone else is unnamed.
+ */
+export const takeoverTitle = (takenOverBy: string | null, me: string | undefined) =>
+  takenOverBy === null
+    ? undefined
+    : takenOverBy === me
+      ? "You have it"
+      : "Taken over by another person";
+
+/** Inbox until a mailbox is connected, said the same on every client. */
+export const inboxEmpty =
+  "No mailbox is connected yet. The business's mail appears here once one is.";

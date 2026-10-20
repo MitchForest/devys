@@ -13,7 +13,7 @@ import {
   Smile,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { Employee } from "../app/api.ts";
 import { employeeOf, type Conversation } from "../app/conversation.ts";
 import { capturing, modeOf } from "../app/voice.ts";
@@ -493,6 +493,29 @@ export function Composer({
     conversation.setDraft(draft.replace(/@([^\s@]*)$/, `@${employee.name} `));
     field.current?.focus();
   };
+  const matches =
+    typed === undefined
+      ? []
+      : employees.filter(
+          (e) =>
+            !conversation.mentions.includes(e.id) &&
+            e.name.toLowerCase().includes(typed.toLowerCase()),
+        );
+  // The highlighted match: arrows move it, Enter or Tab chooses it.
+  const [active, setActive] = useState(0);
+  const pickerId = useId();
+  const highlighted = matches[Math.min(active, matches.length - 1)];
+  useEffect(() => setActive(0), [typed]);
+  const pickWithKeys = (event: React.KeyboardEvent) => {
+    if (!highlighted) return false;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      const step = event.key === "ArrowDown" ? 1 : matches.length - 1;
+      setActive((index) => (Math.min(index, matches.length - 1) + step) % matches.length);
+    } else if (event.key === "Enter" || event.key === "Tab") choose(highlighted);
+    else return false;
+    event.preventDefault();
+    return true;
+  };
   const answerer =
     conversation.to.length === 1 ? employees.find((e) => e.id === conversation.to[0]) : undefined;
   return (
@@ -518,8 +541,8 @@ export function Composer({
           cancel={conversation.cancelReply}
         />
       )}
-      {typed !== undefined && (
-        <MentionPicker query={typed} exclude={conversation.mentions} choose={choose} />
+      {matches.length > 0 && (
+        <MentionPicker id={pickerId} matches={matches} active={highlighted?.id} choose={choose} />
       )}
       {conversation.messages.status === "loaded" && <ToChip conversation={conversation} />}
       {answerer?.paused && <PausedBanner employee={answerer} />}
@@ -538,7 +561,7 @@ export function Composer({
           <InputGroup
             className={cn(
               "h-auto items-end gap-1.5 rounded-[18px] border-[1.5px] bg-sheet-tint py-[5px] pr-[5px] pl-3.5 has-[[data-slot=input-group-control]:focus-visible]:ring-0",
-              listening ? "border-indigo/45" : "border-transparent",
+              listening ? "border-indigo/45" : "border-transparent focus-within:border-indigo/30",
             )}
           >
             <InputGroupTextarea
@@ -548,8 +571,11 @@ export function Composer({
               rows={1}
               value={draft}
               onChange={(event) => conversation.setDraft(event.target.value)}
+              aria-controls={matches.length > 0 ? pickerId : undefined}
+              aria-activedescendant={highlighted ? `${pickerId}-${highlighted.id}` : undefined}
               onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                if (event.nativeEvent.isComposing || pickWithKeys(event)) return;
+                if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
                   actions.sendDraft(conversation);
                 }
@@ -652,21 +678,19 @@ function ToChip({ conversation }: { conversation: Conversation }) {
 
 /** Employees matching what follows "@"; choosing one inserts "@Name " and mentions them. */
 function MentionPicker({
-  query,
-  exclude,
+  id,
+  matches,
+  active,
   choose,
 }: {
-  query: string;
-  exclude: string[];
+  id: string;
+  matches: Employee[];
+  active: string | undefined;
   choose: (employee: Employee) => void;
 }) {
-  const { employees } = useWorkspace();
-  const matches = employees.filter(
-    (e) => !exclude.includes(e.id) && e.name.toLowerCase().includes(query.toLowerCase()),
-  );
-  if (matches.length === 0) return null;
   return (
     <div
+      id={id}
       role="listbox"
       aria-label="Mention"
       className="flex animate-in flex-col gap-0.5 rounded-[12px] border border-hairline bg-sheet p-1 shadow-raised fade-in slide-in-from-bottom-1"
@@ -674,12 +698,17 @@ function MentionPicker({
       {matches.map((employee) => (
         <button
           key={employee.id}
+          id={`${id}-${employee.id}`}
           type="button"
           role="option"
-          aria-selected={false}
+          tabIndex={-1}
+          aria-selected={employee.id === active}
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => choose(employee)}
-          className="flex items-center gap-2 rounded-[8px] px-2 py-1.5 text-left text-control text-ink hover:bg-sheet-tint"
+          className={cn(
+            "flex items-center gap-2 rounded-[8px] px-2 py-1.5 text-left text-control text-ink hover:bg-sheet-tint",
+            employee.id === active && "bg-sheet-tint",
+          )}
         >
           <EmployeePortrait employee={employee} size={20} />
           {employee.name}

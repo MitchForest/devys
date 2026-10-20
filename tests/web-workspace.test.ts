@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { timeline } from "../src/web/app/timeline.ts";
 import { mentionsIn } from "../src/web/app/conversation.ts";
 import { layout } from "../src/web/shell/layout.ts";
+import { takeoverTitle } from "../src/web/app/names.ts";
 import type { ShownMessage } from "../src/web/app/api.ts";
 
 const me = "person:p1";
@@ -130,5 +131,14 @@ describe("workspace columns, as native WorkspaceLayout", () => {
       inspector: 900,
       showsHandle: false,
     });
+  });
+});
+
+describe("who has taken work over", () => {
+  it("says mine only for the signed-in person", () => {
+    expect(takeoverTitle(null, "p1")).toBeUndefined();
+    expect(takeoverTitle("p1", "p1")).toBe("You have it");
+    expect(takeoverTitle("p2", "p1")).toBe("Taken over by another person");
+    expect(takeoverTitle("p2", undefined)).toBe("Taken over by another person");
   });
 });

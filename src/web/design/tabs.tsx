@@ -24,6 +24,7 @@ export function SegmentedTabs<T extends string>({
           return (
             <button
               key={option.value}
+              type="button"
               role="tab"
               aria-selected={selected}
               onClick={() => onChange(option.value)}

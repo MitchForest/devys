@@ -581,18 +581,6 @@ function useWorkspaceState() {
         "That request was already answered or has expired.",
       );
     },
-    /** A quick commitment for the Head of Operations. */
-    createCommitment: (title: string) => {
-      if (!title.trim() || !operations) return;
-      void refreshAfter(
-        () =>
-          api.createCommitment(businessId, {
-            title: title.trim().slice(0, 200),
-            owner: operations.id,
-          }),
-        "The commitment couldn't be saved.",
-      );
-    },
     /** A task with an owner, objective, due date and space; resolves once it is saved. */
     createTask: async (task: NewTask) => {
       await api.createCommitment(businessId, task);
@@ -602,6 +590,15 @@ function useWorkspaceState() {
       void refreshAfter(
         () => api.updateCommitment(businessId, item, { state }),
         "That commitment changed.",
+      ),
+    /** Edits what's next, what it waits on and when it's due, at the revision on screen. */
+    editCommitment: (
+      item: Commitment,
+      change: { nextAction?: string; waitCondition?: string | null; dueAt?: string | null },
+    ) =>
+      refreshAfter(
+        () => api.updateCommitment(businessId, item, change),
+        "That work couldn't be saved.",
       ),
     /** Hands the work to another employee; it starts ready so the dispatcher hands it over. */
     reassign: (item: Commitment, owner: string) =>

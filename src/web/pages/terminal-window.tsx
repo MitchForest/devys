@@ -1,6 +1,7 @@
 import { Hand, X } from "lucide-react";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { api } from "../app/api.ts";
+import { useDark } from "../app/theme.ts";
 import { DevysButton } from "../design/buttons.tsx";
 import type { TerminalState } from "../../surfaces/terminal/view.tsx";
 
@@ -23,21 +24,12 @@ export function TerminalWindow({
   const [title, setTitle] = useState("Terminal");
   const [state, setState] = useState<TerminalState | null>(null);
   const [control, setControl] = useState(0);
-  const [dark, setDark] = useState(false);
+  const dark = useDark();
   useEffect(() => {
     void api.terminals(businessId).then(({ terminals }) => {
       const found = terminals.find((terminal) => terminal.id === terminalId);
       if (found) setTitle(found.title);
     });
-    const media = matchMedia("(prefers-color-scheme: dark)");
-    const apply = () =>
-      setDark(
-        document.documentElement.classList.contains("dark") ||
-          (media.matches && !document.documentElement.classList.contains("light")),
-      );
-    apply();
-    media.addEventListener("change", apply);
-    return () => media.removeEventListener("change", apply);
   }, [businessId, terminalId]);
   useEffect(() => {
     document.title = `${title} — Devys`;

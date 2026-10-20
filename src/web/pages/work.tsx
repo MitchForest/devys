@@ -2,11 +2,11 @@ import {
   Check,
   ChevronDown,
   CircleCheck,
-  CirclePlus,
   CircleX,
   Clock,
   Code2,
   Hand,
+  Pencil,
   Plus,
   Redo2,
   Undo2,
@@ -18,6 +18,7 @@ import {
   chipFor,
   filterTitle,
   isOpen,
+  takeoverTitle,
   templateTitle,
   workFilters,
 } from "../app/names.ts";
@@ -32,7 +33,9 @@ import {
   StatusChip,
   Card,
 } from "../design/primitives.tsx";
+import { Field, fieldClass } from "../design/fields.tsx";
 import { SegmentedTabs } from "../design/tabs.tsx";
+import { endOfDay } from "../shell/dialogs.tsx";
 import { CodingSessions, NewCodingSession, Terminals } from "./coding.tsx";
 import { Spinner } from "../design/spinner.tsx";
 import {
@@ -142,7 +145,8 @@ export function WithWorkActions({
 
 /** One commitment: what, who, what's next and its state. Click to open it. */
 export function WorkRow({ item, extra }: { item: Commitment; extra?: ReactNode }) {
-  const { employeeName, actions } = useWorkspace();
+  const { employeeName, actions, person } = useWorkspace();
+  const takeover = takeoverTitle(item.taken_over_by, person?.id);
   const owner = employeeName(item.owner_employee_id);
   const done = item.evidence[item.evidence.length - 1];
   const detail =
@@ -166,9 +170,7 @@ export function WorkRow({ item, extra }: { item: Commitment; extra?: ReactNode }
           <span className="line-clamp-2 text-detail text-ink-2">{detail}</span>
         </div>
         <span className="ml-auto" />
-        {item.taken_over_by !== null && (
-          <span className="shrink-0 text-caption text-ink-3">You have it</span>
-        )}
+        {takeover && <span className="shrink-0 text-caption text-ink-3">{takeover}</span>}
         <StatusChip tone={chip.tone}>{chip.title}</StatusChip>
       </button>
     </WithWorkActions>
@@ -260,39 +262,6 @@ export function ApprovalsPage() {
   );
 }
 
-/** A new commitment for the Head of Operations; it starts ready, so it's handed over within a minute. */
-function NewCommitment() {
-  const { actions } = useWorkspace();
-  const [draft, setDraft] = useState("");
-  const add = () => {
-    actions.createCommitment(draft);
-    setDraft("");
-  };
-  return (
-    <form
-      className="flex h-[38px] items-center gap-2 rounded-[12px] bg-sheet-tint pr-1.5 pl-3"
-      onSubmit={(event) => {
-        event.preventDefault();
-        add();
-      }}
-    >
-      <CirclePlus className="size-4 shrink-0 text-ink-3" />
-      <input
-        aria-label="New commitment"
-        className="min-w-0 flex-1 bg-transparent text-body text-ink outline-none placeholder:text-ink-3"
-        placeholder="Something the business owes…"
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-      />
-      {draft.trim() && (
-        <DevysButton compact type="submit">
-          Add
-        </DevysButton>
-      )}
-    </form>
-  );
-}
-
 export function WorkPage({ filter }: { filter: WorkFilter }) {
   const { work, workLayout, actions, employeeName } = useWorkspace();
   const [coding, setCoding] = useState(false);
@@ -322,7 +291,6 @@ export function WorkPage({ filter }: { filter: WorkFilter }) {
           />
         </div>
       </PageHeader>
-      <NewCommitment />
       <Terminals />
       <NewCodingSession open={coding} onClose={() => setCoding(false)} />
       {work.status === "loading" ? (
@@ -330,7 +298,7 @@ export function WorkPage({ filter }: { filter: WorkFilter }) {
       ) : items.length === 0 ? (
         <EmptyNote>
           {filter === "all"
-            ? "Nothing is owed yet. Add a commitment, or ask Operations to take something on."
+            ? "Nothing is owed yet. Create a task, or ask Operations to take something on."
             : "Nothing here."}
         </EmptyNote>
       ) : workLayout === "list" ? (
@@ -379,13 +347,138 @@ export function WorkPage({ filter }: { filter: WorkFilter }) {
 
 const formatDue = (due: string) =>
   new Date(due).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+/** A due time as the date field shows it, in the owner's time zone. */
+const dateField = (due: string | null) => {
+  if (!due) return "";
+  const date = new Date(due);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+};
+
+/**
+ * What's next, what it waits on and when it's due, edited as one change at the revision on
+ * screen. If someone changed the item meanwhile, the latest loads and the draft stays to save again.
+ */
+function WorkPlan({ item, editable }: { item: Commitment; editable: boolean }) {
+  const { actions } = useWorkspace();
+  const [editing, setEditing] = useState(false);
+  const [next, setNext] = useState("");
+  const [waiting, setWaiting] = useState("");
+  const [due, setDue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const edit = () => {
+    setNext(item.next_action);
+    setWaiting(item.wait_condition ?? "");
+    setDue(dateField(item.due_at));
+    setError(undefined);
+    setEditing(true);
+  };
+  const save = async () => {
+    const change = {
+      ...(next.trim() !== item.next_action ? { nextAction: next.trim() } : {}),
+      ...(waiting.trim() !== (item.wait_condition ?? "")
+        ? { waitCondition: waiting.trim() || null }
+        : {}),
+      ...(due !== dateField(item.due_at) ? { dueAt: due ? endOfDay(due) : null } : {}),
+    };
+    if (Object.keys(change).length === 0) return setEditing(false);
+    setBusy(true);
+    const saved = await actions.editCommitment(item, change);
+    setBusy(false);
+    if (saved) setEditing(false);
+    else
+      setError(
+        "That wasn't saved. If it changed meanwhile, the latest is shown; save again to apply.",
+      );
+  };
+  if (!editing)
+    return (
+      <div className="flex items-start gap-2">
+        <dl className="grid flex-1 grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-detail">
+          <dt className="text-ink-3">Next</dt>
+          <dd className="text-ink">{item.next_action || "Not set"}</dd>
+          {item.wait_condition && (
+            <>
+              <dt className="text-ink-3">Waiting on</dt>
+              <dd className="text-ink">{item.wait_condition}</dd>
+            </>
+          )}
+          <dt className="text-ink-3">Due</dt>
+          <dd className="text-ink">{item.due_at ? formatDue(item.due_at) : "No due date"}</dd>
+        </dl>
+        {editable && (
+          <DevysButton
+            kind="quiet"
+            compact
+            onClick={edit}
+            aria-label="Edit next, waiting on and due"
+          >
+            <Pencil /> Edit
+          </DevysButton>
+        )}
+      </div>
+    );
+  return (
+    <form
+      aria-label="Edit work plan"
+      className="flex flex-col gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void save();
+      }}
+      onKeyDown={(event) => event.key === "Escape" && setEditing(false)}
+    >
+      <Field label="Next">
+        <input
+          autoFocus
+          className={fieldClass}
+          value={next}
+          maxLength={1000}
+          onChange={(event) => setNext(event.target.value)}
+        />
+      </Field>
+      <Field label="Waiting on">
+        <input
+          className={fieldClass}
+          value={waiting}
+          maxLength={1000}
+          placeholder="Nothing"
+          onChange={(event) => setWaiting(event.target.value)}
+        />
+      </Field>
+      <Field label="Due">
+        <input
+          type="date"
+          className={fieldClass}
+          value={due}
+          onChange={(event) => setDue(event.target.value)}
+        />
+      </Field>
+      {error && (
+        <p role="alert" className="text-detail text-ink-2">
+          {error}
+        </p>
+      )}
+      <div className="flex gap-1.5">
+        <DevysButton compact type="submit" disabled={busy}>
+          {busy ? "Saving…" : "Save"}
+        </DevysButton>
+        <DevysButton kind="quiet" compact onClick={() => setEditing(false)}>
+          Cancel
+        </DevysButton>
+      </div>
+    </form>
+  );
+}
 
 /**
  * One work item, as the right panel shows it above its thread: who owns it, where it
  * stands, what's next, its evidence and decisions, with takeover and reassignment.
  */
 export function WorkDetail({ item }: { item: Commitment }) {
-  const { employees, actions, employeeName, spaces } = useWorkspace();
+  const { employees, actions, employeeName, spaces, person, decisions } = useWorkspace();
+  const takeover = takeoverTitle(item.taken_over_by, person?.id);
+  const waiting = (valueOf(decisions) ?? []).filter((d) => d.commitment_id === item.id);
   const owner = employees.find((e) => e.id === item.owner_employee_id);
   const chip = chipFor(item.state);
   const inSpaces = (valueOf(spaces) ?? []).filter((s) =>
@@ -398,9 +491,7 @@ export function WorkDetail({ item }: { item: Commitment }) {
         <StatusChip tone={chip.tone} small>
           {chip.title}
         </StatusChip>
-        {item.taken_over_by !== null && (
-          <span className="text-caption text-ink-3">You have it</span>
-        )}
+        {takeover && <span className="text-caption text-ink-3">{takeover}</span>}
         {inSpaces.map((space) => (
           <button
             key={space.id}
@@ -451,18 +542,7 @@ export function WorkDetail({ item }: { item: Commitment }) {
             </DropdownMenu>
           )}
         </div>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-detail">
-          <dt className="text-ink-3">Next</dt>
-          <dd className="text-ink">{item.next_action || "Not set"}</dd>
-          {item.wait_condition && (
-            <>
-              <dt className="text-ink-3">Waiting on</dt>
-              <dd className="text-ink">{item.wait_condition}</dd>
-            </>
-          )}
-          <dt className="text-ink-3">Due</dt>
-          <dd className="text-ink">{item.due_at ? formatDue(item.due_at) : "No due date"}</dd>
-        </dl>
+        <WorkPlan item={item} editable={open} />
       </div>
       <div className="flex flex-wrap gap-1.5">
         {open ? (
@@ -500,6 +580,16 @@ export function WorkDetail({ item }: { item: Commitment }) {
           </DevysButton>
         )}
       </div>
+      {waiting.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <span className="text-label font-medium text-ink-3">
+            Waiting on your approval · {waiting.length}
+          </span>
+          {waiting.map((decision) => (
+            <DecisionCard key={decision.id} decision={decision} />
+          ))}
+        </div>
+      )}
       <CodingSessions item={item} />
       {item.evidence.length > 0 && (
         <div className="flex flex-col gap-1">

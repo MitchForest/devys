@@ -1,6 +1,21 @@
-import { Code2, Hand, MessageSquarePlus, Square, SquareTerminal, Undo2, X } from "lucide-react";
+import {
+  Code2,
+  Hand,
+  MessageSquarePlus,
+  Send,
+  Square,
+  SquareTerminal,
+  Undo2,
+  X,
+} from "lucide-react";
 import { useEffect, useState } from "react";
-import { api, type CodingSession, type Commitment, type WorkingDiff } from "../app/api.ts";
+import {
+  api,
+  ApiError,
+  type CodingSession,
+  type Commitment,
+  type WorkingDiff,
+} from "../app/api.ts";
 import { useWorkspace } from "../app/workspace.tsx";
 import { DevysButton } from "../design/buttons.tsx";
 import { MarkdownView } from "../design/markdown.tsx";
@@ -8,20 +23,23 @@ import { StatusChip } from "../design/primitives.tsx";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  commentLine,
   DiffSurface,
+  hunkHash,
+  hunkText,
+  reviewBundle,
   type DiffComment,
   type DiffSelection,
 } from "../../surfaces/diff.tsx";
+import { takeoverTitle } from "../app/names.ts";
+import { useDark } from "../app/theme.ts";
 import { providerName, stateChip } from "./coding.tsx";
 import { openTerminalWindow } from "./terminal-window.tsx";
 
-const isDark = () =>
-  typeof document !== "undefined" && document.documentElement.classList.contains("dark");
-
 /**
  * One coding session: its latest reply, the running diff with line comments, and a composer
- * that talks to the session directly once the owner has taken the work item over.
+ * that talks to the session directly once the owner has taken the work item over. Comments are
+ * always sendable: with the owner's message while they drive, otherwise as one message in the
+ * work item's thread for its employee.
  */
 export default function SessionView({
   item,
@@ -34,7 +52,8 @@ export default function SessionView({
   onClose: () => void;
   onChanged: () => void;
 }) {
-  const { businessId, person, actions } = useWorkspace();
+  const { businessId, person, actions, panel, employeeName } = useWorkspace();
+  const dark = useDark();
   const [diff, setDiff] = useState<WorkingDiff | null>(null);
   const [selection, setSelection] = useState<DiffSelection | null>(null);
   const [draftComment, setDraftComment] = useState("");
@@ -42,6 +61,7 @@ export default function SessionView({
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const mine = item.taken_over_by !== null && item.taken_over_by === person?.id;
+  const takeover = takeoverTitle(item.taken_over_by, person?.id);
   const chip = stateChip[session.state];
 
   useEffect(() => {
@@ -59,19 +79,15 @@ export default function SessionView({
     };
   }, [businessId, item.id, session.id, session.state]);
 
-  const addComment = () => {
-    if (!selection || !draftComment.trim()) return;
-    setComments((items) => [...items, { ...selection, text: draftComment.trim() }]);
+  const addComment = async () => {
+    if (!selection || !draftComment.trim() || !diff) return;
+    const hunk = await hunkHash(hunkText(diff.patch, selection));
+    setComments((items) => [...items, { ...selection, hunk, text: draftComment.trim() }]);
     setDraftComment("");
     setSelection(null);
   };
   const send = async () => {
-    const message = [
-      ...(comments.length
-        ? ["Review comments:", ...comments.map((c) => `- ${commentLine(c)}`)]
-        : []),
-      text.trim(),
-    ]
+    const message = [comments.length ? reviewBundle(item.title, comments) : "", text.trim()]
       .filter(Boolean)
       .join("\n");
     if (!message) return;
@@ -85,6 +101,28 @@ export default function SessionView({
       setError(cause instanceof Error ? cause.message : "That couldn't be sent.");
     }
   };
+  /** Until the owner drives, comments go to the work item's employee in its thread. */
+  const sendComments = async () => {
+    if (!comments.length) return;
+    try {
+      await api.post(businessId, `work:${item.id}`, {
+        id: crypto.randomUUID(),
+        text: reviewBundle(item.title, comments),
+        mentions: [item.owner_employee_id],
+      });
+      setComments([]);
+      setError(null);
+      if (panel.key === `work:${item.id}`) panel.refresh();
+    } catch (cause) {
+      // A 409 says everyone who would read them is paused.
+      setError(
+        cause instanceof ApiError && cause.status === 409
+          ? `${employeeName(item.owner_employee_id)} is paused, so the comments weren't sent.`
+          : "The comments couldn't be sent.",
+      );
+    }
+  };
+  const count = `${comments.length} comment${comments.length === 1 ? "" : "s"}`;
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -156,7 +194,7 @@ export default function SessionView({
               <DiffSurface
                 patch={diff.patch}
                 comments={comments}
-                dark={isDark()}
+                dark={dark}
                 onSelect={setSelection}
               />
             )}
@@ -175,22 +213,31 @@ export default function SessionView({
                 autoFocus
                 value={draftComment}
                 onChange={(event) => setDraftComment(event.target.value)}
-                onKeyDown={(event) => event.key === "Enter" && addComment()}
+                onKeyDown={(event) => event.key === "Enter" && void addComment()}
                 placeholder="Comment on these lines"
                 aria-label="Comment on the selected lines"
-                className="min-w-0 flex-1 rounded-[8px] bg-sheet-tint px-2.5 py-1.5 text-detail text-ink outline-none"
+                className="min-w-0 flex-1 rounded-[8px] bg-sheet-tint px-2.5 py-1.5 text-detail text-ink outline-none focus-visible:ring-2 focus-visible:ring-indigo/40"
               />
-              <DevysButton compact onClick={addComment}>
+              <DevysButton compact onClick={() => void addComment()}>
                 <MessageSquarePlus /> Add
               </DevysButton>
             </div>
           )}
-          {comments.length > 0 && (
-            <span className="text-caption text-ink-3">
-              {comments.length} comment{comments.length === 1 ? "" : "s"} will be sent with your
-              message.
-            </span>
-          )}
+          {comments.length > 0 &&
+            (mine ? (
+              <span className="text-caption text-ink-3">
+                {count} will be sent with your message.
+              </span>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-caption text-ink-3">
+                  {count} for {employeeName(item.owner_employee_id)}, in this work item's thread.
+                </span>
+                <DevysButton compact onClick={() => void sendComments()}>
+                  <Send /> Send {count}
+                </DevysButton>
+              </div>
+            ))}
           {mine ? (
             <div className="flex items-end gap-2">
               <Textarea
@@ -204,8 +251,9 @@ export default function SessionView({
             </div>
           ) : (
             <span className="text-detail text-ink-3">
-              Take over the work item to steer this session yourself; until then its employee steers
-              it.
+              {takeover
+                ? `${takeover}; they steer this session.`
+                : "Take over the work item to steer this session yourself; until then its employee steers it."}
             </span>
           )}
           {error && <span className="text-detail text-ink-2">{error}</span>}

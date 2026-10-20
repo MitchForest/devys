@@ -200,7 +200,7 @@ export function HireSheet() {
 }
 
 /** The end of the chosen day, in the owner's time zone. */
-const endOfDay = (date: string) => new Date(`${date}T23:59:00`).toISOString();
+export const endOfDay = (date: string) => new Date(`${date}T23:59:00`).toISOString();
 
 /** A new task: what, who owns it, why, by when and where it is shown. */
 export function NewTaskDialog() {

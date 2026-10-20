@@ -37,10 +37,10 @@ import type { Space } from "../app/api.ts";
 import { useWorkspace, valueOf, type Destination } from "../app/workspace.tsx";
 import { ToolbarIconButton } from "../design/buttons.tsx";
 import { PersonPortrait } from "../design/face.tsx";
-import { EmptyNote } from "../design/primitives.tsx";
+import { EmptyNote, PageBody } from "../design/primitives.tsx";
 import { ApprovalsPage, WorkDetail, WorkPage } from "../pages/work.tsx";
 import { FilesPage } from "../pages/files.tsx";
-import { TodayPage } from "../pages/today.tsx";
+import { TodayGreeting, TodayPage, TodayWork } from "../pages/today.tsx";
 import { SpacePage, useParticipants } from "../pages/space.tsx";
 import { EmployeePage } from "../pages/employee.tsx";
 import { DirectPage } from "../pages/direct.tsx";
@@ -219,12 +219,26 @@ function ResizeHandle({
   const [dragging, setDragging] = useState(false);
   return (
     <div
-      aria-hidden
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Side panel width"
+      aria-valuenow={width}
+      aria-valuemin={inspectorRange[0]}
+      aria-valuemax={inspectorRange[1]}
+      aria-hidden={!visible}
+      tabIndex={visible ? 0 : -1}
       className={cn(
         "group grid shrink-0 cursor-col-resize place-items-center bg-sheet",
         visible ? "w-[9px]" : "pointer-events-none w-0 opacity-0",
       )}
       onDoubleClick={() => onChange(320)}
+      onKeyDown={(event) => {
+        // The arrows move the divider; the panel grows as it moves left.
+        const step = event.key === "ArrowLeft" ? 16 : event.key === "ArrowRight" ? -16 : 0;
+        if (!step) return;
+        event.preventDefault();
+        onChange(Math.min(Math.max(width + step, inspectorRange[0]), inspectorRange[1]));
+      }}
       onPointerDown={(event) => {
         const start = event.clientX;
         const origin = width;
@@ -713,6 +727,30 @@ function useShortcuts() {
 
 const compactDestinations: Destination[] = ["home", "inbox", "work", "team"];
 
+/** The phone's Home, as native `CompactHome`: the greeting, what waits on approval, then every conversation. */
+function CompactHome() {
+  const { decisions, actions } = useWorkspace();
+  const count = valueOf(decisions)?.length ?? 0;
+  return (
+    <PageBody>
+      <TodayGreeting />
+      {count > 0 && (
+        <button
+          type="button"
+          onClick={() => actions.selectPage({ kind: "approvals" })}
+          className="flex items-center gap-2 rounded-card bg-sheet p-3 text-left text-control text-ink shadow-resting"
+        >
+          <ScanFace className="size-4 shrink-0" /> {count} waiting for your approval
+        </button>
+      )}
+      <div className="-mx-2">
+        <ConversationList />
+      </div>
+      <TodayWork />
+    </PageBody>
+  );
+}
+
 /**
  * Phones, as native `CompactShell`: Home lists Direct messages and Spaces; a conversation
  * opens full screen; a work item pushes over it as a sheet.
@@ -751,6 +789,15 @@ function CompactShell() {
                 </DropdownMenuItem>
               ))}
               <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => actions.newTask()}>New task</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => actions.setHireOpen(true)}>Hire</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => actions.selectPage({ kind: "files" })}>
+                Files
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => actions.selectPage({ kind: "approvals" })}>
+                Approvals
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => actions.selectPage({ kind: "money" })}>
                 Money
               </DropdownMenuItem>
@@ -771,25 +818,23 @@ function CompactShell() {
         )}
         <span className="ml-auto" />
         {operations && !inConversation && (
-          <EmployeePortrait
-            employee={operations}
-            size={28}
-            mood={operationsMood(state)}
-            label={operations.name}
-          />
+          <button
+            type="button"
+            aria-label={`Message ${operations.name}`}
+            onClick={() => actions.message(operations.id)}
+            className="rounded-[9px]"
+          >
+            <EmployeePortrait
+              employee={operations}
+              size={28}
+              mood={operationsMood(state)}
+              label={operations.name}
+            />
+          </button>
         )}
       </header>
       <main className={cn("min-h-0 flex-1", !inConversation && "pb-24")}>
-        {page.kind === "today" ? (
-          <div className="h-full overflow-y-auto">
-            <div className="px-2">
-              <ConversationList />
-            </div>
-            <TodayPage />
-          </div>
-        ) : (
-          <MainPane />
-        )}
+        {page.kind === "today" ? <CompactHome /> : <MainPane />}
       </main>
       {!inConversation && (
         <>

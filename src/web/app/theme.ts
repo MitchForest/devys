@@ -37,3 +37,30 @@ export function useTheme() {
 
 /** Runs before first paint so a dark preference never flashes light. */
 export const themeScript = `try{var t=localStorage.getItem("appearance");if(t==="light"||t==="dark")document.documentElement.classList.add(t)}catch(e){}`;
+
+/** Whether the page renders dark right now: the owner's choice, else the system setting. */
+const rendersDark = () => {
+  const root = document.documentElement;
+  return (
+    root.classList.contains("dark") ||
+    (!root.classList.contains("light") && matchMedia("(prefers-color-scheme: dark)").matches)
+  );
+};
+
+/** Follows the rendered theme, so surfaces that draw their own colors redraw when it changes. */
+export function useDark() {
+  const [dark, setDark] = useState(false);
+  useEffect(() => {
+    const apply = () => setDark(rendersDark());
+    apply();
+    const media = matchMedia("(prefers-color-scheme: dark)");
+    media.addEventListener("change", apply);
+    const observer = new MutationObserver(apply);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => {
+      media.removeEventListener("change", apply);
+      observer.disconnect();
+    };
+  }, []);
+  return dark;
+}

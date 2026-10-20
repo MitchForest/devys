@@ -349,7 +349,13 @@ export const api = {
   updateCommitment: (
     b: string,
     item: Commitment,
-    change: { state?: CommitmentState; owner?: string },
+    change: {
+      state?: CommitmentState;
+      owner?: string;
+      nextAction?: string;
+      waitCondition?: string | null;
+      dueAt?: string | null;
+    },
   ) =>
     post<Commitment>(`${business(b)}/work/${item.id}`, {
       expectedRevision: item.revision,

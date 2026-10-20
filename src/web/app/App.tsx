@@ -67,7 +67,7 @@ function SignIn() {
             placeholder="64-character code"
             value={code}
             onChange={(event) => setCode(event.target.value)}
-            className="rounded-[12px] bg-track px-3.5 py-[11px] text-body text-ink outline-none placeholder:text-ink-3"
+            className="rounded-[12px] bg-track px-3.5 py-[11px] text-body text-ink outline-none placeholder:text-ink-3 focus-visible:ring-2 focus-visible:ring-indigo/40"
           />
         </label>
         {error && (

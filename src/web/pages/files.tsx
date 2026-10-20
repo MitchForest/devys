@@ -1,6 +1,7 @@
 import { FolderInput, MessageSquarePlus, Presentation, Save, Send } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { api, type FileAnchor, type FileEntry } from "../app/api.ts";
+import { useDark } from "../app/theme.ts";
 import { useWorkspace, valueOf } from "../app/workspace.tsx";
 import { DevysButton } from "../design/buttons.tsx";
 import { EmptyNote } from "../design/primitives.tsx";
@@ -117,8 +118,7 @@ function FileView({ businessId, file }: { businessId: string; file: FileEntry })
   const [comments, setComments] = useState<Comment[]>([]);
   const [saved, setSaved] = useState<string | null>(null);
   const [deck, setDeck] = useState(false);
-  const dark =
-    typeof document !== "undefined" && document.documentElement.classList.contains("dark");
+  const dark = useDark();
 
   const read = useCallback(
     (): Promise<Loaded> =>
@@ -437,7 +437,7 @@ function CommentBar({
             }}
             placeholder="Comment on this"
             aria-label="Comment on the selection"
-            className="min-w-0 flex-1 rounded-[8px] bg-sheet-tint px-2.5 py-1.5 text-detail text-ink outline-none"
+            className="min-w-0 flex-1 rounded-[8px] bg-sheet-tint px-2.5 py-1.5 text-detail text-ink outline-none focus-visible:ring-2 focus-visible:ring-indigo/40"
           />
           <DevysButton
             compact
