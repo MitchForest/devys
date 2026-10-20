@@ -21,9 +21,11 @@ import type {
   DelegateEvent,
   DelegateStatus,
   Provider,
+  Published,
   StartRequest,
   Started,
 } from "../contract.ts";
+import { cloneRepository, githubName, publishBranch } from "./github.ts";
 import { HostRefusal, type HostRoutes } from "../../protocol/host.ts";
 import type { ProviderAdapter, ProviderEvents } from "./provider.ts";
 import {
@@ -64,6 +66,8 @@ export interface DelegatesHostOptions {
   deliver(events: readonly DelegateEvent[]): Promise<void>;
   shell?: string;
   env?: NodeJS.ProcessEnv;
+  /** The `gh` the owner is logged in with; tests pass a stand-in. */
+  gh?: string;
   checkTimeoutMs?: number;
   retryMs?: number;
   /** The ttys of the owner's terminals; cleanup never stops what runs in them. */
@@ -230,7 +234,10 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
       const { repository: path, baseCommit, branch, worktree } = build;
       place = { repository: path, baseCommit, branch, worktree };
     } else {
-      const path = await repository(business, request.repository).catch((error: unknown) => {
+      const target = request.repository;
+      const path = await (
+        "clone" in target ? cloneRepository(business, target.clone) : repository(business, target)
+      ).catch((error: unknown) => {
         throw new HostRefusal(400, error instanceof Error ? error.message : "Not a repository");
       });
       const made = await createWorktree(business, path, request.id);
@@ -316,6 +323,22 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
     };
   }
 
+  async function publish(job: Job, input: Record<string, unknown>): Promise<Published> {
+    if (job.readOnly) throw new HostRefusal(409, "A review session has nothing to publish");
+    if (job.state === "working") throw new HostRefusal(409, "The session is still working");
+    if (job.check) throw new HostRefusal(409, "Wait for the check to finish");
+    const { repository: name, title, body } = input;
+    if (typeof name !== "string" || !githubName.test(name))
+      throw new HostRefusal(400, "Name the GitHub repository as owner/name");
+    if (typeof title !== "string" || !title.trim() || typeof body !== "string")
+      throw new HostRefusal(400, "Give the pull request a title and a body");
+    return publishBranch(job, { repository: name, title, body }, options.gh).catch(
+      (error: unknown) => {
+        throw new HostRefusal(409, error instanceof Error ? error.message : "Publishing failed");
+      },
+    );
+  }
+
   return {
     prefix: "/delegates/",
     async handle(path, input) {
@@ -372,6 +395,8 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
             throw new HostRefusal(400, "Give a commit message and a check command");
           return accept(job, input.message, input.check);
         }
+        case "/delegates/publish":
+          return publish(jobOf(input), input);
         case "/delegates/diff": {
           const job = jobOf(input);
           return workingDiff(job.worktree, job.baseCommit);

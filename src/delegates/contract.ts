@@ -34,8 +34,11 @@ export interface StartRequest {
   scope: Scope;
   provider: Provider;
   purpose: Purpose;
-  /** An absolute path to an existing repository, or a new repository's name. */
-  repository: { path: string } | { create: string };
+  /**
+   * An absolute path to an existing repository, a new repository's name, or a GitHub repository
+   * (`owner/name`) cloned into the business folder.
+   */
+  repository: { path: string } | { create: string } | { clone: string };
   objective: string;
   instructions: string;
   /** For a review: the build assignment whose worktree it reads. */
@@ -86,6 +89,25 @@ export interface Accepted {
   patch: string;
 }
 
+/** Publishes the accepted commit to the assignment's branch on GitHub with one pull request. */
+export interface PublishRequest {
+  /** `owner/name`; the repository's origin must be this repository. */
+  repository: string;
+  title: string;
+  body: string;
+}
+
+export interface Published {
+  repository: string;
+  /** GitHub's id for the repository, stable across renames. */
+  repositoryId: string;
+  branch: string;
+  /** The branch the pull request merges into: the repository's default. */
+  base: string;
+  commit: string;
+  pullRequest: string;
+}
+
 /** The worktree's changes against its base, for review. */
 export interface WorkingDiff {
   files: {
@@ -106,4 +128,5 @@ export interface Delegates {
   send(assignmentId: string, text: string): Promise<{ steered: boolean }>;
   interrupt(assignmentId: string): Promise<void>;
   accept(assignmentId: string, request: AcceptRequest): Promise<Accepted>;
+  publish(assignmentId: string, request: PublishRequest): Promise<Published>;
 }

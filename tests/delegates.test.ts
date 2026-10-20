@@ -83,6 +83,21 @@ async function host() {
   let refuse = false;
   const provider = fakeProvider();
   const data = join(root, "data");
+  // Stands in for the owner's `gh`: one repository, pull requests kept in a file.
+  const gh = join(root, "gh");
+  writeFileSync(
+    gh,
+    `#!/bin/sh
+echo "$*" >> "${root}/gh-calls"
+case "$1 $2" in
+  "repo view") echo '{"id":"R_test","defaultBranchRef":{"name":"main"}}' ;;
+  "pr list") cat "${root}/prs" 2>/dev/null || echo '[]' ;;
+  "pr create") echo '[{"url":"https://github.com/acme/site/pull/1"}]' > "${root}/prs"
+    echo "Creating pull request"; echo "https://github.com/acme/site/pull/1" ;;
+esac
+`,
+    { mode: 0o755 },
+  );
   const env = {
     ...process.env,
     GIT_AUTHOR_NAME: "Owner",
@@ -112,6 +127,7 @@ async function host() {
           providers: provider.factory,
           shell: "/bin/sh",
           env,
+          gh,
           retryMs: 20,
           deliver: async (events) => {
             if (refuse) throw new Error("Worker down");
@@ -240,6 +256,65 @@ it("accepting commits on the branch and reports the check against that commit", 
   expect(checked!.check!.output).toContain("checked");
   // The repository's own branch is untouched; the work lives on the assignment's branch.
   expect(git(state.repository, "log", "-1", "--format=%s", "main")).toBe("init");
+});
+
+it("an assignment clones the business's GitHub repository and publishes accepted work once", async () => {
+  const state = await host();
+  // A bare repository stands in for github.com/acme/site.
+  const remote = join(state.root, "remote.git");
+  execFileSync("git", ["clone", "--quiet", "--bare", state.repository, remote]);
+  Object.assign(process.env, {
+    GIT_CONFIG_COUNT: "1",
+    GIT_CONFIG_KEY_0: `url.${remote}.insteadOf`,
+    GIT_CONFIG_VALUE_0: "https://github.com/acme/site.git",
+  });
+  try {
+    const started = await state.client().start(request("a-p", { clone: "acme/site" }));
+    const clone = join(state.root, "work", scope.businessId, "repos", "site");
+    expect(started.repository).toBe(clone);
+    expect(git(clone, "config", "--get", "remote.origin.url")).toBe(
+      "https://github.com/acme/site.git",
+    );
+    const publish = () =>
+      state.client().publish("a-p", { repository: "acme/site", title: "Add it", body: "Checked." });
+    await expect(publish()).rejects.toThrow(/still working/);
+    state.provider.finish(started.sessionId, "Done.");
+    await until(
+      () => state.delivered,
+      (events) => events.some((event) => event.kind === "finished"),
+    );
+    await expect(publish()).rejects.toThrow(/Nothing is accepted yet/);
+    await expect(
+      state.client().publish("a-p", { repository: "acme/other", title: "x", body: "x" }),
+    ).rejects.toThrow(/origin is https:\/\/github.com\/acme\/site.git/);
+    const accepted = await state.client().accept("a-p", { message: "Add it", check: "true" });
+    await until(
+      () => state.delivered,
+      (events) => events.some((event) => event.kind === "checked"),
+    );
+    const published = await publish();
+    expect(published).toEqual({
+      repository: "acme/site",
+      repositoryId: "R_test",
+      branch: "devys/a-p",
+      base: "main",
+      commit: accepted.commit,
+      pullRequest: "https://github.com/acme/site/pull/1",
+    });
+    expect(git(remote, "rev-parse", "devys/a-p")).toBe(accepted.commit);
+    // Published again (a retry): the same pull request, never a second one.
+    expect((await publish()).pullRequest).toBe(published.pullRequest);
+    const calls = readFileSync(join(state.root, "gh-calls"), "utf8");
+    expect(calls.match(/^pr create/gm)).toHaveLength(1);
+    // A folder already holding another repository is not reused for a different clone.
+    await expect(state.client().start(request("a-q", { clone: "someone/site" }))).rejects.toThrow(
+      /already holds https:\/\/github.com\/acme\/site.git/,
+    );
+  } finally {
+    delete process.env.GIT_CONFIG_COUNT;
+    delete process.env.GIT_CONFIG_KEY_0;
+    delete process.env.GIT_CONFIG_VALUE_0;
+  }
 });
 
 it("events wait for the Worker, and a host restart reports a working session interrupted", async () => {

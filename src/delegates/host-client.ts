@@ -30,6 +30,7 @@ export function hostDelegates(host: { url: string; token: string }, scope: Scope
       await call("interrupt", { id });
     },
     accept: (id, request) => call("accept", { id, ...request }),
+    publish: (id, request) => call("publish", { id, ...request }),
   };
 }
 
@@ -48,5 +49,6 @@ export function unavailableDelegates(): Delegates {
     send: refuse,
     interrupt: refuse,
     accept: refuse,
+    publish: refuse,
   };
 }

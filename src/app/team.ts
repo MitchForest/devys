@@ -50,7 +50,14 @@ const files = [
   "publishArtifact",
 ] as const;
 const drive = ["driveList", "driveRead", "driveCreate", "driveUpdate"] as const;
-const coding = ["codingStart", "codingStatus", "codingSend", "codingStop", "codingAccept"] as const;
+const coding = [
+  "codingStart",
+  "codingStatus",
+  "codingSend",
+  "codingStop",
+  "codingAccept",
+  "codingPublish",
+] as const;
 
 export const roleTemplates: readonly RoleTemplate[] = [
   {

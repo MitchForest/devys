@@ -30,6 +30,9 @@ export const providerName = (provider: Provider) =>
 const Text = (max: number) => Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(max));
 const AssignmentId = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9-]{1,64}$/));
 const ProviderInput = Schema.Literals(providers);
+const GitHubName = Schema.String.check(
+  Schema.isPattern(/^[A-Za-z0-9-]{1,39}\/(?!.*\.\.)[A-Za-z0-9._-]{1,100}$/),
+);
 const Status = Schema.Struct({
   assignment: Schema.String,
   provider: Schema.String,
@@ -95,7 +98,7 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
     capability({
       name: "codingStart",
       description:
-        "Delegate coding on this work item to Codex or Claude Code. It works in its own git worktree of the repository (an absolute path on the owner's Mac) or of a new empty repository (newRepository: a folder name). Write the objective as a complete brief: what to build or change, the acceptance checks, and anything it must not do. It runs on its own; you are told when its turn ends. purpose 'review' starts a read-only session on another assignment's worktree (pass reviews).",
+        "Delegate coding on this work item to Codex or Claude Code. It works in its own git worktree of the repository (an absolute path on the owner's Mac), of the business's GitHub repository (cloneRepository: owner/name, cloned into the business folder the first time), or of a new empty repository (newRepository: a folder name). Write the objective as a complete brief: what to build or change, the acceptance checks, and anything it must not do. It runs on its own; you are told when its turn ends. purpose 'review' starts a read-only session on another assignment's worktree (pass reviews).",
       effect: "change",
       replay: "idempotent",
       constraints: {
@@ -107,14 +110,17 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
             ),
           ),
         }),
-        // Without repositories, any repository on the Mac and new ones; with them, only those.
+        // Without repositories, any repository on the Mac or GitHub and new ones; with them, only
+        // those (paths, or owner/name for GitHub).
         allows: ({ providers: allowed, repositories }, input) =>
           (!allowed || allowed.includes(input.provider)) &&
           (!repositories ||
-            (input.repository !== undefined &&
-              repositories.some(
-                (root) => input.repository === root || input.repository!.startsWith(`${root}/`),
-              ))),
+            repositories.some(
+              (root) =>
+                (input.repository !== undefined &&
+                  (input.repository === root || input.repository.startsWith(`${root}/`))) ||
+                input.cloneRepository?.toLowerCase() === root.toLowerCase(),
+            )),
       },
       input: Schema.Struct({
         provider: ProviderInput,
@@ -125,6 +131,7 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
         newRepository: Schema.optional(
           Schema.String.check(Schema.isPattern(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/)),
         ),
+        cloneRepository: Schema.optional(GitHubName),
         purpose: Schema.optional(Schema.Literals(["build", "review"])),
         reviews: Schema.optional(AssignmentId),
       }),
@@ -137,11 +144,12 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
         Effect.gen(function* () {
           const { invocation, commitmentId } = yield* workItem;
           const purpose = input.purpose ?? "build";
-          if (purpose === "build" && !input.repository === !input.newRepository)
+          const targets = [input.repository, input.newRepository, input.cloneRepository];
+          if (purpose === "build" && targets.filter(Boolean).length !== 1)
             return yield* new CapabilityError({
               code: "invalid_input",
               message:
-                "Give exactly one of repository (an absolute path) or newRepository (a name).",
+                "Give exactly one of repository (an absolute path), cloneRepository (owner/name) or newRepository (a name).",
             });
           if (purpose === "review" && !input.reviews)
             return yield* new CapabilityError({
@@ -174,7 +182,9 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
               purpose,
               repository: input.repository
                 ? { path: input.repository }
-                : { create: input.newRepository ?? "unused" },
+                : input.cloneRepository
+                  ? { clone: input.cloneRepository }
+                  : { create: input.newRepository ?? "unused" },
               objective: input.objective,
               instructions: delegateInstructions(purpose),
               ...(input.reviews ? { reviews: input.reviews } : {}),
@@ -248,7 +258,7 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
     capability({
       name: "codingAccept",
       description:
-        "Accept a coding session's work: Devys commits its worktree on its branch and runs the repository's check command (for example `bun run verify`) against that commit. You are told how the check ended, and the commit and result are recorded as evidence. Pushing, merging and deploying are separate.",
+        "Accept a coding session's work: Devys commits its worktree on its branch and runs the repository's check command (for example `bun run verify`) against that commit. You are told how the check ended, and the commit and result are recorded as evidence. Publishing (codingPublish), merging and deploying are separate.",
       effect: "change",
       replay: "reconcile",
       input: Schema.Struct({
@@ -274,6 +284,51 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
             }),
           );
           return { commit: accepted.commit, diffStat: accepted.diffStat };
+        }),
+    }),
+    capability({
+      name: "codingPublish",
+      description:
+        "Publish a coding session's accepted work for review: Devys pushes the accepted commit to the session's branch on the business's GitHub repository (owner/name, which must be the repository's origin) and opens a pull request into the default branch, or returns the one already open. Accept the work and let its check pass first. Merging and deploying are separate decisions.",
+      effect: "external",
+      replay: "reconcile",
+      constraints: {
+        schema: Schema.Struct({
+          repositories: Schema.optional(Schema.Array(GitHubName).check(Schema.isMaxLength(50))),
+        }),
+        allows: ({ repositories }, input) =>
+          !repositories ||
+          repositories.some((name) => name.toLowerCase() === input.repository.toLowerCase()),
+      },
+      input: Schema.Struct({
+        assignment: AssignmentId,
+        repository: GitHubName,
+        title: Text(200),
+        body: Text(8000),
+      }),
+      output: Schema.Struct({
+        pullRequest: Schema.String,
+        branch: Schema.String,
+        commit: Schema.String,
+      }),
+      execute: ({ assignment: id, repository, title, body }) =>
+        Effect.gen(function* () {
+          const { invocation, commitmentId } = yield* owned(id);
+          const scope = { businessId: invocation.businessId, employeeId: invocation.employeeId };
+          const published = yield* rpc(() =>
+            dependencies.delegates(scope).publish(id, { repository, title, body }),
+          );
+          yield* rpc(() =>
+            dependencies.evidence(scope, commitmentId, {
+              commit: published.commit,
+              note: `Published ${published.commit.slice(0, 12)} to ${published.branch} on github.com/${published.repository} (repository ${published.repositoryId}), pull request into ${published.base}: ${published.pullRequest}`,
+            }),
+          );
+          return {
+            pullRequest: published.pullRequest,
+            branch: published.branch,
+            commit: published.commit,
+          };
         }),
     }),
   ];

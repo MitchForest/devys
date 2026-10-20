@@ -42,6 +42,7 @@ function harness() {
   } as unknown as Env;
   const starts: StartRequest[] = [];
   const sent: string[] = [];
+  const published: { id: string; repository: string; title: string }[] = [];
   const delegates: Delegates = {
     start: async (request) => {
       starts.push(request);
@@ -61,13 +62,24 @@ function harness() {
     },
     interrupt: async () => {},
     accept: async () => ({ commit: "b".repeat(40), diffStat: " 1 file changed", patch: "+x" }),
+    publish: async (id, request) => {
+      published.push({ id, ...request });
+      return {
+        repository: request.repository,
+        repositoryId: "R_kgDOtest",
+        branch: `devys/${id.slice(0, 12)}`,
+        base: "main",
+        commit: "b".repeat(40),
+        pullRequest: `https://github.com/${request.repository}/pull/7`,
+      };
+    },
   };
   const catalog = delegateCapabilities({
     ...delegateDependencies(bindings),
     delegates: () => delegates,
   });
   const named = (name: string) => catalog.find((item) => item.name === name)!;
-  return { received, bindings, starts, sent, named, delegates };
+  return { received, bindings, starts, sent, published, named, delegates };
 }
 
 const as = (
@@ -95,7 +107,7 @@ const as = (
 async function setup() {
   const state = harness();
   const { scope } = await business("Delegates");
-  for (const name of ["codingStart", "codingStatus", "codingSend", "codingAccept"])
+  for (const name of ["codingStart", "codingStatus", "codingSend", "codingAccept", "codingPublish"])
     await Effect.runPromise(grant(db, scope, { capability: state.named(name), mode: "auto" }));
   const work = await Effect.runPromise(
     createCommitment(db, scope.businessId, {
@@ -157,6 +169,57 @@ it("coding starts only from a work item, once per call, within the grant's repos
     start.execute(input).pipe(as(bindings, scope, work.id), Effect.exit),
   );
   expect(refused._tag).toBe("Failure");
+});
+
+it("coding clones the business's GitHub repository and publishes accepted work as a pull request", async () => {
+  const { bindings, scope, work, starts, published, named } = await setup();
+  const { assignment } = (await Effect.runPromise(
+    named("codingStart")
+      .execute({ provider: "codex", objective: "Fix the footer", cloneRepository: "acme/site" })
+      .pipe(as(bindings, scope, work.id)),
+  )) as { assignment: string };
+  expect(starts.at(-1)!.repository).toEqual({ clone: "acme/site" });
+  const two = await Effect.runPromise(
+    named("codingStart")
+      .execute({
+        provider: "codex",
+        objective: "x",
+        cloneRepository: "acme/site",
+        newRepository: "site",
+      })
+      .pipe(as(bindings, scope, work.id), Effect.flip),
+  );
+  expect(two).toMatchObject({ code: "invalid_input" });
+
+  const publish = named("codingPublish");
+  const result = await Effect.runPromise(
+    publish
+      .execute({ assignment, repository: "acme/site", title: "Fix the footer", body: "Checked." })
+      .pipe(as(bindings, scope, work.id)),
+  );
+  expect(result).toMatchObject({ pullRequest: "https://github.com/acme/site/pull/7" });
+  expect(published).toEqual([
+    { id: assignment, repository: "acme/site", title: "Fix the footer", body: "Checked." },
+  ]);
+  const evidence = (await Effect.runPromise(commitment(db, scope.businessId, work.id)))!.evidence;
+  expect(evidence.at(-1)!.note).toContain(
+    "to devys/" + assignment.slice(0, 12) + " on github.com/acme/site (repository R_kgDOtest)",
+  );
+  // A grant limited to other repositories refuses this one.
+  await Effect.runPromise(
+    grant(db, scope, {
+      capability: publish,
+      mode: "auto",
+      constraints: { repositories: ["acme/docs"] },
+    }),
+  );
+  const refused = await Effect.runPromise(
+    publish
+      .execute({ assignment, repository: "acme/site", title: "Again", body: "x" })
+      .pipe(as(bindings, scope, work.id), Effect.exit),
+  );
+  expect(refused._tag).toBe("Failure");
+  expect(published).toHaveLength(1);
 });
 
 it("host events become thread cards, wake the employee under a stable id, and record checks as evidence", async () => {
