@@ -18,15 +18,14 @@ import {
 } from "../apps/code/service.ts";
 import { scopeName, type Business, type Person, type Scope } from "../identity/contract.ts";
 import { activeEmployee } from "../identity/service.ts";
-import { sha256 } from "../protocol/bytes.ts";
+import { stableId } from "../protocol/bytes.ts";
 import { setFollowing } from "../conversations/service.ts";
 import { commitment, createCommitment, requeue } from "../work/service.ts";
 import { modeOf } from "./mode.ts";
 import { postEvent } from "./conversations.ts";
+import { body } from "./request.ts";
 
 type Access = { person: Person; business: Business; trusted: boolean; path: string };
-
-const json = async <T>(request: Request) => (await request.json().catch(() => ({}))) as Partial<T>;
 
 /**
  * The owner's side of coding sessions (.docs/PRODUCT_EXPERIENCE.md#first-class-coding-workspace):
@@ -81,7 +80,7 @@ export async function codingRoute(
       return new Response("Take over the work item to steer its session yourself.", {
         status: 409,
       });
-    const { text } = await json<{ text: string }>(request);
+    const { text } = await body<{ text: string }>(request, 64_000);
     if (typeof text !== "string" || !text.trim() || text.length > 8000)
       return new Response("Say what the session should do.", { status: 400 });
     const sent = await host.send(item.id, text);
@@ -126,14 +125,14 @@ async function startOwned(
   delegates: (scope: Scope) => Delegates,
 ) {
   const { person, business } = access;
-  const input = await json<{
+  const input = await body<{
     clientId: string;
     employee: string;
     provider: Provider;
     objective: string;
     repository: string;
     newRepository: string;
-  }>(request);
+  }>(request, 16_000);
   if (
     typeof input.clientId !== "string" ||
     !/^[A-Za-z0-9-]{8,64}$/.test(input.clientId) ||
@@ -152,14 +151,14 @@ async function startOwned(
     return new Response("Choose an employee of this business to hand it to later.", {
       status: 400,
     });
-  const digest = await sha256(`${business.id}:owned:${input.clientId}`);
-  const id = `${digest.slice(0, 8)}-${digest.slice(8, 12)}-${digest.slice(12, 16)}-${digest.slice(16, 20)}-${digest.slice(20, 32)}`;
+  const id = await stableId(`${business.id}:owned:${input.clientId}`);
   const existing = await Effect.runPromise(assignment(env.HYPERDRIVE, business.id, id));
   const workId =
     existing?.commitment_id ??
     (
       await Effect.runPromise(
         createCommitment(env.HYPERDRIVE, business.id, {
+          id: await stableId(`${business.id}:owned-work:${input.clientId}`),
           owner: scope.employeeId,
           title: input.objective.split("\n")[0]!.slice(0, 200),
           objective: input.objective.slice(0, 4000),

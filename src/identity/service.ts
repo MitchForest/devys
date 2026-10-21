@@ -22,12 +22,15 @@ export const isMachineOwner = (db: Database, personId: string) =>
     return first?.id === personId;
   });
 
-/** Employees who take no work now: paused or retired, in every business. */
-export const unavailableEmployees = (db: Database) =>
+/**
+ * Employees paused now, in every business: their work waits. Retired employees own no open
+ * work (retiring hands it over in the same transaction), so they need no skipping.
+ */
+export const pausedEmployees = (db: Database) =>
   database(db, async (sql) =>
     (
       await sql.rows<{ id: string }>(
-        "SELECT id FROM employees WHERE paused_at IS NOT NULL OR revoked_at IS NOT NULL",
+        "SELECT id FROM employees WHERE paused_at IS NOT NULL AND revoked_at IS NULL",
       )
     ).map((row) => row.id),
   );

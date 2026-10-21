@@ -33,6 +33,15 @@ export async function readBounded(
 export const sha256 = (value: string): Promise<string> =>
   sha256Bytes(new TextEncoder().encode(value));
 
+/**
+ * A UUID-shaped id derived from a seed, so a retried operation creates the same record:
+ * seed with the business and the trusted operation (or client) id.
+ */
+export async function stableId(seed: string): Promise<string> {
+  const digest = await sha256(seed);
+  return `${digest.slice(0, 8)}-${digest.slice(8, 12)}-${digest.slice(12, 16)}-${digest.slice(16, 20)}-${digest.slice(20, 32)}`;
+}
+
 export async function sha256Bytes(value: ArrayBuffer | Uint8Array): Promise<string> {
   const bytes = await crypto.subtle.digest("SHA-256", value as BufferSource);
   return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");

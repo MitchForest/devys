@@ -5,7 +5,7 @@ import { appCatalog } from "./apps.ts";
 import { grantAll } from "../authority/service.ts";
 import { atomically, type Database } from "../data/database.ts";
 import type { RoleTemplateId, Scope } from "../identity/contract.ts";
-import { createEmployee } from "../identity/service.ts";
+import { activeEmployee, createEmployee } from "../identity/service.ts";
 import {
   capability,
   CapabilityError,
@@ -13,6 +13,10 @@ import {
   type Capability,
 } from "../protocol/capability.ts";
 import { isConfiguredModel } from "./models.ts";
+
+/** Whether an employee directs others' work: the Head of Operations coordinates the team. */
+export const coordinates = async (env: Env, scope: Scope) =>
+  (await Effect.runPromise(activeEmployee(env.HYPERDRIVE, scope)))?.template === "operations";
 
 /**
  * Role templates. Hiring copies one into an ordinary employee that the owner can then

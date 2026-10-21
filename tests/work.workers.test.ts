@@ -12,6 +12,7 @@ import { Invocation } from "../src/protocol/capability.ts";
 import { createCommitment, commitment } from "../src/work/service.ts";
 import { createProject } from "../src/work/projects.ts";
 import { messages } from "../src/conversations/service.ts";
+import { createEmployee } from "../src/identity/service.ts";
 import { business, db, sql } from "./fixtures/postgres.ts";
 
 const bindings = env as unknown as Env;
@@ -127,6 +128,7 @@ it("an owner's rejection stands, and an approval covers only the work item it wa
     ["One", "Two"].map((title) =>
       Effect.runPromise(
         createCommitment(db, scope.businessId, {
+          id: crypto.randomUUID(),
           owner: scope.employeeId,
           title,
           createdBy: "person:test",
@@ -154,6 +156,7 @@ it("work's conditions only narrow, and taking it over stops the employee acting 
   await Effect.runPromise(grant(db, scope, { capability: read, mode: "auto" }));
   const work = await Effect.runPromise(
     createCommitment(db, scope.businessId, {
+      id: crypto.randomUUID(),
       owner: scope.employeeId,
       title: "Research Search Intelligence",
       conditions: { readPublicUrl: { hosts: ["searchintelligence.com"] } },
@@ -226,6 +229,7 @@ it("due work reaches its employee once per revision, and a lost hand-off is resu
   } as unknown as Env;
   const work = await Effect.runPromise(
     createCommitment(db, scope.businessId, {
+      id: crypto.randomUUID(),
       owner: scope.employeeId,
       title: "Draft the PR inquiry",
       createdBy: "person:test",
@@ -253,6 +257,7 @@ it("due work reaches its employee once per revision, and a lost hand-off is resu
   await sql.run("UPDATE employees SET paused_at = now() WHERE id = $1", [scope.employeeId]);
   const later = await Effect.runPromise(
     createCommitment(db, scope.businessId, {
+      id: crypto.randomUUID(),
       owner: scope.employeeId,
       title: "Later",
       createdBy: "person:test",
@@ -268,9 +273,12 @@ it("work in a project is handed over with a card in its thread and in the projec
     ...bindings,
     AGENT: { getByName: () => ({ receive: async () => ({ accepted: true }) }) },
   } as unknown as Env;
-  const launch = await Effect.runPromise(createProject(db, scope.businessId, { name: "Launch" }));
+  const launch = await Effect.runPromise(
+    createProject(db, scope.businessId, { id: crypto.randomUUID(), name: "Launch" }),
+  );
   const work = await Effect.runPromise(
     createCommitment(db, scope.businessId, {
+      id: crypto.randomUUID(),
       owner: scope.employeeId,
       title: "Started from a message",
       projectId: launch.id,
@@ -290,6 +298,7 @@ it("paused employees' work and a failing hand-off never hold up other work", asy
   for (let index = 0; index < 21; index++)
     await Effect.runPromise(
       createCommitment(db, paused.scope.businessId, {
+        id: crypto.randomUUID(),
         owner: paused.scope.employeeId,
         title: `Waiting ${index}`,
         createdBy: "person:test",
@@ -299,6 +308,7 @@ it("paused employees' work and a failing hand-off never hold up other work", asy
   const { scope } = await business();
   const broken = await Effect.runPromise(
     createCommitment(db, scope.businessId, {
+      id: crypto.randomUUID(),
       owner: scope.employeeId,
       title: "Fails",
       createdBy: "person:test",
@@ -306,6 +316,7 @@ it("paused employees' work and a failing hand-off never hold up other work", asy
   );
   const fine = await Effect.runPromise(
     createCommitment(db, scope.businessId, {
+      id: crypto.randomUUID(),
       owner: scope.employeeId,
       title: "Works",
       createdBy: "person:test",
@@ -514,6 +525,7 @@ it("handing back work with no coding sessions puts it back in the dispatcher's h
   const { scope } = await business();
   const work = await Effect.runPromise(
     createCommitment(db, scope.businessId, {
+      id: crypto.randomUUID(),
       owner: scope.employeeId,
       title: "Taken and returned",
       createdBy: "person:test",
@@ -524,4 +536,76 @@ it("handing back work with no coding sessions puts it back in the dispatcher's h
   const after = (await Effect.runPromise(commitment(db, scope.businessId, work.id)))!;
   expect(after.state).toBe("ready");
   expect(after.revision).toBeGreaterThan(work.revision);
+});
+
+it("a create rerun under the same operation id makes one work item and one project", async () => {
+  const { scope } = await business();
+  const rerun = <A, E>(effect: Effect.Effect<A, E, Invocation>) =>
+    Effect.runPromise(
+      effect.pipe(
+        Effect.provideService(Invocation, {
+          ...scope,
+          operationId: "recovered-call",
+          authorize: () => Effect.void,
+          assertActive: () => Effect.void,
+        }),
+      ),
+    );
+  const work = named("commitmentCreate").execute({ title: "Draft the inquiry" });
+  const first = (await rerun(work)) as { id: string };
+  expect(((await rerun(work)) as { id: string }).id).toBe(first.id);
+  const project = named("projectCreate").execute({ name: "Launch" });
+  const made = (await rerun(project)) as { id: string };
+  expect(((await rerun(project)) as { id: string }).id).toBe(made.id);
+  const counted = await sql.row<{ items: number; projects: number }>(
+    `SELECT (SELECT count(*)::int FROM commitments WHERE business_id = $1) AS items,
+            (SELECT count(*)::int FROM projects WHERE business_id = $1) AS projects`,
+    [scope.businessId],
+  );
+  expect(counted).toEqual({ items: 1, projects: 1 });
+});
+
+it("an employee changes only its own work items; Operations changes anyone's", async () => {
+  const { scope } = await business();
+  const engineer = await Effect.runPromise(
+    createEmployee(db, scope.businessId, {
+      name: "Engineering",
+      role: "Builds the product.",
+      model: "claude-opus-5-5",
+      template: "engineering",
+    }),
+  );
+  const acting = (employeeId: string) =>
+    Effect.provideService(Invocation, {
+      businessId: scope.businessId,
+      employeeId,
+      operationId: crypto.randomUUID(),
+      authorize: () => Effect.void,
+      assertActive: () => Effect.void,
+    });
+  const mine = await Effect.runPromise(
+    createCommitment(db, scope.businessId, {
+      id: crypto.randomUUID(),
+      owner: scope.employeeId,
+      title: "Plan the launch",
+      createdBy: "person:t",
+    }),
+  );
+  const update = (id: string, revision: number) =>
+    named("commitmentUpdate").execute({ id, expectedRevision: revision, nextAction: "Draft" });
+  const refused = await Effect.runPromise(
+    Effect.flip(update(mine.id, mine.revision).pipe(acting(engineer.id))),
+  );
+  expect(refused).toMatchObject({ code: "forbidden" });
+  const theirs = await Effect.runPromise(
+    createCommitment(db, scope.businessId, {
+      id: crypto.randomUUID(),
+      owner: engineer.id,
+      title: "Build the page",
+      createdBy: "person:t",
+    }),
+  );
+  expect(
+    await Effect.runPromise(update(theirs.id, theirs.revision).pipe(acting(scope.employeeId))),
+  ).toMatchObject({ nextAction: "Draft" });
 });

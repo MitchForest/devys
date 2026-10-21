@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import type { Env } from "./env.ts";
 import { conversationKey } from "../conversations/contract.ts";
 import type { Business, Person } from "../identity/contract.ts";
@@ -8,6 +8,7 @@ import { revisionConflict } from "../workspace/contract.ts";
 import { commitment } from "../work/service.ts";
 import { postFromPerson } from "./conversations.ts";
 import { modeOf } from "./mode.ts";
+import { body } from "./request.ts";
 
 type Access = { person: Person; business: Business; trusted: boolean; path: string };
 
@@ -29,11 +30,37 @@ const types: Record<string, string> = {
 };
 const rawBytes = 20_000_000;
 
+const Offset = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+const Coordinate = Schema.Finite;
 /** One anchored comment: a markdown source range, PDF page rectangles, or diff lines. */
-type Anchor =
-  | { kind: "text"; start: number; end: number; quote: string }
-  | { kind: "pdf"; page: number; rects: { x: number; y: number; width: number; height: number }[] }
-  | { kind: "lines"; start: number; end: number };
+const Anchor = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("text"),
+    start: Offset,
+    end: Offset,
+    quote: Schema.String.check(Schema.isMaxLength(4_000)),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("pdf"),
+    page: Offset,
+    rects: Schema.Array(
+      Schema.Struct({ x: Coordinate, y: Coordinate, width: Coordinate, height: Coordinate }),
+    ).check(Schema.isMaxLength(50)),
+  }),
+  Schema.Struct({ kind: Schema.Literal("lines"), start: Offset, end: Offset }),
+]);
+type Anchor = typeof Anchor.Type;
+const Comments = Schema.Struct({
+  id: Schema.String.check(Schema.isPattern(/^[A-Za-z0-9-]{8,64}$/)),
+  path: Schema.String,
+  employee: Schema.optional(Schema.String),
+  /** A work item whose thread gets the comments, addressed to its owner, instead of a DM. */
+  work: Schema.optional(Schema.String),
+  comments: Schema.Array(
+    Schema.Struct({ anchor: Anchor, text: Schema.String.check(Schema.isMaxLength(8_000)) }),
+  ).check(Schema.isMinLength(1), Schema.isMaxLength(100)),
+  message: Schema.optional(Schema.String.check(Schema.isMaxLength(8_000))),
+});
 
 /** A path in the business's folder on the Mac, or undefined (also outside local mode). */
 export function businessFile(env: Env, businessId: string, candidate: unknown) {
@@ -117,11 +144,11 @@ export async function filesRoute(request: Request, env: Env, access: Access) {
   }
   if (!trusted) return new Response("Forbidden", { status: 403 });
   if (path === "/files/text" && request.method === "PUT") {
-    const input = (await request.json().catch(() => ({}))) as {
-      path?: string;
-      content?: string;
-      expectedRevision?: string | null;
-    };
+    // Text files open up to 1 MB; JSON escaping can double it.
+    const input = await body<{ path: string; content: string; expectedRevision: string | null }>(
+      request,
+      2_000_000,
+    );
     const file = inside(input.path);
     if (!file || typeof input.content !== "string")
       return new Response("Send a path inside the business folder and its text", { status: 400 });
@@ -167,15 +194,12 @@ export async function filesRoute(request: Request, env: Env, access: Access) {
     }
   }
   if (path === "/files/comments" && request.method === "POST") {
-    const input = (await request.json().catch(() => ({}))) as {
-      id?: string;
-      path?: string;
-      employee?: string;
-      /** A work item whose thread gets the comments, addressed to its owner, instead of a DM. */
-      work?: string;
-      comments?: { anchor: Anchor; text: string }[];
-      message?: string;
-    };
+    const decoded = Schema.decodeUnknownOption(Comments)(await body(request, 64_000));
+    if (decoded._tag === "None")
+      return new Response("Send a client id, a file and comments with their anchors", {
+        status: 400,
+      });
+    const input = decoded.value;
     const file = inside(input.path);
     const work =
       typeof input.work === "string"
@@ -188,10 +212,8 @@ export async function filesRoute(request: Request, env: Env, access: Access) {
             activeEmployee(env.HYPERDRIVE, { businessId: business.id, employeeId }),
           )
         : undefined;
-    const comments = (input.comments ?? []).filter(
-      (comment) => typeof comment.text === "string" && comment.text.trim(),
-    );
-    if (!file || !employee || !comments.length || typeof input.id !== "string")
+    const comments = input.comments.filter((comment) => comment.text.trim());
+    if (!file || !employee || !comments.length)
       return new Response(
         "Send a file, an employee or a work item, a client id and at least one comment",
         { status: 400 },
@@ -209,7 +231,8 @@ export async function filesRoute(request: Request, env: Env, access: Access) {
       text: text.slice(0, 16_000),
       mentions: [employee.id],
     });
-    return Response.json(posted, { status: "paused" in posted ? 409 : 201 });
+    if ("refused" in posted) return new Response(posted.refused, { status: 409 });
+    return Response.json(posted, { status: 201 });
   }
   return new Response("Not found", { status: 404 });
 }

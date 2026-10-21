@@ -62,7 +62,7 @@ export function artifactCapabilities(
     capability({
       name: "artifactEdit",
       description:
-        "Change a page you published by replacing one exact piece of its HTML (it must appear once), publishing the result as the next version.",
+        "Change one of the business's pages by replacing one exact piece of its HTML (it must appear once), publishing the result as the next version.",
       effect: "change",
       replay: "idempotent",
       input: Schema.Struct({

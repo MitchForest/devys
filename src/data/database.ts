@@ -68,7 +68,8 @@ export async function transaction<A>(db: Database, use: (sql: Sql) => Promise<A>
       await client.query("COMMIT");
       return result;
     } catch (error) {
-      await client.query("ROLLBACK");
+      // The original failure is the one worth reporting, even if the rollback fails too.
+      await client.query("ROLLBACK").catch(() => undefined);
       throw error;
     }
   });

@@ -17,7 +17,7 @@ import { atomically } from "../data/database.ts";
 import { defaultApps } from "./apps.ts";
 import { install } from "../apps/service.ts";
 import { modeOf } from "./mode.ts";
-import { readBounded } from "../protocol/bytes.ts";
+import { body, RequestError } from "./request.ts";
 import { sameOrigin } from "../protocol/http.ts";
 import { grantAll } from "../authority/service.ts";
 import { hire, hireInput, roleTemplate, roleTemplates, templateGrants } from "./team.ts";
@@ -29,6 +29,15 @@ import { modelsConfig } from "../../config/models.ts";
 
 /** Webhooks and the API. Page rendering stays in the Worker entry. Undefined means "not an API path". */
 export async function apiRoute(request: Request, env: Env): Promise<Response | undefined> {
+  try {
+    return await route(request, env);
+  } catch (error) {
+    if (error instanceof RequestError) return new Response(error.message, { status: error.status });
+    throw error;
+  }
+}
+
+async function route(request: Request, env: Env): Promise<Response | undefined> {
   const path = new URL(request.url).pathname;
   if (path === "/health") return Response.json({ status: "ok" });
   if (path === "/webhooks/photon" && request.method === "POST") {
@@ -85,16 +94,12 @@ export async function apiRoute(request: Request, env: Env): Promise<Response | u
       return new Response("On a Mac in local mode only its owner creates businesses", {
         status: 403,
       });
-    const body = JSON.parse(new TextDecoder().decode(await readBounded(request.body, 8_000))) as {
-      name?: unknown;
-      brief?: unknown;
-      team?: unknown;
-    };
-    const name = typeof body.name === "string" ? body.name.trim() : "";
+    const input = await body<{ name: unknown; brief: unknown; team: unknown }>(request, 8_000);
+    const name = typeof input.name === "string" ? input.name.trim() : "";
     if (!name || name.length > 80) return new Response("Send a business name", { status: 400 });
-    const brief = typeof body.brief === "string" ? body.brief.trim().slice(0, 4000) : "";
+    const brief = typeof input.brief === "string" ? input.brief.trim().slice(0, 4000) : "";
     // The starting team: templates hired alongside the Head of Operations.
-    const team = Array.isArray(body.team) ? body.team.map(roleTemplate) : [];
+    const team = Array.isArray(input.team) ? input.team.map(roleTemplate) : [];
     if (
       team.some((template) => !template || template.id === "operations" || template.id === "custom")
     )

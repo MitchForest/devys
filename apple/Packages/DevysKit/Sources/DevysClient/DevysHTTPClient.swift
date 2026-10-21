@@ -138,10 +138,10 @@ public struct DevysHTTPClient: Sendable {
         ))
     }
 
-    /// A saved text file's contents, for showing Markdown inline.
+    /// A saved text artifact's whole contents, such as an employee's HTML page.
     public func artifactText(_ session: DeviceSession, businessID: String, artifactID: String) async throws -> String {
         let data = try await raw(authorized(session, path: "api/businesses/\(businessID)/artifacts/\(artifactID)"))
-        return String(bytes: data.prefix(256_000), encoding: .utf8) ?? ""
+        return String(bytes: data, encoding: .utf8) ?? ""
     }
 
     /// Business-wide memory.
@@ -248,6 +248,11 @@ public struct DevysHTTPClient: Sendable {
         let response: URLResponse
         do {
             (data, response) = try await transport(request)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as URLError where error.code == .cancelled {
+            // A view torn down mid-request is not an unreachable server.
+            throw CancellationError()
         } catch {
             throw DevysHTTPError.unreachable(error.localizedDescription)
         }

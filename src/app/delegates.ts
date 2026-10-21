@@ -12,6 +12,8 @@ import type { Commitment } from "../work/contract.ts";
 import { addEvidence, commitment } from "../work/service.ts";
 import { postEvent } from "./conversations.ts";
 import { modeOf } from "./mode.ts";
+import { body } from "./request.ts";
+import { coordinates } from "./team.ts";
 
 export function delegateDependencies(env: Env): DelegateDependencies {
   return {
@@ -28,6 +30,7 @@ export function delegateDependencies(env: Env): DelegateDependencies {
         }),
       );
     },
+    coordinates: (scope) => coordinates(env, scope),
     knownCommits: async (scope, commitmentId) =>
       (
         (await Effect.runPromise(commitment(env.HYPERDRIVE, scope.businessId, commitmentId)))
@@ -45,9 +48,12 @@ export async function codingIncomplete(env: Env, businessId: string, work: Commi
     await Effect.runPromise(assignmentsFor(env.HYPERDRIVE, businessId, work.id))
   ).filter((item) => item.purpose === "build");
   if (!builds.length) return undefined;
-  const check = work.evidence.findLast((entry) => entry.check)?.check;
+  // An acceptance records the commit with its changes; its check reports later against it.
+  const accepted = work.evidence.findLast((entry) => entry.changes !== undefined)?.commit;
+  const check =
+    accepted && work.evidence.findLast((entry) => entry.check && entry.commit === accepted)?.check;
   if (!check)
-    return "This work has a coding session: accept it with codingAccept and wait for the check to pass before completing.";
+    return "This work has a coding session: accept it with codingAccept and wait for the check of the accepted commit to pass before completing.";
   if (check.exitCode !== 0)
     return "The last check failed: fix it with codingSend, accept again, and complete once the check passes.";
   return undefined;
@@ -56,10 +62,11 @@ export async function codingIncomplete(env: Env, businessId: string, work: Commi
 /** Employee Stop also interrupts its coding sessions, so no child keeps working unnoticed. */
 export async function interruptAssignments(env: Env, scope: Scope) {
   const delegates = modeOf(env).delegates(scope);
-  for (const item of await Effect.runPromise(
+  const started = await Effect.runPromise(
     employeeAssignments(env.HYPERDRIVE, scope.businessId, scope.employeeId),
-  ))
-    await delegates.interrupt(item.id).catch(() => undefined);
+  );
+  // Interrupting an idle session changes nothing, so all are asked at once.
+  await Promise.allSettled(started.map((item) => delegates.interrupt(item.id)));
 }
 
 /** The "3 files changed, …" line of a diff stat, or how many files are new. */
@@ -82,10 +89,10 @@ export async function delegateEventsRoute(request: Request, env: Env) {
   const offered = await sha256(request.headers.get("authorization") ?? "");
   if (!token || offered !== (await sha256(`Bearer ${token}`)))
     return new Response("Unauthorized", { status: 401 });
-  const { events } = (await request.json()) as { events: DelegateEvent[] };
+  const { events } = await body<{ events: DelegateEvent[] }>(request, 8_000_000);
   // Each event is answered on its own, so one that keeps failing never holds up the rest.
   const delivered: string[] = [];
-  for (const event of events ?? [])
+  for (const event of Array.isArray(events) ? events : [])
     await deliverEvent(env, event).then(
       () => delivered.push(event.id),
       (error: unknown) => console.error(`Delegate event ${event.id} failed:`, error),

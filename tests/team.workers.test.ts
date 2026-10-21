@@ -146,6 +146,12 @@ it("members hire from templates, edit employees and the brief, and retire with a
       body: JSON.stringify({ title: "Pitch editors", owner: growth.id }),
     }),
   );
+  const launch = await json<{ id: string }>(
+    as(`${path}/projects`, {
+      method: "POST",
+      body: JSON.stringify({ name: "Launch", lead: growth.id, members: [growth.id] }),
+    }),
+  );
   expect(
     (
       await as(`${path}/employees/${acme.operations.id}/retire`, {
@@ -174,6 +180,13 @@ it("members hire from templates, edit employees and the brief, and retire with a
     [work.id],
   );
   expect(moved?.owner_employee_id).toBe(acme.operations.id);
+  // The successor leads and joins the retired employee's projects, so its channel is answered.
+  expect(await sql.row("SELECT lead_employee_id FROM projects WHERE id = $1", [launch.id])).toEqual(
+    { lead_employee_id: acme.operations.id },
+  );
+  expect(
+    await sql.rows("SELECT employee_id FROM project_members WHERE project_id = $1", [launch.id]),
+  ).toEqual([{ employee_id: acme.operations.id }]);
   expect(stopped.some((name) => name.includes(growth.id))).toBe(true);
 });
 
@@ -318,7 +331,12 @@ it("Home lists what needs the owner and the work at a glance, and briefs them on
   const scope = acme.scope;
   const work = async (title: string, state: string, extra = "") => {
     const created = await Effect.runPromise(
-      createCommitment(db, scope.businessId, { owner: ops, title, createdBy: "person:t" }),
+      createCommitment(db, scope.businessId, {
+        id: crypto.randomUUID(),
+        owner: ops,
+        title,
+        createdBy: "person:t",
+      }),
     );
     await sql.run(`UPDATE commitments SET state = $2${extra} WHERE id = $1`, [created.id, state]);
     return created.id;

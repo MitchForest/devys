@@ -1,10 +1,10 @@
 import { Effect, Schema } from "effect";
 import type { Database } from "../../data/database.ts";
 import type { Scope } from "../../identity/contract.ts";
-import { sha256 } from "../../protocol/bytes.ts";
+import { stableId } from "../../protocol/bytes.ts";
 import { capability, CapabilityError, Invocation } from "../../protocol/capability.ts";
 import { Ref, ref } from "../../protocol/ref.ts";
-import { rpc } from "../../protocol/rpc.ts";
+import { rpc, stored } from "../../protocol/rpc.ts";
 import {
   providers,
   type Assignment,
@@ -31,6 +31,8 @@ export interface DelegateDependencies {
   ): Promise<void>;
   /** Commits this work item's evidence names (accepted, checked or deployed): rollback targets. */
   knownCommits(scope: Scope, commitmentId: string): Promise<string[]>;
+  /** Whether this employee directs others' work (the Head of Operations). */
+  coordinates(scope: Scope): Promise<boolean>;
 }
 
 export const providerName = (provider: Provider) =>
@@ -82,11 +84,21 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
   const owned = (id: string) =>
     Effect.gen(function* () {
       const { invocation, commitmentId } = yield* workItem;
-      const found = yield* rpc(() => Effect.runPromise(assignment(db, invocation.businessId, id)));
+      const found = yield* stored(assignment(db, invocation.businessId, id));
       if (!found || found.commitment_id !== commitmentId || !found.session_id)
         return yield* new CapabilityError({
           code: "invalid_input",
           message: "No coding session with that id on this work item",
+        });
+      // A session is steered by the employee who started it, or by Operations.
+      const scope = { businessId: invocation.businessId, employeeId: invocation.employeeId };
+      if (
+        found.employee_id !== invocation.employeeId &&
+        !(yield* rpc(() => dependencies.coordinates(scope)))
+      )
+        return yield* new CapabilityError({
+          code: "forbidden",
+          message: "Another employee's coding session: ask them in this thread.",
         });
       return { invocation, commitmentId, found };
     });
@@ -167,22 +179,19 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
               message: "A review names the assignment it reviews.",
             });
           const scope = { businessId: invocation.businessId, employeeId: invocation.employeeId };
-          const digest = yield* Effect.promise(() =>
-            sha256(`${invocation.businessId}:${invocation.operationId}`),
+          const id = yield* Effect.promise(() =>
+            stableId(`${invocation.businessId}:${invocation.operationId}`),
           );
-          const id = `${digest.slice(0, 8)}-${digest.slice(8, 12)}-${digest.slice(12, 16)}-${digest.slice(16, 20)}-${digest.slice(20, 32)}`;
-          yield* rpc(() =>
-            Effect.runPromise(
-              recordAssignment(db, invocation.businessId, {
-                id,
-                commitmentId,
-                employeeId: invocation.employeeId,
-                provider: input.provider,
-                purpose,
-                objective: input.objective,
-                ...(input.reviews ? { reviews: input.reviews } : {}),
-              }),
-            ),
+          yield* stored(
+            recordAssignment(db, invocation.businessId, {
+              id,
+              commitmentId,
+              employeeId: invocation.employeeId,
+              provider: input.provider,
+              purpose,
+              objective: input.objective,
+              ...(input.reviews ? { reviews: input.reviews } : {}),
+            }),
           );
           const started = yield* rpc(() =>
             dependencies.delegates(scope).start({
@@ -200,9 +209,7 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
               ...(input.reviews ? { reviews: input.reviews } : {}),
             }),
           );
-          yield* rpc(() =>
-            Effect.runPromise(recordStarted(db, invocation.businessId, id, started)),
-          );
+          yield* stored(recordStarted(db, invocation.businessId, id, started));
           return {
             assignment: id,
             branch: started.branch,
@@ -223,8 +230,8 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
         Effect.gen(function* () {
           const { invocation, commitmentId } = yield* workItem;
           const scope = { businessId: invocation.businessId, employeeId: invocation.employeeId };
-          const items = (yield* rpc(() =>
-            Effect.runPromise(assignmentsFor(db, invocation.businessId, commitmentId)),
+          const items = (yield* stored(
+            assignmentsFor(db, invocation.businessId, commitmentId),
           )).filter((item) => item.session_id && (!id || item.id === id));
           const sessions = [];
           for (const item of items) sessions.push(yield* statusOf(scope, item));

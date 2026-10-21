@@ -1,6 +1,8 @@
 import { Effect, Schema } from "effect";
 import type { Database } from "../data/database.ts";
+import { stableId } from "../protocol/bytes.ts";
 import { capability, CapabilityError, Invocation } from "../protocol/capability.ts";
+import { rpc, stored } from "../protocol/rpc.ts";
 import { Ref, ref } from "../protocol/ref.ts";
 import type { Commitment, Project } from "./contract.ts";
 import {
@@ -71,13 +73,6 @@ const view = (item: Project) => ({
   items: item.items,
 });
 
-const run = <A>(effect: Effect.Effect<A, unknown>) =>
-  effect.pipe(
-    Effect.mapError(
-      () => new CapabilityError({ code: "unavailable", message: "Work records are unavailable" }),
-    ),
-  );
-
 /** The business's durable work, operated by employees through the same rules as people. */
 export function workCapabilities(
   db: Database,
@@ -86,11 +81,34 @@ export function workCapabilities(
   keepable: (businessId: string, ref: Ref) => Promise<boolean>,
   /** Why this work cannot be completed yet (such as a coding check that has not passed). */
   completionBlocked: (businessId: string, work: Commitment) => Promise<string | undefined>,
+  /** Whether this employee directs others' work (the Head of Operations). */
+  coordinates: (businessId: string, employeeId: string) => Promise<boolean>,
 ) {
+  /** A work item is changed by its owner, or by Operations; others ask in its thread. */
+  const ownWork = (id: string) =>
+    Effect.gen(function* () {
+      const { businessId, employeeId } = yield* Invocation;
+      const work = yield* stored(commitment(db, businessId, id));
+      if (!work)
+        return yield* new CapabilityError({
+          code: "invalid_input",
+          message: "No such work item in this business",
+        });
+      if (
+        work.owner_employee_id !== employeeId &&
+        !(yield* rpc(() => coordinates(businessId, employeeId)))
+      )
+        return yield* new CapabilityError({
+          code: "forbidden",
+          message: "Another employee's work item: ask its owner in its thread.",
+        });
+      return work;
+    });
   const change = (id: string, expectedRevision: number, value: Change) =>
     Effect.gen(function* () {
       const { businessId, employeeId } = yield* Invocation;
-      const updated = yield* run(
+      yield* ownWork(id);
+      const updated = yield* stored(
         updateCommitment(db, businessId, id, expectedRevision, value, {
           kind: "employee",
           id: employeeId,
@@ -106,7 +124,7 @@ export function workCapabilities(
   const checkEmployees = (businessId: string, ids: readonly string[]) =>
     Effect.gen(function* () {
       for (const id of ids)
-        if (!(yield* Effect.promise(() => employeeIn(businessId, id))))
+        if (!(yield* rpc(() => employeeIn(businessId, id))))
           return yield* new CapabilityError({
             code: "invalid_input",
             message: "Leads and members must be employees of this business",
@@ -124,7 +142,7 @@ export function workCapabilities(
       execute: ({ openOnly }) =>
         Effect.gen(function* () {
           const { businessId } = yield* Invocation;
-          const items = yield* run(commitments(db, businessId));
+          const items = yield* stored(commitments(db, businessId));
           return {
             commitments: items
               .filter((item) => !openOnly || !["completed", "cancelled"].includes(item.state))
@@ -149,21 +167,23 @@ export function workCapabilities(
       output: Schema.Struct({ ...Summary.fields, ref: Ref }),
       execute: (input) =>
         Effect.gen(function* () {
-          const { businessId, employeeId } = yield* Invocation;
+          const { businessId, employeeId, operationId } = yield* Invocation;
           const owner = input.owner ?? employeeId;
-          if (!(yield* Effect.promise(() => employeeIn(businessId, owner))))
+          if (!(yield* rpc(() => employeeIn(businessId, owner))))
             return yield* new CapabilityError({
               code: "invalid_input",
               message: "The accountable employee isn't part of this business",
             });
-          if (input.projectId && !(yield* run(project(db, businessId, input.projectId))))
+          if (input.projectId && !(yield* stored(project(db, businessId, input.projectId))))
             return yield* new CapabilityError({
               code: "invalid_input",
               message: "No such project in this business",
             });
+          const id = yield* Effect.promise(() => stableId(`${businessId}:${operationId}`));
           const created = summary(
-            yield* run(
+            yield* stored(
               createCommitment(db, businessId, {
+                id,
                 owner,
                 title: input.title,
                 ...(input.objective ? { objective: input.objective } : {}),
@@ -215,9 +235,8 @@ export function workCapabilities(
       execute: ({ id, expectedRevision, evidence }) =>
         Effect.gen(function* () {
           const { businessId, employeeId } = yield* Invocation;
-          const work = yield* run(commitment(db, businessId, id));
-          const blocked =
-            work && (yield* run(Effect.promise(() => completionBlocked(businessId, work))));
+          const work = yield* ownWork(id);
+          const blocked = yield* rpc(() => completionBlocked(businessId, work));
           if (blocked) return yield* new CapabilityError({ code: "conflict", message: blocked });
           return yield* change(id, expectedRevision, {
             state: "completed",
@@ -236,7 +255,7 @@ export function workCapabilities(
       execute: () =>
         Effect.gen(function* () {
           const { businessId } = yield* Invocation;
-          return { projects: (yield* run(projects(db, businessId))).map(view) };
+          return { projects: (yield* stored(projects(db, businessId))).map(view) };
         }),
     }),
     capability({
@@ -255,10 +274,12 @@ export function workCapabilities(
       output: Schema.Struct({ ...ProjectView.fields, ref: Ref }),
       execute: ({ name, goal, deadline, budget, members }) =>
         Effect.gen(function* () {
-          const { businessId, employeeId } = yield* Invocation;
+          const { businessId, employeeId, operationId } = yield* Invocation;
           yield* checkEmployees(businessId, members ?? []);
-          const created = yield* run(
+          const id = yield* Effect.promise(() => stableId(`${businessId}:${operationId}`));
+          const created = yield* stored(
             createProject(db, businessId, {
+              id,
               name,
               ...(goal ? { goal } : {}),
               ...(deadline ? { deadline } : {}),
@@ -290,7 +311,7 @@ export function workCapabilities(
         Effect.gen(function* () {
           const { businessId } = yield* Invocation;
           yield* checkEmployees(businessId, [...(lead ? [lead] : []), ...(members ?? [])]);
-          const updated = yield* run(
+          const updated = yield* stored(
             updateProject(db, businessId, id, {
               ...rest,
               ...(lead ? { lead } : {}),
@@ -316,12 +337,12 @@ export function workCapabilities(
       execute: ({ projectId, ref: kept }) =>
         Effect.gen(function* () {
           const { businessId } = yield* Invocation;
-          if (!(yield* Effect.promise(() => keepable(businessId, kept))))
+          if (!(yield* rpc(() => keepable(businessId, kept))))
             return yield* new CapabilityError({
               code: "invalid_input",
               message: "No such artifact or file in this business",
             });
-          const item = yield* run(addToProject(db, businessId, projectId, kept));
+          const item = yield* stored(addToProject(db, businessId, projectId, kept));
           if (!item)
             return yield* new CapabilityError({
               code: "invalid_input",

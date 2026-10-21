@@ -14,7 +14,7 @@ import { messages } from "../src/conversations/service.ts";
 import { delegateCapabilities } from "../src/apps/code/capabilities.ts";
 import type { Delegates, StartRequest } from "../src/apps/code/contract.ts";
 import { Invocation } from "../src/protocol/capability.ts";
-import { commitment, createCommitment, setTakeover } from "../src/work/service.ts";
+import { addEvidence, commitment, createCommitment, setTakeover } from "../src/work/service.ts";
 import { codingRoute, handBack } from "../src/app/coding.ts";
 import { business, db, sql } from "./fixtures/postgres.ts";
 
@@ -135,6 +135,7 @@ async function setup() {
   );
   const work = await Effect.runPromise(
     createCommitment(db, scope.businessId, {
+      id: crypto.randomUUID(),
       owner: scope.employeeId,
       title: "Add a waitlist page",
       createdBy: "person:test",
@@ -333,6 +334,27 @@ it("host events become thread cards, wake the employee under a stable id, and re
     ["b", 0],
   ]);
   expect(received).toHaveLength(4);
+  // A later acceptance needs its own check: the earlier commit's pass does not cover it.
+  await Effect.runPromise(
+    addEvidence(db, scope.businessId, work.id, {
+      by: "employee:test",
+      note: "Committed a fix",
+      commit: "c".repeat(40),
+      changes: "1 file changed",
+    }),
+  );
+  expect(await codingIncomplete(bindings, scope.businessId, await current())).toMatch(
+    /codingAccept/,
+  );
+  await Effect.runPromise(
+    addEvidence(db, scope.businessId, work.id, {
+      by: "devys",
+      note: "checked",
+      commit: "c".repeat(40),
+      check: { command: "bun test", exitCode: 0 },
+    }),
+  );
+  expect(await codingIncomplete(bindings, scope.businessId, await current())).toBeUndefined();
 });
 
 it("the owner steers a session only after taking the work over; handing back wakes its employee", async () => {
@@ -496,6 +518,7 @@ it("comments on a file reach the chosen employee's DM as one message with their 
   // Or to a work item's thread, addressed to its owner.
   const own = await Effect.runPromise(
     createCommitment(db, scope.businessId, {
+      id: crypto.randomUUID(),
       owner: scope.employeeId,
       title: "Fix the plan",
       createdBy: "person:test",

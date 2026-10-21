@@ -31,12 +31,15 @@ it("B0 exit: an employee's capabilities see only its own business's work, projec
   const globex = await business("Globex");
   await Effect.runPromise(
     createCommitment(db, acme.business.id, {
+      id: crypto.randomUUID(),
       owner: acme.scope.employeeId,
       title: "Acme launch",
       createdBy: "person:t",
     }),
   );
-  const launch = await Effect.runPromise(createProject(db, acme.business.id, { name: "Launch" }));
+  const launch = await Effect.runPromise(
+    createProject(db, acme.business.id, { id: crypto.randomUUID(), name: "Launch" }),
+  );
   await Effect.runPromise(
     createMemory(db, acme.business.id).remember(
       { key: "launch-month", content: "Acme launches in November", source: "user" },

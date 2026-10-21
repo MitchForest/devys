@@ -4,7 +4,7 @@ import DevysDesignSystem
 import SwiftUI
 import WebKit
 
-/// The policy pages render under, the web's `pagePolicy` (src/artifacts/contract.ts): inline
+/// The policy pages render under, the web's `pagePolicy` (src/apps/documents/contract.ts): inline
 /// styles, scripts and data: images; nothing fetched, no forms, no navigation.
 private let pagePolicy =
     "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; font-src data:; form-action 'none'; base-uri 'none'"

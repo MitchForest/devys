@@ -15,6 +15,7 @@ import { lookPhoto, parseLook, removeLookPhoto } from "../identity/looks.ts";
 import type { Look } from "../identity/contract.ts";
 import { atomically } from "../data/database.ts";
 import { grant, grantsFor, revokeGrant } from "../authority/service.ts";
+import { handOverProjects } from "../work/projects.ts";
 import { reassignOpen } from "../work/service.ts";
 import type { Mode } from "../authority/contract.ts";
 import { bindableChannels, type BindableChannel } from "./channel.ts";
@@ -88,6 +89,9 @@ export async function employeeRoute(
     await atomically(env.HYPERDRIVE, async (db) => {
       await Effect.runPromise(retireEmployee(db, scope));
       await Effect.runPromise(reassignOpen(db, scope.businessId, scope.employeeId, successor.id));
+      await Effect.runPromise(
+        handOverProjects(db, scope.businessId, scope.employeeId, successor.id),
+      );
     });
     await agent().stop(scope);
     return Response.json({ retired: true, reassignedTo: successor.id });

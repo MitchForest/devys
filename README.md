@@ -136,8 +136,12 @@ also verified live. No public product has launched.
 - **Pages.** Employees publish self-contained HTML pages (`artifactPage`, `artifactEdit`):
   reports, comparisons, dashboards. A card in the conversation opens the page in an
   opaque-origin sandbox that fetches nothing; **Keep** lists it on a project's overview.
-- **Not built:** desktop control, the broker and vault, signed decisions, community and
-  custom apps, purchases, mail and launch connectors.
+- **Not built:** routines, the Knowledge app and a learning loop, the broker and vault,
+  signed decisions, the event stream and push, connections for launch providers, mail,
+  purchases, desktop control, the voice and ambient additions, cloud mode's coding runners,
+  files, terminals and browser, community and custom apps, and distribution. First comes an
+  alignment pass: the code still says commitment and assignment where the product says work
+  item and coding session, and some capabilities are still defined in wiring.
 
 The prior Pi/Effect refinement and
 iMessage acceptance guide retain foundation
@@ -161,10 +165,13 @@ billing, and automated customer provisioning are not implemented.
 
 ## Verification status
 
-On 2026-10-20, on the owner's MacBook standing in for the Mac mini, after the security and
-correctness repairs: `bun run verify` (format, lint, types, 114 unit tests, 4 Bun host tests,
-122 Workers tests of which 4 are live-model tests skipped by default, build), `bun run test:browser` (12) and `bun run test:apple`. `bun run test:channel` last
-passed at the conversations closeout.
+On 2026-10-21, on the owner's MacBook standing in for the Mac mini, on `106d194`:
+`bun run verify` (format, lint, types, 138 unit tests, 4 Bun host tests, 133 Workers tests of
+which 4 are live-model tests skipped by default, build), `bun run test:browser` (17) and
+`bun run test:apple` (DevysKit 135 and DevysTerminal 72 tests, both builds, strict lint);
+web walk-throughs at desktop, iPad and phone widths and iPad and iPhone simulator
+walk-throughs against a seeded Acme business. `bun run test:channel` last passed at the
+conversations closeout.
 Live: a conversation with real models routed by the rules (Engineering consulted Growth by
 @mention and got the answer back), and an employee opened a real pull request through
 Devys. Each slice's evidence is in the delivery plan.
@@ -174,7 +181,9 @@ Not yet verified:
 - HTTPS Tailscale Serve and Funnel (the tailnet admin has not enabled Serve; the TCP
   forward works and the iPad signs in through it).
 - The conversation-first, coding, terminal and document screens by hand on the physical
-  iPad and Mac, and an accessibility pass (VoiceOver, Dynamic Type, keyboard).
+  iPad and Mac (the Mac app has not been driven by hand since the conversation-first shell),
+  and an accessibility pass (VoiceOver, Dynamic Type, keyboard).
+- A live run of projects, Home and kept pages with a real model.
 - Plain HTTP to the tailnet name from a physical iPhone.
 - iMessage end to end (no Photon credentials configured).
 - A cloud deploy of the local-mode slices onward, a real reboot of the Mac, and a coding
@@ -187,8 +196,8 @@ restoration. The channel test simulates Photon and sends no real iMessages.
 
 ## Current capability boundaries
 
-- Public HTTPS reads are bounded raw content. There is no agent browser or web
-  search integration yet; Playwright currently verifies the supporting web app.
+- Public HTTPS reads are bounded raw content. No web search integration; the business
+  browser is local-mode only.
 - Recall uses the replaceable memory API (Postgres today), with bounded keyword and
   relationship lookup. Pi owns each employee's transcript and compaction.
   `conversationHistory` pages back through the shared conversation the current turn
@@ -246,9 +255,11 @@ is present. Model arguments never select credentials.
 
 ## Active roadmap
 
-Next: routines, the broker and
-signed decisions, a live event stream and push, mail, purchases, desktop control, voice,
-cloud mode and coding runners, the app directory, and distribution.
+Next: an alignment pass (one name per concept in code, schema and wire; every capability
+defined with its app; one wire contract; the same layer rules on web and native), then
+routines, the Knowledge app and a learning loop, the broker and signed decisions, a live
+event stream and push, connections in the app platform, mail, purchases, desktop control,
+voice, cloud mode and coding runners, the app directory, and distribution.
 
 ## Native clients (macOS, iPhone, iPad)
 
@@ -591,7 +602,7 @@ operation already accepted by an external destination.
 
 Memory is an owner-scoped, replaceable Effect subsystem. It learns useful facts
 from authenticated conversations, applies explicit corrections immediately,
-consolidates in the background, and injects bounded personal context into Pi.
+consolidates in the background, and injects bounded business context into Pi.
 Claims preserve evidence, scope, dates and named relationships. Forgetting removes
 selected knowledge and suppresses supporting sources from future learning;
 original conversation retention is separate.

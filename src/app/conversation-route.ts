@@ -92,9 +92,6 @@ export async function conversationRoute(
       : {}),
     viaVoice: input.viaVoice === true,
   });
-  if ("paused" in posted)
-    return new Response(`${posted.paused.join(" and ")} is paused. Resume them to send.`, {
-      status: 409,
-    });
+  if ("refused" in posted) return new Response(posted.refused, { status: 409 });
   return Response.json(posted, { status: 201 });
 }

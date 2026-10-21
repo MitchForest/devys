@@ -346,13 +346,19 @@ function useWorkspaceState() {
     void loadAccount();
   }, [loadAccount]);
 
+  // Fetched when the signed-in person changes or after an upload; the previous URL is freed.
   const loadOwnerPhoto = useCallback(async () => {
     const response = await fetch(api.profilePhotoUrl, { cache: "no-store" }).catch(() => undefined);
-    setOwnerPhoto(response?.ok ? URL.createObjectURL(await response.blob()) : undefined);
+    const next = response?.ok ? URL.createObjectURL(await response.blob()) : undefined;
+    setOwnerPhoto((previous) => {
+      if (previous) URL.revokeObjectURL(previous);
+      return next;
+    });
   }, []);
+  const personId = person?.id;
   useEffect(() => {
-    if (person) void loadOwnerPhoto();
-  }, [person, loadOwnerPhoto]);
+    if (personId) void loadOwnerPhoto();
+  }, [personId, loadOwnerPhoto]);
   // The deployment's models and role templates are the same for every business.
   const signedIn = Boolean(person);
   useEffect(() => {

@@ -86,6 +86,7 @@ export async function workRoute(
     }
     const created = await Effect.runPromise(
       createCommitment(env.HYPERDRIVE, business.id, {
+        id: crypto.randomUUID(),
         owner: input.owner!,
         title,
         ...(typeof input.objective === "string"

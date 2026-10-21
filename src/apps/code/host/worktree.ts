@@ -1,7 +1,7 @@
 /** Git worktrees for assignments, through the owner's own `git`. */
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { mkdir, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
@@ -162,13 +162,15 @@ export async function stopProcessesIn(worktree: string, spared: readonly string[
   const { stdout } = await exec("lsof", ["-d", "cwd", "-F", "pn"], {
     maxBuffer: 8 * patchBytes,
   }).catch((error: { stdout?: string }) => ({ stdout: error.stdout ?? "" }));
+  // lsof reports real paths (/private/var/… for /var/…), so match the worktree's real path.
+  const root = await realpath(worktree).catch(() => worktree);
   const inside: number[] = [];
   let pid = 0;
   for (const line of stdout.split("\n")) {
     if (line.startsWith("p")) pid = Number(line.slice(1));
     else if (line.startsWith("n") && pid !== process.pid) {
       const cwd = line.slice(1);
-      if (cwd === worktree || cwd.startsWith(`${worktree}/`)) inside.push(pid);
+      if (cwd === root || cwd.startsWith(`${root}/`)) inside.push(pid);
     }
   }
   // The owner's own terminals in the worktree are spared, with everything running in them.

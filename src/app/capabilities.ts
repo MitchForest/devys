@@ -3,7 +3,7 @@ import type { MemoryFactory } from "../memory/contract.ts";
 import { memoryFor } from "./memory.ts";
 import { modeOf } from "./mode.ts";
 import { browserCapabilities } from "../browser/capabilities.ts";
-import { teamCapabilities } from "./team.ts";
+import { coordinates, teamCapabilities } from "./team.ts";
 import { memoryCapabilities } from "../memory/capabilities.ts";
 import { driveCapabilities } from "../connections/capabilities.ts";
 import { workspaceCapabilities } from "../workspace/capabilities.ts";
@@ -46,6 +46,7 @@ export function capabilities(
         ),
       (businessId, ref) => keepable(env, businessId, ref),
       (businessId, work) => codingIncomplete(env, businessId, work),
+      (businessId, employeeId) => coordinates(env, { businessId, employeeId }),
     ),
   ];
   return [...catalog, ...teamCapabilities(env, () => capabilities(env, memory))];

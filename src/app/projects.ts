@@ -131,7 +131,10 @@ export async function projectRoute(
     if (typeof checked === "string") return new Response(checked, { status: 400 });
     return Response.json(
       await Effect.runPromise(
-        createProject(env.HYPERDRIVE, business.id, checked as ProjectChange & { name: string }),
+        createProject(env.HYPERDRIVE, business.id, {
+          ...(checked as ProjectChange & { name: string }),
+          id: crypto.randomUUID(),
+        }),
       ),
       { status: 201 },
     );

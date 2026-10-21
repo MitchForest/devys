@@ -79,20 +79,44 @@ async function setMembers(sql: Sql, businessId: string, id: string, members: rea
   );
 }
 
+/**
+ * Hands one employee's projects to another, as when the first retires: the lead, and the
+ * membership. Run it in the same transaction as the retirement.
+ */
+export const handOverProjects = (db: Database, businessId: string, from: string, to: string) =>
+  database(db, async (sql) => {
+    await sql.run(
+      `UPDATE projects SET lead_employee_id = $3
+       WHERE business_id = $1 AND lead_employee_id = $2`,
+      [businessId, from, to],
+    );
+    await sql.run(
+      `INSERT INTO project_members (business_id, project_id, employee_id)
+       SELECT business_id, project_id, $3 FROM project_members
+       WHERE business_id = $1 AND employee_id = $2 ON CONFLICT DO NOTHING`,
+      [businessId, from, to],
+    );
+    await sql.run("DELETE FROM project_members WHERE business_id = $1 AND employee_id = $2", [
+      businessId,
+      from,
+    ]);
+  });
+
 /** The caller has checked the lead and members are employees of this business. */
 export const createProject = (
   db: Database,
   businessId: string,
-  input: ProjectChange & { name: string },
+  /** A new id, or one derived from the operation so a retried create makes one project. */
+  input: ProjectChange & { id: string; name: string },
 ) =>
   database(
     db,
     async (sql) => {
-      const id = crypto.randomUUID();
-      await sql.run(
+      const { id } = input;
+      const inserted = await sql.run(
         `INSERT INTO projects (id, business_id, name, goal, deadline, budget_cents,
            budget_currency, lead_employee_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (id) DO NOTHING`,
         [
           id,
           businessId,
@@ -104,8 +128,11 @@ export const createProject = (
           input.lead ?? null,
         ],
       );
-      await setMembers(sql, businessId, id, input.members ?? []);
-      return (await load(sql, businessId, id))[0]!;
+      // A retry returns the project its first attempt made, members unchanged.
+      if (inserted) await setMembers(sql, businessId, id, input.members ?? []);
+      const [created] = await load(sql, businessId, id);
+      if (!created) throw new Error("A project with this id belongs to another business");
+      return created;
     },
     { transaction: true },
   );

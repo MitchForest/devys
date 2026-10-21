@@ -223,11 +223,22 @@ export abstract class AgentRuntime<
         ? `${context.kind}:${context.id}`
         : `direct:${this.scope().employeeId}`
       : undefined;
-    if (evidence.length)
-      await Effect.runPromise(this.services.memory(this.scope().businessId).observe(evidence));
+    // Memory being down never stops work: a missed observation is caught up later, and only
+    // observed evidence is cited.
+    const observed =
+      evidence.length &&
+      (await Effect.runPromise(
+        this.services.memory(this.scope().businessId).observe(evidence),
+      ).then(
+        () => true,
+        (error: unknown) => {
+          console.warn("Devys memory observation failed", error);
+          return false;
+        },
+      ));
     const scope = this.scope();
     return {
-      evidenceIds: evidence.map((item) => item.id),
+      evidenceIds: observed ? evidence.map((item) => item.id) : [],
       ...scope,
       ...(commitmentId ? { commitmentId } : {}),
       ...(conversation ? { conversation } : {}),
@@ -714,7 +725,8 @@ export abstract class AgentRuntime<
       const prepared = await this.services.channel.prepare(this.scope(), message.input);
       return {
         message: await this.ctx.storage.transaction(async (tx) => {
-          const latest = (await tx.get<ChannelMessage>(key))!;
+          // A message forgotten meanwhile is treated as cancelled, never recreated.
+          const latest = (await tx.get<ChannelMessage>(key)) ?? { ...message, cancelled: true };
           if (!latest.cancelled) {
             latest.text = prepared;
             await tx.put(key, latest);
@@ -724,7 +736,8 @@ export abstract class AgentRuntime<
       };
     } catch {
       const latest = await this.ctx.storage.transaction(async (tx) => {
-        const latest = (await tx.get<ChannelMessage>(key))!;
+        const latest = await tx.get<ChannelMessage>(key);
+        if (!latest) return { ...message, cancelled: true };
         latest.preparationAttempts = (latest.preparationAttempts ?? 0) + 1;
         if (latest.preparationAttempts >= 3) latest.cancelled = true;
         await tx.put(key, latest);
@@ -843,7 +856,9 @@ export abstract class AgentRuntime<
     // Record an attempted send before networking so a crash cannot later
     // make an unconfirmed send look as though it was never attempted.
     output = await this.ctx.storage.transaction(async (tx) => {
-      const latest = (await tx.get<Outbox>(key))!;
+      // An outbox forgotten meanwhile is not sent.
+      const latest = await tx.get<Outbox>(key);
+      if (!latest) return { ...output, status: "cancelled" as const };
       if (latest.status !== "pending") return latest;
       if (latest.attempts >= 5) latest.status = "uncertain";
       else latest.attempts++;
@@ -859,7 +874,8 @@ export abstract class AgentRuntime<
       output.replyTo,
     );
     output = await this.ctx.storage.transaction(async (tx) => {
-      const latest = (await tx.get<Outbox>(key))!;
+      // Forgotten meanwhile: the send's outcome is still what is reported, not stored.
+      const latest = (await tx.get<Outbox>(key)) ?? { ...output };
       if (sent.status === "sent") latest.status = "sent";
       else if (latest.status === "pending" && latest.attempts >= 5) latest.status = "uncertain";
       await tx.put(key, latest);

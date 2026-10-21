@@ -26,6 +26,8 @@ export const createCommitment = (
   db: Database,
   businessId: string,
   input: {
+    /** A new id, or one derived from the operation so a retried create makes one item. */
+    id: string;
     owner: string;
     title: string;
     objective?: string;
@@ -40,13 +42,14 @@ export const createCommitment = (
   },
 ) =>
   database(db, async (sql) => {
-    const created = await sql.row<Commitment>(
+    await sql.run(
       `INSERT INTO commitments (id, business_id, owner_employee_id, title, objective, next_action,
          due_at, conditions, created_by, taken_over_by, project_id, state)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-         CASE WHEN $10::text IS NULL THEN 'ready' ELSE 'in_progress' END) RETURNING ${columns}`,
+         CASE WHEN $10::text IS NULL THEN 'ready' ELSE 'in_progress' END)
+       ON CONFLICT (id) DO NOTHING`,
       [
-        crypto.randomUUID(),
+        input.id,
         businessId,
         input.owner,
         input.title,
@@ -59,7 +62,13 @@ export const createCommitment = (
         input.projectId ?? null,
       ],
     );
-    return created!;
+    // A retry finds the item its first attempt made; an id of another business finds nothing.
+    const created = await sql.row<Commitment>(
+      `SELECT ${columns} FROM commitments WHERE business_id = $1 AND id = $2`,
+      [businessId, input.id],
+    );
+    if (!created) throw new Error("A work item with this id belongs to another business");
+    return created;
   });
 
 export interface Change {
@@ -177,7 +186,6 @@ export const setTakeover = (db: Database, businessId: string, id: string, person
     ),
   );
 
-/** Ready work whose current revision hasn't been handed to its employee yet. */
 /** Ready, due work, skipping owners who take no work now so they cannot hold up the rest. */
 export const dueCommitments = (db: Database, skipOwners: readonly string[], limit = 20) =>
   database(db, (sql) =>
@@ -190,12 +198,18 @@ export const dueCommitments = (db: Database, skipOwners: readonly string[], limi
     ),
   );
 
-/** Records that this revision reached the employee's runtime. Pi dedupes resubmission. */
+/**
+ * Records that this revision reached the employee's runtime (Pi dedupes resubmission). A
+ * later revision made before this lands (the employee's own turn already changing it) is
+ * covered by the same hand-off, so it is not handed over a second time.
+ */
 export const markSubmitted = (db: Database, id: string, revision: number) =>
   database(db, (sql) =>
     sql.run(
-      `UPDATE commitments SET state = 'in_progress', submitted_revision = revision
-       WHERE id = $1 AND revision = $2 AND state = 'ready'`,
+      `UPDATE commitments
+       SET state = CASE WHEN state = 'ready' THEN 'in_progress' ELSE state END,
+         submitted_revision = revision
+       WHERE id = $1 AND revision >= $2 AND submitted_revision IS DISTINCT FROM revision`,
       [id, revision],
     ),
   );

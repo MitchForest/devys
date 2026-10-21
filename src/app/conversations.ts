@@ -94,6 +94,8 @@ async function deliver(
   key: ConversationKey,
   message: Message,
   targets: readonly string[],
+  /** Where the conversation is, told to each employee it reaches. */
+  place: string,
 ) {
   if (!targets.length) return;
   const employees = await Effect.runPromise(employeesOf(env.HYPERDRIVE, businessId));
@@ -101,7 +103,6 @@ async function deliver(
     ? await Effect.runPromise(activePerson(env.HYPERDRIVE, message.author.slice("person:".length)))
     : undefined;
   const nameOf = namer(employees);
-  const place = (await resolve(env, businessId, key))?.place ?? "";
   for (const target of targets) {
     const employee = employees.find((candidate) => candidate.id === target);
     if (!employee || employee.paused) continue;
@@ -166,14 +167,11 @@ async function post(
   const history = await Effect.runPromise(
     messages(env.HYPERDRIVE, businessId, key, { before: message.id, limit: 50 }),
   );
-  const to = responders({
-    message,
-    history,
-    defaultResponder: await defaultResponder(env, businessId, key),
-  });
+  const resolved = await resolve(env, businessId, key);
+  const to = responders({ message, history, defaultResponder: resolved?.defaultResponder });
   // Delivered on a repeat too: a retry after a failed delivery must still wake whoever answers,
   // and the runtime admits each message id once.
-  await deliver(env, businessId, key, message, to);
+  await deliver(env, businessId, key, message, to, resolved?.place ?? "");
   return { message, to };
 }
 
@@ -190,15 +188,20 @@ export async function postFromPerson(
     ...(input.mentions ?? []).filter((id) => employees.some((employee) => employee.id === id)),
     ...mentionsIn(input.text, employees),
   ];
-  // Refuse plainly when everyone who would answer is paused, rather than post into silence.
+  // Refuse plainly when nobody who would answer is working (paused or retired), rather
+  // than post into silence.
   const targets = responders({
     message: { author: `person:${personId}`, mentions, reply_to: input.replyTo ?? null },
     history: await Effect.runPromise(messages(env.HYPERDRIVE, businessId, key, { limit: 50 })),
     defaultResponder: await defaultResponder(env, businessId, key),
   });
-  const paused = employees.filter((employee) => employee.paused && targets.includes(employee.id));
-  if (targets.length && paused.length === targets.length)
-    return { paused: paused.map((employee) => employee.name) };
+  const answering = employees.filter((employee) => targets.includes(employee.id));
+  if (targets.length && answering.every((employee) => employee.paused))
+    return {
+      refused: answering.length
+        ? `${answering.map((employee) => employee.name).join(" and ")} is paused. Resume them to send.`
+        : "Nobody here can answer: mention an employee of this business.",
+    };
   const posted = await post(env, businessId, key, {
     author: `person:${personId}`,
     text: input.text,

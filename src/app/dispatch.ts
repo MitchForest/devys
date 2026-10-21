@@ -4,7 +4,7 @@ import { ref } from "../protocol/ref.ts";
 import { expireDecisions } from "../authority/service.ts";
 import { workChat } from "../channels/work.ts";
 import { scopeName } from "../identity/contract.ts";
-import { activeEmployee, unavailableEmployees } from "../identity/service.ts";
+import { activeEmployee, pausedEmployees } from "../identity/service.ts";
 import type { Commitment } from "../work/contract.ts";
 import { dueCommitments, markSubmitted } from "../work/service.ts";
 import { postEvent } from "./conversations.ts";
@@ -23,8 +23,8 @@ export async function minuteTick(env: Env) {
  * failing is logged and retried next minute without holding up the others.
  */
 export async function dispatchDue(env: Env) {
-  const skip = await Effect.runPromise(unavailableEmployees(env.HYPERDRIVE));
-  for (const work of await Effect.runPromise(dueCommitments(env.HYPERDRIVE, skip)))
+  const paused = await Effect.runPromise(pausedEmployees(env.HYPERDRIVE));
+  for (const work of await Effect.runPromise(dueCommitments(env.HYPERDRIVE, paused)))
     await handOver(env, work).catch((error: unknown) =>
       console.error(`Dispatching work ${work.id} failed:`, error),
     );

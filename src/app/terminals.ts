@@ -9,6 +9,7 @@ import { relayTerminal } from "../terminal/host-client.ts";
 import { commitment, setTakeover } from "../work/service.ts";
 import { postEvent } from "./conversations.ts";
 import { modeOf } from "./mode.ts";
+import { body } from "./request.ts";
 
 type Access = { person: Person; business: Business; trusted: boolean; path: string };
 /**
@@ -49,7 +50,7 @@ export async function terminalRoute(request: Request, env: Env, access: Access) 
   }
   if (path !== "/terminals" || request.method !== "POST")
     return new Response("Not found", { status: 404 });
-  const input = (await request.json().catch(() => ({}))) as {
+  const input = (await body(request, 4_000)) as {
     work?: string;
     resume?: string;
     cols?: number;
