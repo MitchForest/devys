@@ -1,4 +1,4 @@
--- delegates
+-- code
 -- C1: a coding assignment is a native Codex or Claude Code session in its own worktree,
 -- serving one work item. The provider owns the session and its transcript; this is the
 -- reference to it. The row is written before the host starts the session, then completed

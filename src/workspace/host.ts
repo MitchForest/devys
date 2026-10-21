@@ -50,7 +50,7 @@ export function hostRunner(host: HostConnection, scope: Scope): WorkspacePort {
     `/file?path=${encodeURIComponent(path)}${maximum ? `&max=${maximum}` : ""}${host.within ? `&within=${encodeURIComponent(host.within)}` : ""}`;
 
   return {
-    listSkills: () => post<SkillCatalog>("/skills"),
+    skills: () => post<SkillCatalog>("/skills"),
     run: (operationId, command, timeoutMs, maxBytes) =>
       post<CommandResult>("/run", { operationId, command, timeoutMs, maxBytes }),
     cancel: () => post<{ stopped: boolean }>("/cancel"),

@@ -20,6 +20,7 @@ import {
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   api,
+  type AppEntry,
   type Business,
   type Device,
   type Employee,
@@ -214,15 +215,25 @@ function ListRow({
   );
 }
 
+/** The skills an app ships, by name: what employees can load from it. */
+function AppSkills({ app }: { app: AppEntry }) {
+  return app.skills.length ? (
+    <span className="text-caption text-ink-3">
+      Skills: {app.skills.map((skill) => skill.name).join(", ")}
+    </span>
+  ) : null;
+}
+
 /**
  * The app directory for the current business: Devys apps to install, pin to the sidebar or
- * remove, those coming later, and the accounts apps use.
+ * remove, those coming later, the system apps every business has, and the accounts apps use.
  */
 function AppsPane() {
   const { apps, businessId, actions } = useWorkspace();
   const list = valueOf(apps) ?? [];
-  const available = list.filter((app) => app.status === "available");
+  const available = list.filter((app) => app.kind === "business" && app.status === "available");
   const coming = list.filter((app) => app.status === "coming");
+  const system = list.filter((app) => app.kind === "system");
   return (
     <div className="flex flex-col gap-5 p-5">
       <div className="flex flex-col gap-1">
@@ -232,6 +243,7 @@ function AppsPane() {
             <div className="flex min-w-0 flex-col">
               <span className="text-control font-semibold text-ink">{app.name}</span>
               <span className="text-detail text-ink-2">{app.summary}</span>
+              <AppSkills app={app} />
             </div>
             <span className="ml-auto" />
             {app.installed && (
@@ -250,6 +262,16 @@ function AppsPane() {
                 {app.installed ? "Remove" : "Install"}
               </DevysButton>
             )}
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-col gap-1">
+        <span className="text-label font-medium text-ink-3">Built in</span>
+        {system.map((app) => (
+          <div key={app.id} className="flex flex-col py-1">
+            <span className="text-control text-ink">{app.name}</span>
+            <span className="text-detail text-ink-3">{app.summary}</span>
+            <AppSkills app={app} />
           </div>
         ))}
       </div>

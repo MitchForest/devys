@@ -1,20 +1,21 @@
 import { Effect } from "effect";
 import type { Env } from "./env.ts";
+import { ref } from "../protocol/ref.ts";
 import { workChat } from "../channels/work.ts";
-import { delegateInstructions, providerName } from "../delegates/capabilities.ts";
+import { delegateInstructions, providerName } from "../apps/code/capabilities.ts";
 import {
   providers,
   type Assignment,
   type Delegates,
   type Provider,
-} from "../delegates/contract.ts";
+} from "../apps/code/contract.ts";
 import {
   assignment,
   assignmentsFor,
   codedWork,
   recordAssignment,
   recordStarted,
-} from "../delegates/service.ts";
+} from "../apps/code/service.ts";
 import { scopeName, type Business, type Person, type Scope } from "../identity/contract.ts";
 import { activeEmployee } from "../identity/service.ts";
 import { sha256 } from "../protocol/bytes.ts";
@@ -87,7 +88,7 @@ export async function codingRoute(
     await postEvent(env, business.id, `work:${work.id}`, {
       clientId: `owner-send:${crypto.randomUUID()}`,
       text: `${person.display_name} → ${providerName(item.provider)}: ${text}`,
-      ref: item.id,
+      ref: ref("code", "session", item.id),
     });
     return Response.json(sent);
   }

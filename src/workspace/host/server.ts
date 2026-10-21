@@ -23,9 +23,8 @@ export interface HostOptions {
   token: string;
   /** Where receipts live. */
   data: string;
-  /** Each business works in `<work>/<businessId>`. */
+  /** Each business works in `<work>/<businessId>` and keeps its skills in its `skills` folder. */
   work: string;
-  skills: string;
   port: number;
   shell?: string;
   env?: NodeJS.ProcessEnv;
@@ -442,7 +441,7 @@ export async function startHost(options: HostOptions) {
         return json(
           await listWorkspaceSkills(
             skillFiles as unknown as Parameters<typeof listWorkspaceSkills>[0],
-            options.skills,
+            join(options.work, scopeOf(input.scope).businessId, "skills"),
           ),
         );
       default:

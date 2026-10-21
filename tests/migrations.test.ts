@@ -5,6 +5,7 @@ import { createDatabase, databaseUrl, start } from "../scripts/db.ts";
 
 const name = "devys_migration_test";
 const projects = "20261023000000_projects";
+const refs = "20261024000000_refs";
 const migrations = readdirSync("migrations").sort();
 const apply = (client: pg.Client, only: (migration: string) => boolean) =>
   migrations
@@ -59,7 +60,7 @@ it("U7 turns spaces into projects with their work, references, channel, reads an
     "INSERT INTO follows (business_id, conversation, person_id) VALUES ('b1', 'space:launch', 'p')",
   );
 
-  await apply(client, (migration) => migration >= projects);
+  await apply(client, (migration) => migration >= projects && migration < refs);
 
   expect(
     (await q("SELECT id, name, goal, lead_employee_id FROM projects ORDER BY created_at")).rows,
@@ -103,4 +104,71 @@ it("U7 turns spaces into projects with their work, references, channel, reads an
       "INSERT INTO project_items (id, business_id, project_id, kind, ref) VALUES ('i5', 'b1', 'launch', 'commitment', 'w-none')",
     ),
   ).rejects.toThrow();
+});
+
+it("U8 rewrites message refs and project items as Refs, and listSkills grants as readSkill", async () => {
+  const q = (text: string, values: unknown[] = []) => client.query(text, values);
+  await q(
+    "INSERT INTO assignments (id, business_id, commitment_id, employee_id, provider, purpose, objective) VALUES ('s1', 'b1', 'w-both', 'ops', 'codex', 'build', 'Build')",
+  );
+  await q("INSERT INTO conversations (business_id, key) VALUES ('b1', 'work:w-both')");
+  await q(`INSERT INTO messages (id, business_id, conversation, author, kind, text, ref, client_id) VALUES
+    ('e1', 'b1', 'work:w-both', 'system', 'event', 'Took on', 'w-both', 'c-e1'),
+    ('e2', 'b1', 'work:w-both', 'system', 'event', 'Page', 'artifact:a1', 'c-e2'),
+    ('e3', 'b1', 'work:w-both', 'system', 'event', 'Codex', 's1', 'c-e3'),
+    ('e4', 'b1', 'work:w-both', 'system', 'event', 'Gone', 'w-deleted', 'c-e4')`);
+  await q(
+    "INSERT INTO project_items (id, business_id, project_id, kind, ref) VALUES ('i5', 'b1', 'launch', 'file', '/Users/o/Devys/b1/Q3 plan (ü).md')",
+  );
+  await q(`INSERT INTO grants (id, business_id, employee_id, capability, mode) VALUES
+    ('g1', 'b1', 'ops', 'listSkills', 'auto'), ('g2', 'b1', 'ops', 'read', 'auto')`);
+
+  await apply(client, (migration) => migration >= refs);
+
+  expect(
+    (await q("SELECT id, ref FROM messages WHERE ref IS NOT NULL OR id LIKE 'e%' ORDER BY id"))
+      .rows,
+  ).toEqual([
+    { id: "e1", ref: "devys:work/item/w-both" },
+    { id: "e2", ref: "devys:documents/artifact/a1" },
+    { id: "e3", ref: "devys:code/session/s1" },
+    { id: "e4", ref: null },
+  ]);
+  expect((await q("SELECT id, project_id, ref FROM project_items ORDER BY id")).rows).toEqual([
+    {
+      id: "i3",
+      project_id: "launch",
+      ref: "devys:documents/file/%2FUsers%2Fo%2FDevys%2Fb1%2Fplan.md",
+    },
+    { id: "i4", project_id: "growth", ref: "devys:documents/artifact/a1" },
+    {
+      id: "i5",
+      project_id: "launch",
+      ref: "devys:documents/file/%2FUsers%2Fo%2FDevys%2Fb1%2FQ3%20plan%20(%C3%BC).md",
+    },
+  ]);
+  // The SQL encoding is encodeURIComponent's.
+  expect(encodeURIComponent("/Users/o/Devys/b1/Q3 plan (ü).md")).toBe(
+    "%2FUsers%2Fo%2FDevys%2Fb1%2FQ3%20plan%20(%C3%BC).md",
+  );
+  expect(
+    (await q("SELECT capability, revoked_at IS NULL AS active FROM grants ORDER BY capability"))
+      .rows,
+  ).toEqual([
+    { capability: "listSkills", active: false },
+    { capability: "read", active: true },
+    { capability: "readSkill", active: true },
+  ]);
+  // One Ref per project, and only artifacts and files.
+  await expect(
+    q(
+      "INSERT INTO project_items (id, business_id, project_id, ref) VALUES ('i6', 'b1', 'growth', 'devys:documents/artifact/a1')",
+    ),
+  ).rejects.toThrow();
+  await expect(
+    q(
+      "INSERT INTO project_items (id, business_id, project_id, ref) VALUES ('i7', 'b1', 'growth', 'devys:work/item/w-none')",
+    ),
+  ).rejects.toThrow();
+  await expect(q("UPDATE messages SET ref = 'artifact:a1' WHERE id = 'e2'")).rejects.toThrow();
 });

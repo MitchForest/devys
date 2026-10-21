@@ -50,7 +50,6 @@ async function host(output = "done") {
     token,
     data: join(root, "data"),
     work: join(root, "work"),
-    skills: join(root, "skills"),
     port: 0,
     shell: "/bin/sh",
     env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
@@ -101,6 +100,28 @@ describe("Mac host", () => {
     await state.restart();
     expect(await state.port().run("pwd", "pwd", 5_000, 10_000)).toEqual(first);
     expect(state.spawned()).toBe(1);
+  });
+
+  it("lists each business's own skills from its folder, and only that business's", async () => {
+    const state = await host();
+    const folder = join(state.root, "work", scope.businessId, "skills", "weekly-report");
+    mkdirSync(folder, { recursive: true });
+    writeFileSync(
+      join(folder, "SKILL.md"),
+      "---\nname: weekly-report\ndescription: Build the weekly report\n---\nRun report.sh.",
+    );
+    expect((await state.port().skills()).skills).toEqual([
+      {
+        name: "weekly-report",
+        description: "Build the weekly report",
+        path: join(folder, "SKILL.md"),
+      },
+    ]);
+    const other = hostRunner(
+      { url: state.url(), token, files: state.files },
+      { businessId: "business-2", employeeId: "employee-1" },
+    );
+    expect(await other.skills()).toEqual({ skills: [], warnings: [] });
   });
 
   it("runs a command once when the same operation arrives twice at the same moment", async () => {

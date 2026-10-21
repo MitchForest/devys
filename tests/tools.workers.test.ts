@@ -9,6 +9,7 @@ it("keeps initial schemas smaller and returns only requested integration interfa
   const extension = devysExtension(bindings, contracts, {
     identity: async () => "You are a test employee.",
     granted: async () => new Set(contracts.map((contract) => contract.name)),
+    skills: async () => [],
     authority: async () => {
       throw new Error("Discovery must not invoke a capability");
     },
@@ -19,7 +20,25 @@ it("keeps initial schemas smaller and returns only requested integration interfa
         tools?.map(({ name, description, parameters }) => ({ name, description, parameters })),
       ),
     ).byteLength;
-  const initial = schemaBytes(initialTools(extension));
+  const initial = schemaBytes(initialTools(extension, contracts));
+  // The core capabilities and the two harness controls, from `core` on each capability.
+  expect(
+    initialTools(extension, contracts)
+      .map((tool) => tool.name)
+      .sort(),
+  ).toEqual(
+    [
+      "describe_capabilities",
+      "execute",
+      "forget",
+      "read",
+      "readSkill",
+      "recall",
+      "remember",
+      "run",
+      "write",
+    ].sort(),
+  );
   const all = schemaBytes(extension.tools);
   expect(initial).toBeLessThan(all * 0.75);
   const catalog = JSON.parse(describeCapabilities(contracts));
@@ -39,6 +58,7 @@ it("discovery lists and enables only capabilities the employee is granted", asyn
   const extension = devysExtension(bindings, contracts, {
     identity: async () => "You are a test employee.",
     granted: async () => new Set(["recall", "driveRead"]),
+    skills: async () => [],
     authority: async () => {
       throw new Error("Discovery must not invoke a capability");
     },
@@ -55,4 +75,27 @@ it("discovery lists and enables only capabilities the employee is granted", asyn
   const selected = await run(["driveRead", "driveCreate"]);
   expect(selected.control?.addTools).toEqual(["driveRead"]);
   expect(selected.content[0]!.text).not.toContain("driveCreate");
+});
+
+it("the instructions list the available skills by name and description, and point at readSkill", async () => {
+  const bindings = { DEVYS_MODE: "cloud" } as Env;
+  const contracts = capabilities(bindings);
+  const extension = devysExtension(bindings, contracts, {
+    identity: async () => "You are a test employee.",
+    granted: async () => new Set(),
+    skills: async () => [
+      { name: "weekly-report", description: "Build the weekly report" },
+      { name: "writing-pages", description: "Write a page" },
+    ],
+    authority: async () => {
+      throw new Error("Instructions must not invoke a capability");
+    },
+  });
+  const render = extension.sections![0]!.render as unknown as () => Promise<string>;
+  const text = await render();
+  expect(text).toContain("readSkill");
+  expect(text).not.toContain("listSkills");
+  expect(text).toMatch(
+    /Skills:\n- weekly-report — Build the weekly report\n- writing-pages — Write a page$/,
+  );
 });

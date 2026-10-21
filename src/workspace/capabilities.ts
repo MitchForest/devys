@@ -1,29 +1,50 @@
 import { Effect, Schema } from "effect";
-import { capability, Invocation, Text, FilePath } from "../protocol/capability.ts";
+import { capability, CapabilityError, Invocation, Text, FilePath } from "../protocol/capability.ts";
 import { defaultLimits } from "../protocol/limits.ts";
 import { rpc } from "../protocol/rpc.ts";
+import { isSkillName, parseSkill, type Skill } from "../protocol/skill.ts";
 import type { Runner } from "./contract.ts";
 const PathResult = Schema.Struct({ path: FilePath });
 
-export function workspaceCapabilities(runner: Runner) {
+/** The Computer app: commands, files and skills where the employee works. */
+export function workspaceCapabilities(
+  runner: Runner,
+  /** The skills the business's installed apps ship. */
+  appSkills: (businessId: string) => Promise<readonly Skill[]>,
+) {
   return [
     capability({
-      name: "listSkills",
+      name: "readSkill",
       description:
-        "Discover reusable skills by name, description and path. Read the relevant SKILL.md before using or improving its scripts. Create new skills in your skills folder as <name>/SKILL.md; lowercase names with hyphens, YAML name/description, and Markdown instructions.",
+        "Load a skill listed in your instructions by name: its description and instructions. A business skill also gives the path of its SKILL.md; its scripts and files sit beside it.",
       effect: "read",
       replay: "read",
-      input: Schema.Struct({}),
+      core: true,
+      input: Schema.Struct({ name: Schema.String.check(Schema.makeFilter(isSkillName)) }),
       output: Schema.Struct({
-        skills: Schema.Array(
-          Schema.Struct({ name: Schema.String, description: Schema.String, path: FilePath }),
-        ),
-        warnings: Schema.Array(Schema.String),
+        name: Schema.String,
+        description: Schema.String,
+        body: Schema.String,
+        path: Schema.optional(FilePath),
       }),
-      execute: () =>
+      execute: ({ name }) =>
         Effect.gen(function* () {
           const invocation = yield* Invocation;
-          return yield* rpc(() => runner(invocation).listSkills());
+          const port = runner(invocation);
+          // The business's own skill wins over an app's of the same name.
+          const own = (yield* rpc(() => port.skills())).skills.find((skill) => skill.name === name);
+          if (own) {
+            const skill = parseSkill(name, (yield* rpc(() => port.read(own.path))).content);
+            if (skill) return { ...skill, path: own.path };
+          }
+          const bundled = (yield* rpc(() => appSkills(invocation.businessId))).find(
+            (skill) => skill.name === name,
+          );
+          if (bundled) return bundled;
+          return yield* new CapabilityError({
+            code: "invalid_input",
+            message: `No skill is named ${name}; your instructions list the skills you have.`,
+          });
         }),
     }),
     capability({
@@ -51,6 +72,7 @@ export function workspaceCapabilities(runner: Runner) {
       description: "Read a UTF-8 file by absolute path (64 KB maximum).",
       effect: "read",
       replay: "read",
+      core: true,
       input: PathResult,
       output: Schema.Struct({ path: FilePath, content: Text }),
       execute: ({ path }) =>
@@ -65,6 +87,7 @@ export function workspaceCapabilities(runner: Runner) {
       description: "Write a UTF-8 file by absolute path. This replaces its contents.",
       effect: "change",
       replay: "idempotent",
+      core: true,
       input: Schema.Struct({ path: FilePath, content: Text }),
       output: PathResult,
       execute: ({ path, content }) =>
@@ -94,6 +117,7 @@ export function workspaceCapabilities(runner: Runner) {
         "Run a shell command where you work (your instructions say where). On an uncertain result, inspect existing state; never blindly repeat a side effect.",
       effect: "change",
       replay: "reconcile",
+      core: true,
       input: Schema.Struct({ command: Text }),
       output: Schema.Struct({
         status: Schema.Literals(["completed", "uncertain", "cancelled", "limited"]),

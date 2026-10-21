@@ -65,6 +65,8 @@ export interface AgentDependencies {
   ) => Promise<Outcome>;
   /** Capability names this employee holds a grant for, for discovery. */
   readonly granted: (scope: Scope) => Promise<string[]>;
+  /** The skills the employee can load: its business's installed apps' and the business's own. */
+  readonly skills: (scope: Scope) => Promise<readonly { name: string; description: string }[]>;
   readonly models: (beforeDispatch: (signal?: AbortSignal) => Promise<void>) => HarnessModels;
   /** The employee's chosen model and the effort it runs at. */
   readonly foregroundModel: (
@@ -97,7 +99,9 @@ export abstract class AgentRuntime<
           models,
           registry,
           conversationCreated: (tx, conversation) =>
-            configure(tx, conversation.id, { tools: initialTools(extension) }),
+            configure(tx, conversation.id, {
+              tools: initialTools(extension, this.services.capabilities),
+            }),
           settings: {
             toolExecution: "sequential",
             stream: { timeoutMs: 90_000, maxRetries: 0 },
@@ -138,6 +142,10 @@ export abstract class AgentRuntime<
 
   async granted() {
     return new Set(await this.services.granted(this.scope()));
+  }
+
+  skills() {
+    return this.services.skills(this.scope());
   }
 
   async identity() {
@@ -359,7 +367,7 @@ export abstract class AgentRuntime<
       {
         model: { provider: model.provider, modelId: model.id },
         thinkingLevel: model.thinkingLevel,
-        tools: initialTools(this.extension),
+        tools: initialTools(this.extension, this.services.capabilities),
       },
       BACKGROUND_CONTEXT,
     );

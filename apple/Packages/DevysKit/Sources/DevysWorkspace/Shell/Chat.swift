@@ -321,8 +321,11 @@ struct EventCard: View {
     let store: StoreOf<Workspace>
     let event: ChatTimeline.Event
 
-    private var artifactID: String? {
-        event.ref.flatMap { $0.hasPrefix("artifact:") ? String($0.dropFirst("artifact:".count)) : nil }
+    private var artifactID: String? { event.ref?.page }
+
+    private var workItem: Commitment? {
+        guard case .workItem(let id) = event.ref else { return nil }
+        return store.work.value?.first { $0.id == id }
     }
 
     var body: some View {
@@ -337,7 +340,7 @@ struct EventCard: View {
                         .accessibilityHidden(true)
                     lines(store.artifacts.contains { $0.id == artifactID } ? store.state.artifactName(artifactID) : event.text, pageDetail(artifactID))
                 }
-            } else if let item = store.work.value?.first(where: { $0.id == event.ref }) {
+            } else if let item = workItem {
                 handoff(item)
             } else {
                 HStack(spacing: 8) {

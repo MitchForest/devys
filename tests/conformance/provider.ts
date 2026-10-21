@@ -2,7 +2,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import type { ProviderAdapter, ProviderEvents } from "../../src/delegates/host/provider.ts";
+import type { ProviderAdapter, ProviderEvents } from "../../src/apps/code/host/provider.ts";
 
 type Ended = Parameters<ProviderEvents["turnEnded"]>[0];
 

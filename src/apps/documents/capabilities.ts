@@ -1,13 +1,14 @@
 import { artifactText, publishArtifact, saveArtifact, type ArtifactBindings } from "./service.ts";
 import { Effect, Schema } from "effect";
-import type { Runner } from "../workspace/contract.ts";
-import { capability, CapabilityError, Invocation, FilePath } from "../protocol/capability.ts";
+import type { Runner } from "../../workspace/contract.ts";
+import { capability, CapabilityError, Invocation, FilePath } from "../../protocol/capability.ts";
+import { Ref, ref } from "../../protocol/ref.ts";
 import { pageProblem } from "./page.ts";
 
 /** Says in the conversation an employee is answering that it published a page. */
 export type Announce = (
   invocation: { businessId: string; employeeId: string; conversation?: string },
-  card: { clientId: string; text: string; ref: string },
+  card: { clientId: string; text: string; ref: Ref },
 ) => Promise<void>;
 
 const Title = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(120));
@@ -39,10 +40,10 @@ export function artifactCapabilities(
         announce(invocation, {
           clientId: `artifact:${saved.id}`,
           text: `Published a page: ${title}`,
-          ref: `artifact:${saved.id}`,
+          ref: ref("documents", "artifact", saved.id),
         }),
       );
-      return { id: saved.id };
+      return { id: saved.id, ref: ref("documents", "artifact", saved.id) };
     });
   return [
     capability({
@@ -55,7 +56,7 @@ export function artifactCapabilities(
         title: Title,
         html: Schema.String.check(Schema.isMaxLength(600_000)),
       }),
-      output: Schema.Struct({ id: Schema.String }),
+      output: Schema.Struct({ id: Schema.String, ref: Ref }),
       execute: ({ title, html }) => publishPage(title, html),
     }),
     capability({
@@ -69,7 +70,7 @@ export function artifactCapabilities(
         find: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(100_000)),
         replace: Schema.String.check(Schema.isMaxLength(100_000)),
       }),
-      output: Schema.Struct({ id: Schema.String }),
+      output: Schema.Struct({ id: Schema.String, ref: Ref }),
       execute: ({ page, find, replace }) =>
         Effect.gen(function* () {
           const { businessId } = yield* Invocation;
@@ -97,15 +98,23 @@ export function artifactCapabilities(
         filename: Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_. -]{1,200}$/)),
         contentType: Schema.String.check(Schema.isPattern(/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/)),
       }),
-      output: Schema.Struct({ id: Schema.String, url: Schema.String, bytes: Schema.Int }),
+      output: Schema.Struct({
+        id: Schema.String,
+        url: Schema.String,
+        bytes: Schema.Int,
+        ref: Ref,
+      }),
       execute: ({ path, filename, contentType }) =>
         Effect.gen(function* () {
           const { businessId, employeeId, operationId } = yield* Invocation;
-          return yield* publishArtifact(env, runner, { businessId, employeeId }, operationId, {
-            path,
-            filename,
-            contentType,
-          });
+          const saved = yield* publishArtifact(
+            env,
+            runner,
+            { businessId, employeeId },
+            operationId,
+            { path, filename, contentType },
+          );
+          return { ...saved, ref: ref("documents", "artifact", saved.id) };
         }),
     }),
   ];

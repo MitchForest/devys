@@ -141,7 +141,7 @@ test("a project opens on its channel; a hand-off card opens the thread; Back and
     author: "system",
     kind: "event",
     text: 'Growth took on "Write a tagline".',
-    ref: task.id,
+    ref: `devys:work/item/${task.id}`,
   });
   const sent = await stubPosting(page, () => [growth.id]);
   try {

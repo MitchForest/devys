@@ -133,6 +133,7 @@ export class PiRecoveryProbe extends DurableObject<ProbeEnv> {
       const extension = devysExtension(env, capabilities(env), {
         identity: async () => "You are a test employee.",
         granted: async () => new Set(capabilities(env).map((contract) => contract.name)),
+        skills: async () => [],
         authority: async () => ({
           businessId: "probe",
           employeeId: "probe",
@@ -147,7 +148,7 @@ export class PiRecoveryProbe extends DurableObject<ProbeEnv> {
           models,
           registry,
           conversationCreated: (tx, conversation) =>
-            configure(tx, conversation.id, { tools: initialTools(extension) }),
+            configure(tx, conversation.id, { tools: initialTools(extension, capabilities(env)) }),
           settings: { compaction: { enabled: false, keepRecentTokens: 128 } },
         },
         context,

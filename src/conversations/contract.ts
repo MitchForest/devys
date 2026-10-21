@@ -1,3 +1,5 @@
+import type { Ref } from "../protocol/ref.ts";
+
 /**
  * The shared record of what was said in a DM, a project's channel or a work item's thread. Pi keeps
  * each employee's own reasoning; a conversation is what everyone in it reads.
@@ -13,7 +15,8 @@ export const conversationKey = (value: unknown): ConversationKey | undefined =>
     : undefined;
 
 export const kindOf = (key: ConversationKey) => key.slice(0, key.indexOf(":")) as ConversationKind;
-export const refOf = (key: ConversationKey) => key.slice(key.indexOf(":") + 1);
+/** The id a key names: the employee, project or work item. */
+export const idOf = (key: ConversationKey) => key.slice(key.indexOf(":") + 1);
 
 export interface Message {
   id: string;
@@ -26,8 +29,8 @@ export interface Message {
   /** Employee ids this message addresses. */
   mentions: string[];
   via_voice: boolean;
-  /** What an event is about, such as the commitment a hand-off card opens. */
-  ref: string | null;
+  /** The record an event is about: the work item a hand-off card opens, a page, a session. */
+  ref: Ref | null;
   created_at: string;
 }
 

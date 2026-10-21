@@ -57,6 +57,13 @@ test("looks, the owner's photo, voice and settings work on the web as on native"
     ])
       await expect(settings.getByRole("button", { name: section, exact: true })).toBeVisible();
 
+    // Apps lists each app's skills; the system apps every business has are built in.
+    await settings.getByRole("button", { name: "Apps", exact: true }).click();
+    await expect(settings.getByText("Skills: writing-pages")).toBeVisible();
+    await expect(settings.getByText("Built in")).toBeVisible();
+    await expect(settings.getByText("Computer", { exact: true })).toBeVisible();
+    await settings.getByRole("button", { name: "Account", exact: true }).click();
+
     // The owner's photo uploads to the server.
     await settings.getByLabel("Add photo").setInputFiles({
       name: "me.png",

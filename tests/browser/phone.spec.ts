@@ -27,7 +27,7 @@ test("on a phone: tabs of Home, Projects, Team and Apps; the conversation full s
     author: "system",
     kind: "event",
     text: 'Growth took on "Write a tagline".',
-    ref: task.id,
+    ref: `devys:work/item/${task.id}`,
   });
   const sent = await stubPosting(page);
   try {

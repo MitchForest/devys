@@ -33,11 +33,11 @@ package struct ChatTimeline: Equatable {
         package var startsGroup: Bool { position == .single || position == .first }
     }
 
-    /// A hand-off or other system event; `ref` is the work item it opens.
+    /// A hand-off or other system event; `ref` is the record it is about.
     package struct Event: Equatable, Identifiable {
         package let id: String
         package let text: String
-        package let ref: String?
+        package let ref: Ref?
     }
 
     package enum Item: Equatable, Identifiable {

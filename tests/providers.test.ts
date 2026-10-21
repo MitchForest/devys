@@ -2,8 +2,8 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import { claudeAdapter } from "../src/delegates/host/claude.ts";
-import { codexAdapter } from "../src/delegates/host/codex.ts";
+import { claudeAdapter } from "../src/apps/code/host/claude.ts";
+import { codexAdapter } from "../src/apps/code/host/codex.ts";
 import { providerConformance, recorded } from "./conformance/provider.ts";
 
 const fakeClaude = join(import.meta.dirname, "fixtures/fake-claude.mjs");
@@ -57,7 +57,7 @@ it("Codex runs in the owner's Codex home and declines anything it asks to approv
 });
 
 it("a Claude session file reads as prompts, replies and tool calls with their results", async () => {
-  const { claudeEntries } = await import("../src/delegates/host/claude.ts");
+  const { claudeEntries } = await import("../src/apps/code/host/claude.ts");
   const lines = [
     { type: "user", message: { content: "Fix the test" } },
     {
@@ -111,7 +111,7 @@ it("a coding delegate sees none of the host's settings or the Worker's secrets",
 });
 
 it("Codex commands read without the shell wrapper they run in", async () => {
-  const { unwrapped } = await import("../src/delegates/host/codex.ts");
+  const { unwrapped } = await import("../src/apps/code/host/codex.ts");
   expect(unwrapped(`/bin/zsh -lc "rg --files -g 'a.md' && git status"`)).toBe(
     "rg --files -g 'a.md' && git status",
   );

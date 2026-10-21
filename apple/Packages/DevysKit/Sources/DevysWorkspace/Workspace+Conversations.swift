@@ -59,7 +59,7 @@ extension Workspace {
             settleAwaiting(&state)
             speakReplies(&state)
             markRead(key, state: &state)
-            if let known, !older, let page = state.main?.messages.value?.last(where: { !known.contains($0.id) && $0.isEvent && $0.ref?.hasPrefix("artifact:") == true }) {
+            if let known, !older, let page = state.main?.messages.value?.last(where: { !known.contains($0.id) && $0.isEvent && $0.ref?.page != nil }) {
                 pageArrived(page, state: &state)
             }
         case .pageFailed(let key, let message):

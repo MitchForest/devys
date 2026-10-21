@@ -11,8 +11,8 @@ import {
 import { grant } from "../src/authority/service.ts";
 import type { Inbound } from "../src/channels/contract.ts";
 import { messages } from "../src/conversations/service.ts";
-import { delegateCapabilities } from "../src/delegates/capabilities.ts";
-import type { Delegates, StartRequest } from "../src/delegates/contract.ts";
+import { delegateCapabilities } from "../src/apps/code/capabilities.ts";
+import type { Delegates, StartRequest } from "../src/apps/code/contract.ts";
 import { Invocation } from "../src/protocol/capability.ts";
 import { commitment, createCommitment, setTakeover } from "../src/work/service.ts";
 import { codingRoute, handBack } from "../src/app/coding.ts";
@@ -168,7 +168,8 @@ it("coding starts only from a work item, once per call, within the grant's repos
   const operationId = crypto.randomUUID();
   const first = (await Effect.runPromise(
     start.execute(input).pipe(as(bindings, scope, work.id, operationId)),
-  )) as { assignment: string; branch: string };
+  )) as { assignment: string; branch: string; ref: string };
+  expect(first.ref).toBe(`devys:code/session/${first.assignment}`);
   // The same call replayed is the same assignment; the host makes it idempotent.
   const again = (await Effect.runPromise(
     start.execute(input).pipe(as(bindings, scope, work.id, operationId)),

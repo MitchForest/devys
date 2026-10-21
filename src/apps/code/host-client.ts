@@ -1,4 +1,4 @@
-import type { Scope } from "../identity/contract.ts";
+import type { Scope } from "../../identity/contract.ts";
 import type { Delegates } from "./contract.ts";
 
 /**

@@ -1,0 +1,15 @@
+import { defineApp } from "../../protocol/app.ts";
+
+export const web = defineApp({
+  id: "web",
+  name: "Web",
+  icon: "network",
+  summary: "Reads public web pages.",
+  kind: "system",
+  status: "available",
+  records: [],
+  capabilities: ["readPublicUrl"],
+  skills: [],
+  connections: [],
+  appears: "never",
+});

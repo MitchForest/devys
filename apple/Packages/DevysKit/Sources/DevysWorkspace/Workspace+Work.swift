@@ -39,7 +39,7 @@ package enum ProjectIntent {
     /// The overview's edit form, saved as one change.
     case updated(projectID: String, ProjectChange)
     /// Keeps a page or file on the project's overview; the record stays in its app.
-    case itemAdded(projectID: String, ProjectItem.Kind, ref: String)
+    case itemAdded(projectID: String, ref: Ref)
     case itemRemoved(projectID: String, itemID: String)
 }
 
@@ -82,9 +82,9 @@ extension Workspace {
             changeWork(state, failure: "The project couldn't be saved.") { runtime, businessID in
                 try await runtime.updateProject(businessID, projectID, change)
             }
-        case .itemAdded(let projectID, let kind, let ref):
+        case .itemAdded(let projectID, let ref):
             changeWork(state, failure: "That couldn't be added to the project.") { runtime, businessID in
-                try await runtime.addToProject(businessID, projectID, kind, ref)
+                try await runtime.addToProject(businessID, projectID, ref)
             }
         case .itemRemoved(let projectID, let itemID):
             changeWork(state, failure: "That couldn't be removed.") { runtime, businessID in

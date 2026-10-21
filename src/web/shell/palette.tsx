@@ -48,7 +48,7 @@ export function CommandPalette() {
       go: { place: { kind: "direct", employeeId: e.id } as Place },
     })),
     ...(valueOf(apps) ?? [])
-      .filter((app) => app.installed)
+      .filter((app) => app.installed && app.kind === "business")
       .map((app) => ({
         id: `app-${app.id}`,
         title: app.name,

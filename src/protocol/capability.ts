@@ -54,6 +54,8 @@ export interface Capability {
   readonly replay: "read" | "idempotent" | "reconcile";
   readonly input: Schema.Top;
   readonly output: Schema.Top;
+  /** A direct tool for every employee; the rest are found with describe_capabilities. */
+  readonly core?: true;
   readonly execute: (args: unknown) => Effect.Effect<unknown, CapabilityError, Invocation>;
 }
 
@@ -64,8 +66,10 @@ export function capability<I, O, C = never>(definition: {
   effect: EffectClass;
   constraints?: { schema: Schema.Codec<C>; allows: (constraints: C, input: I) => boolean };
   replay: Capability["replay"];
-  input: Schema.Codec<I>;
-  output: Schema.Codec<O>;
+  /** Decoded types may be branded (such as `Ref`); the encoded side is plain JSON. */
+  input: Schema.Codec<I, unknown>;
+  output: Schema.Codec<O, unknown>;
+  core?: true;
   execute: (input: I) => Effect.Effect<O, CapabilityError, Invocation>;
 }): Capability {
   const contract: Capability = {

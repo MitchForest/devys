@@ -2,7 +2,8 @@ import { Effect } from "effect";
 import type { Env } from "./env.ts";
 import { grantsFor } from "../authority/service.ts";
 import { authorize } from "./authorize.ts";
-import { usableIn } from "./apps.ts";
+import { appSkills, usableIn } from "./apps.ts";
+import { availableSkills } from "../workspace/skills.ts";
 import { activeEmployee, businessBrief, businessName, employeesOf } from "../identity/service.ts";
 import { roleTemplate } from "./team.ts";
 import { AgentRuntime, type AgentDependencies } from "../runtime/agent.ts";
@@ -54,6 +55,17 @@ export function agentDependencies(env: Env): AgentDependencies {
         .map((grant) => grant.capability)
         .filter(usable);
     },
+    skills: async (scope) =>
+      availableSkills(
+        // Without the business's own (no Mac host or workspace right now), the apps' remain.
+        await Promise.resolve()
+          .then(() => modeOf(env).runner()(scope).skills())
+          .then(
+            (catalog) => catalog.skills,
+            () => [],
+          ),
+        await appSkills(env.HYPERDRIVE, scope.businessId),
+      ),
     models: (beforeDispatch) => applicationModels(env, beforeDispatch),
     // Resolved at admission so a configuration typo cannot disable stop/status.
     foregroundModel: async (scope) => {

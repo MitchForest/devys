@@ -1,9 +1,10 @@
 import { Effect, Schema } from "effect";
-import type { Database } from "../data/database.ts";
-import type { Scope } from "../identity/contract.ts";
-import { sha256 } from "../protocol/bytes.ts";
-import { capability, CapabilityError, Invocation } from "../protocol/capability.ts";
-import { rpc } from "../protocol/rpc.ts";
+import type { Database } from "../../data/database.ts";
+import type { Scope } from "../../identity/contract.ts";
+import { sha256 } from "../../protocol/bytes.ts";
+import { capability, CapabilityError, Invocation } from "../../protocol/capability.ts";
+import { Ref, ref } from "../../protocol/ref.ts";
+import { rpc } from "../../protocol/rpc.ts";
 import {
   providers,
   type Assignment,
@@ -20,7 +21,7 @@ export interface DelegateDependencies {
   note(
     scope: Scope,
     commitmentId: string,
-    note: { clientId: string; text: string; ref?: string },
+    note: { clientId: string; text: string; ref?: Ref },
   ): Promise<void>;
   /** Appends evidence to the work item. */
   evidence(
@@ -147,6 +148,7 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
         assignment: Schema.String,
         branch: Schema.String,
         worktree: Schema.String,
+        ref: Ref,
       }),
       execute: (input) =>
         Effect.gen(function* () {
@@ -201,7 +203,12 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
           yield* rpc(() =>
             Effect.runPromise(recordStarted(db, invocation.businessId, id, started)),
           );
-          return { assignment: id, branch: started.branch, worktree: started.worktree };
+          return {
+            assignment: id,
+            branch: started.branch,
+            worktree: started.worktree,
+            ref: ref("code", "session", id),
+          };
         }),
     }),
     capability({
@@ -241,7 +248,7 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
             dependencies.note(scope, commitmentId, {
               clientId: `delegate-send:${invocation.operationId}`,
               text: `→ ${providerName(found.provider)}: ${text}`,
-              ref: id,
+              ref: ref("code", "session", id),
             }),
           );
           return sent;

@@ -114,7 +114,10 @@ private struct DocumentsApp: View {
             .filter { page in page.contentType == "text/html" && !artifacts.contains { $0.filename == page.filename && $0.createdAt > page.createdAt } }
             .filter { page in
                 chosen.map { project in
-                    project.items.contains { item in item.kind == .artifact && artifacts.contains { $0.id == item.ref && $0.filename == page.filename } }
+                    project.items.contains { item in
+                        guard case .artifact(let kept, _) = Layer(ref: item.ref) else { return false }
+                        return artifacts.contains { $0.id == kept && $0.filename == page.filename }
+                    }
                 } ?? true
             }
             .sorted { $0.createdAt > $1.createdAt }
@@ -130,11 +133,11 @@ private struct DocumentsApp: View {
     }
 
     @ViewBuilder private func kept(_ project: Project) -> some View {
-        let files = project.items.filter { $0.kind == .file }
+        let files = project.items.compactMap { item in if case .file(let path) = Layer(ref: item.ref) { (id: item.id, path: path) } else { nil } }
         if !files.isEmpty {
             group("Files") {
-                ForEach(files) { item in
-                    EntryRow(symbol: "doc", title: (item.ref as NSString).lastPathComponent, detail: item.ref) { store.send(.layerOpened(.file(item.ref))) }
+                ForEach(files, id: \.id) { item in
+                    EntryRow(symbol: "doc", title: (item.path as NSString).lastPathComponent, detail: item.path) { store.send(.layerOpened(.file(item.path))) }
                 }
             }
         }

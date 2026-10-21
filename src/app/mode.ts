@@ -1,7 +1,7 @@
 import type { Browser } from "../browser/contract.ts";
 import { hostBrowser, unavailableBrowser } from "../browser/host-client.ts";
-import type { Delegates } from "../delegates/contract.ts";
-import { hostDelegates, unavailableDelegates } from "../delegates/host-client.ts";
+import type { Delegates } from "../apps/code/contract.ts";
+import { hostDelegates, unavailableDelegates } from "../apps/code/host-client.ts";
 import { scopeName, type Scope } from "../identity/contract.ts";
 import type { Terminals } from "../terminal/contract.ts";
 import { hostTerminals, unavailableTerminals } from "../terminal/host-client.ts";
@@ -58,7 +58,7 @@ export function modeOf(env: Env): Mode {
           host ? hostTerminals(host, { businessId, employeeId: "owner" }) : unavailableTerminals(),
         browser: (businessId) => (host ? hostBrowser(host, businessId) : unavailableBrowser()),
         businessFolder: folder,
-        workplace: `You work on the owner's Mac, as the owner: run executes zsh with the owner's tools and logins, starting in this business's folder under ${home ?? "the owner's home folder"}/Devys. The owner's files are under ${home ?? "the owner's home folder"}; use absolute paths. Your skills folder is ${home ?? "the owner's home folder"}/Devys/skills. Changes apply to the owner's real files immediately.`,
+        workplace: `You work on the owner's Mac, as the owner: run executes zsh with the owner's tools and logins, starting in this business's folder under ${home ?? "the owner's home folder"}/Devys. The owner's files are under ${home ?? "the owner's home folder"}; use absolute paths. The business's skills folder is skills inside that business folder. Changes apply to the owner's real files immediately.`,
       };
     }
     case "cloud":
@@ -70,7 +70,7 @@ export function modeOf(env: Env): Mode {
         browser: () => unavailableBrowser(),
         businessFolder: () => undefined,
         workplace:
-          "You work in a private Linux workspace: run executes bash starting in /workspace, files live under /workspace, and your skills folder is /workspace/skills. Files persist at workspace checkpoints; snapshots preserve files, not processes.",
+          "You work in a private Linux workspace: run executes bash starting in /workspace, files live under /workspace, and the business's skills folder is /workspace/skills (in your workspace until cloud mode shares one per business). Files persist at workspace checkpoints; snapshots preserve files, not processes.",
       };
     default:
       throw new Error(`Unknown DEVYS_MODE: ${String(env.DEVYS_MODE)}`);

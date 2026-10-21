@@ -2,6 +2,7 @@
  * The Devys HTTP API as the web app uses it: the same endpoints as the native apps,
  * authenticated by the browser's session cookie. Mutations are same-origin POSTs.
  */
+import type { Ref } from "../../protocol/ref.ts";
 
 export interface Person {
   id: string;
@@ -109,8 +110,8 @@ export interface Message {
   /** Employee ids this message addresses. */
   mentions: string[];
   via_voice: boolean;
-  /** What an event is about: the commitment a hand-off card opens. */
-  ref: string | null;
+  /** The record an event is about: a work item's hand-off card, a page, a coding session. */
+  ref: Ref | null;
   created_at: string;
 }
 export interface ShownMessage extends Message {
@@ -254,11 +255,10 @@ export interface Decision {
   requested_at: string;
   expires_at: string;
 }
-/** A record a project shows: a reference, never a copy. */
+/** A record a project shows: a reference, never a copy (an artifact or a business file). */
 export interface ProjectItem {
   id: string;
-  kind: "artifact" | "file";
-  ref: string;
+  ref: Ref;
 }
 /** A bounded initiative: a channel, its work and the records it touches. */
 export interface Project {
@@ -286,7 +286,11 @@ export interface AppEntry {
   name: string;
   icon: string;
   summary: string;
+  /** System apps are always installed and never in the sidebar. */
+  kind: "system" | "business";
   status: "available" | "coming";
+  /** The skills it ships, which employees load by name. */
+  skills: { name: string; description: string }[];
   installed: boolean;
   pinned: boolean;
   /** Installed and has something to show, so the sidebar lists it. */
@@ -557,8 +561,8 @@ export const api = {
     post<Project>(`${business(b)}/projects`, project),
   updateProject: (b: string, id: string, change: ProjectChange) =>
     put(`${business(b)}/projects/${id}`, change),
-  addToProject: (b: string, project: string, kind: ProjectItem["kind"], ref: string) =>
-    post(`${business(b)}/projects/${project}/items`, { kind, ref }),
+  addToProject: (b: string, project: string, ref: Ref) =>
+    post(`${business(b)}/projects/${project}/items`, { ref }),
   removeFromProject: (b: string, project: string, item: string) =>
     post(`${business(b)}/projects/${project}/items/${item}/remove`),
   apps: (b: string) => get<{ apps: AppEntry[] }>(`${business(b)}/apps`),

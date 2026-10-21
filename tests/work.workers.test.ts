@@ -282,7 +282,7 @@ it("work in a project is handed over with a card in its thread and in the projec
   for (const key of [`work:${work.id}`, `project:${launch.id}`] as const)
     expect(
       (await Effect.runPromise(messages(db, scope.businessId, key))).map((m) => [m.kind, m.ref]),
-    ).toEqual([["event", work.id]]);
+    ).toEqual([["event", `devys:work/item/${work.id}`]]);
 });
 
 it("paused employees' work and a failing hand-off never hold up other work", async () => {
@@ -451,18 +451,27 @@ it("projects reference records without copying them, refuse other businesses' re
   };
   const page = await artifact(acme.business.id);
   const theirs = await artifact(globex.business.id);
-  const add = (project: string, ref: string, kind = "artifact") =>
-    owner(acme.business.id, `/projects/${project}/items`, { kind, ref });
-  const item = (await (await add(launch.id, page)).json()) as { id: string };
-  expect((await add(growth.id, page)).status).toBe(201);
-  expect((await add(launch.id, theirs)).status).toBe(400);
-  expect((await add(launch.id, crypto.randomUUID())).status).toBe(400);
+  const pageRef = (id: string) => `devys:documents/artifact/${id}`;
+  const fileRef = (path: string) => `devys:documents/file/${encodeURIComponent(path)}`;
+  const add = (project: string, ref: string) =>
+    owner(acme.business.id, `/projects/${project}/items`, { ref });
+  const item = (await (await add(launch.id, pageRef(page))).json()) as { id: string; ref: string };
+  expect(item.ref).toBe(pageRef(page));
+  expect((await add(growth.id, pageRef(page))).status).toBe(201);
+  // Adding the same ref again keeps one item.
+  expect(((await (await add(launch.id, pageRef(page))).json()) as { id: string }).id).toBe(item.id);
+  expect((await add(launch.id, pageRef(theirs))).status).toBe(400);
+  expect((await add(launch.id, pageRef(crypto.randomUUID()))).status).toBe(400);
+  // Only refs: not a bare id, not the old card form, not a work item or a project.
+  expect((await add(launch.id, page)).status).toBe(400);
+  expect((await add(launch.id, `artifact:${page}`)).status).toBe(400);
+  expect((await add(launch.id, `devys:work/project/${growth.id}`)).status).toBe(400);
   const listed = (await (await owner(acme.business.id, "/projects")).json()) as {
     projects: { name: string; items: { ref: string }[] }[];
   };
   expect(listed.projects.map((p) => [p.name, p.items.map((i) => i.ref)])).toEqual([
-    ["Launch", [page]],
-    ["Growth", [page]],
+    ["Launch", [pageRef(page)]],
+    ["Growth", [pageRef(page)]],
   ]);
   // Removing goes through the project it is in.
   expect(
@@ -473,33 +482,29 @@ it("projects reference records without copying them, refuse other businesses' re
   ).toBe(200);
   // A file is a path in the business's folder on the Mac, so only in local mode.
   const folder = `/Users/owner/Devys/${acme.business.id}`;
-  expect((await add(launch.id, `${folder}/plan.xlsx`, "file")).status).toBe(400);
+  expect((await add(launch.id, fileRef(`${folder}/plan.xlsx`))).status).toBe(400);
   const local = await signIn(acme.person, {
     ...bindings,
     DEVYS_MODE: "local",
     DEVYS_HOST_HOME: "/Users/owner",
   } as unknown as Env);
-  const addFile = (ref: string) =>
-    local(acme.business.id, `/projects/${growth.id}/items`, { kind: "file", ref });
+  const addFile = (path: string) =>
+    local(acme.business.id, `/projects/${growth.id}/items`, { ref: fileRef(path) });
   expect((await addFile(`${folder}/plan.xlsx`)).status).toBe(201);
   expect((await addFile(`${folder}/../other/plan.xlsx`)).status).toBe(400);
   expect((await addFile(`/Users/owner/Devys/${globex.business.id}/x.md`)).status).toBe(400);
   const withFile = (await (await local(acme.business.id, "/projects")).json()) as {
-    projects: { name: string; items: { kind: string; ref: string }[] }[];
+    projects: { name: string; items: { ref: string }[] }[];
   };
   expect(withFile.projects.find((p) => p.name === "Growth")?.items).toContainEqual(
-    expect.objectContaining({ kind: "file", ref: `${folder}/plan.xlsx` }),
+    expect.objectContaining({ ref: fileRef(`${folder}/plan.xlsx`) }),
   );
   // Globex's owner can't see Acme's projects, and can't add into them through Globex.
   const other = await signIn(globex.person);
   expect((await other(acme.business.id, "/projects")).status).toBe(404);
   expect(
-    (
-      await other(globex.business.id, `/projects/${launch.id}/items`, {
-        kind: "artifact",
-        ref: theirs,
-      })
-    ).status,
+    (await other(globex.business.id, `/projects/${launch.id}/items`, { ref: pageRef(theirs) }))
+      .status,
   ).toBe(404);
 });
 

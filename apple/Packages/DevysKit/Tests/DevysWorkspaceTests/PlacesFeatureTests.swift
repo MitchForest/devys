@@ -18,7 +18,7 @@ private actor PlacesServer {
     private var count = 0
 
     @discardableResult
-    func add(_ key: ConversationKey, _ author: String, _ text: String, kind: ConversationMessage.Kind = .message, ref: String? = nil, mentions: [String] = []) -> ConversationMessage {
+    func add(_ key: ConversationKey, _ author: String, _ text: String, kind: ConversationMessage.Kind = .message, ref: Ref? = nil, mentions: [String] = []) -> ConversationMessage {
         count += 1
         let message = ConversationMessage(
             id: "m\(count)",
@@ -37,7 +37,7 @@ private actor PlacesServer {
     /// An employee publishes a page: the file, and its card in the conversation.
     func publish(_ id: String, _ filename: String, by employee: String, in key: ConversationKey) {
         artifacts.append(Artifact(id: id, filename: filename, contentType: "text/html", byteLength: 10, createdAt: "2026-10-20T10:00:0\(artifacts.count).000Z"))
-        add(key, "employee:\(employee)", filename, kind: .event, ref: "artifact:\(id)")
+        add(key, "employee:\(employee)", filename, kind: .event, ref: .artifact(id))
     }
 
     func setHome(_ value: Home) { home = value }
@@ -241,7 +241,7 @@ struct PlacesFeatureTests {
         // Once the owner opens a layer themselves, a new page arrives as a card only.
         store.send(.layerOpened(.file("/acme/plan.md")))
         await server.publish("a3", "pricing.html", by: "growth", in: .direct("growth"))
-        await settle("the card arrived") { store.main?.messages.value?.last?.ref == "artifact:a3" }
+        await settle("the card arrived") { store.main?.messages.value?.last?.ref == .artifact("a3") }
         #expect(store.state.topLayer == .file("/acme/plan.md"))
     }
 
@@ -251,19 +251,28 @@ struct PlacesFeatureTests {
         let store = await makeStore(server)
         await open(.direct("growth"), in: store)
         let key = ConversationKey.direct("growth")
-        store.send(.layerOpened(.file("/acme/plan.md")))
-        #expect(store.state.reference == LayerReference(title: "plan.md", ref: "file /acme/plan.md"))
+        store.send(.layerOpened(.file("/acme/launch plan.md")))
+        #expect(store.state.reference == LayerReference(title: "launch plan.md", ref: .file("/acme/launch plan.md")))
         store.send(.draftChanged(key, "  Shorter, please  "))
         store.send(.sendTapped(key))
         await settle("posted") { await server.posts.count == 1 }
-        #expect(await server.posts.last?.text == "Shorter, please\n\n_Viewing: plan.md (file /acme/plan.md)_")
+        // Byte for byte what the web sends.
+        #expect(await server.posts.last?.text == "Shorter, please\n\n_Viewing: launch plan.md (devys:documents/file/%2Facme%2Flaunch%20plan.md)_")
         #expect(store.state.reference == nil)
         store.send(.layerOpened(.session(workID: "c1", sessionID: "s1")))
+        #expect(store.state.reference?.line == "\n\n_Viewing: Coding session (devys:code/session/s1)_")
         store.send(.referencingSet(false))
         store.send(.draftChanged(key, "Thanks"))
         store.send(.sendTapped(key))
         await settle("posted again") { await server.posts.count == 2 }
         #expect(await server.posts.last?.text == "Thanks")
+        // The browser is not a record: its line names it without a ref.
+        store.send(.layerOpened(.browser(workID: "c1")))
+        store.send(.referencingSet(true))
+        store.send(.draftChanged(key, "Look"))
+        store.send(.sendTapped(key))
+        await settle("posted a third time") { await server.posts.count == 3 }
+        #expect(await server.posts.last?.text == "Look\n\n_Viewing: Browser_")
         // An app's records are a list, not a thing to talk about.
         store.send(.layerOpened(.app("documents")))
         #expect(store.state.reference == nil)
@@ -276,7 +285,7 @@ struct PlacesFeatureTests {
         let server = PlacesServer()
         let fromGrowth = await server.add(.project("p1"), "employee:growth", "The sitemap drops /blog.\n\nNeeds a fix.")
         let mentioning = await server.add(.project("p1"), "person:person-preview", "@Engineering can you check deploys?", mentions: ["engineering"])
-        let plain = await server.add(.project("p1"), "person:person-preview", "Decide pricing\n\n_Viewing: plan (page artifact:a1)_")
+        let plain = await server.add(.project("p1"), "person:person-preview", "Decide pricing\n\n_Viewing: plan (devys:documents/artifact/a1)_")
         let store = await makeStore(server)
         await open(.project("p1"), in: store)
 

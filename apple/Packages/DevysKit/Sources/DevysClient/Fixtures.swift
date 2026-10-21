@@ -90,10 +90,18 @@ import Foundation
     }
 
     extension AppEntry {
-        /// The two apps every business has.
+        /// Documents and Code installed, and two of the system apps every business has.
         public static let fixtures = [
-            AppEntry(id: "documents", name: "Documents", icon: "file-text", summary: "Documents, pages, sheets and uploads"),
-            AppEntry(id: "code", name: "Code", icon: "code", summary: "Repositories, coding sessions and deploys")
+            AppEntry(
+                id: "documents",
+                name: "Documents",
+                icon: "file-text",
+                summary: "Documents, pages, sheets and uploads",
+                skills: [Skill(name: "writing-pages", description: "Publishing a page")]
+            ),
+            AppEntry(id: "code", name: "Code", icon: "code", summary: "Repositories, coding sessions and deploys"),
+            AppEntry(id: "work", name: "Work", icon: "list-checks", summary: "Work items and the projects they belong to", kind: .system, pinned: false, visible: false),
+            AppEntry(id: "memory", name: "Memory", icon: "brain", summary: "What the business knows", kind: .system, pinned: false, visible: false)
         ]
     }
 

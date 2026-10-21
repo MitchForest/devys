@@ -2,17 +2,13 @@ import Foundation
 
 // MARK: - Projects
 
-/// A record a project shows: a reference, never a copy.
+/// A record a project shows: a reference, never a copy (an artifact or a business file).
 public struct ProjectItem: Equatable, Sendable, Decodable, Identifiable {
-    public enum Kind: String, Equatable, Sendable, Codable { case artifact, file }
-
     public let id: String
-    public let kind: Kind
-    public let ref: String
+    public let ref: Ref
 
-    public init(id: String, kind: Kind, ref: String) {
+    public init(id: String, ref: Ref) {
         self.id = id
-        self.kind = kind
         self.ref = ref
     }
 }
@@ -68,8 +64,8 @@ public struct Project: Equatable, Sendable, Decodable, Identifiable {
     }
 
     /// Whether the project keeps this record on its overview.
-    public func keeps(_ kind: ProjectItem.Kind, _ ref: String) -> ProjectItem? {
-        items.first { $0.kind == kind && $0.ref == ref }
+    public func keeps(_ ref: Ref) -> ProjectItem? {
+        items.first { $0.ref == ref }
     }
 }
 
@@ -110,23 +106,52 @@ public struct ProjectChange: Equatable, Sendable, Encodable {
 /// An app in the directory, and whether this business has it.
 public struct AppEntry: Equatable, Sendable, Decodable, Identifiable {
     public enum Status: String, Equatable, Sendable, Decodable { case available, coming }
+    /// System apps are always installed and never in the sidebar.
+    public enum Kind: String, Equatable, Sendable, Decodable { case system, business }
+
+    /// A skill an app ships, which employees load by name.
+    public struct Skill: Equatable, Sendable, Decodable {
+        public let name: String
+        public let description: String
+
+        public init(name: String, description: String = "") {
+            self.name = name
+            self.description = description
+        }
+    }
 
     public let id: String
     public let name: String
     public let icon: String
     public let summary: String
+    public let kind: Kind
     public let status: Status
+    /// The skills it ships, which employees load by name.
+    public let skills: [Skill]
     public var installed: Bool
     public var pinned: Bool
     /// Installed and has something to show, so the sidebar lists it.
     public let visible: Bool
 
-    public init(id: String, name: String, icon: String = "", summary: String = "", status: Status = .available, installed: Bool = true, pinned: Bool = true, visible: Bool = true) {
+    public init(
+        id: String,
+        name: String,
+        icon: String = "",
+        summary: String = "",
+        kind: Kind = .business,
+        status: Status = .available,
+        skills: [Skill] = [],
+        installed: Bool = true,
+        pinned: Bool = true,
+        visible: Bool = true
+    ) {
         self.id = id
         self.name = name
         self.icon = icon
         self.summary = summary
+        self.kind = kind
         self.status = status
+        self.skills = skills
         self.installed = installed
         self.pinned = pinned
         self.visible = visible
@@ -244,9 +269,9 @@ extension DevysHTTPClient {
     }
 
     /// Keeps a record on a project's overview. Keeping it twice is harmless.
-    public func addToProject(_ session: DeviceSession, businessID: String, projectID: String, kind: ProjectItem.Kind, ref: String) async throws {
-        struct Body: Encodable { let kind: ProjectItem.Kind; let ref: String }
-        _ = try await raw(json(session, path: "api/businesses/\(businessID)/projects/\(projectID)/items", method: "POST", body: Body(kind: kind, ref: ref)))
+    public func addToProject(_ session: DeviceSession, businessID: String, projectID: String, ref: Ref) async throws {
+        struct Body: Encodable { let ref: Ref }
+        _ = try await raw(json(session, path: "api/businesses/\(businessID)/projects/\(projectID)/items", method: "POST", body: Body(ref: ref)))
     }
 
     /// Takes a record off a project; the record itself stays in its app.

@@ -2,8 +2,8 @@ import { env } from "cloudflare:workers";
 import { Effect } from "effect";
 import { expect, it } from "vitest";
 import type { Env } from "../infra/api.ts";
-import { artifactCapabilities } from "../src/artifacts/capabilities.ts";
-import { artifactText } from "../src/artifacts/service.ts";
+import { artifactCapabilities } from "../src/apps/documents/capabilities.ts";
+import { artifactText } from "../src/apps/documents/service.ts";
 import { browserCapabilities } from "../src/browser/capabilities.ts";
 import type { Browser } from "../src/browser/contract.ts";
 import { Invocation } from "../src/protocol/capability.ts";
@@ -37,12 +37,14 @@ it("an employee publishes a page, sees it announced where it is answering, and e
     named("artifactPage")
       .execute({ title: "Signups by week", html: "<h1>Signups</h1><p>12</p>" })
       .pipe(as(scope, { conversation: "project:launch" })),
-  )) as { id: string };
+  )) as { id: string; ref: string };
+  // The page it created is returned as its ref, the same one the card carries.
+  expect(published.ref).toBe(`devys:documents/artifact/${published.id}`);
   expect(cards).toEqual([
     {
       conversation: "project:launch",
       text: "Published a page: Signups by week",
-      ref: `artifact:${published.id}`,
+      ref: `devys:documents/artifact/${published.id}`,
     },
   ]);
   const stored = await Effect.runPromise(artifactText(bindings, scope.businessId, published.id));

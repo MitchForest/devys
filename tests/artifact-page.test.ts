@@ -2,8 +2,8 @@ import { existsSync } from "node:fs";
 import { createServer } from "node:http";
 import { chromium } from "playwright-core";
 import { expect, it } from "vitest";
-import { sandboxed } from "../src/artifacts/contract.ts";
-import { pageProblem } from "../src/artifacts/page.ts";
+import { sandboxed } from "../src/apps/documents/contract.ts";
+import { pageProblem } from "../src/apps/documents/page.ts";
 
 const chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 

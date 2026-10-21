@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { sandboxed } from "../../artifacts/contract.ts";
+import { sandboxed } from "../../apps/documents/contract.ts";
 import { api } from "../app/api.ts";
 import { useWorkspace } from "../app/workspace.tsx";
 

@@ -10,10 +10,10 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, expect, it } from "vitest";
-import type { DelegateEvent, StartRequest } from "../src/delegates/contract.ts";
-import { hostDelegates } from "../src/delegates/host-client.ts";
-import type { ProviderAdapter, ProviderEvents } from "../src/delegates/host/provider.ts";
-import { delegatesHost } from "../src/delegates/host/server.ts";
+import type { DelegateEvent, StartRequest } from "../src/apps/code/contract.ts";
+import { hostDelegates } from "../src/apps/code/host-client.ts";
+import type { ProviderAdapter, ProviderEvents } from "../src/apps/code/host/provider.ts";
+import { delegatesHost } from "../src/apps/code/host/server.ts";
 import { startHost } from "../src/workspace/host/server.ts";
 
 const token = "test-token";
@@ -132,7 +132,6 @@ esac
       token,
       data,
       work: join(root, "work"),
-      skills: join(root, "skills"),
       port: 0,
       shell: "/bin/sh",
       env,

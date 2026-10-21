@@ -477,7 +477,7 @@ async function status() {
 
 /**
  * A business's deploy secrets (`KEY=VALUE`, or `preview.KEY=…` / `production.KEY=…` for one
- * stage): only the host reads them, into the one deploy process (src/delegates/host/deploy.ts).
+ * stage): only the host reads them, into the one deploy process (src/apps/code/host/deploy.ts).
  */
 function deployEnv() {
   const business = process.argv[3];

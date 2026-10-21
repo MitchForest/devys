@@ -61,18 +61,14 @@ extension Workspace.State {
 
     /// What a layer is, in words, for its header and the reference sent with a message.
     package func reference(for layer: Layer) -> LayerReference {
-        switch layer {
-        case .artifact(let id, _):
-            LayerReference(title: artifactName(id), ref: "page artifact:\(id)")
-        case .file(let path):
-            LayerReference(title: (path as NSString).lastPathComponent, ref: "file \(path)")
-        case .app(let id):
-            LayerReference(title: appTitle(id), ref: "the \(appTitle(id)) app")
-        case .session(let workID, let sessionID):
-            LayerReference(title: "Coding session", ref: "coding session \(sessionID) on work:\(workID)")
-        case .browser:
-            LayerReference(title: "Browser", ref: "the business's browser")
+        let title = switch layer {
+        case .artifact(let id, _): artifactName(id)
+        case .file(let path): (path as NSString).lastPathComponent
+        case .app(let id): appTitle(id)
+        case .session: "Coding session"
+        case .browser: "Browser"
         }
+        return LayerReference(title: title, ref: layer.ref)
     }
 
     /// The open layer, sent with the next message unless the owner removed it. An app's
@@ -172,8 +168,7 @@ extension Workspace {
     /// A page published in the conversation on screen opens on its own unless the owner opened a
     /// layer themselves; a new version of the open page replaces it in place and says who.
     func pageArrived(_ message: ConversationMessage, state: inout State) {
-        guard let ref = message.ref, ref.hasPrefix("artifact:") else { return }
-        let id = String(ref.dropFirst("artifact:".count))
+        guard let id = message.ref?.page else { return }
         let author = message.employeeID.flatMap { id in state.snapshot.employees.first { $0.id == id }?.name }
         let artifacts = state.artifacts
         func name(_ artifactID: String) -> String { artifacts.first { $0.id == artifactID }?.filename ?? message.text }

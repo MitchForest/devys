@@ -1,7 +1,7 @@
 import { Effect, Schema } from "effect";
 import type { Env } from "./env.ts";
 import { modelsConfig } from "../../config/models.ts";
-import { appCatalog } from "../apps/catalog.ts";
+import { appCatalog } from "./apps.ts";
 import { grantAll } from "../authority/service.ts";
 import { atomically, type Database } from "../data/database.ts";
 import type { RoleTemplateId, Scope } from "../identity/contract.ts";
@@ -44,7 +44,7 @@ const collaboration = [
   "projectUpdate",
   "projectAdd",
 ] as const;
-const files = ["listSkills", "read", "write", "printPdf", "importAttachment"] as const;
+const files = ["readSkill", "read", "write", "printPdf", "importAttachment"] as const;
 const browser = [
   "browserOpen",
   "browserRead",

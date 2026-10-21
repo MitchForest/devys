@@ -21,6 +21,7 @@ export function memoryCapabilities(factory: MemoryFactory) {
         "Search saved personal knowledge with evidence and scope. Empty query lists current knowledge. Use next as after for another page.",
       effect: "read",
       replay: "read",
+      core: true,
       input: Schema.Struct({ query: Text, after: Schema.optional(Key) }),
       output: Schema.Struct({
         items: Schema.Array(ClaimSchema),
@@ -38,6 +39,7 @@ export function memoryCapabilities(factory: MemoryFactory) {
         "Immediately save or correct useful personal context. Use source=user only for an explicit owner statement; trusted host evidence is attached. Preserve temporary scope and exceptions. Pass expectedRevision from recall or current personal context before correcting.",
       effect: "change",
       replay: "idempotent",
+      core: true,
       input: ChangeSchema,
       output: Schema.Struct({ status: Schema.Literal("saved"), claim: ClaimSchema }),
       execute: (input) =>
@@ -57,6 +59,7 @@ export function memoryCapabilities(factory: MemoryFactory) {
         "Forget the selected memory keys and dependent claims. Suppress their source observations from future learning. This does not erase the original conversation transcript.",
       effect: "change",
       replay: "idempotent",
+      core: true,
       input: Schema.Struct({
         keys: Schema.Array(Key).check(Schema.isMinLength(1), Schema.isMaxLength(30)),
       }),

@@ -2,7 +2,13 @@ import { expect, it } from "vitest";
 import { mkdtemp, mkdir, readFile, readdir, lstat, writeFile, symlink, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { listWorkspaceSkills } from "../src/workspace/skills.ts";
+import { Effect } from "effect";
+import { documents } from "../src/apps/documents/app.ts";
+import { Invocation } from "../src/protocol/capability.ts";
+import { bundledSkill } from "../src/protocol/skill.ts";
+import { workspaceCapabilities } from "../src/workspace/capabilities.ts";
+import type { WorkspacePort } from "../src/workspace/contract.ts";
+import { availableSkills, listWorkspaceSkills } from "../src/workspace/skills.ts";
 
 async function workspace() {
   const root = await mkdtemp(join(tmpdir(), "devys-skills-"));
@@ -89,4 +95,80 @@ it("bounds malformed/oversized skills and skips symlinks without hiding valid ne
   } finally {
     await rm(w.root, { recursive: true, force: true });
   }
+});
+
+it("a bundled app skill follows the same SKILL.md rules; a bad one is rejected", () => {
+  expect(documents.skills.map((skill) => skill.name)).toEqual(["writing-pages"]);
+  expect(documents.skills[0]!.body).toContain("artifactEdit");
+  expect(() => bundledSkill("writing-pages", "No frontmatter")).toThrow("not a valid SKILL.md");
+  expect(() =>
+    bundledSkill("writing-pages", "---\nname: other\ndescription: Mismatch\n---\nBody"),
+  ).toThrow();
+  expect(() =>
+    bundledSkill("Bad_Name", "---\nname: Bad_Name\ndescription: x\n---\nBody"),
+  ).toThrow();
+  expect(() =>
+    bundledSkill("empty", "---\nname: empty\ndescription: Nothing to do\n---\n   "),
+  ).toThrow();
+});
+
+const appSkill = { name: "writing-pages", description: "App version", body: "App body" };
+
+it("the business's skill replaces an app's of the same name; at most 32 are listed", () => {
+  const own = {
+    name: "writing-pages",
+    description: "Ours",
+    path: "/b/skills/writing-pages/SKILL.md",
+  };
+  expect(availableSkills([own], [appSkill, { ...appSkill, name: "other" }])).toEqual([
+    { name: "writing-pages", description: "Ours" },
+    { name: "other", description: "App version" },
+  ]);
+  const many = Array.from({ length: 40 }, (_, i) => ({ ...appSkill, name: `skill-${i}` }));
+  expect(availableSkills([], many)).toHaveLength(32);
+});
+
+it("readSkill loads the business's skill first, then an installed app's", async () => {
+  const files = new Map([
+    [
+      "/b/skills/writing-pages/SKILL.md",
+      "---\nname: writing-pages\ndescription: Ours\n---\nOur own way.",
+    ],
+  ]);
+  const port = {
+    skills: async () => ({
+      skills: [...files.keys()].map((path) => ({
+        name: path.split("/").at(-2)!,
+        description: "Ours",
+        path,
+      })),
+      warnings: [],
+    }),
+    read: async (path: string) => ({ path, content: files.get(path)!, revision: "r" }),
+  } as unknown as WorkspacePort;
+  const readSkill = workspaceCapabilities(
+    () => port,
+    async () => [appSkill, { ...appSkill, name: "app-only" }],
+  ).find((item) => item.name === "readSkill")!;
+  const read = (name: string) =>
+    Effect.runPromise(
+      readSkill.execute({ name }).pipe(
+        Effect.provideService(Invocation, {
+          businessId: "b",
+          employeeId: "e",
+          operationId: "o",
+          authorize: () => Effect.void,
+          assertActive: () => Effect.void,
+        }),
+      ),
+    );
+  expect(await read("writing-pages")).toEqual({
+    name: "writing-pages",
+    description: "Ours",
+    body: "Our own way.",
+    path: "/b/skills/writing-pages/SKILL.md",
+  });
+  expect(await read("app-only")).toEqual({ ...appSkill, name: "app-only" });
+  await expect(read("missing")).rejects.toThrow("No skill is named missing");
+  expect(readSkill.core).toBe(true);
 });

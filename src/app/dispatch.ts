@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import type { Env } from "./env.ts";
+import { ref } from "../protocol/ref.ts";
 import { expireDecisions } from "../authority/service.ts";
 import { workChat } from "../channels/work.ts";
 import { scopeName } from "../identity/contract.ts";
@@ -37,7 +38,7 @@ async function handOver(env: Env, work: Commitment & { business_id: string }) {
   const card = {
     clientId: `handoff:${work.id}:${employee.id}`,
     text: `${employee.name} took on "${work.title}".`,
-    ref: work.id,
+    ref: ref("work", "item", work.id),
   };
   await postEvent(env, work.business_id, `work:${work.id}`, card);
   if (work.project_id) await postEvent(env, work.business_id, `project:${work.project_id}`, card);

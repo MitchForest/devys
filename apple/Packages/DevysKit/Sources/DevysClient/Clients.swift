@@ -72,7 +72,7 @@ public struct RuntimeClient: Sendable {
     public var projects: @Sendable (_ businessID: String) async throws -> [Project]
     public var createProject: @Sendable (_ businessID: String, ProjectChange) async throws -> Project
     public var updateProject: @Sendable (_ businessID: String, _ projectID: String, ProjectChange) async throws -> Void
-    public var addToProject: @Sendable (_ businessID: String, _ projectID: String, ProjectItem.Kind, _ ref: String) async throws -> Void
+    public var addToProject: @Sendable (_ businessID: String, _ projectID: String, _ ref: Ref) async throws -> Void
     public var removeFromProject: @Sendable (_ businessID: String, _ projectID: String, _ itemID: String) async throws -> Void
     /// The app directory, and what this business has installed and pinned.
     public var apps: @Sendable (_ businessID: String) async throws -> [AppEntry]
@@ -135,7 +135,7 @@ public struct RuntimeClient: Sendable {
             Project(id: UUID().uuidString, name: project.name, leadEmployeeID: project.lead, memberIDs: project.members)
         },
         updateProject: @escaping @Sendable (String, String, ProjectChange) async throws -> Void = { _, _, _ in },
-        addToProject: @escaping @Sendable (String, String, ProjectItem.Kind, String) async throws -> Void = { _, _, _, _ in },
+        addToProject: @escaping @Sendable (String, String, Ref) async throws -> Void = { _, _, _ in },
         removeFromProject: @escaping @Sendable (String, String, String) async throws -> Void = { _, _, _ in },
         apps: @escaping @Sendable (String) async throws -> [AppEntry] = { _ in [] },
         installApp: @escaping @Sendable (String, String, Bool) async throws -> Void = { _, _, _ in },
@@ -353,8 +353,8 @@ extension RuntimeClient {
             updateProject: { id, project, change in
                 try await hub.call { api, session in try await api.updateProject(session, businessID: id, projectID: project, change) }
             },
-            addToProject: { id, project, kind, ref in
-                try await hub.call { api, session in try await api.addToProject(session, businessID: id, projectID: project, kind: kind, ref: ref) }
+            addToProject: { id, project, ref in
+                try await hub.call { api, session in try await api.addToProject(session, businessID: id, projectID: project, ref: ref) }
             },
             removeFromProject: { id, project, item in
                 try await hub.call { api, session in try await api.removeFromProject(session, businessID: id, projectID: project, itemID: item) }

@@ -160,7 +160,7 @@ CREATE TABLE space_items (
   FOREIGN KEY (business_id, space_id) REFERENCES spaces(business_id, id) ON DELETE CASCADE
 );
 
--- artifacts
+-- documents
 CREATE TABLE artifacts (
   id text PRIMARY KEY,
   business_id text NOT NULL,

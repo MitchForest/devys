@@ -4,9 +4,9 @@
  */
 import { join } from "node:path";
 import { browsersHost } from "./browser/host/server.ts";
-import { claudeAdapter } from "./delegates/host/claude.ts";
-import { codexAdapter } from "./delegates/host/codex.ts";
-import { delegatesHost } from "./delegates/host/server.ts";
+import { claudeAdapter } from "./apps/code/host/claude.ts";
+import { codexAdapter } from "./apps/code/host/codex.ts";
+import { delegatesHost } from "./apps/code/host/server.ts";
 import { forgetHostSettings } from "./protocol/host.ts";
 import { bunPty, terminalsHost } from "./terminal/host/server.ts";
 import { startHost } from "./workspace/host/server.ts";
@@ -74,7 +74,6 @@ const host = await startHost({
   token,
   data,
   work,
-  skills: join(work, "skills"),
   port,
   routes: [delegates, terminals, browsersHost({ data })],
 });

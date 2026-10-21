@@ -9,7 +9,7 @@ import {
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, type FileEntry } from "../app/api.ts";
 import { chipFor, isOpen } from "../app/names.ts";
-import { useWorkspace, valueOf, type Layer } from "../app/workspace.tsx";
+import { layerOfRef, useWorkspace, valueOf, type Layer } from "../app/workspace.tsx";
 import { DevysButton } from "../design/buttons.tsx";
 import { EmptyNote, StatusChip } from "../design/primitives.tsx";
 import { ArtifactFrame } from "../pages/artifact.tsx";
@@ -151,7 +151,7 @@ function ArtifactLayer({ id, updatedBy }: { id: string; updatedBy?: string | und
 
 /**
  * The business folder's machine folders: repositories the Code app shows, and coding
- * worktrees nobody browses (the host lays them out: src/delegates/host/worktree.ts).
+ * worktrees nobody browses (the host lays them out: src/apps/code/host/worktree.ts).
  */
 const repositories = "repos";
 const worktrees = "worktrees";
@@ -187,6 +187,7 @@ function DocumentsApp() {
   const { listing, problem } = useFolder(folder);
   const all = valueOf(projects) ?? [];
   const chosen = all.find((p) => p.id === project);
+  const kept = (chosen?.items ?? []).map((item) => ({ id: item.id, layer: layerOfRef(item.ref) }));
   const pages = artifacts
     .filter((a) => a.content_type === "text/html")
     // One row per page: its latest version.
@@ -196,14 +197,16 @@ function DocumentsApp() {
     .filter(
       (a) =>
         !chosen ||
-        chosen.items.some(
-          (item) =>
-            item.kind === "artifact" &&
-            artifacts.some((b) => b.id === item.ref && b.filename === a.filename),
+        kept.some(
+          ({ layer }) =>
+            layer?.kind === "artifact" &&
+            artifacts.some((b) => b.id === layer.id && b.filename === a.filename),
         ),
     )
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
-  const keptFiles = chosen?.items.filter((item) => item.kind === "file") ?? [];
+  const keptFiles = kept.flatMap(({ id, layer }) =>
+    layer?.kind === "file" ? [{ id, path: layer.path }] : [],
+  );
   const atRoot = listing !== undefined && listing.path === listing.root;
   const entries = (listing?.entries ?? []).filter(
     (entry) =>
@@ -254,9 +257,9 @@ function DocumentsApp() {
                 <EntryRow
                   key={item.id}
                   icon={<FileText className="size-4 text-ink-3" />}
-                  title={item.ref.split("/").at(-1)!}
-                  detail={item.ref}
-                  open={() => actions.openLayer({ kind: "file", path: item.ref })}
+                  title={item.path.split("/").at(-1)!}
+                  detail={item.path}
+                  open={() => actions.openLayer({ kind: "file", path: item.path })}
                 />
               ))}
             </Group>

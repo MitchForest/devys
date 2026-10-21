@@ -43,14 +43,12 @@ const sqlStatement =
 const components = [
   "app",
   "apps",
-  "artifacts",
   "authority",
   "browser",
   "channels",
   "connections",
   "conversations",
   "data",
-  "delegates",
   "egress",
   "identity",
   "memory",
@@ -70,14 +68,23 @@ it("the component list is explicit", () => {
   expect(present).toEqual(components);
 });
 
-/** Table owners come from the `-- component` headings in the migrations. */
+/** Each app's folder under the apps component: `src/apps/<id>/`. */
+const apps = readdirSync("src/apps", { withFileTypes: true })
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => entry.name);
+
+/** A migration heading's owner: a component, or an app that keeps its own records. */
+const headingOwner = (heading: string) =>
+  components.includes(heading) ? heading : apps.includes(heading) ? `apps/${heading}` : undefined;
+
+/** Table owners come from the `-- component` (or `-- <app>`) headings in the migrations. */
 function tableOwners() {
   const owners = new Map<string, string>();
   for (const migration of readdirSync("migrations")) {
     let owner = "";
     for (const line of read(join("migrations", migration, "migration.sql")).split("\n")) {
       const heading = /^-- (\w+)\b/.exec(line)?.[1];
-      if (heading && components.includes(heading)) owner = heading;
+      if (heading && headingOwner(heading)) owner = headingOwner(heading)!;
       const table = /^CREATE TABLE (\w+)/.exec(line)?.[1];
       if (table) owners.set(table, owner);
       // A later migration may change a table only under its owner's heading (migrations from
@@ -99,9 +106,12 @@ function tableOwners() {
 }
 it("every migration since headings were introduced names its component first", () => {
   for (const migration of readdirSync("migrations").filter((name) => name >= "20261020020000"))
-    expect(components, `${migration} starts with a component heading`).toContain(
-      /^-- (\w+)/.exec(read(join("migrations", migration, "migration.sql")))?.[1],
-    );
+    expect(
+      headingOwner(
+        /^-- (\w+)/.exec(read(join("migrations", migration, "migration.sql")))?.[1] ?? "",
+      ),
+      `${migration} starts with a component heading`,
+    ).toBeDefined();
 });
 
 it("each table is read and written only by the component that owns it", () => {
@@ -133,7 +143,10 @@ it("no ORMs, workflow engines, dependency-injection containers or event buses", 
 const shared = ["src/protocol/", "src/data/"];
 const wiring = (path: string) =>
   path.startsWith("src/app/") || path === "src/worker.ts" || path === "src/host.ts";
-const component = (path: string) => /^src\/([^/]+)\//.exec(path)?.[1];
+/** A path's component; each app folder is its own (`apps/documents`). */
+const component = (path: string) =>
+  /^src\/(apps\/[^/]+)\//.exec(path)?.[1] ?? /^src\/([^/]+)\//.exec(path)?.[1];
+const contractPath = /^src\/(?:apps\/)?[^/]+\/contract\.ts$/;
 const imports = (path: string) =>
   [...read(path).matchAll(/(?:from|import)\s*\(?\s*["']([^"']+)["']/g)].map((match) => match[1]!);
 const resolve = (from: string, target: string) => join(from, "..", target).replaceAll("\\", "/");
@@ -150,7 +163,7 @@ it("components reach each other only through contract.ts; only wiring selects ad
       // The web client renders document surfaces directly; they are its UI library.
       if (own === "web" && component(resolved) === "surfaces") continue;
       if (component(resolved) !== own)
-        expect(resolved, `${path} reaches into ${resolved}`).toMatch(/^src\/[^/]+\/contract\.ts$/);
+        expect(resolved, `${path} reaches into ${resolved}`).toMatch(contractPath);
     }
   }
 });
@@ -220,5 +233,39 @@ it("contracts are vendor-free and depend only on other contracts", () => {
         `${path} imports non-contract ${resolved}`,
       ).toBe(true);
     }
+  }
+});
+
+// The app model (.docs/APPS_AND_CAPABILITIES.md#code-layout).
+it("each app is a folder whose app.ts defines it under its folder's name", () => {
+  expect(apps.length).toBeGreaterThan(10);
+  for (const id of apps) {
+    const text = read(`src/apps/${id}/app.ts`);
+    expect(text, id).toMatch(/= defineApp\(\{/);
+    expect(text, id).toContain(`id: "${id}",`);
+  }
+});
+
+it("apps import only kernel contracts, the shared kernel and their own folder", () => {
+  for (const id of apps)
+    for (const path of files(`src/apps/${id}`))
+      for (const target of imports(path).filter((value) => value.startsWith("."))) {
+        const resolved = resolve(path, target);
+        if (resolved.startsWith(`src/apps/${id}/`)) continue;
+        expect(
+          shared.some((prefix) => resolved.startsWith(prefix)) ||
+            (/^src\/[^/]+\/contract\.ts$/.test(resolved) && !resolved.startsWith("src/apps/")),
+          `${path} imports ${resolved}`,
+        ).toBe(true);
+      }
+});
+
+it("only wiring composes the catalog of apps", () => {
+  for (const path of files("src")) {
+    if (wiring(path)) continue;
+    for (const target of imports(path).filter((value) => value.startsWith(".")))
+      expect(resolve(path, target), `${path} imports a manifest`).not.toMatch(
+        /^src\/apps\/[^/]+\/app\.ts$/,
+      );
   }
 });

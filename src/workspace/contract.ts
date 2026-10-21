@@ -36,7 +36,8 @@ export type Checkpoint =
   | { kind: "durable" };
 
 export interface WorkspacePort {
-  listSkills(): Promise<SkillCatalog>;
+  /** The business's own skills: its skills folder (local mode) or `/workspace/skills` (cloud). */
+  skills(): Promise<SkillCatalog>;
   run(
     operationId: string,
     command: string,

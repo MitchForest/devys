@@ -156,7 +156,7 @@ struct TeamAPITests {
             body: """
             {"projects":[{"id":"p1","name":"Launch","goal":"First customers","deadline":"2026-11-30",
              "budget":{"cents":50000,"currency":"USD"},"lead_employee_id":"ops","member_ids":["growth"],
-             "items":[{"id":"i1","kind":"artifact","ref":"a1"},{"id":"i2","kind":"file","ref":"/b/plan.md"}]},
+             "items":[{"id":"i1","ref":"devys:documents/artifact/a1"},{"id":"i2","ref":"devys:documents/file/%2Fb%2Fplan.md"}]},
              {"id":"p2","name":"Hiring","goal":null,"deadline":null,"budget":null,"lead_employee_id":null,"member_ids":[],"items":[]}]}
             """,
             recorder: recorder
@@ -169,9 +169,9 @@ struct TeamAPITests {
             budget: Budget(cents: 50_000),
             leadEmployeeID: "ops",
             memberIDs: ["growth"],
-            items: [ProjectItem(id: "i1", kind: .artifact, ref: "a1"), ProjectItem(id: "i2", kind: .file, ref: "/b/plan.md")]
+            items: [ProjectItem(id: "i1", ref: .artifact("a1")), ProjectItem(id: "i2", ref: .file("/b/plan.md"))]
         ))
-        #expect(projects.first?.keeps(.file, "/b/plan.md")?.id == "i2")
+        #expect(projects.first?.keeps(.file("/b/plan.md"))?.id == "i2" && projects.first?.keeps(.file("a1")) == nil)
         #expect(projects.last?.budget == nil && projects.last?.goal == nil)
         #expect(await recorder.requests.last?.url?.path() == "/api/businesses/b1/projects")
     }
@@ -193,25 +193,30 @@ struct TeamAPITests {
         #expect(request.httpMethod == "PUT" && request.url?.path() == "/api/businesses/b1/projects/p3")
         #expect(body["goal"] as? String == "Ship" && body["lead"] as? String == "growth" && body["budget"] is NSNull)
 
-        try await api(body: "{}", recorder: recorder).addToProject(Self.session, businessID: "b1", projectID: "p3", kind: .artifact, ref: "a1")
+        try await api(body: "{}", recorder: recorder).addToProject(Self.session, businessID: "b1", projectID: "p3", ref: .artifact("a1"))
         (request, body) = try await sent(recorder)
-        #expect(request.url?.path() == "/api/businesses/b1/projects/p3/items" && body["kind"] as? String == "artifact" && body["ref"] as? String == "a1")
+        #expect(request.url?.path() == "/api/businesses/b1/projects/p3/items" && body.keys.sorted() == ["ref"] && body["ref"] as? String == "devys:documents/artifact/a1")
 
         try await api(body: #"{"removed":true}"#, recorder: recorder).removeFromProject(Self.session, businessID: "b1", projectID: "p3", itemID: "i1")
         #expect(await recorder.requests.last?.url?.path() == "/api/businesses/b1/projects/p3/items/i1/remove")
     }
 
-    @Test("Apps list with install and pin state; installing, removing and pinning post to the app")
+    @Test("Apps list with their kind, skills, install and pin state; installing, removing and pinning post to the app")
     func apps() async throws {
         let recorder = Recorder()
         let apps = try await api(
             body: """
-            {"apps":[{"id":"documents","name":"Documents","icon":"file-text","summary":"Pages and files","status":"available","installed":true,"pinned":true,"visible":true},
-             {"id":"mail","name":"Mail","icon":"mail","summary":"Mailboxes","status":"coming","installed":false,"pinned":false,"visible":false}]}
+            {"apps":[{"id":"documents","name":"Documents","icon":"file-text","summary":"Pages and files","kind":"business","status":"available",
+              "skills":[{"name":"pages","description":"Publish a page"}],"installed":true,"pinned":true,"visible":true},
+             {"id":"memory","name":"Memory","icon":"brain","summary":"What employees remember","kind":"system","status":"available",
+              "skills":[],"installed":true,"pinned":false,"visible":false},
+             {"id":"mail","name":"Mail","icon":"mail","summary":"Mailboxes","kind":"business","status":"coming","skills":[],"installed":false,"pinned":false,"visible":false}]}
             """,
             recorder: recorder
         ).apps(Self.session, businessID: "b1")
-        #expect(apps.map(\.id) == ["documents", "mail"] && apps.last?.status == .coming && apps.first?.visible == true)
+        #expect(apps.map(\.id) == ["documents", "memory", "mail"] && apps.last?.status == .coming && apps.first?.visible == true)
+        #expect(apps.first?.skills == [AppEntry.Skill(name: "pages", description: "Publish a page")])
+        #expect(apps.map(\.kind) == [.business, .system, .business] && apps[1].installed && !apps[1].pinned)
 
         try await api(body: "{}", recorder: recorder).installApp(Self.session, businessID: "b1", appID: "code", install: false)
         #expect(await recorder.requests.last?.url?.path() == "/api/businesses/b1/apps/code/uninstall")

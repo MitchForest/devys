@@ -1,7 +1,7 @@
 import { FileText, Pencil, Plus } from "lucide-react";
 import { useState } from "react";
 import type { Project, ProjectChange } from "../app/api.ts";
-import { filterOf, useWorkspace, valueOf } from "../app/workspace.tsx";
+import { filterOf, layerOfRef, useWorkspace, valueOf } from "../app/workspace.tsx";
 import { DevysButton } from "../design/buttons.tsx";
 import { Field, fieldClass } from "../design/fields.tsx";
 import { EmployeePortrait } from "../design/portrait.tsx";
@@ -59,10 +59,15 @@ export function Overview({ projectId, close }: { projectId: string; close: () =>
   const members = employees.filter(
     (e) => project.member_ids.includes(e.id) && e.id !== project.lead_employee_id,
   );
-  const pages = project.items.filter(
-    (item) => item.kind === "artifact" && artifacts.some((a) => a.id === item.ref),
+  const kept = project.items.map((item) => ({ id: item.id, layer: layerOfRef(item.ref) }));
+  const pages = kept.flatMap(({ id, layer }) =>
+    layer?.kind === "artifact" && artifacts.some((a) => a.id === layer.id)
+      ? [{ id, page: layer.id }]
+      : [],
   );
-  const files = project.items.filter((item) => item.kind === "file");
+  const files = kept.flatMap(({ id, layer }) =>
+    layer?.kind === "file" ? [{ id, path: layer.path }] : [],
+  );
   return (
     <section aria-label={`${project.name} overview`} className="flex h-full flex-col">
       <PanelHeader title="Overview" close={close}>
@@ -205,15 +210,15 @@ export function Overview({ projectId, close }: { projectId: string; close: () =>
             {pages.map((item) => (
               <KeptRow
                 key={item.id}
-                title={artifactName(item.ref)}
-                open={() => actions.openLayer({ kind: "artifact", id: item.ref })}
+                title={artifactName(item.page)}
+                open={() => actions.openLayer({ kind: "artifact", id: item.page })}
               />
             ))}
             {files.map((item) => (
               <KeptRow
                 key={item.id}
-                title={item.ref.split("/").at(-1)!}
-                open={() => actions.openLayer({ kind: "file", path: item.ref })}
+                title={item.path.split("/").at(-1)!}
+                open={() => actions.openLayer({ kind: "file", path: item.path })}
               />
             ))}
           </PanelSection>

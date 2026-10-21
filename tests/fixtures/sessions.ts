@@ -63,6 +63,7 @@ export class SessionsProbe extends AgentRuntime {
     return {
       capabilities: [],
       workplace: "Test workplace.",
+      skills: async () => [],
       interruptDelegates: async () => {},
       runner: () =>
         ({

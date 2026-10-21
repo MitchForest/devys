@@ -136,10 +136,10 @@ test("a page card opens a layer, is kept in the project, and a new version repla
     author: `employee:${growth.id}`,
     kind: "event",
     text: "Published a page: Pricing",
-    ref: `artifact:${first.id}`,
+    ref: `devys:documents/artifact/${first.id}`,
   });
   const keys = [first.key];
-  await stubPosting(page);
+  const sent = await stubPosting(page);
   try {
     await signIn(page, sql, owner.person);
     await sidebar(page)
@@ -160,16 +160,23 @@ test("a page card opens a layer, is kept in the project, and a new version repla
       }),
     ).toBeVisible();
     await expect(page.getByTestId("reference-chip")).toHaveText("Viewing Pricing");
+    // The next message names the page by its ref.
+    await page.getByLabel("Message Launch").fill("Make it shorter");
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+    await expect.poll(() => sent.length).toBe(1);
+    expect(sent[0]!.body.text).toBe(
+      `Make it shorter\n\n_Viewing: Pricing (devys:documents/artifact/${first.id})_`,
+    );
 
     // Keep puts it on the project's overview: a reference, so the page stays in Documents.
     await layer.getByRole("button", { name: "Keep" }).click();
     await page.getByRole("menuitem", { name: "Keep in Launch" }).click();
     await expect(layer.getByRole("button", { name: "Launch" })).toBeVisible();
     expect(
-      await sql.row(
-        "SELECT 1 FROM project_items WHERE project_id = $1 AND kind = 'artifact' AND ref = $2",
-        [project.id, first.id],
-      ),
+      await sql.row("SELECT 1 FROM project_items WHERE project_id = $1 AND ref = $2", [
+        project.id,
+        `devys:documents/artifact/${first.id}`,
+      ]),
     ).toBeTruthy();
 
     // A new version published in the channel replaces the open page and says who changed it.
@@ -179,7 +186,7 @@ test("a page card opens a layer, is kept in the project, and a new version repla
       author: `employee:${growth.id}`,
       kind: "event",
       text: "Published a page: Pricing",
-      ref: `artifact:${second.id}`,
+      ref: `devys:documents/artifact/${second.id}`,
     });
     await expect(layer.getByTestId("updated-by")).toHaveText("Updated by Growth", {
       timeout: 15_000,

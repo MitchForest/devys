@@ -198,24 +198,32 @@ restoration. The channel test simulates Photon and sends no real iMessages.
   workspace restart uses a saved snapshot; automatic fallback to an R2 backup is not
   implemented and real Linux persistence has not passed live acceptance.
 
-## Minimal tools and reusable skills
+## Apps, capabilities and skills
 
-The initial direct tools are `read`, `write`, `run`, `listSkills`, `recall`,
-`remember`, `forget`, `describe_capabilities`, and `execute`. Discovery without
-names returns a capability catalog; selected names return only those interfaces
-and activate native Pi tools. Both direct and composed calls pass through Effect.
-New idle admissions return to the small tool set; pending work keeps its loadout.
-Automatic memory context is capped at 4,000 characters, with deeper `recall`.
+Everything an employee or the owner can do is a capability owned by exactly one app
+(`src/apps/<id>/app.ts`, declared with `defineApp`): the system apps Computer, Browser,
+Web, Memory, Conversations, Work and Team, always installed, and the business apps
+Documents and Code, installed per business. Records are referred to by one `Ref`,
+`devys:<app>/<kind>/<id>`. Tests enforce that every capability belongs to exactly one app
+and every `Ref` kind to exactly one app's records.
 
-Ask an employee to turn useful repeated work into a skill. Skills live in
-`~/Devys/skills/<name>/SKILL.md` in local mode and `/workspace/skills/<name>/SKILL.md`
-in cloud mode, with YAML `name` and `description`, followed
-by instructions and supporting scripts in the same directory. Names use lowercase
-letters/numbers and hyphens, up to 64 characters, matching the directory.
-Descriptions are at most 300 characters and SKILL.md at most 16 KB. Discovery
-returns metadata for up to 32 skill directories; the model reads full instructions
-only when needed. Edits need no deployment. Skill files use the normal workspace
-checkpoint lifecycle, cannot grant authority, and must not contain credentials.
+The initial direct tools are the `core` capabilities (`read`, `write`, `run`,
+`readSkill`, `recall`, `remember`, `forget`) plus `describe_capabilities` and
+`execute`. Discovery without names returns the granted capability catalog; selected
+names return only those interfaces and activate native Pi tools. Both direct and
+composed calls pass through Effect. New idle admissions return to the small tool set;
+pending work keeps its loadout. Automatic memory context is capped at 4,000 characters,
+with deeper `recall`.
+
+Skills use the Agent Skills format: a folder with `SKILL.md` (YAML `name`, matching the
+folder, lowercase letters/numbers and hyphens up to 64 characters, and a `description` of
+at most 300 characters; at most 16 KB), followed by instructions and supporting scripts.
+Apps ship skills in `src/apps/<id>/skills/` (Documents ships `writing-pages`); employees
+write the business's own in `~/Devys/<business>/skills/` in local mode and
+`/workspace/skills/` in cloud mode. Every employee's prompt lists up to 32 available
+skills by name and description; `readSkill` loads one, and the business's skill wins over
+an app's of the same name. Edits need no deployment. Skills cannot grant authority and
+must not contain credentials.
 
 ## Model configuration
 

@@ -1,6 +1,7 @@
 import { Effect, Schema } from "effect";
 import type { Database } from "../data/database.ts";
 import { capability, CapabilityError, Invocation } from "../protocol/capability.ts";
+import { Ref, ref } from "../protocol/ref.ts";
 import type { Commitment, Project } from "./contract.ts";
 import {
   commitment,
@@ -57,9 +58,7 @@ const ProjectView = Schema.Struct({
   budget: Schema.NullOr(Schema.Struct({ cents: Schema.Number, currency: Schema.String })),
   lead: Schema.NullOr(Schema.String),
   members: Schema.Array(Schema.String),
-  items: Schema.Array(
-    Schema.Struct({ id: Schema.String, kind: Schema.String, ref: Schema.String }),
-  ),
+  items: Schema.Array(Schema.Struct({ id: Schema.String, ref: Ref })),
 });
 const view = (item: Project) => ({
   id: item.id,
@@ -83,9 +82,8 @@ const run = <A>(effect: Effect.Effect<A, unknown>) =>
 export function workCapabilities(
   db: Database,
   employeeIn: (businessId: string, employeeId: string) => Promise<boolean>,
-  artifactIn: (businessId: string, artifactId: string) => Promise<boolean>,
-  /** Whether a path names a file in the business folder. */
-  fileIn: (businessId: string, path: string) => boolean,
+  /** Whether a ref names a record of this business a project can show: an artifact or a file. */
+  keepable: (businessId: string, ref: Ref) => Promise<boolean>,
   /** Why this work cannot be completed yet (such as a coding check that has not passed). */
   completionBlocked: (businessId: string, work: Commitment) => Promise<string | undefined>,
 ) {
@@ -148,7 +146,7 @@ export function workCapabilities(
         dueAt: Schema.optional(When),
         projectId: Schema.optional(Id),
       }),
-      output: Summary,
+      output: Schema.Struct({ ...Summary.fields, ref: Ref }),
       execute: (input) =>
         Effect.gen(function* () {
           const { businessId, employeeId } = yield* Invocation;
@@ -163,7 +161,7 @@ export function workCapabilities(
               code: "invalid_input",
               message: "No such project in this business",
             });
-          return summary(
+          const created = summary(
             yield* run(
               createCommitment(db, businessId, {
                 owner,
@@ -176,6 +174,7 @@ export function workCapabilities(
               }),
             ),
           );
+          return { ...created, ref: ref("work", "item", created.id) };
         }),
     }),
     capability({
@@ -229,7 +228,7 @@ export function workCapabilities(
     capability({
       name: "projectList",
       description:
-        "List the business's projects (bounded initiatives like Launch): goal, deadline, budget, lead, members and the artifacts and files each one references. Its work items carry its id as projectId in commitmentList.",
+        "List the business's projects (bounded initiatives like Launch): goal, deadline, budget, lead, members and the refs of the artifacts and files each one shows. Its work items carry its id as projectId in commitmentList.",
       effect: "read",
       replay: "read",
       input: Schema.Struct({}),
@@ -253,23 +252,22 @@ export function workCapabilities(
         budget: Schema.optional(Budget),
         members: Schema.optional(Members),
       }),
-      output: ProjectView,
+      output: Schema.Struct({ ...ProjectView.fields, ref: Ref }),
       execute: ({ name, goal, deadline, budget, members }) =>
         Effect.gen(function* () {
           const { businessId, employeeId } = yield* Invocation;
           yield* checkEmployees(businessId, members ?? []);
-          return view(
-            yield* run(
-              createProject(db, businessId, {
-                name,
-                ...(goal ? { goal } : {}),
-                ...(deadline ? { deadline } : {}),
-                ...(budget ? { budget } : {}),
-                lead: employeeId,
-                ...(members ? { members } : {}),
-              }),
-            ),
+          const created = yield* run(
+            createProject(db, businessId, {
+              name,
+              ...(goal ? { goal } : {}),
+              ...(deadline ? { deadline } : {}),
+              ...(budget ? { budget } : {}),
+              lead: employeeId,
+              ...(members ? { members } : {}),
+            }),
           );
+          return { ...view(created), ref: ref("work", "project", created.id) };
         }),
     }),
     capability({
@@ -310,28 +308,20 @@ export function workCapabilities(
     capability({
       name: "projectAdd",
       description:
-        "Show a saved artifact (by id) or a file in the business folder (by path) on a project. It's a reference: the record keeps one home and can appear in several projects. Work items join a project when created with its projectId.",
+        "Show a saved artifact (devys:documents/artifact/<id>) or a file in the business folder (devys:documents/file/<percent-encoded absolute path>) on a project, by its ref. It's a reference: the record keeps one home and can appear in several projects. Work items join a project when created with its projectId.",
       effect: "change",
       replay: "idempotent",
-      input: Schema.Struct({
-        projectId: Id,
-        kind: Schema.Literals(["artifact", "file"]),
-        ref: Line(1024),
-      }),
+      input: Schema.Struct({ projectId: Id, ref: Ref }),
       output: Schema.Struct({ id: Schema.String }),
-      execute: ({ projectId, kind, ref }) =>
+      execute: ({ projectId, ref: kept }) =>
         Effect.gen(function* () {
           const { businessId } = yield* Invocation;
-          const exists =
-            kind === "file"
-              ? fileIn(businessId, ref)
-              : yield* Effect.promise(() => artifactIn(businessId, ref));
-          if (!exists)
+          if (!(yield* Effect.promise(() => keepable(businessId, kept))))
             return yield* new CapabilityError({
               code: "invalid_input",
               message: "No such artifact or file in this business",
             });
-          const item = yield* run(addToProject(db, businessId, projectId, { kind, ref }));
+          const item = yield* run(addToProject(db, businessId, projectId, kept));
           if (!item)
             return yield* new CapabilityError({
               code: "invalid_input",

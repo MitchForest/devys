@@ -3,7 +3,7 @@ import { afterAll, expect, it, setDefaultTimeout } from "bun:test";
 import { mkdtempSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { stopProcessesIn } from "../../src/delegates/host/worktree.ts";
+import { stopProcessesIn } from "../../src/apps/code/host/worktree.ts";
 import type { ServerMessage, TerminalSession } from "../../src/terminal/contract.ts";
 import { hostTerminals } from "../../src/terminal/host-client.ts";
 import { bunPty, terminalsHost } from "../../src/terminal/host/server.ts";
@@ -27,7 +27,6 @@ const host = await startHost({
   token,
   data: join(root, "data"),
   work: root,
-  skills: join(root, "skills"),
   port: 0,
   routes: [terminals],
 });

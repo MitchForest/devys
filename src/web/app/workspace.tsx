@@ -32,9 +32,9 @@ import {
   type Message,
   type Project,
   type ProjectChange,
-  type ProjectItem,
   type StartingRole,
 } from "./api.ts";
+import { parseRef, ref, type Ref } from "../../protocol/ref.ts";
 import { useConversation } from "./conversation.ts";
 import { downscale } from "./images.ts";
 import {
@@ -102,23 +102,42 @@ const savedPanels = (): Record<PlaceKind, boolean> => {
   }
 };
 
-/** What a layer is, in words, for its header and the reference sent with a message. */
-export function layerReference(layer: Layer, names: { artifact: (id: string) => string }) {
+/** The record a layer shows, as a ref; an app or the browser is not a record. */
+export function refOfLayer(layer: Layer): Ref | undefined {
   switch (layer.kind) {
     case "artifact":
-      return { title: names.artifact(layer.id), ref: `page artifact:${layer.id}` };
+      return ref("documents", "artifact", layer.id);
     case "file":
-      return { title: layer.path.split("/").at(-1)!, ref: `file ${layer.path}` };
-    case "app":
-      return { title: appTitle(layer.app), ref: `the ${appTitle(layer.app)} app` };
+      return ref("documents", "file", layer.path);
     case "session":
-      return {
-        title: "Coding session",
-        ref: `coding session ${layer.sessionId} on work:${layer.workId}`,
-      };
-    case "browser":
-      return { title: "Browser", ref: "the business's browser" };
+      return ref("code", "session", layer.sessionId);
+    default:
+      return undefined;
   }
+}
+
+/** The layer that shows a page or a file, from its ref. */
+export function layerOfRef(value: Ref): Layer | undefined {
+  const parts = parseRef(value);
+  if (parts?.app !== "documents") return undefined;
+  return parts.kind === "artifact"
+    ? { kind: "artifact", id: parts.id }
+    : { kind: "file", path: parts.id };
+}
+
+/** What a layer is, in words and as a ref, for its header and the line sent with a message. */
+export function layerReference(layer: Layer, names: { artifact: (id: string) => string }) {
+  const title =
+    layer.kind === "artifact"
+      ? names.artifact(layer.id)
+      : layer.kind === "file"
+        ? layer.path.split("/").at(-1)!
+        : layer.kind === "app"
+          ? appTitle(layer.app)
+          : layer.kind === "session"
+            ? "Coding session"
+            : "Browser";
+  return { title, ref: refOfLayer(layer) };
 }
 const appTitle = (app: string) => app.charAt(0).toUpperCase() + app.slice(1);
 
@@ -451,12 +470,14 @@ function useWorkspaceState() {
     const fresh = known.key === mainKey;
     const arrived = fresh ? history_.filter((m) => !known.ids.has(m.id)) : [];
     seen.current = { key: mainKey, ids: new Set(history_.map((m) => m.id)) };
-    const page = arrived.filter((m) => m.kind === "event" && m.ref?.startsWith("artifact:")).at(-1);
+    const page = arrived
+      .filter((m) => m.kind === "event" && m.ref && layerOfRef(m.ref)?.kind === "artifact")
+      .at(-1);
     if (page) void pageArrived(page);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [history_, mainKey]);
   async function pageArrived(message: Message) {
-    const id = message.ref!.slice("artifact:".length);
+    const id = parseRef(message.ref)!.id;
     const author = message.author.startsWith("employee:")
       ? employees.find((e) => `employee:${e.id}` === message.author)?.name
       : undefined;
@@ -681,7 +702,7 @@ function useWorkspaceState() {
         setVoice({ kind: "idle" });
       }
       const text = reference
-        ? `${conversation.draft.trim()}\n\n_Viewing: ${reference.title} (${reference.ref})_`
+        ? `${conversation.draft.trim()}\n\n_Viewing: ${reference.title}${reference.ref ? ` (${reference.ref})` : ""}_`
         : conversation.draft;
       conversation.send(text, {
         viaVoice: draftUsedVoice.current,
@@ -815,9 +836,9 @@ function useWorkspaceState() {
         () => api.updateProject(businessId, id, change),
         "The project couldn't be saved.",
       ),
-    addToProject: (projectId: string, kind: ProjectItem["kind"], ref: string) =>
+    addToProject: (projectId: string, item: Ref) =>
       void refreshAfter(
-        () => api.addToProject(businessId, projectId, kind, ref),
+        () => api.addToProject(businessId, projectId, item),
         "That couldn't be added to the project.",
       ),
     removeFromProject: (projectId: string, itemId: string) =>

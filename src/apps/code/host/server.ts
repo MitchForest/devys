@@ -29,7 +29,7 @@ import type {
 } from "../contract.ts";
 import { deploySecrets, redact, smoke, urlIn } from "./deploy.ts";
 import { cloneRepository, githubName, publishBranch } from "./github.ts";
-import { HostRefusal, hostId, scopeOf, type HostRoutes } from "../../protocol/host.ts";
+import { HostRefusal, hostId, scopeOf, type HostRoutes } from "../../../protocol/host.ts";
 import { bounded, type ProviderAdapter, type ProviderEvents } from "./provider.ts";
 import {
   commitAll,

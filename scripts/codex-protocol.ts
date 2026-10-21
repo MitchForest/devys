@@ -40,7 +40,7 @@ const roots = [
   "v2/ErrorNotification",
 ];
 
-const target = join(import.meta.dirname, "../src/delegates/host/codex-protocol");
+const target = join(import.meta.dirname, "../src/apps/code/host/codex-protocol");
 const version = execFileSync("codex", ["--version"], { encoding: "utf8" })
   .trim()
   .split(" ")

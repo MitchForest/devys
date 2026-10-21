@@ -7,7 +7,7 @@ import {
   employeeOf,
   kindOf,
   nextResponder,
-  refOf,
+  idOf,
   responders,
   type ConversationKey,
   type Message,
@@ -16,6 +16,7 @@ import { markSeen, messages, postMessage, unseenBy, messageIn } from "../convers
 import { scopeName, type Employee, type Scope } from "../identity/contract.ts";
 import { activePerson, employeesOf } from "../identity/service.ts";
 import { capability, CapabilityError, Invocation } from "../protocol/capability.ts";
+import type { Ref } from "../protocol/ref.ts";
 import { rpc } from "../protocol/rpc.ts";
 import { commitment } from "../work/service.ts";
 import { project } from "../work/projects.ts";
@@ -29,16 +30,16 @@ const catchUp = 20;
  * comes from. Undefined when it names nothing that can be talked in.
  */
 async function resolve(env: Env, businessId: string, key: ConversationKey) {
-  const ref = refOf(key);
+  const id = idOf(key);
   switch (kindOf(key)) {
     case "direct": {
       const employees = await Effect.runPromise(employeesOf(env.HYPERDRIVE, businessId));
-      return employees.some((employee) => employee.id === ref)
-        ? { defaultResponder: ref as string | undefined, place: "" }
+      return employees.some((employee) => employee.id === id)
+        ? { defaultResponder: id as string | undefined, place: "" }
         : undefined;
     }
     case "project": {
-      const found = await Effect.runPromise(project(env.HYPERDRIVE, businessId, ref));
+      const found = await Effect.runPromise(project(env.HYPERDRIVE, businessId, id));
       if (!found) return undefined;
       const about = [
         found.goal && `goal: ${found.goal}`,
@@ -51,7 +52,7 @@ async function resolve(env: Env, businessId: string, key: ConversationKey) {
       };
     }
     case "work": {
-      const item = await Effect.runPromise(commitment(env.HYPERDRIVE, businessId, ref));
+      const item = await Effect.runPromise(commitment(env.HYPERDRIVE, businessId, id));
       return item
         ? {
             defaultResponder: item.owner_employee_id as string | undefined,
@@ -138,9 +139,9 @@ async function deliver(
     );
     // An employee's own DM is its root session; anything else is its own context.
     const context =
-      kindOf(key) === "direct" && refOf(key) === target
+      kindOf(key) === "direct" && idOf(key) === target
         ? undefined
-        : { kind: kindOf(key), id: refOf(key) };
+        : { kind: kindOf(key), id: idOf(key) };
     await env.AGENT.getByName(scopeName(scope)).receive(scope, {
       messageId: message.id,
       senderId: message.author,
@@ -290,7 +291,7 @@ export const postEvent = (
   env: Env,
   businessId: string,
   key: ConversationKey,
-  event: { clientId: string; text: string; ref?: string },
+  event: { clientId: string; text: string; ref?: Ref },
 ) =>
   Effect.runPromise(
     postMessage(env.HYPERDRIVE, businessId, key, {

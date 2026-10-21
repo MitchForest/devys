@@ -10,7 +10,7 @@ const titles: Record<string, string> = {
   remember: "Remember facts",
   forget: "Forget facts",
   readPublicUrl: "Read public websites",
-  listSkills: "List skills",
+  readSkill: "Read skills",
   importAttachment: "Import attachments",
   read: "Read workspace files",
   write: "Write workspace files",

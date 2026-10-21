@@ -1,9 +1,10 @@
 import { Effect } from "effect";
 import type { Env } from "./env.ts";
+import { ref } from "../protocol/ref.ts";
 import { workChat } from "../channels/work.ts";
-import { providerName, type DelegateDependencies } from "../delegates/capabilities.ts";
-import type { DelegateEvent } from "../delegates/contract.ts";
-import { assignmentById, assignmentsFor, employeeAssignments } from "../delegates/service.ts";
+import { providerName, type DelegateDependencies } from "../apps/code/capabilities.ts";
+import type { DelegateEvent } from "../apps/code/contract.ts";
+import { assignmentById, assignmentsFor, employeeAssignments } from "../apps/code/service.ts";
 import { scopeName, type Scope } from "../identity/contract.ts";
 import { activeEmployee } from "../identity/service.ts";
 import { sha256 } from "../protocol/bytes.ts";
@@ -110,7 +111,7 @@ async function deliverEvent(env: Env, event: DelegateEvent) {
   await postEvent(env, item.business_id, `work:${item.commitment_id}`, {
     clientId: `delegate:${event.id}`,
     text: card,
-    ref: item.id,
+    ref: ref("code", "session", item.id),
   });
   if (event.kind === "checked" && event.check)
     await Effect.runPromise(

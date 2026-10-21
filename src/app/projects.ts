@@ -1,9 +1,8 @@
 import { Effect } from "effect";
 import type { Env } from "./env.ts";
-import { artifactLocation } from "../artifacts/service.ts";
+import { artifactLocation } from "../apps/documents/service.ts";
 import { type Business, type Person } from "../identity/contract.ts";
 import { employeesOf } from "../identity/service.ts";
-import type { Project } from "../work/contract.ts";
 import {
   addToProject,
   createProject,
@@ -12,6 +11,7 @@ import {
   updateProject,
   type ProjectChange,
 } from "../work/projects.ts";
+import { parseRef, type Ref } from "../protocol/ref.ts";
 import { businessFile } from "./files.ts";
 import { body, forbidden, label, notFound } from "./request.ts";
 
@@ -80,6 +80,17 @@ function change(input: Partial<Input>, employeeIds: readonly string[]): ProjectC
   return out;
 }
 
+/**
+ * Whether a project can show this: the ref of an artifact of the business or of a file in its
+ * folder. A project's work items belong to it instead; projects don't hold projects.
+ */
+export async function keepable(env: Env, businessId: string, value: unknown): Promise<boolean> {
+  const parts = parseRef(value);
+  if (parts?.app !== "documents") return false;
+  if (parts.kind === "file") return businessFile(env, businessId, parts.id) !== undefined;
+  return Boolean(await Effect.runPromise(artifactLocation(env.HYPERDRIVE, businessId, parts.id)));
+}
+
 /** Bounded initiatives: their work, channel and references. They grant no access of their own. */
 export async function projectRoute(
   request: Request,
@@ -136,20 +147,14 @@ export async function projectRoute(
   }
   const projectId = /^\/projects\/([A-Za-z0-9-]{1,64})\/items$/.exec(path)?.[1];
   if (!projectId) return notFound();
-  const input = await body<{ kind: Project["items"][number]["kind"]; ref: string }>(request, 4_000);
-  const exists =
-    input.kind === "file"
-      ? businessFile(env, business.id, input.ref) !== undefined
-      : input.kind === "artifact" &&
-        label(input.ref, 64) !== undefined &&
-        Boolean(await Effect.runPromise(artifactLocation(env.HYPERDRIVE, business.id, input.ref!)));
-  if (!exists)
+  const { ref } = await body<{ ref: unknown }>(request, 4_000);
+  if (!(await keepable(env, business.id, ref)))
     return new Response(
-      "Send a kind (artifact, or a file in the business folder) and a ref of this business",
+      "Send the ref of an artifact or of a file in the business folder (devys:documents/…)",
       { status: 400 },
     );
   const item = await Effect.runPromise(
-    addToProject(env.HYPERDRIVE, business.id, projectId, { kind: input.kind!, ref: input.ref! }),
+    addToProject(env.HYPERDRIVE, business.id, projectId, ref as Ref),
   );
   return item
     ? Response.json(item, { status: 201 })

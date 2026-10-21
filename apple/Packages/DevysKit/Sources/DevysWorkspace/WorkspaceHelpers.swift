@@ -116,9 +116,7 @@ extension Workspace.Action {
     package static var newProjectDismissed: Self { Self(.project(.sheetDismissed)) }
     package static func projectCreateTapped(_ project: ProjectChange) -> Self { Self(.project(.createTapped(project))) }
     package static func projectUpdated(_ id: String, _ change: ProjectChange) -> Self { Self(.project(.updated(projectID: id, change))) }
-    package static func projectItemAdded(_ projectID: String, _ kind: ProjectItem.Kind, _ ref: String) -> Self {
-        Self(.project(.itemAdded(projectID: projectID, kind, ref: ref)))
-    }
+    package static func projectItemAdded(_ projectID: String, _ ref: Ref) -> Self { Self(.project(.itemAdded(projectID: projectID, ref: ref))) }
     package static func projectItemRemoved(_ projectID: String, _ itemID: String) -> Self {
         Self(.project(.itemRemoved(projectID: projectID, itemID: itemID)))
     }

@@ -37,7 +37,6 @@ const host = await startHost({
   token,
   data,
   work: join(data, "work"),
-  skills: join(data, "skills"),
   port: 0,
   routes: [browsersHost({ data, headless: true })],
 });

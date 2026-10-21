@@ -1,3 +1,4 @@
+import type { Ref } from "../protocol/ref.ts";
 import { database, type Database } from "../data/database.ts";
 import type { ConversationKey, Message } from "./contract.ts";
 
@@ -20,7 +21,7 @@ export const postMessage = (
     mentions?: string[];
     viaVoice?: boolean;
     kind?: "message" | "event";
-    ref?: string | null;
+    ref?: Ref | null;
   },
 ) =>
   database(

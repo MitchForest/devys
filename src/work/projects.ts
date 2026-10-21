@@ -1,4 +1,5 @@
 import { database, type Database, type Sql } from "../data/database.ts";
+import type { Ref } from "../protocol/ref.ts";
 import type { Project, ProjectItem } from "./contract.ts";
 
 type Row = {
@@ -28,7 +29,7 @@ async function load(sql: Sql, businessId: string, id?: string): Promise<Project[
       [businessId, only],
     ),
     sql.rows<ProjectItem & { project_id: string }>(
-      `SELECT id, project_id, kind, ref FROM project_items
+      `SELECT id, project_id, ref FROM project_items
        WHERE business_id = $1 AND ($2::text IS NULL OR project_id = $2) ORDER BY created_at, id`,
       [businessId, only],
     ),
@@ -44,7 +45,7 @@ async function load(sql: Sql, businessId: string, id?: string): Promise<Project[
       .map((member) => member.employee_id),
     items: items
       .filter((item) => item.project_id === project.id)
-      .map(({ id, kind, ref }) => ({ id, kind, ref })),
+      .map(({ id, ref }) => ({ id, ref })),
   }));
 }
 
@@ -152,15 +153,10 @@ export const updateProject = (
   );
 
 /**
- * Shows a record in a project. The caller has already checked the record belongs to this
+ * Shows a record in a project. The caller has already checked the ref names a record of this
  * business. Adding twice is a no-op; undefined when there is no such project.
  */
-export const addToProject = (
-  db: Database,
-  businessId: string,
-  projectId: string,
-  item: { kind: ProjectItem["kind"]; ref: string },
-) =>
+export const addToProject = (db: Database, businessId: string, projectId: string, ref: Ref) =>
   database(db, async (sql) => {
     if (
       !(await sql.row("SELECT 1 FROM projects WHERE business_id = $1 AND id = $2", [
@@ -170,13 +166,13 @@ export const addToProject = (
     )
       return undefined;
     await sql.run(
-      `INSERT INTO project_items (id, business_id, project_id, kind, ref) VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (project_id, kind, ref) DO NOTHING`,
-      [crypto.randomUUID(), businessId, projectId, item.kind, item.ref],
+      `INSERT INTO project_items (id, business_id, project_id, ref) VALUES ($1, $2, $3, $4)
+       ON CONFLICT (project_id, ref) DO NOTHING`,
+      [crypto.randomUUID(), businessId, projectId, ref],
     );
     return (await sql.row<ProjectItem>(
-      "SELECT id, kind, ref FROM project_items WHERE project_id = $1 AND kind = $2 AND ref = $3",
-      [projectId, item.kind, item.ref],
+      "SELECT id, ref FROM project_items WHERE project_id = $1 AND ref = $2",
+      [projectId, ref],
     ))!;
   });
 

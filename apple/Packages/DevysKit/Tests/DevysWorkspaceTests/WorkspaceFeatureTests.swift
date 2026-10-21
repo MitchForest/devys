@@ -329,10 +329,10 @@ private actor WorkServer {
     var home = Home(needsYou: [NeedsYouItem(kind: .decision, id: "d1", title: "Create inquiry.txt", employeeID: "growth")])
     var added: [String] = []
 
-    func add(_ project: String, _ kind: ProjectItem.Kind, _ ref: String) {
-        added.append("\(project):\(kind.rawValue):\(ref)")
+    func add(_ project: String, _ ref: Ref) {
+        added.append("\(project):\(ref)")
         projects = projects.map { item in
-            item.id == project ? Project(id: item.id, name: item.name, items: item.items + [ProjectItem(id: "i\(added.count)", kind: kind, ref: ref)]) : item
+            item.id == project ? Project(id: item.id, name: item.name, items: item.items + [ProjectItem(id: "i\(added.count)", ref: ref)]) : item
         }
     }
 
@@ -382,7 +382,7 @@ struct WorkFeatureTests {
                 decisions: { _ in await server.decisions },
                 answer: { _, id, approve in await server.answer(id, approve) },
                 projects: { _ in await server.projects },
-                addToProject: { _, project, kind, ref in await server.add(project, kind, ref) },
+                addToProject: { _, project, ref in await server.add(project, ref) },
                 home: { _ in await server.home }
             )
             $0.continuousClock = ContinuousClock()
@@ -418,9 +418,9 @@ struct WorkFeatureTests {
         let server = WorkServer()
         let store = makeStore(server)
         await settle("projects", until: { store.projects.value?.first?.name == "Launch" })
-        store.send(.projectItemAdded("p1", .artifact, "a1"))
-        await settle("kept", until: { store.projects.value?.first?.keeps(.artifact, "a1") != nil })
-        #expect(await server.added == ["p1:artifact:a1"])
+        store.send(.projectItemAdded("p1", .artifact("a1")))
+        await settle("kept", until: { store.projects.value?.first?.keeps(.artifact("a1")) != nil })
+        #expect(await server.added == ["p1:devys:documents/artifact/a1"])
     }
 
     @Test("A new task defaults to the Head of Operations and opens its thread; state changes carry the revision on screen")

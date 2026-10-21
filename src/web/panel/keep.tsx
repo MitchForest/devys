@@ -1,5 +1,5 @@
 import { FolderInput } from "lucide-react";
-import type { ProjectItem } from "../app/api.ts";
+import type { Ref } from "../../protocol/ref.ts";
 import { useWorkspace, valueOf } from "../app/workspace.tsx";
 import { DevysButton } from "../design/buttons.tsx";
 import {
@@ -13,12 +13,10 @@ import {
  * Keeps a page or file on a project's overview: a reference, so the record stays in its app.
  * Says where it is kept; dashed while it is kept nowhere.
  */
-export function KeepInProject({ kind, refId }: { kind: ProjectItem["kind"]; refId: string }) {
+export function KeepInProject({ record }: { record: Ref }) {
   const { projects, actions } = useWorkspace();
   const all = valueOf(projects) ?? [];
-  const keptIn = all.filter((project) =>
-    project.items.some((item) => item.kind === kind && item.ref === refId),
-  );
+  const keptIn = all.filter((project) => project.items.some((item) => item.ref === record));
   if (!all.length) return null;
   return (
     <DropdownMenu>
@@ -35,14 +33,14 @@ export function KeepInProject({ kind, refId }: { kind: ProjectItem["kind"]; refI
       />
       <DropdownMenuContent align="end" className="w-auto">
         {all.map((project) => {
-          const entry = project.items.find((item) => item.kind === kind && item.ref === refId);
+          const entry = project.items.find((item) => item.ref === record);
           return (
             <DropdownMenuItem
               key={project.id}
               onClick={() =>
                 entry
                   ? actions.removeFromProject(project.id, entry.id)
-                  : actions.addToProject(project.id, kind, refId)
+                  : actions.addToProject(project.id, record)
               }
             >
               {entry ? `Remove from ${project.name}` : `Keep in ${project.name}`}

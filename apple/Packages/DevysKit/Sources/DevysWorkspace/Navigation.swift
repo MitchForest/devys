@@ -56,13 +56,47 @@ package struct OpenLayer: Hashable, Sendable {
     }
 }
 
-/// What a layer is, in words: its header, and the reference sent with a message.
+extension Ref {
+    /// The page this ref names, if it names one.
+    package var page: String? {
+        if case .artifact(let id) = self { id } else { nil }
+    }
+}
+
+extension Layer {
+    /// The record a layer shows, as a ref: a page, a file or a coding session. An app's list
+    /// and the browser are not records.
+    package var ref: Ref? {
+        switch self {
+        case .artifact(let id, _): .artifact(id)
+        case .file(let path): .file(path)
+        case .session(_, let sessionID): .codeSession(sessionID)
+        case .app, .browser: nil
+        }
+    }
+
+    /// The layer that shows a page or a file, from its ref.
+    package init?(ref: Ref) {
+        switch ref {
+        case .artifact(let id): self = .artifact(id)
+        case .file(let path): self = .file(path)
+        default: return nil
+        }
+    }
+}
+
+/// What a layer is, in words and as a ref: its header, and the reference sent with a message.
 package struct LayerReference: Equatable, Sendable {
     package let title: String
-    package let ref: String
+    package let ref: Ref?
+
+    package init(title: String, ref: Ref?) {
+        self.title = title
+        self.ref = ref
+    }
 
     /// The line appended to a message sent while the layer is open.
-    package var line: String { "\n\n_Viewing: \(title) (\(ref))_" }
+    package var line: String { "\n\n_Viewing: \(title)\(ref.map { " (\($0))" } ?? "")_" }
 }
 
 /// Work by where it stands, as a project's overview groups it.

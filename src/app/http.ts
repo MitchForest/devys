@@ -14,7 +14,7 @@ import {
   memberBusiness,
 } from "../identity/service.ts";
 import { atomically } from "../data/database.ts";
-import { defaultApps } from "../apps/catalog.ts";
+import { defaultApps } from "./apps.ts";
 import { install } from "../apps/service.ts";
 import { modeOf } from "./mode.ts";
 import { readBounded } from "../protocol/bytes.ts";

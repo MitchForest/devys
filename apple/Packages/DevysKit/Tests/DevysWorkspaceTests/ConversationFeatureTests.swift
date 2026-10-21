@@ -18,7 +18,7 @@ private actor ConversationServer {
     private var count = 0
 
     @discardableResult
-    func add(_ key: ConversationKey, _ author: String, _ text: String, kind: ConversationMessage.Kind = .message, ref: String? = nil, replyTo: String? = nil) -> ConversationMessage {
+    func add(_ key: ConversationKey, _ author: String, _ text: String, kind: ConversationMessage.Kind = .message, ref: Ref? = nil, replyTo: String? = nil) -> ConversationMessage {
         count += 1
         let message = ConversationMessage(
             id: "m\(count)",
@@ -241,15 +241,15 @@ struct ConversationFeatureTests {
     @Test("A hand-off card moves the middle into its thread under the project; Back returns to the channel")
     func handOffCard() async throws {
         let server = ConversationServer()
-        await server.add(.project("p1"), "system", "Growth took on \"Write a tagline\".", kind: .event, ref: "c1")
+        await server.add(.project("p1"), "system", "Growth took on \"Write a tagline\".", kind: .event, ref: .workItem("c1"))
         await server.add(.work("c1"), "employee:growth", "Starting with three options.")
         let store = await makeStore(server)
         await open(.project("p1"), in: store)
         let timeline = ChatTimeline(messages: store.main?.messages.value ?? [], pending: [], now: .now)
         let card = try #require(timeline.items.compactMap { if case .event(let event) = $0 { event } else { nil } }.first)
         let ref = try #require(card.ref)
-        #expect(ref == "c1")
-        store.send(.threadOpened(ref))
+        #expect(ref == .workItem("c1"))
+        store.send(.threadOpened(ref.id))
         #expect(store.place == .thread("c1"))
         #expect(store.history == [.project("p1")])
         #expect(store.state.title(of: store.place).title == "Write a tagline")

@@ -1,3 +1,5 @@
+import type { Ref } from "../protocol/ref.ts";
+
 export type CommitmentState =
   | "proposed"
   | "ready"
@@ -44,12 +46,10 @@ export interface Commitment {
   updated_at: string;
 }
 
-/** A record a project shows: a reference, never a copy. */
+/** A record a project shows: a reference, never a copy (an artifact or a business file). */
 export interface ProjectItem {
   id: string;
-  /** A file's reference is its path in the business folder. */
-  kind: "artifact" | "file";
-  ref: string;
+  ref: Ref;
 }
 
 /** A bounded initiative. Its work items belong to it; it confers no access. */

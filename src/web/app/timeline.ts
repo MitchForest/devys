@@ -1,3 +1,4 @@
+import type { Ref } from "../../protocol/ref.ts";
 import type { ShownMessage } from "./api.ts";
 
 /** A conversation as Messages lays it out: grouped bubbles, with a heading when time passes. */
@@ -14,8 +15,8 @@ export interface Bubble {
   replyTo: string | null;
   viaVoice: boolean;
   reactions: string[];
-  /** What an event opens: a hand-off card's work item. */
-  ref: string | null;
+  /** What an event opens: a hand-off card's work item, a page. */
+  ref: Ref | null;
   sentAt?: Date;
   position: Position;
   /** Set for messages sent from this browser that the conversation doesn't show yet. */

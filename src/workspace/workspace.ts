@@ -238,7 +238,8 @@ export class Workspace extends DurableObject<{ FILES: R2Bucket }> implements Wor
     );
   }
 
-  async listSkills() {
+  /** Cloud mode keeps the business's skills in the employee's workspace until CM. */
+  async skills() {
     if (this.active) throw new Error("Workspace is busy");
     return listWorkspaceSkills(new Files(await this.container()));
   }

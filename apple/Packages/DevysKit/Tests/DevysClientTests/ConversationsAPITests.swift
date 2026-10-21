@@ -67,7 +67,7 @@ struct ConversationsAPITests {
           {"id":"m2","conversation":"project:p1","author":"employee:growth","kind":"message","text":"On it.","reply_to":"m1",
            "mentions":[],"via_voice":false,"ref":null,"created_at":"2026-10-19T15:00:05.000Z","reactions":["👍"]},
           {"id":"m3","conversation":"project:p1","author":"system","kind":"event","text":"Growth took on \\"Write a tagline\\".",
-           "reply_to":null,"mentions":[],"via_voice":false,"ref":"c9","created_at":"2026-10-19T15:00:06.000Z","reactions":[]}]}
+           "reply_to":null,"mentions":[],"via_voice":false,"ref":"devys:work/item/c9","created_at":"2026-10-19T15:00:06.000Z","reactions":[]}]}
         """
         let page = try await api(body: body, recorder: recorder)
             .conversation(Self.session, businessID: "b1", key: .project("p1"), before: "m9")
@@ -75,7 +75,7 @@ struct ConversationsAPITests {
         #expect(page.messages.map(\.id) == ["m1", "m2", "m3"])
         #expect(page.messages[0].isFromPerson && page.messages[0].viaVoice && page.messages[0].mentions == ["growth"])
         #expect(page.messages[1].employeeID == "growth" && page.messages[1].replyTo == "m1" && page.messages[1].reactions == ["👍"])
-        #expect(page.messages[2].isEvent && page.messages[2].ref == "c9" && page.messages[2].employeeID == nil)
+        #expect(page.messages[2].isEvent && page.messages[2].ref == .workItem("c9") && page.messages[2].employeeID == nil)
         #expect(page.messages[0].date != nil)
         let request = try #require(await recorder.requests.last)
         #expect(request.url?.absoluteString == "https://devys.test/api/businesses/b1/conversations/project%3Ap1?before=m9")

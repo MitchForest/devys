@@ -28,12 +28,18 @@ today; target design and historical evidence must remain distinguishable.
 - Keep companies independent. A dogfood business integrates through authenticated remote APIs
   and its own domain rules, never sibling imports, direct SQL, shared environment
   files or impersonated human sessions. An SDK is optional.
-- Devys's app platform (providers, modelled capabilities, relay endpoints, CLI tools,
-  skill bundles) is modelled on treg and Executor v2. Neither is a dependency; see
-  `.docs/COMPONENTS.md`. Anything consequential is a modelled capability, not a relay.
-  Check licenses before source reuse. Devys has an app directory: Devys apps first;
-  community and custom apps later, in their own slice. Do not build third-party
-  distribution or speculative framework machinery ahead of that slice.
+- The app model (2026-10-21) is strict and canonical (`.docs/APPS_AND_CAPABILITIES.md`):
+  every action is a capability owned by exactly one app; what employees ship with are
+  system apps (Computer, Browser, Web, Memory, Conversations, Work, Team); business apps
+  (Documents, Code, …) are installed per business; "app" is the only extension noun
+  ("tool" is how a model sees a capability). Apps are declared with `defineApp` in
+  `src/apps/<id>/`; records are pointed at only by `Ref` (`devys:<app>/<kind>/<id>`);
+  skills use the Agent Skills `SKILL.md` format, shipped with an app or written per
+  business. No third-party code runs inside Devys: remote apps are MCP servers behind a
+  connection (slice AD). Anything consequential is a declared capability, never a raw
+  relay. The design follows treg and Executor v2 without depending on either; check
+  licenses before source reuse. Do not build distribution or framework machinery
+  (hooks, dynamic loading, a second schema language) ahead of a named need.
 - Devys is intended to be open source and use existing models. No model training
   or fine-tuning. Keep Pi's installed provider/configuration boundary: models and
   providers are declared once in `config/models.ts`; employees pick one at setup. Coding

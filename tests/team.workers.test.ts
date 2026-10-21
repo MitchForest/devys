@@ -270,7 +270,7 @@ it("projects have a lead, members, a goal, deadline and budget, and work created
     (
       await as(`${path}/projects/${project.id}/items`, {
         method: "POST",
-        body: JSON.stringify({ kind: "commitment", ref: task.id }),
+        body: JSON.stringify({ ref: `devys:work/item/${task.id}` }),
       })
     ).status,
   ).toBe(400);
@@ -301,6 +301,10 @@ it("the app directory installs, uninstalls and pins apps; Documents stays and co
   expect((await post("/apps/code/pin", { pinned: false })).status).toBe(409);
   expect((await post("/apps/code/install")).status).toBe(200);
   expect((await post("/apps/code/pin", { pinned: "no" })).status).toBe(400);
+  // System apps come with every business: listed as installed, never installed, removed or pinned.
+  expect(await byId("computer")).toMatchObject({ installed: true, pinned: false, visible: false });
+  for (const action of ["install", "uninstall", "pin"])
+    expect((await post(`/apps/work/${action}`, { pinned: true })).status).toBe(409);
   expect(await json(post("/apps/code/pin", { pinned: false }))).toMatchObject({
     app: { id: "code", installed: true, pinned: false },
   });

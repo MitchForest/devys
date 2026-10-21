@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import type { Env } from "./env.ts";
-import { artifactLocation, listArtifacts } from "../artifacts/service.ts";
+import { artifactLocation, listArtifacts } from "../apps/documents/service.ts";
 import { type Business, type Person } from "../identity/contract.ts";
 import {
   activeEmployee,

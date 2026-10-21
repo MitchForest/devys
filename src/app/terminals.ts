@@ -1,8 +1,9 @@
 import { Effect } from "effect";
 import type { Env } from "./env.ts";
-import { providerName } from "../delegates/capabilities.ts";
-import type { Provider } from "../delegates/contract.ts";
-import { assignment, assignmentsFor } from "../delegates/service.ts";
+import { ref } from "../protocol/ref.ts";
+import { providerName } from "../apps/code/capabilities.ts";
+import type { Provider } from "../apps/code/contract.ts";
+import { assignment, assignmentsFor } from "../apps/code/service.ts";
 import type { Business, Person } from "../identity/contract.ts";
 import { relayTerminal } from "../terminal/host-client.ts";
 import { commitment, setTakeover } from "../work/service.ts";
@@ -127,12 +128,13 @@ async function takeOver(
   workId: string,
   person: Person,
   note: string,
-  ref: string,
+  /** The coding session it takes over. */
+  assignmentId: string,
 ) {
   await Effect.runPromise(setTakeover(env.HYPERDRIVE, businessId, workId, person.id));
   await postEvent(env, businessId, `work:${workId}`, {
     clientId: `terminal:${crypto.randomUUID()}`,
     text: note,
-    ref,
+    ref: ref("code", "session", assignmentId),
   });
 }

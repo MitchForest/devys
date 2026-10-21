@@ -47,8 +47,8 @@ public struct ConversationMessage: Equatable, Sendable, Decodable, Identifiable 
     /// Employee ids the message addresses.
     public let mentions: [String]
     public let viaVoice: Bool
-    /// What an event is about: the commitment a hand-off card opens.
-    public let ref: String?
+    /// The record an event is about: a work item's hand-off card, a page, a coding session.
+    public let ref: Ref?
     public let createdAt: String
     public var reactions: [String]
 
@@ -61,7 +61,7 @@ public struct ConversationMessage: Equatable, Sendable, Decodable, Identifiable 
         replyTo: String? = nil,
         mentions: [String] = [],
         viaVoice: Bool = false,
-        ref: String? = nil,
+        ref: Ref? = nil,
         createdAt: String,
         reactions: [String] = []
     ) {
@@ -89,7 +89,7 @@ public struct ConversationMessage: Equatable, Sendable, Decodable, Identifiable 
             replyTo: try container.decodeIfPresent(String.self, forKey: .replyTo),
             mentions: try container.decodeIfPresent([String].self, forKey: .mentions) ?? [],
             viaVoice: try container.decodeIfPresent(Bool.self, forKey: .viaVoice) ?? false,
-            ref: try container.decodeIfPresent(String.self, forKey: .ref),
+            ref: try container.decodeIfPresent(Ref.self, forKey: .ref),
             createdAt: try container.decode(String.self, forKey: .createdAt),
             reactions: try container.decodeIfPresent([String].self, forKey: .reactions) ?? []
         )

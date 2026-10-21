@@ -134,15 +134,18 @@ struct Overview: View {
     }
 
     @ViewBuilder private func kept(_ project: Project) -> some View {
-        let pages = project.items.filter { item in item.kind == .artifact && store.artifacts.contains { $0.id == item.ref } }
-        let files = project.items.filter { $0.kind == .file }
+        let kept = project.items.map { (id: $0.id, layer: Layer(ref: $0.ref)) }
+        let pages = kept.compactMap { item in
+            if case .artifact(let page, _) = item.layer, store.artifacts.contains(where: { $0.id == page }) { (id: item.id, page: page) } else { nil }
+        }
+        let files = kept.compactMap { item in if case .file(let path) = item.layer { (id: item.id, path: path) } else { nil } }
         if !pages.isEmpty || !files.isEmpty {
             PanelSection(title: "Kept", count: pages.count + files.count) {
-                ForEach(pages) { item in
-                    KeptRow(title: store.state.artifactName(item.ref)) { store.send(.layerOpened(.artifact(item.ref))) }
+                ForEach(pages, id: \.id) { item in
+                    KeptRow(title: store.state.artifactName(item.page)) { store.send(.layerOpened(.artifact(item.page))) }
                 }
-                ForEach(files) { item in
-                    KeptRow(title: (item.ref as NSString).lastPathComponent) { store.send(.layerOpened(.file(item.ref))) }
+                ForEach(files, id: \.id) { item in
+                    KeptRow(title: (item.path as NSString).lastPathComponent) { store.send(.layerOpened(.file(item.path))) }
                 }
             }
         }

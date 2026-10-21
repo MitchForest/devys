@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { Effect } from "effect";
 import { query, type Database } from "../../src/data/database.ts";
 import { createBusiness } from "../../src/identity/service.ts";
-import { defaultApps } from "../../src/apps/catalog.ts";
+import { defaultApps } from "../../src/app/apps.ts";
 import { install } from "../../src/apps/service.ts";
 /** The test database behind the Workers pool's Hyperdrive binding. */
 export const db = (env as unknown as { HYPERDRIVE: Database }).HYPERDRIVE;

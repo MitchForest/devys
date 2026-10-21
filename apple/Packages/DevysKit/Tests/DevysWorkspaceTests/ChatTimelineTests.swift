@@ -16,7 +16,7 @@ struct ChatTimelineTests {
             kind: kind,
             text: "m\(id)",
             replyTo: replyTo,
-            ref: kind == .event ? "c1" : nil,
+            ref: kind == .event ? .workItem("c1") : nil,
             createdAt: start.addingTimeInterval(seconds).formatted(.iso8601)
         )
     }
@@ -48,7 +48,7 @@ struct ChatTimelineTests {
         #expect(bubbles(timeline)[2].employeeID == "ops")
         #expect(timeline.items.filter { if case .heading = $0 { true } else { false } }.count == 1)
         let events = timeline.items.compactMap { if case .event(let event) = $0 { event } else { nil } }
-        #expect(events == [ChatTimeline.Event(id: "m7", text: "m7", ref: "c1")])
+        #expect(events == [ChatTimeline.Event(id: "m7", text: "m7", ref: .workItem("c1"))])
     }
 
     @Test("An hour's silence adds a time heading; replies quote an earlier message; unposted sends come last")

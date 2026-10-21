@@ -1,4 +1,4 @@
-import type { Scope } from "../identity/contract.ts";
+import type { Scope } from "../../identity/contract.ts";
 
 /** The coding harnesses Devys delegates to. Each owns its own sessions and transcripts. */
 export const providers = ["codex", "claude"] as const;

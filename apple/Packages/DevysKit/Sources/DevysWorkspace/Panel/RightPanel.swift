@@ -22,11 +22,7 @@ struct RightPanel: View {
                         onClose?()
                     },
                     trailing: {
-                        switch top {
-                        case .artifact(let id, _): KeepInProject(store: store, kind: .artifact, ref: id)
-                        case .file(let path): KeepInProject(store: store, kind: .file, ref: path)
-                        default: EmptyView()
-                        }
+                        if let record = top.ref, Layer(ref: record) != nil { KeepInProject(store: store, record: record) }
                         #if os(macOS)
                             widen
                         #else
@@ -166,19 +162,18 @@ struct PanelAction: View {
 /// Says where it is kept; dashed while it is kept nowhere.
 struct KeepInProject: View {
     let store: StoreOf<Workspace>
-    let kind: ProjectItem.Kind
-    let ref: String
+    let record: Ref
 
     var body: some View {
         let all = store.projects.value ?? []
-        let keptIn = all.filter { $0.keeps(kind, ref) != nil }
+        let keptIn = all.filter { $0.keeps(record) != nil }
         if !all.isEmpty {
             Menu {
                 ForEach(all) { project in
-                    if let entry = project.keeps(kind, ref) {
+                    if let entry = project.keeps(record) {
                         Button("Remove from \(project.name)") { store.send(.projectItemRemoved(project.id, entry.id)) }
                     } else {
-                        Button("Keep in \(project.name)") { store.send(.projectItemAdded(project.id, kind, ref)) }
+                        Button("Keep in \(project.name)") { store.send(.projectItemAdded(project.id, record)) }
                     }
                 }
             } label: {

@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { parseRef } from "../../protocol/ref.ts";
 import type { Employee } from "../app/api.ts";
 import { employeeOf, type Conversation } from "../app/conversation.ts";
 import { capturing, modeOf } from "../app/voice.ts";
@@ -205,10 +206,12 @@ export function ConversationView({
  */
 function EventCard({ bubble }: { bubble: TimelineBubble }) {
   const { actions, work, employees, unreadOf, artifacts } = useWorkspace();
-  const artifact = bubble.ref?.startsWith("artifact:")
-    ? bubble.ref.slice("artifact:".length)
-    : undefined;
-  const item = artifact ? undefined : (valueOf(work) ?? []).find((w) => w.id === bubble.ref);
+  const about = parseRef(bubble.ref);
+  const artifact = about?.app === "documents" && about.kind === "artifact" ? about.id : undefined;
+  const item =
+    about?.app === "work" && about.kind === "item"
+      ? (valueOf(work) ?? []).find((w) => w.id === about.id)
+      : undefined;
   if (item) {
     const owner = employees.find((e) => e.id === item.owner_employee_id);
     const chip = chipFor(item.state);

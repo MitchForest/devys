@@ -17,7 +17,6 @@ const host = await startHost({
   token,
   data: join(home, "data"),
   work: join(home, "Devys"),
-  skills: join(home, "skills"),
   port: 0,
 });
 afterAll(() => host.close());

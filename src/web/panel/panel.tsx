@@ -1,6 +1,6 @@
 import { ChevronLeft, Maximize2, Minimize2, X } from "lucide-react";
 import type { ReactNode } from "react";
-import { layerReference, useWorkspace } from "../app/workspace.tsx";
+import { layerOfRef, layerReference, useWorkspace } from "../app/workspace.tsx";
 import { ToolbarIconButton } from "../design/buttons.tsx";
 import { Desk } from "./desk.tsx";
 import { NeedsYou } from "./home.tsx";
@@ -17,7 +17,7 @@ export function RightPanel({ onClose }: { onClose?: () => void }) {
   const { layers, place, actions, artifactName, wide } = useWorkspace();
   const top = layers.at(-1);
   if (top) {
-    const { title } = layerReference(top, { artifact: artifactName });
+    const { title, ref } = layerReference(top, { artifact: artifactName });
     return (
       <section aria-label={title} className="flex h-full flex-col">
         <PanelHeader
@@ -29,8 +29,7 @@ export function RightPanel({ onClose }: { onClose?: () => void }) {
           }}
           closeLabel="Close (back to the panel)"
         >
-          {top.kind === "artifact" && <KeepInProject kind="artifact" refId={top.id} />}
-          {top.kind === "file" && <KeepInProject kind="file" refId={top.path} />}
+          {ref && layerOfRef(ref) && <KeepInProject record={ref} />}
           {!onClose && (
             <ToolbarIconButton label={wide ? "Narrow" : "Widen"} onClick={actions.toggleWide}>
               {wide ? <Minimize2 /> : <Maximize2 />}

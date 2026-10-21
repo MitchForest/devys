@@ -1,5 +1,5 @@
-import type { Database } from "../data/database.ts";
-import { database } from "../data/database.ts";
+import type { Database } from "../../data/database.ts";
+import { database } from "../../data/database.ts";
 import type { Assignment, Provider, Purpose, Started } from "./contract.ts";
 
 const columns = `id, commitment_id, employee_id, provider, purpose, objective, repository,
