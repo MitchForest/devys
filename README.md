@@ -19,7 +19,7 @@ delegates by talking and reviews by glancing: the conversation is always the mid
 screen, and the right panel shows what it is about, with records, diffs and pages opening
 on top of it.
 
-## What runs today (2026-10-20)
+## What runs today (2026-10-21)
 
 Everything below is implemented and verified locally; employees publishing pull requests is
 also verified live. No public product has launched.
