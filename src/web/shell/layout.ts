@@ -1,3 +1,7 @@
+/** At this width and below the web is a phone: tabs, and the panel as a sheet. */
+export const compactWidth = 700;
+export const compactQuery = `(max-width: ${compactWidth}px)`;
+
 /** Column widths from the space actually available, exactly as native `WorkspaceLayout`. */
 const minimumConversation = 420;
 export const panelRange = [360, 720] as const;

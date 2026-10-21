@@ -2,15 +2,14 @@ import { cn } from "@/lib/utils";
 import { Code2, Hand, MessageSquarePlus, Send, Square, SquareTerminal, Undo2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { api, ApiError } from "../app/api.ts";
-import type { LiveCodingSession, TranscriptEntry } from "../../apps/code/contract.ts";
-import type { WorkItem } from "../../work/contract.ts";
-import { useBusinessId, useEmployeeName, useMembers, usePerson } from "../app/data.ts";
-import { useTakeover } from "../app/mutations.ts";
-import { keys, problemOf } from "../app/query.ts";
-import { DevysButton } from "../design/buttons.tsx";
-import { MarkdownView } from "../design/markdown.tsx";
-import { StatusChip } from "../design/primitives.tsx";
+import { api, ApiError } from "../../app/api.ts";
+import type { LiveCodingSession, TranscriptEntry } from "../../../apps/code/contract.ts";
+import type { WorkItem } from "../../../work/contract.ts";
+import { useBusinessId, useEmployeeName, useMembers, usePerson } from "../../app/data.ts";
+import { useTakeover } from "../../app/mutations.ts";
+import { keys, problemOf } from "../../app/query.ts";
+import { MarkdownView } from "../../design/markdown.tsx";
+import { StatusChip } from "../../design/primitives.tsx";
 import { Textarea } from "@/components/ui/textarea";
 import {
   DiffSurface,
@@ -19,11 +18,13 @@ import {
   reviewBundle,
   type DiffComment,
   type DiffSelection,
-} from "../../surfaces/diff.tsx";
-import { takeoverTitle } from "../app/names.ts";
-import { useDark } from "../app/theme.ts";
-import { providerName, stateChip } from "./coding.tsx";
-import { openTerminalWindow } from "./terminal-window.tsx";
+} from "../../../surfaces/diff.tsx";
+import { takeoverTitle } from "../../app/names.ts";
+import { useDark } from "../../app/theme.ts";
+import { providerName, stateChip } from "../coding.tsx";
+import { openTerminalWindow } from "../../shell/terminal-window.tsx";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 /**
  * One coding session: its latest reply, the running diff with line comments, and a composer
@@ -139,18 +140,18 @@ export default function SessionView({
           {session.branch}
         </span>
         <span className="ml-auto" />
-        <DevysButton
-          compact
+        <Button
+          size="compact"
           onClick={() => void openTerminalWindow(businessId, { resume: session.id })}
         >
           <SquareTerminal /> Open in {providerName(session.provider)}
-        </DevysButton>
+        </Button>
         {session.state === "working" && (
-          <DevysButton compact onClick={() => stop.mutate()}>
+          <Button size="compact" onClick={() => stop.mutate()}>
             <Square /> Stop
-          </DevysButton>
+          </Button>
         )}
-        <DevysButton compact onClick={() => takeoverChange.mutate(item)}>
+        <Button size="compact" onClick={() => takeoverChange.mutate(item)}>
           {item.taken_over_by === null ? (
             <>
               <Hand /> Take over
@@ -160,7 +161,7 @@ export default function SessionView({
               <Undo2 /> Hand back
             </>
           )}
-        </DevysButton>
+        </Button>
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-1 @3xl:grid-cols-[minmax(260px,34%)_1fr]">
         <div className="flex min-h-0 flex-col gap-3 overflow-y-auto border-b border-hairline p-4 @3xl:border-r @3xl:border-b-0">
@@ -199,18 +200,19 @@ export default function SessionView({
                 ? `line ${selection.start}`
                 : `lines ${selection.start}–${selection.end}`}
             </span>
-            <input
+            <Input
               autoFocus
               value={draftComment}
               onChange={(event) => setDraftComment(event.target.value)}
               onKeyDown={(event) => event.key === "Enter" && void addComment()}
               placeholder="Comment on these lines"
               aria-label="Comment on the selected lines"
-              className="min-w-0 flex-1 rounded-[8px] bg-sheet-tint px-2.5 py-1.5 text-detail text-ink outline-none focus-visible:ring-2 focus-visible:ring-indigo/40"
+              density="compact"
+              className="flex-1"
             />
-            <DevysButton compact onClick={() => void addComment()}>
+            <Button size="compact" onClick={() => void addComment()}>
               <MessageSquarePlus /> Add
-            </DevysButton>
+            </Button>
           </div>
         )}
         {comments.length > 0 &&
@@ -221,9 +223,9 @@ export default function SessionView({
               <span className="text-caption text-ink-3">
                 {count} for {employeeName(item.owner_employee_id)}, in this work item's thread.
               </span>
-              <DevysButton compact onClick={sendComments}>
+              <Button size="compact" onClick={sendComments}>
                 <Send /> Send {count}
-              </DevysButton>
+              </Button>
             </div>
           ))}
         {mine ? (
@@ -233,9 +235,9 @@ export default function SessionView({
               onChange={(event) => setText(event.target.value)}
               placeholder={`Tell ${providerName(session.provider)} what to do`}
               aria-label="Message to the coding session"
-              className="min-h-[44px] flex-1"
+              className="field-sizing-content min-h-[44px] flex-1 resize-none"
             />
-            <DevysButton onClick={send}>Send</DevysButton>
+            <Button onClick={send}>Send</Button>
           </div>
         ) : (
           <span className="text-detail text-ink-3">

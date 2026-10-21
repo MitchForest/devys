@@ -14,6 +14,8 @@ import { useState, type ReactNode } from "react";
 import { api } from "../app/api.ts";
 import type { Decision } from "../../authority/contract.ts";
 import type { WorkItem } from "../../work/contract.ts";
+import { employeeOf } from "../../conversations/contract.ts";
+import { dateTime, dueDate } from "../lib/format.ts";
 import {
   accessTitle,
   chipFor,
@@ -51,11 +53,9 @@ function useWorkChanges() {
     toggleTakeover: (item: WorkItem) => takeover.mutate(item),
   };
 }
-import { DevysButton } from "../design/buttons.tsx";
 import { StatusChip, Card } from "../design/primitives.tsx";
-import { Field, fieldClass } from "../design/fields.tsx";
 import { endOfDay } from "../shell/dialogs.tsx";
-import { BrowserSection } from "./browser.tsx";
+import { BrowserSection } from "./layers/browser.tsx";
 import { CodingSessions } from "./coding.tsx";
 import {
   DropdownMenu,
@@ -70,52 +70,73 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
-/** The same actions an employee has, applied by the owner at the revision on screen. */
+/**
+ * What the owner can do to a work item from a row: take it over or hand it back. Changing it by
+ * hand (marking it, cancelling, reopening) is for work they have taken over, which fences its
+ * employee; otherwise they ask in its thread (owner decision 2026-10-21).
+ */
 function WorkActions({ item, extra }: { item: WorkItem; extra?: ReactNode }) {
   const actions = useWorkChanges();
-  if (!isOpen(item.state))
-    return (
-      <>
+  const mine = useHandEditing(item);
+  const person = usePerson();
+  const takeover = item.taken_over_by === null || item.taken_over_by === person?.id;
+  return (
+    <>
+      {isOpen(item.state) && takeover && (
+        <ContextMenuItem onClick={() => actions.toggleTakeover(item)}>
+          {item.taken_over_by === null ? (
+            <>
+              <Hand /> Take over
+            </>
+          ) : (
+            <>
+              <Undo2 /> Hand back
+            </>
+          )}
+        </ContextMenuItem>
+      )}
+      {mine && !isOpen(item.state) && (
         <ContextMenuItem onClick={() => actions.setState(item, "ready")}>
           <Undo2 /> Reopen
         </ContextMenuItem>
-        {extra}
-      </>
-    );
-  return (
-    <>
-      {item.state !== "ready" && (
-        <ContextMenuItem onClick={() => actions.setState(item, "ready")}>
-          <Redo2 /> Mark ready
-        </ContextMenuItem>
       )}
-      {item.state !== "waiting" && (
-        <ContextMenuItem onClick={() => actions.setState(item, "waiting")}>
-          <Clock /> Mark waiting
-        </ContextMenuItem>
+      {mine && isOpen(item.state) && (
+        <>
+          <ContextMenuSeparator />
+          {item.state !== "ready" && (
+            <ContextMenuItem onClick={() => actions.setState(item, "ready")}>
+              <Redo2 /> Mark ready
+            </ContextMenuItem>
+          )}
+          {item.state !== "waiting" && (
+            <ContextMenuItem onClick={() => actions.setState(item, "waiting")}>
+              <Clock /> Mark waiting
+            </ContextMenuItem>
+          )}
+          <ContextMenuItem onClick={() => actions.setState(item, "completed")}>
+            <CircleCheck /> Mark done
+          </ContextMenuItem>
+          <ContextMenuItem
+            variant="destructive"
+            onClick={() => actions.setState(item, "cancelled")}
+          >
+            <CircleX /> Cancel
+          </ContextMenuItem>
+        </>
       )}
-      <ContextMenuItem onClick={() => actions.setState(item, "completed")}>
-        <CircleCheck /> Mark done
-      </ContextMenuItem>
-      <ContextMenuSeparator />
-      <ContextMenuItem onClick={() => actions.toggleTakeover(item)}>
-        {item.taken_over_by === null ? (
-          <>
-            <Hand /> Take over
-          </>
-        ) : (
-          <>
-            <Undo2 /> Hand back
-          </>
-        )}
-      </ContextMenuItem>
-      <ContextMenuItem variant="destructive" onClick={() => actions.setState(item, "cancelled")}>
-        <CircleX /> Cancel
-      </ContextMenuItem>
       {extra}
     </>
   );
+}
+
+/** Whether the signed-in person has taken this work over, so they may change it by hand. */
+export function useHandEditing(item: WorkItem) {
+  const person = usePerson();
+  return item.taken_over_by !== null && item.taken_over_by === person?.id;
 }
 
 /** Right-click (or long-press) a work item to act on it. */
@@ -174,8 +195,8 @@ export function WorkRow({
         onClick={() => nav.openThread(item.id)}
         className={
           compact
-            ? "-mx-2 flex w-[calc(100%+16px)] items-center gap-2.5 rounded-[9px] px-2 py-1.5 text-left transition-colors duration-150 hover:bg-sheet-tint"
-            : "flex w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-left transition-colors duration-150 hover:bg-sheet-tint"
+            ? "-mx-2 flex w-[calc(100%+16px)] items-center gap-2.5 rounded-small px-2 py-1.5 text-left transition-colors duration-150 hover:bg-sheet-tint"
+            : "flex w-full items-center gap-3 rounded-row px-3 py-2.5 text-left transition-colors duration-150 hover:bg-sheet-tint"
         }
       >
         <div className="flex min-w-0 flex-col gap-0.5">
@@ -256,24 +277,22 @@ export function DecisionCard({ decision }: { decision: Decision }) {
           ))}
         </div>
         <div className="flex gap-2 pt-0.5">
-          <DevysButton
-            kind="aurora"
+          <Button
+            variant="aurora"
             onClick={() => answer.mutate({ id: decision.id, approve: true })}
             title="Allows this exact request once. Face ID signing arrives with signed decisions."
           >
             <Check /> Approve
-          </DevysButton>
-          <DevysButton onClick={() => answer.mutate({ id: decision.id, approve: false })}>
+          </Button>
+          <Button onClick={() => answer.mutate({ id: decision.id, approve: false })}>
             Decline
-          </DevysButton>
+          </Button>
         </div>
       </div>
     </Card>
   );
 }
 
-const formatDue = (due: string) =>
-  new Date(due).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 /** A due time as the date field shows it, in the owner's time zone. */
 const dateField = (due: string | null) => {
   if (!due) return "";
@@ -336,17 +355,17 @@ function WorkPlan({ item, editable }: { item: WorkItem; editable: boolean }) {
             </>
           )}
           <dt className="text-ink-3">Due</dt>
-          <dd className="text-ink">{item.due_at ? formatDue(item.due_at) : "No due date"}</dd>
+          <dd className="text-ink">{item.due_at ? dueDate(item.due_at) : "No due date"}</dd>
         </dl>
         {editable && (
-          <DevysButton
-            kind="quiet"
-            compact
+          <Button
+            variant="quiet"
+            size="compact"
             onClick={edit}
             aria-label="Edit next, waiting on and due"
           >
             <Pencil /> Edit
-          </DevysButton>
+          </Button>
         )}
       </div>
     );
@@ -361,17 +380,15 @@ function WorkPlan({ item, editable }: { item: WorkItem; editable: boolean }) {
       onKeyDown={(event) => event.key === "Escape" && setEditing(false)}
     >
       <Field label="Next">
-        <input
+        <Input
           autoFocus
-          className={fieldClass}
           value={next}
           maxLength={1000}
           onChange={(event) => setNext(event.target.value)}
         />
       </Field>
       <Field label="Waiting on">
-        <input
-          className={fieldClass}
+        <Input
           value={waiting}
           maxLength={1000}
           placeholder="Nothing"
@@ -379,12 +396,7 @@ function WorkPlan({ item, editable }: { item: WorkItem; editable: boolean }) {
         />
       </Field>
       <Field label="Due">
-        <input
-          type="date"
-          className={fieldClass}
-          value={due}
-          onChange={(event) => setDue(event.target.value)}
-        />
+        <Input type="date" value={due} onChange={(event) => setDue(event.target.value)} />
       </Field>
       {error && (
         <p role="alert" className="text-detail text-ink-2">
@@ -392,12 +404,12 @@ function WorkPlan({ item, editable }: { item: WorkItem; editable: boolean }) {
         </p>
       )}
       <div className="flex gap-1.5">
-        <DevysButton compact type="submit" disabled={busy}>
+        <Button size="compact" type="submit" disabled={busy}>
           {busy ? "Saving…" : "Save"}
-        </DevysButton>
-        <DevysButton kind="quiet" compact onClick={() => setEditing(false)}>
+        </Button>
+        <Button variant="quiet" size="compact" onClick={() => setEditing(false)}>
           Cancel
-        </DevysButton>
+        </Button>
       </div>
     </form>
   );
@@ -432,6 +444,8 @@ export function WorkDetail({ item }: { item: WorkItem }) {
   const owner = employees.find((e) => e.id === item.owner_employee_id);
   const chip = chipFor(item.state);
   const open = isOpen(item.state);
+  // Read-only until taken over; then the owner changes it by hand until they hand it back.
+  const mine = useHandEditing(item);
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -454,13 +468,13 @@ export function WorkDetail({ item }: { item: WorkItem }) {
             </span>
           </div>
           <span className="ml-auto" />
-          {open && (
+          {open && mine && (
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
-                  <DevysButton kind="quiet" compact aria-label="Reassign">
+                  <Button variant="quiet" size="compact" aria-label="Reassign">
                     Reassign <ChevronDown />
-                  </DevysButton>
+                  </Button>
                 }
               />
               <DropdownMenuContent align="end" className="w-auto min-w-48">
@@ -482,38 +496,45 @@ export function WorkDetail({ item }: { item: WorkItem }) {
             </DropdownMenu>
           )}
         </div>
-        <WorkPlan item={item} editable={open} />
+        <WorkPlan item={item} editable={open && mine} />
       </div>
       <div className="flex flex-wrap gap-1.5">
-        {open ? (
-          <>
-            <DevysButton compact onClick={() => actions.setState(item, "completed")}>
-              <CircleCheck /> Mark done
-            </DevysButton>
-            {item.state !== "waiting" && (
-              <DevysButton compact onClick={() => actions.setState(item, "waiting")}>
-                <Clock /> Waiting
-              </DevysButton>
+        {open && (item.taken_over_by === null || mine) && (
+          <Button size="compact" onClick={() => actions.toggleTakeover(item)}>
+            {mine ? (
+              <>
+                <Undo2 /> Hand back
+              </>
+            ) : (
+              <>
+                <Hand /> Take over
+              </>
             )}
-            <DevysButton compact onClick={() => actions.toggleTakeover(item)}>
-              {item.taken_over_by === null ? (
-                <>
-                  <Hand /> Take over
-                </>
-              ) : (
-                <>
-                  <Undo2 /> Hand back
-                </>
-              )}
-            </DevysButton>
-            <DevysButton kind="quiet" compact onClick={() => actions.setState(item, "cancelled")}>
+          </Button>
+        )}
+        {mine && open && (
+          <>
+            <Button size="compact" onClick={() => actions.setState(item, "completed")}>
+              <CircleCheck /> Mark done
+            </Button>
+            {item.state !== "waiting" && (
+              <Button size="compact" onClick={() => actions.setState(item, "waiting")}>
+                <Clock /> Waiting
+              </Button>
+            )}
+            <Button
+              variant="quiet"
+              size="compact"
+              onClick={() => actions.setState(item, "cancelled")}
+            >
               <CircleX /> Cancel
-            </DevysButton>
+            </Button>
           </>
-        ) : (
-          <DevysButton compact onClick={() => actions.setState(item, "ready")}>
+        )}
+        {mine && !open && (
+          <Button size="compact" onClick={() => actions.setState(item, "ready")}>
             <Undo2 /> Reopen
-          </DevysButton>
+          </Button>
         )}
       </div>
       {waiting.length > 0 && (
@@ -559,16 +580,12 @@ function Evidence({ item }: { item: WorkItem }) {
         <div key={index} className="flex flex-col gap-px py-1">
           <span className="text-detail text-ink">{entry.note}</span>
           <span className="text-caption text-ink-3">
-            {entry.by.startsWith("employee:")
-              ? employeeName(entry.by.slice("employee:".length))
+            {employeeOf(entry.by)
+              ? employeeName(employeeOf(entry.by)!)
               : entry.by === "devys"
                 ? "Devys"
                 : "You"}{" "}
-            ·{" "}
-            {new Date(entry.at).toLocaleString(undefined, {
-              dateStyle: "medium",
-              timeStyle: "short",
-            })}
+            · {dateTime(entry.at)}
           </span>
         </div>
       ))}
@@ -583,7 +600,7 @@ function Evidence({ item }: { item: WorkItem }) {
     );
   return (
     <div className="flex flex-col gap-1" data-testid="outcome">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[10px] bg-sheet-tint px-3 py-2 text-detail">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-control bg-sheet-tint px-3 py-2 text-detail">
         {outcome.check && (
           <StatusChip tone={outcome.check.passed ? "done" : "failed"} small>
             {outcome.check.passed ? "Check passed" : "Check failed"}

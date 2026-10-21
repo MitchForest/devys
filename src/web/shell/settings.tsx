@@ -21,8 +21,15 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, type StartingRole } from "../app/api.ts";
 import type { InstalledApp } from "../../apps/contract.ts";
 import type { Business, Device, Employee, Look, SettableLook } from "../../identity/contract.ts";
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useApps, useBusinessId, useBusinesses, useOwnerPhoto, usePerson } from "../app/data.ts";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useApps,
+  useBusinessId,
+  useBusinesses,
+  useEmployees,
+  useOwnerPhoto,
+  usePerson,
+} from "../app/data.ts";
 import {
   useCreateBusiness,
   useInstallApp,
@@ -35,8 +42,8 @@ import {
   useUploadLookPhoto,
 } from "../app/mutations.ts";
 import { useNav, useSettingsSection } from "../app/navigation.ts";
-import { keys, queries } from "../app/query.ts";
-import { DriveConnection } from "../pages/drive.tsx";
+import { keys } from "../app/query.ts";
+import { DriveConnection } from "./drive-settings.tsx";
 import { useTheme, type Theme } from "../app/theme.ts";
 import {
   availableVoices,
@@ -45,15 +52,20 @@ import {
   speak,
   type VoiceSettings,
 } from "../app/voice.ts";
-import { DevysButton } from "../design/buttons.tsx";
-import { Field, fieldClass, Switch } from "../design/fields.tsx";
 import { Face, faceFor, PersonPortrait, tileGradients, tintFor } from "../design/face.tsx";
 import { palettes, shapes, tints } from "../../identity/contract.ts";
 import { BusinessPortrait, EmployeePortrait } from "../design/portrait.tsx";
-import { SegmentedTabs } from "../design/tabs.tsx";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
 import { Spinner } from "../design/spinner.tsx";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { shortDate } from "../lib/format.ts";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Textarea } from "@/components/ui/textarea";
 
 type Section = "account" | "apps" | "team" | "businesses" | "devices" | "voice" | "appearance";
 const sections: { value: Section; title: string; icon: LucideIcon }[] = [
@@ -123,10 +135,10 @@ function PhotoChooser({ title, choose }: { title: string; choose: (file: File) =
   const input = useRef<HTMLInputElement>(null);
   return (
     <>
-      <DevysButton compact onClick={() => input.current?.click()}>
+      <Button size="compact" onClick={() => input.current?.click()}>
         <Image /> {title}
-      </DevysButton>
-      <input
+      </Button>
+      <Input
         ref={input}
         type="file"
         accept="image/*"
@@ -173,18 +185,18 @@ function AccountPane() {
               choose={(file) => run(file)}
             />
             {ownerPhoto && (
-              <DevysButton kind="quiet" compact onClick={() => run(null)}>
+              <Button variant="quiet" size="compact" onClick={() => run(null)}>
                 Remove
-              </DevysButton>
+              </Button>
             )}
           </div>
         </div>
       </div>
       {error && <p className="text-detail text-red">{error}</p>}
       <span className="mt-auto" />
-      <DevysButton className="self-start text-red" onClick={() => signOut.mutate()}>
+      <Button className="self-start text-red" onClick={() => signOut.mutate()}>
         Sign out of this device
-      </DevysButton>
+      </Button>
     </div>
   );
 }
@@ -204,7 +216,7 @@ function ListRow({
       aria-pressed={selected}
       onClick={onClick}
       className={cn(
-        "flex w-full items-center gap-2.5 rounded-[9px] px-2 py-1.5 text-left text-control text-ink",
+        "flex w-full items-center gap-2.5 rounded-small px-2 py-1.5 text-left text-control text-ink",
         selected && "bg-sheet-tint",
       )}
     >
@@ -249,18 +261,18 @@ function AppsPane() {
             {app.installed && (
               <Switch
                 checked={app.pinned}
-                onChange={(on) => pin.mutate({ app: app.id, pinned: on })}
+                onCheckedChange={(on) => pin.mutate({ app: app.id, pinned: on })}
               >
                 <span className="text-caption text-ink-3">Sidebar</span>
               </Switch>
             )}
-            <DevysButton
-              compact
-              kind={app.installed ? "quiet" : "raised"}
+            <Button
+              size="compact"
+              variant={app.installed ? "quiet" : "raised"}
               onClick={() => install.mutate({ app: app.id, on: !app.installed })}
             >
               {app.installed ? "Remove" : "Install"}
-            </DevysButton>
+            </Button>
           </div>
         ))}
       </div>
@@ -293,40 +305,22 @@ function AppsPane() {
   );
 }
 
-/** Every business's team, each employee's look editable; looks are saved on the server. */
+/** The current business's team, each employee's look editable; looks are saved on the server. */
 function TeamPane() {
-  const businesses = useBusinesses();
+  const employees = useEmployees();
   const setLook = useSetEmployeeLook();
   const uploadPhoto = useUploadLookPhoto();
-  // Each business's team, read once and shared with the workspace's own reads; only the
-  // business on screen is polled, by the workspace.
-  const details = useQueries({
-    queries: businesses.map((b) => ({ ...queries.detail(b.id), refetchInterval: false as const })),
-  });
-  const teams: Record<string, readonly Employee[]> = Object.fromEntries(
-    businesses.map((b, index) => [b.id, details[index]?.data?.employees ?? []]),
-  );
   const [selected, setSelected] = useState<string>();
-  const all = Object.values(teams).flat();
-  const employee = all.find((e) => e.id === selected) ?? all[0];
+  const employee = employees.find((e) => e.id === selected) ?? employees[0];
   const save = (target: Employee, look: SettableLook) => setLook.mutate({ employee: target, look });
   return (
     <div className="flex gap-6 p-4 max-sm:flex-col">
       <div className="flex w-[200px] shrink-0 flex-col gap-0.5">
-        {businesses.map((b) => (
-          <div key={b.id} className="flex flex-col gap-0.5">
-            <span className="px-2 pt-2.5 text-label font-medium text-ink-3">{b.name}</span>
-            {(teams[b.id] ?? []).map((e) => (
-              <ListRow
-                key={e.id}
-                selected={e.id === employee?.id}
-                onClick={() => setSelected(e.id)}
-              >
-                <EmployeePortrait employee={e} size={24} />
-                <span className="truncate">{e.name}</span>
-              </ListRow>
-            ))}
-          </div>
+        {employees.map((e) => (
+          <ListRow key={e.id} selected={e.id === employee?.id} onClick={() => setSelected(e.id)}>
+            <EmployeePortrait employee={e} size={24} />
+            <span className="truncate">{e.name}</span>
+          </ListRow>
         ))}
       </div>
       {employee ? (
@@ -424,8 +418,7 @@ export function NewBusiness({ created }: { created: () => void }) {
     >
       <span className="text-heading font-semibold text-ink">New business</span>
       <Field label="Name">
-        <input
-          className={fieldClass}
+        <Input
           value={name}
           maxLength={80}
           placeholder="What it's called"
@@ -433,8 +426,8 @@ export function NewBusiness({ created }: { created: () => void }) {
         />
       </Field>
       <Field label="Brief" hint="What it does, its goals and constraints. Every employee reads it.">
-        <textarea
-          className={cn(fieldClass, "min-h-24 resize-y leading-[1.4]")}
+        <Textarea
+          className="min-h-24 resize-y leading-[1.4]"
           value={brief}
           maxLength={4000}
           onChange={(event) => setBrief(event.target.value)}
@@ -447,7 +440,7 @@ export function NewBusiness({ created }: { created: () => void }) {
           <Switch
             key={role.value}
             checked={team.includes(role.value)}
-            onChange={(on) =>
+            onCheckedChange={(on) =>
               setTeam((current) =>
                 on
                   ? startingRoles
@@ -469,14 +462,9 @@ export function NewBusiness({ created }: { created: () => void }) {
           {error}
         </p>
       )}
-      <DevysButton
-        kind="aurora"
-        type="submit"
-        disabled={busy || !name.trim()}
-        className="self-start"
-      >
+      <Button variant="aurora" type="submit" disabled={busy || !name.trim()} className="self-start">
         {busy ? "Creating…" : "Create business"}
-      </DevysButton>
+      </Button>
     </form>
   );
 }
@@ -513,8 +501,7 @@ function BusinessDetails({ business }: { business: Business }) {
         }}
       >
         <Field label="Name">
-          <input
-            className={fieldClass}
+          <Input
             value={name}
             maxLength={80}
             onChange={(event) => {
@@ -527,8 +514,8 @@ function BusinessDetails({ business }: { business: Business }) {
           label="Brief"
           hint="What it does, its goals and constraints. Every employee reads it."
         >
-          <textarea
-            className={cn(fieldClass, "min-h-28 resize-y leading-[1.4]")}
+          <Textarea
+            className="min-h-28 resize-y leading-[1.4]"
             value={brief}
             maxLength={4000}
             onChange={(event) => {
@@ -543,9 +530,9 @@ function BusinessDetails({ business }: { business: Business }) {
           </p>
         )}
         <div className="flex items-center gap-2">
-          <DevysButton type="submit" disabled={saving || !changed || !name.trim()}>
+          <Button type="submit" disabled={saving || !changed || !name.trim()}>
             {saving ? "Saving…" : "Save"}
-          </DevysButton>
+          </Button>
           {saved && !changed && (
             <span className="flex items-center gap-1 text-detail text-green">
               <Check className="size-3.5" /> Saved
@@ -579,8 +566,6 @@ function BusinessDetails({ business }: { business: Business }) {
   );
 }
 
-const added = (iso: string) =>
-  new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 const countdown = (ms: number) => {
   const seconds = Math.max(0, Math.ceil(ms / 1000));
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
@@ -590,8 +575,8 @@ const countdown = (ms: number) => {
 function CopyButton({ text, label }: { text: string; label: string }) {
   const [copied, setCopied] = useState(false);
   return (
-    <DevysButton
-      compact
+    <Button
+      size="compact"
       aria-label={label}
       onClick={() =>
         void navigator.clipboard
@@ -604,7 +589,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
       }
     >
       {copied ? <Check /> : <Copy />} {copied ? "Copied" : "Copy"}
-    </DevysButton>
+    </Button>
   );
 }
 
@@ -653,9 +638,9 @@ function DevicesPane() {
         <div className="flex items-center">
           <span className="text-heading font-semibold text-ink">Add a device</span>
           <span className="ml-auto" />
-          <DevysButton compact onClick={issue} disabled={issuing.isPending}>
+          <Button size="compact" onClick={issue} disabled={issuing.isPending}>
             <Plus /> {code ? "New code" : "Add a device"}
-          </DevysButton>
+          </Button>
         </div>
         {code ? (
           <div
@@ -719,19 +704,19 @@ function DevicesPane() {
                 <div className="flex min-w-0 flex-col gap-px">
                   <span className="truncate text-body font-semibold text-ink">{name}</span>
                   <span className="text-detail text-ink-3">
-                    {device.current ? "This device · " : ""}Added {added(device.created_at)}
+                    {device.current ? "This device · " : ""}Added {shortDate(device.created_at)}
                   </span>
                 </div>
                 <span className="ml-auto" />
                 {!device.current && (
-                  <DevysButton
-                    kind="quiet"
-                    compact
+                  <Button
+                    variant="quiet"
+                    size="compact"
                     aria-label={`Revoke ${name}`}
                     onClick={() => revoke.mutate(device.id)}
                   >
                     Revoke
-                  </DevysButton>
+                  </Button>
                 )}
               </li>
             );
@@ -985,25 +970,28 @@ function LookEditor({
         <div className="flex flex-col items-start gap-1.5">
           <span className="text-heading font-semibold text-ink">{title}</span>
           {current && (
-            <DevysButton
-              kind="quiet"
-              compact
+            <Button
+              variant="quiet"
+              size="compact"
               onClick={() => {
                 setChosen(undefined);
                 set(null);
               }}
             >
               Reset
-            </DevysButton>
+            </Button>
           )}
         </div>
       </div>
-      <SegmentedTabs
-        label="Look"
-        value={mode}
-        options={modes.map((m) => ({ value: m, title: modeTitles[m] }))}
-        onChange={choose}
-      />
+      <Tabs value={mode} onValueChange={(next) => choose(next as typeof mode)}>
+        <TabsList aria-label="Look">
+          {modes.map((m) => (
+            <TabsTrigger key={m} value={m}>
+              {modeTitles[m]}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
       {mode === "face" && (
         <div className="flex flex-col gap-3">
           <div className="grid w-fit grid-cols-8 gap-2.5 max-sm:grid-cols-4">
@@ -1045,7 +1033,7 @@ function LookEditor({
               />
             ))}
             <span className="ml-auto" />
-            <input
+            <Input
               aria-label="Any emoji"
               title="Type or paste any emoji"
               placeholder="Any emoji"
@@ -1059,7 +1047,7 @@ function LookEditor({
                 set({ kind: "emoji", emoji: found, tint });
                 setCustom("");
               }}
-              className="w-24 rounded-control bg-well py-[5px] text-center text-[15px] text-ink outline-none placeholder:text-detail placeholder:text-ink-3 focus-visible:ring-2 focus-visible:ring-indigo/40"
+              className="w-24 py-[5px] text-center text-[15px] placeholder:text-detail"
             />
             <Smile className="size-4 text-ink-2" aria-hidden />
           </div>
@@ -1169,11 +1157,11 @@ function VoicePane() {
       <div className="flex flex-col gap-2">
         <span className="text-heading font-semibold text-ink">Reply voice</span>
         <div className="flex items-center gap-2">
-          <select
+          <NativeSelect
             aria-label="Reply voice"
             value={settings.voiceURI ?? ""}
             onChange={(event) => change({ voiceURI: event.target.value || null })}
-            className="h-[30px] max-w-[280px] min-w-0 flex-1 rounded-small bg-well px-2 text-control text-ink outline-none focus-visible:ring-2 focus-visible:ring-indigo/40"
+            className="h-[30px] max-w-[280px] flex-1 rounded-small px-2 py-0 text-control"
           >
             <option value="">Best available</option>
             {voices.map((voice) => (
@@ -1182,15 +1170,15 @@ function VoicePane() {
                 {voice.localService ? "" : " · Online"}
               </option>
             ))}
-          </select>
-          <DevysButton
-            compact
+          </NativeSelect>
+          <Button
+            size="compact"
             onClick={() =>
               void speak("Hi, this is how I'll sound when I read replies aloud.", settings)
             }
           >
             <Play className="fill-current" /> Preview
-          </DevysButton>
+          </Button>
         </div>
       </div>
       <div className="flex flex-col gap-2">
@@ -1210,17 +1198,12 @@ function VoicePane() {
           <Rabbit className="size-4 text-ink-3" aria-hidden />
         </div>
       </div>
-      <label className="flex w-fit cursor-pointer items-center gap-2.5 text-control text-ink">
-        <input
-          type="checkbox"
-          role="switch"
-          checked={settings.speaksReplies}
-          onChange={(event) => change({ speaksReplies: event.target.checked })}
-          className="peer sr-only"
-        />
-        <span className="relative h-[22px] w-[38px] rounded-full bg-track transition-colors peer-checked:bg-green peer-focus-visible:ring-2 peer-focus-visible:ring-indigo after:absolute after:top-0.5 after:left-0.5 after:size-[18px] after:rounded-full after:bg-white after:shadow-resting after:transition-transform peer-checked:after:translate-x-4" />
+      <Switch
+        checked={settings.speaksReplies}
+        onCheckedChange={(on) => change({ speaksReplies: on })}
+      >
         Read replies aloud
-      </label>
+      </Switch>
       <p className="text-detail text-ink-3">
         Your browser transcribes and speaks. It keeps speech on this device where it can; some
         browsers use their own speech service.
@@ -1234,16 +1217,13 @@ function AppearancePane() {
   return (
     <div className="flex flex-col gap-4 p-6">
       <span className="text-heading font-semibold text-ink">Appearance</span>
-      <SegmentedTabs<Theme>
-        label="Appearance"
-        value={theme}
-        options={[
-          { value: "system", title: "System" },
-          { value: "light", title: "Light" },
-          { value: "dark", title: "Dark" },
-        ]}
-        onChange={setTheme}
-      />
+      <Tabs value={theme} onValueChange={(next) => setTheme(next as Theme)}>
+        <TabsList aria-label="Appearance">
+          <TabsTrigger value="system">System</TabsTrigger>
+          <TabsTrigger value="light">Light</TabsTrigger>
+          <TabsTrigger value="dark">Dark</TabsTrigger>
+        </TabsList>
+      </Tabs>
     </div>
   );
 }

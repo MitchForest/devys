@@ -7,7 +7,7 @@ import { readBounded, sha256Bytes } from "../protocol/bytes.ts";
 import { workItem } from "../work/service.ts";
 import { postFromPerson } from "./conversations.ts";
 import { modeOf } from "./mode.ts";
-import { body } from "./request.ts";
+import { body, decodedBody } from "./request.ts";
 import { respond } from "../protocol/http.ts";
 import { FileText, revisionConflict, SavedFile } from "../workspace/contract.ts";
 import {
@@ -16,6 +16,7 @@ import {
   Folder,
   Posted,
   TextConflict,
+  TextSave,
   type FileAnchor,
 } from "./wire.ts";
 
@@ -120,15 +121,26 @@ export async function filesRoute(request: Request, env: Env, access: Access) {
     }
   }
   if (!trusted) return new Response("Forbidden", { status: 403 });
+  /**
+   * Layers are read-only: the owner saves by hand only for a work item they have taken over,
+   * which fences its employee (.docs/PRODUCT_EXPERIENCE.md#layers). Otherwise they ask.
+   */
+  const handEditing = async (workId: unknown) => {
+    if (typeof workId !== "string" || !/^[A-Za-z0-9-]{1,64}$/.test(workId)) return false;
+    const item = await Effect.runPromise(workItem(env.HYPERDRIVE, business.id, workId));
+    return item?.taken_over_by === person.id;
+  };
+  const notTakenOver = () =>
+    new Response(
+      "Files are read-only: take over the work item to edit them by hand, or ask its employee.",
+      { status: 409 },
+    );
   if (path === "/files/text" && request.method === "PUT") {
     // Text files open up to 1 MB; JSON escaping can double it.
-    const input = await body<{ path: string; content: string; expected_revision: string | null }>(
-      request,
-      2_000_000,
-    );
+    const input = await decodedBody(request, 2_000_000, TextSave);
     const file = inside(input.path);
-    if (!file || typeof input.content !== "string")
-      return new Response("Send a path inside the business folder and its text", { status: 400 });
+    if (!file) return new Response("Send a path inside the business folder", { status: 400 });
+    if (!(await handEditing(input.work))) return notTakenOver();
     try {
       return respond(
         SavedFile,
@@ -148,6 +160,7 @@ export async function filesRoute(request: Request, env: Env, access: Access) {
   if (path === "/files/raw" && request.method === "PUT") {
     const file = inside(url.searchParams.get("path"));
     if (!file) return new Response("Stay inside the business folder", { status: 400 });
+    if (!(await handEditing(url.searchParams.get("work")))) return notTakenOver();
     const expected = url.searchParams.get("expected_revision");
     // Counted while it arrives, so an oversized upload is refused without holding all of it.
     const bytes = await readBounded(request.body, rawBytes).catch(() => undefined);

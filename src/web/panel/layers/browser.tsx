@@ -1,13 +1,15 @@
 import { Globe, Hand, Undo2 } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
-import { api } from "../app/api.ts";
-import type { WorkItem } from "../../work/contract.ts";
-import { useBusinessId, useMembers, usePerson, useWork } from "../app/data.ts";
-import { useTakeover } from "../app/mutations.ts";
-import { takeoverTitle } from "../app/names.ts";
-import { useNav } from "../app/navigation.ts";
-import { keys, poll, problemOf } from "../app/query.ts";
+import { api } from "../../app/api.ts";
+import type { WorkItem } from "../../../work/contract.ts";
+import { useBusinessId, useMembers, usePerson, useWork } from "../../app/data.ts";
+import { useTakeover } from "../../app/mutations.ts";
+import { takeoverTitle } from "../../app/names.ts";
+import { useNav } from "../../app/navigation.ts";
+import { keys, poll, problemOf } from "../../app/query.ts";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 /** Where the business's browser is and which work drives it. */
 const useBrowserStatus = (businessId: string, interval: number) =>
@@ -16,7 +18,6 @@ const useBrowserStatus = (businessId: string, interval: number) =>
     queryFn: () => api.browserStatus(businessId),
     refetchInterval: interval,
   });
-import { DevysButton } from "../design/buttons.tsx";
 
 /** The business's browser while this work item drives it: a line that opens the live view. */
 export function BrowserSection({ item }: { item: WorkItem }) {
@@ -28,7 +29,7 @@ export function BrowserSection({ item }: { item: WorkItem }) {
     <button
       type="button"
       onClick={() => nav.openLayer({ kind: "browser", workId: item.id })}
-      className="flex items-center gap-2 rounded-[10px] px-2 py-1.5 text-left text-detail text-ink-2 hover:bg-sheet-tint hover:text-ink"
+      className="flex items-center gap-2 rounded-control px-2 py-1.5 text-left text-detail text-ink-2 hover:bg-sheet-tint hover:text-ink"
     >
       <Globe className="size-3.5 shrink-0 text-ink-3" />
       <span className="truncate">{status.title || status.url}</span>
@@ -86,7 +87,7 @@ function BrowserView({ item }: { item: WorkItem }) {
         <span className="truncate text-caption text-ink-3">{status?.url}</span>
         <span className="ml-auto" />
         {takeover && <span className="shrink-0 text-caption text-ink-3">{takeover}</span>}
-        <DevysButton compact onClick={() => takeoverChange.mutate(item)}>
+        <Button size="compact" onClick={() => takeoverChange.mutate(item)}>
           {item.taken_over_by === null ? (
             <>
               <Hand /> Take over
@@ -96,7 +97,7 @@ function BrowserView({ item }: { item: WorkItem }) {
               <Undo2 /> Hand back
             </>
           )}
-        </DevysButton>
+        </Button>
       </div>
       <div className="min-h-0 flex-1 overflow-auto bg-sheet-tint p-3">
         {shot ? (
@@ -128,19 +129,20 @@ function BrowserView({ item }: { item: WorkItem }) {
             void send({ kind: "type", text }).then(() => setText(""));
           }}
         >
-          <input
+          <Input
             value={text}
             onChange={(event) => setText(event.target.value)}
             aria-label="Type into the page"
             placeholder="Click a field above, then type here"
-            className="min-w-0 flex-1 rounded-[8px] bg-sheet-tint px-2.5 py-1.5 text-detail text-ink outline-none"
+            density="compact"
+            className="flex-1"
           />
-          <DevysButton compact type="submit">
+          <Button size="compact" type="submit">
             Type
-          </DevysButton>
-          <DevysButton compact onClick={() => void send({ kind: "key", key: "Enter" })}>
+          </Button>
+          <Button size="compact" onClick={() => void send({ kind: "key", key: "Enter" })}>
             Enter
-          </DevysButton>
+          </Button>
         </form>
       ) : (
         <p className="border-t border-hairline px-4 py-2.5 text-detail text-ink-3">

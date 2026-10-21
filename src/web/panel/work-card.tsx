@@ -2,10 +2,10 @@ import { Bell, BellRing } from "lucide-react";
 import { useFollowed, useWork } from "../app/data.ts";
 import { useFollow } from "../app/mutations.ts";
 import { problemOf } from "../app/query.ts";
-import { ToolbarIconButton } from "../design/buttons.tsx";
 import { EmptyNote } from "../design/primitives.tsx";
-import { WorkDetail } from "../pages/work.tsx";
+import { WorkDetail } from "./work.tsx";
 import { PanelBody, PanelHeader } from "./panel.tsx";
+import { ToolbarIconButton } from "@/components/ui/button";
 
 /**
  * A thread's permanent view: the work item itself. Who owns it, where it stands, what's next,

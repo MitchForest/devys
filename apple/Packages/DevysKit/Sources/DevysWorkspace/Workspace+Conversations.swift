@@ -76,9 +76,9 @@ extension Workspace {
         case .sendTapped(let key):
             guard let open = state.conversation(key), !open.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
             if state.voice.mode == .dictation { cancelCapture(&state) }
-            // The layer the owner is looking at goes with the message, so "this" means what is on screen.
-            let text = state.reference.map { open.draft.trimmingCharacters(in: .whitespacesAndNewlines) + $0.line } ?? open.draft
-            send(text, viaVoice: open.draftUsedVoice, in: key, state: &state)
+            // The record the owner is looking at goes with the message as its ref, so "this" means
+            // what is on screen.
+            send(open.draft, viaVoice: open.draftUsedVoice, ref: state.reference?.ref, in: key, state: &state)
             state.isReferencing = false
         case .posted(let key, let clientID, let message):
             posted(message, clientID: clientID, in: key, state: &state)
@@ -248,7 +248,7 @@ extension Workspace {
 
     /// Shows the message at once and posts it; returns its client id.
     @discardableResult
-    func send(_ text: String, viaVoice: Bool, in key: ConversationKey, state: inout State) -> String? {
+    func send(_ text: String, viaVoice: Bool, ref: Ref? = nil, in key: ConversationKey, state: inout State) -> String? {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, let open = state.conversation(key) else { return nil }
         let message = PendingMessage(
@@ -256,7 +256,8 @@ extension Workspace {
             text: text,
             replyTo: open.replyingTo,
             mentions: open.mentioned(team: state.snapshot.employees),
-            viaVoice: viaVoice
+            viaVoice: viaVoice,
+            ref: ref
         )
         update(key, &state) { conversation in
             conversation.pending.append(message)

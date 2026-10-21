@@ -5,6 +5,7 @@ import { type Business, type Person } from "../identity/contract.ts";
 import { conversationKey, employeeOf } from "../conversations/contract.ts";
 import { conversationSummaries, markSeen, setFollowing } from "../conversations/service.ts";
 import { conversationExists, conversationPage, postFromPerson } from "./conversations.ts";
+import { businessRef } from "./refs.ts";
 import { body, forbidden, notFound } from "./request.ts";
 import { respond } from "../protocol/http.ts";
 import { ConversationPage, Conversations, Following, Posted, Read } from "./wire.ts";
@@ -76,6 +77,7 @@ export async function conversationRoute(
     reply_to: string;
     mentions: string[];
     via_voice: boolean;
+    ref: string | null;
   }>(request, 70_000);
   const text = typeof input.text === "string" ? input.text.trim() : "";
   if (
@@ -85,6 +87,13 @@ export async function conversationRoute(
     text.length > 60_000
   )
     return new Response("Send an id and non-empty text", { status: 400 });
+  // The record the owner is viewing goes with the message as its ref, never as text.
+  const viewing =
+    input.ref === undefined || input.ref === null
+      ? undefined
+      : await businessRef(env, business.id, input.ref);
+  if (input.ref != null && !viewing)
+    return new Response("Send the ref of a record of this business, or none", { status: 400 });
   const posted = await postFromPerson(env, business.id, person.id, key, {
     id: input.id,
     text,
@@ -93,6 +102,7 @@ export async function conversationRoute(
       ? { mentions: input.mentions.filter((m) => typeof m === "string") }
       : {}),
     viaVoice: input.via_voice === true,
+    ...(viewing ? { ref: viewing } : {}),
   });
   if ("refused" in posted) return new Response(posted.refused, { status: 409 });
   return respond(Posted, posted, { status: 201 });

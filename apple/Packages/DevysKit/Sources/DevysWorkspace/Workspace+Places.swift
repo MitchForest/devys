@@ -186,9 +186,7 @@ extension Workspace {
         guard let open = state.main, let message = open.message(messageID), !state.businessID.isEmpty else { return }
         let owner = message.employeeID ?? message.mentions.first ?? state.recipients(in: open.key).first ?? state.operations?.id
         guard let owner else { return }
-        let text = message.text
-            .replacingOccurrences(of: #"\n\n_Viewing: [^\n]*_$"#, with: "", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
         let newItem = NewWorkItem(
             title: String((text.split(separator: "\n").first.map(String.init) ?? text).prefix(80)),
             owner: owner,

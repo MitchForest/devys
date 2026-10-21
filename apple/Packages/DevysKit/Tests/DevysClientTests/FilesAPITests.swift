@@ -38,10 +38,12 @@ struct FilesAPITests {
         let recorder = Recorder()
         let body = ##"{"conflict":true,"current":{"path":"/d/plan.md","content":"# Newer\n","revision":"r2"}}"##
         let result = try await api(status: 409, body: body, recorder: recorder)
-            .saveFile(Self.session, businessID: "b", path: "/d/plan.md", content: "# Mine\n", expectedRevision: "r1")
+            .saveFile(Self.session, businessID: "b", edit: HandEdit(work: "w1", path: "/d/plan.md"), content: "# Mine\n", expectedRevision: "r1")
         #expect(result == .conflict(FileText(path: "/d/plan.md", content: "# Newer\n", revision: "r2")))
         let sent = try #require(try await recorder.requests.last?.httpBody.flatMap { try JSONSerialization.jsonObject(with: $0) as? [String: Any] })
         #expect(sent["expected_revision"] as? String == "r1")
+        // A save by hand names the work item the owner has taken over.
+        #expect(sent["work"] as? String == "w1")
     }
 
     @Test("Bytes come with their revision and save over it; a derived copy overwrites")
@@ -51,18 +53,18 @@ struct FilesAPITests {
             .fileBytes(Self.session, businessID: "b", path: "/d/budget.xlsx")
         #expect(read == FileBytes(data: Data("PK".utf8), revision: "r1"))
         let saved = try await api(body: ##"{"path":"/d/budget.xlsx","revision":"r2"}"##, recorder: recorder)
-            .saveFileBytes(Self.session, businessID: "b", path: "/d/budget.xlsx", data: Data("PK2".utf8), expected: .revision("r1"))
+            .saveFileBytes(Self.session, businessID: "b", edit: HandEdit(work: "w1", path: "/d/budget.xlsx"), data: Data("PK2".utf8), expected: .revision("r1"))
         #expect(saved == .saved(revision: "r2"))
         let request = try #require(await recorder.requests.last)
         #expect(request.httpMethod == "PUT")
         #expect(request.httpBody == Data("PK2".utf8))
-        #expect(request.url?.query == "path=/d/budget.xlsx&expected_revision=r1")
+        #expect(request.url?.query == "path=/d/budget.xlsx&work=w1&expected_revision=r1")
         let stale = try await api(status: 409, body: ##"{"conflict":true}"##, recorder: recorder)
-            .saveFileBytes(Self.session, businessID: "b", path: "/d/budget.xlsx", data: Data(), expected: .revision("r1"))
+            .saveFileBytes(Self.session, businessID: "b", edit: HandEdit(work: "w1", path: "/d/budget.xlsx"), data: Data(), expected: .revision("r1"))
         #expect(stale == .conflict(nil))
         _ = try await api(body: ##"{"path":"/d/deck.pptx","revision":"r3"}"##, recorder: recorder)
-            .saveFileBytes(Self.session, businessID: "b", path: "/d/deck.pptx", data: Data(), expected: .overwrite)
-        #expect(await recorder.requests.last?.url?.query == "path=/d/deck.pptx")
+            .saveFileBytes(Self.session, businessID: "b", edit: HandEdit(work: "w1", path: "/d/deck.pptx"), data: Data(), expected: .overwrite)
+        #expect(await recorder.requests.last?.url?.query == "path=/d/deck.pptx&work=w1")
     }
 
     @Test("Comments carry their anchors; paths are encoded in the query")

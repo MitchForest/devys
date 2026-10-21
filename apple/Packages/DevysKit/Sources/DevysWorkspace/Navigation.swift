@@ -116,9 +116,6 @@ package struct LayerReference: Equatable, Sendable {
         self.title = title
         self.ref = ref
     }
-
-    /// The line appended to a message sent while the layer is open.
-    package var line: String { "\n\n_Viewing: \(title)\(ref.map { " (\($0))" } ?? "")_" }
 }
 
 /// Work by where it stands, as a project's overview groups it.

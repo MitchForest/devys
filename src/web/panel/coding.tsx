@@ -1,17 +1,20 @@
 import { Code2, SquareTerminal } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { lazy, Suspense, useState } from "react";
+import { useState } from "react";
+import { ref } from "../../protocol/ref.ts";
 import { api } from "../app/api.ts";
 import type { LiveCodingSession } from "../../apps/code/contract.ts";
 import type { WorkItem } from "../../work/contract.ts";
-import { openTerminalWindow } from "./terminal-window.tsx";
-import { useBusinessId, useEmployees, useWork } from "../app/data.ts";
+import { openTerminalWindow } from "../shell/terminal-window.tsx";
+import { useBusinessId, useEmployees } from "../app/data.ts";
 import { useNav } from "../app/navigation.ts";
 import { keys, poll, problemOf } from "../app/query.ts";
-import { DevysButton } from "../design/buttons.tsx";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusChip, type Tone } from "../design/primitives.tsx";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 
 export const providerName = (provider: LiveCodingSession["provider"]) =>
   provider === "codex" ? "Codex" : "Claude Code";
@@ -24,9 +27,6 @@ export const stateChip: Record<LiveCodingSession["state"], { tone: Tone; title: 
   unavailable: { tone: "waiting", title: "Mac host unavailable" },
 };
 
-// The session view carries the diff renderer and its highlighter; load it when opened.
-const SessionView = lazy(() => import("./session.tsx"));
-
 /** The "3 files changed, …" line of a diff stat. */
 const changeLine = (diffStat: string) =>
   diffStat
@@ -35,7 +35,7 @@ const changeLine = (diffStat: string) =>
     ?.trim() ?? (diffStat ? `${diffStat.split("\n").length} files changed` : "No changes yet");
 
 /** Polls a work item's coding sessions while it is shown; the provider is the source. */
-function useSessions(businessId: string, workId: string) {
+export function useSessions(businessId: string, workId: string) {
   return useQuery({
     queryKey: keys.sessions(businessId, workId),
     queryFn: () => api.codingSessions(businessId, workId),
@@ -55,13 +55,13 @@ export function CodingSessions({ item }: { item: WorkItem }) {
       <div className="flex items-center gap-2">
         <span className="text-label font-medium text-ink-3">Coding · {sessions.length}</span>
         {sessions.some((session) => session.purpose === "build") && (
-          <DevysButton
-            kind="quiet"
-            compact
+          <Button
+            variant="quiet"
+            size="compact"
             onClick={() => void openTerminalWindow(businessId, { work: item.id })}
           >
             <SquareTerminal /> Open terminal
-          </DevysButton>
+          </Button>
         )}
       </div>
       {sessions.map((session) => {
@@ -71,9 +71,9 @@ export function CodingSessions({ item }: { item: WorkItem }) {
             key={session.id}
             type="button"
             onClick={() =>
-              nav.openLayer({ kind: "session", workId: item.id, sessionId: session.id })
+              nav.openLayer({ kind: "record", ref: ref("code", "session", session.id) })
             }
-            className="flex items-center gap-2 rounded-[8px] px-2 py-1.5 text-left hover:bg-sheet-tint"
+            className="flex items-center gap-2 rounded-small px-2 py-1.5 text-left hover:bg-sheet-tint"
           >
             <Code2 className="size-4 shrink-0 text-ink-3" />
             <span className="flex min-w-0 flex-col">
@@ -94,26 +94,6 @@ export function CodingSessions({ item }: { item: WorkItem }) {
         );
       })}
     </div>
-  );
-}
-
-/** One coding session as a layer, read live from its work item's sessions. */
-export function SessionLayer({ workId, sessionId }: { workId: string; sessionId: string }) {
-  const businessId = useBusinessId();
-  const sessions = useSessions(businessId, workId);
-  const item = useWork().data?.find((w) => w.id === workId);
-  const session = sessions.data?.find((each) => each.id === sessionId);
-  if (sessions.isError)
-    return (
-      <p role="alert" className="p-4 text-body text-ink-3">
-        {problemOf(sessions.error, "This coding session is unavailable.")}
-      </p>
-    );
-  if (!item || !session) return <p className="p-4 text-body text-ink-3">Loading…</p>;
-  return (
-    <Suspense fallback={null}>
-      <SessionView item={item} session={session} onChanged={() => void sessions.refetch()} />
-    </Suspense>
   );
 }
 
@@ -156,8 +136,6 @@ export function NewCodingSession({ open, onClose }: { open: boolean; onClose: ()
       ? starting.error.message
       : "The session couldn't start."
     : null;
-  const field =
-    "rounded-[8px] bg-sheet-tint px-2.5 py-1.5 text-body text-ink outline-none focus-visible:ring-2 focus-visible:ring-indigo/40";
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
       <DialogContent className="sm:max-w-lg">
@@ -165,27 +143,24 @@ export function NewCodingSession({ open, onClose }: { open: boolean; onClose: ()
         <div className="flex flex-col gap-3">
           <label className="flex flex-col gap-1 text-detail text-ink-3">
             Coding agent
-            <select
-              className={field}
+            <NativeSelect
               value={provider}
               onChange={(e) => setProvider(e.target.value as "codex" | "claude")}
             >
               <option value="codex">Codex</option>
               <option value="claude">Claude Code</option>
-            </select>
+            </NativeSelect>
           </label>
           <label className="flex flex-col gap-1 text-detail text-ink-3">
             Repository
-            <select
-              className={field}
+            <NativeSelect
               value={where}
               onChange={(e) => setWhere(e.target.value as "existing" | "new")}
             >
               <option value="existing">An existing repository on the Mac</option>
               <option value="new">A new, empty repository</option>
-            </select>
-            <input
-              className={field}
+            </NativeSelect>
+            <Input
               aria-label={where === "existing" ? "Repository path" : "New repository name"}
               placeholder={where === "existing" ? "/Users/you/Code/project" : "my-app"}
               value={repository}
@@ -202,25 +177,21 @@ export function NewCodingSession({ open, onClose }: { open: boolean; onClose: ()
           </label>
           <label className="flex flex-col gap-1 text-detail text-ink-3">
             Hand it to, when you hand back
-            <select
-              className={field}
-              value={employee}
-              onChange={(e) => setEmployee(e.target.value)}
-            >
+            <NativeSelect value={employee} onChange={(e) => setEmployee(e.target.value)}>
               {employees.map((e) => (
                 <option key={e.id} value={e.id}>
                   {e.name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </label>
           {error && <span className="text-detail text-ink-2">{error}</span>}
-          <DevysButton
+          <Button
             disabled={!objective.trim() || !repository.trim()}
             onClick={() => starting.mutate()}
           >
             Start session
-          </DevysButton>
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
@@ -246,9 +217,9 @@ export function Terminals() {
         {terminals.length > 0 && (
           <span className="text-label font-medium text-ink-3">Terminals · {terminals.length}</span>
         )}
-        <DevysButton
-          kind="quiet"
-          compact
+        <Button
+          variant="quiet"
+          size="compact"
           onClick={() =>
             void openTerminalWindow(businessId, {}).catch((cause: unknown) =>
               setError(cause instanceof Error ? cause.message : "The terminal couldn't open."),
@@ -256,7 +227,7 @@ export function Terminals() {
           }
         >
           <SquareTerminal /> New terminal
-        </DevysButton>
+        </Button>
       </div>
       {error && <span className="text-detail text-ink-2">{error}</span>}
       {terminals.map((terminal) => (
@@ -265,7 +236,7 @@ export function Terminals() {
           href={`/terminal/${businessId}/${terminal.id}`}
           target="_blank"
           rel="noopener"
-          className="flex items-center gap-2 rounded-[8px] px-2 py-1.5 text-detail text-ink hover:bg-sheet-tint"
+          className="flex items-center gap-2 rounded-small px-2 py-1.5 text-detail text-ink hover:bg-sheet-tint"
         >
           <SquareTerminal className="size-4 text-ink-3" />
           <span className="truncate">{terminal.title}</span>

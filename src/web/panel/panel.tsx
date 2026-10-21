@@ -1,16 +1,15 @@
 import { ChevronLeft, Maximize2, Minimize2, X } from "lucide-react";
 import type { ReactNode } from "react";
-import { useArtifactName } from "../app/data.ts";
-import { layerOfRef, layerReference, useLayers, useNav, usePlace } from "../app/navigation.ts";
+import { refOfLayer, useLayers, useNav, usePlace } from "../app/navigation.ts";
 import { ui, useUi } from "../app/ui.ts";
 import { usePanel } from "../shell/panel-state.ts";
-import { ToolbarIconButton } from "../design/buttons.tsx";
 import { Desk } from "./desk.tsx";
 import { NeedsYou } from "./home.tsx";
 import { KeepInProject } from "./keep.tsx";
-import { LayerView } from "./layers.tsx";
+import { isKeepable, LayerView, useLayerTitle } from "./layers/registry.tsx";
 import { Overview } from "./overview.tsx";
 import { WorkCard } from "./work-card.tsx";
+import { ToolbarIconButton } from "@/components/ui/button";
 
 /**
  * The right panel: the permanent view of what the conversation is about, with temporary
@@ -21,10 +20,10 @@ export function RightPanel({ onClose }: { onClose?: () => void }) {
   const place = usePlace();
   const nav = useNav();
   const panel = usePanel();
-  const artifact = useArtifactName();
   const wide = useUi((state) => state.wide);
+  const title = useLayerTitle(top);
   if (top) {
-    const { title, ref } = layerReference(top, { artifact });
+    const ref = refOfLayer(top);
     return (
       <section aria-label={title} className="flex h-full flex-col">
         <PanelHeader
@@ -36,7 +35,7 @@ export function RightPanel({ onClose }: { onClose?: () => void }) {
           }}
           closeLabel="Close (back to the panel)"
         >
-          {ref && layerOfRef(ref) && <KeepInProject record={ref} />}
+          {ref && isKeepable(ref) && <KeepInProject record={ref} />}
           {!onClose && (
             <ToolbarIconButton label={wide ? "Narrow" : "Widen"} onClick={ui.toggleWide}>
               {wide ? <Minimize2 /> : <Maximize2 />}

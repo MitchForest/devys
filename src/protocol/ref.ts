@@ -12,6 +12,8 @@ export const refKinds = {
 
 type RefApp = keyof typeof refKinds;
 type RefKind<A extends RefApp = RefApp> = (typeof refKinds)[A][number];
+/** A record kind as `<app>/<kind>`: what a client keys its record views by. */
+export type RecordKind = { [A in RefApp]: `${A}/${RefKind<A>}` }[RefApp];
 
 /** A ref taken apart: its app, its kind and its (decoded) id. */
 type RefParts = { [A in RefApp]: { app: A; kind: RefKind<A>; id: string } }[RefApp];

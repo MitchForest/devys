@@ -202,7 +202,11 @@ it("every route the clients read answers in its wire schema; the golden files ma
       source: "wire-fixture",
     }),
   );
-  // Work moving: the site's work item is in progress.
+  // Work moving: the site's work item is in progress. The owner changes work by hand only
+  // while it is taken over; set directly so the revisions in the files stay as they were.
+  const handling = (id: string, by: string | null) =>
+    sql.run("UPDATE work_items SET taken_over_by = $2 WHERE id = $1", [id, by]);
+  await handling(site.id, person);
   const moving = (await (
     await call(`${at}/work/${site.id}`, "POST", {
       expected_revision: site.revision + 1,
@@ -210,6 +214,7 @@ it("every route the clients read answers in its wire schema; the golden files ma
     })
   ).json()) as { state: string };
   expect(moving.state).toBe("in_progress");
+  await handling(site.id, null);
   const supplier = await keep(
     "work-item-updated",
     WorkItem,
@@ -220,6 +225,7 @@ it("every route the clients read answers in its wire schema; the golden files ma
     }).then(async (created) => {
       const item = (await created.json()) as { id: string; revision: number };
       register(item.id);
+      await handling(item.id, person);
       return call(`${at}/work/${item.id}`, "POST", {
         expected_revision: item.revision,
         state: "waiting",
@@ -227,6 +233,7 @@ it("every route the clients read answers in its wire schema; the golden files ma
       });
     }),
   );
+  await handling(supplier.id, null);
 
   // A decision the owner is asked for, on the supplier's work item.
   const create = capabilities(bindings).find((item) => item.name === "driveCreate")!;

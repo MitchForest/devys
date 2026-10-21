@@ -17,7 +17,8 @@ const edits = /^(sheet\.command\.|univer\.command\.(undo|redo)$)/;
 const viewOnly = /activate|zoom|scroll|select|copy|auto-height|set-cell-edit-visible/;
 
 /**
- * Edits a spreadsheet. `onChange` fires on the first edit after `version` and hands over a
+ * Shows a spreadsheet, editable unless `readOnly` (layers are read-only until the owner takes the
+ * work over; Univer's workbook permission refuses edits). `onChange` fires on the first edit after `version` and hands over a
  * function that writes the current sheet as file bytes, so nothing serialises per keystroke.
  */
 export function SheetEditor({
@@ -25,17 +26,21 @@ export function SheetEditor({
   name,
   version,
   dark,
+  readOnly = false,
   onChange,
 }: {
   bytes: ArrayBuffer;
   name: string;
   version: string;
   dark: boolean;
+  readOnly?: boolean;
   onChange: (serialize: () => ArrayBuffer) => void;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const changed = useRef(onChange);
   changed.current = onChange;
+  const locked = useRef(readOnly);
+  locked.current = readOnly;
   const [problem, setProblem] = useState(false);
   const [api, setApi] = useState<ReturnType<typeof createUniver>["univerAPI"] | null>(null);
   const darkAtStart = useRef(dark);
@@ -55,11 +60,11 @@ export function SheetEditor({
       darkMode: darkAtStart.current,
       presets: [UniverSheetsCorePreset({ container: root.current, header: true, footer: {} })],
     });
-    univerAPI.createWorkbook(toUniver(book, `devys-${version}`));
+    univerAPI.createWorkbook(toUniver(book, `devys-${version}`)).setEditable(!locked.current);
     const format = sheetFormat(name);
     const serialize = () => fromUniver(univerAPI.getActiveWorkbook()!.save(), format);
     const listener = univerAPI.addEvent(univerAPI.Event.CommandExecuted, (event) => {
-      if (event.type === 0 && edits.test(event.id) && !viewOnly.test(event.id))
+      if (!locked.current && event.type === 0 && edits.test(event.id) && !viewOnly.test(event.id))
         changed.current(serialize);
     });
     setApi(univerAPI);
@@ -71,6 +76,7 @@ export function SheetEditor({
     };
   }, [bytes, name, version]);
   useEffect(() => api?.toggleDarkMode(dark), [api, dark]);
+  useEffect(() => void api?.getActiveWorkbook()?.setEditable(!readOnly), [api, readOnly]);
   if (problem)
     return <p className="p-4 text-body text-ink-2">This spreadsheet couldn't be read.</p>;
   return (

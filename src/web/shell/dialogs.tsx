@@ -7,14 +7,18 @@ import { useCreateProject, useCreateWorkItem, useHire } from "../app/mutations.t
 import { accessTitle } from "../app/names.ts";
 import { problemOf } from "../app/query.ts";
 import { ui, useUi, type WorkItemDefaults } from "../app/ui.ts";
-import { DevysButton } from "../design/buttons.tsx";
-import { Field, fieldClass } from "../design/fields.tsx";
 import { ModelPicker, perTurn } from "../design/model-picker.tsx";
 import { Spinner } from "../design/spinner.tsx";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { ProjectFields } from "../panel/overview.tsx";
+import { EmployeePortrait } from "../design/portrait.tsx";
+import type { ProjectChange } from "../../work/contract.ts";
+import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Textarea } from "@/components/ui/textarea";
 
 /**
  * Hiring: choose a role template, adjust its name, responsibilities and model, see the
@@ -133,8 +137,7 @@ function HireForm() {
             }}
           >
             <Field label="Name">
-              <input
-                className={fieldClass}
+              <Input
                 value={name}
                 maxLength={80}
                 placeholder="What they're called"
@@ -142,8 +145,8 @@ function HireForm() {
               />
             </Field>
             <Field label="Responsibilities" hint="Every turn starts from these.">
-              <textarea
-                className={cn(fieldClass, "min-h-36 resize-y leading-[1.4]")}
+              <Textarea
+                className="min-h-36 resize-y leading-[1.4]"
                 value={responsibilities}
                 maxLength={2000}
                 placeholder="What they're accountable for, and how they work"
@@ -170,9 +173,9 @@ function HireForm() {
                     value={chosenModel}
                     onChange={setModel}
                     trigger={
-                      <DevysButton kind="quiet" compact aria-label="Choose model">
+                      <Button variant="quiet" size="compact" aria-label="Choose model">
                         Change <ChevronDown />
-                      </DevysButton>
+                      </Button>
                     }
                   />
                 )}
@@ -197,14 +200,14 @@ function HireForm() {
                 {error}
               </p>
             )}
-            <DevysButton
-              kind="aurora"
+            <Button
+              variant="aurora"
               type="submit"
               disabled={busy || !name.trim() || !responsibilities.trim()}
               className="self-start"
             >
               <UserPlus /> {busy ? "Hiring…" : "Hire"}
-            </DevysButton>
+            </Button>
           </form>
         )}
       </div>
@@ -269,9 +272,8 @@ function NewWorkItemForm({ defaults }: { defaults: WorkItemDefaults }) {
     >
       <DialogTitle className="text-heading font-semibold text-ink">New work item</DialogTitle>
       <Field label="Title">
-        <input
+        <Input
           autoFocus
-          className={fieldClass}
           value={title}
           maxLength={200}
           placeholder="Something the business owes"
@@ -280,30 +282,21 @@ function NewWorkItemForm({ defaults }: { defaults: WorkItemDefaults }) {
       </Field>
       <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
         <Field label="Owner">
-          <select
-            className={fieldClass}
-            value={owner}
-            onChange={(event) => setOwner(event.target.value)}
-          >
+          <NativeSelect value={owner} onChange={(event) => setOwner(event.target.value)}>
             {employees.map((employee) => (
               <option key={employee.id} value={employee.id}>
                 {employee.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         <Field label="Due">
-          <input
-            type="date"
-            className={fieldClass}
-            value={due}
-            onChange={(event) => setDue(event.target.value)}
-          />
+          <Input type="date" value={due} onChange={(event) => setDue(event.target.value)} />
         </Field>
       </div>
       <Field label="Objective">
-        <textarea
-          className={cn(fieldClass, "min-h-20 resize-y leading-[1.4]")}
+        <Textarea
+          className="min-h-20 resize-y leading-[1.4]"
           value={objective}
           maxLength={4000}
           placeholder="What done looks like"
@@ -311,18 +304,14 @@ function NewWorkItemForm({ defaults }: { defaults: WorkItemDefaults }) {
         />
       </Field>
       <Field label="Project">
-        <select
-          className={fieldClass}
-          value={projectId}
-          onChange={(event) => setProjectId(event.target.value)}
-        >
+        <NativeSelect value={projectId} onChange={(event) => setProjectId(event.target.value)}>
           <option value="">No project</option>
           {(projects ?? []).map((project) => (
             <option key={project.id} value={project.id}>
               {project.name}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </Field>
       {error && (
         <p role="alert" className="text-detail text-red">
@@ -330,12 +319,12 @@ function NewWorkItemForm({ defaults }: { defaults: WorkItemDefaults }) {
         </p>
       )}
       <div className="flex justify-end gap-2 pt-1">
-        <DevysButton kind="quiet" onClick={ui.closeNewWorkItem}>
+        <Button variant="quiet" onClick={ui.closeNewWorkItem}>
           Cancel
-        </DevysButton>
-        <DevysButton kind="aurora" type="submit" disabled={busy || !title.trim() || !owner}>
+        </Button>
+        <Button variant="aurora" type="submit" disabled={busy || !title.trim() || !owner}>
           {busy ? "Creating…" : "Create work item"}
-        </DevysButton>
+        </Button>
       </div>
     </form>
   );
@@ -351,8 +340,6 @@ export function NewProjectDialog() {
         <DialogTitle className="text-heading font-semibold text-ink">New project</DialogTitle>
         {projectOpen && (
           <ProjectFields
-            initial={{}}
-            submitLabel="Create project"
             cancel={() => ui.setProjectOpen(false)}
             submit={(project) => {
               const name = project.name.trim().slice(0, 80);
@@ -366,5 +353,138 @@ export function NewProjectDialog() {
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Name, goal, deadline, budget, lead and team, created as one project. */
+function ProjectFields({
+  submit,
+  cancel,
+}: {
+  submit: (project: ProjectChange & { name: string }) => Promise<boolean>;
+  cancel: () => void;
+}) {
+  const employees = useEmployees();
+  const operations = useOperations();
+  const [name, setName] = useState("");
+  const [goal, setGoal] = useState("");
+  const [deadline, setDeadline] = useState("");
+  const [budget, setBudget] = useState("");
+  const [lead, setLead] = useState(operations?.id ?? "");
+  const [members, setMembers] = useState<readonly string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const amount = Number(budget);
+  return (
+    <form
+      className="flex flex-col gap-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!name.trim()) return;
+        setBusy(true);
+        setError(undefined);
+        void submit({
+          name: name.trim(),
+          goal: goal.trim() || null,
+          deadline: deadline || null,
+          budget:
+            budget && Number.isFinite(amount) && amount >= 0
+              ? { cents: Math.round(amount * 100), currency: "USD" }
+              : null,
+          ...(lead ? { lead } : {}),
+          members,
+        })
+          .then((ok) => (ok ? cancel() : setError("That couldn't be saved.")))
+          .finally(() => setBusy(false));
+      }}
+      onKeyDown={(event) => event.key === "Escape" && cancel()}
+    >
+      <Field label="Name">
+        <Input
+          autoFocus
+          value={name}
+          maxLength={80}
+          placeholder="Launch"
+          onChange={(event) => setName(event.target.value)}
+        />
+      </Field>
+      <Field label="Goal">
+        <Textarea
+          className="min-h-16 resize-y leading-[1.4]"
+          value={goal}
+          maxLength={500}
+          placeholder="What done looks like (optional)"
+          onChange={(event) => setGoal(event.target.value)}
+        />
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Deadline">
+          <Input
+            type="date"
+            value={deadline}
+            onChange={(event) => setDeadline(event.target.value)}
+          />
+        </Field>
+        <Field label="Budget">
+          <Input
+            inputMode="decimal"
+            value={budget}
+            placeholder="None"
+            onChange={(event) => setBudget(event.target.value.replace(/[^0-9.]/g, ""))}
+          />
+        </Field>
+      </div>
+      <Field label="Lead">
+        <NativeSelect value={lead} onChange={(event) => setLead(event.target.value)}>
+          {employees.map((employee) => (
+            <option key={employee.id} value={employee.id}>
+              {employee.name}
+            </option>
+          ))}
+        </NativeSelect>
+      </Field>
+      <Field label="Team">
+        <div className="flex flex-wrap gap-1.5">
+          {employees
+            .filter((employee) => employee.id !== lead)
+            .map((employee) => {
+              const on = members.includes(employee.id);
+              return (
+                <button
+                  key={employee.id}
+                  type="button"
+                  aria-label={employee.name}
+                  aria-pressed={on}
+                  onClick={() =>
+                    setMembers(
+                      on ? members.filter((id) => id !== employee.id) : [...members, employee.id],
+                    )
+                  }
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-full py-0.5 pr-2.5 pl-0.5 text-caption transition-colors",
+                    on ? "bg-ink text-sheet" : "bg-sheet-tint text-ink-2 hover:text-ink",
+                  )}
+                >
+                  <EmployeePortrait employee={employee} size={18} />
+                  {employee.name}
+                </button>
+              );
+            })}
+        </div>
+      </Field>
+      {error && (
+        <p role="alert" className="text-detail text-red">
+          {error}
+        </p>
+      )}
+      <div className="flex justify-end gap-2">
+        <Button variant="quiet" onClick={cancel}>
+          Cancel
+        </Button>
+        <Button variant="aurora" type="submit" disabled={busy || !name.trim()}>
+          {busy ? "Creating…" : "Create project"}
+        </Button>
+      </div>
+    </form>
   );
 }

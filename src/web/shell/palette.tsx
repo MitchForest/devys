@@ -100,7 +100,7 @@ export function CommandPalette() {
                 key={target.id}
                 value={`${target.title} ${target.detail} ${target.id}`}
                 onSelect={() => go(target.go)}
-                className="gap-3 rounded-[9px] px-3 py-2 text-control text-ink data-[selected=true]:bg-sheet-tint [&>svg:last-child]:hidden"
+                className="gap-3 rounded-small px-3 py-2 text-control text-ink data-[selected=true]:bg-sheet-tint [&>svg:last-child]:hidden"
               >
                 <target.icon className="size-4 w-5 text-ink-2" />
                 <span>{target.title}</span>

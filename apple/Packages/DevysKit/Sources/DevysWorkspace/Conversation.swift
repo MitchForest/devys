@@ -11,11 +11,13 @@ package struct PendingMessage: Equatable, Sendable, Identifiable {
     package var replyTo: String?
     package var mentions: [String] = []
     package var viaVoice = false
+    /// The record on screen as it was sent, as the message's ref.
+    package var ref: Ref?
     package var delivery: Delivery = .sending
 
     package var failed: Bool { delivery == .failed }
     package var outgoing: NewMessage {
-        NewMessage(id: id, text: text, replyTo: replyTo, mentions: mentions, viaVoice: viaVoice)
+        NewMessage(id: id, text: text, replyTo: replyTo, mentions: mentions, viaVoice: viaVoice, ref: ref)
     }
 }
 

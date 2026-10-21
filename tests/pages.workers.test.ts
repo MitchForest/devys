@@ -3,12 +3,12 @@ import { Effect } from "effect";
 import { expect, it } from "vitest";
 import type { Env } from "../infra/api.ts";
 import { artifactCapabilities } from "../src/apps/documents/capabilities.ts";
-import { artifactText } from "../src/apps/documents/service.ts";
+import { artifactText, listArtifacts } from "../src/apps/documents/service.ts";
 import { browserCapabilities } from "../src/browser/capabilities.ts";
 import type { Browser } from "../src/browser/contract.ts";
 import { Invocation } from "../src/protocol/capability.ts";
 import { parseRef } from "../src/protocol/ref.ts";
-import { business } from "./fixtures/postgres.ts";
+import { business, sql } from "./fixtures/postgres.ts";
 
 const bindings = env as unknown as Env;
 const as = (
@@ -113,4 +113,26 @@ it("browser actions name the work they serve, so the owner sees the browser ther
     { method: "open", driver: "work-7" },
     { method: "read", driver: "direct:e" },
   ]);
+});
+
+it("artifacts carry their title and their version among pages of the same name", async () => {
+  const { business: acme } = await business("Versions");
+  const add = (filename: string, at: string) => {
+    const id = crypto.randomUUID();
+    return sql
+      .run(
+        `INSERT INTO artifacts (id, business_id, operation_id, object_key, filename, content_type, byte_length, created_at)
+         VALUES ($1, $2, $1, $1, $3, 'text/html', 1, $4)`,
+        [id, acme.id, filename, at],
+      )
+      .then(() => id);
+  };
+  const first = await add("Launch plan.html", "2026-10-01T00:00:00Z");
+  const second = await add("Launch plan.html", "2026-10-02T00:00:00Z");
+  const other = await add("notes.md", "2026-10-03T00:00:00Z");
+  const listed = await Effect.runPromise(listArtifacts(bindings.HYPERDRIVE, acme.id));
+  const of = (id: string) => listed.find((a) => a.id === id);
+  expect(of(first)).toMatchObject({ title: "Launch plan", version: 1, versions: 2 });
+  expect(of(second)).toMatchObject({ title: "Launch plan", version: 2, versions: 2 });
+  expect(of(other)).toMatchObject({ title: "notes.md", version: 1, versions: 1 });
 });

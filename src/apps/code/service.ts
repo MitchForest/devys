@@ -106,6 +106,16 @@ export const codedWork = (db: Database, businessId: string) =>
     ).map((row) => row.work_item_id),
   );
 
+/** The business's started coding sessions and the work item each belongs to, newest first. */
+export const startedSessions = (db: Database, businessId: string) =>
+  database(db, (sql) =>
+    sql.rows<{ id: string; work_item_id: string }>(
+      `SELECT id, work_item_id FROM coding_sessions
+       WHERE business_id = $1 AND provider_session_id IS NOT NULL ORDER BY created_at DESC`,
+      [businessId],
+    ),
+  );
+
 /** Whether the business has any coding session: the Code app has records to show. */
 export const hasCodingSessions = (db: Database, businessId: string) =>
   database(db, async (sql) =>

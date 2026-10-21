@@ -73,7 +73,7 @@ export function Sidebar() {
           aria-label="Search"
           title="Search (⌘K)"
           onClick={() => ui.setPaletteOpen(true)}
-          className="grid size-7 place-items-center rounded-[8px] text-ink-2 hover:bg-track hover:text-ink"
+          className="grid size-7 place-items-center rounded-small text-ink-2 hover:bg-track hover:text-ink"
         >
           <Search className="size-[15px]" strokeWidth={2} />
         </button>
@@ -91,7 +91,7 @@ function NewMenu() {
       <DropdownMenuTrigger
         aria-label="New"
         title="New"
-        className="grid size-7 place-items-center rounded-[8px] text-ink-2 hover:bg-track hover:text-ink"
+        className="grid size-7 place-items-center rounded-small text-ink-2 hover:bg-track hover:text-ink"
       >
         <Plus className="size-4" strokeWidth={2} />
       </DropdownMenuTrigger>
@@ -110,55 +110,67 @@ function NewMenu() {
   );
 }
 
-/** The sections, also the phone's lists. Headings appear only when they have rows. */
-export function SidebarSections() {
+/** The apps the sidebar lists: installed ones that have something, pinned by the owner. */
+export const useShownApps = () => (useApps().data ?? []).filter((app) => app.visible && app.pinned);
+
+/**
+ * The sections, also the phone's lists: the sidebar shows all of them; a phone tab shows one
+ * (`only`). Headings appear only when they have rows.
+ */
+export function SidebarSections({ only }: { only?: "projects" | "team" }) {
   const employees = useEmployees();
   const operations = useOperations();
   const projects = useProjects().data ?? [];
   const needsYou = useHome().data?.needs_you.length ?? 0;
   const homeUnread = useUnread(operations ? `direct:${operations.id}` : undefined);
   const threads = useNestedThreads();
-  const shownApps = (useApps().data ?? []).filter((app) => app.visible && app.pinned);
+  const shownApps = useShownApps();
+  const all = only === undefined;
   return (
     <div className="flex flex-col gap-0.5">
-      <PlaceRow
-        place={{ kind: "home" }}
-        title="Home"
-        icon={House}
-        count={needsYou}
-        unread={homeUnread}
-      />
-      {threads(null).map((item) => (
-        <ThreadRow key={item.id} item={item} />
-      ))}
-      {projects.length > 0 && (
+      {all && (
+        <PlaceRow
+          place={{ kind: "home" }}
+          title="Home"
+          icon={House}
+          count={needsYou}
+          unread={homeUnread}
+        />
+      )}
+      {all && threads(null).map((item) => <ThreadRow key={item.id} item={item} />)}
+      {(all || only === "projects") && projects.length > 0 && (
         <SectionLabel action={{ label: "New project", run: () => ui.setProjectOpen(true) }}>
           Projects
         </SectionLabel>
       )}
-      {projects.map((project, index) => (
-        <div key={project.id} className="flex flex-col gap-0.5">
-          <PlaceRow place={{ kind: "project", id: project.id }} title={project.name}>
-            <BusinessTile name={project.name} tint={projectTint(index)} size={20} />
-          </PlaceRow>
-          {threads(project.id).map((item) => (
-            <ThreadRow key={item.id} item={item} />
-          ))}
-        </div>
-      ))}
-      <SectionLabel action={{ label: "Hire", run: () => ui.setHireOpen(true) }}>Team</SectionLabel>
-      {employees.map((employee) => (
-        <TeamRow key={employee.id} employee={employee} />
-      ))}
-      {shownApps.length > 0 && <SectionLabel>Apps</SectionLabel>}
-      {shownApps.map((app) => (
-        <LayerRow
-          key={app.id}
-          layer={{ kind: "app", app: app.id }}
-          title={app.name}
-          icon={appIcons[app.id] ?? LayoutGrid}
-        />
-      ))}
+      {(all || only === "projects") &&
+        projects.map((project, index) => (
+          <div key={project.id} className="flex flex-col gap-0.5">
+            <PlaceRow place={{ kind: "project", id: project.id }} title={project.name}>
+              <BusinessTile name={project.name} tint={projectTint(index)} size={20} />
+            </PlaceRow>
+            {threads(project.id).map((item) => (
+              <ThreadRow key={item.id} item={item} />
+            ))}
+          </div>
+        ))}
+      {(all || only === "team") && (
+        <SectionLabel action={{ label: "Hire", run: () => ui.setHireOpen(true) }}>
+          Team
+        </SectionLabel>
+      )}
+      {(all || only === "team") &&
+        employees.map((employee) => <TeamRow key={employee.id} employee={employee} />)}
+      {all && shownApps.length > 0 && <SectionLabel>Apps</SectionLabel>}
+      {all &&
+        shownApps.map((app) => (
+          <LayerRow
+            key={app.id}
+            layer={{ kind: "app", app: app.id }}
+            title={app.name}
+            icon={appIcons[app.id] ?? LayoutGrid}
+          />
+        ))}
     </div>
   );
 }
@@ -231,7 +243,7 @@ function SectionLabel({
 
 const rowClass = (selected: boolean, unread: boolean) =>
   cn(
-    "flex w-full items-center gap-2.5 rounded-[9px] px-2.5 py-[7px] text-left text-control transition-[color,background-color,box-shadow] duration-200",
+    "flex w-full items-center gap-2.5 rounded-small px-2.5 py-[7px] text-left text-control transition-[color,background-color,box-shadow] duration-200",
     selected ? "bg-sheet text-ink shadow-resting" : "text-ink-2 hover:text-ink",
     unread && !selected && "font-semibold text-ink",
   );

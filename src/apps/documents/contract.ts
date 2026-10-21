@@ -5,9 +5,15 @@ import { Timestamp } from "../../protocol/time.ts";
 export const Artifact = Schema.Struct({
   id: Schema.String,
   filename: Schema.String,
+  /** What it is called: its filename without `.html`. */
+  title: Schema.String,
   content_type: Schema.String,
   byte_length: Schema.Number,
   created_at: Timestamp,
+  /** Its place among the artifacts published under the same filename, from 1, oldest first. */
+  version: Schema.Int,
+  /** How many artifacts the business has published under this filename. */
+  versions: Schema.Int,
 });
 export type Artifact = typeof Artifact.Type;
 

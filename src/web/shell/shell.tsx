@@ -12,7 +12,6 @@ import {
 import { Link } from "@tanstack/react-router";
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
-  useApps,
   useBusiness,
   useBusinesses,
   useBusinessId,
@@ -34,17 +33,16 @@ import {
 } from "../app/navigation.ts";
 import { ui, uiState, useUi } from "../app/ui.ts";
 import { useStatus, isRunning } from "../app/data.ts";
-import { ToolbarIconButton } from "../design/buttons.tsx";
 import { PersonPortrait } from "../design/face.tsx";
 import { BusinessPortrait, EmployeePortrait } from "../design/portrait.tsx";
 import { RightPanel } from "../panel/panel.tsx";
 import { ConversationPane } from "./conversation.tsx";
 import { PanelContext, usePanel } from "./panel-state.ts";
-import { defaultPanel, layout, panelRange, sidebarWidth } from "./layout.ts";
+import { compactQuery, defaultPanel, layout, panelRange, sidebarWidth } from "./layout.ts";
 import { HireSheet, NewProjectDialog, NewWorkItemDialog } from "./dialogs.tsx";
 import { CommandPalette } from "./palette.tsx";
 import { Settings } from "./settings.tsx";
-import { Sidebar, SidebarSections } from "./sidebar.tsx";
+import { Sidebar, SidebarSections, useShownApps } from "./sidebar.tsx";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,6 +54,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { ToolbarIconButton } from "@/components/ui/button";
 
 function useWidth<T extends HTMLElement>() {
   const ref = useRef<T>(null);
@@ -70,7 +69,7 @@ function useWidth<T extends HTMLElement>() {
 }
 
 function useCompact() {
-  const query = "(max-width: 700px)";
+  const query = compactQuery;
   const [compact, setCompact] = useState(
     () => typeof window !== "undefined" && window.matchMedia(query).matches,
   );
@@ -497,6 +496,7 @@ function CompactShell() {
   const [sheet, setSheet] = useState(false);
   const selected = list ?? tabOf(place);
   const needsYou = useHome().data?.needs_you.length ?? 0;
+  const shownApps = useShownApps();
   const showsSheet = sheet || layers.length > 0;
   const trail = usePlaceTitle(place);
   return (
@@ -569,7 +569,7 @@ function CompactShell() {
               onClick={() => setSheet(true)}
               className="rounded-full bg-amber/15 px-3 py-1 text-caption font-semibold text-amber"
             >
-              {needsYou} need you
+              {needsYou === 1 ? "1 needs you" : `${needsYou} need you`}
             </button>
           )}
           {list === null && place.kind === "home" && operations && (
@@ -583,7 +583,7 @@ function CompactShell() {
             <CompactApps />
           ) : list !== null ? (
             <div onClickCapture={() => setTimeout(() => setList(null))}>
-              <SidebarSections />
+              <SidebarSections only={list === "team" ? "team" : "projects"} />
             </div>
           ) : (
             <StableConversation />
@@ -594,28 +594,30 @@ function CompactShell() {
             aria-label="Tabs"
             className="mx-4 mb-[calc(12px+env(safe-area-inset-bottom))] flex h-[54px] shrink-0 items-center justify-around rounded-full border border-hairline bg-sheet/80 shadow-raised backdrop-blur-xl"
           >
-            {tabs.map(({ value, title, icon: Icon }) => {
-              const active = value === selected;
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  aria-current={active ? "page" : undefined}
-                  onClick={() => {
-                    if (value !== "home") return setList(value);
-                    setList(null);
-                    nav.selectPlace({ kind: "home" });
-                  }}
-                  className={cn(
-                    "flex flex-col items-center gap-0.5 px-3 text-[10px] font-medium",
-                    active ? "text-indigo" : "text-ink-2",
-                  )}
-                >
-                  <Icon className="size-5" strokeWidth={active ? 2.2 : 1.8} />
-                  {title}
-                </button>
-              );
-            })}
+            {tabs
+              .filter(({ value }) => value !== "apps" || shownApps.length > 0)
+              .map(({ value, title, icon: Icon }) => {
+                const active = value === selected;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-current={active ? "page" : undefined}
+                    onClick={() => {
+                      if (value !== "home") return setList(value);
+                      setList(null);
+                      nav.selectPlace({ kind: "home" });
+                    }}
+                    className={cn(
+                      "flex flex-col items-center gap-0.5 px-3 text-[10px] font-medium",
+                      active ? "text-indigo" : "text-ink-2",
+                    )}
+                  >
+                    <Icon className="size-5" strokeWidth={active ? 2.2 : 1.8} />
+                    {title}
+                  </button>
+                );
+              })}
           </nav>
         )}
         <Sheet
@@ -645,25 +647,23 @@ function PlaceFace({ employeeId }: { employeeId: string }) {
   return employee ? <EmployeePortrait employee={employee} size={26} /> : null;
 }
 
-/** The phone's Apps tab: each installed app opens as a sheet over the conversation. */
+/** The phone's Apps tab: the sidebar's apps, each opening as a sheet over the conversation. */
 function CompactApps() {
-  const apps = useApps().data ?? [];
+  const apps = useShownApps();
   const nav = useNav();
   return (
     <div className="flex flex-col gap-0.5 pt-2">
-      {apps
-        .filter((app) => app.visible)
-        .map((app) => (
-          <button
-            key={app.id}
-            type="button"
-            onClick={() => nav.openLayer({ kind: "app", app: app.id })}
-            className="flex items-center gap-3 rounded-[10px] px-2.5 py-2.5 text-left text-control text-ink hover:bg-sheet-tint"
-          >
-            <span className="font-medium">{app.name}</span>
-            <span className="truncate text-detail text-ink-3">{app.summary}</span>
-          </button>
-        ))}
+      {apps.map((app) => (
+        <button
+          key={app.id}
+          type="button"
+          onClick={() => nav.openLayer({ kind: "app", app: app.id })}
+          className="flex items-center gap-3 rounded-control px-2.5 py-2.5 text-left text-control text-ink hover:bg-sheet-tint"
+        >
+          <span className="font-medium">{app.name}</span>
+          <span className="truncate text-detail text-ink-3">{app.summary}</span>
+        </button>
+      ))}
     </div>
   );
 }

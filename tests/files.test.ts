@@ -1,10 +1,23 @@
 import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, expect, it } from "vitest";
+import { Effect } from "effect";
+import { afterAll, expect, it, vi } from "vitest";
 import type { Env } from "../infra/api.ts";
 import { filesRoute } from "../src/app/files.ts";
 import { startHost } from "../src/workspace/host/server.ts";
+
+// Work items, as the files route reads them: the owner ("p") has taken over "mine" only.
+vi.mock("../src/work/service.ts", () => ({
+  workItem: (_db: unknown, _business: string, id: string) =>
+    Effect.succeed(
+      id === "mine"
+        ? { id, taken_over_by: "p" }
+        : id === "theirs"
+          ? { id, taken_over_by: null }
+          : null,
+    ),
+}));
 
 const token = "test-token";
 const home = realpathSync(mkdtempSync(join(tmpdir(), "devys-files-")));
@@ -61,11 +74,22 @@ it("lists the business folder, reads and saves text at a revision, and refuses a
     revision: string;
   };
   expect(read.content).toBe("# Plan\n");
-  const save = (content: string, expectedRevision: string) =>
+  const save = (content: string, expectedRevision: string, work: string | null = "mine") =>
     call("/files/text", {
       method: "PUT",
-      body: JSON.stringify({ path, content, expected_revision: expectedRevision }),
+      body: JSON.stringify({
+        path,
+        content,
+        expected_revision: expectedRevision,
+        ...(work === null ? {} : { work }),
+      }),
     });
+  // Layers are read-only: a save by hand needs a work item the owner has taken over.
+  for (const work of [null, "theirs", "missing"]) {
+    const refused = await save("# Plan\nMine.\n", read.revision, work);
+    expect(refused.status).toBe(409);
+    expect(await refused.text()).toContain("take over the work item");
+  }
   expect((await save("# Plan\nOne.\n", read.revision)).status).toBe(200);
   const stale = await save("# Plan\nTwo.\n", read.revision);
   expect(stale.status).toBe(409);
@@ -83,7 +107,7 @@ it("serves raw bytes with their type, and stays inside the business folder", asy
   const revision = raw.headers.get("x-devys-revision")!;
   const put = (body: string, expected: string) =>
     call(
-      `/files/raw?path=${encodeURIComponent(join(root, "report.pdf"))}&expected_revision=${expected}`,
+      `/files/raw?path=${encodeURIComponent(join(root, "report.pdf"))}&expected_revision=${expected}&work=mine`,
       {
         method: "PUT",
         body,
@@ -93,13 +117,21 @@ it("serves raw bytes with their type, and stays inside the business folder", asy
   expect((await put("%PDF-1.7 stale", revision)).status).toBe(409);
   // A derived export carries no revision and overwrites; "none" only creates.
   const exported = (body: string, query = "") =>
-    call(`/files/raw?path=${encodeURIComponent(join(root, "deck.pptx"))}${query}`, {
+    call(`/files/raw?path=${encodeURIComponent(join(root, "deck.pptx"))}&work=mine${query}`, {
       method: "PUT",
       body,
     });
   expect((await exported("one", "&expected_revision=none")).status).toBe(200);
   expect((await exported("two", "&expected_revision=none")).status).toBe(409);
   expect((await exported("three")).status).toBe(200);
+  expect(
+    (
+      await call(`/files/raw?path=${encodeURIComponent(join(root, "deck.pptx"))}&work=theirs`, {
+        method: "PUT",
+        body: "four",
+      })
+    ).status,
+  ).toBe(409);
   expect(objects.size).toBe(0);
   expect((await call(`/files?path=${encodeURIComponent(home)}`)).status).toBe(400);
   expect(

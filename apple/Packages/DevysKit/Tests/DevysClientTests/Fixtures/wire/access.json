@@ -216,7 +216,7 @@
       "constraints": {},
       "responsibility": null,
       "created_at": "2026-01-01T00:00:00.000Z",
-      "description": "Show a saved artifact (devys:documents/artifact/<id>) or a file in the business folder (devys:documents/file/<percent-encoded absolute path>) on a project (its ref), by the record's ref. It's a reference: the record keeps one home and can appear in several projects. Work items join a project when created with its ref as project.",
+      "description": "Show a saved artifact (devys:documents/artifact/<id>), a file in the business folder (devys:documents/file/<percent-encoded absolute path>) or a coding session (devys:code/session/<id>) on a project (its ref), by the record's ref. It's a reference: the record keeps one home and can appear in several projects. Work items join a project when created with its ref as project.",
       "effect": "change",
       "limits": false
     },

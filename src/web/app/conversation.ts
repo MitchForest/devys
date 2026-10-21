@@ -1,3 +1,4 @@
+import type { Ref } from "../../protocol/ref.ts";
 import {
   useInfiniteQuery,
   useQueries,
@@ -243,6 +244,7 @@ export function useConversation(key: ConversationKey | undefined, options: Optio
           ...(message.replyTo ? { reply_to: message.replyTo } : {}),
           ...(message.mentions.length ? { mentions: message.mentions } : {}),
           ...(message.viaVoice ? { via_voice: true } : {}),
+          ...(message.ref ? { ref: message.ref } : {}),
         });
         change({ delivery: "delivered", posted: result.message.id });
         update((state) =>
@@ -270,7 +272,7 @@ export function useConversation(key: ConversationKey | undefined, options: Optio
 
   /** Sends text here; returns the client id, or undefined when there was nothing to send. */
   const send = useCallback(
-    (text: string, sending: { viaVoice?: boolean; speak?: boolean } = {}) => {
+    (text: string, sending: { viaVoice?: boolean; speak?: boolean; ref?: Ref } = {}) => {
       const trimmed = text.trim();
       const { local: now, options: current } = latest.current;
       if (!trimmed || !now.key) return undefined;
@@ -280,6 +282,7 @@ export function useConversation(key: ConversationKey | undefined, options: Optio
         ...(now.replyingTo ? { replyTo: now.replyingTo } : {}),
         mentions: now.picked ? [now.picked] : mentionsIn(trimmed, current.employees),
         ...(sending.viaVoice ? { viaVoice: true } : {}),
+        ...(sending.ref ? { ref: sending.ref } : {}),
         delivery: "sending",
       };
       update((state) => ({

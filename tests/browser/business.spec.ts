@@ -61,7 +61,23 @@ test("Home's Needs you approves an exact request; new work opens its thread and 
     const card = page.getByRole("region", { name: "Work item" });
     await expect(card.getByTestId("work-item-owner")).toHaveText("Head of Operations");
 
-    // The owner edits what's next and what it waits on at the revision on screen.
+    // The card is read-only until the owner takes the work over, which fences its employee.
+    await expect(card.getByRole("button", { name: "Edit next, waiting on and due" })).toHaveCount(
+      0,
+    );
+    await expect(card.getByRole("button", { name: "Mark done" })).toHaveCount(0);
+    await card.getByRole("button", { name: "Take over" }).click();
+    await expect(card.getByRole("button", { name: "Hand back" })).toBeVisible();
+    expect(
+      (
+        await sql.row<{ taken_over_by: string | null }>(
+          "SELECT taken_over_by FROM work_items WHERE business_id = $1",
+          [owner.business],
+        )
+      )?.taken_over_by,
+    ).toBe(owner.person);
+
+    // Then they edit what's next and what it waits on at the revision on screen.
     await card.getByRole("button", { name: "Edit next, waiting on and due" }).click();
     await card.getByLabel("Next").fill("Email three editors");
     await card.getByLabel("Waiting on").fill("The press kit");
@@ -77,19 +93,12 @@ test("Home's Needs you approves an exact request; new work opens its thread and 
       wait_condition: "The press kit",
     });
 
-    // Taking over pauses the employee on it; Hand back gives it back.
-    await card.getByRole("button", { name: "Take over" }).click();
-    await expect(card.getByRole("button", { name: "Hand back" })).toBeVisible();
-    expect(
-      (
-        await sql.row<{ taken_over_by: string | null }>(
-          "SELECT taken_over_by FROM work_items WHERE business_id = $1",
-          [owner.business],
-        )
-      )?.taken_over_by,
-    ).toBe(owner.person);
+    // Hand back gives it back, read-only again.
     await card.getByRole("button", { name: "Hand back" }).click();
     await expect(card.getByRole("button", { name: "Take over" })).toBeVisible();
+    await expect(card.getByRole("button", { name: "Edit next, waiting on and due" })).toHaveCount(
+      0,
+    );
   } finally {
     await page.close();
     await stores.remove([owner]);

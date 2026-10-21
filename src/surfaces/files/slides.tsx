@@ -92,14 +92,16 @@ const frame = `
     box-shadow: 0 1px 4px rgb(0 0 0 / 0.3); }
 `;
 
-/** Edits a deck's markdown beside its slides. */
+/** Edits a deck's markdown beside its slides; with `readOnly` the source only reads. */
 export function SlidesEditor({
   markdown,
   version,
+  readOnly = false,
   onChange,
 }: {
   markdown: string;
   version: string;
+  readOnly?: boolean;
   onChange: (markdown: string) => void;
 }) {
   const [source, setSource] = useState(markdown);
@@ -119,6 +121,7 @@ export function SlidesEditor({
     <div className="grid size-full grid-cols-2" data-testid="slides-editor">
       <textarea
         value={source}
+        readOnly={readOnly}
         onChange={(event) => {
           setSource(event.target.value);
           onChange(event.target.value);

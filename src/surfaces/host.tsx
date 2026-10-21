@@ -22,12 +22,29 @@ const WhiteboardEditor = lazy(() =>
 
 type SurfaceContent =
   | { kind: "diff"; patch: string; comments?: DiffComment[]; dark?: boolean }
-  /** `version` changes when the text is replaced from outside, as after a conflict. */
+  /**
+   * `version` changes when the text is replaced from outside, as after a conflict. Layers are
+   * read-only (`readOnly`) unless the owner has taken the work over.
+   */
   /** A markdown file; a deck (`isDeck`) edits beside its slides instead. */
-  | { kind: "markdown"; name: string; markdown: string; version: string; dark?: boolean }
+  | {
+      kind: "markdown";
+      name: string;
+      markdown: string;
+      version: string;
+      readOnly?: boolean;
+      dark?: boolean;
+    }
   | { kind: "code"; name: string; contents: string; dark?: boolean }
-  | { kind: "sheet"; name: string; base64: string; version: string; dark?: boolean }
-  | { kind: "whiteboard"; json: string; version: string; dark?: boolean };
+  | {
+      kind: "sheet";
+      name: string;
+      base64: string;
+      version: string;
+      readOnly?: boolean;
+      dark?: boolean;
+    }
+  | { kind: "whiteboard"; json: string; version: string; readOnly?: boolean; dark?: boolean };
 
 type SurfaceMessage =
   | { type: "ready" }
@@ -114,6 +131,8 @@ function Host() {
   );
   if (!content) return null;
   const dark = content.dark ?? false;
+  const readOnly = "readOnly" in content && content.readOnly === true;
+  const selectText = (selection: TextSelection | null) => tell({ type: "selectText", selection });
   const edited = (serialize: () => string | ArrayBuffer) => {
     serializer.current = serialize;
     tell({ type: "edited" });
@@ -124,6 +143,7 @@ function Host() {
         <SlidesEditor
           markdown={content.markdown}
           version={content.version}
+          readOnly={readOnly}
           onChange={(markdown) => {
             deckSource.current = markdown;
             tell({ type: "change", markdown });
@@ -140,6 +160,7 @@ function Host() {
             name={content.name}
             version={content.version}
             dark={dark}
+            readOnly={readOnly}
             onChange={edited}
           />
         </Suspense>
@@ -153,6 +174,7 @@ function Host() {
             json={content.json}
             version={content.version}
             dark={dark}
+            readOnly={readOnly}
             onChange={edited}
           />
         </Suspense>
@@ -164,15 +186,21 @@ function Host() {
         <MarkdownDocument
           markdown={content.markdown}
           version={content.version}
+          readOnly={readOnly}
           onChange={(markdown) => tell({ type: "change", markdown })}
-          onSelect={(selection) => tell({ type: "selectText", selection })}
+          onSelect={selectText}
         />
       </div>
     );
   if (content.kind === "code")
     return (
       <div className="h-dvh">
-        <CodeFile name={content.name} contents={content.contents} dark={content.dark ?? false} />
+        <CodeFile
+          name={content.name}
+          contents={content.contents}
+          dark={dark}
+          onSelect={selectText}
+        />
       </div>
     );
   return (

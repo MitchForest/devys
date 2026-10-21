@@ -2,41 +2,36 @@ import { Check, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import type { NeedsYouItem, WorkCard } from "../../app/wire.ts";
 import type { Decision } from "../../authority/contract.ts";
-import { useDecisions, useEmployees, useHome, useWork } from "../app/data.ts";
+import { useEmployees, useHome, useWork } from "../app/data.ts";
 import { useAnswer } from "../app/mutations.ts";
 import { useNav } from "../app/navigation.ts";
-import { DevysButton } from "../design/buttons.tsx";
 import { EmployeePortrait } from "../design/portrait.tsx";
-import { decisionFields, decisionTitle } from "../pages/work.tsx";
+import { decisionFields, decisionTitle } from "./work.tsx";
 import { PanelBody, PanelHeader, PanelSection } from "./panel.tsx";
-
-const money = (cents: number) =>
-  (cents / 100).toLocaleString(undefined, { style: "currency", currency: "USD" });
+import { Button } from "@/components/ui/button";
 
 /**
- * Home's permanent view: everything waiting on the owner, then what is moving, what is stuck
- * and what it cost. Each row opens its thread; a decision is answered right here.
+ * Home's permanent view, all from one read of `/home`: everything waiting on the owner, then
+ * what is moving and what is stuck. Each row opens its thread; a decision is answered right here.
+ * (Spending joins it when it is recorded, with its currency.)
  */
 export function NeedsYou({ close }: { close: () => void }) {
   const value = useHome().data;
-  const pending = useDecisions().data ?? [];
   if (!value) return null;
-  const { moving, stuck, spent_cents: spentCents } = value.glance;
+  const { moving, stuck } = value.glance;
   return (
     <section aria-label="Needs you" className="flex h-full flex-col">
       <PanelHeader title={value.needs_you.length ? "Needs you" : "At a glance"} close={close} />
       <PanelBody>
         {value.needs_you.length > 0 && (
           <div className="flex flex-col gap-2">
-            {value.needs_you.map((item) => {
-              const decision =
-                item.kind === "decision" ? pending.find((d) => d.id === item.id) : undefined;
-              return decision ? (
-                <DecisionRow key={item.id} decision={decision} />
+            {value.needs_you.map((item) =>
+              item.kind === "decision" ? (
+                <DecisionRow key={item.id} decision={item} />
               ) : (
                 <NeedsYouRow key={`${item.kind}-${item.id}`} item={item} />
-              );
-            })}
+              ),
+            )}
           </div>
         )}
         {moving.length > 0 && (
@@ -52,9 +47,6 @@ export function NeedsYou({ close }: { close: () => void }) {
               <GlanceRow key={item.id} item={item} tone="stuck" />
             ))}
           </PanelSection>
-        )}
-        {spentCents !== null && spentCents > 0 && (
-          <p className="text-detail text-ink-3">{money(spentCents)} spent since you last looked</p>
         )}
       </PanelBody>
     </section>
@@ -97,16 +89,16 @@ function DecisionRow({ decision }: { decision: Decision }) {
         </div>
       )}
       <div className="flex items-center gap-1.5">
-        <DevysButton
-          kind="aurora"
-          compact
+        <Button
+          variant="aurora"
+          size="compact"
           onClick={() => answer.mutate({ id: decision.id, approve: true })}
         >
           <Check /> Approve
-        </DevysButton>
-        <DevysButton compact onClick={() => answer.mutate({ id: decision.id, approve: false })}>
+        </Button>
+        <Button size="compact" onClick={() => answer.mutate({ id: decision.id, approve: false })}>
           Decline
-        </DevysButton>
+        </Button>
         <span className="ml-auto" />
         <button
           type="button"
@@ -161,7 +153,7 @@ function GlanceRow({ item, tone }: { item: WorkCard; tone?: "stuck" }) {
     <button
       type="button"
       onClick={() => nav.openThread(item.id)}
-      className="-mx-2 flex items-center gap-2.5 rounded-[9px] px-2 py-1.5 text-left hover:bg-sheet-tint"
+      className="-mx-2 flex items-center gap-2.5 rounded-small px-2 py-1.5 text-left hover:bg-sheet-tint"
     >
       {employee && <EmployeePortrait employee={employee} size={20} />}
       <span className="flex min-w-0 flex-col">

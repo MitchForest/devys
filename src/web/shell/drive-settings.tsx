@@ -2,10 +2,10 @@
 import { FileText } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { DevysButton } from "../design/buttons.tsx";
-import { EmptyNote, LiveTag, SectionHeader, StatusChip } from "../design/primitives.tsx";
+import { EmptyNote, SectionHeader, StatusChip } from "../design/primitives.tsx";
 import { api } from "../app/api.ts";
 import { keys, problemOf } from "../app/query.ts";
+import { Button } from "@/components/ui/button";
 
 declare const gapi: {
   load(
@@ -101,7 +101,7 @@ export function DriveConnection({ businessId }: { businessId: string }) {
   return (
     <section aria-label="Google Drive" className="flex flex-col gap-3">
       <SectionHeader title="Google Drive">
-        {connection?.connected ? <StatusChip tone="done">Connected</StatusChip> : <LiveTag />}
+        {connection?.connected && <StatusChip tone="done">Connected</StatusChip>}
       </SectionHeader>
       <p className="text-body text-ink-2">
         Choose documents for Devys to read. Save new text files to your Drive and ask Devys to
@@ -115,36 +115,36 @@ export function DriveConnection({ businessId }: { businessId: string }) {
       {connection?.connected ? (
         <>
           <div className="flex gap-2">
-            <DevysButton compact disabled={busy} onClick={() => void act("picker")}>
+            <Button size="compact" disabled={busy} onClick={() => void act("picker")}>
               Choose files
-            </DevysButton>
-            <DevysButton
-              kind="quiet"
-              compact
+            </Button>
+            <Button
+              variant="quiet"
+              size="compact"
               disabled={busy}
               onClick={() => void act("disconnect")}
             >
               Disconnect
-            </DevysButton>
+            </Button>
           </div>
           {connection.files.map((file) => (
             <div
               key={file.id}
-              className="flex items-center gap-2.5 rounded-[12px] bg-sheet-tint px-3 py-2.5 text-body text-ink"
+              className="flex items-center gap-2.5 rounded-row bg-sheet-tint px-3 py-2.5 text-body text-ink"
             >
               <FileText className="size-4 text-ink-3" /> {file.name}
             </div>
           ))}
         </>
       ) : connection?.configured ? (
-        <DevysButton
-          kind="raised"
+        <Button
+          variant="raised"
           disabled={busy}
           onClick={() => void act("connect")}
           className="self-start"
         >
           Connect Google Drive
-        </DevysButton>
+        </Button>
       ) : (
         <EmptyNote>Google Drive setup is pending.</EmptyNote>
       )}

@@ -4,12 +4,16 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { api } from "../app/api.ts";
 import { keys } from "../app/query.ts";
 import { useDark } from "../app/theme.ts";
-import { DevysButton } from "../design/buttons.tsx";
 import type { TerminalState } from "../../surfaces/terminal/view.tsx";
+import { Button } from "@/components/ui/button";
 
-// The WebAssembly terminal loads only in terminal windows.
+// The WebAssembly terminal loads only in terminal windows, in the browser (never in the Worker).
 const TerminalView = lazy(() =>
-  import("../../surfaces/terminal/view.tsx").then((module) => ({ default: module.TerminalView })),
+  import.meta.env.SSR
+    ? (Promise.resolve({ default: () => null }) as never)
+    : import("../../surfaces/terminal/view.tsx").then((module) => ({
+        default: module.TerminalView,
+      })),
 );
 
 /**
@@ -53,17 +57,17 @@ export function TerminalWindow({
         </span>
         <span className="ml-auto" />
         {state?.connected && !state.typing && !state.exit && (
-          <DevysButton compact onClick={() => setControl((count) => count + 1)}>
+          <Button size="compact" onClick={() => setControl((count) => count + 1)}>
             <Hand /> Take control
-          </DevysButton>
+          </Button>
         )}
-        <DevysButton
-          kind="quiet"
-          compact
+        <Button
+          variant="quiet"
+          size="compact"
           onClick={() => void api.closeTerminal(businessId, terminalId).then(() => window.close())}
         >
           <X /> End
-        </DevysButton>
+        </Button>
       </div>
       {state?.error && <div className="px-3 py-1 text-detail text-ink-2">{state.error}</div>}
       <div className="min-h-0 flex-1 p-1">

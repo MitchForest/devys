@@ -14,6 +14,58 @@ export interface TextSelection {
   quote: string;
 }
 
+/** Whether a node sits inside `root`, looking through shadow roots (code views draw in one). */
+function within(root: HTMLElement, node: Node | null) {
+  for (let at = node; at;) {
+    if (root.contains(at)) return true;
+    const top = at.getRootNode();
+    at = top instanceof ShadowRoot ? top.host : null;
+  }
+  return false;
+}
+
+/**
+ * The selected text. A selection inside a shadow root reads empty from the document in some
+ * engines: Chromium answers through the shadow root, WebKit through its composed ranges.
+ */
+function selectedText(selection: Selection, root: HTMLElement) {
+  const text = selection.toString();
+  if (text) return text;
+  const shadows = [...root.querySelectorAll("*")].flatMap((element) =>
+    element.shadowRoot ? [element.shadowRoot] : [],
+  );
+  for (const shadow of shadows) {
+    const inner = (shadow as ShadowRoot & { getSelection?: () => Selection | null })
+      .getSelection?.()
+      ?.toString();
+    if (inner) return inner;
+  }
+  const composed = (
+    selection as Selection & {
+      getComposedRanges?: (options: { shadowRoots: ShadowRoot[] }) => StaticRange[];
+    }
+  ).getComposedRanges?.({ shadowRoots: shadows })[0];
+  if (!composed || composed.collapsed) return "";
+  const range = document.createRange();
+  range.setStart(composed.startContainer, composed.startOffset);
+  range.setEnd(composed.endContainer, composed.endOffset);
+  return range.toString();
+}
+
+/**
+ * Calls `selected` with the text the reader selects inside `root` (empty when they clear it).
+ * Selecting elsewhere, such as typing a comment, keeps the last selection. Returns the stop.
+ */
+export function watchSelection(root: HTMLElement, selected: (quote: string) => void) {
+  const select = () => {
+    const selection = window.getSelection();
+    if (!selection?.anchorNode || !within(root, selection.anchorNode)) return;
+    selected(selectedText(selection, root).trim());
+  };
+  document.addEventListener("selectionchange", select);
+  return () => document.removeEventListener("selectionchange", select);
+}
+
 export function MarkdownDocument({
   markdown,
   version,
@@ -29,34 +81,36 @@ export function MarkdownDocument({
   onSelect?: (selection: TextSelection | null) => void;
 }) {
   const root = useRef<HTMLDivElement>(null);
-  const latest = useRef({ onChange, onSelect, markdown });
-  latest.current = { onChange, onSelect, markdown };
+  const latest = useRef({ onChange, onSelect, markdown, readOnly });
+  latest.current = { onChange, onSelect, markdown, readOnly };
+  const editor = useRef<{ crepe: Crepe; ready: Promise<unknown> } | null>(null);
 
   useEffect(() => {
     const crepe = new Crepe({
       root: root.current!,
-      defaultValue: markdown,
+      defaultValue: latest.current.markdown,
       features: { [Crepe.Feature.AI]: false, [Crepe.Feature.TopBar]: false },
     });
     crepe.on((listen) => listen.markdownUpdated((_ctx, next) => latest.current.onChange(next)));
-    void crepe.create().then(() => crepe.setReadonly(readOnly));
-    const select = () => {
-      const selection = window.getSelection();
-      // Selecting elsewhere (such as typing the comment itself) keeps the last selection.
-      if (!selection?.anchorNode || !root.current?.contains(selection.anchorNode)) return;
-      const quote = selection.toString().trim();
+    const ready = crepe.create().then(() => crepe.setReadonly(latest.current.readOnly));
+    editor.current = { crepe, ready };
+    const stop = watchSelection(root.current!, (quote) => {
       if (!quote) return latest.current.onSelect?.(null);
       const start = latest.current.markdown.indexOf(quote);
       latest.current.onSelect?.({ start, end: start < 0 ? -1 : start + quote.length, quote });
-    };
-    document.addEventListener("selectionchange", select);
+    });
     return () => {
-      document.removeEventListener("selectionchange", select);
+      stop();
+      editor.current = null;
       void crepe.destroy();
     };
     // A new version replaces the editor; ordinary typing never does.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [version]);
+  // Taking the work over (or handing it back) unlocks or locks the open editor in place.
+  useEffect(() => {
+    const current = editor.current;
+    void current?.ready.then(() => current.crepe.setReadonly(readOnly));
+  }, [readOnly]);
 
   return (
     <div

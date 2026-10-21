@@ -53,7 +53,7 @@ function Glyph({ tone, size }: { tone: Tone; size: number }) {
       className={cn(
         "grid place-items-center text-white",
         toneFill[tone],
-        tone === "done" ? "rounded-[4.5px]" : "rounded-full",
+        tone === "done" ? "rounded-tiny" : "rounded-full",
       )}
       style={{ width: size, height: size }}
     >
@@ -84,18 +84,6 @@ export function StatusChip({
     >
       <Glyph tone={tone} size={small ? 12 : 16} />
       {children}
-    </span>
-  );
-}
-
-export function LiveTag() {
-  return (
-    <span
-      className="inline-flex shrink-0 items-center gap-[5px] rounded-full bg-green-tint px-[9px] py-[3px] text-caption font-medium text-green"
-      aria-label="Live data"
-    >
-      <span className="size-1.5 rounded-full bg-green" />
-      Live
     </span>
   );
 }

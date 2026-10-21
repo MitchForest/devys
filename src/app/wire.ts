@@ -257,21 +257,18 @@ const WorkCard = Schema.Struct({
   updated_at: Timestamp,
 });
 export type WorkCard = typeof WorkCard.Type;
-/** One thing waiting on the owner: a decision, or work that needs one. */
+/**
+ * One thing waiting on the owner: a decision (the whole request, so Needs you is answered from
+ * this one read), or work that needs one.
+ */
 const NeedsYouItem = Schema.Union([
   Schema.Struct({
+    ...Decision.fields,
     kind: Schema.Literal("decision"),
-    id: Schema.String,
     title: Schema.String,
-    employee_id: Schema.String,
-    /** Where the employee asked; the answer is posted there. */
-    conversation: Schema.NullOr(ConversationKey),
     work_id: Schema.NullOr(Schema.String),
     project_id: Schema.NullOr(Schema.String),
     at: Timestamp,
-    capability: Schema.String,
-    input: Schema.Unknown,
-    expires_at: Timestamp,
   }),
   Schema.Struct({
     ...WorkCard.fields,
@@ -300,7 +297,11 @@ export type Home = typeof Home.Type;
 // Coding, terminals, files and the browser (the owner's Mac, local mode).
 
 /** `GET …/coding`: work items that have coding sessions, newest first. */
-export const CodedWork = Schema.Struct({ work: Schema.Array(Schema.String) });
+export const CodedWork = Schema.Struct({
+  work: Schema.Array(Schema.String),
+  /** Each started session and its work item, so a session's ref opens anywhere. */
+  sessions: Schema.Array(Schema.Struct({ id: Schema.String, work_item_id: Schema.String })),
+});
 /** `POST …/coding`: the work item made for the session, and where the session started. */
 export const CodingStarted = Schema.Struct({
   work: Schema.String,
@@ -371,3 +372,16 @@ export const FileComments = Schema.Struct({
   message: Schema.optional(Schema.String.check(Schema.isMaxLength(8_000))),
 });
 export type FileComments = typeof FileComments.Type;
+/**
+ * `PUT …/files/text`: the owner's save of a text file, over the revision that was read. Saving by
+ * hand is for the work item the owner has taken over (`work`); otherwise they ask.
+ */
+export const TextSave = Schema.Struct({
+  path: Schema.String.check(Schema.isMaxLength(1024)),
+  content: Schema.String,
+  /** Absent or null: the file must not exist yet. */
+  expected_revision: Schema.optional(Schema.NullOr(Schema.String)),
+  /** The work item taken over; without it the save is refused (409), as with any other. */
+  work: Schema.optional(Schema.String),
+});
+export type TextSave = typeof TextSave.Type;

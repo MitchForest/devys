@@ -63,7 +63,7 @@ export function ModelPicker({
                     value={model.id}
                     aria-label={model.label}
                     closeOnClick
-                    className="items-start rounded-[6px] py-1.5"
+                    className="items-start rounded-sm py-1.5"
                   >
                     <span className="flex min-w-0 flex-col gap-0.5">
                       <span className="flex items-baseline gap-1.5">

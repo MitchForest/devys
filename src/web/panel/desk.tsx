@@ -36,13 +36,11 @@ import { accessTitle, isOpen, templateTitle } from "../app/names.ts";
 import { keys, problemOf } from "../app/query.ts";
 import { ui } from "../app/ui.ts";
 import { useMood, useWorking } from "../app/workspace.tsx";
-import { Field, fieldClass } from "../design/fields.tsx";
-import { WorkRow } from "../pages/work.tsx";
+import { WorkRow } from "./work.tsx";
 import { PanelBody, PanelHeader, PanelSection } from "./panel.tsx";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { dollars, ModelPicker, perTurn, spend } from "../design/model-picker.tsx";
-import { DevysButton } from "../design/buttons.tsx";
-import { Card, EmptyNote, LiveTag } from "../design/primitives.tsx";
+import { Card, EmptyNote } from "../design/primitives.tsx";
 import { Spinner } from "../design/spinner.tsx";
 import {
   DropdownMenu,
@@ -51,6 +49,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Textarea } from "@/components/ui/textarea";
 
 export function PausedBanner({ employee }: { employee: Employee }) {
   const togglePause = useTogglePause();
@@ -59,9 +62,9 @@ export function PausedBanner({ employee }: { employee: Employee }) {
       <CirclePause className="size-4 shrink-0 fill-gray text-sheet-tint" />
       <span className="text-body text-ink-2">{employee.name} is paused and takes no actions.</span>
       <span className="ml-auto" />
-      <DevysButton compact onClick={() => togglePause.mutate(employee)}>
+      <Button size="compact" onClick={() => togglePause.mutate(employee)}>
         Resume
-      </DevysButton>
+      </Button>
     </div>
   );
 }
@@ -118,30 +121,30 @@ function EmployeeDesk({ employee, close }: { employee: Employee; close: () => vo
             </span>
           </div>
           <span className="ml-auto" />
-          <DevysButton compact kind="quiet" onClick={() => togglePause.mutate(employee)}>
+          <Button size="compact" variant="quiet" onClick={() => togglePause.mutate(employee)}>
             {employee.paused ? "Resume" : "Pause"}
-          </DevysButton>
+          </Button>
         </div>
         {employee.paused && <PausedBanner employee={employee} />}
-        <PanelSection
-          title="Now"
-          count={open.length}
-          action={
-            <button
-              type="button"
-              onClick={() => ui.newWorkItem({ owner: employee.id })}
-              className="text-caption text-ink-3 hover:text-ink-2"
-            >
-              <Plus className="inline size-3" /> Work item
-            </button>
-          }
-        >
-          {open.length === 0 ? (
-            <span className="text-detail text-ink-3">Nothing open.</span>
-          ) : (
-            open.map((item) => <WorkRow key={item.id} item={item} compact />)
-          )}
-        </PanelSection>
+        {open.length > 0 && (
+          <PanelSection
+            title="Now"
+            count={open.length}
+            action={
+              <button
+                type="button"
+                onClick={() => ui.newWorkItem({ owner: employee.id })}
+                className="text-caption text-ink-3 hover:text-ink-2"
+              >
+                <Plus className="inline size-3" /> Work item
+              </button>
+            }
+          >
+            {open.map((item) => (
+              <WorkRow key={item.id} item={item} compact />
+            ))}
+          </PanelSection>
+        )}
         {done.length > 0 && (
           <PanelSection title="Recently done">
             {done.map((item) => (
@@ -161,7 +164,7 @@ function EmployeeDesk({ employee, close }: { employee: Employee; close: () => vo
           </Disclosure>
           {isOperations && (
             <Disclosure title="Memory">
-              <MemoryPane isOperations={isOperations} />
+              <MemoryPane />
             </Disclosure>
           )}
         </div>
@@ -210,7 +213,7 @@ function EditableName({ employee }: { employee: Employee }) {
           save();
         }}
       >
-        <input
+        <Input
           autoFocus
           aria-label="Name"
           value={name}
@@ -223,7 +226,7 @@ function EditableName({ employee }: { employee: Employee }) {
               setEditing(false);
             }
           }}
-          className={cn(fieldClass, "py-0.5 text-control font-semibold")}
+          className="py-0.5 text-control font-semibold"
         />
       </form>
     );
@@ -269,9 +272,9 @@ function ResponsibilitiesPane({ employee }: { employee: Employee }) {
       }}
     >
       <Field label="Accountable for" hint={`${text.length} of 2000 characters`}>
-        <textarea
+        <Textarea
           aria-label="Responsibilities"
-          className={cn(fieldClass, "min-h-48 resize-y leading-[1.45]")}
+          className="min-h-48 resize-y leading-[1.45]"
           value={text}
           maxLength={2000}
           onChange={(event) => {
@@ -281,13 +284,13 @@ function ResponsibilitiesPane({ employee }: { employee: Employee }) {
         />
       </Field>
       <div className="flex items-center gap-2.5">
-        <DevysButton type="submit" disabled={saving || !changed || !text.trim()}>
+        <Button type="submit" disabled={saving || !changed || !text.trim()}>
           {saving ? "Saving…" : "Save responsibilities"}
-        </DevysButton>
+        </Button>
         {changed && (
-          <DevysButton kind="quiet" onClick={() => setText(employee.responsibilities)}>
+          <Button variant="quiet" onClick={() => setText(employee.responsibilities)}>
             Discard
-          </DevysButton>
+          </Button>
         )}
         {message && (
           <span
@@ -318,9 +321,9 @@ function RetireButton({ employee }: { employee: Employee }) {
   ).length;
   return (
     <>
-      <DevysButton kind="quiet" compact onClick={() => setOpen(true)}>
+      <Button variant="quiet" size="compact" onClick={() => setOpen(true)}>
         <UserMinus /> Retire…
-      </DevysButton>
+      </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="w-[420px] max-w-[calc(100%-2rem)] gap-0 rounded-card! bg-sheet p-0 shadow-raised sm:max-w-[420px]">
           <form
@@ -340,25 +343,21 @@ function RetireButton({ employee }: { employee: Employee }) {
                 : `${employee.name}'s ${openWork} open ${openWork === 1 ? "work item moves" : "work items move"} to the colleague you choose.`}
             </p>
             <Field label="Hand open work to">
-              <select
-                className={fieldClass}
-                value={chosen}
-                onChange={(event) => setSuccessor(event.target.value)}
-              >
+              <NativeSelect value={chosen} onChange={(event) => setSuccessor(event.target.value)}>
                 {others.map((e) => (
                   <option key={e.id} value={e.id}>
                     {e.name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </Field>
             <div className="flex justify-end gap-2">
-              <DevysButton kind="quiet" onClick={() => setOpen(false)}>
+              <Button variant="quiet" onClick={() => setOpen(false)}>
                 Cancel
-              </DevysButton>
-              <DevysButton type="submit" disabled={busy || !chosen} className="text-red">
+              </Button>
+              <Button type="submit" disabled={busy || !chosen} className="text-red">
                 {busy ? "Retiring…" : "Retire"}
-              </DevysButton>
+              </Button>
             </div>
           </form>
         </DialogContent>
@@ -407,9 +406,13 @@ function ModelRow({ employee }: { employee: Employee }) {
             value={employee.model}
             onChange={choose}
             trigger={
-              <DevysButton kind="quiet" compact aria-label={`Change model for ${employee.name}`}>
+              <Button
+                variant="quiet"
+                size="compact"
+                aria-label={`Change model for ${employee.name}`}
+              >
                 Change <ChevronDown />
-              </DevysButton>
+              </Button>
             }
           />
         )}
@@ -431,17 +434,13 @@ function ModelRow({ employee }: { employee: Employee }) {
   );
 }
 
-function MemoryPane({ isOperations }: { isOperations: boolean }) {
+/** The business's memory, as Operations keeps it. */
+function MemoryPane() {
   const memory = useMemory();
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <span className="text-heading font-semibold text-ink">What I remember</span>
-        {isOperations && <LiveTag />}
-      </div>
-      {!isOperations ? (
-        <EmptyNote>No memory yet</EmptyNote>
-      ) : memory.isPending ? (
+      <span className="text-heading font-semibold text-ink">What I remember</span>
+      {memory.isPending ? (
         <Spinner />
       ) : memory.isError ? (
         <EmptyNote>{problemOf(memory.error, "Memory is unavailable.")}</EmptyNote>
@@ -476,15 +475,14 @@ function AccessPane({ employee }: { employee: Employee }) {
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
         <span className="text-heading font-semibold text-ink">Standing access</span>
-        <LiveTag />
         <span className="ml-auto" />
         {list.data && list.data.available.length > 0 && (
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
-                <DevysButton kind="quiet" compact>
+                <Button variant="quiet" size="compact">
                   <Plus /> Add access
-                </DevysButton>
+                </Button>
               }
             />
             <DropdownMenuContent align="end" className="w-auto">
@@ -561,14 +559,14 @@ function GrantRow({ grant, revoke }: { grant: AccessList["grants"][number]; revo
         ) : null}
       </div>
       <span className="ml-auto" />
-      <DevysButton
-        kind="quiet"
-        compact
+      <Button
+        variant="quiet"
+        size="compact"
         onClick={revoke}
         className={hovering ? "opacity-100" : "opacity-55"}
       >
         Revoke
-      </DevysButton>
+      </Button>
     </div>
   );
 }

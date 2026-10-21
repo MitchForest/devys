@@ -53,6 +53,8 @@ test("on a phone: tabs of Home, Projects, Team and Apps; the conversation full s
       "aria-current",
       "page",
     );
+    // Each tab shows its own list: Projects has no team rows.
+    await expect(page.getByRole("link", { name: "Growth", exact: true })).toHaveCount(0);
     await page.getByRole("link", { name: /^Launch/ }).click();
     await expect(page.getByLabel("Message Launch")).toBeVisible();
     await expect(tabs).toHaveCount(0);
@@ -89,6 +91,7 @@ test("on a phone: tabs of Home, Projects, Team and Apps; the conversation full s
 
     // Team opens a direct chat.
     await tabs.getByRole("button", { name: "Team" }).click();
+    await expect(page.getByRole("link", { name: /^Launch/ })).toHaveCount(0);
     await page.getByRole("link", { name: "Growth", exact: true }).click();
     await expect(page.getByLabel("Message Growth")).toBeVisible();
     await page.getByRole("button", { name: "Back", exact: true }).click();

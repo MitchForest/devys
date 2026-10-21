@@ -9,7 +9,7 @@ import {
   type QueryClient,
   type QueryKey,
 } from "@tanstack/react-query";
-import type { BusinessDetail, Conversations, Decisions, Me } from "../../app/wire.ts";
+import type { BusinessDetail, Conversations, Home, Me } from "../../app/wire.ts";
 import type { ConversationKey } from "../../conversations/contract.ts";
 import type { Employee, SettableLook } from "../../identity/contract.ts";
 import type { Ref } from "../../protocol/ref.ts";
@@ -84,14 +84,14 @@ export function useAnswer() {
     (b, { id, approve }: { id: string; approve: boolean }) => api.answer(b, id, approve),
     {
       failure: "That request was already answered or has expired.",
-      settles: (b) => [...workSettles(b), keys.decisions(b)],
+      settles: workSettles,
       optimistic: (client, b, { id }) => {
-        const before = client.getQueryData<typeof Decisions.Type>(keys.decisions(b));
-        client.setQueryData<typeof Decisions.Type>(
-          keys.decisions(b),
-          (all) => all && { decisions: all.decisions.filter((d) => d.id !== id) },
+        const before = client.getQueryData<Home>(keys.home(b));
+        client.setQueryData<Home>(
+          keys.home(b),
+          (home) => home && { ...home, needs_you: home.needs_you.filter((d) => d.id !== id) },
         );
-        return () => client.setQueryData(keys.decisions(b), before);
+        return () => client.setQueryData(keys.home(b), before);
       },
     },
   );
@@ -167,7 +167,7 @@ export function useStartThread() {
   const follow = useFollow();
   return useChange(
     (b, { text, owner, projectId }: { text: string; owner: string; projectId?: string }) => {
-      const body = text.replace(/\n\n_Viewing: [^\n]*_$/, "").trim();
+      const body = text.trim();
       return api.createWorkItem(b, {
         title: body.split("\n")[0]!.slice(0, 80),
         owner,
@@ -195,12 +195,6 @@ export function useCreateProject() {
       settles: workSettles,
       succeeded: (created) => nav.selectPlace({ kind: "project", id: created.id }),
     },
-  );
-}
-export function useUpdateProject() {
-  return useChange(
-    (b, { id, change }: { id: string; change: ProjectChange }) => api.updateProject(b, id, change),
-    { failure: "The project couldn't be saved.", settles: (b) => [keys.projects(b)] },
   );
 }
 /** Keeps a record on a project's overview, or stops keeping it. */

@@ -16,26 +16,19 @@ import {
 import type { BusinessDetail } from "../../app/wire.ts";
 import type { ConversationKey, Message, ShownMessage } from "../../conversations/contract.ts";
 import type { Employee } from "../../identity/contract.ts";
+import { employeeOf } from "../../conversations/contract.ts";
 import { parseRef } from "../../protocol/ref.ts";
 import type { Mood } from "../design/face.tsx";
 import { draft, useConversation, type Conversation } from "./conversation.ts";
 import {
   isRunning,
   unfinished,
-  useArtifactName,
   useBusinessId,
   useEmployees,
   useOperations,
   useStatus,
 } from "./data.ts";
-import {
-  conversationOf,
-  layerOfRef,
-  layerReference,
-  useLayers,
-  useNav,
-  usePlace,
-} from "./navigation.ts";
+import { conversationOf, refOfLayer, useLayers, useNav, usePlace } from "./navigation.ts";
 import { queries } from "./query.ts";
 import { createStore, useStore } from "./store.ts";
 import { ui, useUi } from "./ui.ts";
@@ -202,14 +195,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   /** A page published in the conversation on screen opens beside it. */
   const arrived = async (_key: ConversationKey, news: readonly ShownMessage[]) => {
     const page = news
-      .filter((m) => m.kind === "event" && m.ref && layerOfRef(m.ref)?.kind === "artifact")
+      .filter((m) => m.kind === "event" && parseRef(m.ref)?.kind === "artifact")
       .at(-1);
     if (!page) return;
     const id = parseRef(page.ref)!.id;
-    const author = page.author.startsWith("employee:")
-      ? employees.find((e) => `employee:${e.id}` === page.author)?.name
-      : undefined;
-    // A version is recognised by its page's name, so the list must already hold the new page.
+    const author = employees.find((e) => e.id === employeeOf(page.author))?.name;
+    // A new version is a page of the same name, so the list must already hold the new page.
     let detail = client.getQueryData<Detail>(queries.detail(businessId).queryKey);
     if (!detail?.artifacts.some((a) => a.id === id))
       detail = await client.fetchQuery(queries.detail(businessId)).catch(() => detail);
@@ -288,17 +279,16 @@ export function useMood(employee: Employee): Mood {
   return working ? "working" : "idle";
 }
 
-/** The open layer, in words, sent with the next message unless the owner removed it. */
+/** The record on top of the panel, sent with the next message unless the owner removed it. */
 export function useReference() {
   const { top } = useLayers();
   const referencing = useUi((state) => state.referencing);
-  const artifact = useArtifactName();
-  return top && top.kind !== "app" && referencing ? layerReference(top, { artifact }) : undefined;
+  return top && referencing ? refOfLayer(top) : undefined;
 }
 
 /**
- * Sends the draft, marking it dictated if it was. The layer the owner is looking at goes with
- * it as a reference line, so "this" means what is on screen.
+ * Sends the draft, marking it dictated if it was. The record the owner is looking at goes with
+ * it as the message's ref, so "this" means what is on screen.
  */
 export function useSendDraft() {
   const main = useMain();
@@ -308,10 +298,11 @@ export function useSendDraft() {
     const current = draft.get(main.key);
     if (!current.text.trim()) return;
     voice.draftSent();
-    const text = reference
-      ? `${current.text.trim()}\n\n_Viewing: ${reference.title}${reference.ref ? ` (${reference.ref})` : ""}_`
-      : current.text;
-    main.send(text, { viaVoice: current.voiced, speak: loadVoiceSettings().speaksReplies });
+    main.send(current.text, {
+      viaVoice: current.voiced,
+      speak: loadVoiceSettings().speaksReplies,
+      ...(reference ? { ref: reference } : {}),
+    });
     draft.set(main.key, "", false);
     ui.setReferencing(false);
   };

@@ -92,17 +92,24 @@ export function artifactText(
   });
 }
 
+/**
+ * Each artifact with its title and its version: publishing again under the same filename makes
+ * the next version of that page (counted over all of the business's artifacts).
+ */
+const withVersions = `SELECT id, filename, regexp_replace(filename, '\\.html$', '', 'i') AS title,
+    content_type, byte_length, created_at,
+    (row_number() OVER (PARTITION BY filename ORDER BY created_at, id))::int AS version,
+    (count(*) OVER (PARTITION BY filename))::int AS versions
+  FROM artifacts WHERE business_id = $1`;
+
 export function listArtifacts(db: Database, businessId: string, after?: string) {
   return database(db, (sql) =>
     after === undefined
-      ? sql.rows<Artifact>(
-          `SELECT id, filename, content_type, byte_length, created_at FROM artifacts
-           WHERE business_id = $1 ORDER BY created_at DESC LIMIT 100`,
-          [businessId],
-        )
+      ? sql.rows<Artifact>(`SELECT * FROM (${withVersions}) a ORDER BY created_at DESC LIMIT 100`, [
+          businessId,
+        ])
       : sql.rows<Artifact>(
-          `SELECT id, filename, content_type, byte_length, created_at FROM artifacts
-           WHERE business_id = $1 AND id > $2 ORDER BY id LIMIT 100`,
+          `SELECT * FROM (${withVersions}) a WHERE id > $2 ORDER BY id LIMIT 100`,
           [businessId, after],
         ),
   );

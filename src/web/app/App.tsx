@@ -5,10 +5,11 @@ import { useBusinessId, useMe } from "./data.ts";
 import { useSignIn } from "./mutations.ts";
 import { problemOf } from "./query.ts";
 import { WorkspaceProvider } from "./workspace.tsx";
-import { DevysButton } from "../design/buttons.tsx";
 import { Face } from "../design/face.tsx";
 import { NewBusiness } from "../shell/settings.tsx";
 import { Shell } from "../shell/shell.tsx";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 /** `/`: signed in, the first business's Home; signed out, the sign-in card. */
 export function Entry() {
@@ -94,14 +95,14 @@ function SignIn() {
         </div>
         <label className="flex w-full flex-col gap-1.5">
           <span className="text-label font-medium text-ink-3">Enrollment code</span>
-          <input
+          <Input
             autoFocus
             autoComplete="one-time-code"
             spellCheck={false}
             placeholder="64-character code"
             value={code}
             onChange={(event) => setCode(event.target.value)}
-            className="rounded-[12px] bg-track px-3.5 py-[11px] text-body text-ink outline-none placeholder:text-ink-3 focus-visible:ring-2 focus-visible:ring-indigo/40"
+            className="rounded-row bg-track px-3.5 py-[11px]"
           />
         </label>
         {error && (
@@ -112,14 +113,14 @@ function SignIn() {
             <CircleAlert className="size-3.5 fill-red text-sheet" /> {error}
           </p>
         )}
-        <DevysButton
-          kind="aurora"
+        <Button
+          variant="aurora"
           type="submit"
           disabled={submitting || code.trim().length !== 64}
           className="w-full justify-center [&>span]:w-full [&>span]:justify-center"
         >
           {submitting ? "Signing in…" : "Sign in"}
-        </DevysButton>
+        </Button>
       </form>
     </div>
   );

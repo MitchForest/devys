@@ -139,3 +139,86 @@ test("a whiteboard draws in the surface and saves as Excalidraw JSON", async ({ 
   expect(scene.elements.map((e) => e.type)).toContain("rectangle");
   expect(elsewhere).toEqual([]);
 });
+
+test("read-only layers refuse edits, and a code selection is offered for Ask", async ({ page }) => {
+  const elsewhere = await openSurface(page);
+  // A whiteboard in view mode has no drawing tools, and dragging on it changes nothing.
+  await page.evaluate(() =>
+    window.devysSurface!.show({ kind: "whiteboard", json: "", version: "1", readOnly: true }),
+  );
+  const board = page.getByTestId("whiteboard-editor");
+  await expect(board.locator("canvas").first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTitle(/Rectangle/)).toHaveCount(0);
+  const box = (await board.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2 - 80, box.y + box.height / 2 - 60);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 80, box.y + box.height / 2 + 60, { steps: 8 });
+  await page.mouse.up();
+
+  // Typing into a read-only spreadsheet does not edit it.
+  const book = utils.book_new();
+  utils.book_append_sheet(book, utils.aoa_to_sheet([["Cost"], [12]]), "Budget");
+  const base64 = Buffer.from(write(book, { type: "array", bookType: "xlsx" })).toString("base64");
+  await page.evaluate((content) => window.devysSurface!.show(content), {
+    kind: "sheet" as const,
+    name: "budget.xlsx",
+    base64,
+    version: "2",
+    readOnly: true,
+  });
+  const sheet = page.getByTestId("sheet-editor");
+  await expect(sheet.getByText("Budget", { exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(sheet.locator('[aria-busy="true"]')).toHaveCount(0);
+  const grid = await sheet.evaluate((root) => {
+    const canvases = [...root.querySelectorAll("canvas")].map((c) => c.getBoundingClientRect());
+    const largest = canvases.sort((a, b) => b.width * b.height - a.width * a.height)[0]!;
+    return { x: largest.x, y: largest.y };
+  });
+  await page.mouse.click(grid.x + 46 + 88 + 40, grid.y + 20 + 24 + 12);
+  await page.keyboard.type("Total cost");
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(500);
+  expect(await messages(page)).not.toContainEqual({ type: "edited" });
+  expect(await page.evaluate(() => window.devysSurface!.serialize())).toBeNull();
+
+  // Selecting source text reports it the way a document selection is reported.
+  await page.evaluate(() =>
+    window.devysSurface!.show({
+      kind: "code",
+      name: "plan.ts",
+      contents: "export const plan = 'ship it';\n",
+    }),
+  );
+  await expect(page.getByTestId("code-file")).toContainText("ship it");
+  await page.getByTestId("code-file").evaluate((root) => {
+    const walk = (node: Node): Text | undefined => {
+      if (node instanceof Text && node.data.includes("ship")) return node;
+      for (const child of [
+        ...(node instanceof Element && node.shadowRoot ? [node.shadowRoot] : []),
+        ...node.childNodes,
+      ]) {
+        const found = walk(child);
+        if (found) return found;
+      }
+      return undefined;
+    };
+    const text = walk(root)!;
+    const at = text.data.indexOf("ship");
+    const range = document.createRange();
+    range.setStart(text, at);
+    range.setEnd(text, at + "ship".length);
+    getSelection()!.removeAllRanges();
+    getSelection()!.addRange(range);
+  });
+  await expect
+    .poll(() => messages(page))
+    .toContainEqual({
+      type: "selectText",
+      selection: {
+        start: "export const plan = '".length,
+        end: "export const plan = 'ship".length,
+        quote: "ship",
+      },
+    });
+  expect(elsewhere).toEqual([]);
+});

@@ -82,17 +82,12 @@ export async function homeRoute(
     ...decisions.map((decision) => {
       const item = workOf(decision.work_item_id);
       return {
+        ...decision,
         kind: "decision" as const,
-        id: decision.id,
         title: item?.title ?? decision.capability,
-        employee_id: decision.employee_id,
-        conversation: decision.conversation,
         work_id: decision.work_item_id,
         project_id: item?.project_id ?? null,
         at: decision.requested_at,
-        capability: decision.capability,
-        input: decision.input,
-        expires_at: decision.expires_at,
       };
     }),
     // Work waiting on the owner's decision, unless a request above already stands for it.

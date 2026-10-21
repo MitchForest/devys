@@ -34,6 +34,8 @@ export interface Unsent {
   text: string;
   replyTo?: string;
   viaVoice?: boolean;
+  /** The record the owner was viewing, sent as the message's ref. */
+  ref?: Ref;
   delivery: "sending" | "delivered" | "failed";
   error?: string;
 }
@@ -77,7 +79,7 @@ export function timeline(
       replyTo: p.replyTo ?? null,
       viaVoice: p.viaVoice ?? false,
       reactions: [],
-      ref: null,
+      ref: p.ref ?? null,
       sentAt: now,
       position: "single" as const,
       delivery: p.delivery,
@@ -118,16 +120,4 @@ export function timeline(
     previous = bubble;
   }
   return items;
-}
-
-/** "Today 2:21 PM", "Yesterday 9:04 AM", "Mon 9:04 AM" or a date. */
-export function headingLabel(date: Date, now = new Date()) {
-  const time = date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  if (sameDay(date, now)) return `Today ${time}`;
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  if (sameDay(date, yesterday)) return `Yesterday ${time}`;
-  if (now.getTime() - date.getTime() < 7 * 86_400_000)
-    return `${date.toLocaleDateString(undefined, { weekday: "short" })} ${time}`;
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }

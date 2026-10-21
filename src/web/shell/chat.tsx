@@ -7,8 +7,6 @@ import {
   CornerUpLeft,
   Hand,
   Eye,
-  FileText,
-  ListChecks,
   MessageSquarePlus,
   Mic,
   Reply,
@@ -16,29 +14,19 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { parseRef } from "../../protocol/ref.ts";
 import type { Employee } from "../../identity/contract.ts";
 import { answerersOf, draft, useDraft, type Conversation } from "../app/conversation.ts";
 import { employeeOf } from "../../conversations/contract.ts";
 import { capturing, modeOf } from "../app/voice.ts";
 import {
   endsGroup,
-  headingLabel,
   startsGroup,
   timeline,
   type Bubble as TimelineBubble,
 } from "../app/timeline.ts";
-import {
-  useArtifacts,
-  useDecisions,
-  useEmployees,
-  useOperations,
-  usePerson,
-  useUnread,
-  useWork,
-} from "../app/data.ts";
+import { useDecisions, useEmployees, useOperations, usePerson, useWork } from "../app/data.ts";
 import { useStartThread } from "../app/mutations.ts";
-import { useNav, usePlace } from "../app/navigation.ts";
+import { usePlace } from "../app/navigation.ts";
 import { ui } from "../app/ui.ts";
 import {
   useMicLevel,
@@ -47,15 +35,14 @@ import {
   useVoice,
   useVoiceActions,
 } from "../app/workspace.tsx";
-import { ThreadLink } from "./links.tsx";
-import { chipFor, templateTitle } from "../app/names.ts";
-import { DevysButton } from "../design/buttons.tsx";
-import { StatusChip } from "../design/primitives.tsx";
+import { templateTitle } from "../app/names.ts";
 import { PersonPortrait } from "../design/face.tsx";
 import { InlineMarkdown } from "../design/markdown.tsx";
 import { EmployeePortrait } from "../design/portrait.tsx";
 import { Spinner } from "../design/spinner.tsx";
-import { DecisionCard } from "../pages/work.tsx";
+import { DecisionCard } from "../panel/work.tsx";
+import { RecordCard, ViewedRecord } from "../panel/layers/registry.tsx";
+import { useRecordTitle } from "../panel/layers/titles.ts";
 import { PausedBanner } from "../panel/desk.tsx";
 import { Bubble, BubbleContent, BubbleReactions } from "@/components/ui/bubble";
 import {
@@ -90,7 +77,9 @@ import {
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { dateTime, relativeDay } from "../lib/format.ts";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 const quick = ["👍", "👎", "❤️", "‼️", "❓", "😂"];
 const avatarSize = 26;
@@ -165,9 +154,9 @@ export function ConversationView({
                 )}
                 {conversation.hasOlder && (
                   <div className="flex justify-center">
-                    <DevysButton
-                      kind="quiet"
-                      compact
+                    <Button
+                      variant="quiet"
+                      size="compact"
                       disabled={loadingOlder}
                       onClick={() => {
                         setLoadingOlder(true);
@@ -175,14 +164,14 @@ export function ConversationView({
                       }}
                     >
                       {loadingOlder ? "Loading…" : "Earlier messages"}
-                    </DevysButton>
+                    </Button>
                   </div>
                 )}
                 {items.map((item, index) =>
                   item.kind === "heading" ? (
                     <MessageScrollerItem key={item.id}>
                       <p className="pt-3.5 pb-0.5 text-center text-caption text-ink-3">
-                        {headingLabel(item.date)}
+                        {relativeDay(item.date)}
                       </p>
                     </MessageScrollerItem>
                   ) : (
@@ -192,7 +181,7 @@ export function ConversationView({
                       className={startsGroup(item.bubble) ? "pt-2.5" : "pt-0.5"}
                     >
                       {item.bubble.kind === "event" ? (
-                        <EventCard bubble={item.bubble} />
+                        <RecordCard value={item.bubble.ref} text={item.bubble.text} />
                       ) : (
                         <MessageRow bubble={item.bubble} conversation={conversation} />
                       )}
@@ -221,98 +210,6 @@ export function ConversationView({
         <MessageScrollerButton className="shadow-raised" />
       </MessageScroller>
     </MessageScrollerProvider>
-  );
-}
-
-/**
- * A hand-off or other event. A hand-off is the work item's card: its owner, live status and
- * whether it has unread replies; it opens the thread. A published page opens as a layer.
- */
-function EventCard({ bubble }: { bubble: TimelineBubble }) {
-  const nav = useNav();
-  const work = useWork().data;
-  const employees = useEmployees();
-  const artifacts = useArtifacts();
-  const about = parseRef(bubble.ref);
-  const unread = useUnread(about?.app === "work" ? `work:${about.id}` : undefined);
-  const artifact = about?.app === "documents" && about.kind === "artifact" ? about.id : undefined;
-  const item =
-    about?.app === "work" && about.kind === "item"
-      ? (work ?? []).find((w) => w.id === about.id)
-      : undefined;
-  if (item) {
-    const owner = employees.find((e) => e.id === item.owner_employee_id);
-    const chip = chipFor(item.state);
-    return (
-      <ThreadLink
-        workId={item.id}
-        data-testid="handoff"
-        title="Open the thread"
-        className="mx-auto flex w-full max-w-[520px] items-center gap-2.5 rounded-[14px] border border-hairline bg-sheet px-3 py-2 text-left shadow-resting transition-colors hover:bg-sheet-tint"
-      >
-        {owner ? (
-          <EmployeePortrait employee={owner} size={22} />
-        ) : (
-          <ListChecks className="size-4 shrink-0 text-indigo" />
-        )}
-        <span className="flex min-w-0 flex-col">
-          <span className="truncate text-control font-semibold text-ink">{item.title}</span>
-          <span className="truncate text-caption text-ink-3">
-            {[
-              owner?.name,
-              item.state === "waiting" && item.wait_condition
-                ? `waiting on ${item.wait_condition}`
-                : item.next_action,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </span>
-        </span>
-        <span className="ml-auto" />
-        {unread > 0 && (
-          <span className="shrink-0 text-caption font-semibold text-indigo">{unread} new</span>
-        )}
-        <StatusChip tone={chip.tone} small>
-          {chip.title}
-        </StatusChip>
-      </ThreadLink>
-    );
-  }
-  if (artifact) {
-    const page = artifacts.find((a) => a.id === artifact);
-    const title = page?.filename.replace(/\.html$/, "");
-    // Its version among pages of the same name: a new version says so.
-    const version = page
-      ? artifacts.filter((a) => a.filename === page.filename && a.created_at <= page.created_at)
-          .length
-      : 1;
-    return (
-      <button
-        type="button"
-        data-testid="page-card"
-        title="Open the page"
-        onClick={() => nav.openLayer({ kind: "artifact", id: artifact })}
-        className="mx-auto flex w-full max-w-[520px] items-center gap-2.5 rounded-[14px] border border-hairline bg-sheet px-3 py-2 text-left shadow-resting transition-colors hover:bg-sheet-tint"
-      >
-        <span className="grid size-[22px] shrink-0 place-items-center rounded-[7px] bg-indigo/12">
-          <FileText className="size-3.5 text-indigo" />
-        </span>
-        <span className="flex min-w-0 flex-col">
-          <span className="truncate text-control font-semibold text-ink">
-            {title ?? bubble.text}
-          </span>
-          <span className="truncate text-caption text-ink-3">
-            {version > 1 ? `Page · v${version}` : "Page"}
-          </span>
-        </span>
-      </button>
-    );
-  }
-  return (
-    <div className="mx-auto flex max-w-[90%] items-center gap-2 rounded-full border border-hairline bg-sheet-tint px-3 py-1.5 text-detail text-ink-2">
-      <ListChecks className="size-3.5 shrink-0 text-indigo" />
-      <span className="min-w-0 truncate">{bubble.text}</span>
-    </div>
   );
 }
 
@@ -389,7 +286,7 @@ function MessageRow({
             data-testid="quoted"
           >
             <CornerUpLeft className="size-3 shrink-0 text-ink-3" />
-            <span className="line-clamp-2 rounded-[14px] border border-hairline px-2.5 py-[5px] text-detail text-ink-2">
+            <span className="line-clamp-2 rounded-workspace border border-hairline px-2.5 py-[5px] text-detail text-ink-2">
               <span className="font-medium text-ink">{nameOf(replied.author)}</span>{" "}
               {replied.text.slice(0, 200)}
             </span>
@@ -404,10 +301,7 @@ function MessageRow({
                     align={align}
                     variant={mine ? "default" : "muted"}
                     className={cn("max-w-full", bubble.reactions.length > 0 && "mt-3")}
-                    title={bubble.sentAt?.toLocaleString(undefined, {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })}
+                    title={bubble.sentAt && dateTime(bubble.sentAt)}
                   />
                 }
               >
@@ -507,6 +401,11 @@ function MessageRow({
             </PopoverContent>
           </Popover>
         </div>
+        {bubble.ref && (
+          <div className={cn("flex px-3", mine && "justify-end")}>
+            <ViewedRecord value={bubble.ref} />
+          </div>
+        )}
         {(bubble.delivery || (bubble.viaVoice && endsGroup(bubble))) && (
           <MessageFooter className="px-0 text-caption font-normal text-ink-3">
             {bubble.delivery === "sending" ? (
@@ -617,6 +516,7 @@ export function Composer({
   const voiceError = useVoice((state) => state.error);
   const voiceActions = useVoiceActions();
   const reference = useReference();
+  const recordTitle = useRecordTitle();
   const sendDraft = useSendDraft();
   const nameOf = useAuthorName();
   const field = useRef<HTMLTextAreaElement>(null);
@@ -699,7 +599,7 @@ export function Composer({
               title="What you're looking at goes with your message"
             >
               <Eye className="size-3 shrink-0 text-ink-3" />
-              <span className="truncate">Viewing {reference.title}</span>
+              <span className="truncate">Viewing {recordTitle(reference)}</span>
               <button
                 type="button"
                 aria-label="Don't send what you're viewing"
@@ -727,7 +627,7 @@ export function Composer({
           )}
           <InputGroup
             className={cn(
-              "h-auto items-end gap-1.5 rounded-[18px] border-[1.5px] bg-sheet-tint py-[5px] pr-[5px] pl-[5px] has-[[data-slot=input-group-control]:focus-visible]:ring-0",
+              "h-auto items-end gap-1.5 rounded-bubble border-[1.5px] bg-sheet-tint py-[5px] pr-[5px] pl-[5px] has-[[data-slot=input-group-control]:focus-visible]:ring-0",
               listening ? "border-indigo/45" : "border-transparent focus-within:border-indigo/30",
             )}
           >
@@ -860,7 +760,7 @@ function MentionPicker({
       id={id}
       role="listbox"
       aria-label="Mention"
-      className="flex animate-in flex-col gap-0.5 rounded-[12px] border border-hairline bg-sheet p-1 shadow-raised fade-in slide-in-from-bottom-1"
+      className="flex animate-in flex-col gap-0.5 rounded-row border border-hairline bg-sheet p-1 shadow-raised fade-in slide-in-from-bottom-1"
     >
       {matches.map((employee) => (
         <button
@@ -873,7 +773,7 @@ function MentionPicker({
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => choose(employee)}
           className={cn(
-            "flex items-center gap-2 rounded-[8px] px-2 py-1.5 text-left text-control text-ink hover:bg-sheet-tint",
+            "flex items-center gap-2 rounded-small px-2 py-1.5 text-left text-control text-ink hover:bg-sheet-tint",
             employee.id === active && "bg-sheet-tint",
           )}
         >
@@ -938,7 +838,7 @@ function ConversationStrip() {
   return (
     <div
       className={cn(
-        "flex items-center gap-3 rounded-[18px] border-[1.5px] bg-sheet-tint px-3.5 py-2.5",
+        "flex items-center gap-3 rounded-bubble border-[1.5px] bg-sheet-tint px-3.5 py-2.5",
         active ? "border-indigo/45" : "border-indigo/15",
       )}
     >
@@ -964,13 +864,13 @@ function ConversationStrip() {
       </div>
       <span className="ml-auto" />
       {voice.kind === "speaking" && (
-        <DevysButton compact onClick={actions.stopSpeaking}>
+        <Button size="compact" onClick={actions.stopSpeaking}>
           <Hand /> Interrupt
-        </DevysButton>
+        </Button>
       )}
-      <DevysButton kind="quiet" compact onClick={actions.conversationToggled}>
+      <Button variant="quiet" size="compact" onClick={actions.conversationToggled}>
         <X /> End
-      </DevysButton>
+      </Button>
     </div>
   );
 }

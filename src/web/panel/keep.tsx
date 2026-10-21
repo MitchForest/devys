@@ -2,13 +2,13 @@ import { FolderInput } from "lucide-react";
 import type { Ref } from "../../protocol/ref.ts";
 import { useProjects } from "../app/data.ts";
 import { useKeep } from "../app/mutations.ts";
-import { DevysButton } from "../design/buttons.tsx";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
 
 /**
  * Keeps a page or file on a project's overview: a reference, so the record stays in its app.
@@ -23,13 +23,13 @@ export function KeepInProject({ record }: { record: Ref }) {
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <DevysButton
-            compact
-            kind="quiet"
+          <Button
+            size="compact"
+            variant="quiet"
             className={keptIn.length ? undefined : "border border-dashed border-hairline"}
           >
             <FolderInput /> {keptIn.length ? keptIn.map((p) => p.name).join(", ") : "Keep"}
-          </DevysButton>
+          </Button>
         }
       />
       <DropdownMenuContent align="end" className="w-auto">

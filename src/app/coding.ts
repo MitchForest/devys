@@ -22,6 +22,7 @@ import {
   employeeCodingSessions,
   recordCodingSession,
   recordStarted,
+  startedSessions,
 } from "../apps/code/service.ts";
 import { scopeName, type Business, type Person, type Scope } from "../identity/contract.ts";
 import { activeEmployee } from "../identity/service.ts";
@@ -55,6 +56,7 @@ export async function codingRoute(
   if (path === "/coding" && request.method === "GET")
     return respond(CodedWork, {
       work: await Effect.runPromise(codedWork(env.HYPERDRIVE, business.id)),
+      sessions: await Effect.runPromise(startedSessions(env.HYPERDRIVE, business.id)),
     });
   if (path === "/coding" && request.method === "POST")
     return trusted ? startOwned(request, env, access, coding) : forbidden();

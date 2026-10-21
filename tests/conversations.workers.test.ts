@@ -256,3 +256,32 @@ it("client ids are per conversation, and read positions follow insertion order",
   const unseen = await Effect.runPromise(unseenBy(db, scope.businessId, key, "employee:x", 10));
   expect(unseen.map((message) => message.text)).toEqual(["two"]);
 });
+
+it("the record the owner is viewing goes with a message as its ref, and only a record of the business", async () => {
+  const { acme, received, as, say } = await owner();
+  const ops = acme.operations.id;
+  const project = (await (
+    await as("/projects", { method: "POST", body: JSON.stringify({ name: "Launch" }) })
+  ).json()) as { id: string };
+  const viewing = `devys:work/project/${project.id}`;
+  const posted = await say(`direct:${ops}`, {
+    id: "dm-viewing-0001",
+    text: "Is this on track?",
+    ref: viewing,
+  });
+  expect(posted.to).toEqual([ops]);
+  // The text stays what the owner wrote; the employee is told what was on screen.
+  const page = (await (await as(`/conversations/direct:${ops}`)).json()) as {
+    messages: { text: string; ref: string | null }[];
+  };
+  expect(page.messages.at(-1)).toMatchObject({ text: "Is this on track?", ref: viewing });
+  expect(received.at(-1)!.input.text).toContain(`Viewing: ${viewing}`);
+  // Another business's record, or a ref that names nothing here, is refused.
+  for (const ref of [`devys:work/project/${crypto.randomUUID()}`, "devys:nothing/at/all"]) {
+    const refused = await as(`/conversations/direct:${ops}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ id: crypto.randomUUID(), text: "This?", ref }),
+    });
+    expect(refused.status).toBe(400);
+  }
+});

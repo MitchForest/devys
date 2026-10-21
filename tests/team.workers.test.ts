@@ -257,22 +257,11 @@ it("projects have a lead, members, a goal, deadline and budget, and work created
     budget: { cents: 50_000, currency: "USD" },
     member_ids: [growth.id],
   });
-  const put = (change: unknown) =>
-    as(`${path}/projects/${project.id}`, { method: "PUT", body: JSON.stringify(change) });
-  expect((await put({ lead: "nobody" })).status).toBe(400);
-  expect((await put({ members: ["nobody"] })).status).toBe(400);
-  expect((await put({ budget: { cents: 1.5, currency: "USD" } })).status).toBe(400);
-  expect((await put({ deadline: "soon" })).status).toBe(400);
+  // Details change by asking in the channel: there is no owner route that edits a project.
   expect(
-    await json(put({ lead: growth.id, members: [], budget: null, goal: null, deadline: null })),
-  ).toMatchObject({
-    lead_employee_id: growth.id,
-    member_ids: [],
-    budget: null,
-    goal: null,
-    deadline: null,
-  });
-  expect((await as(`${path}/projects/nope`, { method: "PUT", body: "{}" })).status).toBe(404);
+    (await as(`${path}/projects/${project.id}`, { method: "PUT", body: JSON.stringify({}) }))
+      .status,
+  ).toBe(404);
   const create = (projectId: string) =>
     as(`${path}/work`, {
       method: "POST",

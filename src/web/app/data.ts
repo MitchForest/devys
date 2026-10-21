@@ -5,7 +5,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { useCallback } from "react";
-import type { Me as MeSchema, RuntimeState } from "../../app/wire.ts";
+import type { Home, Me as MeSchema, RuntimeState } from "../../app/wire.ts";
 import type { ConversationKey } from "../../conversations/contract.ts";
 import type { Employee } from "../../identity/contract.ts";
 import { api } from "./api.ts";
@@ -73,19 +73,12 @@ export function useEmployeeName() {
     [employees],
   );
 }
-/** A page's title, from its filename. */
-export function useArtifactName() {
-  const artifacts = useArtifacts();
-  return useCallback(
-    (id: string) => artifacts.find((a) => a.id === id)?.filename.replace(/\.html$/, "") ?? "Page",
-    [artifacts],
-  );
-}
-
 export const useWork = () =>
   useQuery({ ...queries.work(useBusinessId()), select: (d) => d.work_items });
+const decisionsOf = (home: Home) => home.needs_you.filter((item) => item.kind === "decision");
+/** Requests waiting on the owner, from Home: the one source of what needs them. */
 export const useDecisions = () =>
-  useQuery({ ...queries.decisions(useBusinessId()), select: (d) => d.decisions });
+  useQuery({ ...queries.home(useBusinessId()), select: decisionsOf });
 export const useProjects = () =>
   useQuery({ ...queries.projects(useBusinessId()), select: (d) => d.projects });
 export const useApps = () => useQuery({ ...queries.apps(useBusinessId()), select: (d) => d.apps });

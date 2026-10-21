@@ -245,7 +245,7 @@ struct PlacesFeatureTests {
         #expect(store.state.topLayer == .file("/acme/plan.md"))
     }
 
-    @Test("What's on screen goes with the next message as a reference line, until the owner removes it")
+    @Test("What's on screen goes with the next message as its ref, until the owner removes it")
     func reference() async {
         let server = PlacesServer()
         let store = await makeStore(server)
@@ -256,23 +256,26 @@ struct PlacesFeatureTests {
         store.send(.draftChanged(key, "  Shorter, please  "))
         store.send(.sendTapped(key))
         await settle("posted") { await server.posts.count == 1 }
-        // Byte for byte what the web sends.
-        #expect(await server.posts.last?.text == "Shorter, please\n\n_Viewing: launch plan.md (devys:documents/file/%2Facme%2Flaunch%20plan.md)_")
+        // As the web sends it: the words as written, and the record as the message's ref.
+        #expect(await server.posts.last?.text == "Shorter, please")
+        #expect(await server.posts.last?.ref == .file("/acme/launch plan.md"))
         #expect(store.state.reference == nil)
         store.send(.layerOpened(.session(workID: "c1", sessionID: "s1")))
-        #expect(store.state.reference?.line == "\n\n_Viewing: Coding session (devys:code/session/s1)_")
+        #expect(store.state.reference?.ref == .codeSession("s1"))
         store.send(.referencingSet(false))
         store.send(.draftChanged(key, "Thanks"))
         store.send(.sendTapped(key))
         await settle("posted again") { await server.posts.count == 2 }
         #expect(await server.posts.last?.text == "Thanks")
-        // The browser is not a record: its line names it without a ref.
+        #expect(await server.posts.last?.ref == nil)
+        // The browser is not a record: nothing goes with the message.
         store.send(.layerOpened(.browser(workID: "c1")))
         store.send(.referencingSet(true))
         store.send(.draftChanged(key, "Look"))
         store.send(.sendTapped(key))
         await settle("posted a third time") { await server.posts.count == 3 }
-        #expect(await server.posts.last?.text == "Look\n\n_Viewing: Browser_")
+        #expect(await server.posts.last?.text == "Look")
+        #expect(await server.posts.last?.ref == nil)
         // An app's records are a list, not a thing to talk about.
         store.send(.layerOpened(.app("documents")))
         #expect(store.state.reference == nil)
@@ -285,7 +288,7 @@ struct PlacesFeatureTests {
         let server = PlacesServer()
         let fromGrowth = await server.add(.project("p1"), "employee:growth", "The sitemap drops /blog.\n\nNeeds a fix.")
         let mentioning = await server.add(.project("p1"), "person:person-preview", "@Engineering can you check deploys?", mentions: ["engineering"])
-        let plain = await server.add(.project("p1"), "person:person-preview", "Decide pricing\n\n_Viewing: plan (devys:documents/artifact/a1)_")
+        let plain = await server.add(.project("p1"), "person:person-preview", "Decide pricing", ref: .artifact("a1"))
         let store = await makeStore(server)
         await open(.project("p1"), in: store)
 
@@ -304,7 +307,7 @@ struct PlacesFeatureTests {
         await settle("the channel again") { store.main?.key == .project("p1") && store.main?.messages.value != nil }
         store.send(.startThreadTapped(plain.id))
         await settle("thread for who answers here") { await server.newItems.count == 3 }
-        // Nobody addressed: who answers in the channel (its lead), titled without the reference line.
+        // Nobody addressed: who answers in the channel (its lead), titled from its words.
         #expect(await server.newItems.last == NewWorkItem(title: "Decide pricing", owner: "growth", objective: "Decide pricing", projectID: "p1"))
     }
 

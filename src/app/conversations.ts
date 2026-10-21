@@ -112,6 +112,9 @@ async function deliver(
         ? [`Replying to ${nameOf(replied.author)}: "${replied.text.slice(0, 280)}"`]
         : []),
       ...(person ? [] : [`From your colleague ${nameOf(message.author)}.`]),
+      // What the owner had open beside the conversation: "this" means it. A reference, not a
+      // grant: read it with your own access.
+      ...(message.ref ? [`Viewing: ${message.ref}`] : []),
     ]
       .filter(Boolean)
       .join("\n");
@@ -163,7 +166,15 @@ export async function postFromPerson(
   businessId: string,
   personId: string,
   key: ConversationKey,
-  input: { id: string; text: string; replyTo?: string; mentions?: string[]; viaVoice?: boolean },
+  input: {
+    id: string;
+    text: string;
+    replyTo?: string;
+    mentions?: string[];
+    viaVoice?: boolean;
+    /** The record the person was viewing as they wrote, checked to be the business's. */
+    ref?: Ref;
+  },
 ) {
   const employees = await Effect.runPromise(employeesOf(env.HYPERDRIVE, businessId));
   const mentions = [
@@ -191,6 +202,7 @@ export async function postFromPerson(
     replyTo: input.replyTo ?? null,
     mentions: [...new Set(mentions)],
     viaVoice: input.viaVoice === true,
+    ref: input.ref ?? null,
   });
   await Effect.runPromise(
     markSeen(env.HYPERDRIVE, businessId, key, `person:${personId}`, {

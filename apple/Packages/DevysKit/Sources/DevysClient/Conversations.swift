@@ -149,17 +149,20 @@ public struct NewMessage: Equatable, Sendable, Encodable {
     public let replyTo: String?
     public let mentions: [String]
     public let viaVoice: Bool
+    /// The record the owner was viewing as they wrote: a reference, not a grant.
+    public let ref: Ref?
 
-    public init(id: String, text: String, replyTo: String? = nil, mentions: [String] = [], viaVoice: Bool = false) {
+    public init(id: String, text: String, replyTo: String? = nil, mentions: [String] = [], viaVoice: Bool = false, ref: Ref? = nil) {
         self.id = id
         self.text = text
         self.replyTo = replyTo
         self.mentions = mentions
         self.viaVoice = viaVoice
+        self.ref = ref
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, text, mentions
+        case id, text, mentions, ref
         case replyTo = "reply_to"
         case viaVoice = "via_voice"
     }
@@ -171,6 +174,7 @@ public struct NewMessage: Equatable, Sendable, Encodable {
         try container.encodeIfPresent(replyTo, forKey: .replyTo)
         if !mentions.isEmpty { try container.encode(mentions, forKey: .mentions) }
         try container.encode(viaVoice, forKey: .viaVoice)
+        try container.encodeIfPresent(ref, forKey: .ref)
     }
 }
 

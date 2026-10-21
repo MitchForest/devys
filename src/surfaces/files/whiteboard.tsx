@@ -17,18 +17,20 @@ declare global {
 type Scene = { elements?: unknown[]; appState?: Record<string, unknown>; files?: unknown };
 
 /**
- * Edits a whiteboard. `onChange` fires when the drawing changes (not on scrolling or selecting)
+ * Shows a whiteboard, editable unless `readOnly` (Excalidraw's view mode). `onChange` fires when the drawing changes (not on scrolling or selecting)
  * and hands over a function that writes the current drawing as `.excalidraw` JSON.
  */
 export function WhiteboardEditor({
   json,
   version,
   dark,
+  readOnly = false,
   onChange,
 }: {
   json: string;
   version: string;
   dark: boolean;
+  readOnly?: boolean;
   onChange: (serialize: () => string) => void;
 }) {
   window.EXCALIDRAW_ASSET_PATH = new URL("excalidraw/", document.baseURI).href;
@@ -48,6 +50,7 @@ export function WhiteboardEditor({
       <Excalidraw
         key={version}
         theme={dark ? "dark" : "light"}
+        viewModeEnabled={readOnly}
         initialData={{
           elements: (scene.elements ?? []) as never,
           appState: { ...scene.appState, collaborators: new Map() } as never,
@@ -69,7 +72,7 @@ export function WhiteboardEditor({
               });
             return;
           }
-          if (before.at === at) return;
+          if (before.at === at || readOnly) return;
           onChange(() => serializeAsJSON(elements, appState, files, "local"));
         }}
       />

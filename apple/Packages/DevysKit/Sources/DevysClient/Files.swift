@@ -51,6 +51,18 @@ public enum FileExpectation: Equatable, Sendable {
     case overwrite
 }
 
+/// A file the owner saves by hand: its path, and the work item they have taken over. The server
+/// refuses any other save (owner decision, 2026-10-21).
+public struct HandEdit: Equatable, Sendable {
+    public let work: String
+    public let path: String
+
+    public init(work: String, path: String) {
+        self.work = work
+        self.path = path
+    }
+}
+
 /// How a save went: saved at a new revision, or the file had changed (with its newer text).
 public enum FileSave: Equatable, Sendable {
     case saved(revision: String)
@@ -113,9 +125,10 @@ extension DevysHTTPClient {
         return FileBytes(data: data, revision: response.value(forHTTPHeaderField: "x-devys-revision") ?? "")
     }
 
-    public func saveFileBytes(_ session: DeviceSession, businessID: String, path: String, data: Data, expected: FileExpectation) async throws -> FileSave {
+    public func saveFileBytes(_ session: DeviceSession, businessID: String, edit: HandEdit, data: Data, expected: FileExpectation) async throws -> FileSave {
         struct Saved: Decodable { let revision: String }
-        var request = try authorizedQuery(session, "api/businesses/\(businessID)/files/raw", path: path, method: "PUT")
+        var request = try authorizedQuery(session, "api/businesses/\(businessID)/files/raw", path: edit.path, method: "PUT")
+        request.url = request.url.map { $0.appending(queryItems: [URLQueryItem(name: "work", value: edit.work)]) }
         switch expected {
         case .revision(let revision): request.url = request.url.map { $0.appending(queryItems: [URLQueryItem(name: "expected_revision", value: revision)]) }
         case .new: request.url = request.url.map { $0.appending(queryItems: [URLQueryItem(name: "expected_revision", value: "none")]) }
@@ -130,20 +143,22 @@ extension DevysHTTPClient {
         }
     }
 
-    public func saveFile(_ session: DeviceSession, businessID: String, path: String, content: String, expectedRevision: String?) async throws -> FileSave {
+    public func saveFile(_ session: DeviceSession, businessID: String, edit: HandEdit, content: String, expectedRevision: String?) async throws -> FileSave {
         struct Body: Encodable {
             let path: String
             let content: String
             let expectedRevision: String?
+            let work: String
             enum CodingKeys: String, CodingKey {
-                case path, content
+                case path, content, work
                 case expectedRevision = "expected_revision"
             }
         }
         struct Saved: Decodable { let revision: String }
         struct Conflict: Decodable { let current: FileText? }
+        let body = Body(path: edit.path, content: content, expectedRevision: expectedRevision, work: edit.work)
         do {
-            let saved: Saved = try await send(json(session, path: "api/businesses/\(businessID)/files/text", method: "PUT", body: Body(path: path, content: content, expectedRevision: expectedRevision)))
+            let saved: Saved = try await send(json(session, path: "api/businesses/\(businessID)/files/text", method: "PUT", body: body))
             return .saved(revision: saved.revision)
         } catch DevysHTTPError.rejected(409, let message) {
             let conflict = try? Wire.decoder().decode(Conflict.self, from: Data(message.utf8))
@@ -175,16 +190,17 @@ public struct FilesClient: Sendable {
     public var list: @Sendable (_ businessID: String, _ path: String?) async throws -> (root: String, entries: [FileEntry])
     public var text: @Sendable (_ businessID: String, _ path: String) async throws -> FileText
     public var bytes: @Sendable (_ businessID: String, _ path: String) async throws -> FileBytes
-    public var save: @Sendable (_ businessID: String, _ path: String, _ content: String, _ expectedRevision: String?) async throws -> FileSave
-    public var saveBytes: @Sendable (_ businessID: String, _ path: String, _ data: Data, _ expected: FileExpectation) async throws -> FileSave
+    /// Saves for the work item the owner has taken over (`work`).
+    public var save: @Sendable (_ businessID: String, _ work: String, _ path: String, _ content: String, _ expectedRevision: String?) async throws -> FileSave
+    public var saveBytes: @Sendable (_ businessID: String, _ work: String, _ path: String, _ data: Data, _ expected: FileExpectation) async throws -> FileSave
     public var comment: @Sendable (_ businessID: String, _ path: String, _ employee: String, [FileComment]) async throws -> Void
 
     public init(
         list: @escaping @Sendable (String, String?) async throws -> (root: String, entries: [FileEntry]),
         text: @escaping @Sendable (String, String) async throws -> FileText,
         bytes: @escaping @Sendable (String, String) async throws -> FileBytes,
-        save: @escaping @Sendable (String, String, String, String?) async throws -> FileSave,
-        saveBytes: @escaping @Sendable (String, String, Data, FileExpectation) async throws -> FileSave,
+        save: @escaping @Sendable (String, String, String, String, String?) async throws -> FileSave,
+        saveBytes: @escaping @Sendable (String, String, String, Data, FileExpectation) async throws -> FileSave,
         comment: @escaping @Sendable (String, String, String, [FileComment]) async throws -> Void
     ) {
         self.list = list
@@ -200,11 +216,11 @@ public struct FilesClient: Sendable {
             list: { business, path in try await hub.call { api, session in try await api.files(session, businessID: business, path: path) } },
             text: { business, path in try await hub.call { api, session in try await api.fileText(session, businessID: business, path: path) } },
             bytes: { business, path in try await hub.call { api, session in try await api.fileBytes(session, businessID: business, path: path) } },
-            save: { business, path, content, revision in
-                try await hub.call { api, session in try await api.saveFile(session, businessID: business, path: path, content: content, expectedRevision: revision) }
+            save: { business, work, path, content, revision in
+                try await hub.call { api, session in try await api.saveFile(session, businessID: business, edit: HandEdit(work: work, path: path), content: content, expectedRevision: revision) }
             },
-            saveBytes: { business, path, data, expected in
-                try await hub.call { api, session in try await api.saveFileBytes(session, businessID: business, path: path, data: data, expected: expected) }
+            saveBytes: { business, work, path, data, expected in
+                try await hub.call { api, session in try await api.saveFileBytes(session, businessID: business, edit: HandEdit(work: work, path: path), data: data, expected: expected) }
             },
             comment: { business, path, employee, comments in
                 try await hub.call { api, session in try await api.commentOnFile(session, businessID: business, path: path, employee: employee, comments: comments) }
@@ -217,8 +233,8 @@ public struct FilesClient: Sendable {
         list: { _, _ in ("", []) },
         text: { _, path in FileText(path: path, content: "", revision: "") },
         bytes: { _, _ in FileBytes(data: Data(), revision: "") },
-        save: { _, _, _, _ in .saved(revision: "") },
-        saveBytes: { _, _, _, _ in .saved(revision: "") },
+        save: { _, _, _, _, _ in .saved(revision: "") },
+        saveBytes: { _, _, _, _, _ in .saved(revision: "") },
         comment: { _, _, _, _ in }
     )
 }

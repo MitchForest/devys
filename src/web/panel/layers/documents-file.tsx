@@ -1,45 +1,66 @@
 import { MessageSquarePlus, Presentation, Save, Send } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
-import { api } from "../app/api.ts";
-import type { FileAnchor } from "../../app/wire.ts";
+import { api } from "../../app/api.ts";
+import type { FileAnchor } from "../../../app/wire.ts";
 
 /** What the owner can select here: text in a document, or regions of a PDF page. */
 type Anchor = Exclude<FileAnchor, { kind: "lines" }>;
-import type { FileEntry } from "../../workspace/contract.ts";
-import { useDark } from "../app/theme.ts";
-import { isOpen } from "../app/names.ts";
-import { useEmployees, useWork } from "../app/data.ts";
-import { keys } from "../app/query.ts";
-import { DevysButton } from "../design/buttons.tsx";
-import { EmptyNote } from "../design/primitives.tsx";
-import { fileKind } from "../../surfaces/files/kind.ts";
-import type { TextSelection } from "../../surfaces/files/markdown.tsx";
-import type { PdfRegion } from "../../surfaces/files/pdf.tsx";
+import type { FileEntry } from "../../../workspace/contract.ts";
+import { useDark } from "../../app/theme.ts";
+import { isOpen } from "../../app/names.ts";
+import { useEmployees, useWork } from "../../app/data.ts";
+import { keys } from "../../app/query.ts";
+import { clock } from "../../lib/format.ts";
+import { EmptyNote } from "../../design/primitives.tsx";
+import { fileKind } from "../../../surfaces/files/kind.ts";
+import type { TextSelection } from "../../../surfaces/files/markdown.tsx";
+import type { PdfRegion } from "../../../surfaces/files/pdf.tsx";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 
-// Each viewer carries a heavy library; it loads when a file of its kind opens.
+// Each viewer carries a heavy library; it loads when a file of its kind opens, in the browser
+// only (the server render shows nothing for it), so the Worker never bundles the editors.
 const MarkdownDocument = lazy(() =>
-  import("../../surfaces/files/markdown.tsx").then((m) => ({ default: m.MarkdownDocument })),
+  import.meta.env.SSR
+    ? (Promise.resolve({ default: () => null }) as never)
+    : import("../../../surfaces/files/markdown.tsx").then((m) => ({ default: m.MarkdownDocument })),
 );
 const PdfDocument = lazy(() =>
-  import("../../surfaces/files/pdf.tsx").then((m) => ({ default: m.PdfDocument })),
+  import.meta.env.SSR
+    ? (Promise.resolve({ default: () => null }) as never)
+    : import("../../../surfaces/files/pdf.tsx").then((m) => ({ default: m.PdfDocument })),
 );
 const WordDocument = lazy(() =>
-  import("../../surfaces/files/office.tsx").then((m) => ({ default: m.WordDocument })),
+  import.meta.env.SSR
+    ? (Promise.resolve({ default: () => null }) as never)
+    : import("../../../surfaces/files/office.tsx").then((m) => ({ default: m.WordDocument })),
 );
 const SheetEditor = lazy(() =>
-  import("../../surfaces/files/sheet.tsx").then((m) => ({ default: m.SheetEditor })),
+  import.meta.env.SSR
+    ? (Promise.resolve({ default: () => null }) as never)
+    : import("../../../surfaces/files/sheet.tsx").then((m) => ({ default: m.SheetEditor })),
 );
 const SlidesEditor = lazy(() =>
-  import("../../surfaces/files/slides.tsx").then((m) => ({ default: m.SlidesEditor })),
+  import.meta.env.SSR
+    ? (Promise.resolve({ default: () => null }) as never)
+    : import("../../../surfaces/files/slides.tsx").then((m) => ({ default: m.SlidesEditor })),
 );
 const WhiteboardEditor = lazy(() =>
-  import("../../surfaces/files/whiteboard.tsx").then((m) => ({ default: m.WhiteboardEditor })),
+  import.meta.env.SSR
+    ? (Promise.resolve({ default: () => null }) as never)
+    : import("../../../surfaces/files/whiteboard.tsx").then((m) => ({
+        default: m.WhiteboardEditor,
+      })),
 );
 const CodeFile = lazy(() =>
-  import("../../surfaces/files/code.tsx").then((m) => ({ default: m.CodeFile })),
+  import.meta.env.SSR
+    ? (Promise.resolve({ default: () => null }) as never)
+    : import("../../../surfaces/files/code.tsx").then((m) => ({ default: m.CodeFile })),
 );
-const slides = () => import("../../surfaces/files/slides.tsx");
+const slides = () =>
+  import.meta.env.SSR ? new Promise<never>(() => {}) : import("../../../surfaces/files/slides.tsx");
 
 interface Comment {
   anchor: Anchor;
@@ -49,16 +70,23 @@ interface Comment {
 /** A file as it was read: its text or bytes, and the revision a save goes over. */
 type Loaded = { text: string; revision: string } | { bytes: ArrayBuffer; revision: string };
 
-/** One file from the business's folder: edited in place where an editor exists, else viewed. */
+/**
+ * One file from the business's folder, read-only: the owner asks about a selection or comments
+ * on it. Opened in the thread of a work item the owner has taken over (`work`), documents,
+ * sheets and whiteboards edit in place and save over the revision they were read at.
+ */
 export function FileView({
   businessId,
   file,
   turn = 0,
+  work,
 }: {
   businessId: string;
   file: FileEntry;
   /** The turn it is read at: a finished turn reads it again. */
   turn?: number;
+  /** The work item the owner has taken over, whose thread this file opened in. */
+  work?: string | undefined;
 }) {
   const kind = fileKind(file.name);
   const binary = kind === "pdf" || kind === "word" || kind === "sheet";
@@ -109,9 +137,10 @@ export function FileView({
 
   const edited = (serialize: () => string | ArrayBuffer) => setDraft(() => serialize);
   const write = async (content: string | ArrayBuffer, revision: string) => {
+    if (!work) return { conflict: true as const };
     if (typeof content !== "string")
-      return api.saveFileBytes(businessId, file.path, content, revision);
-    const result = await api.saveFile(businessId, file.path, content, revision);
+      return api.saveFileBytes(businessId, work, file.path, content, revision);
+    const result = await api.saveFile(businessId, work, file.path, content, revision);
     return result.conflict ? { conflict: true as const } : result;
   };
   const save = async (overwrite = false) => {
@@ -131,7 +160,7 @@ export function FileView({
     );
     setDraft(null);
     setConflict(false);
-    setSaved(new Date().toLocaleTimeString());
+    setSaved(clock(new Date()));
   };
   const reload = async () => {
     const newer = await read();
@@ -141,14 +170,17 @@ export function FileView({
     setVersion(newer.revision);
   };
   const exportDeck = async () => {
-    if (!loaded || !("text" in loaded)) return;
+    if (!loaded || !("text" in loaded) || !work) return;
     const { deckToPptx, pptxPath } = await slides();
     const source = draft ? (draft() as string) : loaded.text;
     const target = pptxPath(file.path);
-    await api.saveFileBytes(businessId, target, await deckToPptx(source));
-    setSaved(`exported ${target.split("/").at(-1)} at ${new Date().toLocaleTimeString()}`);
+    await api.saveFileBytes(businessId, work, target, await deckToPptx(source));
+    setSaved(`exported ${target.split("/").at(-1)} at ${clock(new Date())}`);
   };
+  const editable =
+    work !== undefined && (kind === "markdown" || kind === "sheet" || kind === "whiteboard");
   useEffect(() => {
+    if (!editable) return;
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key === "s") {
         event.preventDefault();
@@ -161,7 +193,6 @@ export function FileView({
 
   const text = loaded && "text" in loaded ? loaded.text : null;
   const bytes = loaded && "bytes" in loaded ? loaded.bytes : null;
-  const editable = kind === "markdown" || kind === "sheet" || kind === "whiteboard";
   const viewer = (() => {
     if (problem)
       return (
@@ -176,12 +207,14 @@ export function FileView({
           <SlidesEditor
             markdown={text}
             version={version}
+            readOnly={!editable}
             onChange={(next) => (next === text ? setDraft(null) : edited(() => next))}
           />
         ) : (
           <MarkdownDocument
             markdown={text}
             version={version}
+            readOnly={!editable}
             onChange={(next) => (next === text ? setDraft(null) : edited(() => next))}
             onSelect={(picked: TextSelection | null) =>
               setSelection(picked && { kind: "text", ...picked })
@@ -189,10 +222,25 @@ export function FileView({
           />
         );
       case "text":
-        return text !== null ? <CodeFile name={file.name} contents={text} dark={dark} /> : null;
+        return text !== null ? (
+          <CodeFile
+            name={file.name}
+            contents={text}
+            dark={dark}
+            onSelect={(picked: TextSelection | null) =>
+              setSelection(picked && { kind: "text", ...picked })
+            }
+          />
+        ) : null;
       case "whiteboard":
         return text !== null ? (
-          <WhiteboardEditor json={text} version={version} dark={dark} onChange={edited} />
+          <WhiteboardEditor
+            json={text}
+            version={version}
+            dark={dark}
+            readOnly={!editable}
+            onChange={edited}
+          />
         ) : null;
       case "pdf":
         return bytes ? (
@@ -211,6 +259,7 @@ export function FileView({
             name={file.name}
             version={version}
             dark={dark}
+            readOnly={!editable}
             onChange={edited}
           />
         ) : null;
@@ -257,15 +306,15 @@ export function FileView({
           </span>
         )}
         <span className="ml-auto" />
-        {deck && (
-          <DevysButton compact kind="quiet" onClick={() => void exportDeck()}>
+        {deck && editable && (
+          <Button size="compact" variant="quiet" onClick={() => void exportDeck()}>
             <Presentation /> Export .pptx
-          </DevysButton>
+          </Button>
         )}
         {editable && (
-          <DevysButton compact disabled={!draft} onClick={() => void save()}>
+          <Button size="compact" disabled={!draft} onClick={() => void save()}>
             <Save /> Save
-          </DevysButton>
+          </Button>
         )}
       </div>
       {conflict && (
@@ -274,12 +323,12 @@ export function FileView({
           role="alert"
         >
           This file changed on the Mac since you opened it.
-          <DevysButton compact kind="quiet" onClick={() => void reload()}>
+          <Button size="compact" variant="quiet" onClick={() => void reload()}>
             Load the newer version
-          </DevysButton>
-          <DevysButton compact onClick={() => void save(true)}>
+          </Button>
+          <Button size="compact" onClick={() => void save(true)}>
             Keep mine
-          </DevysButton>
+          </Button>
         </div>
       )}
       <div className="min-h-0 flex-1">
@@ -287,7 +336,7 @@ export function FileView({
           {viewer}
         </Suspense>
       </div>
-      {((kind === "markdown" && !deck) || kind === "pdf") && (
+      {((kind === "markdown" && !deck) || kind === "pdf" || kind === "text") && (
         <CommentBar
           businessId={businessId}
           path={file.path}
@@ -356,7 +405,7 @@ function CommentBar({
       {where ? (
         <div className="flex items-center gap-2">
           <span className="max-w-[40%] shrink-0 truncate text-caption text-ink-3">{where}</span>
-          <input
+          <Input
             value={text}
             onChange={(event) => setText(event.target.value)}
             onKeyDown={(event) => {
@@ -367,10 +416,11 @@ function CommentBar({
             }}
             placeholder="Comment on this"
             aria-label="Comment on the selection"
-            className="min-w-0 flex-1 rounded-[8px] bg-sheet-tint px-2.5 py-1.5 text-detail text-ink outline-none focus-visible:ring-2 focus-visible:ring-indigo/40"
+            density="compact"
+            className="flex-1"
           />
-          <DevysButton
-            compact
+          <Button
+            size="compact"
             disabled={!text.trim()}
             onClick={() => {
               onAdd({ anchor: selection!, text: text.trim() });
@@ -378,7 +428,7 @@ function CommentBar({
             }}
           >
             <MessageSquarePlus /> Add
-          </DevysButton>
+          </Button>
         </div>
       ) : null}
       {comments.length > 0 && (
@@ -386,11 +436,12 @@ function CommentBar({
           <span className="text-caption text-ink-3">
             {comments.length} comment{comments.length === 1 ? "" : "s"} for
           </span>
-          <select
+          <NativeSelect
             value={to}
             onChange={(event) => setTo(event.target.value)}
             aria-label="Send comments to"
-            className="rounded-[8px] bg-sheet-tint px-2 py-1 text-detail text-ink"
+            density="compact"
+            className="w-auto px-2 py-1"
           >
             {employees.map((employee) => (
               <option key={employee.id} value={employee.id}>
@@ -406,10 +457,10 @@ function CommentBar({
                 ))}
               </optgroup>
             )}
-          </select>
-          <DevysButton compact onClick={send}>
+          </NativeSelect>
+          <Button size="compact" onClick={send}>
             <Send /> Send
-          </DevysButton>
+          </Button>
         </div>
       )}
       {problem && <span className="text-detail text-ink-2">{problem}</span>}

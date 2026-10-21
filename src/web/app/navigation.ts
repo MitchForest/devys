@@ -26,12 +26,13 @@ export type Place =
   | { kind: "project"; id: string }
   | { kind: "thread"; workId: string };
 
-/** A temporary view stacked over the right panel's permanent view. */
+/**
+ * A temporary view stacked over the right panel's permanent view: a record (by its ref, shown
+ * by the layer registry for its kind), an app's records, or the live browser of a thread's work.
+ */
 export type Layer =
-  | { kind: "artifact"; id: string }
-  | { kind: "file"; path: string }
+  | { kind: "record"; ref: Ref }
   | { kind: "app"; app: string }
-  | { kind: "session"; workId: string; sessionId: string }
   | { kind: "browser"; workId: string };
 
 declare module "@tanstack/history" {
@@ -97,46 +98,15 @@ export const conversationOf = (
         ? `project:${place.id}`
         : `work:${place.workId}`;
 
-/** The record a layer shows, as a ref; an app or the browser is not a record. */
-function refOfLayer(layer: Layer): Ref | undefined {
-  switch (layer.kind) {
-    case "artifact":
-      return ref("documents", "artifact", layer.id);
-    case "file":
-      return ref("documents", "file", layer.path);
-    case "session":
-      return ref("code", "session", layer.sessionId);
-    default:
-      return undefined;
-  }
-}
+/** The record a layer shows; an app or the browser is not a record. */
+export const refOfLayer = (layer: Layer): Ref | undefined =>
+  layer.kind === "record" ? layer.ref : undefined;
 
-/** The layer that shows a page or a file, from its ref. */
-export function layerOfRef(value: Ref): Layer | undefined {
-  const parts = parseRef(value);
-  if (parts?.app !== "documents") return undefined;
-  return parts.kind === "artifact"
-    ? { kind: "artifact", id: parts.id }
-    : { kind: "file", path: parts.id };
-}
+/** The layer that shows a record, or undefined for anything that is not a ref. */
+export const layerOfRef = (value: string): Layer | undefined =>
+  parseRef(value) ? { kind: "record", ref: value as Ref } : undefined;
 
-/** What a layer is, in words and as a ref, for its header and the line sent with a message. */
-export function layerReference(layer: Layer, names: { artifact: (id: string) => string }) {
-  const title =
-    layer.kind === "artifact"
-      ? names.artifact(layer.id)
-      : layer.kind === "file"
-        ? layer.path.split("/").at(-1)!
-        : layer.kind === "app"
-          ? appTitle(layer.app)
-          : layer.kind === "session"
-            ? "Coding session"
-            : "Browser";
-  return { title, ref: refOfLayer(layer) };
-}
-const appTitle = (app: string) => app.charAt(0).toUpperCase() + app.slice(1);
-
-/** The stack a URL describes. A coding session and the browser belong to the thread's work. */
+/** The stack a URL describes. The browser belongs to the thread's work. */
 function layersOf(search: LayerSearch, place: Place): Layer[] {
   const work = place.kind === "thread" ? place.workId : undefined;
   const base: Layer[] =
@@ -147,21 +117,7 @@ function layersOf(search: LayerSearch, place: Place): Layer[] {
       : search.app
         ? [{ kind: "app", app: search.app }]
         : [];
-  return [
-    ...base,
-    ...(search.layer ?? []).flatMap((value): Layer[] => {
-      const parts = parseRef(value);
-      if (parts?.app === "documents")
-        return [
-          parts.kind === "artifact"
-            ? { kind: "artifact", id: parts.id }
-            : { kind: "file", path: parts.id },
-        ];
-      if (parts?.app === "code" && work)
-        return [{ kind: "session", workId: work, sessionId: parts.id }];
-      return [];
-    }),
-  ];
+  return [...base, ...(search.layer ?? []).flatMap((value) => layerOfRef(value) ?? [])];
 }
 
 /** The URL's form of a stack: its app (always at the bottom), then each record's ref. */
@@ -375,14 +331,16 @@ function makeNav(router: Router) {
       const { layers, history } = now();
       const top = layers.at(-1);
       ui.openedLayer();
-      if (top?.kind === "artifact" && sameName(top.id, id))
-        return setLayers([...layers.slice(0, -1), { kind: "artifact", id }], {
+      const page: Layer = { kind: "record", ref: ref("documents", "artifact", id) };
+      const showing = top?.kind === "record" ? parseRef(top.ref) : undefined;
+      if (showing?.kind === "artifact" && sameName(showing.id, id))
+        return setLayers([...layers.slice(0, -1), page], {
           replace: true,
           ...(history.auto ? { auto: true } : {}),
           ...(author ? { updatedBy: author } : {}),
         });
       if (top && !history.auto) return;
-      setLayers([{ kind: "artifact", id }], { replace: true, auto: true });
+      setLayers([page], { replace: true, auto: true });
     },
     openSettings: (section = "account") => {
       const { business, place, history } = now();

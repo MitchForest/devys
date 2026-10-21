@@ -70,7 +70,8 @@ test("New project with goal, deadline, budget, lead and team opens its channel a
     await expect(overview.getByText("$1,500")).toBeVisible();
     await expect(overview.getByRole("button", { name: "Growth" })).toBeVisible();
     await expect(overview.getByRole("button", { name: "Head of Operations" })).toBeVisible();
-    await expect(overview.getByText("No threads yet.", { exact: false })).toBeVisible();
+    // No work yet: the Work section holds no standing description.
+    await expect(overview.getByText("No threads yet.", { exact: false })).toHaveCount(0);
 
     const project = (await sql.row<{
       id: string;
@@ -98,18 +99,8 @@ test("New project with goal, deadline, budget, lead and team opens its channel a
       ]),
     ).toBeTruthy();
 
-    // The overview edits the project in place.
-    await overview.getByRole("button", { name: "Edit project" }).click();
-    await overview.getByLabel("Goal").fill("Ship Acme v1 to twenty customers");
-    await overview.getByRole("button", { name: "Save" }).click();
-    await expect(overview.getByText("Ship Acme v1 to twenty customers")).toBeVisible();
-    await expect
-      .poll(
-        async () =>
-          (await sql.row<{ goal: string }>("SELECT goal FROM projects WHERE id = $1", [project.id]))
-            ?.goal,
-      )
-      .toBe("Ship Acme v1 to twenty customers");
+    // The overview is read-only: the project changes by asking in its channel.
+    await expect(overview.getByRole("button", { name: "Edit project" })).toHaveCount(0);
   } finally {
     await page.close();
     await stores.remove([owner]);
@@ -167,13 +158,12 @@ test("a page card opens a layer, is kept in the project, and a new version repla
     await page.reload();
     await expect(layer.getByTestId("panel-title")).toHaveText("Pricing");
     await expect(page.getByTestId("reference-chip")).toHaveText("Viewing Pricing");
-    // The next message names the page by its ref.
+    // The next message carries the page as its ref; its words stay as written.
     await page.getByLabel("Message Launch").fill("Make it shorter");
     await page.getByRole("button", { name: "Send", exact: true }).click();
     await expect.poll(() => sent.length).toBe(1);
-    expect(sent[0]!.body.text).toBe(
-      `Make it shorter\n\n_Viewing: Pricing (devys:documents/artifact/${first.id})_`,
-    );
+    expect(sent[0]!.body.text).toBe("Make it shorter");
+    expect(sent[0]!.body.ref).toBe(`devys:documents/artifact/${first.id}`);
 
     // Keep puts it on the project's overview: a reference, so the page stays in Documents.
     await layer.getByRole("button", { name: "Keep" }).click();

@@ -67,6 +67,7 @@ import {
   TextConflict,
   WorkItems,
   type FileComments,
+  type TextSave,
 } from "../../app/wire.ts";
 
 /** The templates a new business can start its team with, beside the Head of Operations. */
@@ -78,6 +79,8 @@ interface OutgoingMessage {
   reply_to?: string;
   mentions?: string[];
   via_voice?: boolean;
+  /** The record the owner is viewing beside the conversation. */
+  ref?: Ref;
 }
 export interface NewCodingSession {
   client_id: string;
@@ -249,12 +252,19 @@ export const api = {
   fileText: (b: string, path: string) =>
     get(FileText, `${business(b)}/files/text?path=${encodeURIComponent(path)}`),
   /** Saves over the revision that was read; a newer file on the Mac comes back as `conflict`. */
-  saveFile: async (b: string, path: string, content: string, expectedRevision: string | null) => {
+  saveFile: async (
+    b: string,
+    work: string,
+    path: string,
+    content: string,
+    expectedRevision: string | null,
+  ) => {
     const url = `${business(b)}/files/text`;
+    const save: TextSave = { path, content, expected_revision: expectedRevision, work };
     const response = await fetch(url, {
       method: "PUT",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ path, content, expected_revision: expectedRevision }),
+      body: JSON.stringify(save),
     });
     if (response.status === 409) return await conflictOf(TextConflict, url, response);
     if (!response.ok)
@@ -272,17 +282,19 @@ export const api = {
   },
   /**
    * Saves bytes over the revision that was read (`null`: the file must not exist yet). With no
-   * revision at all it overwrites, which only derived copies such as a deck's .pptx do.
+   * revision at all it overwrites, which only derived copies such as a deck's .pptx do. Saving
+   * by hand is for the work item the owner has taken over (`work`).
    */
   saveFileBytes: async (
     b: string,
+    work: string,
     path: string,
     bytes: ArrayBuffer,
     expectedRevision?: string | null,
   ) => {
     const revision =
       expectedRevision === undefined ? "" : `&expected_revision=${expectedRevision ?? "none"}`;
-    const url = `${business(b)}/files/raw?path=${encodeURIComponent(path)}${revision}`;
+    const url = `${business(b)}/files/raw?path=${encodeURIComponent(path)}&work=${encodeURIComponent(work)}${revision}`;
     const response = await fetch(url, { method: "PUT", body: bytes });
     if (response.status === 409) return await conflictOf(BytesConflict, url, response);
     if (!response.ok)
@@ -299,7 +311,6 @@ export const api = {
   closeTerminal: (b: string, id: string) => post(Closed, `${business(b)}/terminals/${id}/close`),
   terminalSocket: (b: string, id: string, offset: number) =>
     `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${business(b)}/terminals/${id}/socket?offset=${offset}`,
-  decisions: (b: string) => get(Decisions, `${business(b)}/decisions`),
   /** One work item's requests, answered ones included. */
   workDecisions: (b: string, workItem: string) =>
     get(Decisions, `${business(b)}/decisions?work_item=${encodeURIComponent(workItem)}`),
@@ -308,8 +319,6 @@ export const api = {
   projects: (b: string) => get(Projects, `${business(b)}/projects`),
   createProject: (b: string, project: ProjectChange & { name: string }) =>
     post(Project, `${business(b)}/projects`, project),
-  updateProject: (b: string, id: string, change: ProjectChange) =>
-    put(Project, `${business(b)}/projects/${id}`, change),
   addToProject: (b: string, project: string, ref: Ref) =>
     post(ProjectItem, `${business(b)}/projects/${project}/items`, { ref }),
   removeFromProject: (b: string, project: string, item: string) =>

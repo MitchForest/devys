@@ -6,6 +6,7 @@ import { postFromPerson } from "./conversations.ts";
 import { activeEmployee } from "../identity/service.ts";
 import { answerDecision, decisionsFor, pendingDecisions } from "../authority/service.ts";
 import {
+  workItem,
   workItems,
   createWorkItem,
   setTakeover,
@@ -96,6 +97,15 @@ export async function workRoute(
   const id = /^\/work\/([A-Za-z0-9-]{1,64})$/.exec(path)?.[1];
   if (!id) return notFound();
   const input = await decodedBody(request, 8_000, WorkItemChange);
+  // Work is read-only to people until they take it over, which fences its employee; until then
+  // they ask in its thread (.docs/PRODUCT_EXPERIENCE.md#layers).
+  const current = await Effect.runPromise(workItem(env.HYPERDRIVE, business.id, id));
+  if (!current) return notFound();
+  if (current.taken_over_by !== person.id)
+    return new Response(
+      "Take over the work item to change it by hand, or ask its employee in its thread.",
+      { status: 409 },
+    );
   if (input.owner !== undefined && !(await isEmployee(input.owner)))
     return new Response("The owner must be an employee of this business", { status: 400 });
   const change: Change = {

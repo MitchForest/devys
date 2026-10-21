@@ -330,7 +330,7 @@ export function workCapabilities(
     capability({
       name: "projectAdd",
       description:
-        "Show a saved artifact (devys:documents/artifact/<id>) or a file in the business folder (devys:documents/file/<percent-encoded absolute path>) on a project (its ref), by the record's ref. It's a reference: the record keeps one home and can appear in several projects. Work items join a project when created with its ref as project.",
+        "Show a saved artifact (devys:documents/artifact/<id>), a file in the business folder (devys:documents/file/<percent-encoded absolute path>) or a coding session (devys:code/session/<id>) on a project (its ref), by the record's ref. It's a reference: the record keeps one home and can appear in several projects. Work items join a project when created with its ref as project.",
       effect: "change",
       replay: "idempotent",
       input: Schema.Struct({ project: ProjectRef, ref: Ref }),
@@ -341,7 +341,7 @@ export function workCapabilities(
           if (!(yield* rpc(() => keepable(businessId, kept))))
             return yield* new CapabilityError({
               code: "invalid_input",
-              message: "No such artifact or file in this business",
+              message: "No such artifact, file or coding session in this business",
             });
           const item = yield* stored(addToProject(db, businessId, projectId, kept));
           if (!item)

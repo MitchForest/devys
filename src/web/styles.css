@@ -133,9 +133,12 @@
   --text-data: 12px;
 
   /* DevysRadius. */
+  --radius-tiny: 5px;
   --radius-small: 8px;
   --radius-control: 10px;
+  --radius-row: 12px;
   --radius-workspace: 14px;
+  --radius-bubble: 18px;
   --radius-card: 16px;
   --radius-sheet: 22px;
   --radius-sm: 6px;

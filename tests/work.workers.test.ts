@@ -395,19 +395,27 @@ it("members manage work and answer requests over HTTP; stale revisions conflict"
   expect(await unknownState.text()).toContain('["state"]');
   expect((await call("/work", { title: "  ", owner: scope.employeeId })).status).toBe(400);
   expect((await call(`/work/${created.id}`, { state: "waiting" })).status).toBe(400);
-  const moved = await call(`/work/${created.id}`, {
+  // Work is read-only to the owner until they take it over (owner decision 2026-10-21).
+  const asked = await call(`/work/${created.id}`, {
     expected_revision: created.revision,
+    state: "waiting",
+  });
+  expect(asked.status).toBe(409);
+  expect(await asked.text()).toContain("Take over");
+  const taken = (await (await call(`/work/${created.id}/takeover`, {})).json()) as {
+    taken_over_by: string;
+    revision: number;
+  };
+  expect(taken.taken_over_by).toBe(person);
+  const moved = await call(`/work/${created.id}`, {
+    expected_revision: taken.revision,
     state: "waiting",
   });
   expect(moved.status).toBe(200);
   expect(
-    (await call(`/work/${created.id}`, { expected_revision: created.revision, state: "ready" }))
+    (await call(`/work/${created.id}`, { expected_revision: taken.revision, state: "ready" }))
       .status,
   ).toBe(409);
-  const taken = (await (await call(`/work/${created.id}/takeover`, {})).json()) as {
-    taken_over_by: string;
-  };
-  expect(taken.taken_over_by).toBe(person);
   const listed = (await (await call("/work")).json()) as { work_items: { id: string }[] };
   expect(listed.work_items.map((c) => c.id)).toContain(created.id);
 

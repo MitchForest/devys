@@ -97,7 +97,7 @@ struct FileView: View {
                 }
                     .buttonStyle(DevysButtonStyle(.quiet, compact: true))
                     .help(quote == nil ? "Ask about this file" : "Ask about the selection")
-                if deck {
+                if deck && editable {
                     Button("Export .pptx", systemImage: "rectangle.on.rectangle") { Task { await exportDeck() } }
                         .buttonStyle(DevysButtonStyle(.quiet, compact: true))
                 }
@@ -224,14 +224,14 @@ struct FileView: View {
     }
 
     private func save(overwrite: Bool = false) async {
-        guard editable, let loaded, let content = await written() else { return }
+        guard editable, let work = item?.id, let loaded, let content = await written() else { return }
         let result: FileSave
         do {
             // Keeping mine saves over whatever is on the Mac now.
             let revision = overwrite ? try await read().revision : loaded.revision
             switch content {
-            case .text(let text): result = try await files.save(store.businessID, file.path, text, revision)
-            case .bytes(let data): result = try await files.saveBytes(store.businessID, file.path, data, .revision(revision))
+            case .text(let text): result = try await files.save(store.businessID, work, file.path, text, revision)
+            case .bytes(let data): result = try await files.saveBytes(store.businessID, work, file.path, data, .revision(revision))
             }
         } catch DevysHTTPError.rejected(_, let message) where !message.isEmpty {
             // The server says why, such as a file too large or a path outside the business.
@@ -258,13 +258,13 @@ struct FileView: View {
     }
 
     private func exportDeck() async {
-        guard let data = await surface.exportDeck() else {
+        guard editable, let work = item?.id, let data = await surface.exportDeck() else {
             actionError = "The deck couldn't be exported."
             return
         }
         let target = pptxPath(file.path)
         do {
-            guard case .saved = try await files.saveBytes(store.businessID, target, data, .overwrite) else {
+            guard case .saved = try await files.saveBytes(store.businessID, work, target, data, .overwrite) else {
                 actionError = "The PowerPoint copy changed on the Mac; export again."
                 return
             }
