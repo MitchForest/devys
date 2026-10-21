@@ -72,8 +72,10 @@ also verified live. No public product has launched.
 - **Clients.** One sidebar of Home (with what needs the owner), Projects (threads that
   need the owner or that they follow nested under each), Team (status and unread) and the
   business's apps. The middle is always a conversation: Home is the direct chat with
-  Operations, then a project's channel, a direct chat or a work item's thread, with a "To"
-  chip and @-autocomplete. The right panel shows that conversation's permanent view (Needs
+  Operations, then a project's channel, a direct chat or a work item's thread, with the
+  face of whoever answers inside the field (tap to choose someone else), a placeholder
+  naming them, @-autocomplete, a mic that dictates and, in an empty field, a button that
+  starts a hands-free conversation. The right panel shows that conversation's permanent view (Needs
   you, the employee's desk, the project overview, the work card), remembered open or
   closed per kind, with layers stacked above it: pages with their versions, files, the
   Documents and Code apps, coding sessions and the live browser. A page published in reply

@@ -1,8 +1,7 @@
 import {
   ArrowUp,
-  AtSign,
+  Check,
   AudioLines,
-  ChevronDown,
   CircleAlert,
   Copy,
   CornerUpLeft,
@@ -610,6 +609,15 @@ export function Composer({
   };
   const answerer =
     conversation.to.length === 1 ? employees.find((e) => e.id === conversation.to[0]) : undefined;
+  // The field names who answers, so no separate "To" row is needed.
+  const answering = conversation.to
+    .flatMap((id) => employees.find((e) => e.id === id)?.name ?? [])
+    .join(", ");
+  const placeholder = !answering
+    ? label
+    : label === "Reply"
+      ? `Reply to ${answering}`
+      : `Message ${answering}`;
   return (
     <div className={cn("mx-auto flex w-full flex-col gap-2 p-2.5", className)}>
       {served && voiceError && (
@@ -636,9 +644,8 @@ export function Composer({
       {matches.length > 0 && (
         <MentionPicker id={pickerId} matches={matches} active={highlighted?.id} choose={choose} />
       )}
-      {conversation.messages.status === "loaded" && (
-        <div className="flex items-center gap-2">
-          <ToChip conversation={conversation} />
+      {reference && (
+        <div className="flex items-center px-1">
           {reference && (
             <span
               className="flex min-w-0 items-center gap-1 rounded-full bg-sheet-tint py-0.5 pr-1 pl-2 text-caption text-ink-2"
@@ -674,15 +681,17 @@ export function Composer({
           )}
           <InputGroup
             className={cn(
-              "h-auto items-end gap-1.5 rounded-[18px] border-[1.5px] bg-sheet-tint py-[5px] pr-[5px] pl-3.5 has-[[data-slot=input-group-control]:focus-visible]:ring-0",
+              "h-auto items-end gap-1.5 rounded-[18px] border-[1.5px] bg-sheet-tint py-[5px] pr-[5px] pl-[5px] has-[[data-slot=input-group-control]:focus-visible]:ring-0",
               listening ? "border-indigo/45" : "border-transparent focus-within:border-indigo/30",
             )}
           >
+            <InputGroupAddon align="inline-start" className="p-0">
+              <AnswererPicker conversation={conversation} />
+            </InputGroupAddon>
             <InputGroupTextarea
               ref={field}
               aria-label={label}
-              // The work thread's field names no title: the panel already shows it.
-              placeholder={listening ? "Listening…" : label}
+              placeholder={listening ? "Listening…" : placeholder}
               rows={1}
               value={draft}
               onChange={(event) => conversation.setDraft(event.target.value)}
@@ -697,28 +706,27 @@ export function Composer({
               }}
               className="max-h-[132px] min-h-7 resize-none p-0 py-[5px] text-body leading-[1.35] text-ink placeholder:text-ink-3"
             />
-            <InputGroupAddon align="inline-end" className="gap-1.5 p-0">
-              <button
-                type="button"
-                aria-label="Mention someone"
-                title="Mention someone"
-                onClick={() => {
-                  conversation.setDraft(draft && !/\s$/.test(draft) ? `${draft} @` : `${draft}@`);
-                  field.current?.focus();
-                }}
-                className="grid size-7 place-items-center rounded-full text-ink-2 hover:text-ink"
-              >
-                <AtSign className="size-[15px]" strokeWidth={2.2} />
-              </button>
+            <InputGroupAddon align="inline-end" className="gap-1 p-0">
               <MicButton listening={listening} level={served ? level : 0} />
-              <InputGroupButton
-                aria-label="Send"
-                disabled={!draft.trim()}
-                onClick={() => actions.sendDraft()}
-                className="aurora size-7 rounded-full p-0 text-white disabled:opacity-40 [&_svg]:size-3.5"
-              >
-                <ArrowUp strokeWidth={3} />
-              </InputGroupButton>
+              {/* An empty field offers talking instead of sending, as in ChatGPT. */}
+              {draft.trim() ? (
+                <InputGroupButton
+                  aria-label="Send"
+                  onClick={() => actions.sendDraft()}
+                  className="aurora size-7 rounded-full p-0 text-white [&_svg]:size-3.5"
+                >
+                  <ArrowUp strokeWidth={3} />
+                </InputGroupButton>
+              ) : (
+                <InputGroupButton
+                  aria-label="Talk hands-free"
+                  title="Talk hands-free: speak, hear the answer, keep talking"
+                  onClick={() => actions.conversationToggled()}
+                  className="aurora size-7 rounded-full p-0 text-white [&_svg]:size-3.5"
+                >
+                  <AudioLines strokeWidth={2.6} />
+                </InputGroupButton>
+              )}
             </InputGroupAddon>
           </InputGroup>
         </div>
@@ -728,66 +736,60 @@ export function Composer({
 }
 
 /**
- * Who answers the next message, as the server decides: those mentioned, else the author
- * of the message replied to, else whoever spoke last. Tap to have someone else answer.
+ * Who answers the next message, as the server decides (those mentioned, else the author of
+ * the message replied to, else whoever spoke last): their face inside the field. Tap to have
+ * someone else answer.
  */
-function ToChip({ conversation }: { conversation: Conversation }) {
+function AnswererPicker({ conversation }: { conversation: Conversation }) {
   const { employees } = useWorkspace();
-  const to = conversation.to.flatMap((id) => {
-    const employee = employees.find((e) => e.id === id);
-    return employee ? [employee] : [];
-  });
+  const to = conversation.to.flatMap((id) => employees.find((e) => e.id === id) ?? []);
   return (
-    <div className="flex items-center gap-1.5 px-1.5">
-      <span className="text-caption text-ink-3">To</span>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          aria-label="Change who answers"
-          data-testid="to-chip"
-          className="inline-flex max-w-full items-center gap-1 rounded-full bg-sheet-tint py-0.5 pr-1.5 pl-0.5 text-caption font-medium text-ink transition-colors hover:bg-track"
-        >
-          {to.length === 0 ? (
-            <span className="pl-1.5 text-ink-3">No one</span>
-          ) : (
-            <>
-              <span className="flex -space-x-1">
-                {to.slice(0, 3).map((employee) => (
-                  <EmployeePortrait key={employee.id} employee={employee} size={16} />
-                ))}
-              </span>
-              <span className="truncate" data-testid="to-names">
-                {to.map((employee) => employee.name).join(", ")}
-              </span>
-            </>
-          )}
-          <ChevronDown className="size-3 shrink-0 text-ink-3" strokeWidth={2.5} />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent side="top" align="start" className="w-auto min-w-52">
-          <DropdownMenuGroup>
-            <DropdownMenuLabel className="text-caption font-normal text-ink-3">
-              Who answers your next message
-            </DropdownMenuLabel>
-            {employees.map((employee) => (
-              <DropdownMenuItem key={employee.id} onClick={() => conversation.pick(employee.id)}>
-                <EmployeePortrait employee={employee} size={18} />
-                {employee.name}
-                <span className="ml-auto pl-3 text-caption text-ink-3">
-                  {templateTitle(employee.template)}
-                </span>
-              </DropdownMenuItem>
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label={`Change who answers, now ${to.map((e) => e.name).join(", ") || "no one"}`}
+        title="Who answers"
+        data-testid="to-chip"
+        className="flex h-7 items-center rounded-full px-[3px] transition-colors hover:bg-track"
+      >
+        {to.length === 0 ? (
+          <span className="grid size-[22px] place-items-center rounded-full border border-dashed border-ink-3/50" />
+        ) : (
+          <span
+            className="flex -space-x-1.5"
+            data-testid="to-names"
+            data-names={to.map((e) => e.name).join(", ")}
+          >
+            {to.slice(0, 3).map((employee) => (
+              <EmployeePortrait key={employee.id} employee={employee} size={22} />
             ))}
-          </DropdownMenuGroup>
-          {conversation.picked && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => conversation.pick(undefined)}>
-                <X /> Whoever would answer
-              </DropdownMenuItem>
-            </>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
+          </span>
+        )}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="top" align="start" className="w-auto min-w-52">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="text-caption font-normal text-ink-3">
+            Who answers
+          </DropdownMenuLabel>
+          {employees.map((employee) => (
+            <DropdownMenuItem key={employee.id} onClick={() => conversation.pick(employee.id)}>
+              <EmployeePortrait employee={employee} size={18} />
+              {employee.name}
+              {conversation.to.includes(employee.id) && (
+                <Check className="ml-auto size-3.5 text-ink-2" />
+              )}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
+        {conversation.picked && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => conversation.pick(undefined)}>
+              <X /> Whoever would answer
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -836,50 +838,29 @@ function MentionPicker({
   );
 }
 
-/** Tap to dictate; the menu also starts a hands-free conversation, as native `MicButton`. */
+/** Tap to dictate into the field; the words stay there to edit before sending. */
 function MicButton({ listening, level }: { listening: boolean; level: number }) {
   const { actions } = useWorkspace();
   return (
-    <span className="flex items-center">
-      <button
-        type="button"
-        aria-label={listening ? "Stop dictating" : "Dictate"}
-        title={listening ? "Stop dictating" : "Dictate"}
-        onClick={() => actions.micTapped()}
-        className={cn(
-          "relative grid size-7 place-items-center rounded-full",
-          listening ? "text-indigo" : "text-ink-2 hover:text-ink",
-        )}
-      >
-        <span
-          className="absolute inset-0 rounded-full bg-indigo transition-[opacity,scale] duration-100"
-          style={{
-            opacity: listening ? 0.12 + level * 0.35 : 0,
-            scale: listening ? 1 + level * 0.5 : 1,
-          }}
-        />
-        <Mic
-          className={cn("relative size-[15px]", listening && "fill-current")}
-          strokeWidth={2.2}
-        />
-      </button>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          aria-label="Voice options"
-          className="grid h-7 w-3 place-items-center text-ink-3 hover:text-ink-2"
-        >
-          <ChevronDown className="size-3" strokeWidth={2.5} />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent side="top" align="end" className="w-auto min-w-44">
-          <DropdownMenuItem onClick={() => actions.micTapped()}>
-            <Mic /> {listening ? "Stop dictating" : "Dictate"}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => actions.conversationToggled()}>
-            <AudioLines /> Talk hands-free
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </span>
+    <button
+      type="button"
+      aria-label={listening ? "Stop dictating" : "Dictate"}
+      title={listening ? "Stop dictating" : "Dictate"}
+      onClick={() => actions.micTapped()}
+      className={cn(
+        "relative grid size-7 place-items-center rounded-full",
+        listening ? "text-indigo" : "text-ink-2 hover:text-ink",
+      )}
+    >
+      <span
+        className="absolute inset-0 rounded-full bg-indigo transition-[opacity,scale] duration-100"
+        style={{
+          opacity: listening ? 0.12 + level * 0.35 : 0,
+          scale: listening ? 1 + level * 0.5 : 1,
+        }}
+      />
+      <Mic className={cn("relative size-[15px]", listening && "fill-current")} strokeWidth={2.2} />
+    </button>
   );
 }
 

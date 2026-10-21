@@ -157,8 +157,8 @@ struct ConversationMessages: View {
     }
 }
 
-/// The composer: who answers (the To chip), what's on screen going with the message (the
-/// reference chip), "@" suggestions, the message being replied to, the server's refusal when
+/// The composer: who answers (their face inside the field, named by the placeholder), what's
+/// on screen going with the message (the reference chip), "@" suggestions, the message being replied to, the server's refusal when
 /// everyone who'd answer is paused, and voice.
 struct ConversationComposer: View {
     let store: StoreOf<Workspace>
@@ -180,10 +180,7 @@ struct ConversationComposer: View {
                     }
                 }
                 MentionSuggestions(store: store, key: key, draft: open.draft)
-                HStack(spacing: 8) {
-                    ToChip(store: store, key: key)
-                    if let reference = store.state.reference { ReferenceChip(store: store, reference: reference) }
-                }
+                if let reference = store.state.reference { ReferenceChip(store: store, reference: reference) }
                 if recipients.count == 1, let answerer = store.state.employee(recipients.first), answerer.paused {
                     PausedBanner(store: store, employee: answerer)
                 }
@@ -198,6 +195,7 @@ struct ConversationComposer: View {
                         level: store.level,
                         onMicTap: { store.send(.micTapped) },
                         onHandsFree: { store.send(.conversationToggled) },
+                        leading: AnyView(AnswererPicker(store: store, key: key)),
                         onSend: { store.send(.sendTapped(key)) }
                     )
                 }
@@ -207,12 +205,12 @@ struct ConversationComposer: View {
         }
     }
 
+    /// The field names who answers, so no separate "To" row is needed.
     private var placeholder: String {
-        switch key.kind {
-        case .direct: "Message \(store.state.employeeName(key.ref))"
-        case .project: "Message \(store.state.project(key.ref)?.name ?? "the team")"
-        case .work: "Reply"
-        }
+        let answering = store.state.recipients(in: key).map(store.state.employeeName).joined(separator: ", ")
+        if key.kind == .work { return answering.isEmpty ? "Reply" : "Reply to \(answering)" }
+        if !answering.isEmpty { return "Message \(answering)" }
+        return key.kind == .project ? "Message \(store.state.project(key.ref)?.name ?? "the team")" : "Message"
     }
 }
 
@@ -240,8 +238,8 @@ private struct ReferenceChip: View {
     }
 }
 
-/// "To Growth ⌄": who answers the draft. Picking someone sends it to them alone.
-struct ToChip: View {
+/// Who answers the draft: their face inside the field. Picking someone sends it to them alone.
+struct AnswererPicker: View {
     let store: StoreOf<Workspace>
     let key: ConversationKey
 
@@ -254,7 +252,7 @@ struct ToChip: View {
                     Button {
                         store.send(.responderPicked(key, employee.id))
                     } label: {
-                        if recipients == [employee.id] {
+                        if recipients.contains(employee.id) {
                             Label(employee.name, systemImage: "checkmark")
                         } else {
                             Text(employee.name)
@@ -264,33 +262,26 @@ struct ToChip: View {
             }
             if picked != nil {
                 Divider()
-                Button("Follow the conversation", systemImage: "arrow.uturn.backward") { store.send(.responderPicked(key, nil)) }
+                Button("Whoever would answer", systemImage: "xmark") { store.send(.responderPicked(key, nil)) }
             }
         } label: {
-            HStack(spacing: 6) {
-                Text("To").font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
-                HStack(spacing: -4) {
-                    ForEach(store.snapshot.employees.filter { recipients.contains($0.id) }) { employee in
-                        Portrait(store.state.portrait(for: employee), size: 16, isAnimated: false)
-                    }
+            HStack(spacing: -6) {
+                if recipients.isEmpty {
+                    Circle().strokeBorder(DevysColors.ink3.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [3]))
+                        .frame(width: 22, height: 22)
                 }
-                Text(recipients.isEmpty ? "No one" : recipients.map(store.state.employeeName).joined(separator: ", "))
-                    .font(DevysTypography.caption.weight(.semibold))
-                    .foregroundStyle(DevysColors.ink)
-                    .lineLimit(1)
-                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).foregroundStyle(DevysColors.ink3).accessibilityHidden(true)
+                ForEach(store.snapshot.employees.filter { recipients.contains($0.id) }.prefix(3)) { employee in
+                    Portrait(store.state.portrait(for: employee), size: 22, isAnimated: false)
+                }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(DevysColors.track, in: Capsule())
+            .padding(3)
             .contentShape(Capsule())
         }
         .menuIndicator(.hidden)
         .buttonStyle(.plain)
         .fixedSize()
-        .padding(.leading, 6)
-        .help("Who answers. Choose someone else to send it to them instead.")
-        .accessibilityLabel("To \(recipients.map(store.state.employeeName).joined(separator: ", ")). Change who answers")
+        .help("Who answers")
+        .accessibilityLabel("Change who answers, now \(recipients.map(store.state.employeeName).joined(separator: ", "))")
     }
 }
 

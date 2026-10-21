@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { localStores } from "../fixtures/local.ts";
 import { bearer, insertMessage, sidebar, signIn, stubPosting } from "./helpers.ts";
 
-test("a direct chat is the middle; the To chip follows replies and @mentions; reactions show", async ({
+test("a direct chat is the middle; who answers follows replies and @mentions; reactions show", async ({
   page,
 }) => {
   const stores = await localStores();
@@ -24,7 +24,7 @@ test("a direct chat is the middle; the To chip follows replies and @mentions; re
 
     // An empty direct chat: its employee answers.
     const chip = page.getByTestId("to-names");
-    await expect(chip).toHaveText("Head of Operations");
+    await expect(chip).toHaveAttribute("data-names", "Head of Operations");
 
     // The owner's bubble shows at once and the post goes to this chat.
     await field.fill("What is due this week?");
@@ -48,7 +48,7 @@ test("a direct chat is the middle; the To chip follows replies and @mentions; re
       timeout: 10_000,
     });
     await expect(page.getByTestId("speaker").filter({ hasText: "Growth" })).toBeVisible();
-    await expect(chip).toHaveText("Growth");
+    await expect(chip).toHaveAttribute("data-names", "Growth");
 
     // A reaction shows on the employee's message.
     await page.getByText("The launch post and the pricing page.").click({ button: "right" });
@@ -67,7 +67,7 @@ test("a direct chat is the middle; the To chip follows replies and @mentions; re
     await page.getByText("The launch post and the pricing page.").click({ button: "right" });
     await page.getByRole("menuitem", { name: "Reply" }).click();
     await expect(page.getByText("Replying to Head of Operations")).toBeVisible();
-    await expect(chip).toHaveText("Head of Operations");
+    await expect(chip).toHaveAttribute("data-names", "Head of Operations");
     await field.fill("Start with the pricing page.");
     await page.keyboard.press("Enter");
     await expect.poll(() => sent.length).toBe(2);
@@ -83,7 +83,7 @@ test("a direct chat is the middle; the To chip follows replies and @mentions; re
       .getByRole("option", { name: /Growth/ })
       .click();
     await expect(field).toHaveValue("@Growth ");
-    await expect(chip).toHaveText("Growth");
+    await expect(chip).toHaveAttribute("data-names", "Growth");
     await field.pressSequentially("draft the post too");
     await page.getByRole("button", { name: "Send" }).click();
     await expect.poll(() => sent.length).toBe(3);
@@ -95,7 +95,7 @@ test("a direct chat is the middle; the To chip follows replies and @mentions; re
     // The chip's picker sends someone else's name as the only mention.
     await page.getByRole("button", { name: "Change who answers" }).click();
     await page.getByRole("menuitem", { name: /^Growth/ }).click();
-    await expect(chip).toHaveText("Growth");
+    await expect(chip).toHaveAttribute("data-names", "Growth");
     await field.fill("Thanks");
     await page.getByRole("button", { name: "Send" }).click();
     await expect.poll(() => sent.length).toBe(4);
@@ -199,7 +199,7 @@ test("a project opens on its channel; a hand-off card opens the thread; Back and
     await expect(page.getByText("Drafting three options.")).toBeVisible({
       timeout: 10_000,
     });
-    await expect(page.getByTestId("to-names")).toHaveText("Growth");
+    await expect(page.getByTestId("to-names")).toHaveAttribute("data-names", "Growth");
     await page.getByRole("textbox", { name: "Reply" }).fill("Keep it under six words.");
     await page.getByRole("button", { name: "Send" }).click();
     await expect.poll(() => sent.length).toBe(1);

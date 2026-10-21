@@ -84,8 +84,9 @@ public struct FilterChip: View {
     }
 }
 
-/// The message field: an inset capsule with one mic and the aurora send button.
-/// Click the mic to dictate; its menu starts a hands-free conversation.
+/// The message field: an inset capsule with an optional leading control (who answers), the
+/// mic, which dictates into the field, and the aurora button: send, or with an empty field,
+/// talk hands-free.
 public struct Composer: View {
     let placeholder: String
     @Binding var text: String
@@ -97,6 +98,7 @@ public struct Composer: View {
     let onSend: () -> Void
     let onMicTap: (() -> Void)?
     let onHandsFree: (() -> Void)?
+    let leading: AnyView?
 
     public init(
         _ placeholder: String,
@@ -108,6 +110,7 @@ public struct Composer: View {
         level: Double = 0,
         onMicTap: (() -> Void)? = nil,
         onHandsFree: (() -> Void)? = nil,
+        leading: AnyView? = nil,
         onSend: @escaping () -> Void
     ) {
         self.placeholder = placeholder
@@ -119,8 +122,11 @@ public struct Composer: View {
         self.level = level
         self.onMicTap = onMicTap
         self.onHandsFree = onHandsFree
+        self.leading = leading
         self.onSend = onSend
     }
+
+    private var isEmpty: Bool { text.trimmingCharacters(in: .whitespaces).isEmpty }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -134,6 +140,7 @@ public struct Composer: View {
                     .accessibilityLabel("Hearing: \(volatileText)")
             }
             HStack(spacing: 6) {
+                if let leading { leading }
                 TextField(isListening ? "Listening…" : placeholder, text: $text, axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(DevysTypography.body)
@@ -141,22 +148,23 @@ public struct Composer: View {
                     .disabled(!isEnabled)
                     .onSubmit(onSend)
                 if let onMicTap {
-                    MicButton(isListening: isListening, level: level, dictate: onMicTap, handsFree: onHandsFree)
+                    MicButton(isListening: isListening, level: level, dictate: onMicTap)
                 }
-                Button(action: onSend) {
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 28, height: 28)
-                        .background { Aurora().clipShape(Circle()) }
+                // An empty field offers talking instead of sending, as in ChatGPT.
+                if isEmpty, let onHandsFree {
+                    AuroraButton(symbol: "waveform", action: onHandsFree)
+                        .disabled(!isEnabled)
+                        .help("Talk hands-free: speak, hear the answer, keep talking")
+                        .accessibilityLabel("Talk hands-free")
+                } else {
+                    AuroraButton(symbol: "arrow.up", action: onSend)
+                        .disabled(!isEnabled || isEmpty)
+                        .opacity(isEnabled && !isEmpty ? 1 : 0.4)
+                        .keyboardShortcut(.return, modifiers: .command)
+                        .accessibilityLabel("Send")
                 }
-                .buttonStyle(.plain)
-                .disabled(!isEnabled || text.trimmingCharacters(in: .whitespaces).isEmpty)
-                .opacity(isEnabled && !text.trimmingCharacters(in: .whitespaces).isEmpty ? 1 : 0.4)
-                .keyboardShortcut(.return, modifiers: .command)
-                .accessibilityLabel("Send")
             }
-            .padding(.leading, 14)
+            .padding(.leading, leading == nil ? 14 : 5)
             .padding(.trailing, 5)
             .padding(.vertical, 5)
             .background(DevysColors.sheetTint, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -173,21 +181,31 @@ public struct Composer: View {
     }
 }
 
-/// One mic: a native split control. Clicking dictates (or stops); the menu
-/// (chevron on macOS, long press on iOS) starts a hands-free conversation.
+/// The round aurora button at the end of the field.
+private struct AuroraButton: View {
+    let symbol: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 28, height: 28)
+                .background { Aurora().clipShape(Circle()) }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// The mic: tap to dictate into the field (or stop); the words stay there to edit.
 private struct MicButton: View {
     let isListening: Bool
     let level: Double
     let dictate: () -> Void
-    let handsFree: (() -> Void)?
 
     var body: some View {
-        Menu {
-            Button(isListening ? "Stop dictating" : "Dictate", systemImage: "mic", action: dictate)
-            if let handsFree {
-                Button("Talk hands-free", systemImage: "waveform", action: handsFree)
-            }
-        } label: {
+        Button(action: dictate) {
             Image(systemName: isListening ? "mic.fill" : "mic")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(isListening ? DevysColors.indigo : DevysColors.ink2)
@@ -198,18 +216,8 @@ private struct MicButton: View {
                         .scaleEffect(isListening ? 1 + level * 0.5 : 1)
                 }
                 .contentShape(Circle())
-        } primaryAction: {
-            dictate()
         }
-        #if os(macOS)
-            // Borderless pull-down with a primary action draws its own arrow segment.
-            .menuStyle(.borderlessButton)
-        #else
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-        #endif
-        .menuIndicator(handsFree == nil ? .hidden : .visible)
-        .fixedSize()
+        .buttonStyle(.plain)
         .animation(.easeOut(duration: 0.1), value: level)
         .help(isListening ? "Stop dictating" : "Dictate")
         .accessibilityLabel(isListening ? "Stop dictating" : "Dictate")
