@@ -333,12 +333,13 @@ private struct StateChange: Equatable {
 
 private actor WorkServer {
     var workItems = [WorkItem(id: "c1", ownerEmployeeID: "ops", title: "Launch Acme", state: .inProgress, revision: 3)]
-    var decisions = [Decision(id: "d1", employeeID: "growth", capability: "driveCreate", input: .object(["name": .string("inquiry.txt")]))]
     var answers: [(String, Bool)] = []
     var stateChanges: [StateChange] = []
     var created: [NewWorkItem] = []
     var projects = [Project(id: "p1", name: "Launch")]
-    var home = Home(needsYou: [NeedsYouItem(kind: .decision, id: "d1", title: "Create inquiry.txt", employeeID: "growth")])
+    var home = Home(needsYou: [
+        NeedsYouItem(Decision(id: "d1", employeeID: "growth", capability: "driveCreate", input: .object(["name": .string("inquiry.txt")])), title: "Create inquiry.txt")
+    ])
     var added: [String] = []
 
     func add(_ project: String, _ ref: Ref) {
@@ -350,7 +351,7 @@ private actor WorkServer {
 
     func answer(_ id: String, _ approve: Bool) {
         answers.append((id, approve))
-        decisions.removeAll { $0.id == id }
+        home = home.answering(id)
     }
     func update(_ id: String, _ change: WorkItemChange) throws -> WorkItem {
         guard let index = workItems.firstIndex(where: { $0.id == id }) else { throw DevysHTTPError.rejected(status: 404, message: "") }
@@ -391,7 +392,6 @@ struct WorkFeatureTests {
                 work: { _ in await server.workItems },
                 createWorkItem: { _, newItem in await server.create(newItem) },
                 updateWorkItem: { _, id, change in try await server.update(id, change) },
-                decisions: { _ in await server.decisions },
                 answer: { _, id, approve in await server.answer(id, approve) },
                 projects: { _ in await server.projects },
                 addToProject: { _, project, ref in await server.add(project, ref) },
@@ -406,10 +406,10 @@ struct WorkFeatureTests {
     @Test("Real work, requests, projects and Home load with the team; Home's panel shows what needs the owner")
     func loads() async {
         let store = makeStore(WorkServer())
-        await settle("work", until: { store.work.value != nil && store.decisions.value != nil && store.home.value != nil })
+        await settle("work", until: { store.work.value != nil && store.home.value != nil })
         #expect(store.work.value?.filter { $0.state.group == .inProgress }.map(\.title) == ["Launch Acme"])
         #expect(store.projects.value?.map(\.name) == ["Launch"])
-        #expect(store.home.value?.needsYou.map(\.id) == ["d1"])
+        #expect(store.home.value?.needsYou.map(\.id) == ["d1"] && store.state.decisions.first?.capability == "driveCreate")
         #expect(store.state.hasPermanent && store.state.isPanelOpen)
     }
 
@@ -417,9 +417,9 @@ struct WorkFeatureTests {
     func answers() async {
         let server = WorkServer()
         let store = makeStore(server)
-        await settle("work", until: { store.decisions.value?.count == 1 })
+        await settle("work", until: { store.state.decisions.count == 1 })
         store.send(.decisionAnswered("d1", approve: true))
-        #expect(store.decisions.value?.isEmpty == true)
+        #expect(store.state.decisions.isEmpty && store.home.value?.needsYou.isEmpty == true)
         for _ in 0..<2_000 where await server.answers.isEmpty { await Task.yield() }
         let answers = await server.answers
         #expect(answers.count == 1 && answers.first?.0 == "d1" && answers.first?.1 == true)

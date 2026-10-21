@@ -63,7 +63,6 @@ public struct RuntimeClient: Sendable {
     public var createWorkItem: @Sendable (_ businessID: String, NewWorkItem) async throws -> WorkItem
     public var updateWorkItem: @Sendable (_ businessID: String, _ workItemID: String, WorkItemChange) async throws -> WorkItem
     public var setTakeover: @Sendable (_ businessID: String, _ workItemID: String, _ takeOver: Bool) async throws -> Void
-    public var decisions: @Sendable (_ businessID: String) async throws -> [Decision]
     /// One work item's requests, answered ones included.
     public var workDecisions: @Sendable (_ businessID: String, _ workItemID: String) async throws -> [Decision]
     public var answer: @Sendable (_ businessID: String, _ decisionID: String, _ approve: Bool) async throws -> Void
@@ -125,7 +124,6 @@ public struct RuntimeClient: Sendable {
             throw DevysHTTPError.unauthorized
         },
         setTakeover: @escaping @Sendable (String, String, Bool) async throws -> Void = { _, _, _ in },
-        decisions: @escaping @Sendable (String) async throws -> [Decision] = { _ in [] },
         workDecisions: @escaping @Sendable (String, String) async throws -> [Decision] = { _, _ in [] },
         answer: @escaping @Sendable (String, String, Bool) async throws -> Void = { _, _, _ in },
         projects: @escaping @Sendable (String) async throws -> [Project] = { _ in [] },
@@ -172,7 +170,6 @@ public struct RuntimeClient: Sendable {
         self.createWorkItem = createWorkItem
         self.updateWorkItem = updateWorkItem
         self.setTakeover = setTakeover
-        self.decisions = decisions
         self.workDecisions = workDecisions
         self.answer = answer
         self.projects = projects
@@ -345,7 +342,6 @@ extension RuntimeClient {
             setTakeover: { id, workItem, takeOver in
                 try await hub.call { api, session in try await api.setTakeover(session, businessID: id, id: workItem, takeOver: takeOver) }
             },
-            decisions: { id in try await hub.call { api, session in try await api.decisions(session, businessID: id) } },
             workDecisions: { id, workItem in
                 try await hub.call { api, session in try await api.decisions(session, businessID: id, workItemID: workItem) }
             },

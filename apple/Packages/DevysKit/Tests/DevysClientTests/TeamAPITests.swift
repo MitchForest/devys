@@ -224,17 +224,24 @@ struct TeamAPITests {
         let recorder = Recorder()
         let home = try await api(
             body: """
-            {"needs_you":[{"kind":"decision","id":"d1","title":"Buy domain","employee_id":"growth","work_id":"c1","project_id":"p1"},
+            {"needs_you":[{"kind":"decision","id":"d1","title":"Buy domain","employee_id":"growth","work_id":"c1","project_id":"p1",
+              "capability":"domainBuy","input":{"domain":"acme.com"},"work_item_id":"c1","status":"pending",
+              "requested_at":"2026-10-20T10:00:00.000Z","expires_at":"2026-10-21T10:00:00.000Z"},
              {"kind":"work","id":"c2","title":"Decide pricing","employee_id":null,"work_id":"c2","project_id":null}],
              "glance":{"moving":[{"id":"c3","title":"Fix sitemap","employee_id":"engineering","project_id":"p1","state":"in_progress",
-              "wait_condition":null,"due_at":null,"updated_at":"2026-10-20T10:00:00.000Z"}],"stuck":[],"spent_cents":3800}}
+              "wait_condition":null,"due_at":null,"updated_at":"2026-10-20T10:00:00.000Z"}],"stuck":[],"spent_cents":null}}
             """,
             recorder: recorder
         ).home(Self.session, businessID: "b1")
-        #expect(home.needsYou.first == NeedsYouItem(kind: .decision, id: "d1", title: "Buy domain", employeeID: "growth", workID: "c1", projectID: "p1"))
-        #expect(home.needsYou.last?.employeeID == nil && home.needsYou.last?.kind == .work)
+        let decision = Decision(
+            id: "d1", employeeID: "growth", capability: "domainBuy", input: .object(["domain": .string("acme.com")]), workItemID: "c1",
+            requestedAt: "2026-10-20T10:00:00.000Z", expiresAt: "2026-10-21T10:00:00.000Z"
+        )
+        #expect(home.needsYou.first == NeedsYouItem(decision, title: "Buy domain", projectID: "p1"))
+        #expect(home.decisions == [decision])
+        #expect(home.needsYou.last?.employeeID == nil && home.needsYou.last?.kind == .work && home.needsYou.last?.decision == nil)
         #expect(home.glance.moving.first?.state == .inProgress && home.glance.moving.first?.projectID == "p1")
-        #expect(home.glance.spentCents == 3_800 && !home.isEmpty)
+        #expect(!home.isEmpty)
         #expect(Home().isEmpty)
         #expect(await recorder.requests.last?.url?.path() == "/api/businesses/b1/home")
     }

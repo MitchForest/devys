@@ -64,9 +64,8 @@ package struct Workspace {
         /// The New project sheet, while it is open.
         package var newProject: ProjectSheet?
         package var memory: Loadable<[MemoryClaim]> = .loading
-        /// The business's work items and the requests waiting on the owner.
+        /// The business's work items; the requests waiting on the owner are Home's.
         package var work: Loadable<[WorkItem]> = .loading
-        package var decisions: Loadable<[Decision]> = .loading
         package var projects: Loadable<[Project]> = .loading
         /// The app directory; installed apps with something to show are in the sidebar.
         package var apps: Loadable<[AppEntry]> = .loading
@@ -431,7 +430,6 @@ extension Workspace {
         state.models.usage = [:]
         state.models.errors = [:]
         state.work = .loading
-        state.decisions = .loading
         state.projects = .loading
         state.apps = .loading
         state.home = .loading

@@ -174,7 +174,8 @@ public struct AppEntry: Equatable, Sendable, Decodable, Identifiable {
 
 // MARK: - Home
 
-/// One thing waiting on the owner: a decision, or work that needs one.
+/// One thing waiting on the owner: a decision (the whole request, so Needs you is answered from
+/// Home alone), or work that needs one.
 public struct NeedsYouItem: Equatable, Sendable, Decodable, Identifiable {
     public enum Kind: String, Equatable, Sendable, WireEnum { case decision, work, unknown }
 
@@ -184,6 +185,8 @@ public struct NeedsYouItem: Equatable, Sendable, Decodable, Identifiable {
     public let employeeID: String?
     public let workID: String?
     public let projectID: String?
+    /// The request itself, when this is a decision.
+    public let decision: Decision?
 
     public init(kind: Kind, id: String, title: String, employeeID: String? = nil, workID: String? = nil, projectID: String? = nil) {
         self.kind = kind
@@ -192,6 +195,29 @@ public struct NeedsYouItem: Equatable, Sendable, Decodable, Identifiable {
         self.employeeID = employeeID
         self.workID = workID
         self.projectID = projectID
+        self.decision = nil
+    }
+
+    /// A pending request as Home lists it.
+    public init(_ decision: Decision, title: String, projectID: String? = nil) {
+        self.kind = .decision
+        self.id = decision.id
+        self.title = title
+        self.employeeID = decision.employeeID
+        self.workID = decision.workItemID
+        self.projectID = projectID
+        self.decision = decision
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try container.decode(Kind.self, forKey: .kind)
+        id = try container.decode(String.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        employeeID = try container.decodeIfPresent(String.self, forKey: .employeeID)
+        workID = try container.decodeIfPresent(String.self, forKey: .workID)
+        projectID = try container.decodeIfPresent(String.self, forKey: .projectID)
+        decision = kind == .decision ? try Decision(from: decoder) : nil
     }
 
     enum CodingKeys: String, CodingKey {
@@ -248,18 +274,10 @@ public struct Home: Equatable, Sendable, Decodable {
     public struct Glance: Equatable, Sendable, Decodable {
         public let moving: [GlanceItem]
         public let stuck: [GlanceItem]
-        /// Spent since the owner last looked, when the server knows.
-        public let spentCents: Int?
 
-        public init(moving: [GlanceItem] = [], stuck: [GlanceItem] = [], spentCents: Int? = nil) {
+        public init(moving: [GlanceItem] = [], stuck: [GlanceItem] = []) {
             self.moving = moving
             self.stuck = stuck
-            self.spentCents = spentCents
-        }
-
-        enum CodingKeys: String, CodingKey {
-            case moving, stuck
-            case spentCents = "spent_cents"
         }
     }
 
@@ -274,6 +292,14 @@ public struct Home: Equatable, Sendable, Decodable {
     enum CodingKeys: String, CodingKey {
         case glance
         case needsYou = "needs_you"
+    }
+
+    /// The requests waiting on the owner.
+    public var decisions: [Decision] { needsYou.compactMap(\.decision) }
+
+    /// Home without one answered request, until the next read.
+    public func answering(_ decisionID: String) -> Home {
+        Home(needsYou: needsYou.filter { $0.id != decisionID }, glance: glance)
     }
 
     /// Whether Home's panel has anything to show; an empty one is never shown.

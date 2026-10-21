@@ -114,7 +114,7 @@ struct SidebarSections: View {
     /// Threads the owner follows or that need the owner, under their project (or under Home when
     /// they have none). Everything else stays in its channel.
     private func nestedThreads(_ projectID: String?) -> [WorkItem] {
-        let waiting = Set((store.decisions.value ?? []).compactMap(\.workItemID))
+        let waiting = Set(store.state.decisions.compactMap(\.workItemID))
         return (store.work.value ?? []).filter { item in
             item.state.isOpen && item.projectID == projectID
                 && (store.state.isFollowing(item.id) || item.state == .needsDecision || waiting.contains(item.id))
@@ -124,7 +124,7 @@ struct SidebarSections: View {
     private func trailing(for employee: Employee) -> SidebarTrailing {
         if employee.paused { return .paused }
         if store.state.isWorking(employee.id) { return .working }
-        return store.decisions.value?.contains { $0.employeeID == employee.id } == true ? .needsYou : .none
+        return store.state.decisions.contains { $0.employeeID == employee.id } ? .needsYou : .none
     }
 
     /// A project's tile color, from its place in the list, the same everywhere it shows.

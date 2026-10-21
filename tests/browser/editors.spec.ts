@@ -119,6 +119,39 @@ test("a markdown deck shows its slides and exports PowerPoint", async ({ page })
   expect(elsewhere).toEqual([]);
 });
 
+test("a markdown document is not edited until the owner types", async ({ page }) => {
+  const elsewhere = await openSurface(page);
+  // Written the way people write it, not the way the editor writes it back.
+  const markdown =
+    "# Brief\n\n| Job | Day |\n|---|---|\n| Van | Friday |\n\n- [ ] Call the supplier\n- [x] Book the van\n";
+  await page.evaluate(
+    (text) =>
+      window.devysSurface!.show({
+        kind: "markdown",
+        name: "brief.md",
+        markdown: text,
+        version: "1",
+        readOnly: false,
+      }),
+    markdown,
+  );
+  const editor = page.getByTestId("markdown-document");
+  await expect(editor.getByText("Call the supplier")).toBeVisible({ timeout: 30_000 });
+  // Opening it lets the editor rewrite it its own way (table rule, task bullets); that is not
+  // an edit, so nothing but the loaded text is ever reported until the owner types.
+  await page.waitForTimeout(800);
+  const changes = async () =>
+    ((await messages(page)) as { type: string; markdown?: string }[])
+      .filter((m) => m.type === "change")
+      .map((m) => m.markdown);
+  expect((await changes()).every((text) => text === markdown)).toBe(true);
+  await editor.getByText("Call the supplier").click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" today");
+  await expect.poll(async () => (await changes()).at(-1)).toContain("Call the supplier today");
+  expect(elsewhere).toEqual([]);
+});
+
 test("a whiteboard draws in the surface and saves as Excalidraw JSON", async ({ page }) => {
   const elsewhere = await openSurface(page);
   await page.evaluate(() =>

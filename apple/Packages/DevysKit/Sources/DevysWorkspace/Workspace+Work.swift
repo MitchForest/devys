@@ -8,14 +8,12 @@ import Foundation
 /// Everything the sidebar and the permanent views read, loaded together every tick.
 package struct WorkRecords: Sendable {
     package var work: [WorkItem]
-    package var decisions: [Decision]
     package var projects: [Project]
     package var home: Home
     package var apps: [AppEntry]
 
-    package init(work: [WorkItem], decisions: [Decision], projects: [Project], home: Home, apps: [AppEntry]) {
+    package init(work: [WorkItem], projects: [Project], home: Home, apps: [AppEntry]) {
         self.work = work
-        self.decisions = decisions
         self.projects = projects
         self.home = home
         self.apps = apps
@@ -47,7 +45,6 @@ extension Workspace {
         case .workLoaded(let businessID, let records):
             guard businessID == state.businessID else { return }
             state.work = .loaded(records.work)
-            state.decisions = .loaded(records.decisions)
             state.projects = .loaded(records.projects)
             state.home = .loaded(records.home)
             state.apps = .loaded(records.apps)
@@ -118,10 +115,7 @@ extension Workspace {
     }
 
     func answer(_ decisionID: String, approve: Bool, state: inout State) {
-        if var pending = state.decisions.value {
-            pending.removeAll { $0.id == decisionID }
-            state.decisions = .loaded(pending)
-        }
+        if let home = state.home.value { state.home = .loaded(home.answering(decisionID)) }
         changeWork(state, failure: "That request was already answered or has expired.") { runtime, businessID in
             try await runtime.answer(businessID, decisionID, approve)
         }
@@ -162,11 +156,10 @@ extension Workspace {
     func reloadWork(_ runtime: RuntimeClient, _ businessID: String) async throws {
         // A failed reload keeps what's on screen; the next tick tries again.
         async let work = runtime.work(businessID)
-        async let decisions = runtime.decisions(businessID)
         async let projects = runtime.projects(businessID)
         async let home = runtime.home(businessID)
         async let apps = runtime.apps(businessID)
-        guard let records = try? await WorkRecords(work: work, decisions: decisions, projects: projects, home: home, apps: apps) else { return }
+        guard let records = try? await WorkRecords(work: work, projects: projects, home: home, apps: apps) else { return }
         try store.send(Action(.workLoaded(businessID: businessID, records)))
     }
 }

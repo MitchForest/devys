@@ -24,7 +24,7 @@ struct WireTests {
         "conversation-work": { try await $0.conversation($1, businessID: "b1", key: .work("w1")) },
         "conversation": { try await $0.conversation($1, businessID: "b1", key: .direct("e1")) },
         "conversations": { try await $0.conversations($1, businessID: "b1") },
-        "decisions": { try await $0.decisions($1, businessID: "b1") },
+        "decisions": { try await $0.decisions($1, businessID: "b1", workItemID: "w1") },
         "device-code": { try await $0.issueDeviceCode($1) },
         "devices": { try await $0.devices($1) },
         "diff": { try await $0.sessionDiff($1, businessID: "b1", workID: "w1", sessionID: "s1") },
@@ -88,6 +88,7 @@ struct WireTests {
     func values() async throws {
         let home = try await Self.answering("home").home(Self.session, businessID: "b1")
         #expect(home.needsYou.first?.kind == .decision && home.needsYou.first?.workID != nil && home.needsYou.first?.projectID != nil)
+        #expect(home.decisions.first?.capability == "driveCreate" && home.decisions.first?.input.fields.first?.key == "content")
         #expect(home.glance.moving.first?.state == .inProgress && home.glance.moving.first?.dueAt != nil)
 
         let work = try await Self.answering("work").work(Self.session, businessID: "b1")

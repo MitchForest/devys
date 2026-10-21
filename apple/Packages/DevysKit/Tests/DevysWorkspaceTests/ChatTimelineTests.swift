@@ -100,10 +100,11 @@ struct ChatTimelineTests {
         #expect(!state.isMine(free) && state.takeoverTitle(free) == nil)
         #expect(state.isMine(mine) && state.takeoverTitle(mine) == "You have it")
         #expect(!state.isMine(theirs) && state.takeoverTitle(theirs) == "Taken over by another person")
-        state.decisions = .loaded([
-            Decision(id: "d1", employeeID: "growth", capability: "email.send", input: .object([:]), workItemID: "c1"),
-            Decision(id: "d2", employeeID: "growth", capability: "email.send", input: .object([:]))
-        ])
+        state.home = .loaded(Home(needsYou: [
+            NeedsYouItem(Decision(id: "d1", employeeID: "growth", capability: "email.send", input: .object([:]), workItemID: "c1"), title: "PR"),
+            NeedsYouItem(Decision(id: "d2", employeeID: "growth", capability: "email.send", input: .object([:])), title: "email.send"),
+            NeedsYouItem(kind: .work, id: "c2", title: "PR", workID: "c2")
+        ]))
         #expect(state.decisions(for: free).map(\.id) == ["d1"])
         #expect(state.decisions(for: mine).isEmpty)
     }

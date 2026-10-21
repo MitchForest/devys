@@ -148,7 +148,7 @@ struct ConversationMessages: View {
     /// in its thread, others in the employee's direct chat. Home's are in Needs you beside it.
     private var decisions: [Decision] {
         guard store.place != .home else { return [] }
-        let all = store.decisions.value ?? []
+        let all = store.state.decisions
         return switch key.kind {
         case .direct: all.filter { $0.employeeID == key.ref && $0.workItemID == nil }
         case .work: all.filter { $0.workItemID == key.ref }

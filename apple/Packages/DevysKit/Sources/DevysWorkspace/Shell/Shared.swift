@@ -101,9 +101,12 @@ extension Workspace.State {
         return "Taken over by \(members.first { $0.id == person }?.displayName ?? "another person")"
     }
 
+    /// The requests waiting on the owner, from Home: the one source of what needs them.
+    var decisions: [Decision] { home.value?.decisions ?? [] }
+
     /// The owner's decisions waiting on this work item.
     func decisions(for item: WorkItem) -> [Decision] {
-        decisions.value?.filter { $0.workItemID == item.id } ?? []
+        decisions.filter { $0.workItemID == item.id }
     }
 
     func employeeName(_ id: String) -> String {

@@ -4,22 +4,21 @@ import DevysClient
 import DevysDesignSystem
 import SwiftUI
 
-/// Home's permanent view: everything waiting on the owner, then what is moving, what is stuck
-/// and what it cost. Each row opens its thread; a decision is answered right here.
+/// Home's permanent view: everything waiting on the owner, then what is moving and what is
+/// stuck. Each row opens its thread; a decision is answered right here.
 struct NeedsYou: View {
     let store: StoreOf<Workspace>
     let close: () -> Void
 
     var body: some View {
         if let home = store.home.value {
-            let pending = store.decisions.value ?? []
             VStack(spacing: 0) {
                 PanelHeader(title: home.needsYou.isEmpty ? "At a glance" : "Needs you", close: close)
                 PanelBody {
                     if !home.needsYou.isEmpty {
                         VStack(spacing: 8) {
                             ForEach(home.needsYou) { item in
-                                if item.kind == .decision, let decision = pending.first(where: { $0.id == item.id }) {
+                                if let decision = item.decision {
                                     DecisionRow(store: store, decision: decision)
                                 } else {
                                     NeedsYouRow(store: store, item: item)
@@ -36,10 +35,6 @@ struct NeedsYou: View {
                         PanelSection(title: "Stuck", count: home.glance.stuck.count) {
                             ForEach(home.glance.stuck) { GlanceRow(store: store, card: $0, stuck: true) }
                         }
-                    }
-                    if let cents = home.glance.spentCents, cents > 0 {
-                        Text("\(ModelText.dollars(Double(cents) / 100)) spent since you last looked")
-                            .font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3)
                     }
                 }
             }

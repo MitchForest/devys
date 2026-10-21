@@ -1,6 +1,7 @@
 /**
  * A markdown document, edited as rich text and stored as markdown (Milkdown's Crepe, MIT). The
- * caller owns saving; this reports each change and the text the reader selects for a comment.
+ * caller owns saving; this reports each change the reader makes (never the editor's own rewrite of
+ * what it loaded) and the text the reader selects for a comment.
  */
 import { Crepe } from "@milkdown/crepe";
 import "@milkdown/crepe/theme/common/style.css";
@@ -86,21 +87,41 @@ export function MarkdownDocument({
   const editor = useRef<{ crepe: Crepe; ready: Promise<unknown> } | null>(null);
 
   useEffect(() => {
+    const element = root.current!;
     const crepe = new Crepe({
-      root: root.current!,
+      root: element,
       defaultValue: latest.current.markdown,
       features: { [Crepe.Feature.AI]: false, [Crepe.Feature.TopBar]: false },
     });
-    crepe.on((listen) => listen.markdownUpdated((_ctx, next) => latest.current.onChange(next)));
-    const ready = crepe.create().then(() => crepe.setReadonly(latest.current.readOnly));
+    // Loading a document rewrites it the editor's way (tables, task lists, images): that is not
+    // an edit. Until the owner first acts here, the editor's text is only its normalised copy of
+    // what was loaded; afterwards each change is reported, and that copy reports as the loaded
+    // text, so undoing back to it is not an edit either.
+    const loaded = latest.current.markdown;
+    let normalised = loaded;
+    let acted = false;
+    const act = () => (acted = true);
+    const acts = ["beforeinput", "keydown", "paste", "cut", "drop", "pointerdown"] as const;
+    for (const type of acts) element.addEventListener(type, act, true);
+    crepe.on((listen) =>
+      listen.markdownUpdated((_ctx, next) => {
+        if (!acted) normalised = next;
+        else latest.current.onChange(next === normalised ? loaded : next);
+      }),
+    );
+    const ready = crepe.create().then(() => {
+      if (!acted) normalised = crepe.getMarkdown();
+      crepe.setReadonly(latest.current.readOnly);
+    });
     editor.current = { crepe, ready };
-    const stop = watchSelection(root.current!, (quote) => {
+    const stop = watchSelection(element, (quote) => {
       if (!quote) return latest.current.onSelect?.(null);
       const start = latest.current.markdown.indexOf(quote);
       latest.current.onSelect?.({ start, end: start < 0 ? -1 : start + quote.length, quote });
     });
     return () => {
       stop();
+      for (const type of acts) element.removeEventListener(type, act, true);
       editor.current = null;
       void crepe.destroy();
     };
