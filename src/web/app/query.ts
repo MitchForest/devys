@@ -29,6 +29,7 @@ export const keys = {
   workDecisions: (b: string, work: string, revision: number) =>
     ["business", b, "decisions", work, revision] as const,
   projects: (b: string) => ["business", b, "projects"] as const,
+  routines: (b: string) => ["business", b, "routines"] as const,
   home: (b: string) => ["business", b, "home"] as const,
   apps: (b: string) => ["business", b, "apps"] as const,
   memory: (b: string) => ["business", b, "memory"] as const,
@@ -115,6 +116,12 @@ export const queries = {
     queryOptions({
       queryKey: keys.projects(b),
       queryFn: () => api.projects(b),
+      refetchInterval: poll,
+    }),
+  routines: (b: string) =>
+    queryOptions({
+      queryKey: keys.routines(b),
+      queryFn: () => api.routines(b),
       refetchInterval: poll,
     }),
   home: (b: string) =>

@@ -8,6 +8,7 @@ import { useNav } from "../app/navigation.ts";
 import { EmployeePortrait } from "../design/portrait.tsx";
 import { decisionFields, decisionTitle } from "./work.tsx";
 import { PanelBody, PanelHeader, PanelSection } from "./panel.tsx";
+import { RoutineProposal } from "./routines.tsx";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -27,7 +28,11 @@ export function NeedsYou({ close }: { close: () => void }) {
           <div className="flex flex-col gap-2">
             {value.needs_you.map((item) =>
               item.kind === "decision" ? (
-                <DecisionRow key={item.id} decision={item} />
+                item.routine ? (
+                  <RoutineProposal key={item.id} decision={item} routine={item.routine} />
+                ) : (
+                  <DecisionRow key={item.id} decision={item} />
+                )
               ) : (
                 <NeedsYouRow key={`${item.kind}-${item.id}`} item={item} />
               ),

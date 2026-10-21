@@ -45,14 +45,14 @@ it("a new business's Head of Operations starts with the operations preset", asyn
     available: unknown[];
   };
   expect(access.grants.map((g) => g.capability).sort()).toEqual(catalog.map((c) => c.name).sort());
-  // Every capability runs on its own except hiring and production deploys, which the owner
-  // approves each time.
+  // Every capability runs on its own except hiring, production deploys and activating a
+  // routine, which the owner approves each time.
   expect(
     access.grants
       .filter((g) => g.mode !== "auto")
       .map((g) => g.capability)
       .sort(),
-  ).toEqual(["deployProduction", "hireEmployee"]);
+  ).toEqual(["deployProduction", "hireEmployee", "routineActivate"]);
   expect(access.grants.find((g) => g.capability === "driveCreate")?.effect).toBe("external");
   expect(access.available).toEqual([]);
 });

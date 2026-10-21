@@ -8,13 +8,14 @@ struct RefTests {
     @Test("A ref round-trips every kind, its id percent-encoded as encodeURIComponent does")
     func roundTrip() throws {
         let id = "a b/ü?#%"
-        let all: [Ref] = [.artifact(id), .file(id), .codeSession(id), .workItem(id), .workProject(id)]
+        let all: [Ref] = [.artifact(id), .file(id), .codeSession(id), .workItem(id), .workProject(id), .workRoutine(id)]
         #expect(all.map(\.description) == [
             "devys:documents/artifact/a%20b%2F%C3%BC%3F%23%25",
             "devys:documents/file/a%20b%2F%C3%BC%3F%23%25",
             "devys:code/session/a%20b%2F%C3%BC%3F%23%25",
             "devys:work/item/a%20b%2F%C3%BC%3F%23%25",
-            "devys:work/project/a%20b%2F%C3%BC%3F%23%25"
+            "devys:work/project/a%20b%2F%C3%BC%3F%23%25",
+            "devys:work/routine/a%20b%2F%C3%BC%3F%23%25"
         ])
         for ref in all { #expect(Ref(ref.description) == ref && ref.id == id) }
         let file = Ref.file("/Users/o/Devys/b1/plan (v2).md")

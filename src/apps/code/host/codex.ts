@@ -1,7 +1,10 @@
 /**
- * Codex through `codex app-server`: JSON-RPC lines over stdio, one process for the host,
- * started on first use. Threads persist in the Codex home, so a thread the current process
- * has not loaded is resumed before its next turn. Message shapes come from the protocol
+ * Codex through `codex app-server`: JSON-RPC lines over stdio, started on first use. The host
+ * makes one adapter per business, and it runs one process for builds and one for reviews, each
+ * under the host's confinement for that business. Codex's own Seatbelt sandbox cannot start
+ * inside another Seatbelt profile, so threads run with Codex's sandbox off and the review
+ * process's confinement is what keeps a review from writing. Threads persist in the Codex
+ * home, so a thread the current process has not loaded is resumed before its next turn. Message shapes come from the protocol
  * generated for the pinned Codex (`codex-protocol/`, `bun run codex:protocol`).
  */
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
@@ -21,7 +24,7 @@ import type { TurnStartResponse } from "./codex-protocol/v2/TurnStartResponse";
 import type { TurnSteerParams } from "./codex-protocol/v2/TurnSteerParams";
 import type { TurnSteerResponse } from "./codex-protocol/v2/TurnSteerResponse";
 import type { TranscriptEntry } from "../contract.ts";
-import type { ProviderAdapter, ProviderEvents } from "./provider.ts";
+import type { Confine, ProviderAdapter, ProviderEvents } from "./provider.ts";
 
 /** A command without the shell wrapper Codex runs it in (`/bin/zsh -lc "…"`). */
 export function unwrapped(command: string) {
@@ -82,12 +85,19 @@ interface CodexOptions {
   home: string;
   env: NodeJS.ProcessEnv;
   command?: string;
+  /** Keeps the build (false) or review (true) process in its business. */
+  /** Holds the process for its business (Seatbelt on the Mac host). */
+  confine: (readOnly: boolean) => Confine;
 }
 
 export function codexAdapter(options: CodexOptions, events: ProviderEvents): ProviderAdapter {
-  let server: Promise<Connection> | undefined;
-  /** The running turn and latest reply of each thread this process has loaded. */
-  const threads = new Map<string, { turn: string | null; reply: string | null }>();
+  /** The build (false) and review (true) processes. */
+  const servers = new Map<boolean, Promise<Connection>>();
+  /** The running turn, latest reply and process of each thread a process has loaded. */
+  const threads = new Map<
+    string,
+    { turn: string | null; reply: string | null; readOnly: boolean }
+  >();
   /** What Codex asked approval for and Devys declined, per thread, said with the turn's end. */
   const declined = new Map<string, string[]>();
 
@@ -96,12 +106,17 @@ export function codexAdapter(options: CodexOptions, events: ProviderEvents): Pro
     call<T>(method: string, params: unknown): Promise<T>;
   }
 
-  function connect(): Promise<Connection> {
-    server ??= (async () => {
-      const child = spawn(options.command ?? "codex", ["app-server"], {
-        env: { ...options.env, CODEX_HOME: options.home },
-        stdio: ["pipe", "pipe", "pipe"],
-      });
+  function connect(readOnly: boolean): Promise<Connection> {
+    const existing = servers.get(readOnly);
+    if (existing) return existing;
+    const server = (async () => {
+      const child = spawn(
+        ...options.confine(readOnly)(options.command ?? "codex", ["app-server"]),
+        {
+          env: { ...options.env, CODEX_HOME: options.home },
+          stdio: ["pipe", "pipe", "pipe"],
+        },
+      );
       let next = 0;
       const waiting = new Map<
         number,
@@ -146,16 +161,17 @@ export function codexAdapter(options: CodexOptions, events: ProviderEvents): Pro
                 ...(declined.get(asked.threadId) ?? []),
                 asked.command ?? asked.reason ?? message.method,
               ]);
-          } else notify(message.method, message.params);
+          } else notify(readOnly, message.method, message.params);
         }
       });
       child.stderr.resume();
       child.on("exit", () => {
-        server = undefined;
+        if (servers.get(readOnly) === server) servers.delete(readOnly);
         for (const pending of waiting.values()) pending.reject(new Error("Codex exited"));
         waiting.clear();
-        const running = [...threads].filter(([, thread]) => thread.turn).map(([id]) => id);
-        threads.clear();
+        const gone = [...threads].filter(([, thread]) => thread.readOnly === readOnly);
+        for (const [id] of gone) threads.delete(id);
+        const running = gone.filter(([, thread]) => thread.turn).map(([id]) => id);
         if (running.length) events.lost(running);
       });
       await call("initialize", {
@@ -165,24 +181,25 @@ export function codexAdapter(options: CodexOptions, events: ProviderEvents): Pro
       write({ method: "initialized", params: {} });
       return { child, call };
     })().catch((error: unknown) => {
-      server = undefined;
+      if (servers.get(readOnly) === server) servers.delete(readOnly);
       throw error;
     });
+    servers.set(readOnly, server);
     return server;
   }
 
-  function notify(method: string, params: unknown) {
+  function notify(readOnly: boolean, method: string, params: unknown) {
     if (method === "turn/started") {
       const { threadId, turn } = params as TurnStartedNotification;
-      threads.set(threadId, { reply: null, ...threads.get(threadId), turn: turn.id });
+      threads.set(threadId, { reply: null, ...threads.get(threadId), turn: turn.id, readOnly });
     } else if (method === "item/completed") {
       const { threadId, item } = params as ItemCompletedNotification;
       if (item.type === "agentMessage" && item.text)
-        threads.set(threadId, { turn: null, ...threads.get(threadId), reply: item.text });
+        threads.set(threadId, { turn: null, ...threads.get(threadId), reply: item.text, readOnly });
     } else if (method === "turn/completed") {
       const { threadId, turn } = params as TurnCompletedNotification;
       const thread = threads.get(threadId);
-      threads.set(threadId, { turn: null, reply: thread?.reply ?? null });
+      threads.set(threadId, { turn: null, reply: thread?.reply ?? null, readOnly });
       if (turn.status === "inProgress") return;
       const refused = declined.get(threadId) ?? [];
       declined.delete(threadId);
@@ -199,32 +216,41 @@ export function codexAdapter(options: CodexOptions, events: ProviderEvents): Pro
     }
   }
 
-  const sandbox = (readOnly: boolean) => (readOnly ? "read-only" : "danger-full-access");
+  // Codex's own sandbox stays off: the host's confinement holds the process (see above).
+  const sandbox = "danger-full-access";
 
-  async function startTurn(connection: Connection, threadId: string, text: string) {
+  async function startTurn(
+    connection: Connection,
+    threadId: string,
+    text: string,
+    readOnly: boolean,
+  ) {
     const { turn } = await connection.call<TurnStartResponse>("turn/start", {
       threadId,
       input: [{ type: "text", text, text_elements: [] }],
     } as TurnStartParams);
-    threads.set(threadId, { reply: null, ...threads.get(threadId), turn: turn.id });
+    threads.set(threadId, { reply: null, ...threads.get(threadId), turn: turn.id, readOnly });
     return turn.id;
   }
 
   return {
     async start({ cwd, instructions, prompt, readOnly }) {
-      const connection = await connect();
+      const connection = await connect(readOnly);
       const { thread } = await connection.call<ThreadStartResponse>("thread/start", {
         cwd,
         approvalPolicy: "never",
-        sandbox: sandbox(readOnly),
+        sandbox,
         developerInstructions: instructions,
       } satisfies ThreadStartParams);
-      threads.set(thread.id, { turn: null, reply: null });
-      return { sessionId: thread.id, turnId: await startTurn(connection, thread.id, prompt) };
+      threads.set(thread.id, { turn: null, reply: null, readOnly });
+      return {
+        sessionId: thread.id,
+        turnId: await startTurn(connection, thread.id, prompt, readOnly),
+      };
     },
 
     async send({ sessionId, cwd, text, readOnly }) {
-      const connection = await connect();
+      const connection = await connect(readOnly);
       const loaded = threads.get(sessionId);
       if (loaded?.turn) {
         const { turnId } = await connection.call<TurnSteerResponse>("turn/steer", {
@@ -239,24 +265,28 @@ export function codexAdapter(options: CodexOptions, events: ProviderEvents): Pro
           threadId: sessionId,
           cwd,
           approvalPolicy: "never",
-          sandbox: sandbox(readOnly),
+          sandbox,
         } as ThreadResumeParams);
-        threads.set(sessionId, { turn: null, reply: null });
+        threads.set(sessionId, { turn: null, reply: null, readOnly });
       }
-      return { turnId: await startTurn(connection, sessionId, text), steered: false };
+      return { turnId: await startTurn(connection, sessionId, text, readOnly), steered: false };
     },
 
     async interrupt(sessionId) {
-      const turn = threads.get(sessionId)?.turn;
-      if (!turn || !server) return;
+      const thread = threads.get(sessionId);
+      if (!thread?.turn || !servers.has(thread.readOnly)) return;
       await (
-        await connect()
-      ).call("turn/interrupt", { threadId: sessionId, turnId: turn } satisfies TurnInterruptParams);
+        await connect(thread.readOnly)
+      ).call("turn/interrupt", {
+        threadId: sessionId,
+        turnId: thread.turn,
+      } satisfies TurnInterruptParams);
     },
 
     async transcript({ sessionId }) {
+      // Any process reads a thread from the Codex home; the one holding it, if any.
       const { thread } = await (
-        await connect()
+        await connect(threads.get(sessionId)?.readOnly ?? false)
       ).call<ThreadReadResponse>("thread/read", {
         threadId: sessionId,
         includeTurns: true,
@@ -265,8 +295,8 @@ export function codexAdapter(options: CodexOptions, events: ProviderEvents): Pro
     },
 
     async close() {
-      const connection = await server?.catch(() => undefined);
-      connection?.child.kill("SIGTERM");
+      for (const server of servers.values())
+        (await server.catch(() => undefined))?.child.kill("SIGTERM");
     },
   };
 }

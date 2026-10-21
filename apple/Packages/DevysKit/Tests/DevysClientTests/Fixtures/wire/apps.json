@@ -233,7 +233,7 @@
       "id": "work",
       "name": "Work",
       "icon": "checklist",
-      "summary": "Work items the business owes and the projects they belong to.",
+      "summary": "Work items the business owes, the projects they belong to and employees' routines.",
       "kind": "system",
       "status": "available",
       "records": [
@@ -244,6 +244,10 @@
         {
           "kind": "project",
           "title": "Project"
+        },
+        {
+          "kind": "routine",
+          "title": "Routine"
         }
       ],
       "capabilities": [
@@ -254,7 +258,11 @@
         "projectList",
         "projectCreate",
         "projectUpdate",
-        "projectAdd"
+        "projectAdd",
+        "routineList",
+        "routinePropose",
+        "routineActivate",
+        "routinePause"
       ],
       "skills": [],
       "connections": [],
@@ -268,7 +276,11 @@
           "projectList",
           "projectCreate",
           "projectUpdate",
-          "projectAdd"
+          "projectAdd",
+          "routineList",
+          "routinePropose",
+          "routineActivate",
+          "routinePause"
         ],
         "engineering": [
           "workList",
@@ -278,7 +290,11 @@
           "projectList",
           "projectCreate",
           "projectUpdate",
-          "projectAdd"
+          "projectAdd",
+          "routineList",
+          "routinePropose",
+          "routineActivate",
+          "routinePause"
         ],
         "growth": [
           "workList",
@@ -288,7 +304,11 @@
           "projectList",
           "projectCreate",
           "projectUpdate",
-          "projectAdd"
+          "projectAdd",
+          "routineList",
+          "routinePropose",
+          "routineActivate",
+          "routinePause"
         ],
         "business-operations": [
           "workList",
@@ -298,7 +318,11 @@
           "projectList",
           "projectCreate",
           "projectUpdate",
-          "projectAdd"
+          "projectAdd",
+          "routineList",
+          "routinePropose",
+          "routineActivate",
+          "routinePause"
         ],
         "custom": [
           "workList",
@@ -308,7 +332,11 @@
           "projectList",
           "projectCreate",
           "projectUpdate",
-          "projectAdd"
+          "projectAdd",
+          "routineList",
+          "routinePropose",
+          "routineActivate",
+          "routinePause"
         ]
       },
       "installed": true,

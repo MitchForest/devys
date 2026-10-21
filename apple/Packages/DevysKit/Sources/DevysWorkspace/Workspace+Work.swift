@@ -11,12 +11,14 @@ package struct WorkRecords: Sendable {
     package var projects: [Project]
     package var home: Home
     package var apps: [AppEntry]
+    package var routines: [Routine]
 
-    package init(work: [WorkItem], projects: [Project], home: Home, apps: [AppEntry]) {
+    package init(work: [WorkItem], projects: [Project], home: Home, apps: [AppEntry], routines: [Routine] = []) {
         self.work = work
         self.projects = projects
         self.home = home
         self.apps = apps
+        self.routines = routines
     }
 }
 
@@ -39,7 +41,48 @@ package enum ProjectIntent {
     case itemRemoved(projectID: String, itemID: String)
 }
 
+/// The owner pauses an active routine or resumes a paused one; a proposed one is activated by
+/// answering its decision in Needs you.
+package enum RoutineIntent {
+    case pauseTapped(routineID: String)
+    case resumeTapped(routineID: String)
+    /// The routine as the server saved it.
+    case changed(Routine)
+}
+
 extension Workspace {
+    func reduceRoutine(_ intent: RoutineIntent, state: inout State) {
+        switch intent {
+        case .pauseTapped(let id):
+            setRoutinePaused(id, paused: true, state: state)
+        case .resumeTapped(let id):
+            setRoutinePaused(id, paused: false, state: state)
+        case .changed(let routine):
+            guard let routines = state.routines.value else { return }
+            state.routines = .loaded(routines.map { $0.id == routine.id ? routine : $0 })
+        }
+    }
+
+    /// Shows the routine as the server saved it; a refusal says why (a proposed routine is
+    /// activated by the owner's decision, not resumed).
+    func setRoutinePaused(_ routineID: String, paused: Bool, state: State) {
+        let businessID = state.businessID
+        guard !businessID.isEmpty, let routine = state.routines.value?.first(where: { $0.id == routineID }),
+              routine.state == (paused ? .active : .paused) else { return }
+        let runtime = runtime
+        store.addTask {
+            do {
+                let saved = try await runtime.setRoutinePaused(businessID, routineID, paused)
+                try store.send(Action(.routine(.changed(saved))))
+            } catch DevysHTTPError.rejected(_, let message) where !message.isEmpty {
+                try store.send(Action(.stopFinished(message)))
+            } catch {
+                try store.send(Action(.stopFinished(paused ? "That routine couldn't be paused." : "That routine couldn't be resumed.")))
+            }
+            try await reloadWork(runtime, businessID)
+        }
+    }
+
     func reduceWork(_ intent: Intent, state: inout State) {
         switch intent {
         case .workLoaded(let businessID, let records):
@@ -48,11 +91,14 @@ extension Workspace {
             state.projects = .loaded(records.projects)
             state.home = .loaded(records.home)
             state.apps = .loaded(records.apps)
+            state.routines = .loaded(records.routines)
         case .decisionAnswered(let decisionID, let approve):
             answer(decisionID, approve: approve, state: &state)
         case .workItemStateSet(let workItemID, let target):
             setState(workItemID, target, state: state)
         case .takeoverToggled(let workItemID):
+            // Taking over or handing back closes any plan left open on that work.
+            if state.workPlan?.workItemID == workItemID { state.workPlan = nil }
             toggleTakeover(workItemID, state: state)
         default:
             break
@@ -159,7 +205,8 @@ extension Workspace {
         async let projects = runtime.projects(businessID)
         async let home = runtime.home(businessID)
         async let apps = runtime.apps(businessID)
-        guard let records = try? await WorkRecords(work: work, projects: projects, home: home, apps: apps) else { return }
+        async let routines = runtime.routines(businessID)
+        guard let records = try? await WorkRecords(work: work, projects: projects, home: home, apps: apps, routines: routines) else { return }
         try store.send(Action(.workLoaded(businessID: businessID, records)))
     }
 }

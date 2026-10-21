@@ -7,7 +7,7 @@ import { Schema, SchemaTransformation } from "effect";
 export const refKinds = {
   documents: ["artifact", "file"],
   code: ["session"],
-  work: ["item", "project"],
+  work: ["item", "project", "routine"],
 } as const;
 
 type RefApp = keyof typeof refKinds;

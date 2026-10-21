@@ -18,7 +18,9 @@ struct NeedsYou: View {
                     if !home.needsYou.isEmpty {
                         VStack(spacing: 8) {
                             ForEach(home.needsYou) { item in
-                                if let decision = item.decision {
+                                if let decision = item.decision, let routine = item.routine {
+                                    RoutineProposal(store: store, decision: decision, routine: routine)
+                                } else if let decision = item.decision {
                                     DecisionRow(store: store, decision: decision)
                                 } else {
                                     NeedsYouRow(store: store, item: item)

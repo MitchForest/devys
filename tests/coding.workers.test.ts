@@ -174,7 +174,8 @@ it("coding starts only from a work item, once per call, within the grant's repos
   const outside = await Effect.runPromise(
     start.execute(input).pipe(as(bindings, scope), Effect.flip),
   );
-  expect(outside).toMatchObject({ code: "invalid_input" });
+  // Coding happens in the work item's thread; elsewhere it says where to go.
+  expect(outside).toMatchObject({ code: "conflict" });
   const operationId = crypto.randomUUID();
   const first = (await Effect.runPromise(
     start.execute(input).pipe(as(bindings, scope, work.id, operationId)),

@@ -43,6 +43,8 @@ package enum Layer: Hashable, Sendable {
     case app(String)
     case session(workID: String, sessionID: String)
     case browser(workID: String)
+    /// A routine, read-only: what it does, when, and what its last run said.
+    case routine(String)
 }
 
 /// A layer on the stack; `auto` when it opened on its own, so the next one may replace it.
@@ -71,6 +73,7 @@ extension Layer {
         case .artifact(let id, _): .artifact(id)
         case .file(let path): .file(path)
         case .session(_, let sessionID): .codeSession(sessionID)
+        case .routine(let id): .workRoutine(id)
         case .app, .browser: nil
         }
     }
@@ -99,7 +102,8 @@ package enum Records {
         "documents/file": { id, _ in .layer(.file(id)) },
         "code/session": { id, work in work.map { .layer(.session(workID: $0, sessionID: id)) } },
         "work/item": { id, _ in .place(.thread(id)) },
-        "work/project": { id, _ in .place(.project(id)) }
+        "work/project": { id, _ in .place(.project(id)) },
+        "work/routine": { id, _ in .layer(.routine(id)) }
     ]
 
     package static func open(_ ref: Ref, work: String? = nil) -> RecordTarget? {

@@ -81,6 +81,8 @@ export const useDecisions = () =>
   useQuery({ ...queries.home(useBusinessId()), select: decisionsOf });
 export const useProjects = () =>
   useQuery({ ...queries.projects(useBusinessId()), select: (d) => d.projects });
+export const useRoutines = () =>
+  useQuery({ ...queries.routines(useBusinessId()), select: (d) => d.routines });
 export const useApps = () => useQuery({ ...queries.apps(useBusinessId()), select: (d) => d.apps });
 export const useHome = () => useQuery(queries.home(useBusinessId()));
 export const useMemory = () =>

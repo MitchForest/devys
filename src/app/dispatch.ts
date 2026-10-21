@@ -6,15 +6,26 @@ import { workChat } from "../channels/work.ts";
 import { scopeName } from "../identity/contract.ts";
 import { activeEmployee, pausedEmployees } from "../identity/service.ts";
 import type { WorkItem } from "../work/contract.ts";
-import { readyWorkItems, markSubmitted } from "../work/service.ts";
+import { readyWorkItems, markSubmitted, wakeFollowUps } from "../work/service.ts";
 import { postEvent } from "./conversations.ts";
+import { dispatchRoutines } from "./routines.ts";
 
-/** The minute tick: unanswered decisions expire, then ready work is handed over. */
+/**
+ * The minute tick: unanswered decisions expire, follow-ups whose time came become ready, ready
+ * work is handed over, and due routines run. Wiring only: Pi's idempotent submit by operation
+ * id is the dedupe, so a repeated tick changes nothing.
+ */
 export async function minuteTick(env: Env) {
   await Effect.runPromise(expireDecisions(env.HYPERDRIVE)).catch((error: unknown) =>
     console.error("Expiring decisions failed:", error),
   );
+  await Effect.runPromise(wakeFollowUps(env.HYPERDRIVE)).catch((error: unknown) =>
+    console.error("Waking follow-ups failed:", error),
+  );
   await dispatchReady(env);
+  await dispatchRoutines(env).catch((error: unknown) =>
+    console.error("Running routines failed:", error),
+  );
 }
 
 /**
@@ -50,6 +61,7 @@ async function handOver(env: Env, work: WorkItem & { business_id: string }) {
       `Work on this work item (${ref("work", "item", work.id)}, revision ${work.revision}): ${work.title}.`,
       work.objective && `Objective: ${work.objective}`,
       work.next_action && `Next action: ${work.next_action}`,
+      work.wait_condition && `It was waiting on: ${work.wait_condition}`,
       "When it's done, call workComplete with evidence. If it's blocked, call workUpdate with state waiting or needs_decision and what it waits on.",
     ]
       .filter(Boolean)

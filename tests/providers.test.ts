@@ -1,4 +1,5 @@
 import { mkdtempSync } from "node:fs";
+import type { Confine } from "../src/apps/code/host/provider.ts";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
@@ -9,14 +10,19 @@ import { providerConformance, recorded } from "./conformance/provider.ts";
 const fakeClaude = join(import.meta.dirname, "fixtures/fake-claude.mjs");
 const fakeCodex = join(import.meta.dirname, "fixtures/fake-codex.mjs");
 
+/** The provider conformance suite tests the adapters; confinement has its own suite. */
+const asIs = (): Confine => (command, args) => [command, [...args]];
 const claudeConfig = mkdtempSync(join(tmpdir(), "devys-claude-config-"));
 const claude = (env: NodeJS.ProcessEnv = process.env) =>
   recorded((events) =>
-    claudeAdapter({ configDir: claudeConfig, env, command: fakeClaude }, events),
+    claudeAdapter({ configDir: claudeConfig, env, command: fakeClaude, confine: asIs }, events),
   );
 const codex = () =>
   recorded((events) =>
-    codexAdapter({ home: "/owner/.codex-personal", env: process.env, command: fakeCodex }, events),
+    codexAdapter(
+      { home: "/owner/.codex-personal", env: process.env, command: fakeCodex, confine: asIs },
+      events,
+    ),
   );
 
 providerConformance("Claude Code CLI", () => claude());
@@ -97,7 +103,10 @@ it("a coding session sees none of the host's settings or the Worker's secrets", 
   });
   expect(Object.keys(env).filter((name) => name.startsWith("DEVYS_"))).toEqual([]);
   const { adapter, next } = recorded((events) =>
-    codexAdapter({ home: "/owner/.codex-personal", env, command: fakeCodex }, events),
+    codexAdapter(
+      { home: "/owner/.codex-personal", env, command: fakeCodex, confine: asIs },
+      events,
+    ),
   );
   const ended = next();
   await adapter.start({

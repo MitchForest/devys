@@ -4,13 +4,16 @@
  * Commands run in the owner's login shell with the owner's tools and logins, starting in
  * the business's working folder. Receipts are an append-only JSON-lines file: a repeated
  * operation returns its recorded result, and a command cut off by a restart reports
- * uncertain and is never run again. It uses only Node APIs, so Bun and tests both run it.
+ * uncertain and is never run again. Every command runs confined to its business: it cannot
+ * read or write another business's folder (./seatbelt.ts). It uses only Node APIs, so Bun and
+ * tests both run it.
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { lstat, mkdir, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Readable } from "node:stream";
@@ -18,12 +21,16 @@ import { HostRefusal as Refusal, scopeOf, type HostRoutes } from "../../protocol
 import { withinCommandLimits } from "../../protocol/limits.ts";
 import type { CommandResult } from "../contract.ts";
 import { listWorkspaceSkills } from "../skills.ts";
+import { confine } from "./seatbelt.ts";
 
 interface HostOptions {
   token: string;
   /** Where receipts live. */
   data: string;
-  /** Each business works in `<work>/<businessId>` and keeps its skills in its `skills` folder. */
+  /**
+   * Each business works in `<work>/<businessId>` and keeps its skills in its `skills` folder.
+   * What runs for one business, and the files it names, stay out of the others' folders.
+   */
   work: string;
   port: number;
   shell?: string;
@@ -70,6 +77,14 @@ function absolute(path: unknown): string {
 async function confined(path: string, within: unknown) {
   if (within === undefined || within === null) return path;
   const root = await realpath(absolute(within)).catch(() => undefined);
+  const resolved = await resolvedPath(path);
+  if (!root || !resolved || !inside(resolved, root))
+    throw new Refusal(403, "Stay inside the business folder");
+  return path;
+}
+
+/** `path` with symbolic links followed; a missing file is judged by its nearest existing folder. */
+async function resolvedPath(path: string) {
   let existing = path;
   let real: string | undefined;
   for (;;) {
@@ -77,10 +92,17 @@ async function confined(path: string, within: unknown) {
     if (real || existing === "/") break;
     existing = dirname(existing);
   }
-  const resolved = real && join(real, relative(existing, path));
-  if (!root || !resolved || (resolved !== root && !resolved.startsWith(`${root}/`)))
-    throw new Refusal(403, "Stay inside the business folder");
-  return path;
+  return real && join(real, relative(existing, path));
+}
+
+const inside = (path: string, folder: string) => path === folder || path.startsWith(`${folder}/`);
+
+/** The business a `/file` request acts for; every caller names it. */
+function businessParam(url: URL) {
+  const business = url.searchParams.get("business");
+  if (!business || !/^[A-Za-z0-9-]{1,64}$/.test(business))
+    throw new Refusal(400, "Name the business");
+  return business;
 }
 
 async function body(request: IncomingMessage, limit: number) {
@@ -169,6 +191,21 @@ export async function startHost(options: HostOptions) {
     });
     return done;
   };
+  /**
+   * `path` unless it reaches another business's folder or the host's own data under the
+   * businesses folder; the employee's commands are held to the same line (./seatbelt.ts).
+   */
+  const ownBusiness = (path: string, input: Record<string, unknown>) =>
+    ownFolder(path, scopeOf(input.scope).businessId);
+  /** Refuses a path in another business's folder or the host's own data under the root. */
+  const ownFolder = async (path: string, businessId: string) => {
+    const root = await realpath(options.work).catch(() => options.work);
+    const own = join(root, businessId);
+    const resolved = (await resolvedPath(path)) ?? path;
+    if (inside(resolved, root) && !inside(resolved, own))
+      throw new Refusal(403, "That is another business's folder");
+    return path;
+  };
   let spawned = 0;
   const scopeKey = (scope: Scope) => `${scope.businessId}/${scope.employeeId}`;
   const stopGroup = (child: ChildProcess, signal: NodeJS.Signals) => {
@@ -216,12 +253,19 @@ export async function startHost(options: HostOptions) {
     mkdirSync(cwd, { recursive: true });
     record({ key, fingerprint });
     spawned++;
-    const child = spawn(options.shell ?? "/bin/zsh", ["-lc", command], {
-      cwd,
-      env: options.env ?? process.env,
-      detached: true,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    const child = spawn(
+      ...confine(
+        { root: options.work, folder: cwd, readOnly: false },
+        options.shell ?? "/bin/zsh",
+        ["-lc", command],
+      ),
+      {
+        cwd,
+        env: options.env ?? process.env,
+        detached: true,
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
     const job = { child, stopped: false };
     active.set(scopeKey(scope), job);
     let limited = false;
@@ -299,7 +343,7 @@ export async function startHost(options: HostOptions) {
     }
     if (url.pathname === "/file" && request.method === "GET") {
       const path = await confined(
-        absolute(url.searchParams.get("path")),
+        await ownFolder(absolute(url.searchParams.get("path")), businessParam(url)),
         url.searchParams.get("within"),
       );
       const maximum = Math.min(Number(url.searchParams.get("max") ?? fileBytes), fileBytes);
@@ -312,7 +356,7 @@ export async function startHost(options: HostOptions) {
     }
     if (url.pathname === "/file" && request.method === "PUT") {
       const path = await confined(
-        absolute(url.searchParams.get("path")),
+        await ownFolder(absolute(url.searchParams.get("path")), businessParam(url)),
         url.searchParams.get("within"),
       );
       const bytes = await body(request, fileBytes);
@@ -343,7 +387,7 @@ export async function startHost(options: HostOptions) {
         return json({ stopped: true });
       }
       case "/read": {
-        const path = await confined(absolute(input.path), input.within);
+        const path = await confined(await ownBusiness(absolute(input.path), input), input.within);
         const maximum = Math.min(Number(input.maximum ?? inlineBytes) || inlineBytes, textBytes);
         const info = await stat(path).catch(() => undefined);
         if (!info?.isFile()) throw new Refusal(404, "File is unavailable");
@@ -360,7 +404,7 @@ export async function startHost(options: HostOptions) {
         });
       }
       case "/write": {
-        const path = await confined(absolute(input.path), input.within);
+        const path = await confined(await ownBusiness(absolute(input.path), input), input.within);
         const content = typeof input.content === "string" ? input.content : "";
         if (Buffer.byteLength(content) > textBytes)
           throw new Refusal(413, "File exceeds the text write limit");
@@ -368,8 +412,8 @@ export async function startHost(options: HostOptions) {
         return json({ path, revision: revisionOf(content) });
       }
       case "/print": {
-        const source = absolute(input.source);
-        const target = absolute(input.target);
+        const source = await ownBusiness(absolute(input.source), input);
+        const target = await ownBusiness(absolute(input.target), input);
         if (!/\.html?$/i.test(source) || !/\.pdf$/i.test(target))
           throw new Refusal(400, "Print an .html file to a .pdf file");
         if (!(await stat(source).catch(() => undefined))?.isFile())
@@ -380,18 +424,30 @@ export async function startHost(options: HostOptions) {
           throw new Refusal(503, "Google Chrome is not installed on this Mac");
         await mkdir(dirname(target), { recursive: true });
         // A throwaway profile: printing never touches the owner's or a business's browser profile.
-        const profile = join(options.data, `print-${randomUUID()}`);
+        // It sits outside the businesses folder, which the confined Chrome cannot reach.
+        const profile = join(tmpdir(), `devys-print-${randomUUID()}`);
         const exitCode = await new Promise<number | null>((resolve) => {
+          // Confined like a command, so the page cannot pull in another business's files. Chrome's
+          // own sandbox cannot start inside another Seatbelt profile; it adds nothing here, where
+          // the employee could run Chrome itself.
           const child = spawn(
-            chrome,
-            [
-              "--headless",
-              "--disable-gpu",
-              "--no-pdf-header-footer",
-              `--user-data-dir=${profile}`,
-              `--print-to-pdf=${target}`,
-              pathToFileURL(source).href,
-            ],
+            ...confine(
+              {
+                root: options.work,
+                folder: join(options.work, scopeOf(input.scope).businessId),
+                readOnly: false,
+              },
+              chrome,
+              [
+                "--headless",
+                "--no-sandbox",
+                "--disable-gpu",
+                "--no-pdf-header-footer",
+                `--user-data-dir=${profile}`,
+                `--print-to-pdf=${target}`,
+                pathToFileURL(source).href,
+              ],
+            ),
             { stdio: "ignore" },
           );
           const timer = setTimeout(() => child.kill("SIGKILL"), 60_000);
@@ -411,7 +467,7 @@ export async function startHost(options: HostOptions) {
         return json({ path: target, size: printed.size });
       }
       case "/list": {
-        const path = await confined(absolute(input.path), input.within);
+        const path = await confined(await ownBusiness(absolute(input.path), input), input.within);
         const entries = await readdir(path, { withFileTypes: true }).catch(() => {
           throw new Refusal(404, "Folder is unavailable");
         });

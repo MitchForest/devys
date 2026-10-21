@@ -76,6 +76,10 @@ public struct RuntimeClient: Sendable {
     public var pinApp: @Sendable (_ businessID: String, _ appID: String, _ pinned: Bool) async throws -> Void
     /// What needs the owner, and work at a glance.
     public var home: @Sendable (_ businessID: String) async throws -> Home
+    /// The business's routines; desks and overviews filter them.
+    public var routines: @Sendable (_ businessID: String) async throws -> [Routine]
+    /// Pauses or resumes a routine; returns it as the server saved it.
+    public var setRoutinePaused: @Sendable (_ businessID: String, _ routineID: String, _ paused: Bool) async throws -> Routine
     public var artifactText: @Sendable (_ businessID: String, _ artifactID: String) async throws -> String
     public var googleConnection: @Sendable (_ businessID: String) async throws -> GoogleConnection
 
@@ -136,6 +140,8 @@ public struct RuntimeClient: Sendable {
         installApp: @escaping @Sendable (String, String, Bool) async throws -> Void = { _, _, _ in },
         pinApp: @escaping @Sendable (String, String, Bool) async throws -> Void = { _, _, _ in },
         home: @escaping @Sendable (String) async throws -> Home = { _ in Home() },
+        routines: @escaping @Sendable (String) async throws -> [Routine] = { _ in [] },
+        setRoutinePaused: @escaping @Sendable (String, String, Bool) async throws -> Routine = { _, _, _ in throw DevysHTTPError.unauthorized },
         artifactText: @escaping @Sendable (String, String) async throws -> String = { _, _ in "" },
         googleConnection: @escaping @Sendable (String) async throws -> GoogleConnection = { _ in GoogleConnection(configured: false, connected: false) }
     ) {
@@ -180,6 +186,8 @@ public struct RuntimeClient: Sendable {
         self.installApp = installApp
         self.pinApp = pinApp
         self.home = home
+        self.routines = routines
+        self.setRoutinePaused = setRoutinePaused
         self.artifactText = artifactText
         self.googleConnection = googleConnection
     }
@@ -362,6 +370,10 @@ extension RuntimeClient {
             },
             pinApp: { id, app, pinned in try await hub.call { api, session in try await api.pinApp(session, businessID: id, appID: app, pinned: pinned) } },
             home: { id in try await hub.call { api, session in try await api.home(session, businessID: id) } },
+            routines: { id in try await hub.call { api, session in try await api.routines(session, businessID: id) } },
+            setRoutinePaused: { id, routine, paused in
+                try await hub.call { api, session in try await api.setRoutinePaused(session, businessID: id, id: routine, paused: paused) }
+            },
             artifactText: { id, artifact in
                 try await hub.call { api, session in try await api.artifactText(session, businessID: id, artifactID: artifact) }
             },

@@ -420,6 +420,7 @@ struct EventCard: View {
         case "code/session": "chevron.left.forwardslash.chevron.right"
         case "work/item": "checklist"
         case "work/project": "folder"
+        case "work/routine": "repeat"
         default: "doc.text"
         }
     }

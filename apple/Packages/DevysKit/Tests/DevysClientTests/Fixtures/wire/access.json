@@ -1,7 +1,7 @@
 {
   "grants": [
     {
-      "id": "00000000-0000-4000-8000-000000000013",
+      "id": "00000000-0000-4000-8000-000000000016",
       "capability": "artifactEdit",
       "mode": "auto",
       "constraints": {},
@@ -12,7 +12,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000014",
+      "id": "00000000-0000-4000-8000-000000000017",
       "capability": "artifactPage",
       "mode": "auto",
       "constraints": {},
@@ -23,7 +23,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000015",
+      "id": "00000000-0000-4000-8000-000000000018",
       "capability": "artifactRead",
       "mode": "auto",
       "constraints": {},
@@ -34,7 +34,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000016",
+      "id": "00000000-0000-4000-8000-000000000019",
       "capability": "browserClick",
       "mode": "auto",
       "constraints": {},
@@ -45,7 +45,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000017",
+      "id": "00000000-0000-4000-8000-000000000020",
       "capability": "browserOpen",
       "mode": "auto",
       "constraints": {},
@@ -56,7 +56,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000018",
+      "id": "00000000-0000-4000-8000-000000000021",
       "capability": "browserPress",
       "mode": "auto",
       "constraints": {},
@@ -67,7 +67,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000019",
+      "id": "00000000-0000-4000-8000-000000000022",
       "capability": "browserRead",
       "mode": "auto",
       "constraints": {},
@@ -78,7 +78,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000020",
+      "id": "00000000-0000-4000-8000-000000000023",
       "capability": "browserType",
       "mode": "auto",
       "constraints": {},
@@ -89,7 +89,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000021",
+      "id": "00000000-0000-4000-8000-000000000024",
       "capability": "codingAccept",
       "mode": "auto",
       "constraints": {},
@@ -100,7 +100,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000022",
+      "id": "00000000-0000-4000-8000-000000000025",
       "capability": "codingPublish",
       "mode": "auto",
       "constraints": {},
@@ -111,7 +111,7 @@
       "limits": true
     },
     {
-      "id": "00000000-0000-4000-8000-000000000023",
+      "id": "00000000-0000-4000-8000-000000000026",
       "capability": "codingSend",
       "mode": "auto",
       "constraints": {},
@@ -122,7 +122,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000024",
+      "id": "00000000-0000-4000-8000-000000000027",
       "capability": "codingStart",
       "mode": "auto",
       "constraints": {},
@@ -133,7 +133,7 @@
       "limits": true
     },
     {
-      "id": "00000000-0000-4000-8000-000000000025",
+      "id": "00000000-0000-4000-8000-000000000028",
       "capability": "codingStatus",
       "mode": "auto",
       "constraints": {},
@@ -144,7 +144,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000026",
+      "id": "00000000-0000-4000-8000-000000000029",
       "capability": "codingStop",
       "mode": "auto",
       "constraints": {},
@@ -155,7 +155,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000027",
+      "id": "00000000-0000-4000-8000-000000000030",
       "capability": "conversationHistory",
       "mode": "auto",
       "constraints": {},
@@ -166,7 +166,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000028",
+      "id": "00000000-0000-4000-8000-000000000031",
       "capability": "deployPreview",
       "mode": "auto",
       "constraints": {},
@@ -177,7 +177,7 @@
       "limits": true
     },
     {
-      "id": "00000000-0000-4000-8000-000000000029",
+      "id": "00000000-0000-4000-8000-000000000032",
       "capability": "deployProduction",
       "mode": "ask",
       "constraints": {},
@@ -188,7 +188,7 @@
       "limits": true
     },
     {
-      "id": "00000000-0000-4000-8000-000000000030",
+      "id": "00000000-0000-4000-8000-000000000033",
       "capability": "forget",
       "mode": "auto",
       "constraints": {},
@@ -199,7 +199,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000031",
+      "id": "00000000-0000-4000-8000-000000000034",
       "capability": "importAttachment",
       "mode": "auto",
       "constraints": {},
@@ -210,7 +210,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000032",
+      "id": "00000000-0000-4000-8000-000000000035",
       "capability": "printPdf",
       "mode": "auto",
       "constraints": {},
@@ -221,7 +221,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000033",
+      "id": "00000000-0000-4000-8000-000000000036",
       "capability": "projectAdd",
       "mode": "auto",
       "constraints": {},
@@ -232,7 +232,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000034",
+      "id": "00000000-0000-4000-8000-000000000037",
       "capability": "projectCreate",
       "mode": "auto",
       "constraints": {},
@@ -243,7 +243,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000035",
+      "id": "00000000-0000-4000-8000-000000000038",
       "capability": "projectList",
       "mode": "auto",
       "constraints": {},
@@ -254,7 +254,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000036",
+      "id": "00000000-0000-4000-8000-000000000039",
       "capability": "projectUpdate",
       "mode": "auto",
       "constraints": {},
@@ -265,7 +265,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000037",
+      "id": "00000000-0000-4000-8000-000000000040",
       "capability": "publishArtifact",
       "mode": "auto",
       "constraints": {},
@@ -276,7 +276,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000038",
+      "id": "00000000-0000-4000-8000-000000000041",
       "capability": "read",
       "mode": "auto",
       "constraints": {},
@@ -287,7 +287,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000039",
+      "id": "00000000-0000-4000-8000-000000000042",
       "capability": "readPublicUrl",
       "mode": "auto",
       "constraints": {},
@@ -298,7 +298,7 @@
       "limits": true
     },
     {
-      "id": "00000000-0000-4000-8000-000000000040",
+      "id": "00000000-0000-4000-8000-000000000043",
       "capability": "readSkill",
       "mode": "auto",
       "constraints": {},
@@ -309,7 +309,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000041",
+      "id": "00000000-0000-4000-8000-000000000044",
       "capability": "recall",
       "mode": "auto",
       "constraints": {},
@@ -320,7 +320,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000042",
+      "id": "00000000-0000-4000-8000-000000000045",
       "capability": "remember",
       "mode": "auto",
       "constraints": {},
@@ -331,7 +331,51 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000043",
+      "id": "00000000-0000-4000-8000-000000000046",
+      "capability": "routineActivate",
+      "mode": "ask",
+      "constraints": {},
+      "responsibility": null,
+      "created_at": "2026-01-01T00:00:00.000Z",
+      "description": "Ask the owner to activate a proposed routine (its ref) at exactly this revision. It is the owner's decision each time: the request waits in Needs you, and once approved, calling it again with the same input activates it. A later revision needs a new decision.",
+      "effect": "change",
+      "limits": false
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000047",
+      "capability": "routineList",
+      "mode": "auto",
+      "constraints": {},
+      "responsibility": null,
+      "created_at": "2026-01-01T00:00:00.000Z",
+      "description": "List the business's routines (recurring or event-started work), or one employee's or one project's: each with its ref, schedule in words, state (proposed, active, paused), revision, next run and last result.",
+      "effect": "read",
+      "limits": false
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000048",
+      "capability": "routinePause",
+      "mode": "auto",
+      "constraints": {},
+      "responsibility": null,
+      "created_at": "2026-01-01T00:00:00.000Z",
+      "description": "Pause an active routine (its ref) of yours, such as one that no longer finds anything worth doing; say why where you are talking. Only the owner resumes it.",
+      "effect": "change",
+      "limits": false
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000049",
+      "capability": "routinePropose",
+      "mode": "auto",
+      "constraints": {},
+      "responsibility": null,
+      "created_at": "2026-01-01T00:00:00.000Z",
+      "description": "Propose a routine: work you (or, for Operations, another employee) run on a schedule or when an event happens, for a responsibility or a project (its ref; runs then speak in its channel, else in the employee's direct chat). trigger is {kind: \"cron\", expression: five-field cron like \"0 9 * * 1\", timezone: the owner's IANA zone, hours?: {start: \"09:00\", end: \"18:00\", days?: [\"mon\", …]}} or {kind: \"event\", source, type, filters: {field: exact value}}. notify when_found makes a quiet check-in: a run that finds nothing posts nothing. To change a routine, pass its ref and current revision: that is a new proposal and it stops running until approved. Proposing activates nothing: then call routineActivate with its ref and revision, which asks the owner. For a one-off look later, use workUpdate with wakeAt instead.",
+      "effect": "change",
+      "limits": false
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000050",
       "capability": "run",
       "mode": "auto",
       "constraints": {},
@@ -342,18 +386,18 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000044",
+      "id": "00000000-0000-4000-8000-000000000051",
       "capability": "workComplete",
       "mode": "auto",
       "constraints": {},
       "responsibility": null,
       "created_at": "2026-01-01T00:00:00.000Z",
-      "description": "Mark a work item (its ref) completed, at its current revision, with evidence: what was done and where to see it. Saying 'done' in chat does not complete work.",
+      "description": "Mark a work item (its ref) completed, at its current revision, in its own thread, with evidence: what was done and where to see it. Saying 'done' in chat does not complete work.",
       "effect": "change",
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000045",
+      "id": "00000000-0000-4000-8000-000000000052",
       "capability": "workCreate",
       "mode": "auto",
       "constraints": {},
@@ -364,7 +408,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000046",
+      "id": "00000000-0000-4000-8000-000000000053",
       "capability": "workList",
       "mode": "auto",
       "constraints": {},
@@ -375,18 +419,18 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000047",
+      "id": "00000000-0000-4000-8000-000000000054",
       "capability": "workUpdate",
       "mode": "auto",
       "constraints": {},
       "responsibility": null,
       "created_at": "2026-01-01T00:00:00.000Z",
-      "description": "Update a work item (its ref) at its current revision: the next action, its state (ready, in_progress, waiting, needs_decision, cancelled), what it waits on, or its due date.",
+      "description": "Update a work item (its ref) at its current revision, in its own thread: the next action, its state (ready, in_progress, waiting, needs_decision, cancelled), what it waits on, or its due date (a deadline only). To follow up later (\"look again Thursday\"), set state waiting with wakeAt: at that time it becomes ready and is handed back to you in its thread, once. A routine (routinePropose) is for work that recurs.",
       "effect": "change",
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000048",
+      "id": "00000000-0000-4000-8000-000000000055",
       "capability": "write",
       "mode": "auto",
       "constraints": {},

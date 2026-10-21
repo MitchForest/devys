@@ -42,6 +42,8 @@ struct WireTests {
         "project": { try await $0.createProject($1, businessID: "b1", ProjectChange(name: "Spring launch")) },
         "projects": { try await $0.projects($1, businessID: "b1") },
         "roles": { try await $0.roles($1) },
+        "routine": { try await $0.setRoutinePaused($1, businessID: "b1", id: "r1", paused: true) },
+        "routines": { try await $0.routines($1, businessID: "b1", employeeID: "e1") },
         "screenshot": { try await $0.browserPicture($1, businessID: "b1") },
         "status": { try await $0.status($1, scope) },
         "terminals": { try await $0.terminals($1, businessID: "b1") },
@@ -87,11 +89,22 @@ struct WireTests {
     @Test("Golden values land in the right fields")
     func values() async throws {
         let home = try await Self.answering("home").home(Self.session, businessID: "b1")
-        #expect(home.needsYou.first?.kind == .decision && home.needsYou.first?.workID != nil && home.needsYou.first?.projectID != nil)
-        #expect(home.decisions.first?.capability == "driveCreate" && home.decisions.first?.input.fields.first?.key == "content")
+        #expect(home.needsYou.last?.kind == .decision && home.needsYou.last?.workID != nil && home.needsYou.last?.projectID != nil)
+        #expect(home.decisions.last?.capability == "driveCreate" && home.decisions.last?.input.fields.first?.key == "content")
+        #expect(home.decisions.first?.capability == "routineActivate" && home.needsYou.first?.workID == nil)
         #expect(home.glance.moving.first?.state == .inProgress && home.glance.moving.first?.dueAt != nil)
 
+        let proposal = try #require(home.needsYou.first?.routine)
+        #expect(proposal.state == .proposed && proposal.notify == .always && proposal.projectID != nil)
+        #expect(proposal.trigger == .cron(expression: "0 9 * * 1", timezone: "America/Chicago", hours: ActiveHours(start: "08:00", end: "18:00", days: ["mon"])))
+        #expect(home.needsYou.last?.routine == nil)
+
+        let routines = try await Self.answering("routines").routines(Self.session, businessID: "b1")
+        #expect(routines.first?.trigger == .event(source: "mail", type: "received", filters: ["from": .string("parts@supply.test")]))
+        #expect(routines.first?.notify == .whenFound && routines.first?.state == .paused && routines.first?.schedule.hasPrefix("When mail") == true)
+
         let work = try await Self.answering("work").work(Self.session, businessID: "b1")
+        #expect(work.allSatisfy { $0.wakeAt == nil })
         let evidence = try #require(work.last?.evidence.first)
         #expect(evidence.check?.exitCode == 0 && evidence.deploy?.live == true && evidence.recordedAt.hasSuffix("Z"))
         #expect(work.first?.waitCondition == "The supplier confirms the price" && work.first?.projectID != nil)
@@ -149,6 +162,10 @@ struct WireTests {
         #expect(entries.first?.kind == .unknown)
         let item = try decoder.decode(WorkItemState.self, from: Data(#""archived""#.utf8))
         #expect(item == .unknown)
+        let trigger = try decoder.decode(Trigger.self, from: Data(#"{"kind":"webhook","url":"u"}"#.utf8))
+        #expect(trigger == .unknown)
+        #expect(try decoder.decode(RoutineState.self, from: Data(#""retired""#.utf8)) == .unknown)
+        #expect(try decoder.decode(RoutineNotify.self, from: Data(#""digest""#.utf8)) == .unknown)
     }
 
     @Test("Requests are snake_case")

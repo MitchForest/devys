@@ -28,6 +28,8 @@ struct LayerView: View {
             SessionLayer(store: store, workID: workID, sessionID: sessionID)
         case .browser(let workID):
             BrowserLayer(store: store, workID: workID)
+        case .routine(let id):
+            RoutineLayer(store: store, routineID: id)
         }
     }
 }

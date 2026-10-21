@@ -36,6 +36,8 @@ export const WorkItemFields = {
   nextAction: Text(1000),
   waitCondition: Schema.NullOr(Text(1000)),
   dueAt: Instant,
+  /** A follow-up: when waiting work becomes ready again. */
+  wakeAt: Instant,
   owner: EmployeeId,
   state: WorkItemState,
   expectedRevision: Schema.Int,
@@ -132,7 +134,10 @@ export const WorkItem = Schema.Struct({
   objective: Schema.String,
   next_action: Schema.String,
   wait_condition: Schema.NullOr(Schema.String),
+  /** A deadline, never a start time. */
   due_at: Schema.NullOr(Timestamp),
+  /** A follow-up: when this waiting work becomes ready again. Only waiting work has one. */
+  wake_at: Schema.NullOr(Timestamp),
   state: WorkItemState,
   /** The project it belongs to, if any; its thread is in that project's channel. */
   project_id: Schema.NullOr(Schema.String),
@@ -168,3 +173,83 @@ export const Project = Schema.Struct({
   items: Schema.Array(ProjectItem),
 });
 export type Project = typeof Project.Type;
+
+/** Every state a routine can be in: proposed by an employee, active once the owner decides. */
+const routineStates = ["proposed", "active", "paused"] as const;
+export const RoutineState = Schema.Literals(routineStates);
+export type RoutineState = (typeof routineStates)[number];
+
+/** Whether a run speaks always, or only when it found something (a quiet check-in). */
+export const RoutineNotify = Schema.Literals(["always", "when_found"]);
+export type RoutineNotify = typeof RoutineNotify.Type;
+
+/** A time of day, `HH:MM` on a 24-hour clock. */
+const ClockTime = Schema.String.check(
+  Schema.makeFilter(
+    (value) => /^([01]\d|2[0-3]):[0-5]\d$/.test(value) || "Expected a time like 09:00",
+  ),
+);
+const weekdays = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
+/**
+ * When runs may happen, in the routine's time zone: from `start` up to `end` (`end` before
+ * `start` spans midnight), on `days` (every day when absent). Slots outside are skipped.
+ */
+export const ActiveHours = Schema.Struct({
+  start: ClockTime,
+  end: ClockTime,
+  days: Schema.optionalKey(Schema.Array(Schema.Literals(weekdays)).check(Schema.isMinLength(1))),
+});
+export type ActiveHours = typeof ActiveHours.Type;
+
+/** A literal an event field must equal. */
+const FilterValue = Schema.Union([Schema.String, Schema.Finite, Schema.Boolean]);
+/** A source's name, an event type or a field name: short, plain words. */
+const Name = Schema.String.check(Schema.isPattern(/^[a-z][a-z0-9_.-]{0,63}$/));
+
+/**
+ * What starts a run: a cron expression (five fields) in an IANA time zone, optionally within
+ * active hours; or an event from a source (such as mail) whose fields equal every filter.
+ */
+export const Trigger = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("cron"),
+    expression: Schema.String.check(Schema.isMinLength(9), Schema.isMaxLength(100)),
+    timezone: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(64)),
+    hours: Schema.optionalKey(ActiveHours),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("event"),
+    source: Name,
+    type: Name,
+    filters: Schema.Record(Name, FilterValue).check(
+      Schema.makeFilter((value) => Object.keys(value).length <= 10 || "At most 10 filters"),
+    ),
+  }),
+]);
+export type Trigger = typeof Trigger.Type;
+
+/** Recurring or event-started work of one employee, for a responsibility or a project. */
+export const Routine = Schema.Struct({
+  id: Schema.String,
+  employee_id: Schema.String,
+  /** The project it serves: its runs speak in that project's channel, else the employee's DM. */
+  project_id: Schema.NullOr(Schema.String),
+  title: Schema.String,
+  instruction: Schema.String,
+  trigger: Trigger,
+  /** The trigger in words, as the owner reads it: "At 09:00 AM, only on Monday (Europe/London)". */
+  schedule: Schema.String,
+  notify: RoutineNotify,
+  state: RoutineState,
+  /** Each proposal is a new revision; the owner's decision activates exactly one. */
+  revision: Schema.Int,
+  /** The next scheduled run, while active. */
+  next_run_at: Schema.NullOr(Timestamp),
+  last_run_at: Schema.NullOr(Timestamp),
+  /** What the last run said, shortened, or "nothing to report". */
+  last_result: Schema.NullOr(Schema.String),
+  /** `person:<id>` or `employee:<id>`. */
+  created_by: Schema.String,
+  updated_at: Timestamp,
+});
+export type Routine = typeof Routine.Type;

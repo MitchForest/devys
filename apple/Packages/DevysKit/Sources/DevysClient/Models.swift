@@ -356,9 +356,6 @@ public enum WorkItemState: String, Equatable, Sendable, WireEnum {
     /// A state this client does not know yet; shown, never set.
     case unknown
 
-    /// The states a person sets, in order.
-    public static let settable: [Self] = [.proposed, .ready, .inProgress, .waiting, .needsDecision, .completed, .cancelled]
-
     public var isOpen: Bool { self != .completed && self != .cancelled }
 }
 
@@ -467,6 +464,8 @@ public struct WorkItem: Equatable, Sendable, Decodable, Identifiable {
     public let nextAction: String
     public let waitCondition: String?
     public let dueAt: String?
+    /// When the employee is woken to look again (a follow-up it scheduled), while it waits.
+    public let wakeAt: String?
     public let state: WorkItemState
     public let evidence: [WorkItemEvidence]
     public let revision: Int
@@ -483,6 +482,7 @@ public struct WorkItem: Equatable, Sendable, Decodable, Identifiable {
         nextAction: String = "",
         waitCondition: String? = nil,
         dueAt: String? = nil,
+        wakeAt: String? = nil,
         state: WorkItemState = .ready,
         evidence: [WorkItemEvidence] = [],
         revision: Int = 1,
@@ -497,6 +497,7 @@ public struct WorkItem: Equatable, Sendable, Decodable, Identifiable {
         self.nextAction = nextAction
         self.waitCondition = waitCondition
         self.dueAt = dueAt
+        self.wakeAt = wakeAt
         self.state = state
         self.evidence = evidence
         self.revision = revision
@@ -511,6 +512,7 @@ public struct WorkItem: Equatable, Sendable, Decodable, Identifiable {
         case nextAction = "next_action"
         case waitCondition = "wait_condition"
         case dueAt = "due_at"
+        case wakeAt = "wake_at"
         case takenOverBy = "taken_over_by"
         case projectID = "project_id"
         case updatedAt = "updated_at"

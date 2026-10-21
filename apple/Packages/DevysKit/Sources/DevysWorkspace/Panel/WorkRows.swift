@@ -40,7 +40,7 @@ struct WorkRow: View {
 
     private var detail: String {
         let owner = store.state.employeeName(item.ownerEmployeeID)
-        if let wait = item.waitCondition, item.state == .waiting { return "\(owner) · waiting on \(wait)" }
+        if item.state == .waiting, let waiting = RoutineText.waiting(item) { return "\(owner) · \(waiting)" }
         if let done = item.evidence.last, item.state == .completed { return "\(owner) · \(done.note)" }
         return item.nextAction.isEmpty ? owner : "\(owner) · \(item.nextAction)"
     }

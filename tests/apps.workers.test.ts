@@ -125,8 +125,10 @@ it("employees see the skills of their business's installed apps", async () => {
 
 // Before AL3 role templates listed their capabilities; the manifests now propose them. These
 // are the grants each role had then, written out, plus the core capabilities the rule "a core
-// capability is granted to every employee it is offered to" added.
+// capability is granted to every employee it is offered to" added, and Q1's routines.
+const routines = ["routineList", "routinePropose", "routineActivate", "routinePause"];
 const collaboration = [
+  ...routines,
   "workList",
   "workCreate",
   "workUpdate",
@@ -194,12 +196,13 @@ const coreAdded: Record<string, string[]> = {
   "business-operations": ["run"],
   custom: ["run", "read", "write", "readSkill"],
 };
+// Activating a routine is the owner's decision, whatever the role.
 const asked: Record<string, string[]> = {
-  operations: ["deployProduction", "hireEmployee"],
-  engineering: ["deployProduction"],
-  growth: [],
-  "business-operations": [],
-  custom: [],
+  operations: ["deployProduction", "hireEmployee", "routineActivate"],
+  engineering: ["deployProduction", "routineActivate"],
+  growth: ["routineActivate"],
+  "business-operations": ["routineActivate"],
+  custom: ["routineActivate"],
 };
 
 it("each role's grants come from the manifests and equal what its template granted before", () => {

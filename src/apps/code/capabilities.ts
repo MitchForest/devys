@@ -67,14 +67,18 @@ export const codingInstructions = (purpose: "build" | "review") =>
     "Never print, copy or move credentials, tokens or secrets.",
   ].join("\n");
 
-/** Fails unless the call acts for a work item, which is where coding sessions live. */
+/**
+ * Fails unless the call is in a work item's thread, which is where its coding sessions are
+ * started and steered: one place per work item, under that item's conditions. No one is exempt,
+ * Operations included, since the item's conditions apply only there.
+ */
 const workItem = Effect.gen(function* () {
   const invocation = yield* Invocation;
   if (!invocation.workItemId)
     return yield* new CapabilityError({
-      code: "invalid_input",
+      code: "conflict",
       message:
-        "Start and steer coding sessions from a work item, so the work has a thread and an owner.",
+        "Coding sessions are started and steered in a work item's thread (devys:work/item/<id>): create the work item (workCreate) or continue in its thread.",
     });
   return { invocation, workItemId: invocation.workItemId };
 });
@@ -85,10 +89,15 @@ export function codingCapabilities(dependencies: CodingDependencies) {
     Effect.gen(function* () {
       const { invocation, workItemId } = yield* workItem;
       const found = yield* stored(codingSession(db, invocation.businessId, id));
-      if (!found || found.work_item_id !== workItemId || !found.provider_session_id)
+      if (!found || !found.provider_session_id)
         return yield* new CapabilityError({
           code: "invalid_input",
-          message: "No such coding session on this work item",
+          message: "No such coding session in this business",
+        });
+      if (found.work_item_id !== workItemId)
+        return yield* new CapabilityError({
+          code: "conflict",
+          message: `This coding session belongs to another work item: steer it in that item's thread (${ref("work", "item", found.work_item_id)}).`,
         });
       // A session is steered by the employee who started it, or by Operations.
       const scope = { businessId: invocation.businessId, employeeId: invocation.employeeId };

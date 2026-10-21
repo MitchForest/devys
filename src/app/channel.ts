@@ -3,11 +3,13 @@ import type { Env } from "./env.ts";
 import { appChannel } from "../channels/app.ts";
 import { channelOf, type Channel } from "../channels/contract.ts";
 import { imessageChannel } from "../channels/photon-adapter.ts";
+import { routineChannel } from "../channels/routine.ts";
 import { workChannel } from "../channels/work.ts";
 import { workItem } from "../work/service.ts";
 import { activeEmployee, channelBinding, memberBusiness } from "../identity/service.ts";
 import type { Scope } from "../identity/contract.ts";
 import { postFromEmployee, recordChannelMessage, recordChannelReply } from "./conversations.ts";
+import { reportRun, runOpen } from "./routines.ts";
 
 /**
  * Channels a person can bind a chat of their own to (the apps bind by sign-in, and the
@@ -64,7 +66,12 @@ export function channelFor(env: Env): Channel {
     },
     post: (chatId, text, operationId) => postFromEmployee(env, chatId, text, operationId),
   });
-  const channels = [app, work, imessage];
+  const routine = routineChannel({
+    open: (scope, routineId, conversation) => runOpen(env, scope, routineId, conversation),
+    report: (scope, chatId, routineId, reply, operationId) =>
+      reportRun(env, scope, chatId, routineId, reply, operationId),
+  });
+  const channels = [app, work, routine, imessage];
   const pick = (chatId: string) => {
     const channel = channels.find((candidate) => candidate.id === channelOf(chatId));
     if (!channel) throw new Error(`Unknown channel for chat ${chatId}`);

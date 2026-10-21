@@ -1,11 +1,13 @@
 import { Effect } from "effect";
 import type { Env } from "./env.ts";
+import type { Decision } from "../authority/contract.ts";
 import { pendingDecisions } from "../authority/service.ts";
 import { postMessage, readAt } from "../conversations/service.ts";
 import { type Business, type Person } from "../identity/contract.ts";
 import { employeesOf } from "../identity/service.ts";
 import type { WorkItem } from "../work/contract.ts";
 import { workItems } from "../work/service.ts";
+import { quietRuns, routines } from "../work/routines.ts";
 import { respond } from "../protocol/http.ts";
 import { Home, type WorkCard } from "./wire.ts";
 
@@ -15,10 +17,12 @@ const stuckAfter = 24 * hour;
 /** The owner gets a briefing when they return after this long. */
 const awayFor = 8 * hour;
 
+/** Waiting work is stuck when past its due date, or idle with no follow-up still to come. */
 const stuck = (item: WorkItem, now: number) =>
   item.state === "waiting" &&
   ((item.due_at !== null && Date.parse(item.due_at) < now) ||
-    Date.parse(item.updated_at) < now - stuckAfter);
+    (Date.parse(item.updated_at) < now - stuckAfter &&
+      !(item.wake_at !== null && Date.parse(item.wake_at) > now)));
 
 /** A work item as Home shows it, with what a client needs to open its thread. */
 const card = (item: WorkItem): WorkCard => ({
@@ -39,11 +43,21 @@ function titles(items: readonly WorkItem[]) {
   return items.length > 5 ? `${shown.join(", ")} and ${items.length - 5} more` : shown.join(", ");
 }
 
+/** `"A" 3 times, "B" once`. */
+const quietly = (quiet: readonly { title: string; runs: number }[]) =>
+  quiet.map(({ title, runs }) => `"${title}" ${runs === 1 ? "once" : `${runs} times`}`).join(", ");
+
 /**
  * Operations' briefing, composed from records: what got done, started and became stuck since
- * the owner last read their direct chat. Nothing when nothing happened.
+ * the owner last read their direct chat, and the quiet routine runs that found nothing (and so
+ * posted nothing). Nothing when nothing happened.
  */
-export function briefing(work: readonly WorkItem[], since: string, now: number) {
+export function briefing(
+  work: readonly WorkItem[],
+  since: string,
+  now: number,
+  quiet: readonly { title: string; runs: number }[] = [],
+) {
   const after = (at: string | null) => at !== null && at > since;
   const done = work.filter((item) => item.state === "completed" && after(item.updated_at));
   const moving = work.filter((item) => item.state === "in_progress" && after(item.updated_at));
@@ -57,6 +71,7 @@ export function briefing(work: readonly WorkItem[], since: string, now: number) 
     done.length && `Done: ${titles(done)}.`,
     moving.length && `Moving: ${titles(moving)}.`,
     blocked.length && `Stuck: ${titles(blocked)}.`,
+    quiet.length && `Checked, nothing to report: ${quietly(quiet)}.`,
   ].filter(Boolean);
   return lines.length ? ["While you were away:", ...lines].join("\n") : undefined;
 }
@@ -70,23 +85,39 @@ export async function homeRoute(
   access: { person: Person; business: Business; trusted: boolean },
 ) {
   const { person, business, trusted } = access;
-  const [decisions, work, employees] = await Promise.all([
+  const [decisions, work, employees, proposals] = await Promise.all([
     Effect.runPromise(pendingDecisions(env.HYPERDRIVE, business.id)),
     Effect.runPromise(workItems(env.HYPERDRIVE, business.id)),
     Effect.runPromise(employeesOf(env.HYPERDRIVE, business.id)),
+    Effect.runPromise(routines(env.HYPERDRIVE, business.id)),
   ]);
   const now = Date.now();
   const workOf = (id: string | null) => work.find((item) => item.id === id);
+  /** The routine an activation request is about, by the ids in its input. */
+  const routineOf = (decision: Decision) => {
+    if (decision.capability !== "routineActivate") return undefined;
+    const asked = decision.input as { routine?: unknown };
+    return proposals.find((routine) => routine.id === asked.routine);
+  };
+  /** The proposal an activation request decides, while the routine is still at that revision. */
+  const proposalOf = (decision: Decision) => {
+    const routine = routineOf(decision);
+    return routine && routine.revision === (decision.input as { revision?: unknown }).revision
+      ? routine
+      : null;
+  };
   const asked = new Set(decisions.map((decision) => decision.work_item_id));
   const needsYou: Home["needs_you"] = [
     ...decisions.map((decision) => {
       const item = workOf(decision.work_item_id);
+      const about = routineOf(decision);
       return {
         ...decision,
         kind: "decision" as const,
-        title: item?.title ?? decision.capability,
+        title: about?.title ?? item?.title ?? decision.capability,
         work_id: decision.work_item_id,
-        project_id: item?.project_id ?? null,
+        project_id: item?.project_id ?? about?.project_id ?? null,
+        routine: proposalOf(decision),
         at: decision.requested_at,
       };
     }),
@@ -106,8 +137,15 @@ export async function homeRoute(
     ? await Effect.runPromise(readAt(env.HYPERDRIVE, business.id, key, `person:${person.id}`))
     : undefined;
   // Only a same-origin or signed-in-device request writes it, as with every other write.
-  const text =
-    trusted && since && now - Date.parse(since) > awayFor ? briefing(work, since, now) : undefined;
+  const away = trusted && since && now - Date.parse(since) > awayFor;
+  const text = away
+    ? briefing(
+        work,
+        since,
+        now,
+        await Effect.runPromise(quietRuns(env.HYPERDRIVE, business.id, since)),
+      )
+    : undefined;
   const posted =
     key && text
       ? await Effect.runPromise(

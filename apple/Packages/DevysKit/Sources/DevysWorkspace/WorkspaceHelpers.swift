@@ -72,7 +72,10 @@ extension Workspace.Action {
     package static func workItemEdited(_ draft: WorkItemDraft) -> Self { Self(.workItem(.edited(draft))) }
     package static var workItemConfirmed: Self { Self(.workItem(.confirmed)) }
     package static var workItemCancelled: Self { Self(.workItem(.cancelled)) }
-    package static func workItemChanged(_ id: String, _ change: WorkItemChange) -> Self { Self(.workItem(.changed(workItemID: id, change))) }
+    package static func planEditTapped(_ id: String) -> Self { Self(.workItem(.planEditTapped(workItemID: id))) }
+    package static func planEdited(_ draft: WorkPlanDraft) -> Self { Self(.workItem(.planEdited(draft))) }
+    package static var planSaveTapped: Self { Self(.workItem(.planSaveTapped)) }
+    package static var planEditCancelled: Self { Self(.workItem(.planEditCancelled)) }
     package static func reassigned(_ id: String, to owner: String) -> Self { Self(.workItem(.reassigned(workItemID: id, ownerID: owner))) }
     package static var hireTapped: Self { Self(.team(.hireTapped)) }
     package static func templateChosen(_ id: String) -> Self { Self(.team(.templateChosen(id))) }
@@ -112,6 +115,8 @@ extension Workspace.Action {
     package static func referencingSet(_ isOn: Bool) -> Self { Self(.place(.referencingSet(isOn))) }
     package static func askTapped(_ quote: String) -> Self { Self(.place(.askTapped(quote))) }
     package static func startThreadTapped(_ messageID: String) -> Self { Self(.place(.startThreadTapped(messageID: messageID))) }
+    package static func routinePauseTapped(_ id: String) -> Self { Self(.routine(.pauseTapped(routineID: id))) }
+    package static func routineResumeTapped(_ id: String) -> Self { Self(.routine(.resumeTapped(routineID: id))) }
     package static var newProjectTapped: Self { Self(.project(.newTapped)) }
     package static var newProjectDismissed: Self { Self(.project(.sheetDismissed)) }
     package static func projectCreateTapped(_ project: ProjectChange) -> Self { Self(.project(.createTapped(project))) }

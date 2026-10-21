@@ -18,6 +18,7 @@ import { TerminalSession } from "../../terminal/contract.ts";
 import {
   Project,
   ProjectItem,
+  Routine,
   WorkItem,
   type NewWorkItem,
   type ProjectChange,
@@ -57,6 +58,7 @@ import {
   Projects,
   Read,
   Removed,
+  Routines,
   Retired,
   Revoked,
   Roles,
@@ -317,6 +319,9 @@ export const api = {
   answer: (b: string, id: string, approve: boolean) =>
     post(Answered, `${business(b)}/decisions/${id}/${approve ? "approve" : "reject"}`),
   projects: (b: string) => get(Projects, `${business(b)}/projects`),
+  routines: (b: string) => get(Routines, `${business(b)}/routines`),
+  setRoutinePaused: (b: string, id: string, paused: boolean) =>
+    post(Routine, `${business(b)}/routines/${id}/${paused ? "pause" : "resume"}`),
   createProject: (b: string, project: ProjectChange & { name: string }) =>
     post(Project, `${business(b)}/projects`, project),
   addToProject: (b: string, project: string, ref: Ref) =>

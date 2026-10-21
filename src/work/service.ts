@@ -1,7 +1,7 @@
 import { database, isoText, type Database } from "../data/database.ts";
 import type { WorkItem, WorkItemState } from "./contract.ts";
 
-const columns = `id, owner_employee_id, title, objective, next_action, wait_condition, due_at, state,
+const columns = `id, owner_employee_id, title, objective, next_action, wait_condition, due_at, wake_at, state,
   project_id, conditions, evidence, revision, taken_over_by, created_by, updated_at`;
 
 export const workItems = (db: Database, businessId: string, since?: string) =>
@@ -78,6 +78,8 @@ export interface Change {
   nextAction?: string;
   waitCondition?: string | null;
   dueAt?: string | null;
+  /** A follow-up while `waiting` (null clears it). Any other state clears it too. */
+  wakeAt?: string | null;
   evidence?: { by: string; note: string };
 }
 
@@ -102,6 +104,8 @@ export const updateWorkItem = (
          next_action = coalesce($7, next_action),
          wait_condition = CASE WHEN $8::boolean THEN $9 ELSE wait_condition END,
          due_at = CASE WHEN $10::boolean THEN $11::timestamptz ELSE due_at END,
+         wake_at = CASE WHEN coalesce($6, state) <> 'waiting' THEN NULL
+           WHEN $14::boolean THEN $15::timestamptz ELSE wake_at END,
          evidence = CASE WHEN $12::jsonb IS NULL THEN evidence
            ELSE evidence || jsonb_build_array($12::jsonb || jsonb_build_object('at', ${isoText("now()")})) END,
          revision = revision + 1,
@@ -123,6 +127,8 @@ export const updateWorkItem = (
         change.dueAt ?? null,
         change.evidence ? JSON.stringify(change.evidence) : null,
         actor.kind,
+        change.wakeAt !== undefined,
+        change.wakeAt ?? null,
       ],
     );
     return updated;
@@ -163,6 +169,19 @@ export const reassignOpen = (db: Database, businessId: string, from: string, to:
        WHERE business_id = $1 AND owner_employee_id = $2
          AND state NOT IN ('completed', 'cancelled')`,
       [businessId, from, to],
+    ),
+  );
+
+/**
+ * Follow-ups: waiting work whose wake time has come becomes ready, once (the wake time is
+ * cleared), so the dispatcher hands it to its employee. Work a person took over stays theirs.
+ */
+export const wakeFollowUps = (db: Database) =>
+  database(db, (sql) =>
+    sql.run(
+      `UPDATE work_items SET state = 'ready', wake_at = NULL, revision = revision + 1,
+         updated_at = now()
+       WHERE state = 'waiting' AND wake_at <= now() AND taken_over_by IS NULL`,
     ),
   );
 

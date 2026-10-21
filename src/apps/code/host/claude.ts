@@ -11,7 +11,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { TranscriptEntry } from "../contract.ts";
-import type { ProviderAdapter, ProviderEvents } from "./provider.ts";
+import type { Confine, ProviderAdapter, ProviderEvents } from "./provider.ts";
 
 type Part =
   | { type: "text"; text: string }
@@ -80,6 +80,9 @@ interface ClaudeOptions {
   configDir: string;
   env: NodeJS.ProcessEnv;
   command?: string;
+  /** Keeps a build's (false) or a review's (true) processes in their business. */
+  /** Holds the process for its business (Seatbelt on the Mac host). */
+  confine: (readOnly: boolean) => Confine;
 }
 
 /**
@@ -124,20 +127,25 @@ export function claudeAdapter(options: ClaudeOptions, events: ProviderEvents): P
     resume?: string;
     readOnly: boolean;
   }) {
-    const child = spawn(
-      options.command ?? "claude",
-      [
-        "-p",
-        "--input-format=stream-json",
-        "--output-format=stream-json",
-        "--verbose",
-        // A review reads and runs read-only tools; a build works on its own in its worktree.
-        `--permission-mode=${input.readOnly ? "plan" : "bypassPermissions"}`,
-        ...(input.instructions ? ["--append-system-prompt", input.instructions] : []),
-        ...(input.resume ? ["--resume", input.resume] : []),
-      ],
-      { cwd: input.cwd, env, stdio: ["pipe", "pipe", "pipe"] },
-    );
+    const [command, args] = options.confine(input.readOnly)(options.command ?? "claude", [
+      "-p",
+      "--input-format=stream-json",
+      "--output-format=stream-json",
+      "--verbose",
+      // A review reads and runs read-only tools; a build works on its own in its worktree.
+      `--permission-mode=${input.readOnly ? "plan" : "bypassPermissions"}`,
+      // The host's confinement already holds the CLI; its own Seatbelt sandbox cannot start
+      // inside it, so a sandbox the owner turned on for their own sessions stays off here.
+      "--settings",
+      '{"sandbox":{"enabled":false}}',
+      ...(input.instructions ? ["--append-system-prompt", input.instructions] : []),
+      ...(input.resume ? ["--resume", input.resume] : []),
+    ]);
+    const child = spawn(command, args, {
+      cwd: input.cwd,
+      env,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
     child.stderr.resume();
     child.stdin.write(message(input.text));
     return new Promise<{ sessionId: string; session: Session }>((resolve, reject) => {

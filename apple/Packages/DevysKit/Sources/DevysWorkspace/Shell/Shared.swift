@@ -56,6 +56,7 @@ extension Workspace.State {
         case "code/session": "Coding session"
         case "work/item": work.value?.first { $0.id == ref.id }?.title ?? "Work item"
         case "work/project": project(ref.id)?.name ?? "Project"
+        case "work/routine": routine(ref.id)?.title ?? "Routine"
         default: "Record"
         }
     }
@@ -80,11 +81,14 @@ extension Workspace.State {
         case "code/session": "Coding session"
         case "work/item": "Work item"
         case "work/project": "Project"
+        case "work/routine": routine(ref.id)?.schedule ?? "Routine"
         default: ""
         }
     }
 
     func project(_ id: String) -> Project? { projects.value?.first { $0.id == id } }
+
+    func routine(_ id: String) -> Routine? { routines.value?.first { $0.id == id } }
 
     func employee(_ id: String?) -> Employee? { snapshot.employees.first { $0.id == id } }
 

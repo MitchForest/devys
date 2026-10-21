@@ -61,12 +61,16 @@ package struct Workspace {
         package var team = TeamState()
         /// The work item being written in the New work item sheet.
         package var newWorkItem: WorkItemDraft?
+        /// The plan being edited on a work card, after the owner took that work over.
+        package var workPlan: WorkPlanDraft?
         /// The New project sheet, while it is open.
         package var newProject: ProjectSheet?
         package var memory: Loadable<[MemoryClaim]> = .loading
         /// The business's work items; the requests waiting on the owner are Home's.
         package var work: Loadable<[WorkItem]> = .loading
         package var projects: Loadable<[Project]> = .loading
+        /// The business's routines: each employee's desk and each project's overview list theirs.
+        package var routines: Loadable<[Routine]> = .loading
         /// The app directory; installed apps with something to show are in the sidebar.
         package var apps: Loadable<[AppEntry]> = .loading
         /// What needs the owner, and work at a glance: Home's permanent view.
@@ -142,6 +146,7 @@ package struct Workspace {
         case conversation(ConversationIntent)
         case workItem(WorkItemIntent)
         case project(ProjectIntent)
+        case routine(RoutineIntent)
         case workLoaded(businessID: String, WorkRecords)
         case decisionAnswered(decisionID: String, approve: Bool)
         case workItemStateSet(workItemID: String, WorkItemState)
@@ -245,6 +250,8 @@ package struct Workspace {
             case .place(let intent): reducePlace(intent, state: &state)
 
             case .project(let intent): reduceProject(intent, state: &state)
+
+            case .routine(let intent): reduceRoutine(intent, state: &state)
 
             case .team(let intent): reduceTeam(intent, state: &state)
 
@@ -423,6 +430,7 @@ extension Workspace {
         state.summaries = [:]
         state.team.hiring = nil
         state.newWorkItem = nil
+        state.workPlan = nil
         state.newProject = nil
         state.memory = .loading
         state.access = .loading
@@ -431,6 +439,7 @@ extension Workspace {
         state.models.errors = [:]
         state.work = .loading
         state.projects = .loading
+        state.routines = .loading
         state.apps = .loading
         state.home = .loading
         state.artifacts = []

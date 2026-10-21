@@ -21,7 +21,8 @@ import { ClaimPage } from "../src/memory/contract.ts";
 import { sha256 } from "../src/protocol/bytes.ts";
 import { ref } from "../src/protocol/ref.ts";
 import { TerminalSession } from "../src/terminal/contract.ts";
-import { Project, ProjectItem, WorkItem } from "../src/work/contract.ts";
+import { Project, ProjectItem, Routine, WorkItem } from "../src/work/contract.ts";
+import { activateRoutine, proposeRoutine } from "../src/work/routines.ts";
 import { addEvidence } from "../src/work/service.ts";
 import { FileText } from "../src/workspace/contract.ts";
 import { business, db, sql } from "./fixtures/postgres.ts";
@@ -246,6 +247,65 @@ it("every route the clients read answers in its wire schema; the golden files ma
     { workItemId: supplier.id, conversation: `work:${supplier.id}` },
   );
 
+  // Routines: Ada proposes a weekly report for the launch and asks the owner to activate it; an
+  // event routine the owner has paused.
+  const report = crypto.randomUUID();
+  register(report);
+  const ada = { businessId: acme.id, employeeId: engineer.id };
+  await Effect.runPromise(
+    proposeRoutine(
+      db,
+      acme.id,
+      report,
+      {
+        employeeId: engineer.id,
+        projectId: launch.id,
+        title: "Weekly bookings report",
+        instruction: "Report last week's bookings and what changed on the booking page.",
+        trigger: {
+          kind: "cron",
+          expression: "0 9 * * 1",
+          timezone: "America/Chicago",
+          hours: { start: "08:00", end: "18:00", days: ["mon"] },
+        },
+        notify: "always",
+      },
+      `employee:${engineer.id}`,
+    ),
+  );
+  await authorize(
+    bindings,
+    ada,
+    capabilities(bindings).find((item) => item.name === "routineActivate")!,
+    { routine: report, revision: 1 },
+    { conversation: `project:${launch.id}` },
+  );
+  const replies = crypto.randomUUID();
+  register(replies);
+  await Effect.runPromise(
+    proposeRoutine(
+      db,
+      acme.id,
+      replies,
+      {
+        employeeId: operations.id,
+        projectId: null,
+        title: "Supplier replies",
+        instruction: "Answer supplier replies about prices.",
+        trigger: {
+          kind: "event",
+          source: "mail",
+          type: "received",
+          filters: { from: "parts@supply.test" },
+        },
+        notify: "when_found",
+      },
+      `employee:${operations.id}`,
+    ),
+  );
+  await Effect.runPromise(activateRoutine(db, acme.id, replies, 1, null));
+  await keep("routine", Routine, await call(`${at}/routines/${replies}/pause`, "POST"));
+
   // Conversations: the owner's message, an employee's reply, an event that points at a record.
   const posted = await keep(
     "posted",
@@ -291,6 +351,7 @@ it("every route the clients read answers in its wire schema; the golden files ma
   // The business at a glance.
   await keep("work", wire.WorkItems, await call(`${at}/work`));
   await keep("projects", wire.Projects, await call(`${at}/projects`));
+  await keep("routines", wire.Routines, await call(`${at}/routines`));
   await keep("decisions", wire.Decisions, await call(`${at}/decisions`));
   await keep("home", wire.Home, await call(`${at}/home`));
   await keep("business", wire.BusinessDetail, await call(at));

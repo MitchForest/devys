@@ -23,6 +23,7 @@ struct Overview: View {
                 PanelBody {
                     summary(project, work: work)
                     workSection(project, work: work)
+                    RoutinesSection(store: store, routines: (store.routines.value ?? []).filter { $0.projectID == project.id })
                     kept(project)
                 }
             }

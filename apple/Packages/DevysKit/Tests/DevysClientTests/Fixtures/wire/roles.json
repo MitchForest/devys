@@ -41,7 +41,11 @@
         "projectList",
         "projectCreate",
         "projectUpdate",
-        "projectAdd"
+        "projectAdd",
+        "routineList",
+        "routinePropose",
+        "routineActivate",
+        "routinePause"
       ]
     },
     {
@@ -77,7 +81,11 @@
         "projectList",
         "projectCreate",
         "projectUpdate",
-        "projectAdd"
+        "projectAdd",
+        "routineList",
+        "routinePropose",
+        "routineActivate",
+        "routinePause"
       ]
     },
     {
@@ -117,7 +125,11 @@
         "projectList",
         "projectCreate",
         "projectUpdate",
-        "projectAdd"
+        "projectAdd",
+        "routineList",
+        "routinePropose",
+        "routineActivate",
+        "routinePause"
       ]
     },
     {
@@ -141,7 +153,11 @@
         "projectList",
         "projectCreate",
         "projectUpdate",
-        "projectAdd"
+        "projectAdd",
+        "routineList",
+        "routinePropose",
+        "routineActivate",
+        "routinePause"
       ]
     }
   ]

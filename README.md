@@ -47,7 +47,17 @@ also verified live. No public product has launched.
   condition, conditions and evidence. A one-minute dispatcher hands ready work to its
   employee under `<work item>:<revision>`. A project has an optional goal, deadline,
   budget (a limit; spending arrives with P1), lead and team; its work items belong to it
-  (`project_id`) and kept pages and files are references to them.
+  (`project_id`) and kept pages and files are references to them. A work item is changed and
+  its coding steered only in its own thread (Operations changes work from anywhere). An
+  employee's follow-up (`workUpdate` with state `waiting` and `wakeAt`) makes the work ready
+  again once, at that time; a due date is only a deadline.
+- **Routines.** An employee proposes recurring work (a five-field cron in a time zone,
+  optionally within active hours) or work started by an event, for a responsibility or a
+  project; the owner's decision in Needs you activates that exact revision. The minute tick
+  runs each due slot once (`routine:<id>:<slot>`; missed slots run once, not as a backlog) in
+  the project's channel or the employee's direct chat. A quiet routine that finds nothing
+  posts nothing and is counted in the briefing. The owner pauses and resumes routines; a
+  retired employee's routines pause. Event routing (`routeEvent`) has no source connected yet.
 - **Apps.** `src/apps` lists Devys apps as literal manifests: Documents and Code are
   installed for every business; Mail, Money, Website, Ads and Customers are listed as
   coming. An app's capabilities are hidden from employees and refused unless the app is
@@ -136,7 +146,8 @@ also verified live. No public product has launched.
 - **Pages.** Employees publish self-contained HTML pages (`artifactPage`, `artifactEdit`):
   reports, comparisons, dashboards. A card in the conversation opens the page in an
   opaque-origin sandbox that fetches nothing; **Keep** lists it on a project's overview.
-- **Not built:** routines, the Knowledge app and a learning loop, the broker and vault,
+- **Not built:** routines on the web and native desks (the API serves them), event sources
+  (mail), the Knowledge app and a learning loop, the broker and vault,
   signed decisions, the event stream and push, connections for launch providers, mail,
   purchases, desktop control, the voice and ambient additions, cloud mode's coding runners,
   files, terminals and browser, community and custom apps, and distribution.
@@ -252,7 +263,7 @@ is present. Model arguments never select credentials.
 
 ## Active roadmap
 
-Next: routines, the Knowledge app and a learning loop, the broker and signed decisions, a live
+Next: routines on the clients and their live check, the Knowledge app and a learning loop, the broker and signed decisions, a live
 event stream and push, connections in the app platform, mail, purchases, desktop control,
 voice, cloud mode and coding runners, the app directory, and distribution.
 
@@ -388,7 +399,7 @@ commands, file access, coding sessions and terminals behind a token. The token i
 to the Worker's vars file, not its command line. The host's environment excludes what
 `.env` supplies (the model gateway key and other secrets) and its own `DEVYS_*` settings,
 so employees' shells, coding sessions and terminals see neither. The launcher calls the
-scheduled handler every minute so ready work is dispatched and unanswered decisions expire.
+scheduled handler every minute so unanswered decisions expire, follow-ups wake, ready work is dispatched and due routines run.
 
 Because employees work as the Mac's owner, only that person (the earliest active person,
 the one `bun run local code` signs in) can create businesses and open coding sessions,

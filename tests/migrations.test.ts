@@ -14,7 +14,7 @@ beforeAll(async () => {
 }, 60_000);
 afterAll(() => client?.end());
 
-it("the baseline migrates an empty database to every component's tables, once", async () => {
+it("the migrations take an empty database to every component's tables, once", async () => {
   await migrate(name);
   await migrate(name);
   const tables = (
@@ -53,6 +53,7 @@ it("the baseline migrates an empty database to every component's tables, once", 
     "project_items",
     "project_members",
     "projects",
+    "routines",
     "web_sessions",
     "work_items",
   ]);

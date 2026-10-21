@@ -182,6 +182,9 @@ public struct NeedsYouItem: Equatable, Sendable, Decodable, Identifiable {
     public let projectID: String?
     /// The request itself, when this is a decision.
     public let decision: Decision?
+    /// For a routine's activation, the proposal it decides (at the revision asked about); nil
+    /// when the routine has since moved to another revision, or for any other request.
+    public let routine: Routine?
 
     public init(kind: Kind, id: String, title: String, employeeID: String? = nil, workID: String? = nil, projectID: String? = nil) {
         self.kind = kind
@@ -191,10 +194,11 @@ public struct NeedsYouItem: Equatable, Sendable, Decodable, Identifiable {
         self.workID = workID
         self.projectID = projectID
         self.decision = nil
+        self.routine = nil
     }
 
     /// A pending request as Home lists it.
-    public init(_ decision: Decision, title: String, projectID: String? = nil) {
+    public init(_ decision: Decision, title: String, projectID: String? = nil, routine: Routine? = nil) {
         self.kind = .decision
         self.id = decision.id
         self.title = title
@@ -202,6 +206,7 @@ public struct NeedsYouItem: Equatable, Sendable, Decodable, Identifiable {
         self.workID = decision.workItemID
         self.projectID = projectID
         self.decision = decision
+        self.routine = routine
     }
 
     public init(from decoder: any Decoder) throws {
@@ -213,10 +218,11 @@ public struct NeedsYouItem: Equatable, Sendable, Decodable, Identifiable {
         workID = try container.decodeIfPresent(String.self, forKey: .workID)
         projectID = try container.decodeIfPresent(String.self, forKey: .projectID)
         decision = kind == .decision ? try Decision(from: decoder) : nil
+        routine = try container.decodeIfPresent(Routine.self, forKey: .routine)
     }
 
     enum CodingKeys: String, CodingKey {
-        case kind, id, title
+        case kind, id, title, routine
         case employeeID = "employee_id"
         case workID = "work_id"
         case projectID = "project_id"

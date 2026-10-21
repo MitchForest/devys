@@ -5,14 +5,15 @@
  */
 import type { Artifact } from "../../../apps/documents/contract.ts";
 import { parseRef, ref, type RecordKind, type Ref } from "../../../protocol/ref.ts";
-import type { Project, WorkItem } from "../../../work/contract.ts";
-import { useArtifacts, useProjects, useWork } from "../../app/data.ts";
+import type { Project, Routine, WorkItem } from "../../../work/contract.ts";
+import { useArtifacts, useProjects, useRoutines, useWork } from "../../app/data.ts";
 
 /** What record titles are read from. */
 export interface Names {
   artifacts: readonly Artifact[];
   work: readonly WorkItem[] | undefined;
   projects: readonly Project[] | undefined;
+  routines: readonly Routine[] | undefined;
 }
 
 const fileName = (path: string) => path.split("/").at(-1) ?? path;
@@ -38,6 +39,10 @@ export const recordNames: Record<
     title: (id, { projects }) => projects?.find((p) => p.id === id)?.name ?? "Project",
     detail: () => "Project",
   },
+  "work/routine": {
+    title: (id, { routines }) => routines?.find((r) => r.id === id)?.title ?? "Routine",
+    detail: (id, { routines }) => routines?.find((r) => r.id === id)?.schedule ?? "Routine",
+  },
 };
 
 /** A ref's kind and id, or undefined for a ref of a kind nobody knows. */
@@ -47,7 +52,12 @@ export function kindOf(value: Ref | null | undefined) {
 }
 
 export function useNames(): Names {
-  return { artifacts: useArtifacts(), work: useWork().data, projects: useProjects().data };
+  return {
+    artifacts: useArtifacts(),
+    work: useWork().data,
+    projects: useProjects().data,
+    routines: useRoutines().data,
+  };
 }
 
 /** A record's title from its ref. */

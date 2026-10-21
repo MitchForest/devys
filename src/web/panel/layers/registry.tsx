@@ -10,6 +10,7 @@ import {
   FolderKanban,
   ListChecks,
   MessageSquareQuote,
+  Repeat,
   type LucideIcon,
 } from "lucide-react";
 import { useRef, useState, type ComponentType, type ReactNode } from "react";
@@ -31,7 +32,8 @@ import { EmployeePortrait } from "../../design/portrait.tsx";
 import { EmptyNote, StatusChip } from "../../design/primitives.tsx";
 import { ThreadLink } from "../../shell/links.tsx";
 import { ProjectSummary } from "../overview.tsx";
-import { WorkDetail } from "../work.tsx";
+import { RoutineLayer } from "../routines.tsx";
+import { waitingNote, WorkDetail } from "../work.tsx";
 import { CodeApp, DocumentsApp } from "./apps.tsx";
 import { BrowserLayer } from "./browser.tsx";
 import { CodeSessionLayer } from "./code-session.tsx";
@@ -80,6 +82,11 @@ export const records: Record<RecordKind, RecordView> = {
     icon: FolderKanban,
     keepable: false,
     Layer: ProjectLayer,
+  },
+  "work/routine": {
+    icon: Repeat,
+    keepable: false,
+    Layer: RoutineLayer,
   },
 };
 
@@ -236,9 +243,7 @@ function WorkItemCard({ id, text }: { id: string; text: string }) {
         <span className="truncate text-caption text-ink-3">
           {[
             owner?.name,
-            item.state === "waiting" && item.wait_condition
-              ? `waiting on ${item.wait_condition}`
-              : item.next_action,
+            item.state === "waiting" ? waitingNote(item) || item.next_action : item.next_action,
           ]
             .filter(Boolean)
             .join(" · ")}

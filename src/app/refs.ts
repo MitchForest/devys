@@ -5,11 +5,12 @@ import { artifactLocation } from "../apps/documents/service.ts";
 import { parseRef, type Ref } from "../protocol/ref.ts";
 import { project } from "../work/projects.ts";
 import { workItem } from "../work/service.ts";
+import { routine } from "../work/routines.ts";
 import { businessFile } from "./files.ts";
 
 /**
  * The ref, when it points at a record of this business: an artifact, a file in its folder, a
- * coding session, a work item or a project. Anything else (another business's record, an id
+ * coding session, a work item, a project or a routine. Anything else (another business's record, an id
  * that names nothing) is undefined. Seeing a record here grants nothing.
  */
 export async function businessRef(
@@ -35,6 +36,8 @@ export async function businessRef(
         return Boolean(await Effect.runPromise(workItem(env.HYPERDRIVE, businessId, parts.id)));
       case "work/project":
         return Boolean(await Effect.runPromise(project(env.HYPERDRIVE, businessId, parts.id)));
+      case "work/routine":
+        return Boolean(await Effect.runPromise(routine(env.HYPERDRIVE, businessId, parts.id)));
       default:
         return false;
     }

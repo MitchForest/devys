@@ -6,6 +6,7 @@
   "next_action": "",
   "wait_condition": "The supplier confirms the price",
   "due_at": null,
+  "wake_at": null,
   "state": "waiting",
   "project_id": "00000000-0000-4000-8000-000000000005",
   "conditions": {},

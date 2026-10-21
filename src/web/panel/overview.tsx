@@ -2,7 +2,7 @@ import { Code2, FileText, Plus } from "lucide-react";
 import { useState } from "react";
 import type { Project } from "../../work/contract.ts";
 import type { Ref } from "../../protocol/ref.ts";
-import { useEmployees, useProjects, useWork } from "../app/data.ts";
+import { useEmployees, useProjects, useRoutines, useWork } from "../app/data.ts";
 import { filterOf } from "../app/names.ts";
 import { useNav } from "../app/navigation.ts";
 import { ui } from "../app/ui.ts";
@@ -10,6 +10,7 @@ import { EmployeePortrait } from "../design/portrait.tsx";
 import { EmptyNote } from "../design/primitives.tsx";
 import { deadline, money } from "../lib/format.ts";
 import { kindOf, useCurrentRef, useRecordTitle } from "./layers/titles.ts";
+import { RoutinesSection } from "./routines.tsx";
 import { WorkRow } from "./work.tsx";
 import { PanelBody, PanelHeader, PanelSection } from "./panel.tsx";
 
@@ -49,6 +50,7 @@ export function ProjectSummary({ project }: { project: Project }) {
   const employees = useEmployees();
   const allWork = useWork().data;
   const recordTitle = useRecordTitle();
+  const routines = (useRoutines().data ?? []).filter((r) => r.project_id === project.id);
   const [showDone, setShowDone] = useState(false);
   const work = (allWork ?? []).filter((item) => item.project_id === project.id);
   const done = work.filter((item) => filterOf(item.state) === "done");
@@ -168,6 +170,7 @@ export function ProjectSummary({ project }: { project: Project }) {
           </div>
         )}
       </PanelSection>
+      <RoutinesSection routines={routines} />
       {kept.length > 0 && (
         <PanelSection title="Kept" count={kept.length}>
           {kept.map((item) => (

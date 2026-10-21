@@ -47,7 +47,7 @@ export function hostRunner(host: HostConnection, scope: Scope): WorkspacePort {
       })
     ).json()) as T;
   const file = (path: string, maximum?: number) =>
-    `/file?path=${encodeURIComponent(path)}${maximum ? `&max=${maximum}` : ""}${host.within ? `&within=${encodeURIComponent(host.within)}` : ""}`;
+    `/file?business=${encodeURIComponent(scope.businessId)}&path=${encodeURIComponent(path)}${maximum ? `&max=${maximum}` : ""}${host.within ? `&within=${encodeURIComponent(host.within)}` : ""}`;
 
   return {
     skills: () => post<SkillCatalog>("/skills"),

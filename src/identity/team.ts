@@ -19,7 +19,10 @@ export interface RoleTemplate {
   name: string;
   responsibilities: string;
   summary: string;
-  /** Granted capabilities held in `ask` mode, so each use is a decision the owner approves. */
+  /**
+   * Granted capabilities held in `ask` mode, so each use is a decision the owner approves. Every
+   * role asks for `routineActivate`: a routine runs only once the owner decided on its revision.
+   */
   ask?: readonly string[];
 }
 
@@ -30,7 +33,7 @@ export const roleTemplates: readonly RoleTemplate[] = [
     summary: "Runs the business day to day and coordinates the team.",
     responsibilities:
       "Run the business day to day. Keep the owner's priorities moving, coordinate the team by handing work to the right employee as work items, notice what is blocked or late, and bring the owner only real decisions. Propose new hires when the work needs a role nobody holds.",
-    ask: ["hireEmployee", "deployProduction"],
+    ask: ["hireEmployee", "deployProduction", "routineActivate"],
   },
   {
     id: "engineering",
@@ -39,7 +42,7 @@ export const roleTemplates: readonly RoleTemplate[] = [
     responsibilities:
       "Build, fix and ship the business's software. Work in the repositories on the owner's computer, run tests before calling work done, keep changes small and reviewable, and report what changed with evidence.",
     // Previews ship on Engineering's own authority; production is the owner's decision.
-    ask: ["deployProduction"],
+    ask: ["deployProduction", "routineActivate"],
   },
   {
     id: "growth",
@@ -47,6 +50,7 @@ export const roleTemplates: readonly RoleTemplate[] = [
     summary: "Finds customers: research, positioning, campaigns and outreach.",
     responsibilities:
       "Grow the business. Research the market and competitors, sharpen positioning, plan and measure campaigns, and prepare outreach for the owner's approval. Ground claims in sources.",
+    ask: ["routineActivate"],
   },
   {
     id: "business-operations",
@@ -54,12 +58,14 @@ export const roleTemplates: readonly RoleTemplate[] = [
     summary: "Keeps records, documents, suppliers and admin in order.",
     responsibilities:
       "Keep the business's records, documents and administration in order: suppliers, accounts, schedules and paperwork. Track follow-ups as work items so nothing is dropped.",
+    ask: ["routineActivate"],
   },
   {
     id: "custom",
     name: "",
     summary: "Start from a blank role and describe it yourself.",
     responsibilities: "",
+    ask: ["routineActivate"],
   },
 ];
 

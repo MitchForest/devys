@@ -124,6 +124,7 @@ export function browsersHost(options: BrowsersHostOptions): HostRoutes {
   };
   const web = (value: unknown) => {
     const url = text(value, "URL", 2000);
+    // Never file://: the business's browser must not read the Mac's folders.
     if (!/^https?:\/\//.test(url)) throw new HostRefusal(400, "Open an http or https URL");
     return url;
   };

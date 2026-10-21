@@ -13,9 +13,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { api } from "../app/api.ts";
 import type { Decision } from "../../authority/contract.ts";
-import type { WorkItem } from "../../work/contract.ts";
+import type { Routine, WorkItem } from "../../work/contract.ts";
 import { employeeOf } from "../../conversations/contract.ts";
-import { dateTime, dueDate } from "../lib/format.ts";
+import { dateTime, dueDate, upcoming } from "../lib/format.ts";
 import {
   accessTitle,
   chipFor,
@@ -57,6 +57,7 @@ import { StatusChip, Card } from "../design/primitives.tsx";
 import { endOfDay } from "../shell/dialogs.tsx";
 import { BrowserSection } from "./layers/browser.tsx";
 import { CodingSessions } from "./coding.tsx";
+import { RoutineProposal } from "./routines.tsx";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -179,14 +180,14 @@ export function WorkRow({
   const takeover = takeoverTitle(item.taken_over_by, person?.id, members);
   const owner = employeeName(item.owner_employee_id);
   const done = item.evidence[item.evidence.length - 1];
-  const detail =
-    item.wait_condition && item.state === "waiting"
-      ? `${owner} · waiting on ${item.wait_condition}`
-      : done && item.state === "completed"
-        ? `${owner} · ${done.note}`
-        : item.next_action
-          ? `${owner} · ${item.next_action}`
-          : owner;
+  const waiting = item.state === "waiting" ? waitingNote(item) : "";
+  const detail = waiting
+    ? `${owner} · ${waiting}`
+    : done && item.state === "completed"
+      ? `${owner} · ${done.note}`
+      : item.next_action
+        ? `${owner} · ${item.next_action}`
+        : owner;
   const chip = chipFor(item.state);
   return (
     <WithWorkActions item={item} extra={extra}>
@@ -229,6 +230,16 @@ export function WorkRow({
   );
 }
 
+/**
+ * What waiting work waits on and when it looks again, in a row: "waiting on the press kit until
+ * Thu 9:00 AM", "waiting until Tomorrow 9:00 AM"; empty when neither is known.
+ */
+export function waitingNote(item: WorkItem) {
+  const until = item.wake_at ? `until ${upcoming(item.wake_at)}` : "";
+  if (item.wait_condition) return `waiting on ${item.wait_condition}${until ? ` ${until}` : ""}`;
+  return until && `waiting ${until}`;
+}
+
 /** Pretty-prints a decision's exact input as key/value rows. */
 export function decisionFields(input: unknown): [string, string][] {
   if (input && typeof input === "object" && !Array.isArray(input))
@@ -254,8 +265,20 @@ export function decisionTitle(decision: Decision) {
   return accessTitle(decision.capability);
 }
 
-/** One exact request: who asked, what they will do, and the input it will run with. */
-export function DecisionCard({ decision }: { decision: Decision }) {
+/**
+ * One exact request: who asked, what they will do, and the input it will run with. A routine's
+ * activation reads as its proposal.
+ */
+export function DecisionCard({
+  decision,
+}: {
+  decision: Decision & { kind: "decision"; routine: Routine | null; title: string };
+}) {
+  if (decision.routine) return <RoutineProposal decision={decision} routine={decision.routine} />;
+  return <RequestCard decision={decision} />;
+}
+
+function RequestCard({ decision }: { decision: Decision }) {
   const employeeName = useEmployeeName();
   const answer = useAnswer();
   return (
@@ -352,6 +375,12 @@ function WorkPlan({ item, editable }: { item: WorkItem; editable: boolean }) {
             <>
               <dt className="text-ink-3">Waiting on</dt>
               <dd className="text-ink">{item.wait_condition}</dd>
+            </>
+          )}
+          {item.state === "waiting" && item.wake_at && (
+            <>
+              <dt className="text-ink-3">Waiting until</dt>
+              <dd className="text-ink">{upcoming(item.wake_at)}</dd>
             </>
           )}
           <dt className="text-ink-3">Due</dt>

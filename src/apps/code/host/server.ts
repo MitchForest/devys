@@ -4,7 +4,9 @@
  * append-only JSON-lines file (the last line for an id wins). Events the supervising employee
  * must hear about wait in a small outbox file until the Worker accepts them, so a lost push
  * is sent again. Harness processes stay in the host's process group: a host restart ends
- * them, and their coding sessions report interrupted. Nothing is replayed.
+ * them, and their coding sessions report interrupted. Nothing is replayed. Each business has its
+ * own harness processes, and they, its checks and its deploys are confined to the business: they
+ * cannot reach another business's folder.
  */
 import { spawn } from "node:child_process";
 import {
@@ -15,7 +17,7 @@ import {
   renameSync,
   writeFileSync,
 } from "node:fs";
-import { rm } from "node:fs/promises";
+import { realpath, rm } from "node:fs/promises";
 import { join } from "node:path";
 import type {
   Accepted,
@@ -30,7 +32,7 @@ import type {
 import { deploySecrets, redact, smoke, urlIn } from "./deploy.ts";
 import { cloneRepository, githubName, publishBranch } from "./github.ts";
 import { HostRefusal, hostId, scopeOf, type HostRoutes } from "../../../protocol/host.ts";
-import { bounded, type ProviderAdapter, type ProviderEvents } from "./provider.ts";
+import { bounded, type Confine, type ProviderAdapter, type ProviderEvents } from "./provider.ts";
 import {
   commitAll,
   createWorktree,
@@ -69,7 +71,16 @@ interface CodingHostOptions {
   /** Each business works in `<work>/<businessId>`. */
   work: string;
   data: string;
-  providers: (events: ProviderEvents) => Partial<Record<Provider, ProviderAdapter>>;
+  /**
+   * One business's harnesses, made the first time that business needs one; `confine` keeps a
+   * build's (false) or a review's (true) processes in the business.
+   */
+  providers: (
+    events: ProviderEvents,
+    confine: (readOnly: boolean) => Confine,
+  ) => Partial<Record<Provider, ProviderAdapter>>;
+  /** Wraps a process started for the business in `folder` so it stays out of the others. */
+  confine(folder: string, readOnly: boolean): Confine;
   /** Hands events to the Worker; resolving means they were accepted. */
   /** Sends events to the Worker; resolves with the ids it delivered (the rest are retried). */
   deliver(events: readonly CodingEvent[]): Promise<readonly string[]>;
@@ -102,6 +113,19 @@ function signInHint(provider: Provider, error: string) {
   const command = provider === "codex" ? "codex login" : "claude, then /login";
   const name = provider === "codex" ? "Codex" : "Claude Code";
   return `${name} isn't signed in on this Mac (${error.slice(0, 200)}). Sign in with \`${command}\` in a terminal, then send the session a follow-up to continue.`;
+}
+
+/**
+ * Refuses a repository inside another business's folder (or the host's data beside them): its
+ * confined harness could not read it, and the host's own git must not reach it either.
+ */
+async function ownRepository(path: string, work: string, businessId: string) {
+  const root = await realpath(work).catch(() => work);
+  const real = await realpath(path).catch(() => path);
+  const own = join(root, businessId);
+  const within = (folder: string) => real === folder || real.startsWith(`${folder}/`);
+  if (within(root) && !within(own))
+    throw new HostRefusal(403, "That repository is in another business's folder");
 }
 
 export function codingHost(options: CodingHostOptions): HostRoutes {
@@ -210,9 +234,17 @@ export function codingHost(options: CodingHostOptions): HostRoutes {
         }
     },
   };
-  const adapters = options.providers(events);
-  const adapter = (provider: Provider) => {
-    const found = adapters[provider];
+  const adapters = new Map<string, Partial<Record<Provider, ProviderAdapter>>>();
+  const folderOf = (businessId: string) => join(options.work, businessId);
+  const adapter = (provider: Provider, businessId: string) => {
+    let made = adapters.get(businessId);
+    if (!made) {
+      made = options.providers(events, (readOnly) =>
+        options.confine(folderOf(businessId), readOnly),
+      );
+      adapters.set(businessId, made);
+    }
+    const found = made[provider];
     if (!found) throw new HostRefusal(503, `${provider} is not available on this Mac`);
     return found;
   };
@@ -255,7 +287,7 @@ export function codingHost(options: CodingHostOptions): HostRoutes {
   async function start(request: StartRequest): Promise<Started> {
     const existing = jobs.get(request.id);
     if (existing) return startedOf(existing);
-    const business = join(options.work, request.scope.businessId);
+    const business = folderOf(request.scope.businessId);
     let place: Pick<Job, "repository" | "baseCommit" | "branch" | "worktree">;
     if (request.purpose === "review") {
       const build = request.reviews ? jobs.get(request.reviews) : undefined;
@@ -265,16 +297,19 @@ export function codingHost(options: CodingHostOptions): HostRoutes {
       place = { repository: path, baseCommit, branch, worktree };
     } else {
       const target = request.repository;
+      if ("path" in target)
+        await ownRepository(target.path, options.work, request.scope.businessId);
       const path = await (
         "clone" in target ? cloneRepository(business, target.clone) : repository(business, target)
       ).catch((error: unknown) => {
         throw new HostRefusal(400, error instanceof Error ? error.message : "Not a repository");
       });
+      await ownRepository(path, options.work, request.scope.businessId);
       const made = await createWorktree(business, path, request.id);
       place = { repository: path, ...made };
     }
     const readOnly = request.purpose === "review";
-    const session = await adapter(request.provider).start({
+    const session = await adapter(request.provider, request.scope.businessId).start({
       cwd: place.worktree,
       instructions: request.instructions,
       prompt: request.objective,
@@ -323,12 +358,18 @@ export function codingHost(options: CodingHostOptions): HostRoutes {
     const check = { id: crypto.randomUUID(), commit, command };
     save({ ...job, check, accepted: { commit, passed: null } });
     // Its own process group, so a timeout stops everything the check started.
-    const child = spawn(options.shell ?? "/bin/zsh", ["-lc", command], {
-      cwd: job.worktree,
-      env: options.env ?? process.env,
-      detached: true,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    const child = spawn(
+      ...options.confine(folderOf(job.scope.businessId), false)(options.shell ?? "/bin/zsh", [
+        "-lc",
+        command,
+      ]),
+      {
+        cwd: job.worktree,
+        env: options.env ?? process.env,
+        detached: true,
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
     const stop = () => {
       try {
         process.kill(-child.pid!, "SIGKILL");
@@ -410,12 +451,18 @@ export function codingHost(options: CodingHostOptions): HostRoutes {
     await git(job.repository, "worktree", "add", "--detach", place, full);
     const secrets = await deploySecrets(options.data, job.scope.businessId, stage);
     save({ ...job, deploying: { stage, commit: full } });
-    const child = spawn(options.shell ?? "/bin/zsh", ["-lc", command], {
-      cwd: place,
-      env: { ...(options.env ?? process.env), ...secrets },
-      detached: true,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    const child = spawn(
+      ...options.confine(folderOf(job.scope.businessId), false)(options.shell ?? "/bin/zsh", [
+        "-lc",
+        command,
+      ]),
+      {
+        cwd: place,
+        env: { ...(options.env ?? process.env), ...secrets },
+        detached: true,
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
     const stop = () => {
       try {
         process.kill(-child.pid!, "SIGKILL");
@@ -524,7 +571,7 @@ export function codingHost(options: CodingHostOptions): HostRoutes {
           // Working before the turn starts, so a turn that ends at once is not overwritten.
           const before = jobs.get(job.id)!;
           save({ ...before, state: "working", error: null });
-          const sent = await adapter(job.provider)
+          const sent = await adapter(job.provider, job.scope.businessId)
             .send({
               sessionId: job.sessionId,
               cwd: job.worktree,
@@ -540,7 +587,8 @@ export function codingHost(options: CodingHostOptions): HostRoutes {
         }
         case "/coding/interrupt": {
           const job = jobOf(input);
-          if (job.state === "working") await adapter(job.provider).interrupt(job.sessionId);
+          if (job.state === "working")
+            await adapter(job.provider, job.scope.businessId).interrupt(job.sessionId);
           // An interrupted turn can leave its command running. A review shares its build's
           // worktree, so only a build's own interrupt clears it.
           if (!job.readOnly)
@@ -566,7 +614,7 @@ export function codingHost(options: CodingHostOptions): HostRoutes {
         }
         case "/coding/transcript": {
           const job = jobOf(input);
-          const entries = await adapter(job.provider).transcript({
+          const entries = await adapter(job.provider, job.scope.businessId).transcript({
             sessionId: job.sessionId,
             cwd: job.worktree,
           });
@@ -581,7 +629,9 @@ export function codingHost(options: CodingHostOptions): HostRoutes {
     },
     async close() {
       clearTimeout(retry);
-      await Promise.all(Object.values(adapters).map((each) => each?.close()));
+      await Promise.all(
+        [...adapters.values()].flatMap((made) => Object.values(made).map((each) => each?.close())),
+      );
     },
   };
 }

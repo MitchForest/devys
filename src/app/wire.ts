@@ -20,7 +20,7 @@ import {
 import { Business, Employee, Look, Person, RoleTemplate } from "../identity/contract.ts";
 import { Timestamp } from "../protocol/time.ts";
 import { TerminalSession } from "../terminal/contract.ts";
-import { Project, WorkItem, WorkItemState } from "../work/contract.ts";
+import { Project, Routine, WorkItem, WorkItemState } from "../work/contract.ts";
 import { FileEntry, FileText } from "../workspace/contract.ts";
 
 // The person and their businesses.
@@ -217,6 +217,11 @@ export const Answered = Schema.Struct({ status: Decision.fields.status });
 export const Projects = Schema.Struct({ projects: Schema.Array(Project) });
 /** `POST …/projects/:id/items/:item/remove`. */
 export const Removed = Schema.Struct({ removed: Schema.Literal(true) });
+/**
+ * `GET …/routines`, `?employee=` for an employee's desk and `?project=` for a project's overview.
+ * `POST …/routines/:id/pause` and `…/resume` answer with the `Routine`.
+ */
+export const Routines = Schema.Struct({ routines: Schema.Array(Routine) });
 
 // Apps.
 
@@ -268,6 +273,11 @@ const NeedsYouItem = Schema.Union([
     title: Schema.String,
     work_id: Schema.NullOr(Schema.String),
     project_id: Schema.NullOr(Schema.String),
+    /**
+     * For `routineActivate`, the proposal it decides, readable as a whole (its schedule in
+     * words); null when the routine has since moved to another revision, or for any other.
+     */
+    routine: Schema.NullOr(Routine),
     at: Timestamp,
   }),
   Schema.Struct({

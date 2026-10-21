@@ -30,6 +30,7 @@ struct Desk: View {
                         }
                         ForEach(open) { WorkRow(store: store, item: $0, compact: true) }
                     }
+                    RoutinesSection(store: store, routines: (store.routines.value ?? []).filter { $0.employeeID == employee.id })
                     if !done.isEmpty {
                         PanelSection(title: "Recently done") {
                             ForEach(done) { WorkRow(store: store, item: $0, compact: true) }

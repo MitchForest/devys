@@ -67,6 +67,7 @@ extension Workspace.State {
         case .app(let id): appTitle(id)
         case .session: "Coding session"
         case .browser: "Browser"
+        case .routine(let id): routine(id)?.title ?? "Routine"
         }
         return LayerReference(title: title, ref: layer.ref)
     }

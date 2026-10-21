@@ -9,6 +9,7 @@ import { codexAdapter } from "./apps/code/host/codex.ts";
 import { codingHost } from "./apps/code/host/server.ts";
 import { forgetHostSettings } from "./protocol/host.ts";
 import { bunPty, terminalsHost } from "./terminal/host/server.ts";
+import { confine } from "./workspace/host/seatbelt.ts";
 import { startHost } from "./workspace/host/server.ts";
 
 const token = process.env.DEVYS_HOST_TOKEN;
@@ -32,6 +33,14 @@ const ownLogin = Object.fromEntries(
   ),
 );
 
+/**
+ * What an employee starts for a business (commands, coding harnesses, checks, deploys) cannot
+ * reach the other businesses' folders. The owner's terminals are the owner's own and run as is.
+ */
+const confineTo =
+  (folder: string, readOnly: boolean) => (command: string, args: readonly string[]) =>
+    confine({ root: work, folder, readOnly }, command, args);
+
 const terminals = terminalsHost({
   spawn: bunPty,
   env: process.env,
@@ -52,12 +61,14 @@ const coding = codingHost({
   spared: () => terminals.ttys(),
   work,
   data,
-  providers: (events) => ({
-    codex: codexAdapter({ home: codexHome, env: process.env }, events),
+  confine: confineTo,
+  providers: (events, confined) => ({
+    codex: codexAdapter({ home: codexHome, env: process.env, confine: confined }, events),
     claude: claudeAdapter(
       {
         configDir: claudeConfig,
         env: process.env,
+        confine: confined,
       },
       events,
     ),

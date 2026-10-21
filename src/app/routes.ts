@@ -27,6 +27,7 @@ import { BusinessDetail, BusinessUpdated } from "./wire.ts";
 import { employeeRoute, lookRoute } from "./employees.ts";
 import { decisionRoute, workRoute } from "./work.ts";
 import { projectRoute } from "./projects.ts";
+import { routinesRoute } from "./routines.ts";
 import { appsRoute } from "./apps.ts";
 import { homeRoute } from "./home.ts";
 import { googleRoute } from "./google-route.ts";
@@ -125,6 +126,8 @@ export async function businessRoute(
     return decisionRoute(request, env, access);
   if (path === "/projects" || path.startsWith("/projects/"))
     return projectRoute(request, env, access);
+  if (path === "/routines" || path.startsWith("/routines/"))
+    return routinesRoute(request, env, access);
   if (path === "/apps" || path.startsWith("/apps/")) return appsRoute(request, env, access);
   if (path === "/home" && method === "GET") return homeRoute(env, access);
   if (path === "/conversations" || path.startsWith("/conversations/"))

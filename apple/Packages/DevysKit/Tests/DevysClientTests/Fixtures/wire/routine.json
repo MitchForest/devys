@@ -1,0 +1,24 @@
+{
+  "id": "00000000-0000-4000-8000-000000000011",
+  "employee_id": "00000000-0000-4000-8000-000000000003",
+  "project_id": null,
+  "title": "Supplier replies",
+  "instruction": "Answer supplier replies about prices.",
+  "trigger": {
+    "kind": "event",
+    "source": "mail",
+    "type": "received",
+    "filters": {
+      "from": "parts@supply.test"
+    }
+  },
+  "schedule": "When mail reports received where from is \"parts@supply.test\"",
+  "notify": "when_found",
+  "state": "paused",
+  "revision": 1,
+  "next_run_at": null,
+  "last_run_at": null,
+  "last_result": null,
+  "created_by": "employee:00000000-0000-4000-8000-000000000003",
+  "updated_at": "2026-01-01T00:00:00.000Z"
+}

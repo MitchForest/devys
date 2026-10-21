@@ -8,6 +8,12 @@ export const bounded = (entries: TranscriptEntry[]): TranscriptEntry[] =>
     ...(entry.detail !== undefined ? { detail: entry.detail.slice(-4000) } : {}),
   }));
 
+/**
+ * Wraps a harness process so it stays in its business (the host's Seatbelt confinement, chosen
+ * by `src/host.ts`): the file and arguments to spawn instead of `command args`.
+ */
+export type Confine = (command: string, args: readonly string[]) => [string, string[]];
+
 /** How the host drives one coding harness. Each adapter maps its native protocol onto this. */
 export interface ProviderAdapter {
   /** Opens a session in `cwd` and starts its first turn. */

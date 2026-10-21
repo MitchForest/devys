@@ -21,6 +21,7 @@ import {
   useMemory,
   useModels,
   useOperations,
+  useRoutines,
   useStatus,
   useWork,
 } from "../app/data.ts";
@@ -36,6 +37,7 @@ import { accessTitle, isOpen, templateTitle } from "../app/names.ts";
 import { keys, problemOf } from "../app/query.ts";
 import { ui } from "../app/ui.ts";
 import { useMood, useWorking } from "../app/workspace.tsx";
+import { RoutinesSection } from "./routines.tsx";
 import { WorkRow } from "./work.tsx";
 import { PanelBody, PanelHeader, PanelSection } from "./panel.tsx";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -90,6 +92,7 @@ export function Desk({ employeeId, close }: { employeeId: string; close: () => v
 function EmployeeDesk({ employee, close }: { employee: Employee; close: () => void }) {
   const operations = useOperations();
   const work = useWork().data;
+  const routines = (useRoutines().data ?? []).filter((r) => r.employee_id === employee.id);
   const mood = useMood(employee);
   const working = useWorking(employee.id);
   const togglePause = useTogglePause();
@@ -145,6 +148,7 @@ function EmployeeDesk({ employee, close }: { employee: Employee; close: () => vo
             ))}
           </PanelSection>
         )}
+        <RoutinesSection routines={routines} />
         {done.length > 0 && (
           <PanelSection title="Recently done">
             {done.map((item) => (

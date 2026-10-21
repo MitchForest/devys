@@ -6,7 +6,8 @@ import SwiftUI
 
 /// A thread's permanent view: the work item itself. Who owns it, where it stands, what's next,
 /// what it waits on, when it's due, the decision waiting on the owner, its coding sessions, the
-/// live browser and its evidence. The thread itself is the conversation in the middle.
+/// live browser and its evidence. The thread itself is the conversation in the middle. Read-only
+/// until the owner takes it over; then they change it by hand until they hand it back.
 struct WorkCard: View {
     let store: StoreOf<Workspace>
     let workItemID: String
@@ -22,15 +23,20 @@ struct WorkCard: View {
                 header(item)
                 ScrollView {
                     VStack(alignment: .leading, spacing: DevysSpacing.compact) {
+                        HStack(spacing: DevysSpacing.small) {
+                            item.state.chip(size: .small)
+                            if let takeover = store.state.takeoverTitle(item) {
+                                Text(takeover).font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
+                            }
+                        }
                         if !item.objective.isEmpty {
                             Text(item.objective).font(DevysTypography.body).foregroundStyle(DevysColors.ink2)
                         }
-                        decisions(item)
                         // Attached to a view that always exists, so it runs with no decisions yet.
-                        WorkItemFields(store: store, item: item)
+                        WorkSummary(store: store, item: item)
                             .task(id: item.revision) { await loadAnswered(item) }
-                        WorkItemNotes(store: store, item: item)
-                        WorkItemStateActions(store: store, item: item)
+                        WorkItemActions(store: store, item: item)
+                        decisions(item)
                         CodingSessions(store: store, item: item)
                         BrowserLine(store: store, item: item)
                         evidence(item)
@@ -47,9 +53,8 @@ struct WorkCard: View {
     }
 
     private func header(_ item: WorkItem?) -> some View {
-        PanelHeader(title: item?.title ?? "Work", detail: item.flatMap(store.state.takeoverTitle), close: close) {
+        PanelHeader(title: item?.title ?? "Work", close: close) {
             if let item {
-                item.state.chip
                 let following = store.state.isFollowing(item.id)
                 ToolbarIconButton(
                     following ? "Following: told at each step. Stop following" : "Follow each step",
@@ -69,7 +74,7 @@ struct WorkCard: View {
         }
         if !answered.isEmpty {
             VStack(alignment: .leading, spacing: DevysSpacing.small) {
-                SectionHeader("Decided", count: answered.count)
+                SectionHeader("Decided")
                 ForEach(answered) { decision in
                     Text("\(decision.status == "rejected" ? "Declined" : "Approved"): \(DecisionText.title(decision))\(decision.status == "used" ? " · used" : "")")
                         .font(DevysTypography.caption).foregroundStyle(DevysColors.ink2)
@@ -135,174 +140,171 @@ struct WorkCard: View {
     }
 }
 
-/// Owner, state, due date and takeover. The owner changes them by hand only after taking the work
-/// over (each at the revision on screen); until then they read, and Ask in the thread.
-private struct WorkItemFields: View {
+/// Who owns the work and its plan: what's next, what it waits on and when it's due. Read-only;
+/// once the owner has taken the work over, Reassign and Edit change it by hand.
+private struct WorkSummary: View {
     let store: StoreOf<Workspace>
     let item: WorkItem
 
     private var editable: Bool { store.state.isHandEditable(item) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            row("Owner") {
-                Menu {
-                    ForEach(store.snapshot.employees.filter { $0.id != item.ownerEmployeeID }) { employee in
-                        Button("Reassign to \(employee.name)") { store.send(.reassigned(item.id, to: employee.id)) }
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        if let owner = store.snapshot.employees.first(where: { $0.id == item.ownerEmployeeID }) {
-                            Portrait(store.state.portrait(for: owner), size: 20, isAnimated: false)
-                        }
-                        Text(store.state.employeeName(item.ownerEmployeeID))
-                        Image(systemName: "chevron.up.chevron.down").imageScale(.small).foregroundStyle(DevysColors.ink3).accessibilityHidden(true)
-                    }
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                if let owner = store.snapshot.employees.first(where: { $0.id == item.ownerEmployeeID }) {
+                    Portrait(store.state.portrait(for: owner), size: 26, isAnimated: false)
                 }
-                .menuIndicator(.hidden)
-                .buttonStyle(.plain)
-                .fixedSize()
-                .disabled(!editable)
-            }
-            row("State") {
-                Menu {
-                    ForEach(WorkItemState.settable.filter { $0 != item.state }, id: \.self) { state in
-                        Button(state.title) { store.send(.workItemChanged(item.id, WorkItemChange(expectedRevision: item.revision, state: state))) }
-                    }
-                } label: {
-                    item.state.chip
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Owner").font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
+                    Text(store.state.employeeName(item.ownerEmployeeID))
+                        .font(DevysTypography.body.weight(.semibold)).foregroundStyle(DevysColors.ink).lineLimit(1)
                 }
-                .menuIndicator(.hidden)
-                .buttonStyle(.plain)
-                .fixedSize()
-                .disabled(!editable)
-            }
-            row("Due") { due }
-            row("Handled by") {
-                Text(handler).foregroundStyle(DevysColors.ink)
                 Spacer(minLength: 8)
-                if item.state.isOpen {
-                    TakeoverButton(store: store, item: item)
-                        .buttonStyle(DevysButtonStyle(.quiet, compact: true))
-                        .fixedSize()
-                }
+                if editable { reassign }
+            }
+            if editable, let draft = store.workPlan, draft.workItemID == item.id {
+                WorkPlanForm(store: store, draft: draft)
+            } else {
+                plan
             }
         }
-        .font(DevysTypography.body)
-        .devysCard()
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(DevysColors.sheetTint, in: RoundedRectangle(cornerRadius: DevysRadius.card, style: .continuous))
     }
 
-    private var handler: String {
-        if item.takenOverBy == nil { return store.state.employeeName(item.ownerEmployeeID) }
-        return store.state.isMine(item) ? "You" : "Another person"
+    private var reassign: some View {
+        Menu {
+            ForEach(store.snapshot.employees.filter { $0.id != item.ownerEmployeeID }) { employee in
+                Button(employee.name) { store.send(.reassigned(item.id, to: employee.id)) }
+            }
+        } label: {
+            Label("Reassign", systemImage: "chevron.down").labelStyle(TrailingIcon())
+        }
+        .menuIndicator(.hidden)
+        .buttonStyle(DevysButtonStyle(.quiet, compact: true))
+        .fixedSize()
     }
 
-    @ViewBuilder private var due: some View {
-        let date = item.dueAt.flatMap(ServerDate.parse)
-        if !editable {
-            Text(date?.formatted(date: .abbreviated, time: .shortened) ?? "No due date").foregroundStyle(date == nil ? DevysColors.ink3 : DevysColors.ink)
-        } else if let date {
-            DatePicker(
-                "Due",
-                selection: Binding(get: { date }, set: { change(dueAt: .set(ServerDate.format($0))) }),
-                displayedComponents: [.date, .hourAndMinute]
-            )
-            .labelsHidden()
-            .fixedSize()
-            Spacer(minLength: 8)
-            Button("Clear") { change(dueAt: .clear) }.buttonStyle(DevysButtonStyle(.quiet, compact: true))
-        } else {
-            Text("No due date").foregroundStyle(DevysColors.ink3)
-            Spacer(minLength: 8)
-            Button("Add due date") { change(dueAt: .set(ServerDate.format(Date.now.addingTimeInterval(86_400)))) }
-                .buttonStyle(DevysButtonStyle(.quiet, compact: true))
+    private var plan: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 4) {
+                line("Next", item.nextAction.isEmpty ? "Not set" : item.nextAction)
+                if let waiting = item.waitCondition, !waiting.isEmpty { line("Waiting on", waiting) }
+                if item.state == .waiting, let wake = item.wakeAt.flatMap(ServerDate.parse) { line("Waiting until", RoutineText.upcoming(wake)) }
+                line("Due", item.dueAt.flatMap(ServerDate.parse).map(dueDate) ?? "No due date")
+            }
+            Spacer(minLength: 0)
+            if editable {
+                Button("Edit", systemImage: "pencil") { store.send(.planEditTapped(item.id)) }
+                    .buttonStyle(DevysButtonStyle(.quiet, compact: true))
+                    .fixedSize()
+                    .accessibilityLabel("Edit next, waiting on and due")
+            }
         }
     }
 
-    private func change(dueAt: WorkItemChange.Value) {
-        store.send(.workItemChanged(item.id, WorkItemChange(expectedRevision: item.revision, dueAt: dueAt)))
+    private func line(_ label: String, _ text: String) -> some View {
+        GridRow(alignment: .firstTextBaseline) {
+            Text(label).foregroundStyle(DevysColors.ink3)
+            Text(text).foregroundStyle(DevysColors.ink).textSelection(.enabled)
+        }
+        .font(DevysTypography.secondary)
     }
 
-    private func row(_ label: String, @ViewBuilder content: () -> some View) -> some View {
-        HStack(spacing: 10) {
-            Text(label).font(DevysTypography.label).foregroundStyle(DevysColors.ink3).frame(width: 76, alignment: .leading)
-            content()
-            Spacer(minLength: 0)
+    /// "Wed, Oct 21", as the web shows a due date.
+    private func dueDate(_ date: Date) -> String {
+        date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+    }
+}
+
+/// A label with its icon after the title, as a menu button reads ("Reassign ⌄").
+private struct TrailingIcon: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 4) {
+            configuration.title
+            configuration.icon.imageScale(.small)
         }
     }
 }
 
-/// The next action and what the work waits on: read, or edited in place once the owner has taken
-/// the work over.
-private struct WorkItemNotes: View {
+/// What's next, what it waits on and the day it's due, saved as one change at the revision on
+/// screen. If someone changed the item meanwhile, the latest loads and the draft stays to save again.
+private struct WorkPlanForm: View {
     let store: StoreOf<Workspace>
-    let item: WorkItem
-    @State private var nextAction = ""
-    @State private var waiting = ""
+    let draft: WorkPlanDraft
 
     var body: some View {
-        if store.state.isHandEditable(item) { form } else { plan }
-    }
-
-    @ViewBuilder private var plan: some View {
-        let lines = [("Next", item.nextAction), ("Waiting on", item.waitCondition ?? "")].filter { !$0.1.isEmpty }
-        if !lines.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(lines, id: \.0) { label, text in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(label).font(DevysTypography.label).foregroundStyle(DevysColors.ink3)
-                        Text(text).font(DevysTypography.body).foregroundStyle(DevysColors.ink).textSelection(.enabled)
+        VStack(alignment: .leading, spacing: 8) {
+            field("Next") { TextField("Next", text: binding(\.nextAction), axis: .vertical).lineLimit(1...4) }
+            field("Waiting on") { TextField("Nothing", text: binding(\.waiting), axis: .vertical).lineLimit(1...4) }
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Due").font(DevysTypography.label).foregroundStyle(DevysColors.ink3)
+                HStack(spacing: 8) {
+                    if draft.hasDue {
+                        DatePicker("Due", selection: binding(\.due), displayedComponents: .date).labelsHidden().fixedSize()
+                        Button("Clear") { edit { $0.hasDue = false } }.buttonStyle(DevysButtonStyle(.quiet, compact: true))
+                    } else {
+                        Text("No due date").font(DevysTypography.body).foregroundStyle(DevysColors.ink3)
+                        Button("Add due date") { edit { $0.hasDue = true } }.buttonStyle(DevysButtonStyle(.quiet, compact: true))
                     }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .devysCard()
-        }
-    }
-
-    private var form: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            note("Next", text: $nextAction, prompt: "What happens next", saved: item.nextAction) {
-                store.send(.workItemChanged(item.id, WorkItemChange(expectedRevision: item.revision, nextAction: nextAction)))
+            if let error = draft.error {
+                Text(error).font(DevysTypography.secondary).foregroundStyle(DevysColors.ink2)
             }
-            note("Waiting on", text: $waiting, prompt: "Nothing", saved: item.waitCondition ?? "") {
-                let text = waiting.trimmingCharacters(in: .whitespacesAndNewlines)
-                store.send(.workItemChanged(item.id, WorkItemChange(expectedRevision: item.revision, waitCondition: text.isEmpty ? .clear : .set(text))))
+            HStack(spacing: 6) {
+                Button(draft.isSaving ? "Saving…" : "Save") { store.send(.planSaveTapped) }
+                    .buttonStyle(DevysButtonStyle(.raised, compact: true))
+                    .disabled(draft.isSaving)
+                Button("Cancel") { store.send(.planEditCancelled) }
+                    .buttonStyle(DevysButtonStyle(.quiet, compact: true))
             }
+            .fixedSize()
         }
-        .devysCard()
-        .onAppear(perform: reset)
-        .onChange(of: item.revision) { reset() }
+        .onSubmit { store.send(.planSaveTapped) }
+        .onKeyPress(.escape) {
+            store.send(.planEditCancelled)
+            return .handled
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Edit work plan")
     }
 
-    private func reset() {
-        nextAction = item.nextAction
-        waiting = item.waitCondition ?? ""
-    }
-
-    private func note(_ label: String, text: Binding<String>, prompt: String, saved: String, save: @escaping () -> Void) -> some View {
+    private func field(_ label: String, @ViewBuilder content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label).font(DevysTypography.label).foregroundStyle(DevysColors.ink3)
-            HStack(spacing: 8) {
-                FieldBox { TextField(prompt, text: text, axis: .vertical).lineLimit(1...4).onSubmit(save) }
-                if text.wrappedValue != saved {
-                    Button("Save", action: save).buttonStyle(DevysButtonStyle(.raised, compact: true))
-                }
-            }
+            FieldBox(content: content)
         }
+    }
+
+    private func binding<Value>(_ keyPath: WritableKeyPath<WorkPlanDraft, Value>) -> Binding<Value> {
+        Binding(get: { draft[keyPath: keyPath] }, set: { value in edit { $0[keyPath: keyPath] = value } })
+    }
+
+    private func edit(_ change: (inout WorkPlanDraft) -> Void) {
+        guard var current = store.workPlan, current.workItemID == draft.workItemID else { return }
+        change(&current)
+        store.send(.planEdited(current))
     }
 }
 
-/// Where the work stands, changed by hand once the owner has taken it over, as on the web:
-/// Mark done, Waiting and Cancel while it's open; Reopen once it's closed.
-private struct WorkItemStateActions: View {
+/// The owner's direct actions, as on the web: Take over while its employee has the work; once
+/// they have it, Hand back, Mark done, Waiting and Cancel while it's open, Reopen once closed.
+private struct WorkItemActions: View {
     let store: StoreOf<Workspace>
     let item: WorkItem
 
     var body: some View {
-        if store.state.isMine(item) {
+        let mine = store.state.isMine(item)
+        let open = item.state.isOpen
+        if mine || (open && item.takenOverBy == nil) {
             HStack(spacing: 6) {
-                if item.state.isOpen {
+                if open {
+                    TakeoverButton(store: store, item: item)
+                        .buttonStyle(DevysButtonStyle(.raised, compact: true))
+                }
+                if mine && open {
                     Button("Mark done", systemImage: "checkmark.circle") { set(.completed) }
                         .buttonStyle(DevysButtonStyle(.raised, compact: true))
                     if item.state != .waiting {
@@ -311,7 +313,8 @@ private struct WorkItemStateActions: View {
                     }
                     Button("Cancel", systemImage: "xmark.circle") { set(.cancelled) }
                         .buttonStyle(DevysButtonStyle(.quiet, compact: true))
-                } else {
+                }
+                if mine && !open {
                     Button("Reopen", systemImage: "arrow.uturn.backward") { set(.ready) }
                         .buttonStyle(DevysButtonStyle(.raised, compact: true))
                 }
@@ -322,20 +325,5 @@ private struct WorkItemStateActions: View {
 
     private func set(_ state: WorkItemState) {
         store.send(.workItemStateSet(item.id, state))
-    }
-}
-
-extension WorkItemState {
-    var title: String {
-        switch self {
-        case .proposed: "Proposed"
-        case .ready: "Ready"
-        case .inProgress: "In progress"
-        case .waiting: "Waiting"
-        case .needsDecision: "Needs a decision"
-        case .completed: "Done"
-        case .cancelled: "Cancelled"
-        case .unknown: "Other"
-        }
     }
 }

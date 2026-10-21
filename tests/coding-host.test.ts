@@ -14,6 +14,7 @@ import type { CodingEvent, StartRequest } from "../src/apps/code/contract.ts";
 import { hostCoding } from "../src/apps/code/host-client.ts";
 import type { ProviderAdapter, ProviderEvents } from "../src/apps/code/host/provider.ts";
 import { codingHost } from "../src/apps/code/host/server.ts";
+import { confine } from "../src/workspace/host/seatbelt.ts";
 import { startHost } from "../src/workspace/host/server.ts";
 
 const token = "test-token";
@@ -140,6 +141,8 @@ esac
           work: join(root, "work"),
           data,
           providers: provider.factory,
+          confine: (folder, readOnly) => (command, args) =>
+            confine({ root: join(root, "work"), folder, readOnly }, command, args),
           shell: "/bin/sh",
           env,
           gh,

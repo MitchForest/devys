@@ -1,7 +1,54 @@
 {
   "needs_you": [
     {
-      "id": "00000000-0000-4000-8000-000000000012",
+      "id": "00000000-0000-4000-8000-000000000014",
+      "employee_id": "00000000-0000-4000-8000-000000000004",
+      "capability": "routineActivate",
+      "input": {
+        "routine": "00000000-0000-4000-8000-000000000010",
+        "revision": 1
+      },
+      "work_item_id": null,
+      "conversation": "project:00000000-0000-4000-8000-000000000005",
+      "status": "pending",
+      "requested_at": "2026-01-01T00:00:00.000Z",
+      "expires_at": "2026-01-01T00:00:00.000Z",
+      "kind": "decision",
+      "title": "Weekly bookings report",
+      "work_id": null,
+      "project_id": "00000000-0000-4000-8000-000000000005",
+      "routine": {
+        "id": "00000000-0000-4000-8000-000000000010",
+        "employee_id": "00000000-0000-4000-8000-000000000004",
+        "project_id": "00000000-0000-4000-8000-000000000005",
+        "title": "Weekly bookings report",
+        "instruction": "Report last week's bookings and what changed on the booking page.",
+        "trigger": {
+          "kind": "cron",
+          "expression": "0 9 * * 1",
+          "timezone": "America/Chicago",
+          "hours": {
+            "start": "08:00",
+            "end": "18:00",
+            "days": [
+              "mon"
+            ]
+          }
+        },
+        "schedule": "At 09:00, only on Monday, between 08:00 and 18:00 on Mon (America/Chicago)",
+        "notify": "always",
+        "state": "proposed",
+        "revision": 1,
+        "next_run_at": null,
+        "last_run_at": null,
+        "last_result": null,
+        "created_by": "employee:00000000-0000-4000-8000-000000000004",
+        "updated_at": "2026-01-01T00:00:00.000Z"
+      },
+      "at": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000015",
       "employee_id": "00000000-0000-4000-8000-000000000003",
       "capability": "driveCreate",
       "input": {
@@ -17,6 +64,7 @@
       "title": "Order fittings",
       "work_id": "00000000-0000-4000-8000-000000000009",
       "project_id": "00000000-0000-4000-8000-000000000005",
+      "routine": null,
       "at": "2026-01-01T00:00:00.000Z"
     }
   ],

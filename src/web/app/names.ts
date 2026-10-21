@@ -1,5 +1,5 @@
 import type { RoleTemplateId } from "../../protocol/roles.ts";
-import type { WorkItem, WorkItemState } from "../../work/contract.ts";
+import type { RoutineNotify, RoutineState, WorkItem, WorkItemState } from "../../work/contract.ts";
 import type { Tone } from "../design/primitives.tsx";
 
 /** Plain names for capabilities, as native `AccessNames`; the description carries the detail. */
@@ -27,6 +27,10 @@ const titles: Record<string, string> = {
   projectCreate: "Create projects",
   projectUpdate: "Edit projects",
   projectAdd: "Keep in projects",
+  routineList: "List routines",
+  routinePropose: "Propose routines",
+  routineActivate: "Activate routines",
+  routinePause: "Pause routines",
   hireEmployee: "Propose hires",
 };
 export const accessTitle = (capability: string) => titles[capability] ?? capability;
@@ -54,6 +58,19 @@ export const chipFor = (state: WorkItemState): { title: string; tone: Tone } =>
           : state === "cancelled"
             ? { title: "Cancelled", tone: "waiting" }
             : { title: "Ready", tone: "waiting" };
+
+/** A routine's state as the owner reads it. */
+export const routineStateTitle: Record<RoutineState, string> = {
+  active: "Active",
+  paused: "Paused",
+  proposed: "Proposed",
+};
+
+/** Whether a routine's runs speak always or only when they find something. */
+export const notifyTitle: Record<RoutineNotify, string> = {
+  always: "Always posts",
+  when_found: "Posts only when something needs attention",
+};
 
 export const isOpen = (state: WorkItemState) => state !== "completed" && state !== "cancelled";
 

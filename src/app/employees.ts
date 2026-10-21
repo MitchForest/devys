@@ -17,6 +17,7 @@ import { atomically } from "../data/database.ts";
 import { grant, grantsFor, revokeGrant } from "../authority/service.ts";
 import { handOverProjects } from "../work/projects.ts";
 import { reassignOpen } from "../work/service.ts";
+import { pauseRoutinesOf } from "../work/routines.ts";
 import type { Mode } from "../authority/contract.ts";
 import { bindableChannels, type BindableChannel } from "./channel.ts";
 import { capabilities } from "./capabilities.ts";
@@ -105,6 +106,8 @@ export async function employeeRoute(
       await Effect.runPromise(
         handOverProjects(db, scope.businessId, scope.employeeId, successor.id),
       );
+      // Its routines stop: running them as someone else is a new proposal, not a hand-over.
+      await Effect.runPromise(pauseRoutinesOf(db, scope.businessId, scope.employeeId));
     });
     await agent().stop(scope);
     return respond(Retired, { retired: true, reassigned_to: successor.id });

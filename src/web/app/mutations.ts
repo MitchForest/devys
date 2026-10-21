@@ -9,11 +9,17 @@ import {
   type QueryClient,
   type QueryKey,
 } from "@tanstack/react-query";
-import type { BusinessDetail, Conversations, Home, Me } from "../../app/wire.ts";
+import type { BusinessDetail, Conversations, Home, Me, Routines } from "../../app/wire.ts";
 import type { ConversationKey } from "../../conversations/contract.ts";
 import type { Employee, SettableLook } from "../../identity/contract.ts";
 import type { Ref } from "../../protocol/ref.ts";
-import type { NewWorkItem, ProjectChange, WorkItem, WorkItemState } from "../../work/contract.ts";
+import type {
+  NewWorkItem,
+  ProjectChange,
+  Routine,
+  WorkItem,
+  WorkItemState,
+} from "../../work/contract.ts";
 import { api, ApiError, type StartingRole } from "./api.ts";
 import { useBusinessId } from "./data.ts";
 import { downscale } from "./images.ts";
@@ -84,7 +90,8 @@ export function useAnswer() {
     (b, { id, approve }: { id: string; approve: boolean }) => api.answer(b, id, approve),
     {
       failure: "That request was already answered or has expired.",
-      settles: workSettles,
+      // Approving a routine's activation changes it once its employee activates it.
+      settles: (b) => [...workSettles(b), keys.routines(b)],
       optimistic: (client, b, { id }) => {
         const before = client.getQueryData<Home>(keys.home(b));
         client.setQueryData<Home>(
@@ -270,6 +277,30 @@ export function useTogglePause() {
     optimistic: (client, b, employee) =>
       editEmployees(client, b, (e) => (e.id === employee.id ? { ...e, paused: !e.paused } : e)),
   });
+}
+
+/** Pauses an active routine, or resumes a paused one at the revision the owner approved. */
+export function useToggleRoutine() {
+  return useChange(
+    (b, routine: Routine) => api.setRoutinePaused(b, routine.id, routine.state === "active"),
+    {
+      failure: (routine) =>
+        `Couldn't ${routine.state === "active" ? "pause" : "resume"} that routine.`,
+      settles: (b) => [keys.routines(b), keys.home(b)],
+      optimistic: (client, b, routine) => {
+        const before = client.getQueryData<typeof Routines.Type>(keys.routines(b));
+        const state = routine.state === "active" ? "paused" : "active";
+        client.setQueryData<typeof Routines.Type>(
+          keys.routines(b),
+          (list) =>
+            list && {
+              routines: list.routines.map((r) => (r.id === routine.id ? { ...r, state } : r)),
+            },
+        );
+        return () => client.setQueryData(keys.routines(b), before);
+      },
+    },
+  );
 }
 
 /** Hires from a template and opens the new employee's chat. */
