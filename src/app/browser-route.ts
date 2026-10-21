@@ -1,8 +1,9 @@
 import type { Business } from "../identity/contract.ts";
-import type { OwnerInput } from "../browser/contract.ts";
+import { BrowserStatus, OwnerInput, PageState, Screenshot } from "../browser/contract.ts";
+import { respond } from "../protocol/http.ts";
 import type { Env } from "./env.ts";
 import { modeOf } from "./mode.ts";
-import { body, forbidden, notFound } from "./request.ts";
+import { decodedBody, forbidden, notFound } from "./request.ts";
 
 /**
  * The business's browser for its owner (local mode): where it is and which work drives it, a
@@ -17,14 +18,15 @@ export async function browserRoute(
   const { business, trusted, path } = access;
   if (path !== "/browser" && !path.startsWith("/browser/")) return undefined;
   const browser = modeOf(env).browser(business.id);
-  if (path === "/browser" && request.method === "GET") return Response.json(await browser.status());
+  if (path === "/browser" && request.method === "GET")
+    return respond(BrowserStatus, await browser.status());
   if (path === "/browser/screenshot" && request.method === "GET")
-    return Response.json(await browser.screenshot());
+    return respond(Screenshot, await browser.screenshot());
   if (path === "/browser/input" && request.method === "POST") {
     if (!trusted) return forbidden();
-    const action = await body<OwnerInput>(request, 8_000);
+    const action = await decodedBody(request, 8_000, OwnerInput);
     try {
-      return Response.json(await browser.input(action as OwnerInput));
+      return respond(PageState, await browser.input(action));
     } catch (error) {
       return new Response(error instanceof Error ? error.message : "The page refused that", {
         status: 409,

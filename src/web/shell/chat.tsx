@@ -17,8 +17,9 @@ import {
 } from "lucide-react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { parseRef } from "../../protocol/ref.ts";
-import type { Employee } from "../app/api.ts";
-import { employeeOf, type Conversation } from "../app/conversation.ts";
+import type { Employee } from "../../identity/contract.ts";
+import { answerersOf, draft, useDraft, type Conversation } from "../app/conversation.ts";
+import { employeeOf } from "../../conversations/contract.ts";
 import { capturing, modeOf } from "../app/voice.ts";
 import {
   endsGroup,
@@ -27,7 +28,26 @@ import {
   timeline,
   type Bubble as TimelineBubble,
 } from "../app/timeline.ts";
-import { useWorkspace, valueOf } from "../app/workspace.tsx";
+import {
+  useArtifacts,
+  useDecisions,
+  useEmployees,
+  useOperations,
+  usePerson,
+  useUnread,
+  useWork,
+} from "../app/data.ts";
+import { useStartThread } from "../app/mutations.ts";
+import { useNav, usePlace } from "../app/navigation.ts";
+import { ui } from "../app/ui.ts";
+import {
+  useMicLevel,
+  useReference,
+  useSendDraft,
+  useVoice,
+  useVoiceActions,
+} from "../app/workspace.tsx";
+import { ThreadLink } from "./links.tsx";
 import { chipFor, templateTitle } from "../app/names.ts";
 import { DevysButton } from "../design/buttons.tsx";
 import { StatusChip } from "../design/primitives.tsx";
@@ -77,7 +97,8 @@ const avatarSize = 26;
 
 /** Who wrote a message, for names and quoted replies. */
 function useAuthorName() {
-  const { person, employees } = useWorkspace();
+  const person = usePerson();
+  const employees = useEmployees();
   return (author: string) => {
     const employee = employeeOf(author);
     if (employee) return employees.find((e) => e.id === employee)?.name ?? "A former employee";
@@ -99,16 +120,18 @@ export function ConversationView({
   empty: ReactNode;
   className?: string;
 }) {
-  const { person, decisions, employees, place } = useWorkspace();
+  const person = usePerson();
+  const decisions = useDecisions().data;
+  const employees = useEmployees();
+  const place = usePlace();
   const [loadingOlder, setLoadingOlder] = useState(false);
-  const { messages, pending, key } = conversation;
-  const history = valueOf(messages);
+  const { messages: history, pending, key } = conversation;
   const items = history ? timeline(history, pending, `person:${person?.id}`, new Date()) : [];
   // Requests waiting on the owner: from this DM's employee, or about this work item.
   const ref = key?.slice(key.indexOf(":") + 1);
   // Requests wait where they were asked: a work item's in its thread, others in the DM. A
   // channel shows none; its threads' cards say they need the owner. Home's are in Needs you.
-  const waiting = (valueOf(decisions) ?? []).filter((d) =>
+  const waiting = (decisions ?? []).filter((d) =>
     place.kind === "home"
       ? false
       : key?.startsWith("direct:")
@@ -125,12 +148,14 @@ export function ConversationView({
       <MessageScroller>
         <MessageScrollerViewport>
           <MessageScrollerContent className={cn("mx-auto w-full gap-0 p-3.5", className)}>
-            {messages.status === "loading" ? (
+            {conversation.status === "pending" ? (
               <div className="flex justify-center pt-16">
                 <Spinner />
               </div>
-            ) : messages.status === "failed" ? (
-              <p className="text-body text-ink-3">{messages.message}</p>
+            ) : conversation.status === "error" && !history ? (
+              <p role="alert" className="text-body text-ink-3">
+                {conversation.problem}
+              </p>
             ) : (
               <>
                 {items.length === 0 && (
@@ -204,23 +229,25 @@ export function ConversationView({
  * whether it has unread replies; it opens the thread. A published page opens as a layer.
  */
 function EventCard({ bubble }: { bubble: TimelineBubble }) {
-  const { actions, work, employees, unreadOf, artifacts } = useWorkspace();
+  const nav = useNav();
+  const work = useWork().data;
+  const employees = useEmployees();
+  const artifacts = useArtifacts();
   const about = parseRef(bubble.ref);
+  const unread = useUnread(about?.app === "work" ? `work:${about.id}` : undefined);
   const artifact = about?.app === "documents" && about.kind === "artifact" ? about.id : undefined;
   const item =
     about?.app === "work" && about.kind === "item"
-      ? (valueOf(work) ?? []).find((w) => w.id === about.id)
+      ? (work ?? []).find((w) => w.id === about.id)
       : undefined;
   if (item) {
     const owner = employees.find((e) => e.id === item.owner_employee_id);
     const chip = chipFor(item.state);
-    const unread = unreadOf(`work:${item.id}`);
     return (
-      <button
-        type="button"
+      <ThreadLink
+        workId={item.id}
         data-testid="handoff"
         title="Open the thread"
-        onClick={() => actions.openThread(item.id)}
         className="mx-auto flex w-full max-w-[520px] items-center gap-2.5 rounded-[14px] border border-hairline bg-sheet px-3 py-2 text-left shadow-resting transition-colors hover:bg-sheet-tint"
       >
         {owner ? (
@@ -248,7 +275,7 @@ function EventCard({ bubble }: { bubble: TimelineBubble }) {
         <StatusChip tone={chip.tone} small>
           {chip.title}
         </StatusChip>
-      </button>
+      </ThreadLink>
     );
   }
   if (artifact) {
@@ -264,7 +291,7 @@ function EventCard({ bubble }: { bubble: TimelineBubble }) {
         type="button"
         data-testid="page-card"
         title="Open the page"
-        onClick={() => actions.openLayer({ kind: "artifact", id: artifact })}
+        onClick={() => nav.openLayer({ kind: "artifact", id: artifact })}
         className="mx-auto flex w-full max-w-[520px] items-center gap-2.5 rounded-[14px] border border-hairline bg-sheet px-3 py-2 text-left shadow-resting transition-colors hover:bg-sheet-tint"
       >
         <span className="grid size-[22px] shrink-0 place-items-center rounded-[7px] bg-indigo/12">
@@ -303,24 +330,40 @@ function MessageRow({
   bubble: TimelineBubble;
   conversation: Conversation;
 }) {
-  const { employees, actions, place } = useWorkspace();
+  const employees = useEmployees();
+  const operations = useOperations();
+  const work = useWork().data;
+  const place = usePlace();
+  const start = useStartThread();
   const nameOf = useAuthorName();
   const [picking, setPicking] = useState(false);
   // A thread starts from a message anywhere but inside a thread.
   const threads = place.kind !== "thread" && !bubble.delivery;
-  const startThread = () =>
-    void actions.startThread({
-      text: bubble.text,
-      author: bubble.author,
-      mentions: valueOf(conversation.messages)?.find((m) => m.id === bubble.id)?.mentions ?? [],
-    });
+  /** A work item owned by whoever the message addressed, in the project it was said in. */
+  const startThread = () => {
+    const mentions = conversation.messages?.find((m) => m.id === bubble.id)?.mentions ?? [];
+    const author = employeeOf(bubble.author);
+    const owner =
+      author ??
+      mentions[0] ??
+      answerersOf(conversation, draft.get(conversation.key).text, employees).to[0] ??
+      operations?.id;
+    if (!owner) return;
+    const projectId =
+      place.kind === "project"
+        ? place.id
+        : place.kind === "thread"
+          ? (work?.find((w) => w.id === place.workId)?.project_id ?? undefined)
+          : undefined;
+    start.mutate({ text: bubble.text, owner, ...(projectId ? { projectId } : {}) });
+  };
   const mine = bubble.mine;
   const speaker = employees.find((e) => e.id === employeeOf(bubble.author));
   const reacts = Boolean(speaker) && !bubble.delivery;
   const replies = !bubble.delivery;
   const align = mine ? "end" : "start";
   const replied = bubble.replyTo
-    ? valueOf(conversation.messages)?.find((m) => m.id === bubble.replyTo)
+    ? conversation.messages?.find((m) => m.id === bubble.replyTo)
     : undefined;
   return (
     <Message align={align} className="group/row items-end gap-2 text-body">
@@ -567,30 +610,36 @@ export function Composer({
   label: string;
   className?: string;
 }) {
-  const state = useWorkspace();
-  const { actions, employees, voice, conversationMode, volatileText, level, voiceError } = state;
-  const { reference } = state;
+  const employees = useEmployees();
+  const voice = useVoice((state) => state.phase);
+  const conversationMode = useVoice((state) => state.conversationMode);
+  const volatileText = useVoice((state) => state.volatileText);
+  const voiceError = useVoice((state) => state.error);
+  const voiceActions = useVoiceActions();
+  const reference = useReference();
+  const sendDraft = useSendDraft();
   const nameOf = useAuthorName();
   const field = useRef<HTMLTextAreaElement>(null);
-  const { draft, replyingTo } = conversation;
+  const { replyingTo } = conversation;
+  const text = useDraft(conversation.key);
+  const setDraft = (next: string) => draft.set(conversation.key, next);
+  const { mentions, to } = answerersOf(conversation, text, employees);
   useEffect(() => {
     if (replyingTo) field.current?.focus();
   }, [replyingTo]);
   const served = true;
   const listening = served && modeOf(voice) === "dictation";
   // Typing "@name" at the end of the draft offers matching employees, as in Slack.
-  const typed = /(?:^|\s)@([^\s@]*)$/.exec(draft)?.[1];
+  const typed = /(?:^|\s)@([^\s@]*)$/.exec(text)?.[1];
   const choose = (employee: Employee) => {
-    conversation.setDraft(draft.replace(/@([^\s@]*)$/, `@${employee.name} `));
+    setDraft(text.replace(/@([^\s@]*)$/, `@${employee.name} `));
     field.current?.focus();
   };
   const matches =
     typed === undefined
       ? []
       : employees.filter(
-          (e) =>
-            !conversation.mentions.includes(e.id) &&
-            e.name.toLowerCase().includes(typed.toLowerCase()),
+          (e) => !mentions.includes(e.id) && e.name.toLowerCase().includes(typed.toLowerCase()),
         );
   // The highlighted match: arrows move it, Enter or Tab chooses it.
   const [active, setActive] = useState(0);
@@ -607,12 +656,9 @@ export function Composer({
     event.preventDefault();
     return true;
   };
-  const answerer =
-    conversation.to.length === 1 ? employees.find((e) => e.id === conversation.to[0]) : undefined;
+  const answerer = to.length === 1 ? employees.find((e) => e.id === to[0]) : undefined;
   // The field names who answers, so no separate "To" row is needed.
-  const answering = conversation.to
-    .flatMap((id) => employees.find((e) => e.id === id)?.name ?? [])
-    .join(", ");
+  const answering = to.flatMap((id) => employees.find((e) => e.id === id)?.name ?? []).join(", ");
   const placeholder = !answering
     ? label
     : label === "Reply"
@@ -628,7 +674,7 @@ export function Composer({
             type="button"
             aria-label="Dismiss"
             className="ml-auto text-ink-3 hover:text-ink-2"
-            onClick={actions.dismissVoiceError}
+            onClick={voiceActions.dismissError}
           >
             <X className="size-3.5" />
           </button>
@@ -657,7 +703,7 @@ export function Composer({
               <button
                 type="button"
                 aria-label="Don't send what you're viewing"
-                onClick={() => actions.setReferencing(false)}
+                onClick={() => ui.setReferencing(false)}
                 className="grid size-4 place-items-center rounded-full text-ink-3 hover:text-ink-2"
               >
                 <X className="size-3" />
@@ -686,33 +732,33 @@ export function Composer({
             )}
           >
             <InputGroupAddon align="inline-start" className="p-0">
-              <AnswererPicker conversation={conversation} />
+              <AnswererPicker conversation={conversation} to={to} />
             </InputGroupAddon>
             <InputGroupTextarea
               ref={field}
               aria-label={label}
               placeholder={listening ? "Listening…" : placeholder}
               rows={1}
-              value={draft}
-              onChange={(event) => conversation.setDraft(event.target.value)}
+              value={text}
+              onChange={(event) => setDraft(event.target.value)}
               aria-controls={matches.length > 0 ? pickerId : undefined}
               aria-activedescendant={highlighted ? `${pickerId}-${highlighted.id}` : undefined}
               onKeyDown={(event) => {
                 if (event.nativeEvent.isComposing || pickWithKeys(event)) return;
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
-                  actions.sendDraft();
+                  sendDraft();
                 }
               }}
               className="max-h-[132px] min-h-7 resize-none p-0 py-[5px] text-body leading-[1.35] text-ink placeholder:text-ink-3"
             />
             <InputGroupAddon align="inline-end" className="gap-1 p-0">
-              <MicButton listening={listening} level={served ? level : 0} />
+              <MicButton listening={listening} />
               {/* An empty field offers talking instead of sending, as in ChatGPT. */}
-              {draft.trim() ? (
+              {text.trim() ? (
                 <InputGroupButton
                   aria-label="Send"
-                  onClick={() => actions.sendDraft()}
+                  onClick={sendDraft}
                   className="aurora size-7 rounded-full p-0 text-white [&_svg]:size-3.5"
                 >
                   <ArrowUp strokeWidth={3} />
@@ -721,7 +767,7 @@ export function Composer({
                 <InputGroupButton
                   aria-label="Talk hands-free"
                   title="Talk hands-free: speak, hear the answer, keep talking"
-                  onClick={() => actions.conversationToggled()}
+                  onClick={voiceActions.conversationToggled}
                   className="aurora size-7 rounded-full p-0 text-white [&_svg]:size-3.5"
                 >
                   <AudioLines strokeWidth={2.6} />
@@ -740,9 +786,15 @@ export function Composer({
  * the message replied to, else whoever spoke last): their face inside the field. Tap to have
  * someone else answer.
  */
-function AnswererPicker({ conversation }: { conversation: Conversation }) {
-  const { employees } = useWorkspace();
-  const to = conversation.to.flatMap((id) => employees.find((e) => e.id === id) ?? []);
+function AnswererPicker({
+  conversation,
+  to: answering,
+}: {
+  conversation: Conversation;
+  to: readonly string[];
+}) {
+  const employees = useEmployees();
+  const to = answering.flatMap((id) => employees.find((e) => e.id === id) ?? []);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -774,9 +826,7 @@ function AnswererPicker({ conversation }: { conversation: Conversation }) {
             <DropdownMenuItem key={employee.id} onClick={() => conversation.pick(employee.id)}>
               <EmployeePortrait employee={employee} size={18} />
               {employee.name}
-              {conversation.to.includes(employee.id) && (
-                <Check className="ml-auto size-3.5 text-ink-2" />
-              )}
+              {answering.includes(employee.id) && <Check className="ml-auto size-3.5 text-ink-2" />}
             </DropdownMenuItem>
           ))}
         </DropdownMenuGroup>
@@ -839,14 +889,16 @@ function MentionPicker({
 }
 
 /** Tap to dictate into the field; the words stay there to edit before sending. */
-function MicButton({ listening, level }: { listening: boolean; level: number }) {
-  const { actions } = useWorkspace();
+function MicButton({ listening }: { listening: boolean }) {
+  const voice = useVoiceActions();
+  // The level changes every frame while listening; only this button redraws for it.
+  const level = useMicLevel(listening);
   return (
     <button
       type="button"
       aria-label={listening ? "Stop dictating" : "Dictate"}
       title={listening ? "Stop dictating" : "Dictate"}
-      onClick={() => actions.micTapped()}
+      onClick={voice.micTapped}
       className={cn(
         "relative grid size-7 place-items-center rounded-full",
         listening ? "text-indigo" : "text-ink-2 hover:text-ink",
@@ -866,8 +918,11 @@ function MicButton({ listening, level }: { listening: boolean; level: number }) 
 
 /** Hands-free conversation: what's happening, a live level, and a way out. */
 function ConversationStrip() {
-  const { voice, level, volatileText, actions } = useWorkspace();
+  const voice = useVoice((state) => state.phase);
+  const volatileText = useVoice((state) => state.volatileText);
+  const actions = useVoiceActions();
   const active = capturing(voice);
+  const level = useMicLevel(active);
   const phase =
     voice.kind === "starting"
       ? "Getting ready…"
@@ -913,7 +968,7 @@ function ConversationStrip() {
           <Hand /> Interrupt
         </DevysButton>
       )}
-      <DevysButton kind="quiet" compact onClick={() => actions.conversationToggled()}>
+      <DevysButton kind="quiet" compact onClick={actions.conversationToggled}>
         <X /> End
       </DevysButton>
     </div>

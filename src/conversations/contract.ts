@@ -1,4 +1,6 @@
-import type { Ref } from "../protocol/ref.ts";
+import { Schema } from "effect";
+import { Ref } from "../protocol/ref.ts";
+import { Timestamp } from "../protocol/time.ts";
 
 /**
  * The shared record of what was said in a DM, a project's channel or a work item's thread. Pi keeps
@@ -6,36 +8,68 @@ import type { Ref } from "../protocol/ref.ts";
  */
 type ConversationKind = "direct" | "project" | "work";
 
-/** `direct:<employee>`, `project:<project>` or `work:<workItem>`. */
+/** `direct:<employee>`, `project:<project>` or `work:<workItem>`: the one rule for a key. */
+export const ConversationKey = Schema.TemplateLiteral([
+  Schema.Literals(["direct", "project", "work"]),
+  ":",
+  Schema.String,
+]).check(Schema.isPattern(/^(direct|project|work):[A-Za-z0-9-]{1,64}$/));
 export type ConversationKey = `${ConversationKind}:${string}`;
 
+const isConversationKey = Schema.is(ConversationKey);
 export const conversationKey = (value: unknown): ConversationKey | undefined =>
-  typeof value === "string" && /^(direct|project|work):[A-Za-z0-9-]{1,64}$/.test(value)
-    ? (value as ConversationKey)
-    : undefined;
+  isConversationKey(value) ? value : undefined;
 
 export const kindOf = (key: ConversationKey) => key.slice(0, key.indexOf(":")) as ConversationKind;
 /** The id a key names: the employee, project or work item. */
 export const idOf = (key: ConversationKey) => key.slice(key.indexOf(":") + 1);
 
-export interface Message {
-  id: string;
-  conversation: ConversationKey;
+/** One entry in a conversation: something someone said, or an event such as a hand-off. */
+export const Message = Schema.Struct({
+  id: Schema.String,
+  conversation: ConversationKey,
   /** `person:<id>`, `employee:<id>` or `system`. */
-  author: string;
-  kind: "message" | "event";
-  text: string;
-  reply_to: string | null;
+  author: Schema.String,
+  kind: Schema.Literals(["message", "event"]),
+  text: Schema.String,
+  reply_to: Schema.NullOr(Schema.String),
   /** Employee ids this message addresses. */
-  mentions: string[];
-  via_voice: boolean;
+  mentions: Schema.Array(Schema.String),
+  via_voice: Schema.Boolean,
   /** The record an event is about: the work item a hand-off card opens, a page, a session. */
-  ref: Ref | null;
-  created_at: string;
-}
+  ref: Schema.NullOr(Ref),
+  created_at: Timestamp,
+});
+export type Message = typeof Message.Type;
+
+/** A message as the owner's clients show it, with the reactions on it. */
+export const ShownMessage = Schema.Struct({
+  ...Message.fields,
+  reactions: Schema.Array(Schema.String),
+});
+export type ShownMessage = typeof ShownMessage.Type;
+
+/** A conversation in the owner's list: its last message and what they haven't read. */
+export const ConversationSummary = Schema.Struct({
+  key: ConversationKey,
+  last: Schema.NullOr(Message),
+  unread: Schema.Int,
+  /** The person follows it: a work thread they hear each milestone of. */
+  following: Schema.Boolean,
+});
+export type ConversationSummary = typeof ConversationSummary.Type;
 
 export const employeeOf = (author: string) =>
   author.startsWith("employee:") ? author.slice("employee:".length) : undefined;
+
+/** `@Name` mentions of the business's employees in a message, longest names first. */
+export function mentionsIn(text: string, employees: readonly { id: string; name: string }[]) {
+  const lower = text.toLowerCase();
+  return [...employees]
+    .sort((a, b) => b.name.length - a.name.length)
+    .filter((employee) => lower.includes(`@${employee.name.toLowerCase()}`))
+    .map((employee) => employee.id);
+}
 
 /** How a message's author is named to an employee, given the business's employees. */
 export const namer = (employees: readonly { id: string; name: string }[]) => (author: string) =>
@@ -64,7 +98,7 @@ export function responders(input: {
   const replied = message.reply_to
     ? history.find((earlier) => earlier.id === message.reply_to)
     : undefined;
-  const unique = (ids: (string | undefined)[]) => [
+  const unique = (ids: readonly (string | undefined)[]) => [
     ...new Set(ids.filter((id): id is string => Boolean(id) && id !== author)),
   ];
   if (!author) {

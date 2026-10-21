@@ -1,4 +1,4 @@
-import { database, type Database } from "../data/database.ts";
+import { database, isoText, type Database } from "../data/database.ts";
 import type { WorkItem, WorkItemState } from "./contract.ts";
 
 const columns = `id, owner_employee_id, title, objective, next_action, wait_condition, due_at, state,
@@ -103,7 +103,7 @@ export const updateWorkItem = (
          wait_condition = CASE WHEN $8::boolean THEN $9 ELSE wait_condition END,
          due_at = CASE WHEN $10::boolean THEN $11::timestamptz ELSE due_at END,
          evidence = CASE WHEN $12::jsonb IS NULL THEN evidence
-           ELSE evidence || jsonb_build_array($12::jsonb || jsonb_build_object('at', now())) END,
+           ELSE evidence || jsonb_build_array($12::jsonb || jsonb_build_object('at', ${isoText("now()")})) END,
          revision = revision + 1,
          updated_at = now()
        WHERE business_id = $1 AND id = $2 AND revision = $3
@@ -142,7 +142,7 @@ export const addEvidence = (
   database(db, (sql) =>
     sql.run(
       `UPDATE work_items SET
-         evidence = evidence || jsonb_build_array($3::jsonb || jsonb_build_object('at', now())),
+         evidence = evidence || jsonb_build_array($3::jsonb || jsonb_build_object('at', ${isoText("now()")})),
          revision = revision + 1, updated_at = now()
        WHERE business_id = $1 AND id = $2
          AND ($4::text IS NULL OR NOT evidence @> jsonb_build_array(jsonb_build_object('source', $4::text)))`,

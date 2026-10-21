@@ -116,29 +116,38 @@ public struct RuntimeState: Equatable, Sendable, Decodable {
 }
 
 public struct InboxEntry: Equatable, Sendable, Decodable, Identifiable {
+    public enum Status: String, Equatable, Sendable, WireEnum { case queued, running, done, failed, unknown }
+
     public let id: String
     public let text: String?
     /// Milliseconds since 1970.
     public let receivedAt: Double
-    public let status: String
+    public let status: Status
 
-    public init(id: String, text: String?, receivedAt: Double, status: String) {
+    public init(id: String, text: String?, receivedAt: Double, status: Status) {
         self.id = id
         self.text = text
         self.receivedAt = receivedAt
         self.status = status
     }
 
+    enum CodingKeys: String, CodingKey {
+        case id, text, status
+        case receivedAt = "received_at"
+    }
+
     public var receivedDate: Date { Date(timeIntervalSince1970: receivedAt / 1000) }
 }
 
 public struct OutboxEntry: Equatable, Sendable, Decodable, Identifiable {
+    /// Uncertain is never shown as sent.
+    public enum Status: String, Equatable, Sendable, WireEnum { case pending, sent, uncertain, cancelled, unknown }
+
     public let id: String
     public let text: String
-    /// `pending`, `sent`, `uncertain` or `cancelled`; uncertain is never shown as sent.
-    public let status: String
+    public let status: Status
 
-    public init(id: String, text: String, status: String) {
+    public init(id: String, text: String, status: Status) {
         self.id = id
         self.text = text
         self.status = status
@@ -200,20 +209,22 @@ public struct MemoryPage: Equatable, Sendable, Decodable {
 
 /// A tapback on an employee's message. Silent: the employee reads it as context next turn.
 public struct Reaction: Equatable, Sendable, Encodable {
-    public let targetId: String
+    public let targetID: String
     public let targetText: String
     public let emoji: String
     public let isOn: Bool
 
-    public init(targetId: String, targetText: String, emoji: String, isOn: Bool) {
-        self.targetId = targetId
+    public init(targetID: String, targetText: String, emoji: String, isOn: Bool) {
+        self.targetID = targetID
         self.targetText = targetText
         self.emoji = emoji
         self.isOn = isOn
     }
 
     enum CodingKeys: String, CodingKey {
-        case targetId, targetText, emoji
+        case emoji
+        case targetID = "target_id"
+        case targetText = "target_text"
         case isOn = "on"
     }
 }
@@ -330,7 +341,7 @@ public indirect enum JSONValue: Equatable, Sendable, Decodable {
     }
 }
 
-public enum WorkItemState: String, Equatable, Sendable, Decodable, CaseIterable {
+public enum WorkItemState: String, Equatable, Sendable, WireEnum {
     case proposed
     case ready
     case inProgress = "in_progress"
@@ -338,6 +349,11 @@ public enum WorkItemState: String, Equatable, Sendable, Decodable, CaseIterable 
     case needsDecision = "needs_decision"
     case completed
     case cancelled
+    /// A state this client does not know yet; shown, never set.
+    case unknown
+
+    /// The states a person sets, in order.
+    public static let settable: [Self] = [.proposed, .ready, .inProgress, .waiting, .needsDecision, .completed, .cancelled]
 
     public var isOpen: Bool { self != .completed && self != .cancelled }
 }
@@ -351,6 +367,11 @@ public struct WorkItemEvidence: Equatable, Sendable, Decodable {
         public init(command: String, exitCode: Int?) {
             self.command = command
             self.exitCode = exitCode
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case command
+            case exitCode = "exit_code"
         }
     }
 
@@ -398,7 +419,8 @@ public struct WorkItemEvidence: Equatable, Sendable, Decodable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case note, commit, check, changes, pullRequest, deploy
+        case note, commit, check, changes, deploy
+        case pullRequest = "pull_request"
         case author = "by"
         case recordedAt = "at"
     }

@@ -42,7 +42,13 @@ async function session(person: string) {
     ).then((response) => response ?? new Response(null, { status: 404 }));
 }
 
-type Employee = { id: string; name: string; role: string; template: string; model: string };
+type Employee = {
+  id: string;
+  name: string;
+  responsibilities: string;
+  template: string;
+  model: string;
+};
 const json = async <T>(response: Response | Promise<Response>) =>
   (await (await response).json()) as T;
 const grantsOf = async (employee: string) =>
@@ -127,7 +133,7 @@ it("members hire from templates, edit employees and the brief, and retire with a
     }),
   );
   expect([growth.name, growth.template, growth.model]).toEqual(["Growth", "growth", "gpt-6.1-sol"]);
-  expect(growth.role.length).toBeGreaterThan(50);
+  expect(growth.responsibilities.length).toBeGreaterThan(50);
 
   await as(`${path}/employees/${growth.id}/profile`, {
     method: "PUT",
@@ -138,7 +144,7 @@ it("members hire from templates, edit employees and the brief, and retire with a
   expect(detail.business.brief).toBe("Scholarships for families.");
   expect(detail.employees.find((e) => e.id === growth.id)).toMatchObject({
     name: "Growth lead",
-    role: "Run the launch PR.",
+    responsibilities: "Run the launch PR.",
   });
 
   const work = await json<{ id: string }>(
@@ -157,7 +163,7 @@ it("members hire from templates, edit employees and the brief, and retire with a
     (
       await as(`${path}/employees/${acme.operations.id}/retire`, {
         method: "POST",
-        body: JSON.stringify({ reassignTo: growth.id }),
+        body: JSON.stringify({ reassign_to: growth.id }),
       })
     ).status,
   ).toBe(409);
@@ -165,13 +171,13 @@ it("members hire from templates, edit employees and the brief, and retire with a
     (
       await as(`${path}/employees/${growth.id}/retire`, {
         method: "POST",
-        body: JSON.stringify({ reassignTo: growth.id }),
+        body: JSON.stringify({ reassign_to: growth.id }),
       })
     ).status,
   ).toBe(400);
   const retired = await as(`${path}/employees/${growth.id}/retire`, {
     method: "POST",
-    body: JSON.stringify({ reassignTo: acme.operations.id }),
+    body: JSON.stringify({ reassign_to: acme.operations.id }),
   });
   expect(retired.status).toBe(200);
   const after = await json<{ employees: Employee[] }>(as(path));
@@ -270,15 +276,19 @@ it("projects have a lead, members, a goal, deadline and budget, and work created
   const create = (projectId: string) =>
     as(`${path}/work`, {
       method: "POST",
-      body: JSON.stringify({ title: "Buy the domain", owner: acme.operations.id, projectId }),
+      body: JSON.stringify({
+        title: "Buy the domain",
+        owner: acme.operations.id,
+        project_id: projectId,
+      }),
     });
   expect((await create("nope")).status).toBe(400);
   const task = await json<{ id: string; project_id: string }>(create(project.id));
   expect(task.project_id).toBe(project.id);
-  const listed = await json<{ workItems: { id: string; project_id: string | null }[] }>(
+  const listed = await json<{ work_items: { id: string; project_id: string | null }[] }>(
     as(`${path}/work`),
   );
-  expect(listed.workItems.find((item) => item.id === task.id)?.project_id).toBe(project.id);
+  expect(listed.work_items.find((item) => item.id === task.id)?.project_id).toBe(project.id);
   // A project references records; work belongs to it rather than being one of its items.
   expect(
     (
@@ -365,19 +375,19 @@ it("Home lists what needs the owner and the work at a glance, and briefs them on
   await Effect.runPromise(grant(db, scope, { capability: list, mode: "ask" }));
   await authorize(bindings, scope, list, {}, { workItemId: asked, conversation: `work:${asked}` });
   type Home = {
-    needsYou: { kind: string; id: string; title: string; conversation: string | null }[];
-    glance: { moving: { id: string }[]; stuck: { id: string }[]; spentCents: number | null };
+    needs_you: { kind: string; id: string; title: string; conversation: string | null }[];
+    glance: { moving: { id: string }[]; stuck: { id: string }[]; spent_cents: number | null };
     since: string | null;
     briefing: { id: string; author: string; text: string } | null;
   };
   const home = await json<Home>(as(`${path}/home`));
-  expect(home.needsYou.map((need) => [need.kind, need.title, need.conversation])).toEqual([
+  expect(home.needs_you.map((need) => [need.kind, need.title, need.conversation])).toEqual([
     ["decision", "Order the domain", `work:${asked}`],
     ["work", "Pick a name", `work:${decide}`],
   ]);
   expect(home.glance.moving.map((item) => item.id).sort()).toEqual([asked, moving].sort());
   expect(home.glance.stuck.map((item) => item.id)).toEqual([late]);
-  expect(home.glance.spentCents).toBeNull();
+  expect(home.glance.spent_cents).toBeNull();
   // The owner has never read the chat with Operations: nothing to brief against.
   expect(home).toMatchObject({ since: null, briefing: null });
 

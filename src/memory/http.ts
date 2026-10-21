@@ -1,8 +1,8 @@
 import { Effect, Schema } from "effect";
-import type { MemoryFactory, PortableRecord } from "./contract.ts";
-import { MemoryError } from "./contract.ts";
-import { ChangeSchema, ImportSchema, Key } from "./schema.ts";
-import { sameOrigin } from "../protocol/http.ts";
+import type { Change, MemoryFactory, PortableRecord } from "./contract.ts";
+import { ClaimPage, MemoryError } from "./contract.ts";
+import { ImportSchema, Key, RememberRequest } from "./schema.ts";
+import { respond, sameOrigin } from "../protocol/http.ts";
 import { readBounded, sha256 } from "../protocol/bytes.ts";
 
 /**
@@ -21,7 +21,7 @@ export async function memoryRoute(
     after = url.searchParams.get("after") ?? undefined;
   try {
     if (request.method === "GET") {
-      if (path === "") return Response.json(await Effect.runPromise(memory.inspect(after)));
+      if (path === "") return respond(ClaimPage, await Effect.runPromise(memory.inspect(after)));
       if (path === "/export") return Response.json(await Effect.runPromise(memory.export(after)));
       return new Response("Not found", { status: 404 });
     }
@@ -34,7 +34,18 @@ export async function memoryRoute(
       new TextDecoder("utf-8", { fatal: true }).decode(await readBounded(request.body, 2_000_000)),
     );
     if (path === "/remember") {
-      const change = Schema.decodeUnknownSync(ChangeSchema)(input);
+      const {
+        valid_from: validFrom,
+        valid_until: validUntil,
+        expected_revision: expectedRevision,
+        ...fields
+      } = Schema.decodeUnknownSync(RememberRequest)(input);
+      const change: Change = {
+        ...fields,
+        ...(validFrom !== undefined ? { validFrom } : {}),
+        ...(validUntil !== undefined ? { validUntil } : {}),
+        ...(expectedRevision !== undefined ? { expectedRevision } : {}),
+      };
       const evidenceId = `web:${await sha256(`${url.origin}:${scope}:${id}`)}`;
       await Effect.runPromise(
         memory.observe([

@@ -12,34 +12,38 @@ import Foundation
                 Employee(
                     id: "ops",
                     name: "Head of Operations",
-                    role: "Coordinates launch work and brings you decisions",
+                    responsibilities: "Coordinates launch work and brings you decisions",
                     template: "operations",
                     avatar: AvatarSpec(palette: .blue, shape: .roundedSquare, seed: 7),
-                    summary: "Updating the launch plan after your note on email"
+                    summary: "Updating the launch plan after your note on email",
+                    model: "claude-opus-5-5"
                 ),
                 Employee(
                     id: "engineering",
                     name: "Engineering",
-                    role: "Builds, verifies and deploys Acme",
+                    responsibilities: "Builds, verifies and deploys Acme",
                     template: "engineering",
                     avatar: AvatarSpec(palette: .green, shape: .hexagon, seed: 3),
-                    summary: "Ready to deploy a preview once GitHub is connected"
+                    summary: "Ready to deploy a preview once GitHub is connected",
+                    model: "claude-opus-5-5"
                 ),
                 Employee(
                     id: "growth",
                     name: "Growth",
-                    role: "Measurement, PR and campaigns",
+                    responsibilities: "Measurement, PR and campaigns",
                     template: "growth",
                     avatar: AvatarSpec(palette: .orange, shape: .blob, seed: 11),
-                    summary: "Waiting on your approval to send the PR inquiry"
+                    summary: "Waiting on your approval to send the PR inquiry",
+                    model: "claude-opus-5-5"
                 ),
                 Employee(
                     id: "business-ops",
                     name: "Business Operations",
-                    role: "Accounts, purchases and suppliers",
+                    responsibilities: "Accounts, purchases and suppliers",
                     template: "business-operations",
                     avatar: AvatarSpec(palette: .purple, shape: .capsule, seed: 5),
-                    summary: "Comparing Workspace plans"
+                    summary: "Comparing Workspace plans",
+                    model: "claude-opus-5-5"
                 )
             ]
         )
@@ -50,10 +54,11 @@ import Foundation
                 Employee(
                     id: "globex-ops",
                     name: "Head of Operations",
-                    role: "Coordinates Globex's growth work",
+                    responsibilities: "Coordinates Globex's growth work",
                     template: "operations",
                     avatar: AvatarSpec(palette: .teal, shape: .circle, seed: 2),
-                    summary: "Watching sign-ups and support"
+                    summary: "Watching sign-ups and support",
+                    model: "claude-opus-5-5"
                 )
             ]
         )
@@ -69,7 +74,6 @@ import Foundation
             stop: { _ in true },
             memory: { _ in MemoryClaim.fixtures },
             conversation: { _, key, _ in .fixture(key) },
-            models: { .fixture },
             projects: { id in id == WorkspaceSnapshot.acmeLaunch.business.id ? Project.fixtures : [] },
             apps: { _ in AppEntry.fixtures }
         )
@@ -125,12 +129,12 @@ import Foundation
             state: RuntimeState(
                 run: nil,
                 inbox: [
-                    InboxEntry(id: "m2", text: "Draft the PR pricing inquiry", receivedAt: 1_760_880_000_000, status: "done"),
-                    InboxEntry(id: "m1", text: "What is blocking launch?", receivedAt: 1_760_870_000_000, status: "done")
+                    InboxEntry(id: "m2", text: "Draft the PR pricing inquiry", receivedAt: 1_760_880_000_000, status: .done),
+                    InboxEntry(id: "m1", text: "What is blocking launch?", receivedAt: 1_760_870_000_000, status: .done)
                 ],
                 outbox: [
-                    OutboxEntry(id: "m2", text: "Draft ready for your review.", status: "sent"),
-                    OutboxEntry(id: "m1", text: "Domain, mailbox and measurement.", status: "sent")
+                    OutboxEntry(id: "m2", text: "Draft ready for your review.", status: .sent),
+                    OutboxEntry(id: "m1", text: "Domain, mailbox and measurement.", status: .sent)
                 ],
                 usage: RuntimeUsage(models: [
                     "gateway/claude-opus-5-5": RuntimeUsage.ModelUsage(
@@ -168,7 +172,7 @@ import Foundation
                     author: author,
                     text: text,
                     replyTo: replyTo,
-                    createdAt: Date(timeIntervalSince1970: 1_760_870_000 + Double(seconds)).formatted(.iso8601),
+                    createdAt: ServerDate.format(Date(timeIntervalSince1970: 1_760_870_000 + Double(seconds))),
                     reactions: reactions
                 )
             }

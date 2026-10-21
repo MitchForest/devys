@@ -45,6 +45,8 @@ package struct Workspace {
         package var isReferencing = true
         /// Counts answered turns in the conversation, so open layers read their records again.
         package var turns = 0
+        /// The app is in front; the 5 s refresh runs only then.
+        package var isActive = true
         package var isSidebarVisible = true
         package var isPaletteOpen = false
         /// The Head of Operations' runtime state.
@@ -126,6 +128,8 @@ package struct Workspace {
         case sidebarToggled
         case paletteToggled(Bool)
         case refreshTapped
+        /// The scene became active, or left the foreground.
+        case activeChanged(Bool)
         case accountLoaded(Account)
         case detailLoaded(BusinessDetail)
         case tick
@@ -217,6 +221,7 @@ package struct Workspace {
                 openConversation(&state)
 
             case .tick:
+                guard state.isActive else { return }
                 loadStatus(state)
                 loadWork(state)
                 refreshConversations(state)
@@ -278,13 +283,14 @@ package struct Workspace {
             case .paletteToggled(let open):
                 state.isPaletteOpen = open
 
+            case .activeChanged(let isActive):
+                guard isActive != state.isActive else { return }
+                state.isActive = isActive
+                // Back in front: catch up at once rather than at the next tick.
+                if isActive { refresh(state) }
+
             case .refreshTapped:
-                loadAccount()
-                refreshTeam(state)
-                loadStatus(state)
-                loadMemory(state)
-                loadWork(state)
-                refreshConversations(state)
+                refresh(state)
 
             case .statusLoaded(let scope, let snapshot):
                 guard scope.businessID == state.businessID else { return }
@@ -383,12 +389,19 @@ extension Workspace {
         state.preferences = Spawn(preferences)
     }
 
+    /// Everything the workspace shows, read again.
+    func refresh(_ state: State) {
+        loadAccount()
+        refreshTeam(state)
+        loadStatus(state)
+        loadMemory(state)
+        loadWork(state)
+        refreshConversations(state)
+    }
+
     func loadFailed(_ error: DevysHTTPError, memory: Bool, state: inout State) {
-        if error == .unauthorized {
-            let session = session
-            store.addTask { await session.expire() }
-            return
-        }
+        // The session hub has signed the device out (any call's 401 does); sign-in replaces this.
+        if error == .unauthorized { return }
         let message = Self.message(for: error)
         if memory {
             state.memory = .failed(message)

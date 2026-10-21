@@ -17,7 +17,7 @@ struct ChatTimelineTests {
             text: "m\(id)",
             replyTo: replyTo,
             ref: kind == .event ? .workItem("c1") : nil,
-            createdAt: start.addingTimeInterval(seconds).formatted(.iso8601)
+            createdAt: ServerDate.format(start.addingTimeInterval(seconds))
         )
     }
 
@@ -79,8 +79,8 @@ struct ChatTimelineTests {
         state.snapshot = .acmeLaunch
         let idle = EmployeeStatus(state: RuntimeState(run: nil, inbox: [], outbox: []))
         let running = EmployeeStatus(state: RuntimeState(run: .init(id: "r", stopped: false, deadline: nil), inbox: [], outbox: []))
-        let unfinished = EmployeeStatus(state: RuntimeState(run: nil, inbox: [InboxEntry(id: "m", text: "Go", receivedAt: 1, status: "queued")], outbox: []))
-        let failed = EmployeeStatus(state: RuntimeState(run: nil, inbox: [InboxEntry(id: "m", text: "Go", receivedAt: 1, status: "failed")], outbox: []))
+        let unfinished = EmployeeStatus(state: RuntimeState(run: nil, inbox: [InboxEntry(id: "m", text: "Go", receivedAt: 1, status: .queued)], outbox: []))
+        let failed = EmployeeStatus(state: RuntimeState(run: nil, inbox: [InboxEntry(id: "m", text: "Go", receivedAt: 1, status: .failed)], outbox: []))
         state.statuses = ["engineering": running, "growth": unfinished, "business-ops": failed]
         #expect(state.isWorking("engineering") && state.isWorking("growth"))
         #expect(!state.isWorking("business-ops"))

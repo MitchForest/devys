@@ -6,10 +6,15 @@ import {
   GitBranch,
   MessageSquareQuote,
 } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { api, type FileEntry } from "../app/api.ts";
+import { useQuery } from "@tanstack/react-query";
+import { useRef, useState, type ReactNode } from "react";
+import { api } from "../app/api.ts";
+import { useArtifacts, useBusinessId, useProjects, useWork } from "../app/data.ts";
 import { chipFor, isOpen } from "../app/names.ts";
-import { layerOfRef, useWorkspace, valueOf, type Layer } from "../app/workspace.tsx";
+import { layerOfRef, useLayers, useNav, type Layer } from "../app/navigation.ts";
+import { keys, problemOf } from "../app/query.ts";
+import { useUi } from "../app/ui.ts";
+import { useAsk } from "../app/workspace.tsx";
 import { DevysButton } from "../design/buttons.tsx";
 import { EmptyNote, StatusChip } from "../design/primitives.tsx";
 import { ArtifactFrame } from "../pages/artifact.tsx";
@@ -20,16 +25,19 @@ import { cn } from "@/lib/utils";
 
 /** The layer on top of the right panel. */
 export function LayerView({ layer }: { layer: Layer }) {
-  const { businessId, turns } = useWorkspace();
+  const businessId = useBusinessId();
+  const turns = useUi((state) => state.turns);
+  const { updatedBy } = useLayers();
   switch (layer.kind) {
     case "artifact":
-      return <ArtifactLayer id={layer.id} updatedBy={layer.updatedBy} />;
+      return <ArtifactLayer id={layer.id} updatedBy={updatedBy} />;
     case "file":
       return (
         <Askable>
           <FileView
             // A finished turn reads the file again: an employee may have just changed it.
             key={`${layer.path}:${turns}`}
+            turn={turns}
             businessId={businessId}
             file={{ name: layer.path.split("/").at(-1)!, path: layer.path, kind: "file", size: 0 }}
           />
@@ -53,7 +61,7 @@ export function LayerView({ layer }: { layer: Layer }) {
  * owner changes things by asking the employee rather than by editing.
  */
 function Askable({ children }: { children: ReactNode }) {
-  const { actions } = useWorkspace();
+  const ask = useAsk();
   const box = useRef<HTMLDivElement>(null);
   const [offer, setOffer] = useState<{ text: string; x: number; y: number }>();
   const look = () => {
@@ -77,7 +85,7 @@ function Askable({ children }: { children: ReactNode }) {
           type="button"
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => {
-            actions.ask(offer.text);
+            ask(offer.text);
             setOffer(undefined);
             window.getSelection()?.removeAllRanges();
           }}
@@ -96,7 +104,8 @@ function Askable({ children }: { children: ReactNode }) {
  * conversation replaces the one on screen and says who changed it.
  */
 function ArtifactLayer({ id, updatedBy }: { id: string; updatedBy?: string | undefined }) {
-  const { artifacts, actions } = useWorkspace();
+  const artifacts = useArtifacts();
+  const nav = useNav();
   const current = artifacts.find((a) => a.id === id);
   const versions = current
     ? artifacts
@@ -106,7 +115,7 @@ function ArtifactLayer({ id, updatedBy }: { id: string; updatedBy?: string | und
   const at = versions.findIndex((a) => a.id === id);
   const step = (by: number) => {
     const next = versions[at + by];
-    if (next) actions.replaceLayer({ kind: "artifact", id: next.id });
+    if (next) nav.replaceLayer({ kind: "artifact", id: next.id });
   };
   return (
     <div className="flex h-full flex-col">
@@ -157,23 +166,17 @@ const repositories = "repos";
 const worktrees = "worktrees";
 
 /** Folders and files under a path, newest listing on each visit. */
-function useFolder(path: string | null) {
-  const { businessId } = useWorkspace();
-  const [listing, setListing] = useState<{ root: string; path: string; entries: FileEntry[] }>();
-  const [problem, setProblem] = useState<string>();
-  useEffect(() => {
-    let live = true;
-    setProblem(undefined);
-    api.files(businessId, path ?? undefined).then(
-      (result) => live && setListing(result),
-      (error: unknown) =>
-        live && setProblem(error instanceof Error ? error.message : "Files are unavailable."),
-    );
-    return () => {
-      live = false;
-    };
-  }, [businessId, path]);
-  return { listing, problem };
+function useFolder(path: string | null, enabled = true) {
+  const businessId = useBusinessId();
+  const folder = useQuery({
+    queryKey: keys.folder(businessId, path),
+    queryFn: () => api.files(businessId, path ?? undefined),
+    enabled,
+  });
+  return {
+    listing: folder.data,
+    problem: folder.isError ? problemOf(folder.error, "Files are unavailable.") : undefined,
+  };
 }
 
 /**
@@ -181,11 +184,12 @@ function useFolder(path: string | null) {
  * belong to Code and never show here.
  */
 function DocumentsApp() {
-  const { artifacts, projects, actions } = useWorkspace();
+  const artifacts = useArtifacts();
+  const nav = useNav();
   const [folder, setFolder] = useState<string | null>(null);
   const [project, setProject] = useState<string>();
   const { listing, problem } = useFolder(folder);
-  const all = valueOf(projects) ?? [];
+  const all = useProjects().data ?? [];
   const chosen = all.find((p) => p.id === project);
   const kept = (chosen?.items ?? []).map((item) => ({ id: item.id, layer: layerOfRef(item.ref) }));
   const pages = artifacts
@@ -245,7 +249,7 @@ function DocumentsApp() {
                 icon={<FileText className="size-4 text-indigo" />}
                 title={page.filename.replace(/\.html$/, "")}
                 detail={new Date(page.created_at).toLocaleDateString()}
-                open={() => actions.openLayer({ kind: "artifact", id: page.id })}
+                open={() => nav.openLayer({ kind: "artifact", id: page.id })}
               />
             ))}
           </Group>
@@ -259,7 +263,7 @@ function DocumentsApp() {
                   icon={<FileText className="size-4 text-ink-3" />}
                   title={item.path.split("/").at(-1)!}
                   detail={item.path}
-                  open={() => actions.openLayer({ kind: "file", path: item.path })}
+                  open={() => nav.openLayer({ kind: "file", path: item.path })}
                 />
               ))}
             </Group>
@@ -297,7 +301,7 @@ function DocumentsApp() {
                   open={() =>
                     entry.kind === "directory"
                       ? setFolder(entry.path)
-                      : actions.openLayer({ kind: "file", path: entry.path })
+                      : nav.openLayer({ kind: "file", path: entry.path })
                   }
                 />
               ))
@@ -314,19 +318,17 @@ function DocumentsApp() {
  * and a coding session the owner drives from the start.
  */
 function CodeApp() {
-  const { work, actions, businessId } = useWorkspace();
+  const work = useWork().data;
+  const nav = useNav();
+  const businessId = useBusinessId();
   const [starting, setStarting] = useState(false);
-  const [withSessions, setWithSessions] = useState<string[]>([]);
-  useEffect(() => {
-    api
-      .codingWork(businessId)
-      .then((result) => setWithSessions(result.work))
-      .catch(() => setWithSessions([]));
-  }, [businessId]);
+  const withSessions =
+    useQuery({ queryKey: keys.codingWork(businessId), queryFn: () => api.codingWork(businessId) })
+      .data?.work ?? [];
   const { listing: root } = useFolder(null);
-  const { listing } = useFolder(root ? `${root.root}/${repositories}` : null);
+  const { listing } = useFolder(root ? `${root.root}/${repositories}` : null, Boolean(root));
   const repos = root ? (listing?.entries ?? []).filter((entry) => entry.kind === "repository") : [];
-  const coding = (valueOf(work) ?? [])
+  const coding = (work ?? [])
     .filter((item) => withSessions.includes(item.id))
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
   return (
@@ -363,7 +365,7 @@ function CodeApp() {
                     {chip.title}
                   </StatusChip>
                 }
-                open={() => actions.openThread(item.id)}
+                open={() => nav.openThread(item.id)}
               />
             );
           })}

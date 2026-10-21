@@ -1,0 +1,40 @@
+{
+  "conversations": [
+    {
+      "key": "direct:00000000-0000-4000-8000-000000000003",
+      "last": {
+        "id": "00000000-0000-4000-8000-000000000010",
+        "conversation": "direct:00000000-0000-4000-8000-000000000003",
+        "author": "person:00000000-0000-4000-8000-000000000001",
+        "kind": "message",
+        "text": "What's left before the launch? @Ada please check the site.",
+        "reply_to": null,
+        "mentions": [
+          "00000000-0000-4000-8000-000000000004"
+        ],
+        "via_voice": false,
+        "ref": null,
+        "created_at": "2026-01-01T00:00:00.000Z"
+      },
+      "unread": 0,
+      "following": false
+    },
+    {
+      "key": "work:00000000-0000-4000-8000-000000000008",
+      "last": {
+        "id": "00000000-0000-4000-8000-000000000011",
+        "conversation": "work:00000000-0000-4000-8000-000000000008",
+        "author": "system",
+        "kind": "event",
+        "text": "Ada started a coding session.",
+        "reply_to": null,
+        "mentions": [],
+        "via_voice": false,
+        "ref": "devys:work/item/00000000-0000-4000-8000-000000000008",
+        "created_at": "2026-01-01T00:00:00.000Z"
+      },
+      "unread": 1,
+      "following": true
+    }
+  ]
+}

@@ -27,7 +27,7 @@ export interface CodingDependencies {
   evidence(
     scope: Scope,
     workItemId: string,
-    entry: { note: string; commit: string; changes?: string; pullRequest?: string },
+    entry: { note: string; commit: string; changes?: string; pull_request?: string },
   ): Promise<void>;
   /** Commits this work item's evidence names (accepted, checked or deployed): rollback targets. */
   knownCommits(scope: Scope, workItemId: string): Promise<string[]>;
@@ -342,7 +342,7 @@ export function codingCapabilities(dependencies: CodingDependencies) {
           yield* rpc(() =>
             dependencies.evidence(scope, workItemId, {
               commit: published.commit,
-              pullRequest: published.pullRequest,
+              pull_request: published.pullRequest,
               note: `Published ${published.commit.slice(0, 12)} to ${published.branch} on github.com/${published.repository} (repository ${published.repositoryId}), pull request into ${published.base}: ${published.pullRequest}`,
             }),
           );

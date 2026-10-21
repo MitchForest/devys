@@ -1,3 +1,4 @@
+import type { Mutable } from "effect/Types";
 /**
  * Terminal sessions on the trusted Mac host (local mode; .docs/COMPONENTS.md#terminal). Each is
  * a PTY running the owner's login shell (or a coding agent's own CLI resumed on its session) in
@@ -53,7 +54,7 @@ const event = (message: ServerMessage) =>
   frame(1, new TextEncoder().encode(JSON.stringify(message)));
 
 interface Live {
-  session: TerminalSession;
+  session: Mutable<TerminalSession>;
   businessId: string;
   pty: Pty;
   /** The most recent output; `start` is the offset of its first byte. */
@@ -77,14 +78,14 @@ export function terminalsHost(
     const command = request.resume
       ? options.resume(request.resume)
       : { argv: [options.shell, "-l"], env: options.env };
-    const session: TerminalSession = {
+    const session: Mutable<TerminalSession> = {
       id,
       title: request.title.slice(0, 120),
       cwd: request.cwd,
-      codingSessionId: request.codingSessionId ?? null,
+      coding_session_id: request.codingSessionId ?? null,
       cols: request.cols,
       rows: request.rows,
-      startedAt: new Date().toISOString(),
+      started_at: new Date().toISOString(),
       offset: 0,
       writer: null,
       exit: null,

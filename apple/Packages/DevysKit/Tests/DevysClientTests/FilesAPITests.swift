@@ -41,7 +41,7 @@ struct FilesAPITests {
             .saveFile(Self.session, businessID: "b", path: "/d/plan.md", content: "# Mine\n", expectedRevision: "r1")
         #expect(result == .conflict(FileText(path: "/d/plan.md", content: "# Newer\n", revision: "r2")))
         let sent = try #require(try await recorder.requests.last?.httpBody.flatMap { try JSONSerialization.jsonObject(with: $0) as? [String: Any] })
-        #expect(sent["expectedRevision"] as? String == "r1")
+        #expect(sent["expected_revision"] as? String == "r1")
     }
 
     @Test("Bytes come with their revision and save over it; a derived copy overwrites")
@@ -56,7 +56,7 @@ struct FilesAPITests {
         let request = try #require(await recorder.requests.last)
         #expect(request.httpMethod == "PUT")
         #expect(request.httpBody == Data("PK2".utf8))
-        #expect(request.url?.query == "path=/d/budget.xlsx&expectedRevision=r1")
+        #expect(request.url?.query == "path=/d/budget.xlsx&expected_revision=r1")
         let stale = try await api(status: 409, body: ##"{"conflict":true}"##, recorder: recorder)
             .saveFileBytes(Self.session, businessID: "b", path: "/d/budget.xlsx", data: Data(), expected: .revision("r1"))
         #expect(stale == .conflict(nil))

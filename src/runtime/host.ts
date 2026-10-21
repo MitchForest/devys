@@ -15,7 +15,7 @@ import { conversationIn, conversationOf } from "./sessions.ts";
 /** The employee while it and its business are active. */
 export interface ActiveEmployee {
   name: string;
-  role: string;
+  responsibilities: string;
   businessName: string;
   brief: string;
   paused: boolean;
@@ -90,7 +90,7 @@ export function toolHost(deps: {
     const team = employee.colleagues.length
       ? ` Your colleagues: ${employee.colleagues.join("; ")}. To ask one, write @ and their name in your reply; their answer comes back to you. Hand over lasting work as a work item they own.`
       : "";
-    return `You are ${employee.name} at ${employee.businessName}, an employee operated by Devys.${about} Your responsibilities: ${employee.role}${team} Work toward the business's goals and the owner's requests. ${deps.workplace}`;
+    return `You are ${employee.name} at ${employee.businessName}, an employee operated by Devys.${about} Your responsibilities: ${employee.responsibilities}${team} Work toward the business's goals and the owner's requests. ${deps.workplace}`;
   }
 
   /** The calling tool's session decides which input, and so which work item, it acts for. */

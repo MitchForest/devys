@@ -40,7 +40,7 @@ extension Workspace.State {
     /// its inbox has unfinished messages. The same rule as the web's `workingOf`.
     package func isWorking(_ employeeID: String) -> Bool {
         let status = statuses[employeeID]
-        let unfinished = status?.state.inbox.contains { $0.status != "done" && $0.status != "failed" } ?? false
+        let unfinished = status?.state.inbox.contains { $0.status == .queued || $0.status == .running } ?? false
         let answering = main?.awaiting.contains(employeeID) == true
         return status?.isRunning == true || answering || unfinished
     }
@@ -357,8 +357,8 @@ extension Workspace {
     func toggleReaction(_ emoji: String, on messageID: String, in key: ConversationKey, state: inout State) {
         guard let message = state.conversation(key)?.message(messageID), let author = message.employeeID, !message.isEvent else { return }
         let removing = message.reactions.contains(emoji)
-        let changes = message.reactions.map { Reaction(targetId: message.id, targetText: message.text, emoji: $0, isOn: false) }
-            + (removing ? [] : [Reaction(targetId: message.id, targetText: message.text, emoji: emoji, isOn: true)])
+        let changes = message.reactions.map { Reaction(targetID: message.id, targetText: message.text, emoji: $0, isOn: false) }
+            + (removing ? [] : [Reaction(targetID: message.id, targetText: message.text, emoji: emoji, isOn: true)])
         update(key, &state) { conversation in
             guard var messages = conversation.messages.value, let index = messages.firstIndex(where: { $0.id == messageID }) else { return }
             messages[index].reactions = removing ? [] : [emoji]

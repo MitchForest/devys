@@ -8,7 +8,9 @@ import {
   Search,
   type LucideIcon,
 } from "lucide-react";
-import { useWorkspace, valueOf, type Layer, type Place } from "../app/workspace.tsx";
+import { useApps, useEmployees, useProjects, useWork } from "../app/data.ts";
+import { useNav, type Layer, type Place } from "../app/navigation.ts";
+import { ui, useUi } from "../app/ui.ts";
 import { Command, CommandEmpty, CommandItem, CommandList } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Command as CommandPrimitive } from "cmdk";
@@ -24,7 +26,12 @@ interface Target {
 
 /** ⌘K: jump to any conversation, thread or app in the current business by typing. */
 export function CommandPalette() {
-  const { paletteOpen, actions, projects, employees, work, apps } = useWorkspace();
+  const paletteOpen = useUi((state) => state.paletteOpen);
+  const nav = useNav();
+  const projects = useProjects().data;
+  const employees = useEmployees();
+  const work = useWork().data;
+  const apps = useApps().data;
   const targets: Target[] = [
     {
       id: "home",
@@ -33,7 +40,7 @@ export function CommandPalette() {
       icon: House,
       go: { place: { kind: "home" } },
     },
-    ...(valueOf(projects) ?? []).map((p) => ({
+    ...(projects ?? []).map((p) => ({
       id: p.id,
       title: p.name,
       detail: "Project",
@@ -47,7 +54,7 @@ export function CommandPalette() {
       icon: MessageCircle,
       go: { place: { kind: "direct", employeeId: e.id } as Place },
     })),
-    ...(valueOf(apps) ?? [])
+    ...(apps ?? [])
       .filter((app) => app.installed && app.kind === "business")
       .map((app) => ({
         id: `app-${app.id}`,
@@ -56,7 +63,7 @@ export function CommandPalette() {
         icon: app.id === "code" ? Code2 : FileText,
         go: { layer: { kind: "app", app: app.id } as Layer },
       })),
-    ...(valueOf(work) ?? []).map((item) => ({
+    ...(work ?? []).map((item) => ({
       id: item.id,
       title: item.title,
       detail: "Thread",
@@ -65,13 +72,13 @@ export function CommandPalette() {
     })),
   ];
   const go = (target: Target["go"]) => {
-    if ("place" in target) actions.selectPlace(target.place);
-    else if ("thread" in target) actions.openThread(target.thread);
-    else actions.openLayer(target.layer);
-    actions.setPaletteOpen(false);
+    if ("place" in target) nav.selectPlace(target.place);
+    else if ("thread" in target) nav.openThread(target.thread);
+    else nav.openLayer(target.layer);
+    ui.setPaletteOpen(false);
   };
   return (
-    <Dialog open={paletteOpen} onOpenChange={actions.setPaletteOpen}>
+    <Dialog open={paletteOpen} onOpenChange={ui.setPaletteOpen}>
       <DialogContent
         showCloseButton={false}
         className="top-[90px] w-[520px] max-w-[calc(100%-2rem)] translate-y-0 gap-0 overflow-hidden rounded-card! bg-sheet p-0 shadow-raised ring-0 sm:max-w-[520px]"

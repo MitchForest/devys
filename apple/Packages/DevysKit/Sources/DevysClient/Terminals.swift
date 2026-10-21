@@ -10,13 +10,21 @@ public struct TerminalInfo: Equatable, Sendable, Decodable, Identifiable, Hashab
     public let id: String
     public let title: String
     public let cwd: String
+    /// The coding session it resumed, when it did.
+    public let codingSessionID: String?
     public let exit: Exit?
 
-    public init(id: String, title: String, cwd: String, exit: Exit? = nil) {
+    public init(id: String, title: String, cwd: String, codingSessionID: String? = nil, exit: Exit? = nil) {
         self.id = id
         self.title = title
         self.cwd = cwd
+        self.codingSessionID = codingSessionID
         self.exit = exit
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, cwd, exit
+        case codingSessionID = "coding_session_id"
     }
 }
 
@@ -50,11 +58,13 @@ extension DevysHTTPClient {
     }
 
     /// The WebSocket request for a terminal, resuming from `offset`, with the device's bearer token.
-    public func terminalSocket(_ session: DeviceSession, businessID: String, terminalID: String, offset: Int) -> URLRequest {
-        var components = URLComponents(url: session.server.appending(path: "api/businesses/\(businessID)/terminals/\(terminalID)/socket"), resolvingAgainstBaseURL: false)!
+    public func terminalSocket(_ session: DeviceSession, businessID: String, terminalID: String, offset: Int) throws -> URLRequest {
+        let address = session.server.appending(path: "api/businesses/\(businessID)/terminals/\(terminalID)/socket")
+        guard var components = URLComponents(url: address, resolvingAgainstBaseURL: false) else { throw DevysHTTPError.invalidResponse }
         components.scheme = components.scheme == "https" ? "wss" : "ws"
         components.queryItems = [URLQueryItem(name: "offset", value: String(offset))]
-        var request = URLRequest(url: components.url!)
+        guard let url = components.url else { throw DevysHTTPError.invalidResponse }
+        var request = URLRequest(url: url)
         request.setValue("Bearer \(session.token)", forHTTPHeaderField: "authorization")
         return request
     }
@@ -84,7 +94,7 @@ public struct TerminalsClient: Sendable {
             list: { business in try await hub.call { api, session in try await api.terminals(session, businessID: business) } },
             open: { business, target in try await hub.call { api, session in try await api.openTerminal(session, businessID: business, target: target) } },
             close: { business, id in try await hub.call { api, session in try await api.closeTerminal(session, businessID: business, terminalID: id) } },
-            socket: { business, id, offset in try await hub.call { api, session in api.terminalSocket(session, businessID: business, terminalID: id, offset: offset) } }
+            socket: { business, id, offset in try await hub.call { api, session in try api.terminalSocket(session, businessID: business, terminalID: id, offset: offset) } }
         )
     }
 

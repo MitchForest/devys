@@ -13,7 +13,7 @@ GlobalWorkerOptions.workerSrc = new URL(
 
 export interface PdfRegion {
   page: number;
-  rects: { x: number; y: number; width: number; height: number }[];
+  rects: readonly { x: number; y: number; width: number; height: number }[];
 }
 
 export function PdfDocument({

@@ -14,9 +14,9 @@ test("the owner sees and changes an employee's model on its desk", async ({ page
   const usage = {
     input: 1_000,
     output: 400,
-    cacheRead: 3_000,
-    cacheWrite: 0,
-    totalTokens: 4_400,
+    cache_read: 3_000,
+    cache_write: 0,
+    total_tokens: 4_400,
   };
   await page.route("**/status", (route) =>
     route.fulfill({
@@ -32,8 +32,8 @@ test("the owner sees and changes an employee's model on its desk", async ({ page
                 cost: {
                   input: 0.1,
                   output: 0.3,
-                  cacheRead: 0.02,
-                  cacheWrite: 0,
+                  cache_read: 0.02,
+                  cache_write: 0,
                   total: 0.42,
                 },
               },
@@ -46,7 +46,7 @@ test("the owner sees and changes an employee's model on its desk", async ({ page
   );
   try {
     await signIn(page, sql, owner.person);
-    await sidebar(page).getByRole("button", { name: "Head of Operations" }).click();
+    await sidebar(page).getByRole("link", { name: "Head of Operations" }).click();
     await page.getByRole("button", { name: /^Show side panel/ }).click();
     const desk = page.getByRole("region", {
       name: "Head of Operations's desk",

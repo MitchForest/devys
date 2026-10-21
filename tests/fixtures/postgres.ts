@@ -21,7 +21,7 @@ export async function business(name = "Test business") {
       name,
       brief: "",
       model: "claude-opus-5-5",
-      operations: { name: "Head of Operations", role: "Runs the business day to day." },
+      operations: { name: "Head of Operations", responsibilities: "Runs the business day to day." },
     }),
   );
   await Effect.runPromise(install(db, created.business.id, defaultApps));

@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { api } from "../src/web/app/api.ts";
 import { timeline } from "../src/web/app/timeline.ts";
-import { mentionsIn } from "../src/web/app/conversation.ts";
+import { mentionsIn, type ShownMessage } from "../src/conversations/contract.ts";
 import { layout } from "../src/web/shell/layout.ts";
 import { takeoverTitle } from "../src/web/app/names.ts";
-import type { ShownMessage } from "../src/web/app/api.ts";
 
 const me = "person:p1";
 const message = (
@@ -187,21 +187,21 @@ describe("a coding outcome at a glance", () => {
           note: "failed",
           at,
           commit: "a".repeat(40),
-          check: { command: "bun test", exitCode: 1 },
+          check: { command: "bun test", exit_code: 1 },
         },
         {
           by: "devys",
           note: "passed",
           at,
           commit: "b".repeat(40),
-          check: { command: "bun test", exitCode: 0 },
+          check: { command: "bun test", exit_code: 0 },
         },
         {
           by: "employee:e1",
           note: "Published",
           at,
           commit: "b".repeat(40),
-          pullRequest: "https://github.com/acme/site/pull/12",
+          pull_request: "https://github.com/acme/site/pull/12",
         },
       ]),
     ).toEqual({
@@ -245,5 +245,18 @@ describe("where coding work is live", () => {
       { stage: "production", url: "https://acme.example", live: true, commit: "aaaaaaa" },
       { stage: "preview", url: "https://b.example", live: false, commit: "bbbbbbb" },
     ]);
+  });
+});
+
+describe("the web client's API", () => {
+  it("decodes each answer with its route's schema and names the route when it drifts", async () => {
+    const answer = (body: unknown) =>
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json(body));
+    const person = { id: "p1", display_name: "Owner" };
+    answer({ person, businesses: [] });
+    expect(await api.me()).toEqual({ person, businesses: [] });
+    answer({ person: { id: 1 }, businesses: [] });
+    await expect(api.me()).rejects.toThrow(/\/api\/me was not in the expected shape/);
+    vi.restoreAllMocks();
   });
 });

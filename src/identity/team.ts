@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { atomically, type Database } from "../data/database.ts";
-import type { RoleTemplateId } from "../protocol/roles.ts";
+import { hireableRoleIds, type RoleTemplateId } from "../protocol/roles.ts";
 import type { Scope } from "./contract.ts";
 import { activeEmployee, createEmployee } from "./service.ts";
 
@@ -87,8 +87,9 @@ export function hireInput(
   input: { template?: unknown; name?: unknown; responsibilities?: unknown; model?: unknown },
   hiring: Pick<Hiring, "defaultModel" | "isModel">,
 ): Hire | string {
-  const template = roleTemplate(input.template ?? "custom");
-  if (!template || template.id === "operations") return "Choose a role template";
+  const id = hireableRoleIds.find((hireable) => hireable === (input.template ?? "custom"));
+  const template = id && roleTemplate(id);
+  if (!template) return "Choose a role template";
   const text = (value: unknown, max: number) =>
     typeof value === "string" && value.trim() ? value.trim().slice(0, max) : undefined;
   const name = text(input.name, 80) ?? (template.name || undefined);
@@ -106,7 +107,7 @@ export function hire(db: Database, businessId: string, input: Hire, hiring: Pick
     const employee = await Effect.runPromise(
       createEmployee(db, businessId, {
         name: input.name,
-        role: input.responsibilities,
+        responsibilities: input.responsibilities,
         model: input.model,
         template: input.template,
       }),

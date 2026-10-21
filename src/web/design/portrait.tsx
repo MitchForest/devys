@@ -1,4 +1,4 @@
-import type { Business, Employee, Look } from "../app/api.ts";
+import type { Business, Employee, Look } from "../../identity/contract.ts";
 import { BusinessTile, Face, faceFor, tileGradients, tintFor, type Mood } from "./face.tsx";
 import { cn } from "@/lib/utils";
 

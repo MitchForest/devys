@@ -1,20 +1,20 @@
-public import ComposableArchitecture2
+import ComposableArchitecture2
 import DevysCharacter
 import DevysClient
 import DevysDesignSystem
 import PhotosUI
-public import SwiftUI
+import SwiftUI
 import UniformTypeIdentifiers
 
-/// Settings: a native Settings window on macOS, a sheet on iPhone and iPad.
-public struct PreferencesScreen: View {
+/// Settings: in the Settings window on macOS (`SettingsWindow`), a sheet on iPhone and iPad.
+struct PreferencesScreen: View {
     let store: StoreOf<Preferences>
     var onDone: (() -> Void)?
     #if os(iOS)
         @State private var path: [PreferencesSection] = []
     #endif
 
-    public init(store: StoreOf<Preferences>) {
+    init(store: StoreOf<Preferences>) {
         self.store = store
     }
 
@@ -23,7 +23,7 @@ public struct PreferencesScreen: View {
         self.onDone = onDone
     }
 
-    public var body: some View {
+    var body: some View {
         #if os(macOS)
             TabView(selection: Binding(get: { store.section }, set: { store.send(.sectionSelected($0)) })) {
                 ForEach(PreferencesSection.allCases, id: \.self) { section in
@@ -372,7 +372,7 @@ struct LookEditor: View {
                 ForEach(BusinessTile.Tint.allCases, id: \.self) { tint in
                     Button { set(.emoji(currentEmoji, tint: tint.rawValue)) } label: {
                         Circle()
-                            .fill(BusinessTile.colors(for: tint).first!)
+                            .fill(BusinessTile.colors(for: tint).light)
                             .frame(width: 20, height: 20)
                             .overlay { Circle().strokeBorder(DevysColors.sheet, lineWidth: isEmojiTint(tint) ? 2.5 : 0) }
                             .overlay { Circle().strokeBorder(DevysColors.ink, lineWidth: isEmojiTint(tint) ? 1 : 0).padding(-2) }

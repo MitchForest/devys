@@ -18,17 +18,24 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { api, type StartingRole } from "../app/api.ts";
+import type { InstalledApp } from "../../apps/contract.ts";
+import type { Business, Device, Employee, Look, SettableLook } from "../../identity/contract.ts";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useApps, useBusinessId, useBusinesses, useOwnerPhoto, usePerson } from "../app/data.ts";
 import {
-  api,
-  type AppEntry,
-  type Business,
-  type Device,
-  type Employee,
-  type Look,
-  type SettableLook,
-  type StartingRole,
-} from "../app/api.ts";
-import { useWorkspace, valueOf } from "../app/workspace.tsx";
+  useCreateBusiness,
+  useInstallApp,
+  useOwnerPhotoChange,
+  usePinApp,
+  useSetBusinessLook,
+  useSetEmployeeLook,
+  useSignOut,
+  useUpdateBusiness,
+  useUploadLookPhoto,
+} from "../app/mutations.ts";
+import { useNav, useSettingsSection } from "../app/navigation.ts";
+import { keys, queries } from "../app/query.ts";
 import { DriveConnection } from "../pages/drive.tsx";
 import { useTheme, type Theme } from "../app/theme.ts";
 import {
@@ -40,16 +47,8 @@ import {
 } from "../app/voice.ts";
 import { DevysButton } from "../design/buttons.tsx";
 import { Field, fieldClass, Switch } from "../design/fields.tsx";
-import {
-  Face,
-  faceFor,
-  palettes,
-  PersonPortrait,
-  shapes,
-  tileGradients,
-  tintFor,
-  tints,
-} from "../design/face.tsx";
+import { Face, faceFor, PersonPortrait, tileGradients, tintFor } from "../design/face.tsx";
+import { palettes, shapes, tints } from "../../identity/contract.ts";
 import { BusinessPortrait, EmployeePortrait } from "../design/portrait.tsx";
 import { SegmentedTabs } from "../design/tabs.tsx";
 import { Spinner } from "../design/spinner.tsx";
@@ -69,13 +68,15 @@ const sections: { value: Section; title: string; icon: LucideIcon }[] = [
 
 /** Settings, as the native Settings window: a section bar over one 640×480 pane. */
 export function Settings() {
-  const { settingsOpen, settingsSection, actions } = useWorkspace();
-  const [section, setSection] = useState<Section>("account");
-  useEffect(() => {
-    if (settingsOpen) setSection((settingsSection as Section | undefined) ?? "account");
-  }, [settingsOpen, settingsSection]);
+  const nav = useNav();
+  const open = useSettingsSection();
+  // The section is the URL's; while the dialog closes it keeps showing the last one.
+  const [shown, setShown] = useState(open);
+  if (open && open !== shown) setShown(open);
+  const section: Section = sections.some((s) => s.value === shown) ? (shown as Section) : "account";
+  const setSection = nav.setSettingsSection;
   return (
-    <Dialog open={settingsOpen} onOpenChange={(open) => actions.setSettingsOpen(open)}>
+    <Dialog open={Boolean(open)} onOpenChange={(next) => !next && nav.closeSettings()}>
       <DialogContent className="w-[640px] max-w-[calc(100%-2rem)] gap-0 overflow-hidden rounded-card! bg-sheet p-0 shadow-raised sm:max-w-[640px]">
         <DialogTitle className="sr-only">Settings</DialogTitle>
         <div className="flex justify-center gap-1 overflow-x-auto border-b border-hairline pt-3 pr-12 pb-2 pl-4">
@@ -142,16 +143,13 @@ function PhotoChooser({ title, choose }: { title: string; choose: (file: File) =
 }
 
 function AccountPane() {
-  const { person, ownerPhoto, actions } = useWorkspace();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
-  const run = (work: Promise<unknown>) => {
-    setBusy(true);
-    setError(undefined);
-    void work
-      .catch(() => setError("That photo couldn't be used. Try a JPEG or PNG."))
-      .finally(() => setBusy(false));
-  };
+  const person = usePerson();
+  const ownerPhoto = useOwnerPhoto();
+  const photo = useOwnerPhotoChange();
+  const signOut = useSignOut();
+  const busy = photo.isPending;
+  const error = photo.isError ? "That photo couldn't be used. Try a JPEG or PNG." : undefined;
+  const run = (file: Blob | null) => photo.mutate(file);
   return (
     <div className="flex h-full flex-col gap-6 p-6">
       <div className="flex items-center gap-4">
@@ -172,10 +170,10 @@ function AccountPane() {
           <div className="flex gap-2">
             <PhotoChooser
               title={ownerPhoto ? "Change photo" : "Add photo"}
-              choose={(file) => run(actions.uploadOwnerPhoto(file))}
+              choose={(file) => run(file)}
             />
             {ownerPhoto && (
-              <DevysButton kind="quiet" compact onClick={() => run(actions.removeOwnerPhoto())}>
+              <DevysButton kind="quiet" compact onClick={() => run(null)}>
                 Remove
               </DevysButton>
             )}
@@ -184,7 +182,7 @@ function AccountPane() {
       </div>
       {error && <p className="text-detail text-red">{error}</p>}
       <span className="mt-auto" />
-      <DevysButton className="self-start text-red" onClick={() => void actions.signOut()}>
+      <DevysButton className="self-start text-red" onClick={() => signOut.mutate()}>
         Sign out of this device
       </DevysButton>
     </div>
@@ -216,7 +214,7 @@ function ListRow({
 }
 
 /** The skills an app ships, by name: what employees can load from it. */
-function AppSkills({ app }: { app: AppEntry }) {
+function AppSkills({ app }: { app: InstalledApp }) {
   return app.skills.length ? (
     <span className="text-caption text-ink-3">
       Skills: {app.skills.map((skill) => skill.name).join(", ")}
@@ -229,8 +227,10 @@ function AppSkills({ app }: { app: AppEntry }) {
  * remove, those coming later, the system apps every business has, and the accounts apps use.
  */
 function AppsPane() {
-  const { apps, businessId, actions } = useWorkspace();
-  const list = valueOf(apps) ?? [];
+  const businessId = useBusinessId();
+  const list = useApps().data ?? [];
+  const pin = usePinApp();
+  const install = useInstallApp();
   const available = list.filter((app) => app.kind === "business" && app.status === "available");
   const coming = list.filter((app) => app.status === "coming");
   const system = list.filter((app) => app.kind === "system");
@@ -247,14 +247,17 @@ function AppsPane() {
             </div>
             <span className="ml-auto" />
             {app.installed && (
-              <Switch checked={app.pinned} onChange={(on) => void actions.pinApp(app.id, on)}>
+              <Switch
+                checked={app.pinned}
+                onChange={(on) => pin.mutate({ app: app.id, pinned: on })}
+              >
                 <span className="text-caption text-ink-3">Sidebar</span>
               </Switch>
             )}
             <DevysButton
               compact
               kind={app.installed ? "quiet" : "raised"}
-              onClick={() => void actions.installApp(app.id, !app.installed)}
+              onClick={() => install.mutate({ app: app.id, on: !app.installed })}
             >
               {app.installed ? "Remove" : "Install"}
             </DevysButton>
@@ -292,29 +295,21 @@ function AppsPane() {
 
 /** Every business's team, each employee's look editable; looks are saved on the server. */
 function TeamPane() {
-  const { businesses, businessId, employees, actions } = useWorkspace();
-  const [teams, setTeams] = useState<Record<string, Employee[]>>({});
+  const businesses = useBusinesses();
+  const setLook = useSetEmployeeLook();
+  const uploadPhoto = useUploadLookPhoto();
+  // Each business's team, read once and shared with the workspace's own reads; only the
+  // business on screen is polled, by the workspace.
+  const details = useQueries({
+    queries: businesses.map((b) => ({ ...queries.detail(b.id), refetchInterval: false as const })),
+  });
+  const teams: Record<string, readonly Employee[]> = Object.fromEntries(
+    businesses.map((b, index) => [b.id, details[index]?.data?.employees ?? []]),
+  );
   const [selected, setSelected] = useState<string>();
-  useEffect(() => {
-    void Promise.all(
-      businesses.map(
-        async (b) =>
-          [b.id, b.id === businessId ? employees : (await api.business(b.id)).employees] as const,
-      ),
-    ).then((entries) => setTeams(Object.fromEntries(entries)));
-  }, [businesses, businessId, employees]);
   const all = Object.values(teams).flat();
   const employee = all.find((e) => e.id === selected) ?? all[0];
-  const save = async (target: Employee, look: SettableLook) => {
-    if (target.business_id === businessId) actions.setEmployeeLook(target.id, look);
-    else await api.setEmployeeLook(target.business_id, target.id, look);
-    setTeams((current) => ({
-      ...current,
-      [target.business_id]: (current[target.business_id] ?? []).map((e) =>
-        e.id === target.id ? { ...e, look } : e,
-      ),
-    }));
-  };
+  const save = (target: Employee, look: SettableLook) => setLook.mutate({ employee: target, look });
   return (
     <div className="flex gap-6 p-4 max-sm:flex-col">
       <div className="flex w-[200px] shrink-0 flex-col gap-0.5">
@@ -341,14 +336,12 @@ function TeamPane() {
           current={employee.look}
           kind={{ kind: "employee", fallback: faceFor(employee.id) }}
           preview={<EmployeePortrait employee={employee} size={84} label={employee.name} />}
-          set={(look) => void save(employee, look)}
+          set={(look) => save(employee, look)}
           photo={(file) =>
-            void actions
-              .uploadLookPhoto({ businessId: employee.business_id, employeeId: employee.id }, file)
-              .then(async () => {
-                const fresh = (await api.business(employee.business_id)).employees;
-                setTeams((current) => ({ ...current, [employee.business_id]: fresh }));
-              })
+            uploadPhoto.mutate({
+              target: { businessId: employee.business_id, employeeId: employee.id },
+              file,
+            })
           }
         />
       ) : (
@@ -370,7 +363,7 @@ const startingRoles: { value: StartingRole; title: string; summary: string }[] =
 
 /** Every business you belong to: its name, brief and look, and a way to start another. */
 function BusinessesPane() {
-  const { businesses } = useWorkspace();
+  const businesses = useBusinesses();
   const [selected, setSelected] = useState<string>();
   const [creating, setCreating] = useState(false);
   const business = businesses.find((b) => b.id === selected) ?? businesses[0];
@@ -405,13 +398,13 @@ function BusinessesPane() {
 }
 
 /** A business starts with a Head of Operations and, if you like, a starting team. */
-function NewBusiness({ created }: { created: () => void }) {
-  const { actions } = useWorkspace();
+export function NewBusiness({ created }: { created: () => void }) {
+  const createBusiness = useCreateBusiness();
   const [name, setName] = useState("");
   const [brief, setBrief] = useState("");
   const [team, setTeam] = useState<StartingRole[]>(startingRoles.map((r) => r.value));
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const busy = createBusiness.isPending;
   return (
     <form
       aria-label="New business"
@@ -419,13 +412,14 @@ function NewBusiness({ created }: { created: () => void }) {
       onSubmit={(event) => {
         event.preventDefault();
         if (!name.trim()) return;
-        setBusy(true);
         setError(undefined);
-        void actions
-          .createBusiness({ name, brief, team })
-          .then(created)
-          .catch(() => setError("The business couldn't be created. Try again."))
-          .finally(() => setBusy(false));
+        createBusiness.mutate(
+          { name, brief, team },
+          {
+            onSuccess: created,
+            onError: () => setError("The business couldn't be created. Try again."),
+          },
+        );
       }}
     >
       <span className="text-heading font-semibold text-ink">New business</span>
@@ -489,7 +483,9 @@ function NewBusiness({ created }: { created: () => void }) {
 
 /** Rename a business, rewrite its brief, and change its look. */
 function BusinessDetails({ business }: { business: Business }) {
-  const { actions } = useWorkspace();
+  const updateBusiness = useUpdateBusiness();
+  const setLook = useSetBusinessLook();
+  const uploadPhoto = useUploadLookPhoto();
   const [name, setName] = useState(business.name);
   const [brief, setBrief] = useState(business.brief ?? "");
   const [saving, setSaving] = useState(false);
@@ -506,11 +502,14 @@ function BusinessDetails({ business }: { business: Business }) {
           if (!name.trim()) return;
           setSaving(true);
           setError(undefined);
-          void actions
-            .updateBusiness(business.id, { name: name.trim(), brief: brief.trim() })
-            .then(() => setSaved(true))
-            .catch(() => setError("Those changes couldn't be saved."))
-            .finally(() => setSaving(false));
+          updateBusiness.mutate(
+            { id: business.id, change: { name: name.trim(), brief: brief.trim() } },
+            {
+              onSuccess: () => setSaved(true),
+              onError: () => setError("Those changes couldn't be saved."),
+              onSettled: () => setSaving(false),
+            },
+          );
         }}
       >
         <Field label="Name">
@@ -559,8 +558,8 @@ function BusinessDetails({ business }: { business: Business }) {
         current={business.look}
         kind={{ kind: "business", tint: tintFor(business.id) }}
         preview={<BusinessPortrait business={business} size={84} />}
-        set={(look) => void actions.setBusinessLook(business.id, look)}
-        photo={(file) => void actions.uploadLookPhoto({ businessId: business.id }, file)}
+        set={(look) => setLook.mutate({ id: business.id, look })}
+        photo={(file) => uploadPhoto.mutate({ target: { businessId: business.id }, file })}
       />
       <div className="flex flex-col items-start gap-1.5">
         <span className="text-label font-medium text-ink-3">Your data</span>
@@ -614,44 +613,37 @@ function CopyButton({ text, label }: { text: string; label: string }) {
  * link opens the app with this server; the code works for ten minutes.
  */
 function DevicesPane() {
-  const [list, setList] = useState<Device[]>();
-  const [failed, setFailed] = useState(false);
-  const [code, setCode] = useState<{ code: string; expiresAt: string }>();
-  const [issuing, setIssuing] = useState(false);
+  const client = useQueryClient();
+  const [code, setCode] = useState<{ code: string; expires_at: string }>();
   const [now, setNow] = useState(Date.now());
-  const load = () =>
-    api
-      .devices()
-      .then((result) => {
-        setList(result.devices);
-        setFailed(false);
-      })
-      .catch(() => setFailed(true));
-  useEffect(() => {
-    void load();
-  }, []);
-  // While a code is showing, count down and watch for the new device to appear.
+  // While a code is showing, watch for the new device to appear.
+  const devices = useQuery({
+    queryKey: keys.devices,
+    queryFn: api.devices,
+    select: (result) => result.devices,
+    refetchInterval: code ? 5_000 : false,
+  });
+  const list: readonly Device[] | undefined = devices.data;
+  const issuing = useMutation({
+    mutationFn: api.issueDeviceCode,
+    onSuccess: (issued) => {
+      setCode(issued);
+      setNow(Date.now());
+    },
+  });
+  const revoke = useMutation({
+    mutationFn: (id: string) => api.revokeDevice(id),
+    onSettled: () => client.invalidateQueries({ queryKey: keys.devices }),
+  });
+  const failed = devices.isError || issuing.isError || revoke.isError;
+  // While a code is showing, count down.
   useEffect(() => {
     if (!code) return;
     const tick = setInterval(() => setNow(Date.now()), 1000);
-    const poll = setInterval(() => void load(), 5000);
-    return () => {
-      clearInterval(tick);
-      clearInterval(poll);
-    };
+    return () => clearInterval(tick);
   }, [code]);
-  const issue = () => {
-    setIssuing(true);
-    void api
-      .issueDeviceCode()
-      .then((issued) => {
-        setCode(issued);
-        setNow(Date.now());
-      })
-      .catch(() => setFailed(true))
-      .finally(() => setIssuing(false));
-  };
-  const remaining = code ? Date.parse(code.expiresAt) - now : 0;
+  const issue = () => issuing.mutate();
+  const remaining = code ? Date.parse(code.expires_at) - now : 0;
   const link = code
     ? `devys://enroll?server=${encodeURIComponent(location.origin)}&code=${code.code}`
     : "";
@@ -661,7 +653,7 @@ function DevicesPane() {
         <div className="flex items-center">
           <span className="text-heading font-semibold text-ink">Add a device</span>
           <span className="ml-auto" />
-          <DevysButton compact onClick={issue} disabled={issuing}>
+          <DevysButton compact onClick={issue} disabled={issuing.isPending}>
             <Plus /> {code ? "New code" : "Add a device"}
           </DevysButton>
         </div>
@@ -736,12 +728,7 @@ function DevicesPane() {
                     kind="quiet"
                     compact
                     aria-label={`Revoke ${name}`}
-                    onClick={() =>
-                      void api
-                        .revokeDevice(device.id)
-                        .then(load)
-                        .catch(() => setFailed(true))
-                    }
+                    onClick={() => revoke.mutate(device.id)}
                   >
                     Revoke
                   </DevysButton>
@@ -927,7 +914,7 @@ const emojiGroups: { title: string; emoji: string[] }[] = [
 type Mode = "face" | "initials" | "emoji" | "photo";
 type EditorKind =
   | { kind: "employee"; fallback: ReturnType<typeof faceFor> }
-  | { kind: "business"; tint: string };
+  | { kind: "business"; tint: (typeof tints)[number] };
 const modeTitles: Record<Mode, string> = {
   face: "Face",
   initials: "Initials",
@@ -969,11 +956,11 @@ function LookEditor({
       ? current
       : kind.kind === "employee"
         ? kind.fallback
-        : { palette: "blue", shape: "roundedSquare", seed: 1 };
+        : ({ palette: "blue", shape: "roundedSquare", seed: 1 } as const);
   const tint =
     current?.kind === "emoji" ? current.tint : kind.kind === "business" ? kind.tint : "blue";
   const emoji = current?.kind === "emoji" ? current.emoji : "🙂";
-  const face = (palette: string, shape: string) =>
+  const face = (palette: (typeof palettes)[number], shape: (typeof shapes)[number]) =>
     set({ kind: "face", palette, shape, seed: spec.seed });
   // Choosing a mode applies it at once; a photo waits until one is chosen.
   const choose = (next: Mode) => {

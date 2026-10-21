@@ -27,10 +27,28 @@ public struct BrowserPicture: Equatable, Sendable, Decodable {
 }
 
 /// The owner acting on the page directly; not recorded.
-public enum BrowserInput: Sendable {
+public enum BrowserInput: Sendable, Encodable {
     case click(x: Double, y: Double)
     case type(String)
     case key(String)
+
+    private enum Key: String, CodingKey { case kind, x, y, text, key }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: Key.self)
+        switch self {
+        case let .click(x, y):
+            try container.encode("click", forKey: .kind)
+            try container.encode(x, forKey: .x)
+            try container.encode(y, forKey: .y)
+        case let .type(text):
+            try container.encode("type", forKey: .kind)
+            try container.encode(text, forKey: .text)
+        case let .key(key):
+            try container.encode("key", forKey: .kind)
+            try container.encode(key, forKey: .key)
+        }
+    }
 }
 
 extension DevysHTTPClient {
@@ -43,12 +61,7 @@ extension DevysHTTPClient {
     }
 
     public func browserInput(_ session: DeviceSession, businessID: String, _ input: BrowserInput) async throws {
-        let body: [String: String] = switch input {
-        case let .click(x, y): ["kind": "click", "x": String(Int(x)), "y": String(Int(y))]
-        case let .type(text): ["kind": "type", "text": text]
-        case let .key(key): ["kind": "key", "key": key]
-        }
-        _ = try await raw(json(session, path: "api/businesses/\(businessID)/browser/input", method: "POST", body: body))
+        _ = try await raw(json(session, path: "api/businesses/\(businessID)/browser/input", method: "POST", body: input))
     }
 }
 

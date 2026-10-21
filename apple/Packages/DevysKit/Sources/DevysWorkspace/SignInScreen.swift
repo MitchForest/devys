@@ -19,7 +19,7 @@ struct SignInScreen: View {
                     Text("Welcome to Devys")
                         .font(DevysTypography.greeting)
                         .foregroundStyle(DevysColors.ink)
-                    Text("Paste the one-time code from `bun scripts/enroll.ts`.")
+                    Text("Add a device in Settings › Devices on another signed-in device, then scan its code or paste it here.")
                         .font(DevysTypography.body)
                         .foregroundStyle(DevysColors.ink2)
                         .multilineTextAlignment(.center)

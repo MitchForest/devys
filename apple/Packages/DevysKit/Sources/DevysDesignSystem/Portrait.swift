@@ -60,7 +60,7 @@ public struct Portrait: View {
             .background(DevysColors.sheet, in: RoundedRectangle(cornerRadius: size * 0.3, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
-                    .fill(BusinessTile.colors(for: tint).first!.opacity(0.14))
+                    .fill(BusinessTile.colors(for: tint).light.opacity(0.14))
             }
             .overlay {
                 RoundedRectangle(cornerRadius: size * 0.3, style: .continuous).strokeBorder(DevysColors.hairline)

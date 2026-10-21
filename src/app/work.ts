@@ -12,7 +12,9 @@ import {
   updateWorkItem,
   type Change,
 } from "../work/service.ts";
-import { WorkItemFields } from "../work/contract.ts";
+import { NewWorkItem, WorkItem, WorkItemChange } from "../work/contract.ts";
+import { respond } from "../protocol/http.ts";
+import { Answered, Decisions, WorkItems } from "./wire.ts";
 import { project } from "../work/projects.ts";
 import { capabilities } from "./capabilities.ts";
 import { handBack } from "./coding.ts";
@@ -20,29 +22,6 @@ import { decodedBody, forbidden, notFound } from "./request.ts";
 
 const when = (value: string | null) =>
   value && Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : undefined;
-
-/** A work item a person records. The HTTP field names are the clients'. */
-const NewWorkItem = Schema.Struct({
-  title: WorkItemFields.title,
-  owner: WorkItemFields.owner,
-  objective: Schema.optional(WorkItemFields.objective),
-  nextAction: Schema.optional(WorkItemFields.nextAction),
-  dueAt: Schema.optional(WorkItemFields.dueAt),
-  conditions: Schema.optional(
-    Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.Unknown)),
-  ),
-  projectId: Schema.optional(Schema.String),
-});
-/** A person's change at the revision they saw; null clears what waits or the due date. */
-const WorkItemChange = Schema.Struct({
-  expectedRevision: WorkItemFields.expectedRevision,
-  title: Schema.optional(WorkItemFields.title),
-  owner: Schema.optional(WorkItemFields.owner),
-  state: Schema.optional(WorkItemFields.state),
-  nextAction: Schema.optional(WorkItemFields.nextAction),
-  waitCondition: Schema.optional(WorkItemFields.waitCondition),
-  dueAt: Schema.optional(Schema.NullOr(WorkItemFields.dueAt)),
-});
 
 /** The business's work items, operated by its members through the same rules as employees. */
 export async function workRoute(
@@ -53,8 +32,8 @@ export async function workRoute(
   const { person, business, trusted, path } = access;
   if (path === "/work" && request.method === "GET") {
     const since = when(new URL(request.url).searchParams.get("since"));
-    return Response.json({
-      workItems: await Effect.runPromise(workItems(env.HYPERDRIVE, business.id, since)),
+    return respond(WorkItems, {
+      work_items: await Effect.runPromise(workItems(env.HYPERDRIVE, business.id, since)),
     });
   }
   if (request.method !== "POST") return notFound();
@@ -70,8 +49,8 @@ export async function workRoute(
     if (!(await isEmployee(input.owner)))
       return new Response("The owner must be an employee of this business", { status: 400 });
     if (
-      input.projectId !== undefined &&
-      !(await Effect.runPromise(project(env.HYPERDRIVE, business.id, input.projectId)))
+      input.project_id !== undefined &&
+      !(await Effect.runPromise(project(env.HYPERDRIVE, business.id, input.project_id)))
     )
       return new Response("No such project in this business", { status: 400 });
     const conditions = input.conditions ?? {};
@@ -85,21 +64,21 @@ export async function workRoute(
         return new Response(`Conditions for ${name} don't fit it`, { status: 400 });
       }
     }
-    const dueAt = when(input.dueAt ?? null);
+    const dueAt = when(input.due_at ?? null);
     const created = await Effect.runPromise(
       createWorkItem(env.HYPERDRIVE, business.id, {
         id: crypto.randomUUID(),
         owner: input.owner,
         title: input.title,
         ...(input.objective !== undefined ? { objective: input.objective } : {}),
-        ...(input.nextAction !== undefined ? { nextAction: input.nextAction } : {}),
+        ...(input.next_action !== undefined ? { nextAction: input.next_action } : {}),
         ...(dueAt ? { dueAt } : {}),
         conditions,
-        ...(input.projectId ? { projectId: input.projectId } : {}),
+        ...(input.project_id ? { projectId: input.project_id } : {}),
         createdBy: `person:${person.id}`,
       }),
     );
-    return Response.json(created, { status: 201 });
+    return respond(WorkItem, created, { status: 201 });
   }
   const takeover = /^\/work\/([A-Za-z0-9-]{1,64})\/(takeover|release)$/.exec(path);
   if (takeover) {
@@ -112,7 +91,7 @@ export async function workRoute(
       ),
     );
     if (item && takeover[2] === "release") await handBack(env, business.id, item.id);
-    return item ? Response.json(item) : notFound();
+    return item ? respond(WorkItem, item) : notFound();
   }
   const id = /^\/work\/([A-Za-z0-9-]{1,64})$/.exec(path)?.[1];
   if (!id) return notFound();
@@ -123,18 +102,18 @@ export async function workRoute(
     ...(input.title !== undefined ? { title: input.title } : {}),
     ...(input.owner !== undefined ? { owner: input.owner } : {}),
     ...(input.state !== undefined ? { state: input.state } : {}),
-    ...(input.nextAction !== undefined ? { nextAction: input.nextAction } : {}),
-    ...(input.waitCondition !== undefined ? { waitCondition: input.waitCondition } : {}),
-    ...(input.dueAt !== undefined ? { dueAt: when(input.dueAt) ?? null } : {}),
+    ...(input.next_action !== undefined ? { nextAction: input.next_action } : {}),
+    ...(input.wait_condition !== undefined ? { waitCondition: input.wait_condition } : {}),
+    ...(input.due_at !== undefined ? { dueAt: when(input.due_at) ?? null } : {}),
   };
   const updated = await Effect.runPromise(
-    updateWorkItem(env.HYPERDRIVE, business.id, id, input.expectedRevision, change, {
+    updateWorkItem(env.HYPERDRIVE, business.id, id, input.expected_revision, change, {
       kind: "person",
       id: person.id,
     }),
   );
   return updated
-    ? Response.json(updated)
+    ? respond(WorkItem, updated)
     : new Response("The work item changed; reload it", { status: 409 });
 }
 
@@ -146,9 +125,9 @@ export async function decisionRoute(
 ) {
   const { person, business, trusted, path } = access;
   if (path === "/decisions" && request.method === "GET") {
-    // `?workItem=` lists one work item's requests with their answers, not only pending ones.
-    const workItemId = new URL(request.url).searchParams.get("workItem");
-    return Response.json({
+    // `?work_item=` lists one work item's requests with their answers, not only pending ones.
+    const workItemId = new URL(request.url).searchParams.get("work_item");
+    return respond(Decisions, {
       decisions: await Effect.runPromise(
         workItemId
           ? decisionsFor(env.HYPERDRIVE, business.id, workItemId)
@@ -178,5 +157,5 @@ export async function decisionRoute(
           : `Declined: ${answered.capability}. Don't run it; find another way or ask me.`,
       mentions: [answered.employee_id],
     });
-  return Response.json({ status: answered.status });
+  return respond(Answered, { status: answered.status });
 }

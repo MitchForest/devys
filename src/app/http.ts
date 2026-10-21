@@ -18,9 +18,11 @@ import { install } from "../apps/service.ts";
 import { modeOf } from "./mode.ts";
 import { body, RequestError } from "./request.ts";
 import { Unavailable } from "../protocol/host.ts";
-import { sameOrigin } from "../protocol/http.ts";
+import { respond, sameOrigin } from "../protocol/http.ts";
+import { BusinessCreated, Me, ModelCatalog, Roles } from "./wire.ts";
 import { grantAll } from "../authority/service.ts";
-import { hire, hireInput, roleTemplate, roleTemplates } from "../identity/team.ts";
+import { hire, hireInput, roleTemplate } from "../identity/team.ts";
+import { hireableRoleIds } from "../protocol/roles.ts";
 import { hiring, templateGrants } from "./team.ts";
 import { capabilities } from "./capabilities.ts";
 import { businessRoute } from "./routes.ts";
@@ -64,12 +66,13 @@ async function route(request: Request, env: Env): Promise<Response | undefined> 
   if (!access) return new Response("Sign in required", { status: 401 });
   const { person } = access;
   const trusted = access.bearer || sameOrigin(request);
-  if (path === "/api/models" && request.method === "GET") return Response.json(modelCatalog());
+  if (path === "/api/models" && request.method === "GET")
+    return respond(ModelCatalog, modelCatalog());
   if (path === "/api/roles" && request.method === "GET")
-    return Response.json({
-      roles: roleTemplates
-        .filter((template) => template.id !== "operations")
-        .map(({ id, name, summary, responsibilities }) => ({
+    return respond(Roles, {
+      roles: hireableRoleIds.map((id) => {
+        const { name, summary, responsibilities } = roleTemplate(id)!;
+        return {
           id,
           name,
           summary,
@@ -77,7 +80,8 @@ async function route(request: Request, env: Env): Promise<Response | undefined> 
           capabilities: templateGrants(id, capabilities(env)).map(
             (granted) => granted.capability.name,
           ),
-        })),
+        };
+      }),
     });
   if (path === "/api/devices" || path.startsWith("/api/devices/"))
     return devicesRoute(request, env, {
@@ -87,7 +91,7 @@ async function route(request: Request, env: Env): Promise<Response | undefined> 
       path,
     });
   if (path === "/api/me" && request.method === "GET")
-    return Response.json({
+    return respond(Me, {
       person,
       businesses: await Effect.runPromise(businessesFor(env.HYPERDRIVE, person.id)),
     });
@@ -119,7 +123,7 @@ async function route(request: Request, env: Env): Promise<Response | undefined> 
           name,
           brief,
           model: modelsConfig.defaults.employee,
-          operations: { name: operations.name, role: operations.responsibilities },
+          operations: { name: operations.name, responsibilities: operations.responsibilities },
         }),
       );
       await Effect.runPromise(
@@ -138,7 +142,7 @@ async function route(request: Request, env: Env): Promise<Response | undefined> 
       }
       return { created, hired };
     });
-    return Response.json({ ...created, team: hired }, { status: 201 });
+    return respond(BusinessCreated, { ...created, team: hired }, { status: 201 });
   }
   if (path === "/api/connections/google/callback" && request.method === "GET")
     return finishGoogle(request, env, person.id, async (businessId) =>

@@ -1,7 +1,8 @@
+#if DEBUG
 public import SwiftUI
 import DevysCharacter
 
-/// Every design-system component in both appearances, for review.
+/// Every design-system component in both appearances, for review. Debug builds only.
 /// Opened from the Debug menu on macOS or with DEVYS_GALLERY=1.
 public struct DesignGallery: View {
     @State private var tab = "List"
@@ -124,3 +125,4 @@ public struct DesignGallery: View {
         }
     }
 }
+#endif

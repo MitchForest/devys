@@ -6,7 +6,7 @@ import WebKit
 
 /// The policy pages render under, the web's `pagePolicy` (src/apps/documents/contract.ts): inline
 /// styles, scripts and data: images; nothing fetched, no forms, no navigation.
-private let pagePolicy =
+let pagePolicy =
     "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; font-src data:; form-action 'none'; base-uri 'none'"
 
 /// An employee's HTML page in its own web view: no stored data, the policy first, and no

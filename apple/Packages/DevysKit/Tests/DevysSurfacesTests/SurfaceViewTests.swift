@@ -35,7 +35,7 @@ import Testing
     var rendered: Int?
     let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
-    window.contentView = NSHostingView(rootView: SurfaceView(.markdown("# Plan\n\nShip it.", name: "plan.md", version: "1"), onRendered: { rendered = $0 }))
+    window.contentView = NSHostingView(rootView: SurfaceView(.markdown("# Plan\n\nShip it.", name: "plan.md", version: "1", readOnly: false), onRendered: { rendered = $0 }))
     window.orderFront(nil)
     let deadline = ContinuousClock.now.advanced(by: .seconds(30))
     while rendered == nil, ContinuousClock.now < deadline {
@@ -52,7 +52,7 @@ import Testing
     let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
     let markdown = "---\nmarp: true\n---\n\n# Launch\n\n---\n\n## Plan\n\n- Ship it\n"
-    window.contentView = NSHostingView(rootView: SurfaceView(.markdown(markdown, name: "launch.md", version: "1"), onDeck: { deck = true }, handle: handle))
+    window.contentView = NSHostingView(rootView: SurfaceView(.markdown(markdown, name: "launch.md", version: "1", readOnly: false), onDeck: { deck = true }, handle: handle))
     window.orderFront(nil)
     let deadline = ContinuousClock.now.advanced(by: .seconds(30))
     while !deck, ContinuousClock.now < deadline {

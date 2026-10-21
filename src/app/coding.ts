@@ -32,6 +32,9 @@ import { addEvidence, createWorkItem, requeue, workItem } from "../work/service.
 import { modeOf } from "./mode.ts";
 import { postEvent } from "./conversations.ts";
 import { body } from "./request.ts";
+import { respond } from "../protocol/http.ts";
+import { Transcript, WorkingDiff } from "../apps/code/contract.ts";
+import { CodedWork, CodingSessions, CodingStarted, Interrupted, Steered } from "./wire.ts";
 import { coordinates } from "../identity/team.ts";
 
 type Access = { person: Person; business: Business; trusted: boolean; path: string };
@@ -50,7 +53,9 @@ export async function codingRoute(
 ) {
   const { person, business, trusted, path } = access;
   if (path === "/coding" && request.method === "GET")
-    return Response.json({ work: await Effect.runPromise(codedWork(env.HYPERDRIVE, business.id)) });
+    return respond(CodedWork, {
+      work: await Effect.runPromise(codedWork(env.HYPERDRIVE, business.id)),
+    });
   if (path === "/coding" && request.method === "POST")
     return trusted ? startOwned(request, env, access, coding) : forbidden();
   const match =
@@ -65,7 +70,7 @@ export async function codingRoute(
     const items = (
       await Effect.runPromise(codingSessionsFor(env.HYPERDRIVE, business.id, work.id))
     ).filter((item) => item.provider_session_id);
-    return Response.json({
+    return respond(CodingSessions, {
       sessions: await Promise.all(items.map((item) => sessionOf(coding, business.id, item))),
     });
   }
@@ -74,14 +79,15 @@ export async function codingRoute(
     : undefined;
   if (!item || item.work_item_id !== work.id || !item.provider_session_id) return notFound();
   const host = coding({ businessId: business.id, employeeId: item.employee_id });
-  if (action === "diff" && request.method === "GET") return Response.json(await host.diff(item.id));
+  if (action === "diff" && request.method === "GET")
+    return respond(WorkingDiff, await host.diff(item.id));
   if (action === "transcript" && request.method === "GET")
-    return Response.json(await host.transcript(item.id));
+    return respond(Transcript, await host.transcript(item.id));
   if (request.method !== "POST") return notFound();
   if (!trusted) return forbidden();
   if (action === "interrupt") {
     await host.interrupt(item.id);
-    return Response.json({ interrupted: true });
+    return respond(Interrupted, { interrupted: true });
   }
   if (action === "send") {
     // Steering a session yourself is taking the work over, so its employee stops steering it.
@@ -98,7 +104,7 @@ export async function codingRoute(
       text: `${person.display_name} → ${providerName(item.provider)}: ${text}`,
       ref: ref("code", "session", item.id),
     });
-    return Response.json(sent);
+    return respond(Steered, sent);
   }
   return notFound();
 }
@@ -110,14 +116,17 @@ async function sessionOf(
   item: CodingSession,
 ) {
   try {
-    const status = await coding({ businessId, employeeId: item.employee_id }).inspect(item.id);
-    return { ...item, ...status };
+    const { diffStat, ...status } = await coding({
+      businessId,
+      employeeId: item.employee_id,
+    }).inspect(item.id);
+    return { ...item, ...status, diff_stat: diffStat };
   } catch (error) {
     return {
       ...item,
       state: "unavailable" as const,
       reply: null,
-      diffStat: "",
+      diff_stat: "",
       error: error instanceof Error ? error.message : "The Mac host is unavailable",
     };
   }
@@ -135,21 +144,21 @@ async function startOwned(
 ) {
   const { person, business } = access;
   const input = await body<{
-    clientId: string;
+    client_id: string;
     employee: string;
     provider: Provider;
     objective: string;
     repository: string;
-    newRepository: string;
+    new_repository: string;
   }>(request, 16_000);
   if (
-    typeof input.clientId !== "string" ||
-    !/^[A-Za-z0-9-]{8,64}$/.test(input.clientId) ||
+    typeof input.client_id !== "string" ||
+    !/^[A-Za-z0-9-]{8,64}$/.test(input.client_id) ||
     !providers.includes(input.provider as Provider) ||
     typeof input.objective !== "string" ||
     !input.objective.trim() ||
     input.objective.length > 8000 ||
-    !input.repository === !input.newRepository
+    !input.repository === !input.new_repository
   )
     return new Response(
       "Send a client id, a provider, an objective, and a repository path or a new repository name.",
@@ -160,14 +169,14 @@ async function startOwned(
     return new Response("Choose an employee of this business to hand it to later.", {
       status: 400,
     });
-  const id = await stableId(`${business.id}:owned:${input.clientId}`);
+  const id = await stableId(`${business.id}:owned:${input.client_id}`);
   const existing = await Effect.runPromise(codingSession(env.HYPERDRIVE, business.id, id));
   const workId =
     existing?.work_item_id ??
     (
       await Effect.runPromise(
         createWorkItem(env.HYPERDRIVE, business.id, {
-          id: await stableId(`${business.id}:owned-work:${input.clientId}`),
+          id: await stableId(`${business.id}:owned-work:${input.client_id}`),
           owner: scope.employeeId,
           title: input.objective.split("\n")[0]!.slice(0, 200),
           objective: input.objective.slice(0, 4000),
@@ -192,7 +201,7 @@ async function startOwned(
     scope,
     provider: input.provider as Provider,
     purpose: "build",
-    repository: input.repository ? { path: input.repository } : { create: input.newRepository! },
+    repository: input.repository ? { path: input.repository } : { create: input.new_repository! },
     objective: input.objective,
     instructions: codingInstructions("build"),
   });
@@ -201,7 +210,19 @@ async function startOwned(
   await Effect.runPromise(
     setFollowing(env.HYPERDRIVE, business.id, `work:${workId}`, person.id, true),
   );
-  return Response.json({ work: workId, codingSession: id, ...started }, { status: 201 });
+  return respond(
+    CodingStarted,
+    {
+      work: workId,
+      coding_session: id,
+      provider_session_id: started.providerSessionId,
+      repository: started.repository,
+      base_commit: started.baseCommit,
+      branch: started.branch,
+      worktree: started.worktree,
+    },
+    { status: 201 },
+  );
 }
 
 /**
@@ -228,7 +249,7 @@ export async function handBack(
     "The owner handed this work item back to you after driving its coding sessions. Read what changed, then carry on: review, iterate with codingSend, accept with codingAccept and the repository's check.",
     ...sessions.map(
       (session) =>
-        `${providerName(session.provider)} session ${ref("code", "session", session.id)} (${session.purpose}, ${session.state}) in ${session.worktree}:\n${session.diffStat || "no changes"}${session.reply ? `\nIts latest reply: ${session.reply.slice(0, 2000)}` : ""}`,
+        `${providerName(session.provider)} session ${ref("code", "session", session.id)} (${session.purpose}, ${session.state}) in ${session.worktree}:\n${session.diff_stat || "no changes"}${session.reply ? `\nIts latest reply: ${session.reply.slice(0, 2000)}` : ""}`,
     ),
   ].join("\n\n");
   await env.AGENT.getByName(scopeName(scope)).receive(scope, {
@@ -278,7 +299,7 @@ export async function codingIncomplete(env: Env, businessId: string, work: WorkI
     accepted && work.evidence.findLast((entry) => entry.check && entry.commit === accepted)?.check;
   if (!check)
     return "This work has a coding session: accept it with codingAccept and wait for the check of the accepted commit to pass before completing.";
-  if (check.exitCode !== 0)
+  if (check.exit_code !== 0)
     return "The last check failed: fix it with codingSend, accept again, and complete once the check passes.";
   return undefined;
 }
@@ -347,7 +368,7 @@ async function deliverEvent(env: Env, event: CodingEvent) {
         by: "devys",
         note: `\`${event.check.command}\` ${event.check.exitCode === 0 ? "passed" : `failed (exit ${event.check.exitCode ?? "killed"})`} on ${event.check.commit.slice(0, 12)}.`,
         commit: event.check.commit,
-        check: { command: event.check.command, exitCode: event.check.exitCode },
+        check: { command: event.check.command, exit_code: event.check.exitCode },
         source: `coding:${event.id}`,
       }),
     );

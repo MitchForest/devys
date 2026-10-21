@@ -49,7 +49,7 @@ export function claims(storage: Storage, assertActive: () => Promise<void>) {
         id,
       );
       if (!source) return fail("invalid", "Evidence is missing or excluded");
-      evidence.push({ id: source.id, kind: source.kind, observedAt: source.observed_at });
+      evidence.push({ id: source.id, kind: source.kind, observed_at: source.observed_at });
     }
     if (await isExcluded(change.key)) {
       const before = (
@@ -60,7 +60,7 @@ export function claims(storage: Storage, assertActive: () => Promise<void>) {
       const restoredByOwner = evidence.some(
         (item) =>
           item.kind === "owner" &&
-          Date.parse(item.observedAt) > Date.parse(before ?? "1970-01-01T00:00:00.000Z"),
+          Date.parse(item.observed_at) > Date.parse(before ?? "1970-01-01T00:00:00.000Z"),
       );
       if (!restoredByOwner)
         fail("conflict", "Restoring forgotten knowledge requires new owner evidence");
@@ -75,8 +75,8 @@ export function claims(storage: Storage, assertActive: () => Promise<void>) {
       content: change.content,
       subject: change.subject ?? "owner",
       scope: change.scope ?? "unspecified",
-      validFrom: change.validFrom ? new Date(change.validFrom).toISOString() : null,
-      validUntil: change.validUntil ? new Date(change.validUntil).toISOString() : null,
+      valid_from: change.validFrom ? new Date(change.validFrom).toISOString() : null,
+      valid_until: change.validUntil ? new Date(change.validUntil).toISOString() : null,
       relations: change.relations ?? [],
       evidence,
       source_kind:
@@ -92,7 +92,7 @@ export function claims(storage: Storage, assertActive: () => Promise<void>) {
   }
 
   /** Keeps a claim's evidence links, so forgetting a source can find what it supported. */
-  const links = (key: string, evidence: Evidence[]) =>
+  const links = (key: string, evidence: readonly Evidence[]) =>
     statement(
       `INSERT INTO memory_links(scope_id,key,source_id,evidence)
       SELECT $1,$2,e->>'id',e FROM jsonb_array_elements($3::jsonb) e
@@ -115,8 +115,8 @@ export function claims(storage: Storage, assertActive: () => Promise<void>) {
       JSON.stringify({
         subject: value.subject,
         scope: value.scope,
-        validFrom: value.validFrom,
-        validUntil: value.validUntil,
+        valid_from: value.valid_from,
+        valid_until: value.valid_until,
         evidence: value.evidence,
         relations: value.relations,
       }),

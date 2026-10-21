@@ -388,7 +388,7 @@ it("members manage work and answer requests over HTTP; stale revisions conflict"
   };
   // Routes decode with the work contract's schemas, as capabilities do, and say what is wrong.
   const unknownState = await call(`/work/${created.id}`, {
-    expectedRevision: created.revision,
+    expected_revision: created.revision,
     state: "done",
   });
   expect(unknownState.status).toBe(400);
@@ -396,20 +396,20 @@ it("members manage work and answer requests over HTTP; stale revisions conflict"
   expect((await call("/work", { title: "  ", owner: scope.employeeId })).status).toBe(400);
   expect((await call(`/work/${created.id}`, { state: "waiting" })).status).toBe(400);
   const moved = await call(`/work/${created.id}`, {
-    expectedRevision: created.revision,
+    expected_revision: created.revision,
     state: "waiting",
   });
   expect(moved.status).toBe(200);
   expect(
-    (await call(`/work/${created.id}`, { expectedRevision: created.revision, state: "ready" }))
+    (await call(`/work/${created.id}`, { expected_revision: created.revision, state: "ready" }))
       .status,
   ).toBe(409);
   const taken = (await (await call(`/work/${created.id}/takeover`, {})).json()) as {
     taken_over_by: string;
   };
   expect(taken.taken_over_by).toBe(person);
-  const listed = (await (await call("/work")).json()) as { workItems: { id: string }[] };
-  expect(listed.workItems.map((c) => c.id)).toContain(created.id);
+  const listed = (await (await call("/work")).json()) as { work_items: { id: string }[] };
+  expect(listed.work_items.map((c) => c.id)).toContain(created.id);
 
   await Effect.runPromise(grant(db, scope, { capability: named("driveCreate"), mode: "ask" }));
   // Asked for a work item the employee still holds (a taken-over one fences it).
@@ -430,7 +430,7 @@ it("members manage work and answer requests over HTTP; stale revisions conflict"
   expect((await call(`/decisions/${decisions[0]!.id}/approve`, {})).status).toBe(200);
   expect((await call(`/decisions/${decisions[0]!.id}/reject`, {})).status).toBe(409);
   // The work item still lists the request once answered; the business names its members.
-  const forItem = (await (await call(`/decisions?workItem=${asking.id}`)).json()) as {
+  const forItem = (await (await call(`/decisions?work_item=${asking.id}`)).json()) as {
     decisions: { id: string; status: string }[];
   };
   expect(forItem.decisions).toEqual([
@@ -598,7 +598,7 @@ it("an employee changes only its own work items; Operations changes anyone's", a
   const engineer = await Effect.runPromise(
     createEmployee(db, scope.businessId, {
       name: "Engineering",
-      role: "Builds the product.",
+      responsibilities: "Builds the product.",
       model: "claude-opus-5-5",
       template: "engineering",
     }),

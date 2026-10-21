@@ -14,7 +14,7 @@ export function exportBusiness(env: Env, business: Business, employees: Employee
       version: 1,
       business,
       employees,
-      exportedAt: new Date().toISOString(),
+      exported_at: new Date().toISOString(),
       note: "Every DM, project channel and work-item thread, each employee's own Pi history for its direct chat, current memory, artifact index, and selected Drive file index. Credentials are excluded. Artifact bytes require separate downloads. Concurrent edits may appear during export.",
     };
     for (const employee of employees) {

@@ -4,7 +4,7 @@ public import Foundation
 
 /// One entry of a folder in the business's files on the Mac.
 public struct FileEntry: Equatable, Sendable, Decodable, Identifiable, Hashable {
-    public enum Kind: String, Sendable, Decodable { case file, directory, repository, other }
+    public enum Kind: String, Sendable, WireEnum { case file, directory, repository, other, unknown }
     public let name: String
     public let path: String
     public let kind: Kind
@@ -105,20 +105,20 @@ extension DevysHTTPClient {
     }
 
     public func fileText(_ session: DeviceSession, businessID: String, path: String) async throws -> FileText {
-        try await send(authorizedQuery(session, "api/businesses/\(businessID)/files/text", path: path))
+        try await send(try authorizedQuery(session, "api/businesses/\(businessID)/files/text", path: path))
     }
 
     public func fileBytes(_ session: DeviceSession, businessID: String, path: String) async throws -> FileBytes {
-        let (data, response) = try await response(authorizedQuery(session, "api/businesses/\(businessID)/files/raw", path: path))
+        let (data, response) = try await response(try authorizedQuery(session, "api/businesses/\(businessID)/files/raw", path: path))
         return FileBytes(data: data, revision: response.value(forHTTPHeaderField: "x-devys-revision") ?? "")
     }
 
     public func saveFileBytes(_ session: DeviceSession, businessID: String, path: String, data: Data, expected: FileExpectation) async throws -> FileSave {
         struct Saved: Decodable { let revision: String }
-        var request = authorizedQuery(session, "api/businesses/\(businessID)/files/raw", path: path, method: "PUT")
+        var request = try authorizedQuery(session, "api/businesses/\(businessID)/files/raw", path: path, method: "PUT")
         switch expected {
-        case .revision(let revision): request.url = request.url.map { $0.appending(queryItems: [URLQueryItem(name: "expectedRevision", value: revision)]) }
-        case .new: request.url = request.url.map { $0.appending(queryItems: [URLQueryItem(name: "expectedRevision", value: "none")]) }
+        case .revision(let revision): request.url = request.url.map { $0.appending(queryItems: [URLQueryItem(name: "expected_revision", value: revision)]) }
+        case .new: request.url = request.url.map { $0.appending(queryItems: [URLQueryItem(name: "expected_revision", value: "none")]) }
         case .overwrite: break
         }
         request.httpBody = data
@@ -131,14 +131,22 @@ extension DevysHTTPClient {
     }
 
     public func saveFile(_ session: DeviceSession, businessID: String, path: String, content: String, expectedRevision: String?) async throws -> FileSave {
-        struct Body: Encodable { let path: String; let content: String; let expectedRevision: String? }
+        struct Body: Encodable {
+            let path: String
+            let content: String
+            let expectedRevision: String?
+            enum CodingKeys: String, CodingKey {
+                case path, content
+                case expectedRevision = "expected_revision"
+            }
+        }
         struct Saved: Decodable { let revision: String }
         struct Conflict: Decodable { let current: FileText? }
         do {
             let saved: Saved = try await send(json(session, path: "api/businesses/\(businessID)/files/text", method: "PUT", body: Body(path: path, content: content, expectedRevision: expectedRevision)))
             return .saved(revision: saved.revision)
         } catch DevysHTTPError.rejected(409, let message) {
-            let conflict = try? JSONDecoder().decode(Conflict.self, from: Data(message.utf8))
+            let conflict = try? Wire.decoder().decode(Conflict.self, from: Data(message.utf8))
             return .conflict(conflict?.current)
         }
     }
@@ -151,9 +159,11 @@ extension DevysHTTPClient {
         _ = try await raw(json(session, path: "api/businesses/\(businessID)/files/comments", method: "POST", body: body))
     }
 
-    private func authorizedQuery(_ session: DeviceSession, _ base: String, path: String, method: String = "GET") -> URLRequest {
+    private func authorizedQuery(_ session: DeviceSession, _ base: String, path: String, method: String = "GET") throws -> URLRequest {
         var request = authorized(session, path: base, method: method)
-        var components = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!
+        guard let url = request.url, var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            throw DevysHTTPError.invalidResponse
+        }
         components.percentEncodedQuery = "path=\(fileQuery(path))"
         request.url = components.url
         return request

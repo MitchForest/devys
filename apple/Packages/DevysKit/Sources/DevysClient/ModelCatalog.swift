@@ -52,6 +52,11 @@ public struct ModelCatalog: Equatable, Sendable, Decodable {
             self.price = price
             self.typicalTurnUsd = typicalTurnUsd
         }
+
+        enum CodingKeys: String, CodingKey {
+            case id, label, vendor, provider, summary, effort, price
+            case typicalTurnUsd = "typical_turn_usd"
+        }
     }
 
     /// Dollars per million tokens.
@@ -64,6 +69,11 @@ public struct ModelCatalog: Equatable, Sendable, Decodable {
             self.input = input
             self.output = output
             self.cacheRead = cacheRead
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case input, output
+            case cacheRead = "cache_read"
         }
     }
 
@@ -123,6 +133,12 @@ public struct RuntimeUsage: Equatable, Sendable, Decodable {
             self.cacheWrite = cacheWrite
             self.cost = cost
         }
+
+        enum CodingKeys: String, CodingKey {
+            case input, output, cost
+            case cacheRead = "cache_read"
+            case cacheWrite = "cache_write"
+        }
     }
 
     public struct Cost: Equatable, Sendable, Decodable {
@@ -133,43 +149,4 @@ public struct RuntimeUsage: Equatable, Sendable, Decodable {
             self.total = total
         }
     }
-}
-
-extension ModelCatalog {
-    /// A small catalog for previews and tests.
-    public static let fixture = ModelCatalog(
-        defaults: Defaults(employee: "claude-opus-5-5", background: "gemini-3.8-flash"),
-        models: [
-            Model(
-                id: "claude-opus-5-5",
-                label: "Claude Opus 5.5",
-                vendor: "Anthropic",
-                provider: "Gateway",
-                summary: "Best judgment and the most reliable long, tool-heavy work.",
-                effort: "medium",
-                price: Price(input: 5, output: 25, cacheRead: 0.5),
-                typicalTurnUsd: 0.0625
-            ),
-            Model(
-                id: "gpt-6.1-sol",
-                label: "GPT-6.1 Sol",
-                vendor: "OpenAI",
-                provider: "Gateway",
-                summary: "Strong all-round reasoning at half the price of Opus.",
-                effort: "medium",
-                price: Price(input: 2.5, output: 15, cacheRead: 0.25),
-                typicalTurnUsd: 0.035
-            ),
-            Model(
-                id: "gemini-3.8-flash",
-                label: "Gemini 3.8 Flash",
-                vendor: "Google",
-                provider: "Gateway",
-                summary: "Fast and inexpensive.",
-                effort: "low",
-                price: Price(input: 0.5, output: 3, cacheRead: 0.05),
-                typicalTurnUsd: 0.007
-            )
-        ]
-    )
 }

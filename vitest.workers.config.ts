@@ -31,7 +31,7 @@ export default defineConfig({
   },
   test: {
     include: ["tests/**/*.workers.test.ts"],
-    globalSetup: ["tests/setup/database.ts"],
+    globalSetup: ["tests/setup/database.ts", "tests/setup/wire.ts"],
     // A Durable Object's first Pi or Code Mode start is cold (about 7 s alone); with every file
     // running in parallel on a busy machine that has exceeded 30 s, failing correct tests.
     testTimeout: 90_000,

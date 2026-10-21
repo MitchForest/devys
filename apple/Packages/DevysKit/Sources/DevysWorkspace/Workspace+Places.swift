@@ -193,7 +193,7 @@ extension Workspace {
             title: String((text.split(separator: "\n").first.map(String.init) ?? text).prefix(80)),
             owner: owner,
             objective: String(text.prefix(4000)),
-            projectId: state.currentProjectID
+            projectID: state.currentProjectID
         )
         let businessID = state.businessID
         let runtime = runtime

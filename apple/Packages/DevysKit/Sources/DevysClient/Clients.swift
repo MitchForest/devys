@@ -12,19 +12,15 @@ public struct SessionClient: Sendable {
     public var phases: @Sendable () -> AsyncStream<SessionPhase>
     public var signIn: @Sendable (_ server: URL, _ code: String) async throws -> Void
     public var signOut: @Sendable () async -> Void
-    /// The server rejected the session; forget it locally without calling the server.
-    public var expire: @Sendable () async -> Void
 
     public init(
         phases: @escaping @Sendable () -> AsyncStream<SessionPhase>,
         signIn: @escaping @Sendable (URL, String) async throws -> Void,
-        signOut: @escaping @Sendable () async -> Void,
-        expire: @escaping @Sendable () async -> Void
+        signOut: @escaping @Sendable () async -> Void
     ) {
         self.phases = phases
         self.signIn = signIn
         self.signOut = signOut
-        self.expire = expire
     }
 }
 
@@ -35,6 +31,8 @@ public struct RuntimeClient: Sendable {
     public var business: @Sendable (_ id: String) async throws -> BusinessDetail
     public var createBusiness: @Sendable (NewBusiness) async throws -> Business
     public var updateBusiness: @Sendable (_ id: String, _ name: String?, _ brief: String?) async throws -> Business
+    /// The business's export, newline-delimited JSON.
+    public var exportBusiness: @Sendable (_ id: String) async throws -> Data
     public var devices: @Sendable () async throws -> [Device]
     public var issueDeviceCode: @Sendable () async throws -> DeviceCode
     public var revokeDevice: @Sendable (_ id: String) async throws -> Void
@@ -71,7 +69,6 @@ public struct RuntimeClient: Sendable {
     public var answer: @Sendable (_ businessID: String, _ decisionID: String, _ approve: Bool) async throws -> Void
     public var projects: @Sendable (_ businessID: String) async throws -> [Project]
     public var createProject: @Sendable (_ businessID: String, ProjectChange) async throws -> Project
-    public var updateProject: @Sendable (_ businessID: String, _ projectID: String, ProjectChange) async throws -> Void
     public var addToProject: @Sendable (_ businessID: String, _ projectID: String, _ ref: Ref) async throws -> Void
     public var removeFromProject: @Sendable (_ businessID: String, _ projectID: String, _ itemID: String) async throws -> Void
     /// The app directory, and what this business has installed and pinned.
@@ -90,6 +87,7 @@ public struct RuntimeClient: Sendable {
         updateBusiness: @escaping @Sendable (String, String?, String?) async throws -> Business = { id, name, brief in
             Business(id: id, name: name ?? "", brief: brief ?? "")
         },
+        exportBusiness: @escaping @Sendable (String) async throws -> Data = { _ in Data() },
         devices: @escaping @Sendable () async throws -> [Device] = { [] },
         issueDeviceCode: @escaping @Sendable () async throws -> DeviceCode = { throw DevysHTTPError.unauthorized },
         revokeDevice: @escaping @Sendable (String) async throws -> Void = { _ in },
@@ -106,7 +104,7 @@ public struct RuntimeClient: Sendable {
         },
         postMessage: @escaping @Sendable (String, ConversationKey, NewMessage) async throws -> PostedMessage = { _, key, message in
             PostedMessage(
-                message: ConversationMessage(id: message.id, conversation: key.rawValue, author: "person:preview", text: message.text, createdAt: Date.now.formatted(.iso8601)),
+                message: ConversationMessage(id: message.id, conversation: key.rawValue, author: "person:preview", text: message.text, createdAt: ServerDate.format(Date.now)),
                 recipients: []
             )
         },
@@ -134,7 +132,6 @@ public struct RuntimeClient: Sendable {
         createProject: @escaping @Sendable (String, ProjectChange) async throws -> Project = { _, project in
             Project(id: UUID().uuidString, name: project.name, leadEmployeeID: project.lead, memberIDs: project.members)
         },
-        updateProject: @escaping @Sendable (String, String, ProjectChange) async throws -> Void = { _, _, _ in },
         addToProject: @escaping @Sendable (String, String, Ref) async throws -> Void = { _, _, _ in },
         removeFromProject: @escaping @Sendable (String, String, String) async throws -> Void = { _, _, _ in },
         apps: @escaping @Sendable (String) async throws -> [AppEntry] = { _ in [] },
@@ -148,6 +145,7 @@ public struct RuntimeClient: Sendable {
         self.business = business
         self.createBusiness = createBusiness
         self.updateBusiness = updateBusiness
+        self.exportBusiness = exportBusiness
         self.devices = devices
         self.issueDeviceCode = issueDeviceCode
         self.revokeDevice = revokeDevice
@@ -179,7 +177,6 @@ public struct RuntimeClient: Sendable {
         self.answer = answer
         self.projects = projects
         self.createProject = createProject
-        self.updateProject = updateProject
         self.addToProject = addToProject
         self.removeFromProject = removeFromProject
         self.apps = apps
@@ -228,6 +225,7 @@ public actor SessionHub {
         expire()
     }
 
+    /// The server rejected the session; forget it locally without calling the server.
     public func expire() {
         store.clear()
         publish(nil)
@@ -238,10 +236,18 @@ public actor SessionHub {
         return session
     }
 
+    /// Every live call goes through here, so a 401 from any of them signs the device out once.
     public func call<Value: Sendable>(
         _ operation: @Sendable (DevysHTTPClient, DeviceSession) async throws -> Value
     ) async throws -> Value {
-        try await operation(api, current())
+        let session = try current()
+        do {
+            return try await operation(api, session)
+        } catch DevysHTTPError.unauthorized {
+            // Only the session that was refused; a newer sign-in stays.
+            if self.session == session { expire() }
+            throw DevysHTTPError.unauthorized
+        }
     }
 
     func subscribe(_ continuation: AsyncStream<SessionPhase>.Continuation) {
@@ -274,23 +280,20 @@ extension SessionClient {
                 }
             },
             signIn: { server, code in try await hub.signIn(server: server, code: code) },
-            signOut: { await hub.signOut() },
-            expire: { await hub.expire() }
+            signOut: { await hub.signOut() }
         )
     }
 
     public static let unimplemented = Self(
         phases: { AsyncStream { $0.finish() } },
         signIn: { _, _ in throw DevysHTTPError.unauthorized },
-        signOut: {},
-        expire: {}
+        signOut: {}
     )
 
     public static let signedInPreview = Self(
         phases: { AsyncStream { $0.yield(.signedIn(server: URL(string: "http://127.0.0.1:5173")!)) } },
         signIn: { _, _ in },
-        signOut: {},
-        expire: {}
+        signOut: {}
     )
 }
 
@@ -303,6 +306,7 @@ extension RuntimeClient {
             updateBusiness: { id, name, brief in
                 try await hub.call { api, session in try await api.updateBusiness(session, id: id, name: name, brief: brief) }
             },
+            exportBusiness: { id in try await hub.call { api, session in try await api.exportBusiness(session, id: id) } },
             devices: { try await hub.call { api, session in try await api.devices(session) } },
             issueDeviceCode: { try await hub.call { api, session in try await api.issueDeviceCode(session) } },
             revokeDevice: { id in try await hub.call { api, session in try await api.revokeDevice(session, id: id) } },
@@ -350,9 +354,6 @@ extension RuntimeClient {
             },
             projects: { id in try await hub.call { api, session in try await api.projects(session, businessID: id) } },
             createProject: { id, project in try await hub.call { api, session in try await api.createProject(session, businessID: id, project) } },
-            updateProject: { id, project, change in
-                try await hub.call { api, session in try await api.updateProject(session, businessID: id, projectID: project, change) }
-            },
             addToProject: { id, project, ref in
                 try await hub.call { api, session in try await api.addToProject(session, businessID: id, projectID: project, ref: ref) }
             },

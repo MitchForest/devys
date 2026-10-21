@@ -23,27 +23,6 @@ public enum DevysComposition {
         }
     }
 
-    /// The macOS Settings window's store; it shares the live clients.
-    @MainActor
-    public static func makePreferencesStore() -> StoreOf<Preferences> {
-        var state = Preferences.State()
-        #if DEBUG
-            // QA only: DEVYS_SETTINGS=account|team|businesses|devices|voice|appearance opens that section.
-            if let raw = ProcessInfo.processInfo.environment["DEVYS_SETTINGS"],
-               let section = PreferencesSection.allCases.first(where: { $0.rawValue.lowercased() == raw }) {
-                state.section = section
-            }
-        #endif
-        return withDependencies {
-            $0.speechCaptureClient = speechCapture
-            $0.speechPlaybackClient = speechPlayback
-        } operation: {
-            Store(initialState: state) {
-                Preferences()
-            }
-        }
-    }
-
     #if DEBUG
         /// QA only: `DEVYS_ENROLL_SERVER` and `DEVYS_ENROLL_CODE` sign in at launch
         /// through the real enrollment exchange, so screenshots need no UI scripting.

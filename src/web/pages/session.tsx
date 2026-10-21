@@ -1,15 +1,13 @@
 import { cn } from "@/lib/utils";
 import { Code2, Hand, MessageSquarePlus, Send, Square, SquareTerminal, Undo2 } from "lucide-react";
-import { useEffect, useState } from "react";
-import {
-  api,
-  ApiError,
-  type CodingSession,
-  type WorkItem,
-  type WorkingDiff,
-  type TranscriptEntry,
-} from "../app/api.ts";
-import { useWorkspace } from "../app/workspace.tsx";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { api, ApiError } from "../app/api.ts";
+import type { LiveCodingSession, TranscriptEntry } from "../../apps/code/contract.ts";
+import type { WorkItem } from "../../work/contract.ts";
+import { useBusinessId, useEmployeeName, useMembers, usePerson } from "../app/data.ts";
+import { useTakeover } from "../app/mutations.ts";
+import { keys, problemOf } from "../app/query.ts";
 import { DevysButton } from "../design/buttons.tsx";
 import { MarkdownView } from "../design/markdown.tsx";
 import { StatusChip } from "../design/primitives.tsx";
@@ -39,12 +37,23 @@ export default function SessionView({
   onChanged,
 }: {
   item: WorkItem;
-  session: CodingSession;
+  session: LiveCodingSession;
   onChanged: () => void;
 }) {
-  const { businessId, person, members, actions, main, employeeName } = useWorkspace();
+  const businessId = useBusinessId();
+  const person = usePerson();
+  const members = useMembers();
+  const employeeName = useEmployeeName();
+  const takeoverChange = useTakeover();
+  const client = useQueryClient();
   const dark = useDark();
-  const [diff, setDiff] = useState<WorkingDiff | null>(null);
+  // The running diff, read often while the session works.
+  const diff =
+    useQuery({
+      queryKey: keys.diff(businessId, item.id, session.id),
+      queryFn: () => api.sessionDiff(businessId, item.id, session.id),
+      refetchInterval: session.state === "working" ? 5_000 : 30_000,
+    }).data ?? null;
   const [selection, setSelection] = useState<DiffSelection | null>(null);
   const [draftComment, setDraftComment] = useState("");
   const [comments, setComments] = useState<DiffComment[]>([]);
@@ -53,21 +62,6 @@ export default function SessionView({
   const mine = item.taken_over_by !== null && item.taken_over_by === person?.id;
   const takeover = takeoverTitle(item.taken_over_by, person?.id, members);
   const chip = stateChip[session.state];
-
-  useEffect(() => {
-    let live = true;
-    const load = () =>
-      api
-        .sessionDiff(businessId, item.id, session.id)
-        .then((result) => live && setDiff(result))
-        .catch(() => undefined);
-    void load();
-    const timer = setInterval(() => void load(), session.state === "working" ? 5_000 : 30_000);
-    return () => {
-      live = false;
-      clearInterval(timer);
-    };
-  }, [businessId, item.id, session.id, session.state]);
 
   const addComment = async () => {
     if (!selection || !draftComment.trim() || !diff) return;
@@ -84,41 +78,49 @@ export default function SessionView({
     setDraftComment("");
     setSelection(null);
   };
-  const send = async () => {
-    const message = [comments.length ? reviewBundle(item.title, comments) : "", text.trim()]
-      .filter(Boolean)
-      .join("\n");
-    if (!message) return;
-    try {
-      await api.steerSession(businessId, item.id, session.id, message);
+  const steer = useMutation({
+    mutationFn: (message: string) => api.steerSession(businessId, item.id, session.id, message),
+    onSuccess: () => {
       setText("");
       setComments([]);
       setError(null);
       onChanged();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "That couldn't be sent.");
-    }
+    },
+    onError: (cause) => setError(cause instanceof Error ? cause.message : "That couldn't be sent."),
+  });
+  const send = () => {
+    const message = [comments.length ? reviewBundle(item.title, comments) : "", text.trim()]
+      .filter(Boolean)
+      .join("\n");
+    if (message) steer.mutate(message);
   };
+  const stop = useMutation({
+    mutationFn: () => api.stopSession(businessId, item.id, session.id),
+    onSuccess: onChanged,
+  });
   /** Until the owner drives, comments go to the work item's employee in its thread. */
-  const sendComments = async () => {
-    if (!comments.length) return;
-    try {
-      await api.post(businessId, `work:${item.id}`, {
+  const commenting = useMutation({
+    mutationFn: () =>
+      api.post(businessId, `work:${item.id}`, {
         id: crypto.randomUUID(),
         text: reviewBundle(item.title, comments),
         mentions: [item.owner_employee_id],
-      });
+      }),
+    onSuccess: () => {
       setComments([]);
       setError(null);
-      if (main.key === `work:${item.id}`) main.refresh();
-    } catch (cause) {
+      void client.invalidateQueries({ queryKey: keys.conversation(businessId, `work:${item.id}`) });
+    },
+    onError: (cause) =>
       // A 409 says everyone who would read them is paused.
       setError(
         cause instanceof ApiError && cause.status === 409
           ? `${employeeName(item.owner_employee_id)} is paused, so the comments weren't sent.`
           : "The comments couldn't be sent.",
-      );
-    }
+      ),
+  });
+  const sendComments = () => {
+    if (comments.length) commenting.mutate();
   };
   const count = `${comments.length} comment${comments.length === 1 ? "" : "s"}`;
 
@@ -144,14 +146,11 @@ export default function SessionView({
           <SquareTerminal /> Open in {providerName(session.provider)}
         </DevysButton>
         {session.state === "working" && (
-          <DevysButton
-            compact
-            onClick={() => void api.stopSession(businessId, item.id, session.id).then(onChanged)}
-          >
+          <DevysButton compact onClick={() => stop.mutate()}>
             <Square /> Stop
           </DevysButton>
         )}
-        <DevysButton compact onClick={() => actions.toggleTakeover(item)}>
+        <DevysButton compact onClick={() => takeoverChange.mutate(item)}>
           {item.taken_over_by === null ? (
             <>
               <Hand /> Take over
@@ -222,7 +221,7 @@ export default function SessionView({
               <span className="text-caption text-ink-3">
                 {count} for {employeeName(item.owner_employee_id)}, in this work item's thread.
               </span>
-              <DevysButton compact onClick={() => void sendComments()}>
+              <DevysButton compact onClick={sendComments}>
                 <Send /> Send {count}
               </DevysButton>
             </div>
@@ -236,7 +235,7 @@ export default function SessionView({
               aria-label="Message to the coding session"
               className="min-h-[44px] flex-1"
             />
-            <DevysButton onClick={() => void send()}>Send</DevysButton>
+            <DevysButton onClick={send}>Send</DevysButton>
           </div>
         ) : (
           <span className="text-detail text-ink-3">
@@ -271,29 +270,17 @@ function SessionSteps({
 }: {
   businessId: string;
   workId: string;
-  session: CodingSession;
+  session: LiveCodingSession;
 }) {
   const [open, setOpen] = useState(false);
-  const [entries, setEntries] = useState<TranscriptEntry[] | null>(null);
-  const [problem, setProblem] = useState<string>();
-  useEffect(() => {
-    if (!open) return;
-    let live = true;
-    const load = () =>
-      api
-        .sessionTranscript(businessId, workId, session.id)
-        .then((result) => live && (setEntries(result.entries), setProblem(undefined)))
-        .catch(
-          (cause: unknown) =>
-            live && setProblem(cause instanceof Error ? cause.message : "Unavailable"),
-        );
-    void load();
-    const timer = session.state === "working" ? setInterval(() => void load(), 5_000) : undefined;
-    return () => {
-      live = false;
-      clearInterval(timer);
-    };
-  }, [open, businessId, workId, session.id, session.state]);
+  const transcript = useQuery({
+    queryKey: keys.transcript(businessId, workId, session.id),
+    queryFn: () => api.sessionTranscript(businessId, workId, session.id),
+    enabled: open,
+    refetchInterval: session.state === "working" ? 5_000 : false,
+  });
+  const entries: readonly TranscriptEntry[] | null = transcript.data?.entries ?? null;
+  const problem = transcript.isError ? problemOf(transcript.error, "Unavailable") : undefined;
   return (
     <div className="flex flex-col gap-1.5">
       <button

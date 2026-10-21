@@ -151,6 +151,20 @@ const imports = (path: string) =>
   [...read(path).matchAll(/(?:from|import)\s*\(?\s*["']([^"']+)["']/g)].map((match) => match[1]!);
 const resolve = (from: string, target: string) => join(from, "..", target).replaceAll("\\", "/");
 
+/** The API's response schemas: wiring that the web client may import. */
+const wireSchemas = "src/app/wire.ts";
+
+it("the wire schemas compose contracts only, so the web client can import them", () => {
+  for (const target of imports(wireSchemas)) {
+    if (target === "effect") continue;
+    const resolved = resolve(wireSchemas, target);
+    expect(
+      contractPath.test(resolved) || shared.some((prefix) => resolved.startsWith(prefix)),
+      `${wireSchemas} imports ${resolved}`,
+    ).toBe(true);
+  }
+});
+
 it("components reach each other only through contract.ts; only wiring selects adapters", () => {
   for (const path of files("src")) {
     if (wiring(path)) continue;
@@ -159,6 +173,8 @@ it("components reach each other only through contract.ts; only wiring selects ad
       const resolved = resolve(path, target);
       if (!resolved.startsWith("src/") || shared.some((prefix) => resolved.startsWith(prefix)))
         continue;
+      // The web client decodes responses with the wire schemas; nothing else of wiring.
+      if (own === "web" && resolved === wireSchemas) continue;
       expect(wiring(resolved), `${path} imports application wiring ${resolved}`).toBe(false);
       // The web client renders document surfaces directly; they are its UI library.
       if (own === "web" && component(resolved) === "surfaces") continue;

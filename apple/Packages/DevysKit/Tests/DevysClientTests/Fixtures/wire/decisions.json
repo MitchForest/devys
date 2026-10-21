@@ -1,0 +1,18 @@
+{
+  "decisions": [
+    {
+      "id": "00000000-0000-4000-8000-000000000012",
+      "employee_id": "00000000-0000-4000-8000-000000000003",
+      "capability": "driveCreate",
+      "input": {
+        "name": "order.txt",
+        "content": "12 fittings"
+      },
+      "work_item_id": "00000000-0000-4000-8000-000000000009",
+      "conversation": "work:00000000-0000-4000-8000-000000000009",
+      "status": "pending",
+      "requested_at": "2026-01-01T00:00:00.000Z",
+      "expires_at": "2026-01-01T00:00:00.000Z"
+    }
+  ]
+}

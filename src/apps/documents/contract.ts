@@ -1,3 +1,16 @@
+import { Schema } from "effect";
+import { Timestamp } from "../../protocol/time.ts";
+
+/** A file an employee published: its bytes are in object storage, its record here. */
+export const Artifact = Schema.Struct({
+  id: Schema.String,
+  filename: Schema.String,
+  content_type: Schema.String,
+  byte_length: Schema.Number,
+  created_at: Timestamp,
+});
+export type Artifact = typeof Artifact.Type;
+
 /** How employees' HTML pages render (U3): the one policy every viewer applies. */
 
 /**

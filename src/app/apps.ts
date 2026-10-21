@@ -22,6 +22,8 @@ import type { Database } from "../data/database.ts";
 import { type Business, type Person } from "../identity/contract.ts";
 import type { AppManifest } from "../protocol/app.ts";
 import { body, forbidden, notFound } from "./request.ts";
+import { respond } from "../protocol/http.ts";
+import { AppChanged, Apps } from "./wire.ts";
 
 /** Every Devys app: the system apps, then the business apps (available, then coming). */
 export const appCatalog: readonly AppManifest[] = [
@@ -113,11 +115,12 @@ async function hasSomething(
 export async function directory(env: Env, businessId: string): Promise<InstalledApp[]> {
   const rows = await Effect.runPromise(installs(env.HYPERDRIVE, businessId));
   return Promise.all(
-    appCatalog.map(async ({ skills, ...manifest }) => {
+    appCatalog.map(async ({ skills, defaultGrants, ...manifest }) => {
       const row = rows.find((candidate) => candidate.app_id === manifest.id);
       const installed = manifest.kind === "system" || Boolean(row);
       return {
         ...manifest,
+        ...(defaultGrants ? { default_grants: defaultGrants } : {}),
         skills: skills.map(({ name, description }) => ({ name, description })),
         installed,
         pinned: row?.pinned ?? false,
@@ -135,7 +138,7 @@ export async function appsRoute(
 ) {
   const { business, trusted, path } = access;
   if (path === "/apps" && request.method === "GET")
-    return Response.json({ apps: await directory(env, business.id) });
+    return respond(Apps, { apps: await directory(env, business.id) });
   const [, id, action] = /^\/apps\/([a-z0-9-]{1,40})\/(install|uninstall|pin)$/.exec(path) ?? [];
   const app = id ? appById(id) : undefined;
   if (!app || request.method !== "POST") return notFound();
@@ -156,7 +159,7 @@ export async function appsRoute(
     if (!(await Effect.runPromise(setPinned(env.HYPERDRIVE, business.id, app.id, pinned))))
       return new Response(`${app.name} is not installed`, { status: 409 });
   }
-  return Response.json({
-    app: (await directory(env, business.id)).find((entry) => entry.id === app.id),
+  return respond(AppChanged, {
+    app: (await directory(env, business.id)).find((entry) => entry.id === app.id)!,
   });
 }

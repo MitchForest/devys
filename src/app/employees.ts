@@ -22,6 +22,20 @@ import { bindableChannels, type BindableChannel } from "./channel.ts";
 import { capabilities } from "./capabilities.ts";
 import { isConfiguredModel } from "./models.ts";
 import { body, forbidden, label, notFound } from "./request.ts";
+import { respond } from "../protocol/http.ts";
+import { Grant } from "../authority/contract.ts";
+import {
+  AccessList,
+  Bound,
+  LookChanged,
+  ModelChanged,
+  PausedChanged,
+  ProfileChanged,
+  Retired,
+  Revoked,
+  RuntimeStatus,
+  Stopped,
+} from "./wire.ts";
 
 /** What a chat address looks like on each bindable channel. */
 const validAddress: Record<BindableChannel, (chat: string) => boolean> = {
@@ -55,23 +69,22 @@ export async function employeeRoute(
     if (!trusted) return forbidden();
     const input = await body<{ name: string; responsibilities: string }>(request, 8_000);
     const name = input.name === undefined ? undefined : label(input.name, 80);
-    const role =
+    const responsibilities =
       input.responsibilities === undefined ? undefined : label(input.responsibilities, 2000);
-    if ((input.name !== undefined && !name) || (input.responsibilities !== undefined && !role))
+    if (
+      (input.name !== undefined && !name) ||
+      (input.responsibilities !== undefined && !responsibilities)
+    )
       return new Response("Send a name of up to 80 and responsibilities of up to 2000 characters", {
         status: 400,
       });
-    await Effect.runPromise(
-      updateEmployee(env.HYPERDRIVE, scope, {
-        ...(name ? { name } : {}),
-        ...(role ? { role } : {}),
-      }),
-    );
-    return Response.json({ ...(name ? { name } : {}), ...(role ? { role } : {}) });
+    const change = { ...(name ? { name } : {}), ...(responsibilities ? { responsibilities } : {}) };
+    await Effect.runPromise(updateEmployee(env.HYPERDRIVE, scope, change));
+    return respond(ProfileChanged, change);
   }
   if (path === "/retire" && request.method === "POST") {
     if (!trusted) return forbidden();
-    const { reassignTo } = await body<{ reassignTo: string }>(request, 1_000);
+    const { reassign_to: reassignTo } = await body<{ reassign_to: string }>(request, 1_000);
     const successor =
       typeof reassignTo === "string" && reassignTo !== scope.employeeId
         ? await Effect.runPromise(
@@ -94,7 +107,7 @@ export async function employeeRoute(
       );
     });
     await agent().stop(scope);
-    return Response.json({ retired: true, reassignedTo: successor.id });
+    return respond(Retired, { retired: true, reassigned_to: successor.id });
   }
   if (path === "/model" && request.method === "PUT") {
     if (!trusted) return forbidden();
@@ -102,19 +115,19 @@ export async function employeeRoute(
     if (!isConfiguredModel(model))
       return new Response("Choose a configured model", { status: 400 });
     await Effect.runPromise(setEmployeeModel(env.HYPERDRIVE, scope, model));
-    return Response.json({ model });
+    return respond(ModelChanged, { model });
   }
   if (path === "/status" && request.method === "GET")
-    return Response.json({ state: JSON.parse(await agent().inspect(scope)) });
+    return respond(RuntimeStatus, { state: JSON.parse(await agent().inspect(scope)) });
   if (path === "/stop" && request.method === "POST")
-    return trusted ? Response.json(await agent().stop(scope)) : forbidden();
+    return trusted ? respond(Stopped, await agent().stop(scope)) : forbidden();
   if ((path === "/pause" || path === "/resume") && request.method === "POST") {
     if (!trusted) return forbidden();
     const pausing = path === "/pause";
     await Effect.runPromise(setPaused(env.HYPERDRIVE, scope, pausing));
     // Pausing also stops work already running; the fence stops anything after it.
     if (pausing) await agent().stop(scope);
-    return Response.json({ paused: pausing });
+    return respond(PausedChanged, { paused: pausing });
   }
   if (path === "/access" || path.startsWith("/access/")) return accessRoute(request, env, access);
   if (path === "/channels" && request.method === "POST") {
@@ -135,18 +148,20 @@ export async function employeeRoute(
     } catch {
       return new Response("That chat is already bound elsewhere", { status: 409 });
     }
-    return Response.json({ bound: true });
+    return respond(Bound, { bound: true });
   }
   if (path === "/reactions" && request.method === "POST") {
     if (!trusted) return forbidden();
-    const input = await body<{ targetId: string; targetText: string; emoji: string; on: boolean }>(
-      request,
-      4_000,
-    );
+    const input = await body<{
+      target_id: string;
+      target_text: string;
+      emoji: string;
+      on: boolean;
+    }>(request, 4_000);
     if (
-      typeof input.targetId !== "string" ||
-      !/^[0-9a-f-]{36}$/.test(input.targetId) ||
-      typeof input.targetText !== "string" ||
+      typeof input.target_id !== "string" ||
+      !/^[0-9a-f-]{36}$/.test(input.target_id) ||
+      typeof input.target_text !== "string" ||
       typeof input.emoji !== "string" ||
       !input.emoji ||
       [...input.emoji].length > 8 ||
@@ -155,8 +170,8 @@ export async function employeeRoute(
       return new Response("Send a target, its text, an emoji and on", { status: 400 });
     await Effect.runPromise(
       setAppReaction(env.HYPERDRIVE, scope, {
-        targetId: input.targetId,
-        targetText: input.targetText,
+        targetId: input.target_id,
+        targetText: input.target_text,
         emoji: input.emoji,
         on: input.on,
       }),
@@ -179,14 +194,14 @@ export async function lookRoute(
     const result = await lookPhoto(request, env, businessId, subject);
     if (result instanceof Response) return result;
     await Effect.runPromise(save(result));
-    return Response.json({ look: result });
+    return respond(LookChanged, { look: result });
   }
   if (request.method !== "POST") return notFound();
   const look = parseLook((await body<{ look: unknown }>(request, 2_000)).look);
   if (look === undefined) return new Response("Send a Face, an emoji or null", { status: 400 });
   await Effect.runPromise(save(look));
   await removeLookPhoto(env, businessId, subject);
-  return Response.json({ look });
+  return respond(LookChanged, { look });
 }
 
 /** What an employee may do: its grants, and the capabilities it could be granted. */
@@ -210,7 +225,7 @@ async function accessRoute(
   if (path === "/access" && request.method === "GET") {
     const grants = await Effect.runPromise(grantsFor(env.HYPERDRIVE, scope));
     const held = new Set(grants.map((item) => item.capability));
-    return Response.json({
+    return respond(AccessList, {
       grants: grants.map((item) => ({ ...item, ...describe(item.capability) })),
       available: catalog
         .filter((item) => !held.has(item.name))
@@ -234,7 +249,8 @@ async function accessRoute(
     )
       return new Response("Limits must be an object", { status: 400 });
     try {
-      return Response.json(
+      return respond(
+        Grant,
         await Effect.runPromise(
           grant(env.HYPERDRIVE, scope, {
             capability: contract,
@@ -251,7 +267,7 @@ async function accessRoute(
   const revoke = /^\/access\/([A-Za-z0-9-]{1,64})\/revoke$/.exec(path)?.[1];
   if (revoke) {
     const changed = await Effect.runPromise(revokeGrant(env.HYPERDRIVE, scope, revoke));
-    return changed ? Response.json({ revoked: true }) : notFound();
+    return changed ? respond(Revoked, { revoked: true }) : notFound();
   }
   return notFound();
 }

@@ -21,7 +21,7 @@ test("on a phone: tabs of Home, Projects, Team and Apps; the conversation full s
   const workItem = await post<{ id: string }>(`${path}/work`, {
     title: "Write a tagline",
     owner: growth.id,
-    projectId: project.id,
+    project_id: project.id,
   });
   await insertMessage(sql, owner.business, `project:${project.id}`, {
     author: "system",
@@ -53,7 +53,7 @@ test("on a phone: tabs of Home, Projects, Team and Apps; the conversation full s
       "aria-current",
       "page",
     );
-    await page.getByRole("button", { name: /^Launch/ }).click();
+    await page.getByRole("link", { name: /^Launch/ }).click();
     await expect(page.getByLabel("Message Launch")).toBeVisible();
     await expect(tabs).toHaveCount(0);
 
@@ -89,7 +89,7 @@ test("on a phone: tabs of Home, Projects, Team and Apps; the conversation full s
 
     // Team opens a direct chat.
     await tabs.getByRole("button", { name: "Team" }).click();
-    await page.getByRole("button", { name: "Growth", exact: true }).click();
+    await page.getByRole("link", { name: "Growth", exact: true }).click();
     await expect(page.getByLabel("Message Growth")).toBeVisible();
     await page.getByRole("button", { name: "Back", exact: true }).click();
 

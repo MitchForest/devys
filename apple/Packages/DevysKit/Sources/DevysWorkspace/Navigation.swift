@@ -75,13 +75,35 @@ extension Layer {
         }
     }
 
-    /// The layer that shows a page or a file, from its ref.
+    /// The layer that shows a record anywhere (a page or a file), from its ref.
     package init?(ref: Ref) {
-        switch ref {
-        case .artifact(let id): self = .artifact(id)
-        case .file(let path): self = .file(path)
-        default: return nil
-        }
+        guard case .layer(let layer) = Records.open(ref) else { return nil }
+        self = layer
+    }
+}
+
+/// Where a record opens: a layer over the right panel, or a place.
+package enum RecordTarget: Hashable, Sendable {
+    case layer(Layer)
+    case place(Place)
+}
+
+/// The one registry of what opens each record kind the apps declare (their manifests' `records`),
+/// keyed by `<app>/<kind>` from the ref, the same rules as the web. A kind not here opens nothing.
+package enum Records {
+    /// `work`: the work item of the thread on screen, which a coding session belongs to.
+    package typealias Opener = @Sendable (_ id: String, _ work: String?) -> RecordTarget?
+
+    package static let registry: [String: Opener] = [
+        "documents/artifact": { id, _ in .layer(.artifact(id)) },
+        "documents/file": { id, _ in .layer(.file(id)) },
+        "code/session": { id, work in work.map { .layer(.session(workID: $0, sessionID: id)) } },
+        "work/item": { id, _ in .place(.thread(id)) },
+        "work/project": { id, _ in .place(.project(id)) }
+    ]
+
+    package static func open(_ ref: Ref, work: String? = nil) -> RecordTarget? {
+        registry[ref.recordKind]?(ref.id, work)
     }
 }
 

@@ -6,6 +6,8 @@ import { conversationKey, employeeOf } from "../conversations/contract.ts";
 import { conversationSummaries, markSeen, setFollowing } from "../conversations/service.ts";
 import { conversationExists, conversationPage, postFromPerson } from "./conversations.ts";
 import { body, forbidden, notFound } from "./request.ts";
+import { respond } from "../protocol/http.ts";
+import { ConversationPage, Conversations, Following, Posted, Read } from "./wire.ts";
 
 /**
  * The business's shared conversations: DMs (`direct:<employee>`), project channels
@@ -19,7 +21,7 @@ export async function conversationRoute(
 ) {
   const { person, business, trusted, path } = access;
   if (path === "/conversations" && request.method === "GET")
-    return Response.json({
+    return respond(Conversations, {
       conversations: await Effect.runPromise(
         conversationSummaries(env.HYPERDRIVE, business.id, person.id),
       ),
@@ -42,7 +44,7 @@ export async function conversationRoute(
         ),
       )
     ).flat();
-    return Response.json({
+    return respond(ConversationPage, {
       ...page,
       messages: page.messages.map((message) => ({
         ...message,
@@ -59,21 +61,21 @@ export async function conversationRoute(
     await Effect.runPromise(
       markSeen(env.HYPERDRIVE, business.id, key, `person:${person.id}`, { at }),
     );
-    return Response.json({ read: true });
+    return respond(Read, { read: true });
   }
   if (action === "follow") {
     const { on } = await body<{ on: boolean }>(request, 1_000);
     if (typeof on !== "boolean") return new Response("Send on: true or false", { status: 400 });
     await Effect.runPromise(setFollowing(env.HYPERDRIVE, business.id, key, person.id, on));
-    return Response.json({ following: on });
+    return respond(Following, { following: on });
   }
   if (action !== "messages") return notFound();
   const input = await body<{
     id: string;
     text: string;
-    replyTo: string;
+    reply_to: string;
     mentions: string[];
-    viaVoice: boolean;
+    via_voice: boolean;
   }>(request, 70_000);
   const text = typeof input.text === "string" ? input.text.trim() : "";
   if (
@@ -86,12 +88,12 @@ export async function conversationRoute(
   const posted = await postFromPerson(env, business.id, person.id, key, {
     id: input.id,
     text,
-    ...(typeof input.replyTo === "string" ? { replyTo: input.replyTo } : {}),
+    ...(typeof input.reply_to === "string" ? { replyTo: input.reply_to } : {}),
     ...(Array.isArray(input.mentions)
       ? { mentions: input.mentions.filter((m) => typeof m === "string") }
       : {}),
-    viaVoice: input.viaVoice === true,
+    viaVoice: input.via_voice === true,
   });
   if ("refused" in posted) return new Response(posted.refused, { status: 409 });
-  return Response.json(posted, { status: 201 });
+  return respond(Posted, posted, { status: 201 });
 }

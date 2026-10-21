@@ -1,7 +1,10 @@
 import { Check, ChevronRight } from "lucide-react";
 import { useState } from "react";
-import type { Decision, GlanceItem, NeedsYouItem } from "../app/api.ts";
-import { useWorkspace, valueOf } from "../app/workspace.tsx";
+import type { NeedsYouItem, WorkCard } from "../../app/wire.ts";
+import type { Decision } from "../../authority/contract.ts";
+import { useDecisions, useEmployees, useHome, useWork } from "../app/data.ts";
+import { useAnswer } from "../app/mutations.ts";
+import { useNav } from "../app/navigation.ts";
 import { DevysButton } from "../design/buttons.tsx";
 import { EmployeePortrait } from "../design/portrait.tsx";
 import { decisionFields, decisionTitle } from "../pages/work.tsx";
@@ -15,18 +18,17 @@ const money = (cents: number) =>
  * and what it cost. Each row opens its thread; a decision is answered right here.
  */
 export function NeedsYou({ close }: { close: () => void }) {
-  const { home, decisions } = useWorkspace();
-  const value = valueOf(home);
+  const value = useHome().data;
+  const pending = useDecisions().data ?? [];
   if (!value) return null;
-  const pending = valueOf(decisions) ?? [];
-  const { moving, stuck, spentCents } = value.glance;
+  const { moving, stuck, spent_cents: spentCents } = value.glance;
   return (
     <section aria-label="Needs you" className="flex h-full flex-col">
-      <PanelHeader title={value.needsYou.length ? "Needs you" : "At a glance"} close={close} />
+      <PanelHeader title={value.needs_you.length ? "Needs you" : "At a glance"} close={close} />
       <PanelBody>
-        {value.needsYou.length > 0 && (
+        {value.needs_you.length > 0 && (
           <div className="flex flex-col gap-2">
-            {value.needsYou.map((item) => {
+            {value.needs_you.map((item) => {
               const decision =
                 item.kind === "decision" ? pending.find((d) => d.id === item.id) : undefined;
               return decision ? (
@@ -61,10 +63,13 @@ export function NeedsYou({ close }: { close: () => void }) {
 
 /** One request, answered in place; its input unfolds on demand. */
 function DecisionRow({ decision }: { decision: Decision }) {
-  const { actions, employees, work } = useWorkspace();
+  const employees = useEmployees();
+  const work = useWork().data;
+  const nav = useNav();
+  const answer = useAnswer();
   const [open, setOpen] = useState(false);
   const employee = employees.find((e) => e.id === decision.employee_id);
-  const item = valueOf(work)?.find((w) => w.id === decision.work_item_id);
+  const item = work?.find((w) => w.id === decision.work_item_id);
   return (
     <div className="flex flex-col gap-2 rounded-card border border-hairline bg-sheet p-3 shadow-resting">
       <div className="flex items-center gap-2">
@@ -92,10 +97,14 @@ function DecisionRow({ decision }: { decision: Decision }) {
         </div>
       )}
       <div className="flex items-center gap-1.5">
-        <DevysButton kind="aurora" compact onClick={() => actions.answer(decision.id, true)}>
+        <DevysButton
+          kind="aurora"
+          compact
+          onClick={() => answer.mutate({ id: decision.id, approve: true })}
+        >
           <Check /> Approve
         </DevysButton>
-        <DevysButton compact onClick={() => actions.answer(decision.id, false)}>
+        <DevysButton compact onClick={() => answer.mutate({ id: decision.id, approve: false })}>
           Decline
         </DevysButton>
         <span className="ml-auto" />
@@ -110,7 +119,7 @@ function DecisionRow({ decision }: { decision: Decision }) {
         {decision.work_item_id && (
           <button
             type="button"
-            onClick={() => actions.openThread(decision.work_item_id!)}
+            onClick={() => nav.openThread(decision.work_item_id!)}
             className="text-caption text-ink-3 hover:text-ink-2"
           >
             Thread
@@ -122,14 +131,14 @@ function DecisionRow({ decision }: { decision: Decision }) {
 }
 
 function NeedsYouRow({ item }: { item: NeedsYouItem }) {
-  const { actions, employees } = useWorkspace();
-  const employee = employees.find((e) => e.id === item.employeeId);
-  const opens = item.workId ?? undefined;
+  const nav = useNav();
+  const employee = useEmployees().find((e) => e.id === item.employee_id);
+  const opens = item.work_id ?? undefined;
   return (
     <button
       type="button"
       disabled={!opens}
-      onClick={() => opens && actions.openThread(opens)}
+      onClick={() => opens && nav.openThread(opens)}
       className="flex items-center gap-2.5 rounded-card border border-hairline bg-sheet px-3 py-2.5 text-left shadow-resting enabled:hover:bg-sheet-tint"
     >
       {employee && <EmployeePortrait employee={employee} size={22} />}
@@ -139,19 +148,19 @@ function NeedsYouRow({ item }: { item: NeedsYouItem }) {
   );
 }
 
-function GlanceRow({ item, tone }: { item: GlanceItem; tone?: "stuck" }) {
-  const { actions, employees } = useWorkspace();
-  const employee = employees.find((e) => e.id === item.employeeId);
+function GlanceRow({ item, tone }: { item: WorkCard; tone?: "stuck" }) {
+  const nav = useNav();
+  const employee = useEmployees().find((e) => e.id === item.employee_id);
   const note =
     tone === "stuck"
-      ? item.waitCondition
-        ? `Waiting on ${item.waitCondition}`
+      ? item.wait_condition
+        ? `Waiting on ${item.wait_condition}`
         : "No change in a day"
       : undefined;
   return (
     <button
       type="button"
-      onClick={() => actions.openThread(item.id)}
+      onClick={() => nav.openThread(item.id)}
       className="-mx-2 flex items-center gap-2.5 rounded-[9px] px-2 py-1.5 text-left hover:bg-sheet-tint"
     >
       {employee && <EmployeePortrait employee={employee} size={20} />}

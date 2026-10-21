@@ -1,45 +1,82 @@
+import { Navigate } from "@tanstack/react-router";
 import { CircleAlert } from "lucide-react";
 import { useState } from "react";
-import { WorkspaceProvider, useWorkspace } from "./workspace.tsx";
+import { useBusinessId, useMe } from "./data.ts";
+import { useSignIn } from "./mutations.ts";
+import { problemOf } from "./query.ts";
+import { WorkspaceProvider } from "./workspace.tsx";
 import { DevysButton } from "../design/buttons.tsx";
 import { Face } from "../design/face.tsx";
+import { NewBusiness } from "../shell/settings.tsx";
 import { Shell } from "../shell/shell.tsx";
 
-export function App() {
+/** `/`: signed in, the first business's Home; signed out, the sign-in card. */
+export function Entry() {
+  const me = useMe();
+  if (me.isPending) return <Busy />;
+  if (me.isError) return <Unreachable message={problemOf(me.error, "Devys isn't reachable.")} />;
+  if (!me.data) return <SignIn />;
+  const first = me.data.businesses[0];
+  if (!first) return <FirstBusiness />;
+  return <Navigate to="/$business" params={{ business: first.id }} replace />;
+}
+
+/** One business's workspace; a business this person doesn't belong to goes back to `/`. */
+export function BusinessApp() {
+  const me = useMe();
+  const id = useBusinessId();
+  if (me.isPending) return <Busy />;
+  if (me.isError) return <Unreachable message={problemOf(me.error, "Devys isn't reachable.")} />;
+  if (!me.data) return <SignIn />;
+  if (!me.data.businesses.some((b) => b.id === id)) return <Navigate to="/" replace />;
   return (
     <WorkspaceProvider>
-      <Root />
+      <Shell />
     </WorkspaceProvider>
   );
 }
 
-function Root() {
-  const { signedOut, person } = useWorkspace();
-  if (signedOut) return <SignIn />;
-  if (!person) return <div className="h-dvh bg-frame" aria-busy />;
-  return <Shell />;
+const Busy = () => <div className="h-dvh bg-frame" aria-busy />;
+
+/** The server didn't answer: say so, and keep trying. */
+function Unreachable({ message }: { message: string }) {
+  return (
+    <div className="grid min-h-dvh place-items-center bg-frame p-6">
+      <p role="alert" className="flex items-center gap-1.5 text-body text-ink-2">
+        <CircleAlert className="size-4 fill-red text-sheet" /> {message} Trying again…
+      </p>
+    </div>
+  );
+}
+
+/** Signed in with no business yet: start one. */
+function FirstBusiness() {
+  return (
+    <div className="grid min-h-dvh place-items-center overflow-y-auto bg-frame p-6">
+      <div className="flex w-full max-w-[520px] rounded-sheet bg-sheet p-8 shadow-raised">
+        <NewBusiness created={() => undefined} />
+      </div>
+    </div>
+  );
 }
 
 /** The same sign-in card as the native apps; the browser already knows its server. */
 function SignIn() {
-  const { actions } = useWorkspace();
+  const signIn = useSignIn();
   const [code, setCode] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string>();
+  const submitting = signIn.isPending;
   return (
     <div className="grid min-h-dvh place-items-center overflow-y-auto bg-frame p-6">
       <form
         className="flex w-full max-w-[440px] flex-col items-center gap-6 rounded-sheet bg-sheet p-8 shadow-raised max-sm:p-6"
         onSubmit={(event) => {
           event.preventDefault();
-          setSubmitting(true);
           setError(undefined);
-          void actions
-            .signIn(code.trim())
-            .catch(() =>
+          signIn.mutate(code.trim(), {
+            onError: () =>
               setError("That code didn't work. Codes are single-use and expire after an hour."),
-            )
-            .finally(() => setSubmitting(false));
+          });
         }}
       >
         <Face

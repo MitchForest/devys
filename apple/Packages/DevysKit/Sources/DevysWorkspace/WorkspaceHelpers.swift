@@ -115,7 +115,6 @@ extension Workspace.Action {
     package static var newProjectTapped: Self { Self(.project(.newTapped)) }
     package static var newProjectDismissed: Self { Self(.project(.sheetDismissed)) }
     package static func projectCreateTapped(_ project: ProjectChange) -> Self { Self(.project(.createTapped(project))) }
-    package static func projectUpdated(_ id: String, _ change: ProjectChange) -> Self { Self(.project(.updated(projectID: id, change))) }
     package static func projectItemAdded(_ projectID: String, _ ref: Ref) -> Self { Self(.project(.itemAdded(projectID: projectID, ref: ref))) }
     package static func projectItemRemoved(_ projectID: String, _ itemID: String) -> Self {
         Self(.project(.itemRemoved(projectID: projectID, itemID: itemID)))
@@ -123,6 +122,7 @@ extension Workspace.Action {
     package static var sidebarToggled: Self { Self(.sidebarToggled) }
     package static func paletteToggled(_ open: Bool) -> Self { Self(.paletteToggled(open)) }
     package static var refreshTapped: Self { Self(.refreshTapped) }
+    package static func activeChanged(_ isActive: Bool) -> Self { Self(.activeChanged(isActive)) }
     package static var stopTapped: Self { Self(.stopTapped) }
     package static var noticeDismissed: Self { Self(.noticeDismissed) }
     package static var signOutTapped: Self { Self(.signOutTapped) }

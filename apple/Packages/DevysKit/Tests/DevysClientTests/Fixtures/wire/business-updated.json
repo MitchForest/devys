@@ -1,0 +1,8 @@
+{
+  "business": {
+    "id": "00000000-0000-4000-8000-000000000002",
+    "name": "Acme Plumbing",
+    "look": null,
+    "brief": "Fixes leaks across the city, same day."
+  }
+}

@@ -215,11 +215,8 @@ struct TerminalsSection: View {
                 .buttonStyle(.plain)
             }
         }
-        .task(id: businessID) {
-            while !Task.isCancelled {
-                open = ((try? await terminals.list(businessID)) ?? []).filter { $0.exit == nil }
-                try? await Task.sleep(for: .seconds(10))
-            }
+        .poll(id: businessID, every: .seconds(10)) {
+            open = ((try? await terminals.list(businessID)) ?? []).filter { $0.exit == nil }
         }
         .modifier(TerminalOpener(presented: $presented))
     }

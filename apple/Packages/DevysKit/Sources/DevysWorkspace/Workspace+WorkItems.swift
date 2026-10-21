@@ -33,8 +33,8 @@ package struct WorkItemDraft: Equatable {
             title: String(title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(200)),
             owner: ownerID,
             objective: objective.isEmpty ? nil : String(objective.prefix(4000)),
-            dueAt: hasDue ? due.formatted(.iso8601) : nil,
-            projectId: projectID
+            dueAt: hasDue ? ServerDate.format(due) : nil,
+            projectID: projectID
         )
     }
 }

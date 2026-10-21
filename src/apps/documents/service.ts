@@ -5,6 +5,7 @@ import type { Runner } from "../../workspace/contract.ts";
 import { sha256 } from "../../protocol/bytes.ts";
 import { defaultLimits } from "../../protocol/limits.ts";
 import { rpc } from "../../protocol/rpc.ts";
+import type { Artifact } from "./contract.ts";
 /** What publishing needs from the deployment: records and the public address of links. */
 export interface ArtifactBindings {
   HYPERDRIVE: Database;
@@ -91,13 +92,6 @@ export function artifactText(
   });
 }
 
-export interface Artifact {
-  id: string;
-  filename: string;
-  content_type: string;
-  byte_length: number;
-  created_at: string;
-}
 export function listArtifacts(db: Database, businessId: string, after?: string) {
   return database(db, (sql) =>
     after === undefined

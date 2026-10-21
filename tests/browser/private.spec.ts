@@ -37,7 +37,7 @@ test("enrollment is single-use; downloads and sessions enforce business isolatio
     await page.getByLabel("Enrollment code").fill(token);
     await page.getByRole("button", { name: "Sign in" }).click();
     await expect(
-      page.getByRole("navigation", { name: "Sidebar" }).getByRole("button", { name: /^Home/ }),
+      page.getByRole("navigation", { name: "Sidebar" }).getByRole("link", { name: /^Home/ }),
     ).toBeVisible();
     await expect(page.getByLabel("Message Head of Operations")).toBeVisible();
     await page.getByRole("button", { name: "Account" }).click();

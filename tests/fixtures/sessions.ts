@@ -102,7 +102,7 @@ export class SessionsProbe extends AgentRuntime {
       }),
       employee: async () => ({
         name: "Ada",
-        role: "Operations.",
+        responsibilities: "Operations.",
         businessName: "Probe",
         colleagues: [],
         brief: "",

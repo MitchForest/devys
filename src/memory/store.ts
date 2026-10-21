@@ -20,8 +20,8 @@ export function claim(row: Row): Claim {
     updated_at: row.updated_at,
     subject: details.subject ?? "owner",
     scope: details.scope ?? "unspecified",
-    validFrom: details.validFrom ?? null,
-    validUntil: details.validUntil ?? null,
+    valid_from: details.valid_from ?? null,
+    valid_until: details.valid_until ?? null,
     evidence: details.evidence ?? [],
     relations: details.relations ?? [],
   };

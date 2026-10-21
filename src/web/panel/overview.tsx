@@ -1,7 +1,18 @@
 import { FileText, Pencil, Plus } from "lucide-react";
 import { useState } from "react";
-import type { Project, ProjectChange } from "../app/api.ts";
-import { filterOf, layerOfRef, useWorkspace, valueOf } from "../app/workspace.tsx";
+import type { Project, ProjectChange } from "../../work/contract.ts";
+import {
+  useArtifactName,
+  useArtifacts,
+  useEmployees,
+  useOperations,
+  useProjects,
+  useWork,
+} from "../app/data.ts";
+import { useUpdateProject } from "../app/mutations.ts";
+import { filterOf } from "../app/names.ts";
+import { layerOfRef, useNav } from "../app/navigation.ts";
+import { ui } from "../app/ui.ts";
 import { DevysButton } from "../design/buttons.tsx";
 import { Field, fieldClass } from "../design/fields.tsx";
 import { EmployeePortrait } from "../design/portrait.tsx";
@@ -39,11 +50,14 @@ const formatDeadline = (deadline: string) => {
  * status and the records it keeps. Everything opens a thread or a layer.
  */
 export function Overview({ projectId, close }: { projectId: string; close: () => void }) {
-  const state = useWorkspace();
-  const { actions, employees, artifacts, artifactName } = state;
+  const nav = useNav();
+  const employees = useEmployees();
+  const artifacts = useArtifacts();
+  const artifactName = useArtifactName();
+  const allWork = useWork().data;
   const [editing, setEditing] = useState(false);
   const [showDone, setShowDone] = useState(false);
-  const project = valueOf(state.projects)?.find((p) => p.id === projectId);
+  const project = useProjects().data?.find((p) => p.id === projectId);
   if (!project)
     return (
       <section className="flex h-full flex-col">
@@ -53,7 +67,7 @@ export function Overview({ projectId, close }: { projectId: string; close: () =>
         </PanelBody>
       </section>
     );
-  const work = (valueOf(state.work) ?? []).filter((item) => item.project_id === project.id);
+  const work = (allWork ?? []).filter((item) => item.project_id === project.id);
   const done = work.filter((item) => filterOf(item.state) === "done");
   const lead = employees.find((e) => e.id === project.lead_employee_id);
   const members = employees.filter(
@@ -117,7 +131,7 @@ export function Overview({ projectId, close }: { projectId: string; close: () =>
                   <dd>
                     <button
                       type="button"
-                      onClick={() => actions.message(lead.id)}
+                      onClick={() => nav.message(lead.id)}
                       className="flex items-center gap-1.5 text-ink hover:underline"
                     >
                       <EmployeePortrait employee={lead} size={18} />
@@ -136,7 +150,7 @@ export function Overview({ projectId, close }: { projectId: string; close: () =>
                         type="button"
                         title={member.name}
                         aria-label={member.name}
-                        onClick={() => actions.message(member.id)}
+                        onClick={() => nav.message(member.id)}
                       >
                         <EmployeePortrait employee={member} size={20} />
                       </button>
@@ -166,7 +180,7 @@ export function Overview({ projectId, close }: { projectId: string; close: () =>
           action={
             <button
               type="button"
-              onClick={() => actions.newWorkItem({ projectId: project.id })}
+              onClick={() => ui.newWorkItem({ projectId: project.id })}
               className="text-caption text-ink-3 hover:text-ink-2"
             >
               <Plus className="inline size-3" /> Thread
@@ -211,14 +225,14 @@ export function Overview({ projectId, close }: { projectId: string; close: () =>
               <KeptRow
                 key={item.id}
                 title={artifactName(item.page)}
-                open={() => actions.openLayer({ kind: "artifact", id: item.page })}
+                open={() => nav.openLayer({ kind: "artifact", id: item.page })}
               />
             ))}
             {files.map((item) => (
               <KeptRow
                 key={item.id}
                 title={item.path.split("/").at(-1)!}
-                open={() => actions.openLayer({ kind: "file", path: item.path })}
+                open={() => nav.openLayer({ kind: "file", path: item.path })}
               />
             ))}
           </PanelSection>
@@ -253,7 +267,8 @@ export function ProjectFields({
   cancel: () => void;
   submitLabel: string;
 }) {
-  const { employees, operations } = useWorkspace();
+  const employees = useEmployees();
+  const operations = useOperations();
   const [name, setName] = useState(initial.name ?? "");
   const [goal, setGoal] = useState(initial.goal ?? "");
   const [deadline, setDeadline] = useState(initial.deadline ?? "");
@@ -261,7 +276,7 @@ export function ProjectFields({
     initial.budget ? String(Math.round(initial.budget.cents / 100)) : "",
   );
   const [lead, setLead] = useState(initial.lead_employee_id ?? operations?.id ?? "");
-  const [members, setMembers] = useState<string[]>(initial.member_ids ?? []);
+  const [members, setMembers] = useState<readonly string[]>(initial.member_ids ?? []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const amount = Number(budget);
@@ -387,13 +402,18 @@ export function ProjectFields({
 }
 
 function EditProject({ project, done }: { project: Project; done: () => void }) {
-  const { actions } = useWorkspace();
+  const update = useUpdateProject();
   return (
     <ProjectFields
       initial={project}
       submitLabel="Save"
       cancel={done}
-      submit={(change) => actions.updateProject(project.id, change)}
+      submit={(change) =>
+        update.mutateAsync({ id: project.id, change }).then(
+          () => true,
+          () => false,
+        )
+      }
     />
   );
 }

@@ -158,7 +158,11 @@ public struct NewMessage: Equatable, Sendable, Encodable {
         self.viaVoice = viaVoice
     }
 
-    enum CodingKeys: String, CodingKey { case id, text, replyTo, mentions, viaVoice }
+    enum CodingKeys: String, CodingKey {
+        case id, text, mentions
+        case replyTo = "reply_to"
+        case viaVoice = "via_voice"
+    }
 
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -203,26 +207,17 @@ extension DevysHTTPClient {
 
     /// Posts the owner's message; 409 means everyone who would answer is paused.
     public func postMessage(_ session: DeviceSession, businessID: String, key: ConversationKey, _ message: NewMessage) async throws -> PostedMessage {
-        var request = conversationRequest(session, businessID: businessID, key: key, action: "messages", method: "POST")
-        request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.httpBody = try JSONEncoder().encode(message)
-        return try await send(request)
+        try await send(withJSON(conversationRequest(session, businessID: businessID, key: key, action: "messages", method: "POST"), message))
     }
 
     /// Marks the conversation read up to `seen`, the created_at of the newest message seen.
     public func markRead(_ session: DeviceSession, businessID: String, key: ConversationKey, at seen: String) async throws {
-        var request = conversationRequest(session, businessID: businessID, key: key, action: "read", method: "POST")
-        request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.httpBody = try JSONEncoder().encode(ReadPosition(seen: seen))
-        _ = try await raw(request)
+        _ = try await raw(withJSON(conversationRequest(session, businessID: businessID, key: key, action: "read", method: "POST"), ReadPosition(seen: seen)))
     }
 
     /// Starts or stops following a conversation.
     public func follow(_ session: DeviceSession, businessID: String, key: ConversationKey, following: Bool) async throws {
-        var request = conversationRequest(session, businessID: businessID, key: key, action: "follow", method: "POST")
-        request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.httpBody = try JSONEncoder().encode(FollowBody(following: following))
-        _ = try await raw(request)
+        _ = try await raw(withJSON(conversationRequest(session, businessID: businessID, key: key, action: "follow", method: "POST"), FollowBody(following: following)))
     }
 
     /// The key goes in the path percent-encoded, so ":" survives every proxy.

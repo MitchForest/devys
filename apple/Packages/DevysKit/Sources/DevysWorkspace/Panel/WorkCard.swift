@@ -134,10 +134,13 @@ struct WorkCard: View {
     }
 }
 
-/// Owner, state, due date and takeover, each changed at the revision on screen.
+/// Owner, state, due date and takeover. The owner changes them by hand only after taking the work
+/// over (each at the revision on screen); until then they read, and Ask in the thread.
 private struct WorkItemFields: View {
     let store: StoreOf<Workspace>
     let item: WorkItem
+
+    private var editable: Bool { store.state.isHandEditable(item) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -158,11 +161,11 @@ private struct WorkItemFields: View {
                 .menuIndicator(.hidden)
                 .buttonStyle(.plain)
                 .fixedSize()
-                .disabled(!item.state.isOpen)
+                .disabled(!editable)
             }
             row("State") {
                 Menu {
-                    ForEach(WorkItemState.allCases.filter { $0 != item.state }, id: \.self) { state in
+                    ForEach(WorkItemState.settable.filter { $0 != item.state }, id: \.self) { state in
                         Button(state.title) { store.send(.workItemChanged(item.id, WorkItemChange(expectedRevision: item.revision, state: state))) }
                     }
                 } label: {
@@ -171,6 +174,7 @@ private struct WorkItemFields: View {
                 .menuIndicator(.hidden)
                 .buttonStyle(.plain)
                 .fixedSize()
+                .disabled(!editable)
             }
             row("Due") { due }
             row("Handled by") {
@@ -194,10 +198,12 @@ private struct WorkItemFields: View {
 
     @ViewBuilder private var due: some View {
         let date = item.dueAt.flatMap(ServerDate.parse)
-        if let date {
+        if !editable {
+            Text(date?.formatted(date: .abbreviated, time: .shortened) ?? "None").foregroundStyle(date == nil ? DevysColors.ink3 : DevysColors.ink)
+        } else if let date {
             DatePicker(
                 "Due",
-                selection: Binding(get: { date }, set: { change(dueAt: .set($0.formatted(.iso8601))) }),
+                selection: Binding(get: { date }, set: { change(dueAt: .set(ServerDate.format($0))) }),
                 displayedComponents: [.date, .hourAndMinute]
             )
             .labelsHidden()
@@ -207,9 +213,8 @@ private struct WorkItemFields: View {
         } else {
             Text("None").foregroundStyle(DevysColors.ink3)
             Spacer(minLength: 8)
-            Button("Add due date") { change(dueAt: .set(Date.now.addingTimeInterval(86_400).formatted(.iso8601))) }
+            Button("Add due date") { change(dueAt: .set(ServerDate.format(Date.now.addingTimeInterval(86_400)))) }
                 .buttonStyle(DevysButtonStyle(.quiet, compact: true))
-                .disabled(!item.state.isOpen)
         }
     }
 
@@ -226,7 +231,8 @@ private struct WorkItemFields: View {
     }
 }
 
-/// The next action and what the work waits on, edited in place.
+/// The next action and what the work waits on: read, or edited in place once the owner has taken
+/// the work over.
 private struct WorkItemNotes: View {
     let store: StoreOf<Workspace>
     let item: WorkItem
@@ -234,6 +240,26 @@ private struct WorkItemNotes: View {
     @State private var waiting = ""
 
     var body: some View {
+        if store.state.isHandEditable(item) { form } else { plan }
+    }
+
+    @ViewBuilder private var plan: some View {
+        let lines = [("Next action", item.nextAction), ("Waiting on", item.waitCondition ?? "")].filter { !$0.1.isEmpty }
+        if !lines.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(lines, id: \.0) { label, text in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(label).font(DevysTypography.label).foregroundStyle(DevysColors.ink3)
+                        Text(text).font(DevysTypography.body).foregroundStyle(DevysColors.ink).textSelection(.enabled)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .devysCard()
+        }
+    }
+
+    private var form: some View {
         VStack(alignment: .leading, spacing: 10) {
             note("Next action", text: $nextAction, prompt: "What happens next", saved: item.nextAction) {
                 store.send(.workItemChanged(item.id, WorkItemChange(expectedRevision: item.revision, nextAction: nextAction)))
@@ -276,6 +302,7 @@ extension WorkItemState {
         case .needsDecision: "Needs a decision"
         case .completed: "Done"
         case .cancelled: "Cancelled"
+        case .unknown: "Other"
         }
     }
 }

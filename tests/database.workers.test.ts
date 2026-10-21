@@ -341,7 +341,12 @@ it("several components' writes commit together or not at all", async () => {
   const { createEmployee } = await import("../src/identity/service.ts");
   const { grantAll } = await import("../src/authority/service.ts");
   const { scope } = await business("Atomic");
-  const input = { name: "Temp", role: "Helps", model: "m", template: "custom" as const };
+  const input = {
+    name: "Temp",
+    responsibilities: "Helps",
+    model: "m",
+    template: "custom" as const,
+  };
   let created = "";
   await expect(
     atomically(db, async (db) => {

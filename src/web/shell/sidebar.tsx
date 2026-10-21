@@ -1,3 +1,4 @@
+import { tints } from "../../identity/contract.ts";
 import {
   Code2,
   FileText,
@@ -10,9 +11,31 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import type { WorkItem, Employee } from "../app/api.ts";
-import { moodOf } from "../app/names.ts";
-import { samePlace, useWorkspace, valueOf, type Layer, type Place } from "../app/workspace.tsx";
+import type { Employee } from "../../identity/contract.ts";
+import type { WorkItem } from "../../work/contract.ts";
+import {
+  useApps,
+  useBusiness,
+  useDecisions,
+  useEmployees,
+  useFollowed,
+  useHome,
+  useOperations,
+  useProjects,
+  useUnread,
+  useWork,
+} from "../app/data.ts";
+import {
+  samePlace,
+  useLayers,
+  useNav,
+  usePlace,
+  type Layer,
+  type Place,
+} from "../app/navigation.ts";
+import { ui } from "../app/ui.ts";
+import { useMood, useWorking } from "../app/workspace.tsx";
+import { PlaceLink, ThreadLink } from "./links.tsx";
 import { BusinessTile } from "../design/face.tsx";
 import { EmployeePortrait } from "../design/portrait.tsx";
 import {
@@ -23,7 +46,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
-const tints = ["blue", "orange", "green", "purple", "pink"];
 /** A project's tile color, from its place in the list, the same everywhere it shows. */
 const projectTint = (index: number) => tints[(index + 1) % tints.length]!;
 /** The icon an app names in its manifest. */
@@ -39,8 +61,7 @@ type Trailing = "none" | "working" | "needsYou" | "paused";
  * conversation; an app opens as a layer beside the conversation on screen.
  */
 export function Sidebar() {
-  const state = useWorkspace();
-  const { business, actions } = state;
+  const business = useBusiness();
   return (
     <nav aria-label="Sidebar" className="h-full overflow-y-auto px-2.5 pb-4 [scrollbar-width:none]">
       <div className="flex items-center gap-1 px-1 pt-2.5 pb-2">
@@ -51,7 +72,7 @@ export function Sidebar() {
           type="button"
           aria-label="Search"
           title="Search (⌘K)"
-          onClick={() => actions.setPaletteOpen(true)}
+          onClick={() => ui.setPaletteOpen(true)}
           className="grid size-7 place-items-center rounded-[8px] text-ink-2 hover:bg-track hover:text-ink"
         >
           <Search className="size-[15px]" strokeWidth={2} />
@@ -65,7 +86,6 @@ export function Sidebar() {
 
 /** **New**: a project, a hire or a work item. A message needs nothing: the composer is always there. */
 function NewMenu() {
-  const { actions } = useWorkspace();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -76,13 +96,13 @@ function NewMenu() {
         <Plus className="size-4" strokeWidth={2} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-auto min-w-44">
-        <DropdownMenuItem onClick={() => actions.setProjectOpen(true)}>
+        <DropdownMenuItem onClick={() => ui.setProjectOpen(true)}>
           <LayoutGrid /> New project
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => actions.newWorkItem()}>
+        <DropdownMenuItem onClick={() => ui.newWorkItem()}>
           <ListChecks /> New work item
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => actions.setHireOpen(true)}>
+        <DropdownMenuItem onClick={() => ui.setHireOpen(true)}>
           <UserPlus /> Hire
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -92,13 +112,13 @@ function NewMenu() {
 
 /** The sections, also the phone's lists. Headings appear only when they have rows. */
 export function SidebarSections() {
-  const state = useWorkspace();
-  const { employees, actions, unreadOf, operations, home, apps } = state;
-  const projects = valueOf(state.projects) ?? [];
-  const needsYou = valueOf(home)?.needsYou.length ?? 0;
+  const employees = useEmployees();
+  const operations = useOperations();
+  const projects = useProjects().data ?? [];
+  const needsYou = useHome().data?.needs_you.length ?? 0;
+  const homeUnread = useUnread(operations ? `direct:${operations.id}` : undefined);
   const threads = useNestedThreads();
-  const trailing = useTrailing();
-  const shownApps = (valueOf(apps) ?? []).filter((app) => app.visible && app.pinned);
+  const shownApps = (useApps().data ?? []).filter((app) => app.visible && app.pinned);
   return (
     <div className="flex flex-col gap-0.5">
       <PlaceRow
@@ -106,23 +126,19 @@ export function SidebarSections() {
         title="Home"
         icon={House}
         count={needsYou}
-        unread={operations ? unreadOf(`direct:${operations.id}`) : 0}
+        unread={homeUnread}
       />
       {threads(null).map((item) => (
         <ThreadRow key={item.id} item={item} />
       ))}
       {projects.length > 0 && (
-        <SectionLabel action={{ label: "New project", run: () => actions.setProjectOpen(true) }}>
+        <SectionLabel action={{ label: "New project", run: () => ui.setProjectOpen(true) }}>
           Projects
         </SectionLabel>
       )}
       {projects.map((project, index) => (
         <div key={project.id} className="flex flex-col gap-0.5">
-          <PlaceRow
-            place={{ kind: "project", id: project.id }}
-            title={project.name}
-            unread={unreadOf(`project:${project.id}`)}
-          >
+          <PlaceRow place={{ kind: "project", id: project.id }} title={project.name}>
             <BusinessTile name={project.name} tint={projectTint(index)} size={20} />
           </PlaceRow>
           {threads(project.id).map((item) => (
@@ -130,19 +146,9 @@ export function SidebarSections() {
           ))}
         </div>
       ))}
-      <SectionLabel action={{ label: "Hire", run: () => actions.setHireOpen(true) }}>
-        Team
-      </SectionLabel>
+      <SectionLabel action={{ label: "Hire", run: () => ui.setHireOpen(true) }}>Team</SectionLabel>
       {employees.map((employee) => (
-        <PlaceRow
-          key={employee.id}
-          place={{ kind: "direct", employeeId: employee.id }}
-          title={employee.name}
-          trailing={trailing(employee)}
-          unread={unreadOf(`direct:${employee.id}`)}
-        >
-          <EmployeePortrait employee={employee} size={20} mood={moodOf(state, employee)} />
-        </PlaceRow>
+        <TeamRow key={employee.id} employee={employee} />
       ))}
       {shownApps.length > 0 && <SectionLabel>Apps</SectionLabel>}
       {shownApps.map((app) => (
@@ -162,9 +168,11 @@ export function SidebarSections() {
  * they have none). Everything else stays in its channel.
  */
 function useNestedThreads() {
-  const { work, followed, decisions } = useWorkspace();
-  const waiting = new Set((valueOf(decisions) ?? []).map((d) => d.work_item_id));
-  const shown = (valueOf(work) ?? []).filter(
+  const work = useWork().data;
+  const followed = useFollowed();
+  const decisions = useDecisions().data;
+  const waiting = new Set((decisions ?? []).map((d) => d.work_item_id));
+  const shown = (work ?? []).filter(
     (item) =>
       item.state !== "completed" &&
       item.state !== "cancelled" &&
@@ -173,16 +181,27 @@ function useNestedThreads() {
   return (project: string | null) => shown.filter((item) => item.project_id === project);
 }
 
-function useTrailing() {
-  const state = useWorkspace();
-  return (employee: Employee): Trailing =>
-    employee.paused
-      ? "paused"
-      : state.workingOf(employee.id)
-        ? "working"
-        : (valueOf(state.decisions) ?? []).some((d) => d.employee_id === employee.id)
-          ? "needsYou"
-          : "none";
+/** An employee's row: their face, and whether they are working, paused or waiting on you. */
+function TeamRow({ employee }: { employee: Employee }) {
+  const working = useWorking(employee.id);
+  const mood = useMood(employee);
+  const asks = (useDecisions().data ?? []).some((d) => d.employee_id === employee.id);
+  const trailing: Trailing = employee.paused
+    ? "paused"
+    : working
+      ? "working"
+      : asks
+        ? "needsYou"
+        : "none";
+  return (
+    <PlaceRow
+      place={{ kind: "direct", employeeId: employee.id }}
+      title={employee.name}
+      trailing={trailing}
+    >
+      <EmployeePortrait employee={employee} size={20} mood={mood} />
+    </PlaceRow>
+  );
 }
 
 function SectionLabel({
@@ -222,7 +241,7 @@ function PlaceRow({
   title,
   icon: Icon,
   count = 0,
-  unread = 0,
+  unread: given,
   trailing = "none",
   children,
 }: {
@@ -236,14 +255,21 @@ function PlaceRow({
   trailing?: Trailing;
   children?: ReactNode;
 }) {
-  const { place: current, actions } = useWorkspace();
+  const current = usePlace();
   const selected = samePlace(current, place);
+  const own = useUnread(
+    place.kind === "project"
+      ? `project:${place.id}`
+      : place.kind === "direct"
+        ? `direct:${place.employeeId}`
+        : undefined,
+  );
+  const unread = given ?? own;
   return (
-    <button
-      type="button"
+    <PlaceLink
+      place={place}
       aria-label={unread ? `${title}, ${unread} unread` : count ? `${title}, ${count}` : title}
       aria-current={selected ? "page" : undefined}
-      onClick={() => actions.selectPlace(place)}
       className={rowClass(selected, unread > 0)}
     >
       {Icon ? <Icon className="size-[15px] w-5 shrink-0" strokeWidth={1.9} /> : children}
@@ -262,7 +288,7 @@ function PlaceRow({
         </span>
       )}
       {unread > 0 && <UnreadBadge count={unread} />}
-    </button>
+    </PlaceLink>
   );
 }
 
@@ -279,15 +305,14 @@ function UnreadBadge({ count }: { count: number }) {
 
 /** A thread nested under its project: indented, opening the thread. */
 function ThreadRow({ item }: { item: WorkItem }) {
-  const { place, actions, unreadOf } = useWorkspace();
+  const place = usePlace();
   const selected = place.kind === "thread" && place.workId === item.id;
-  const unread = unreadOf(`work:${item.id}`);
+  const unread = useUnread(`work:${item.id}`);
   return (
-    <button
-      type="button"
+    <ThreadLink
+      workId={item.id}
       aria-label={unread ? `${item.title}, ${unread} unread` : item.title}
       aria-current={selected ? "page" : undefined}
-      onClick={() => actions.openThread(item.id)}
       className={cn(rowClass(selected, unread > 0), "py-[5px] pl-[38px]")}
     >
       <span className="truncate text-detail">{item.title}</span>
@@ -296,20 +321,20 @@ function ThreadRow({ item }: { item: WorkItem }) {
         <span className="size-1.5 shrink-0 rounded-full bg-amber" aria-label="needs you" />
       )}
       {unread > 0 && <UnreadBadge count={unread} />}
-    </button>
+    </ThreadLink>
   );
 }
 
 /** An app: opens its records as a layer beside the conversation. */
 function LayerRow({ layer, title, icon: Icon }: { layer: Layer; title: string; icon: LucideIcon }) {
-  const { layers, actions } = useWorkspace();
-  const top = layers.at(-1);
+  const { top } = useLayers();
+  const nav = useNav();
   const selected = top?.kind === "app" && layer.kind === "app" && top.app === layer.app;
   return (
     <button
       type="button"
       aria-current={selected ? "true" : undefined}
-      onClick={() => (selected ? actions.closeLayers() : actions.openLayer(layer))}
+      onClick={() => (selected ? nav.closeLayers() : nav.openLayer(layer))}
       className={rowClass(selected, false)}
     >
       <Icon className="size-[15px] w-5 shrink-0" strokeWidth={1.9} />

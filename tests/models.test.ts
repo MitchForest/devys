@@ -52,7 +52,7 @@ it("describes models for the apps without keys", () => {
   expect(catalog.defaults).toEqual({ employee: "claude-opus-5-5", background: "gpt-6-luna" });
   const opus = catalog.models.find((model) => model.id === "claude-opus-5-5")!;
   expect(opus).toMatchObject({ vendor: "Anthropic", provider: "TrueFoundry gateway" });
-  expect(opus.typicalTurnUsd).toBeCloseTo(0.046, 3);
+  expect(opus.typical_turn_usd).toBeCloseTo(0.046, 3);
   expect(JSON.stringify(catalog)).not.toContain("DEVYS_MODEL_GATEWAY_KEY");
   expect(new Set(catalog.models.map((model) => model.vendor))).toEqual(
     new Set(["Anthropic", "OpenAI", "Google"]),

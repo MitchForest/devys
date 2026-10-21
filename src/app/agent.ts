@@ -33,7 +33,7 @@ export function agentDependencies(env: Env): AgentDependencies {
       return employee && business
         ? {
             name: employee.name,
-            role: employee.role,
+            responsibilities: employee.responsibilities,
             businessName: business,
             brief,
             paused: employee.paused,
@@ -41,7 +41,7 @@ export function agentDependencies(env: Env): AgentDependencies {
               .filter((colleague) => colleague.id !== employee.id)
               .map(
                 (colleague) =>
-                  `${colleague.name} (${roleTemplate(colleague.template)?.summary || colleague.role.slice(0, 120)})`,
+                  `${colleague.name} (${roleTemplate(colleague.template)?.summary || colleague.responsibilities.slice(0, 120)})`,
               ),
           }
         : undefined;

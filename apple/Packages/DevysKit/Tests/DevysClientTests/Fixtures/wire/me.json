@@ -1,0 +1,14 @@
+{
+  "person": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "display_name": "Owner"
+  },
+  "businesses": [
+    {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "name": "Acme Plumbing",
+      "look": null,
+      "brief": ""
+    }
+  ]
+}

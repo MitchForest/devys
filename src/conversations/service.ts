@@ -1,5 +1,5 @@
 import type { Ref } from "../protocol/ref.ts";
-import { database, type Database } from "../data/database.ts";
+import { database, isoText, type Database } from "../data/database.ts";
 import type { ConversationKey, Message } from "./contract.ts";
 
 const columns =
@@ -205,7 +205,8 @@ export const conversationSummaries = (db: Database, businessId: string, personId
       `SELECT c.key,
          EXISTS (SELECT 1 FROM follows f WHERE f.business_id = c.business_id
            AND f.conversation = c.key AND f.person_id = $2) AS following,
-         (SELECT to_jsonb(m) - 'business_id' - 'client_id' - 'seq' FROM messages m
+         (SELECT (to_jsonb(m) - 'business_id' - 'client_id' - 'seq')
+            || jsonb_build_object('created_at', ${isoText("m.created_at")}) FROM messages m
           WHERE m.business_id = c.business_id AND m.conversation = c.key
           ORDER BY m.created_at DESC, m.seq DESC LIMIT 1) AS last,
          (SELECT count(*)::int FROM messages m

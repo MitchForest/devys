@@ -352,7 +352,7 @@ it("host events become thread cards, wake the employee under a stable id, and re
   ]);
   const evidence = (await Effect.runPromise(workItem(db, scope.businessId, work.id)))!.evidence;
   expect(
-    evidence.map((entry) => [entry.commit?.slice(0, 1), entry.check?.exitCode ?? null]),
+    evidence.map((entry) => [entry.commit?.slice(0, 1), entry.check?.exit_code ?? null]),
   ).toEqual([
     ["b", null],
     ["b", 0],
@@ -375,7 +375,7 @@ it("host events become thread cards, wake the employee under a stable id, and re
       by: "devys",
       note: "checked",
       commit: "c".repeat(40),
-      check: { command: "bun test", exitCode: 0 },
+      check: { command: "bun test", exit_code: 0 },
     }),
   );
   expect(await codingIncomplete(bindings, scope.businessId, await current())).toBeUndefined();
@@ -458,11 +458,11 @@ it("a new coding session is a work item already taken over by the owner", async 
       new Request(`http://devys.test${path}`, {
         method: "POST",
         body: JSON.stringify({
-          clientId: "new-session-0001",
+          client_id: "new-session-0001",
           employee: scope.employeeId,
           provider: "codex",
           objective: "Prototype the landing page\nWith a waitlist form.",
-          newRepository: "landing",
+          new_repository: "landing",
         }),
       }),
       bindings,
@@ -474,9 +474,9 @@ it("a new coding session is a work item already taken over by the owner", async 
       },
       harnessCoding(state),
     );
-  const first = (await (await start())!.json()) as { work: string; codingSession: string };
-  const again = (await (await start())!.json()) as { work: string; codingSession: string };
-  expect(again).toMatchObject({ work: first.work, codingSession: first.codingSession });
+  const first = (await (await start())!.json()) as { work: string; coding_session: string };
+  const again = (await (await start())!.json()) as { work: string; coding_session: string };
+  expect(again).toMatchObject({ work: first.work, coding_session: first.coding_session });
   const item = (await Effect.runPromise(workItem(db, scope.businessId, first.work)))!;
   expect(item).toMatchObject({
     title: "Prototype the landing page",

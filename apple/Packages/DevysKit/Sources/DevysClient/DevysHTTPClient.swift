@@ -26,11 +26,14 @@ public struct DevysHTTPClient: Sendable {
     /// Exchanges a one-time enrollment code for a device session; `name` labels the device.
     public func enroll(server: URL, code: String, name: String? = nil) async throws -> DeviceSession {
         struct Body: Encodable { let token: String; let name: String? }
-        struct Issued: Decodable { let sessionToken: String }
+        struct Issued: Decodable {
+            let sessionToken: String
+            enum CodingKeys: String, CodingKey { case sessionToken = "session_token" }
+        }
         var request = URLRequest(url: server.appending(path: "api/native/session"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.httpBody = try JSONEncoder().encode(Body(token: code, name: name.map { String($0.prefix(80)) }))
+        request.httpBody = try Wire.encoder().encode(Body(token: code, name: name.map { String($0.prefix(80)) }))
         let issued: Issued = try await send(request)
         return DeviceSession(server: server, token: issued.sessionToken)
     }
@@ -61,10 +64,7 @@ public struct DevysHTTPClient: Sendable {
     /// Changes the model an employee thinks with; returns the model the server saved.
     public func setModel(_ session: DeviceSession, _ scope: EmployeeScope, model: String) async throws -> String {
         struct Body: Codable { let model: String }
-        var request = authorized(session, path: "\(scope.path)/model", method: "PUT")
-        request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.httpBody = try JSONEncoder().encode(Body(model: model))
-        let saved: Body = try await send(request)
+        let saved: Body = try await send(json(session, path: "\(scope.path)/model", method: "PUT", body: Body(model: model)))
         return saved.model
     }
 
@@ -81,10 +81,7 @@ public struct DevysHTTPClient: Sendable {
     /// Grants a capability, replacing any grant the employee holds for it.
     public func grant(_ session: DeviceSession, _ scope: EmployeeScope, capability: String, mode: AccessMode) async throws {
         struct Body: Encodable { let capability: String; let mode: AccessMode }
-        var request = authorized(session, path: "\(scope.path)/access", method: "POST")
-        request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.httpBody = try JSONEncoder().encode(Body(capability: capability, mode: mode))
-        _ = try await raw(request)
+        _ = try await raw(json(session, path: "\(scope.path)/access", method: "POST", body: Body(capability: capability, mode: mode)))
     }
 
     public func revoke(_ session: DeviceSession, _ scope: EmployeeScope, grantID: String) async throws {
@@ -97,7 +94,10 @@ public struct DevysHTTPClient: Sendable {
     }
 
     public func work(_ session: DeviceSession, businessID: String) async throws -> [WorkItem] {
-        struct Page: Decodable { let workItems: [WorkItem] }
+        struct Page: Decodable {
+            let workItems: [WorkItem]
+            enum CodingKeys: String, CodingKey { case workItems = "work_items" }
+        }
         let page: Page = try await send(authorized(session, path: "api/businesses/\(businessID)/work"))
         return page.workItems
     }
@@ -125,7 +125,7 @@ public struct DevysHTTPClient: Sendable {
     public func decisions(_ session: DeviceSession, businessID: String, workItemID: String? = nil) async throws -> [Decision] {
         struct Page: Decodable { let decisions: [Decision] }
         var request = authorized(session, path: "api/businesses/\(businessID)/decisions")
-        if let workItemID { request.url?.append(queryItems: [URLQueryItem(name: "workItem", value: workItemID)]) }
+        if let workItemID { request.url?.append(queryItems: [URLQueryItem(name: "work_item", value: workItemID)]) }
         let page: Page = try await send(request)
         return page.decisions
     }
@@ -151,10 +151,7 @@ public struct DevysHTTPClient: Sendable {
     }
 
     public func react(_ session: DeviceSession, _ scope: EmployeeScope, _ reaction: Reaction) async throws {
-        var request = authorized(session, path: "\(scope.path)/reactions", method: "POST")
-        request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.httpBody = try JSONEncoder().encode(reaction)
-        _ = try await raw(request)
+        _ = try await raw(json(session, path: "\(scope.path)/reactions", method: "POST", body: reaction))
     }
 
     /// The signed-in person's profile photo, or nil when none is set.
@@ -187,10 +184,7 @@ public struct DevysHTTPClient: Sendable {
                 try container.encode(["look": look])
             }
         }
-        var request = authorized(session, path: "\(path)/look", method: "POST")
-        request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.httpBody = try JSONEncoder().encode(Body(look: look))
-        _ = try await raw(request)
+        _ = try await raw(json(session, path: "\(path)/look", method: "POST", body: Body(look: look)))
     }
 
     public func uploadLookPhoto(_ session: DeviceSession, path: String, jpeg: Data) async throws {
@@ -209,14 +203,22 @@ public struct DevysHTTPClient: Sendable {
     }
 
     public func signOut(_ session: DeviceSession) async throws {
-        struct SignedOut: Decodable { let signedOut: Bool }
+        struct SignedOut: Decodable {
+            let signedOut: Bool
+            enum CodingKeys: String, CodingKey { case signedOut = "signed_out" }
+        }
         let _: SignedOut = try await send(authorized(session, path: "api/logout", method: "POST"))
     }
 
     func json(_ session: DeviceSession, path: String, method: String, body: some Encodable) throws -> URLRequest {
-        var request = authorized(session, path: path, method: method)
+        try withJSON(authorized(session, path: path, method: method), body)
+    }
+
+    /// The request with a JSON body.
+    func withJSON(_ request: URLRequest, _ body: some Encodable) throws -> URLRequest {
+        var request = request
         request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.httpBody = try JSONEncoder().encode(body)
+        request.httpBody = try Wire.encoder().encode(body)
         return request
     }
 
@@ -230,7 +232,7 @@ public struct DevysHTTPClient: Sendable {
     func send<Response: Decodable>(_ request: URLRequest) async throws -> Response {
         let data = try await raw(request)
         do {
-            return try JSONDecoder().decode(Response.self, from: data)
+            return try Wire.decode(Response.self, from: data)
         } catch let error as DevysHTTPError {
             throw error
         } catch {

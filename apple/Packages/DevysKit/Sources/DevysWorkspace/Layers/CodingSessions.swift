@@ -38,7 +38,9 @@ struct CodingSessions: View {
                 }
             }
         }
-        .task(id: item.id) { await poll() }
+        .poll(id: item.id, every: .seconds(5)) {
+            if let loaded = try? await coding.sessions(store.businessID, item.id) { sessions = loaded }
+        }
         .modifier(TerminalOpener(presented: $terminal))
     }
 
@@ -55,13 +57,6 @@ struct CodingSessions: View {
             session.state.chip
         }
         .devysCard()
-    }
-
-    private func poll() async {
-        while !Task.isCancelled {
-            if let loaded = try? await coding.sessions(store.businessID, item.id) { sessions = loaded }
-            try? await Task.sleep(for: .seconds(5))
-        }
     }
 }
 
@@ -84,15 +79,12 @@ struct SessionLayer: View {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .task(id: sessionID) {
-            while !Task.isCancelled {
-                do {
-                    session = try await coding.sessions(store.businessID, workID).first { $0.id == sessionID }
-                    problem = session == nil ? "This coding session no longer exists." : nil
-                } catch {
-                    problem = failure("The coding session couldn't be read.", error)
-                }
-                try? await Task.sleep(for: .seconds(5))
+        .poll(id: sessionID, every: .seconds(5)) {
+            do {
+                session = try await coding.sessions(store.businessID, workID).first { $0.id == sessionID }
+                problem = session == nil ? "This coding session no longer exists." : nil
+            } catch {
+                problem = failure("The coding session couldn't be read.", error)
             }
         }
     }
@@ -132,7 +124,9 @@ private struct SessionView: View {
             Divider()
             footer.padding(12)
         }
-        .task(id: session.state) { await loadDiff() }
+        .poll(id: session.state, every: .seconds(session.state == .working ? 5 : 30)) {
+            if let diff = try? await coding.diff(store.businessID, item.id, session.id) { patch = diff.patch }
+        }
         .modifier(TerminalOpener(presented: $terminal))
     }
 
@@ -168,10 +162,11 @@ private struct SessionView: View {
             }
             if let reply = session.reply {
                 ScrollView { MarkdownView(reply).frame(maxWidth: .infinity, alignment: .leading) }.frame(maxHeight: 140)
+                    .contextMenu { Button("Ask", systemImage: "quote.bubble") { store.send(.askTapped(reply)) } }
             } else if let error = session.error {
                 Text(error).font(DevysTypography.body).foregroundStyle(DevysColors.ink2)
             }
-            SessionSteps(businessID: store.businessID, workID: item.id, session: session)
+            SessionSteps(businessID: store.businessID, workID: item.id, session: session) { store.send(.askTapped($0)) }
         }
         .padding(14)
     }
@@ -273,14 +268,9 @@ private struct SessionView: View {
         }
     }
 
-    private func loadDiff() async {
-        while !Task.isCancelled {
-            if let diff = try? await coding.diff(store.businessID, item.id, session.id) { patch = diff.patch }
-            try? await Task.sleep(for: .seconds(session.state == .working ? 5 : 30))
-        }
-    }
 }
 
+@MainActor
 extension CodingSession.State {
     var chip: StatusChip {
         switch self {
@@ -289,6 +279,7 @@ extension CodingSession.State {
         case .interrupted: StatusChip("Interrupted", tone: .waiting)
         case .failed: StatusChip("Failed", tone: .failed)
         case .unavailable: StatusChip("Mac host unavailable", tone: .waiting)
+        case .unknown: StatusChip("Unknown", tone: .waiting)
         }
     }
 }
@@ -317,11 +308,12 @@ func failure(_ what: String, _ error: any Error) -> String {
 }
 
 /// What the session actually did, closed until asked for: read from the harness each time it
-/// opens (and while it works), never kept by Devys.
+/// opens (and while it works), never kept by Devys. Each step offers Ask (its menu, or a long press).
 private struct SessionSteps: View {
     let businessID: String
     let workID: String
     let session: CodingSession
+    let ask: (String) -> Void
     @Dependency(\.codingClient) private var coding
     @State private var open = false
     @State private var entries: [TranscriptEntry]?
@@ -347,21 +339,15 @@ private struct SessionSteps: View {
                 }
             }
         }
-        .task(id: open ? "\(session.id):\(session.state)" : nil) { await load() }
-    }
-
-    private func load() async {
-        guard open else { return }
-        repeat {
+        .poll(id: open ? "\(session.id):\(session.state)" : nil, every: session.state == .working ? .seconds(5) : nil) {
+            guard open else { return }
             do {
                 entries = try await coding.transcript(businessID, workID, session.id)
                 problem = nil
             } catch {
-                problem = error.localizedDescription
+                problem = failure("The steps couldn't be read.", error)
             }
-            guard session.state == .working else { return }
-            try? await Task.sleep(for: .seconds(5))
-        } while !Task.isCancelled
+        }
     }
 
     private func step(_ entry: TranscriptEntry) -> some View {
@@ -372,6 +358,7 @@ private struct SessionSteps: View {
         case .command: "Ran"
         case .files: "Edited"
         case .tool: "Used"
+        case .unknown: "Step"
         }
         return VStack(alignment: .leading, spacing: 1) {
             Text(label).font(DevysTypography.caption).foregroundStyle(entry.failed == true ? DevysColors.red : DevysColors.ink3)
@@ -379,6 +366,8 @@ private struct SessionSteps: View {
                 .font(entry.kind == .command || entry.kind == .files ? DevysTypography.caption.monospaced() : DevysTypography.secondary)
                 .foregroundStyle(DevysColors.ink2).lineLimit(6).textSelection(.enabled)
         }
+        .contextMenu { Button("Ask", systemImage: "quote.bubble") { ask([entry.text, entry.detail].compactMap(\.self).joined(separator: "\n")) } }
         .accessibilityElement(children: .combine)
+        .accessibilityAction(named: "Ask") { ask(entry.text) }
     }
 }

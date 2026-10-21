@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { isoText } from "../data/database.ts";
 import type { Evidence, MemoryExportPage, PortableRecord } from "./contract.ts";
 import { excludeBefore, type Claims } from "./claims.ts";
 import { fingerprint } from "./operation.ts";
@@ -17,7 +18,7 @@ export async function exportPage(
   const records = await storage.rows<{ cursor: string; kind: string; value: string }>(
     `SELECT * FROM (
           SELECT 'c:'||key AS cursor,'claim' AS kind,key AS value FROM memories WHERE scope_id=$1
-          UNION ALL SELECT 'f:','excluded-before',to_char(excluded_before AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') FROM memory_state WHERE scope_id=$1 AND excluded_before IS NOT NULL
+          UNION ALL SELECT 'f:','excluded-before',${isoText("excluded_before")} FROM memory_state WHERE scope_id=$1 AND excluded_before IS NOT NULL
           UNION ALL SELECT 'k:'||key,'excluded-key',key FROM memory_exclusions WHERE scope_id=$1
           UNION ALL SELECT 'l:'||jsonb_build_array(key,source_id)::text,'evidence-link',jsonb_build_object('key',key,'evidence',evidence)::text FROM memory_links WHERE scope_id=$1
           UNION ALL SELECT 's:'||id,'excluded-source',id FROM memory_sources WHERE scope_id=$1 AND excluded
@@ -69,7 +70,7 @@ export async function importRecords(
       `INSERT INTO memory_sources(scope_id,id,kind,observed_at,processed) VALUES ($1,$2,$3,$4,true) ON CONFLICT DO NOTHING`,
       evidence.id,
       evidence.kind === "owner" ? "owner" : "external",
-      evidence.observedAt,
+      evidence.observed_at,
     );
   const writes = records.flatMap((record) => {
     switch (record.kind) {

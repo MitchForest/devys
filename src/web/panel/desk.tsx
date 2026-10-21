@@ -10,10 +10,32 @@ import {
   UserMinus,
 } from "lucide-react";
 import { EmployeePortrait } from "../design/portrait.tsx";
-import { useEffect, useState, type ReactNode } from "react";
-import { api, type Employee, type Grant, type RuntimeState } from "../app/api.ts";
-import { accessTitle, isOpen, moodOf, templateTitle } from "../app/names.ts";
-import { useWorkspace, valueOf } from "../app/workspace.tsx";
+import { useQuery } from "@tanstack/react-query";
+import { useState, type ReactNode } from "react";
+import { api } from "../app/api.ts";
+import type { AccessList } from "../../app/wire.ts";
+import type { Employee } from "../../identity/contract.ts";
+import {
+  useBusinessId,
+  useEmployees,
+  useMemory,
+  useModels,
+  useOperations,
+  useStatus,
+  useWork,
+} from "../app/data.ts";
+import {
+  useGrant,
+  useRetire,
+  useRevoke,
+  useSetEmployeeModel,
+  useSetProfile,
+  useTogglePause,
+} from "../app/mutations.ts";
+import { accessTitle, isOpen, templateTitle } from "../app/names.ts";
+import { keys, problemOf } from "../app/query.ts";
+import { ui } from "../app/ui.ts";
+import { useMood, useWorking } from "../app/workspace.tsx";
 import { Field, fieldClass } from "../design/fields.tsx";
 import { WorkRow } from "../pages/work.tsx";
 import { PanelBody, PanelHeader, PanelSection } from "./panel.tsx";
@@ -31,13 +53,13 @@ import {
 import { cn } from "@/lib/utils";
 
 export function PausedBanner({ employee }: { employee: Employee }) {
-  const { actions } = useWorkspace();
+  const togglePause = useTogglePause();
   return (
     <div className="flex items-center gap-2.5 rounded-card bg-sheet-tint p-3">
       <CirclePause className="size-4 shrink-0 fill-gray text-sheet-tint" />
       <span className="text-body text-ink-2">{employee.name} is paused and takes no actions.</span>
       <span className="ml-auto" />
-      <DevysButton compact onClick={() => actions.togglePause(employee)}>
+      <DevysButton compact onClick={() => togglePause.mutate(employee)}>
         Resume
       </DevysButton>
     </div>
@@ -49,9 +71,7 @@ export function PausedBanner({ employee }: { employee: Employee }) {
  * finished stay open; who it is, its model, access and memory unfold on demand.
  */
 export function Desk({ employeeId, close }: { employeeId: string; close: () => void }) {
-  const state = useWorkspace();
-  const { employees, actions } = state;
-  const employee = employees.find((e) => e.id === employeeId);
+  const employee = useEmployees().find((e) => e.id === employeeId);
   if (!employee)
     return (
       <section className="flex h-full flex-col">
@@ -61,10 +81,17 @@ export function Desk({ employeeId, close }: { employeeId: string; close: () => v
         </PanelBody>
       </section>
     );
-  const isOperations = employee.id === state.operations?.id;
-  const owned = (valueOf(state.work) ?? []).filter(
-    (item) => item.owner_employee_id === employee.id,
-  );
+  return <EmployeeDesk employee={employee} close={close} />;
+}
+
+function EmployeeDesk({ employee, close }: { employee: Employee; close: () => void }) {
+  const operations = useOperations();
+  const work = useWork().data;
+  const mood = useMood(employee);
+  const working = useWorking(employee.id);
+  const togglePause = useTogglePause();
+  const isOperations = employee.id === operations?.id;
+  const owned = (work ?? []).filter((item) => item.owner_employee_id === employee.id);
   const open = owned.filter((item) => isOpen(item.state));
   const done = owned
     .filter((item) => item.state === "completed")
@@ -75,12 +102,7 @@ export function Desk({ employeeId, close }: { employeeId: string; close: () => v
       <PanelHeader title={<EditableName key={employee.id} employee={employee} />} close={close} />
       <PanelBody>
         <div className="flex items-center gap-3">
-          <EmployeePortrait
-            employee={employee}
-            size={44}
-            mood={moodOf(state, employee)}
-            label={employee.name}
-          />
+          <EmployeePortrait employee={employee} size={44} mood={mood} label={employee.name} />
           <div className="flex min-w-0 flex-col gap-0.5">
             {templateTitle(employee.template) !== employee.name && (
               <span className="text-control text-ink">{templateTitle(employee.template)}</span>
@@ -88,7 +110,7 @@ export function Desk({ employeeId, close }: { employeeId: string; close: () => v
             <span className="text-detail text-ink-3">
               {employee.paused
                 ? "Paused"
-                : state.workingOf(employee.id)
+                : working
                   ? "Working"
                   : open.length
                     ? `${open.length} open`
@@ -96,7 +118,7 @@ export function Desk({ employeeId, close }: { employeeId: string; close: () => v
             </span>
           </div>
           <span className="ml-auto" />
-          <DevysButton compact kind="quiet" onClick={() => actions.togglePause(employee)}>
+          <DevysButton compact kind="quiet" onClick={() => togglePause.mutate(employee)}>
             {employee.paused ? "Resume" : "Pause"}
           </DevysButton>
         </div>
@@ -107,7 +129,7 @@ export function Desk({ employeeId, close }: { employeeId: string; close: () => v
           action={
             <button
               type="button"
-              onClick={() => actions.newWorkItem({ owner: employee.id })}
+              onClick={() => ui.newWorkItem({ owner: employee.id })}
               className="text-caption text-ink-3 hover:text-ink-2"
             >
               <Plus className="inline size-3" /> Work item
@@ -168,14 +190,17 @@ function Disclosure({ title, children }: { title: string; children: ReactNode })
 
 /** The employee's name; click the pencil to rename them. */
 function EditableName({ employee }: { employee: Employee }) {
-  const { actions } = useWorkspace();
+  const setProfile = useSetProfile();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(employee.name);
   const save = () => {
     const next = name.trim();
     setEditing(false);
     if (!next || next === employee.name) return setName(employee.name);
-    void actions.setProfile(employee, { name: next }).then((ok) => ok || setName(employee.name));
+    setProfile.mutate(
+      { employee, change: { name: next } },
+      { onError: () => setName(employee.name) },
+    );
   };
   if (editing)
     return (
@@ -220,29 +245,27 @@ function EditableName({ employee }: { employee: Employee }) {
 
 /** What the employee is accountable for; every turn starts from it. */
 function ResponsibilitiesPane({ employee }: { employee: Employee }) {
-  const { actions } = useWorkspace();
-  const [text, setText] = useState(employee.role);
-  const [saving, setSaving] = useState(false);
+  const setProfile = useSetProfile();
+  const [text, setText] = useState(employee.responsibilities);
+  const saving = setProfile.isPending;
   const [message, setMessage] = useState<{ ok: boolean; text: string }>();
-  const changed = text.trim() !== employee.role.trim();
+  const changed = text.trim() !== employee.responsibilities.trim();
   return (
     <form
       className="flex flex-col gap-3"
       onSubmit={(event) => {
         event.preventDefault();
         if (!text.trim()) return;
-        setSaving(true);
         setMessage(undefined);
-        void actions
-          .setProfile(employee, { responsibilities: text.trim() })
-          .then((ok) =>
-            setMessage(
-              ok
-                ? { ok, text: "Saved. The next turn starts from these." }
-                : { ok, text: "Those responsibilities couldn't be saved." },
-            ),
-          )
-          .finally(() => setSaving(false));
+        setProfile.mutate(
+          { employee, change: { responsibilities: text.trim() } },
+          {
+            onSuccess: () =>
+              setMessage({ ok: true, text: "Saved. The next turn starts from these." }),
+            onError: () =>
+              setMessage({ ok: false, text: "Those responsibilities couldn't be saved." }),
+          },
+        );
       }}
     >
       <Field label="Accountable for" hint={`${text.length} of 2000 characters`}>
@@ -262,7 +285,7 @@ function ResponsibilitiesPane({ employee }: { employee: Employee }) {
           {saving ? "Saving…" : "Save responsibilities"}
         </DevysButton>
         {changed && (
-          <DevysButton kind="quiet" onClick={() => setText(employee.role)}>
+          <DevysButton kind="quiet" onClick={() => setText(employee.responsibilities)}>
             Discard
           </DevysButton>
         )}
@@ -281,13 +304,16 @@ function ResponsibilitiesPane({ employee }: { employee: Employee }) {
 
 /** Retiring hands the employee's open work to a colleague; their history stays readable. */
 function RetireButton({ employee }: { employee: Employee }) {
-  const { employees, operations, work, actions } = useWorkspace();
+  const employees = useEmployees();
+  const operations = useOperations();
+  const work = useWork().data;
+  const retire = useRetire();
   const [open, setOpen] = useState(false);
   const others = employees.filter((e) => e.id !== employee.id);
   const [successor, setSuccessor] = useState("");
-  const [busy, setBusy] = useState(false);
+  const busy = retire.isPending;
   const chosen = successor || operations?.id || others[0]?.id || "";
-  const openWork = (valueOf(work) ?? []).filter(
+  const openWork = (work ?? []).filter(
     (item) => item.owner_employee_id === employee.id && isOpen(item.state),
   ).length;
   return (
@@ -302,11 +328,7 @@ function RetireButton({ employee }: { employee: Employee }) {
             onSubmit={(event) => {
               event.preventDefault();
               if (!chosen) return;
-              setBusy(true);
-              void actions
-                .retire(employee, chosen)
-                .then((ok) => ok && setOpen(false))
-                .finally(() => setBusy(false));
+              retire.mutate({ employee, successor: chosen }, { onSuccess: () => setOpen(false) });
             }}
           >
             <DialogTitle className="text-heading font-semibold text-ink">
@@ -347,29 +369,21 @@ function RetireButton({ employee }: { employee: Employee }) {
 
 /** Which model the employee thinks with, what it has spent, and a way to change it. */
 function ModelRow({ employee }: { employee: Employee }) {
-  const { businessId, models, modelOf, actions } = useWorkspace();
-  const [usage, setUsage] = useState<RuntimeState["usage"]>();
+  const usage = useStatus(employee.id).data?.usage;
+  const catalog = useModels().data;
+  const setModel = useSetEmployeeModel();
   const [error, setError] = useState<string>();
-  useEffect(() => {
-    setUsage(undefined);
-    setError(undefined);
-    let current = true;
-    api
-      .status(businessId, employee.id)
-      .then((result) => current && setUsage(result.state.usage))
-      .catch(() => undefined);
-    return () => {
-      current = false;
-    };
-  }, [businessId, employee.id]);
-  const catalog = valueOf(models);
-  const model = modelOf(employee.model);
+  const model = catalog?.models.find((m) => m.id === employee.model);
   const spent = usage ? spend(usage.models) : undefined;
-  const choose = async (id: string) => {
+  const choose = (id: string) => {
     if (id === employee.model) return;
     setError(undefined);
-    if (!(await actions.setEmployeeModel(employee, id)))
-      setError("That model couldn't be saved. The previous one is still in use.");
+    setModel.mutate(
+      { employee, model: id },
+      {
+        onError: () => setError("That model couldn't be saved. The previous one is still in use."),
+      },
+    );
   };
   return (
     <div className="flex flex-col gap-2 rounded-card bg-sheet-tint px-4 py-3">
@@ -391,7 +405,7 @@ function ModelRow({ employee }: { employee: Employee }) {
           <ModelPicker
             catalog={catalog}
             value={employee.model}
-            onChange={(id) => void choose(id)}
+            onChange={choose}
             trigger={
               <DevysButton kind="quiet" compact aria-label={`Change model for ${employee.name}`}>
                 Change <ChevronDown />
@@ -418,7 +432,7 @@ function ModelRow({ employee }: { employee: Employee }) {
 }
 
 function MemoryPane({ isOperations }: { isOperations: boolean }) {
-  const { memory } = useWorkspace();
+  const memory = useMemory();
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
@@ -427,14 +441,14 @@ function MemoryPane({ isOperations }: { isOperations: boolean }) {
       </div>
       {!isOperations ? (
         <EmptyNote>No memory yet</EmptyNote>
-      ) : memory.status === "loading" ? (
+      ) : memory.isPending ? (
         <Spinner />
-      ) : memory.status === "failed" ? (
-        <EmptyNote>{memory.message}</EmptyNote>
-      ) : memory.value.length === 0 ? (
+      ) : memory.isError ? (
+        <EmptyNote>{problemOf(memory.error, "Memory is unavailable.")}</EmptyNote>
+      ) : memory.data.length === 0 ? (
         <EmptyNote>Nothing remembered yet.</EmptyNote>
       ) : (
-        memory.value.map((claim) => (
+        memory.data.map((claim) => (
           <Card key={claim.key}>
             <div className="flex flex-col gap-1">
               <span className="text-body text-ink">{claim.content}</span>
@@ -451,19 +465,20 @@ function MemoryPane({ isOperations }: { isOperations: boolean }) {
 
 /** What an employee may do, from the server: each grant, how it runs, and its limits. */
 function AccessPane({ employee }: { employee: Employee }) {
-  const { access, actions } = useWorkspace();
-  useEffect(() => {
-    actions.loadAccess(employee.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [employee.id]);
-  const list = access?.employeeId === employee.id ? access.list : { status: "loading" as const };
+  const businessId = useBusinessId();
+  const grant = useGrant();
+  const revoke = useRevoke();
+  const list = useQuery({
+    queryKey: keys.access(businessId, employee.id),
+    queryFn: () => api.access(businessId, employee.id),
+  });
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
         <span className="text-heading font-semibold text-ink">Standing access</span>
         <LiveTag />
         <span className="ml-auto" />
-        {list.status === "loaded" && list.value.available.length > 0 && (
+        {list.data && list.data.available.length > 0 && (
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
@@ -473,16 +488,16 @@ function AccessPane({ employee }: { employee: Employee }) {
               }
             />
             <DropdownMenuContent align="end" className="w-auto">
-              {list.value.available.map((capability) => (
+              {list.data.available.map((capability) => (
                 // Anything that reaches outside the business asks first by default.
                 <DropdownMenuItem
                   key={capability.capability}
                   onClick={() =>
-                    actions.grant(
-                      employee.id,
-                      capability.capability,
-                      capability.effect === "external" ? "ask" : "auto",
-                    )
+                    grant.mutate({
+                      employeeId: employee.id,
+                      capability: capability.capability,
+                      mode: capability.effect === "external" ? "ask" : "auto",
+                    })
                   }
                 >
                   {accessTitle(capability.capability)}
@@ -492,23 +507,23 @@ function AccessPane({ employee }: { employee: Employee }) {
           </DropdownMenu>
         )}
       </div>
-      {list.status === "loading" ? (
+      {list.isPending ? (
         <Spinner />
-      ) : list.status === "failed" ? (
-        <EmptyNote>{list.message}</EmptyNote>
+      ) : list.isError ? (
+        <EmptyNote>{problemOf(list.error, "Access is unavailable.")}</EmptyNote>
       ) : (
         <>
-          {list.value.grants.length === 0 && (
+          {list.data.grants.length === 0 && (
             <EmptyNote>
               No access yet. {employee.name} can talk with you but can't act until you grant
               something.
             </EmptyNote>
           )}
-          {list.value.grants.map((grant) => (
+          {list.data.grants.map((each) => (
             <GrantRow
-              key={grant.id}
-              grant={grant}
-              revoke={() => actions.revoke(employee.id, grant.id)}
+              key={each.id}
+              grant={each}
+              revoke={() => revoke.mutate({ employeeId: employee.id, grantId: each.id })}
             />
           ))}
         </>
@@ -517,7 +532,10 @@ function AccessPane({ employee }: { employee: Employee }) {
   );
 }
 
-function GrantRow({ grant, revoke }: { grant: Grant; revoke: () => void }) {
+function GrantRow({ grant, revoke }: { grant: AccessList["grants"][number]; revoke: () => void }) {
+  const hosts = Array.isArray(grant.constraints.hosts)
+    ? grant.constraints.hosts.filter((host): host is string => typeof host === "string")
+    : [];
   const [hovering, setHovering] = useState(false);
   const asks = grant.mode === "ask";
   const Icon = asks ? ScanFace : KeyRound;
@@ -538,8 +556,8 @@ function GrantRow({ grant, revoke }: { grant: Grant; revoke: () => void }) {
         {grant.description && (
           <span className="line-clamp-2 text-detail text-ink-2">{grant.description}</span>
         )}
-        {grant.constraints.hosts?.length ? (
-          <span className="text-detail text-ink-3">Only {grant.constraints.hosts.join(", ")}</span>
+        {hosts.length ? (
+          <span className="text-detail text-ink-3">Only {hosts.join(", ")}</span>
         ) : null}
       </div>
       <span className="ml-auto" />

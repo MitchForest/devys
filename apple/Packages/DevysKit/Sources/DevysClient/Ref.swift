@@ -1,14 +1,17 @@
 import Foundation
 
 /// A record's address, `devys:<app>/<kind>/<id>` with the id percent-encoded exactly as
-/// JavaScript's `encodeURIComponent` does (src/protocol/ref.ts). The kinds are one closed list,
-/// by the app that owns each; a file's id is its absolute path.
+/// JavaScript's `encodeURIComponent` does (src/protocol/ref.ts). The kinds this client opens are
+/// named cases, by the app that owns each (a file's id is its absolute path); a well-formed ref of
+/// any other app or kind is `unknown`, kept and shown, never opened.
 public enum Ref: Hashable, Sendable, CustomStringConvertible {
     case artifact(String)
     case file(String)
     case codeSession(String)
     case workItem(String)
     case workProject(String)
+    /// A record kind the server knows and this client does not yet.
+    case unknown(app: String, kind: String, id: String)
 
     /// The app that owns the record.
     public var app: String {
@@ -16,6 +19,7 @@ public enum Ref: Hashable, Sendable, CustomStringConvertible {
         case .artifact, .file: "documents"
         case .codeSession: "code"
         case .workItem, .workProject: "work"
+        case .unknown(let app, _, _): app
         }
     }
 
@@ -27,20 +31,24 @@ public enum Ref: Hashable, Sendable, CustomStringConvertible {
         case .codeSession: "session"
         case .workItem: "item"
         case .workProject: "project"
+        case .unknown(_, let kind, _): kind
         }
     }
+
+    /// `<app>/<kind>`: what a client's layer registry is keyed by.
+    public var recordKind: String { "\(app)/\(kind)" }
 
     /// The record's (decoded) id.
     public var id: String {
         switch self {
-        case .artifact(let id), .file(let id), .codeSession(let id), .workItem(let id), .workProject(let id): id
+        case .artifact(let id), .file(let id), .codeSession(let id), .workItem(let id), .workProject(let id), .unknown(_, _, let id): id
         }
     }
 
     public var description: String { "devys:\(app)/\(kind)/\(Self.encode(id))" }
 
-    /// The ref this string names, or nil for anything else: an unknown app or kind, an empty id,
-    /// or an id not in the encoding `description` gives it.
+    /// The ref this string names (`unknown` for an app or kind this client does not know), or nil
+    /// for anything that is not a ref: an empty part, or an id not in the encoding `description` gives it.
     public init?(_ value: String) {
         guard value.hasPrefix("devys:") else { return nil }
         let parts = value.dropFirst("devys:".count).split(separator: "/", omittingEmptySubsequences: false)
@@ -55,7 +63,7 @@ public enum Ref: Hashable, Sendable, CustomStringConvertible {
         case ("code", "session"): self = .codeSession(id)
         case ("work", "item"): self = .workItem(id)
         case ("work", "project"): self = .workProject(id)
-        default: return nil
+        default: self = .unknown(app: String(parts[0]), kind: String(parts[1]), id: id)
         }
     }
 

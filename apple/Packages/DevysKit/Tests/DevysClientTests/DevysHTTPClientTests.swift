@@ -27,7 +27,7 @@ struct DevysHTTPClientTests {
     @Test("Enrollment posts the one-time code and returns a device session")
     func enroll() async throws {
         let recorder = Recorder()
-        let session = try await api(body: #"{"sessionToken":"abc","expiresInSeconds":604800}"#, recorder: recorder)
+        let session = try await api(body: #"{"session_token":"abc","expires_in_seconds":604800}"#, recorder: recorder)
             .enroll(server: Self.server, code: "f00d")
         #expect(session == DeviceSession(server: Self.server, token: "abc"))
         let request = try #require(await recorder.requests.first)
@@ -51,9 +51,9 @@ struct DevysHTTPClientTests {
         let detail = try await api(
             body: """
             {"business":{"id":"b1","name":"Acme"},
-             "employees":[{"id":"e1","business_id":"b1","name":"Head of Operations","role":"Runs the business.","model":"gpt-6.1-sol"}],
+             "employees":[{"id":"e1","business_id":"b1","name":"Head of Operations","responsibilities":"Runs the business.","model":"gpt-6.1-sol"}],
              "members":[{"id":"p1","display_name":"Mitch"}],
-             "artifacts":[{"id":"a1","filename":"x.md","content_type":"text/markdown","byte_length":3,"created_at":"2026-10-19"}]}
+             "artifacts":[{"id":"a1","filename":"x.md","content_type":"text/markdown","byte_length":3,"created_at":"2026-10-19T00:00:00.000Z"}]}
             """,
             recorder: recorder
         ).business(session, id: "b1")
@@ -71,14 +71,14 @@ struct DevysHTTPClientTests {
         let recorder = Recorder()
         let body = """
         {"state":{"run":{"id":"m1","stopped":false,"deadline":1760000000000},
-                  "inbox":[{"id":"m1","text":"hi","receivedAt":1760000000000,"status":"running"}],
-                  "outbox":[{"id":"m0","chatId":"c","text":"hello","attempts":1,"status":"sent"}],
+                  "inbox":[{"id":"m1","text":"hi","received_at":1760000000000,"status":"running"}],
+                  "outbox":[{"id":"m0","chat_id":"c","text":"hello","attempts":1,"status":"sent"}],
                   "checkpoint":null,"usage":{"input":1}}}
         """
         let snapshot = try await api(body: body, recorder: recorder)
             .status(DeviceSession(server: Self.server, token: "tok"), Self.scope)
         #expect(snapshot.state.run?.stopped == false)
-        #expect(snapshot.state.inbox.first?.status == "running")
+        #expect(snapshot.state.inbox.first?.status == .running)
         // A usage shape without per-model entries is tolerated, not an error.
         #expect(snapshot.state.usage?.totalCost == 0)
         let request = try #require(await recorder.requests.first)
@@ -92,11 +92,11 @@ struct DevysHTTPClientTests {
         let body = """
         {"defaults":{"employee":"claude-opus-5-5","background":"gemini-3.8-flash"},"models":[
           {"id":"claude-opus-5-5","label":"Claude Opus 5.5","vendor":"Anthropic","provider":"TrueFoundry gateway",
-           "summary":"Best judgment.","effort":"medium","price":{"input":5,"output":25,"cacheRead":0.5},"typicalTurnUsd":0.0625},
+           "summary":"Best judgment.","effort":"medium","price":{"input":5,"output":25,"cache_read":0.5},"typical_turn_usd":0.0625},
           {"id":"gpt-6.1-sol","label":"GPT-6.1 Sol","vendor":"OpenAI","provider":"TrueFoundry gateway",
-           "summary":"All-round.","effort":"medium","price":{"input":2.5,"output":15,"cacheRead":0.25},"typicalTurnUsd":0.035},
+           "summary":"All-round.","effort":"medium","price":{"input":2.5,"output":15,"cache_read":0.25},"typical_turn_usd":0.035},
           {"id":"claude-fable-5-1","label":"Claude Fable 5.1","vendor":"Anthropic","provider":"TrueFoundry gateway",
-           "summary":"Hardest problems.","effort":"high","price":{"input":15,"output":75,"cacheRead":1.5},"typicalTurnUsd":0.2}]}
+           "summary":"Hardest problems.","effort":"high","price":{"input":15,"output":75,"cache_read":1.5},"typical_turn_usd":0.2}]}
         """
         let catalog = try await api(body: body, recorder: recorder).models(DeviceSession(server: Self.server, token: "tok"))
         #expect(catalog.defaults.employee == "claude-opus-5-5")
@@ -127,10 +127,10 @@ struct DevysHTTPClientTests {
     func usage() async throws {
         let body = """
         {"state":{"run":null,"inbox":[],"outbox":[],"usage":{"models":{
-          "gateway/claude-opus-5-5":{"input":2000,"output":500,"cacheRead":6000,"cacheWrite":2000,"totalTokens":10500,
-            "cost":{"input":0.01,"output":0.0125,"cacheRead":0.003,"cacheWrite":0.0125,"total":0.038}},
-          "gateway/gpt-6-luna":{"input":0,"output":100,"cacheRead":0,"cacheWrite":0,"totalTokens":100,
-            "cost":{"input":0,"output":0.002,"cacheRead":0,"cacheWrite":0,"total":0.002}}},
+          "gateway/claude-opus-5-5":{"input":2000,"output":500,"cache_read":6000,"cache_write":2000,"total_tokens":10500,
+            "cost":{"input":0.01,"output":0.0125,"cache_read":0.003,"cache_write":0.0125,"total":0.038}},
+          "gateway/gpt-6-luna":{"input":0,"output":100,"cache_read":0,"cache_write":0,"total_tokens":100,
+            "cost":{"input":0,"output":0.002,"cache_read":0,"cache_write":0,"total":0.002}}},
           "tools":{"read":{"calls":2}}}}}
         """
         let snapshot = try await api(body: body).status(DeviceSession(server: Self.server, token: "tok"), Self.scope)
@@ -172,7 +172,7 @@ struct SessionHubTests {
         let store = DeviceSessionStore.inMemory()
         let api = DevysHTTPClient { request in
             let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-            return (Data(#"{"sessionToken":"issued"}"#.utf8), response)
+            return (Data(#"{"session_token":"issued"}"#.utf8), response)
         }
         let hub = SessionHub(api: api, store: store)
         var phases = SessionClient.live(hub).phases().makeAsyncIterator()
@@ -184,6 +184,23 @@ struct SessionHubTests {
         #expect(await phases.next() == .signedOut)
         #expect(store.load() == nil)
         await #expect(throws: DevysHTTPError.unauthorized) { try await hub.current() }
+    }
+
+    @Test("A 401 from any call signs the device out once; other failures keep the session")
+    func expiresOnUnauthorized() async throws {
+        let store = DeviceSessionStore.inMemory(DeviceSession(server: Self.server, token: "kept"))
+        let hub = SessionHub(api: DevysHTTPClient { _ in throw URLError(.badURL) }, store: store)
+        var phases = SessionClient.live(hub).phases().makeAsyncIterator()
+        #expect(await phases.next() == .signedIn(server: Self.server))
+        await #expect(throws: DevysHTTPError.rejected(status: 503, message: "busy")) {
+            try await hub.call { _, _ in throw DevysHTTPError.rejected(status: 503, message: "busy") }
+        }
+        #expect(store.load() != nil)
+        await #expect(throws: DevysHTTPError.unauthorized) {
+            try await hub.call { _, _ in throw DevysHTTPError.unauthorized }
+        }
+        #expect(await phases.next() == .signedOut)
+        #expect(store.load() == nil)
     }
 
     @Test("A stored session restores signed in")

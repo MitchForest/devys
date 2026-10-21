@@ -1,10 +1,10 @@
 public import Dependencies
-public import Foundation
+import Foundation
 
 /// A Codex or Claude Code session on a work item, with its live state read from the provider.
 public struct CodingSession: Equatable, Sendable, Decodable, Identifiable {
-    public enum State: String, Sendable, Decodable {
-        case working, idle, interrupted, failed, unavailable
+    public enum State: String, Sendable, WireEnum {
+        case working, idle, interrupted, failed, unavailable, unknown
     }
 
     public let id: String
@@ -21,8 +21,9 @@ public struct CodingSession: Equatable, Sendable, Decodable, Identifiable {
     public let error: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, provider, purpose, objective, branch, worktree, state, reply, diffStat, error
+        case id, provider, purpose, objective, branch, worktree, state, reply, error
         case baseCommit = "base_commit"
+        case diffStat = "diff_stat"
     }
 
     public var providerName: String { provider == "codex" ? "Codex" : "Claude Code" }
@@ -62,7 +63,7 @@ public struct CodingSession: Equatable, Sendable, Decodable, Identifiable {
 
 /// One step of what a coding session did, read from the harness when asked.
 public struct TranscriptEntry: Equatable, Sendable, Decodable {
-    public enum Kind: String, Sendable, Decodable { case prompt, reply, plan, command, files, tool }
+    public enum Kind: String, Sendable, WireEnum { case prompt, reply, plan, command, files, tool, unknown }
 
     public let kind: Kind
     public let text: String
@@ -79,7 +80,7 @@ public struct TranscriptEntry: Equatable, Sendable, Decodable {
 
 /// A coding session the owner drives from the start: its new work item.
 public struct NewCodingSession: Encodable, Sendable {
-    public let clientId: String
+    public let clientID: String
     /// Who it goes to on hand-back.
     public let employee: String
     public let provider: String
@@ -88,12 +89,18 @@ public struct NewCodingSession: Encodable, Sendable {
     public let newRepository: String?
 
     public init(employee: String, provider: String, objective: String, repository: String?, newRepository: String?) {
-        self.clientId = UUID().uuidString.lowercased()
+        self.clientID = UUID().uuidString.lowercased()
         self.employee = employee
         self.provider = provider
         self.objective = objective
         self.repository = repository
         self.newRepository = newRepository
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case employee, provider, objective, repository
+        case clientID = "client_id"
+        case newRepository = "new_repository"
     }
 }
 

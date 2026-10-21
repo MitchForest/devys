@@ -6,6 +6,8 @@ import { type Business, type Person } from "../identity/contract.ts";
 import { employeesOf } from "../identity/service.ts";
 import type { WorkItem } from "../work/contract.ts";
 import { workItems } from "../work/service.ts";
+import { respond } from "../protocol/http.ts";
+import { Home, type WorkCard } from "./wire.ts";
 
 const hour = 3_600_000;
 /** Waiting this long without a change, or past its due date, waiting work is stuck. */
@@ -19,16 +21,16 @@ const stuck = (item: WorkItem, now: number) =>
     Date.parse(item.updated_at) < now - stuckAfter);
 
 /** A work item as Home shows it, with what a client needs to open its thread. */
-const card = (item: WorkItem) => ({
+const card = (item: WorkItem): WorkCard => ({
   id: item.id,
   title: item.title,
-  employeeId: item.owner_employee_id,
-  projectId: item.project_id,
+  employee_id: item.owner_employee_id,
+  project_id: item.project_id,
   conversation: `work:${item.id}`,
   state: item.state,
-  waitCondition: item.wait_condition,
-  dueAt: item.due_at,
-  updatedAt: item.updated_at,
+  wait_condition: item.wait_condition,
+  due_at: item.due_at,
+  updated_at: item.updated_at,
 });
 
 /** `"A", "B" and 3 more`. */
@@ -76,21 +78,21 @@ export async function homeRoute(
   const now = Date.now();
   const workOf = (id: string | null) => work.find((item) => item.id === id);
   const asked = new Set(decisions.map((decision) => decision.work_item_id));
-  const needsYou = [
+  const needsYou: Home["needs_you"] = [
     ...decisions.map((decision) => {
       const item = workOf(decision.work_item_id);
       return {
         kind: "decision" as const,
         id: decision.id,
         title: item?.title ?? decision.capability,
-        employeeId: decision.employee_id,
+        employee_id: decision.employee_id,
         conversation: decision.conversation,
-        workId: decision.work_item_id,
-        projectId: item?.project_id ?? null,
+        work_id: decision.work_item_id,
+        project_id: item?.project_id ?? null,
         at: decision.requested_at,
         capability: decision.capability,
         input: decision.input,
-        expiresAt: decision.expires_at,
+        expires_at: decision.expires_at,
       };
     }),
     // Work waiting on the owner's decision, unless a request above already stands for it.
@@ -99,7 +101,7 @@ export async function homeRoute(
       .map((item) => ({
         kind: "work" as const,
         ...card(item),
-        workId: item.id,
+        work_id: item.id,
         at: item.updated_at,
       })),
   ];
@@ -122,12 +124,12 @@ export async function homeRoute(
           }),
         )
       : undefined;
-  return Response.json({
-    needsYou,
+  return respond(Home, {
+    needs_you: needsYou,
     glance: {
       moving: work.filter((item) => item.state === "in_progress").map(card),
       stuck: work.filter((item) => stuck(item, now)).map(card),
-      spentCents: null,
+      spent_cents: null,
     },
     since: since ?? null,
     briefing: posted?.message ?? null,

@@ -1,6 +1,8 @@
 import { Hand, X } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { api } from "../app/api.ts";
+import { keys } from "../app/query.ts";
 import { useDark } from "../app/theme.ts";
 import { DevysButton } from "../design/buttons.tsx";
 import type { TerminalState } from "../../surfaces/terminal/view.tsx";
@@ -21,16 +23,15 @@ export function TerminalWindow({
   businessId: string;
   terminalId: string;
 }) {
-  const [title, setTitle] = useState("Terminal");
+  const title =
+    useQuery({
+      queryKey: keys.terminals(businessId),
+      queryFn: () => api.terminals(businessId),
+      select: (result) => result.terminals.find((terminal) => terminal.id === terminalId)?.title,
+    }).data ?? "Terminal";
   const [state, setState] = useState<TerminalState | null>(null);
   const [control, setControl] = useState(0);
   const dark = useDark();
-  useEffect(() => {
-    void api.terminals(businessId).then(({ terminals }) => {
-      const found = terminals.find((terminal) => terminal.id === terminalId);
-      if (found) setTitle(found.title);
-    });
-  }, [businessId, terminalId]);
   useEffect(() => {
     document.title = `${title} — Devys`;
   }, [title]);

@@ -118,7 +118,7 @@ test("looks, the owner's photo, voice and settings work on the web as on native"
     await page.keyboard.press("Escape");
 
     // Dictation fills the direct chat's draft; sending marks the message as dictated.
-    await sidebar(page).getByRole("button", { name: "Head of Operations" }).click();
+    await sidebar(page).getByRole("link", { name: "Head of Operations" }).click();
     await page.getByRole("button", { name: "Dictate" }).click();
     await expect(page.getByLabel("Message Head of Operations")).toHaveValue("What is due today?");
     const sent = page.waitForResponse(
@@ -131,7 +131,7 @@ test("looks, the owner's photo, voice and settings work on the web as on native"
     const response = await sent;
     expect(response.request().postDataJSON()).toMatchObject({
       text: "What is due today?",
-      viaVoice: true,
+      via_voice: true,
     });
     // The server stores it as dictated, in Operations' DM.
     expect(await response.json()).toMatchObject({

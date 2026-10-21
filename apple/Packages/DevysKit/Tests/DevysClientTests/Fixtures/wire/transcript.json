@@ -1,0 +1,18 @@
+{
+  "entries": [
+    {
+      "kind": "prompt",
+      "text": "Build the booking page"
+    },
+    {
+      "kind": "command",
+      "text": "bun test",
+      "detail": "12 pass",
+      "failed": false
+    },
+    {
+      "kind": "reply",
+      "text": "Done."
+    }
+  ]
+}

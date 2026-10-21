@@ -1,0 +1,39 @@
+{
+  "needs_you": [
+    {
+      "kind": "decision",
+      "id": "00000000-0000-4000-8000-000000000012",
+      "title": "Order fittings",
+      "employee_id": "00000000-0000-4000-8000-000000000003",
+      "conversation": "work:00000000-0000-4000-8000-000000000009",
+      "work_id": "00000000-0000-4000-8000-000000000009",
+      "project_id": "00000000-0000-4000-8000-000000000005",
+      "at": "2026-01-01T00:00:00.000Z",
+      "capability": "driveCreate",
+      "input": {
+        "name": "order.txt",
+        "content": "12 fittings"
+      },
+      "expires_at": "2026-01-01T00:00:00.000Z"
+    }
+  ],
+  "glance": {
+    "moving": [
+      {
+        "id": "00000000-0000-4000-8000-000000000008",
+        "title": "Publish the booking page",
+        "employee_id": "00000000-0000-4000-8000-000000000004",
+        "project_id": "00000000-0000-4000-8000-000000000005",
+        "conversation": "work:00000000-0000-4000-8000-000000000008",
+        "state": "in_progress",
+        "wait_condition": null,
+        "due_at": "2026-01-01T00:00:00.000Z",
+        "updated_at": "2026-01-01T00:00:00.000Z"
+      }
+    ],
+    "stuck": [],
+    "spent_cents": null
+  },
+  "since": "2026-01-01T00:00:00.000Z",
+  "briefing": null
+}

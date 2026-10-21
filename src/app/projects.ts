@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect";
+import { Effect } from "effect";
 import type { Env } from "./env.ts";
 import { artifactLocation } from "../apps/documents/service.ts";
 import { type Business, type Person } from "../identity/contract.ts";
@@ -10,21 +10,12 @@ import {
   removeFromProject,
   updateProject,
 } from "../work/projects.ts";
-import { ProjectFields } from "../work/contract.ts";
+import { NewProject, Project, ProjectChange, ProjectItem } from "../work/contract.ts";
+import { respond } from "../protocol/http.ts";
+import { Projects, Removed } from "./wire.ts";
 import { parseRef, type Ref } from "../protocol/ref.ts";
 import { businessFile } from "./files.ts";
 import { body, decodedBody, forbidden, notFound } from "./request.ts";
-
-/** A project's fields from a person, in the clients' JSON. A null clears an optional field. */
-const ProjectInput = Schema.Struct({
-  name: Schema.optional(ProjectFields.name),
-  goal: Schema.optional(Schema.NullOr(ProjectFields.goal)),
-  deadline: Schema.optional(Schema.NullOr(ProjectFields.deadline)),
-  budget: Schema.optional(Schema.NullOr(ProjectFields.budget)),
-  lead: Schema.optional(ProjectFields.lead),
-  members: Schema.optional(ProjectFields.members),
-});
-const NewProject = Schema.Struct({ ...ProjectInput.fields, name: ProjectFields.name });
 
 /**
  * Whether a project can show this: the ref of an artifact of the business or of a file in its
@@ -45,7 +36,7 @@ export async function projectRoute(
 ) {
   const { business, trusted, path } = access;
   if (path === "/projects" && request.method === "GET")
-    return Response.json({
+    return respond(Projects, {
       projects: await Effect.runPromise(projects(env.HYPERDRIVE, business.id)),
     });
   if (request.method !== "POST" && request.method !== "PUT") return notFound();
@@ -59,13 +50,13 @@ export async function projectRoute(
       : undefined;
   const editing = /^\/projects\/([A-Za-z0-9-]{1,64})$/.exec(path)?.[1];
   if (editing && request.method === "PUT") {
-    const change = await decodedBody(request, 8_000, ProjectInput);
+    const change = await decodedBody(request, 8_000, ProjectChange);
     const refused = notEmployees(change);
     if (refused) return refused;
     const updated = await Effect.runPromise(
       updateProject(env.HYPERDRIVE, business.id, editing, change),
     );
-    return updated ? Response.json(updated) : notFound();
+    return updated ? respond(Project, updated) : notFound();
   }
   if (request.method !== "POST") return notFound();
   if (path === "/projects") {
@@ -74,7 +65,8 @@ export async function projectRoute(
     const lead = input.lead ?? employees.find((employee) => employee.template === "operations")?.id;
     const refused = notEmployees(input);
     if (refused) return refused;
-    return Response.json(
+    return respond(
+      Project,
       await Effect.runPromise(
         createProject(env.HYPERDRIVE, business.id, {
           ...input,
@@ -95,7 +87,7 @@ export async function projectRoute(
     const removed = await Effect.runPromise(
       removeFromProject(env.HYPERDRIVE, business.id, remove[1]!, remove[2]!),
     );
-    return removed ? Response.json({ removed: true }) : notFound();
+    return removed ? respond(Removed, { removed: true }) : notFound();
   }
   const projectId = /^\/projects\/([A-Za-z0-9-]{1,64})\/items$/.exec(path)?.[1];
   if (!projectId) return notFound();
@@ -109,6 +101,6 @@ export async function projectRoute(
     addToProject(env.HYPERDRIVE, business.id, projectId, ref as Ref),
   );
   return item
-    ? Response.json(item, { status: 201 })
+    ? respond(ProjectItem, item, { status: 201 })
     : new Response("No such project in this business", { status: 404 });
 }

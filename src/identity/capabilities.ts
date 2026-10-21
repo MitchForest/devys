@@ -1,6 +1,7 @@
 import { Effect, Schema } from "effect";
 import type { Database } from "../data/database.ts";
 import { capability, CapabilityError, Invocation } from "../protocol/capability.ts";
+import { HireableRoleId } from "../protocol/roles.ts";
 import { hire, hireInput, type Hiring } from "./team.ts";
 
 /**
@@ -17,7 +18,7 @@ export function teamCapabilities(db: Database, hiring: Hiring) {
       // Each call hires someone new: after an interruption, list the team before trying again.
       replay: "reconcile",
       input: Schema.Struct({
-        template: Schema.Literals(["engineering", "growth", "business-operations", "custom"]),
+        template: HireableRoleId,
         name: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(80)),
         responsibilities: Schema.optional(Schema.String.check(Schema.isMaxLength(2000))),
         model: Schema.optional(Schema.String.check(Schema.isMaxLength(120))),

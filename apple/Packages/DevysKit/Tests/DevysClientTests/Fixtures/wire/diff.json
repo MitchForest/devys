@@ -1,0 +1,11 @@
+{
+  "files": [
+    {
+      "path": "src/book.tsx",
+      "status": "added",
+      "added": 40,
+      "removed": 0
+    }
+  ],
+  "patch": "+export function Book() {}\n"
+}

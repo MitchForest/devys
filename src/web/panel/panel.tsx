@@ -1,6 +1,9 @@
 import { ChevronLeft, Maximize2, Minimize2, X } from "lucide-react";
 import type { ReactNode } from "react";
-import { layerOfRef, layerReference, useWorkspace } from "../app/workspace.tsx";
+import { useArtifactName } from "../app/data.ts";
+import { layerOfRef, layerReference, useLayers, useNav, usePlace } from "../app/navigation.ts";
+import { ui, useUi } from "../app/ui.ts";
+import { usePanel } from "../shell/panel-state.ts";
 import { ToolbarIconButton } from "../design/buttons.tsx";
 import { Desk } from "./desk.tsx";
 import { NeedsYou } from "./home.tsx";
@@ -14,24 +17,28 @@ import { WorkCard } from "./work-card.tsx";
  * layers stacked over it. ‹ and Esc go back one layer; × returns to the permanent view.
  */
 export function RightPanel({ onClose }: { onClose?: () => void }) {
-  const { layers, place, actions, artifactName, wide } = useWorkspace();
-  const top = layers.at(-1);
+  const { layers, top } = useLayers();
+  const place = usePlace();
+  const nav = useNav();
+  const panel = usePanel();
+  const artifact = useArtifactName();
+  const wide = useUi((state) => state.wide);
   if (top) {
-    const { title, ref } = layerReference(top, { artifact: artifactName });
+    const { title, ref } = layerReference(top, { artifact });
     return (
       <section aria-label={title} className="flex h-full flex-col">
         <PanelHeader
           title={title}
-          {...(layers.length > 1 ? { back: actions.popLayer } : {})}
+          {...(layers.length > 1 ? { back: nav.popLayer } : {})}
           close={() => {
-            actions.closeLayers();
+            nav.closeLayers();
             onClose?.();
           }}
           closeLabel="Close (back to the panel)"
         >
           {ref && layerOfRef(ref) && <KeepInProject record={ref} />}
           {!onClose && (
-            <ToolbarIconButton label={wide ? "Narrow" : "Widen"} onClick={actions.toggleWide}>
+            <ToolbarIconButton label={wide ? "Narrow" : "Widen"} onClick={ui.toggleWide}>
               {wide ? <Minimize2 /> : <Maximize2 />}
             </ToolbarIconButton>
           )}
@@ -42,7 +49,7 @@ export function RightPanel({ onClose }: { onClose?: () => void }) {
       </section>
     );
   }
-  const close = onClose ?? actions.togglePanel;
+  const close = onClose ?? panel.toggle;
   return place.kind === "home" ? (
     <NeedsYou close={close} />
   ) : place.kind === "direct" ? (

@@ -1,32 +1,38 @@
+import { Schema } from "effect";
 import type { Scope } from "../../identity/contract.ts";
+import { Timestamp } from "../../protocol/time.ts";
 
 /** The coding harnesses Devys runs coding sessions in. Each owns its own sessions and transcripts. */
 export const providers = ["codex", "claude"] as const;
-export type Provider = (typeof providers)[number];
+const Provider = Schema.Literals(providers);
+export type Provider = typeof Provider.Type;
 
 /** Why a session exists on a work item: to build the change, or to review it read-only. */
-export type Purpose = "build" | "review";
+const Purpose = Schema.Literals(["build", "review"]);
+export type Purpose = typeof Purpose.Type;
 
 /**
  * One coding session: a native harness session in its own worktree, serving one work item.
  * Devys records the reference and the accepted result; the provider owns the rest.
  */
-export interface CodingSession {
-  id: string;
-  work_item_id: string;
-  employee_id: string;
-  provider: Provider;
-  purpose: Purpose;
-  objective: string;
-  /** Absolute path of the repository the worktree was made from. */
-  repository: string;
-  base_commit: string;
-  branch: string;
-  worktree: string;
+export const CodingSession = Schema.Struct({
+  id: Schema.String,
+  work_item_id: Schema.String,
+  employee_id: Schema.String,
+  provider: Provider,
+  purpose: Purpose,
+  objective: Schema.String,
+  /** Absolute path of the repository the worktree was made from; null until it started. */
+  repository: Schema.NullOr(Schema.String),
+  /** The commit the session's branch started from, which its diff is against. */
+  base_commit: Schema.NullOr(Schema.String),
+  branch: Schema.NullOr(Schema.String),
+  worktree: Schema.NullOr(Schema.String),
   /** The provider's own session id, once it exists. */
-  provider_session_id: string | null;
-  created_at: string;
-}
+  provider_session_id: Schema.NullOr(Schema.String),
+  created_at: Timestamp,
+});
+export type CodingSession = typeof CodingSession.Type;
 
 /** What the host needs to begin a coding session. Starting the same id twice returns the first. */
 export interface StartRequest {
@@ -45,6 +51,7 @@ export interface StartRequest {
   reviews?: string;
 }
 
+/** Where the host started a session (the Mac host's protocol). */
 export interface Started {
   providerSessionId: string;
   repository: string;
@@ -62,6 +69,21 @@ export interface CodingStatus {
   diffStat: string;
   error: string | null;
 }
+
+/**
+ * A session as the owner sees it: the record plus its live state from the provider, or
+ * `unavailable` with the error when the host could not be asked.
+ */
+export const LiveCodingSession = Schema.Struct({
+  ...CodingSession.fields,
+  state: Schema.Literals(["working", "idle", "interrupted", "failed", "unavailable"]),
+  /** The provider's latest reply in the session. */
+  reply: Schema.NullOr(Schema.String),
+  /** `git diff --stat` of the worktree against its base, including uncommitted changes. */
+  diff_stat: Schema.String,
+  error: Schema.NullOr(Schema.String),
+});
+export type LiveCodingSession = typeof LiveCodingSession.Type;
 
 /** A change in a session the supervising employee should hear about. */
 export interface CodingEvent {
@@ -141,34 +163,40 @@ export interface Published {
 }
 
 /** The worktree's changes against its base, for review. */
-export interface WorkingDiff {
-  files: {
-    path: string;
-    status: "added" | "modified" | "deleted" | "renamed";
-    added: number;
-    removed: number;
-  }[];
+export const WorkingDiff = Schema.Struct({
+  files: Schema.Array(
+    Schema.Struct({
+      path: Schema.String,
+      status: Schema.Literals(["added", "modified", "deleted", "renamed"]),
+      added: Schema.Int,
+      removed: Schema.Int,
+    }),
+  ),
   /** A unified patch, cut off at a megabyte. */
-  patch: string;
-}
+  patch: Schema.String,
+});
+export type WorkingDiff = typeof WorkingDiff.Type;
 
 /**
  * One step of what a coding session did, read from the harness's own record on demand
  * (Devys keeps no copy): what it was told, its replies and plan, commands and file changes.
  */
-export interface TranscriptEntry {
-  kind: "prompt" | "reply" | "plan" | "command" | "files" | "tool";
-  text: string;
+const TranscriptEntry = Schema.Struct({
+  kind: Schema.Literals(["prompt", "reply", "plan", "command", "files", "tool"]),
+  text: Schema.String,
   /** A command's output, a tool's result; cut short. */
-  detail?: string;
-  failed?: boolean;
-}
+  detail: Schema.optionalKey(Schema.String),
+  failed: Schema.optionalKey(Schema.Boolean),
+});
+export type TranscriptEntry = typeof TranscriptEntry.Type;
+/** A session's latest steps, at most 200, oldest first. */
+export const Transcript = Schema.Struct({ entries: Schema.Array(TranscriptEntry) });
 
 /** The coding runner: the trusted Mac host in local mode. */
 export interface CodingHost {
   diff(codingSessionId: string): Promise<WorkingDiff>;
   /** The session's latest steps, at most 200, oldest first. */
-  transcript(codingSessionId: string): Promise<{ entries: TranscriptEntry[] }>;
+  transcript(codingSessionId: string): Promise<typeof Transcript.Type>;
   start(request: StartRequest): Promise<Started>;
   inspect(codingSessionId: string): Promise<CodingStatus>;
   send(codingSessionId: string, text: string): Promise<{ steered: boolean }>;

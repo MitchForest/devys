@@ -58,7 +58,7 @@ public struct Employee: Equatable, Sendable, Identifiable, Decodable {
     public let id: String
     public var name: String
     /// The employee's responsibilities, in the owner's words.
-    public var role: String
+    public var responsibilities: String
     /// The role template it was hired from: operations, engineering, growth, business-operations or custom.
     public var template: String
     public var avatar: AvatarSpec
@@ -73,20 +73,20 @@ public struct Employee: Equatable, Sendable, Identifiable, Decodable {
     public init(
         id: String,
         name: String,
-        role: String,
+        responsibilities: String,
         template: String = "custom",
         avatar: AvatarSpec? = nil,
         summary: String? = nil,
         paused: Bool = false,
         look: Look? = nil,
-        model: String = ModelCatalog.fixture.defaults.employee
+        model: String
     ) {
         self.id = id
         self.name = name
-        self.role = role
+        self.responsibilities = responsibilities
         self.template = template
         self.avatar = avatar ?? Self.face(for: id)
-        self.summary = summary ?? role
+        self.summary = summary ?? responsibilities
         self.paused = paused
         self.look = look
         self.model = model
@@ -97,7 +97,7 @@ public struct Employee: Equatable, Sendable, Identifiable, Decodable {
         self.init(
             id: try container.decode(String.self, forKey: .id),
             name: try container.decode(String.self, forKey: .name),
-            role: try container.decode(String.self, forKey: .role),
+            responsibilities: try container.decode(String.self, forKey: .responsibilities),
             template: try container.decodeIfPresent(String.self, forKey: .template) ?? "custom",
             paused: try container.decodeIfPresent(Bool.self, forKey: .paused) ?? false,
             look: try container.decodeIfPresent(Look.self, forKey: .look),
@@ -119,7 +119,7 @@ public struct Employee: Equatable, Sendable, Identifiable, Decodable {
     /// The Head of Operations can't be retired.
     public var isOperations: Bool { template == "operations" }
 
-    enum CodingKeys: String, CodingKey { case id, name, role, template, paused, look, model }
+    enum CodingKeys: String, CodingKey { case id, name, responsibilities, template, paused, look, model }
 }
 
 extension WorkspaceSnapshot {

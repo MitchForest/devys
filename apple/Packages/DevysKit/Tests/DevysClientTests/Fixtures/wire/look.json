@@ -1,0 +1,8 @@
+{
+  "look": {
+    "kind": "face",
+    "palette": "teal",
+    "shape": "capsule",
+    "seed": 7
+  }
+}

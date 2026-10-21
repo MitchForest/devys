@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
+import { palettes, shapes, tints } from "../../identity/contract.ts";
 
 export type Mood =
   | "idle"
@@ -12,33 +13,10 @@ export type Mood =
   | "asleep"
   | "off";
 interface FaceSpec {
-  palette: string;
-  shape: string;
+  palette: (typeof palettes)[number];
+  shape: (typeof shapes)[number];
   seed: number;
 }
-
-export const palettes = [
-  "brown",
-  "red",
-  "orange",
-  "amber",
-  "green",
-  "teal",
-  "blue",
-  "purple",
-  "pink",
-  "gray",
-];
-export const shapes = [
-  "circle",
-  "blob",
-  "roundedSquare",
-  "capsule",
-  "triangle",
-  "hexagon",
-  "cloud",
-  "drop",
-];
 
 /** The same default Face the native apps give an employee: Swift's `Employee.face(for:)`. */
 export function faceFor(id: string): FaceSpec {
@@ -103,7 +81,6 @@ export const tileGradients: Record<string, [string, string]> = {
   purple: ["#a77af0", "#6f45c9"],
   pink: ["#f27db2", "#c9457f"],
 };
-export const tints = ["blue", "orange", "green", "purple", "pink"];
 
 /** A business's tint, stable for its id, as on native. */
 export const tintFor = (id: string) =>

@@ -1,0 +1,20 @@
+{
+  "messages": [
+    {
+      "id": "00000000-0000-4000-8000-000000000010",
+      "conversation": "direct:00000000-0000-4000-8000-000000000003",
+      "author": "person:00000000-0000-4000-8000-000000000001",
+      "kind": "message",
+      "text": "What's left before the launch? @Ada please check the site.",
+      "reply_to": null,
+      "mentions": [
+        "00000000-0000-4000-8000-000000000004"
+      ],
+      "via_voice": false,
+      "ref": null,
+      "created_at": "2026-01-01T00:00:00.000Z",
+      "reactions": []
+    }
+  ],
+  "respondent": "00000000-0000-4000-8000-000000000003"
+}

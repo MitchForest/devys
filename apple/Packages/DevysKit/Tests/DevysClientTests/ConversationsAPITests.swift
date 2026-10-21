@@ -102,12 +102,12 @@ struct ConversationsAPITests {
         #expect(request.url?.absoluteString == "https://devys.test/api/businesses/b1/conversations/direct%3Agrowth/messages")
         let body = try await lastBody(recorder)
         #expect(body["id"] as? String == "c-0001" && body["text"] as? String == "Go")
-        #expect(body["replyTo"] as? String == "m1" && body["mentions"] as? [String] == ["growth"] && body["viaVoice"] as? Bool == true)
+        #expect(body["reply_to"] as? String == "m1" && body["mentions"] as? [String] == ["growth"] && body["via_voice"] as? Bool == true)
 
         _ = try await api(status: 201, body: #"{"message":\#(Self.message),"to":[]}"#, recorder: recorder)
             .postMessage(Self.session, businessID: "b1", key: .work("c1"), NewMessage(id: "c-0002", text: "Hi"))
         let plain = try await lastBody(recorder)
-        #expect(plain.keys.sorted() == ["id", "text", "viaVoice"])
+        #expect(plain.keys.sorted() == ["id", "text", "via_voice"])
     }
 
     @Test("A paused answerer comes back as 409 with the server's words")

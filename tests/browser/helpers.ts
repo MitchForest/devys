@@ -47,7 +47,7 @@ export async function signIn(page: Page, sql: Sql, person: string, { phone = fal
     await expect(page.getByLabel("Message Head of Operations")).toBeVisible();
     return;
   }
-  await expect(sidebar(page).getByRole("button", { name: /^Home/ })).toBeVisible();
+  await expect(sidebar(page).getByRole("link", { name: /^Home/ })).toBeVisible();
   await expect(page.getByTestId("place-title")).toHaveText("Home");
 }
 
@@ -111,7 +111,7 @@ export async function stubPosting(page: Page, to: () => string[] = () => []) {
           author: "person:owner",
           kind: "message",
           text: body.text,
-          reply_to: body.replyTo ?? null,
+          reply_to: body.reply_to ?? null,
           mentions: body.mentions ?? [],
           via_voice: false,
           ref: null,

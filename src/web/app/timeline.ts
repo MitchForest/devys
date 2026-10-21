@@ -1,5 +1,5 @@
 import type { Ref } from "../../protocol/ref.ts";
-import type { ShownMessage } from "./api.ts";
+import type { ShownMessage } from "../../conversations/contract.ts";
 
 /** A conversation as Messages lays it out: grouped bubbles, with a heading when time passes. */
 type Position = "single" | "first" | "middle" | "last";
@@ -14,7 +14,7 @@ export interface Bubble {
   /** The message it answers, quoted only when that isn't the message right above it. */
   replyTo: string | null;
   viaVoice: boolean;
-  reactions: string[];
+  reactions: readonly string[];
   /** What an event opens: a hand-off card's work item, a page. */
   ref: Ref | null;
   sentAt?: Date;

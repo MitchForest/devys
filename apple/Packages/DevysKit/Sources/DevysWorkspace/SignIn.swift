@@ -3,14 +3,19 @@ import Dependencies
 import DevysClient
 package import Foundation
 
-/// Device enrollment: a server address and a one-time code from `bun scripts/enroll.ts`.
-/// Success routes at the root through the session phase stream.
+/// Device enrollment: a server address and a one-time code from another signed-in device
+/// (Settings › Devices). Success routes at the root through the session phase stream.
 @Feature
 package struct SignIn {
     package init() {}
 
     package struct State {
-        package var server = "http://127.0.0.1:5173"
+        #if DEBUG
+            /// The local development server.
+            package var server = "http://127.0.0.1:5173"
+        #else
+            package var server = ""
+        #endif
         package var code = ""
         package var isSubmitting = false
         package var errorText: String?
@@ -85,7 +90,7 @@ package struct SignIn {
     static func message(for error: any Error) -> String {
         switch error as? DevysHTTPError {
         case .rejected(401, _), .unauthorized:
-            "That code has expired or was already used. Issue a new one with bun scripts/enroll.ts."
+            "That code has expired or was already used. Add a device in Settings › Devices on another signed-in device for a new one."
         case .rejected(400, _):
             "That doesn't look like an enrollment code."
         case .unreachable:

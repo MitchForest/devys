@@ -91,6 +91,8 @@ let package = Package(
         .testTarget(
             name: "DevysClientTests",
             dependencies: ["DevysClient"],
+            // Golden responses the server writes (`bun run wire:write`).
+            resources: [.copy("Fixtures")],
             swiftSettings: pureSwiftSettings
         ),
         .testTarget(

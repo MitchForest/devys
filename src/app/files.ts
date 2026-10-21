@@ -4,11 +4,20 @@ import { conversationKey } from "../conversations/contract.ts";
 import type { Business, Person } from "../identity/contract.ts";
 import { activeEmployee } from "../identity/service.ts";
 import { readBounded, sha256Bytes } from "../protocol/bytes.ts";
-import { revisionConflict } from "../workspace/contract.ts";
 import { workItem } from "../work/service.ts";
 import { postFromPerson } from "./conversations.ts";
 import { modeOf } from "./mode.ts";
 import { body } from "./request.ts";
+import { respond } from "../protocol/http.ts";
+import { FileText, revisionConflict, SavedFile } from "../workspace/contract.ts";
+import {
+  BytesConflict,
+  FileComments,
+  Folder,
+  Posted,
+  TextConflict,
+  type FileAnchor,
+} from "./wire.ts";
 
 type Access = { person: Person; business: Business; trusted: boolean; path: string };
 
@@ -29,38 +38,6 @@ const types: Record<string, string> = {
   json: "application/json",
 };
 const rawBytes = 20_000_000;
-
-const Offset = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
-const Coordinate = Schema.Finite;
-/** One anchored comment: a markdown source range, PDF page rectangles, or diff lines. */
-const Anchor = Schema.Union([
-  Schema.Struct({
-    kind: Schema.Literal("text"),
-    start: Offset,
-    end: Offset,
-    quote: Schema.String.check(Schema.isMaxLength(4_000)),
-  }),
-  Schema.Struct({
-    kind: Schema.Literal("pdf"),
-    page: Offset,
-    rects: Schema.Array(
-      Schema.Struct({ x: Coordinate, y: Coordinate, width: Coordinate, height: Coordinate }),
-    ).check(Schema.isMaxLength(50)),
-  }),
-  Schema.Struct({ kind: Schema.Literal("lines"), start: Offset, end: Offset }),
-]);
-type Anchor = typeof Anchor.Type;
-const Comments = Schema.Struct({
-  id: Schema.String.check(Schema.isPattern(/^[A-Za-z0-9-]{8,64}$/)),
-  path: Schema.String,
-  employee: Schema.optional(Schema.String),
-  /** A work item whose thread gets the comments, addressed to its owner, instead of a DM. */
-  work: Schema.optional(Schema.String),
-  comments: Schema.Array(
-    Schema.Struct({ anchor: Anchor, text: Schema.String.check(Schema.isMaxLength(8_000)) }),
-  ).check(Schema.isMinLength(1), Schema.isMaxLength(100)),
-  message: Schema.optional(Schema.String.check(Schema.isMaxLength(8_000))),
-});
 
 /** A path in the business's folder on the Mac, or undefined (also outside local mode). */
 export function businessFile(env: Env, businessId: string, candidate: unknown) {
@@ -99,10 +76,10 @@ export async function filesRoute(request: Request, env: Env, access: Access) {
     const folder = inside(url.searchParams.get("path") ?? root);
     if (!folder) return new Response("Stay inside the business folder", { status: 400 });
     try {
-      return Response.json({ root, path: folder, entries: await runner().list(folder) });
+      return respond(Folder, { root, path: folder, entries: await runner().list(folder) });
     } catch (error) {
       // A business with no files yet has no folder.
-      if (folder === root) return Response.json({ root, path: folder, entries: [] });
+      if (folder === root) return respond(Folder, { root, path: folder, entries: [] });
       return failure(error);
     }
   }
@@ -110,7 +87,7 @@ export async function filesRoute(request: Request, env: Env, access: Access) {
     const file = inside(url.searchParams.get("path"));
     if (!file) return new Response("Stay inside the business folder", { status: 400 });
     try {
-      return Response.json(await runner().read(file, 1_000_000));
+      return respond(FileText, await runner().read(file, 1_000_000));
     } catch (error) {
       return failure(error);
     }
@@ -145,7 +122,7 @@ export async function filesRoute(request: Request, env: Env, access: Access) {
   if (!trusted) return new Response("Forbidden", { status: 403 });
   if (path === "/files/text" && request.method === "PUT") {
     // Text files open up to 1 MB; JSON escaping can double it.
-    const input = await body<{ path: string; content: string; expectedRevision: string | null }>(
+    const input = await body<{ path: string; content: string; expected_revision: string | null }>(
       request,
       2_000_000,
     );
@@ -153,8 +130,9 @@ export async function filesRoute(request: Request, env: Env, access: Access) {
     if (!file || typeof input.content !== "string")
       return new Response("Send a path inside the business folder and its text", { status: 400 });
     try {
-      return Response.json(
-        await runner().write(file, input.content, input.expectedRevision ?? null),
+      return respond(
+        SavedFile,
+        await runner().write(file, input.content, input.expected_revision ?? null),
       );
     } catch (error) {
       if (error instanceof Error && error.message.startsWith(revisionConflict)) {
@@ -162,7 +140,7 @@ export async function filesRoute(request: Request, env: Env, access: Access) {
         const current = await runner()
           .read(file, 1_000_000)
           .catch(() => null);
-        return Response.json({ conflict: true, current }, { status: 409 });
+        return respond(TextConflict, { conflict: true, current }, { status: 409 });
       }
       return failure(error);
     }
@@ -170,7 +148,7 @@ export async function filesRoute(request: Request, env: Env, access: Access) {
   if (path === "/files/raw" && request.method === "PUT") {
     const file = inside(url.searchParams.get("path"));
     if (!file) return new Response("Stay inside the business folder", { status: 400 });
-    const expected = url.searchParams.get("expectedRevision");
+    const expected = url.searchParams.get("expected_revision");
     // Counted while it arrives, so an oversized upload is refused without holding all of it.
     const bytes = await readBounded(request.body, rawBytes).catch(() => undefined);
     if (!bytes) return new Response("The file is too large", { status: 413 });
@@ -184,17 +162,17 @@ export async function filesRoute(request: Request, env: Env, access: Access) {
         key,
         expected === null ? undefined : expected === "none" ? null : expected,
       );
-      return Response.json({ path: file, revision: await sha256Bytes(bytes) });
+      return respond(SavedFile, { path: file, revision: await sha256Bytes(bytes) });
     } catch (error) {
       if (error instanceof Error && error.message.startsWith(revisionConflict))
-        return Response.json({ conflict: true }, { status: 409 });
+        return respond(BytesConflict, { conflict: true }, { status: 409 });
       return failure(error);
     } finally {
       await env.FILES.delete(key);
     }
   }
   if (path === "/files/comments" && request.method === "POST") {
-    const decoded = Schema.decodeUnknownOption(Comments)(await body(request, 64_000));
+    const decoded = Schema.decodeUnknownOption(FileComments)(await body(request, 64_000));
     if (decoded._tag === "None")
       return new Response("Send a client id, a file and comments with their anchors", {
         status: 400,
@@ -232,13 +210,13 @@ export async function filesRoute(request: Request, env: Env, access: Access) {
       mentions: [employee.id],
     });
     if ("refused" in posted) return new Response(posted.refused, { status: 409 });
-    return Response.json(posted, { status: 201 });
+    return respond(Posted, posted, { status: 201 });
   }
   return new Response("Not found", { status: 404 });
 }
 
 /** How an anchor reads in the message that carries it. */
-function describe(anchor: Anchor) {
+function describe(anchor: FileAnchor) {
   switch (anchor.kind) {
     case "text":
       return `"${anchor.quote.slice(0, 200)}" (characters ${anchor.start}–${anchor.end})`;

@@ -52,7 +52,7 @@ test("authenticated memory APIs and portable CLI migrate between isolated busine
     }
     const stale = await request.post(`${memory(first)}/remember`, {
       headers: { ...headers(first.session), "idempotency-key": "stale" },
-      data: { key: "preference-0", content: "Changed", source: "user", expectedRevision: 0 },
+      data: { key: "preference-0", content: "Changed", source: "user", expected_revision: 0 },
     });
     expect(stale.status()).toBe(409);
     const file = join(temp, "memory.ndjson");

@@ -224,10 +224,10 @@ export function modelCatalog(config: ModelsConfig = modelsConfig) {
         price: {
           input: model.cost.input,
           output: model.cost.output,
-          cacheRead: model.cost.cacheRead,
+          cache_read: model.cost.cacheRead,
         },
         // A typical employee turn: 20k cached context, 3k new input, 1.5k output with thinking.
-        typicalTurnUsd:
+        typical_turn_usd:
           (20_000 * model.cost.cacheRead + 3_000 * model.cost.input + 1_500 * model.cost.output) /
           1_000_000,
       };

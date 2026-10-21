@@ -1,5 +1,6 @@
 import { Schema } from "effect";
-import type { Ref } from "../protocol/ref.ts";
+import { Ref } from "../protocol/ref.ts";
+import { Timestamp } from "../protocol/time.ts";
 
 /** Every state a work item can be in: the one list. */
 const workItemStates = [
@@ -62,61 +63,108 @@ export const ProjectFields = {
   members: Schema.Array(EmployeeId).check(Schema.isMaxLength(50)),
 };
 
+/** A work item a person records over HTTP, in the API's field names. */
+export const NewWorkItem = Schema.Struct({
+  title: WorkItemFields.title,
+  owner: WorkItemFields.owner,
+  objective: Schema.optional(WorkItemFields.objective),
+  next_action: Schema.optional(WorkItemFields.nextAction),
+  due_at: Schema.optional(WorkItemFields.dueAt),
+  conditions: Schema.optional(
+    Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.Unknown)),
+  ),
+  project_id: Schema.optional(Schema.String),
+});
+export type NewWorkItem = typeof NewWorkItem.Type;
+/** A person's change at the revision they saw; null clears what waits or the due date. */
+export const WorkItemChange = Schema.Struct({
+  expected_revision: WorkItemFields.expectedRevision,
+  title: Schema.optional(WorkItemFields.title),
+  owner: Schema.optional(WorkItemFields.owner),
+  state: Schema.optional(WorkItemFields.state),
+  next_action: Schema.optional(WorkItemFields.nextAction),
+  wait_condition: Schema.optional(WorkItemFields.waitCondition),
+  due_at: Schema.optional(Schema.NullOr(WorkItemFields.dueAt)),
+});
+
+/** A project's fields from a person, in the clients' JSON. A null clears an optional field. */
+export const ProjectChange = Schema.Struct({
+  name: Schema.optional(ProjectFields.name),
+  goal: Schema.optional(Schema.NullOr(ProjectFields.goal)),
+  deadline: Schema.optional(Schema.NullOr(ProjectFields.deadline)),
+  budget: Schema.optional(Schema.NullOr(ProjectFields.budget)),
+  lead: Schema.optional(ProjectFields.lead),
+  members: Schema.optional(ProjectFields.members),
+});
+export type ProjectChange = typeof ProjectChange.Type;
+export const NewProject = Schema.Struct({ ...ProjectChange.fields, name: ProjectFields.name });
+
+/** What was done; a coding result names its commit and the check that ran against it. */
+const Evidence = Schema.Struct({
+  by: Schema.String,
+  note: Schema.String,
+  at: Timestamp,
+  commit: Schema.optionalKey(Schema.String),
+  check: Schema.optionalKey(
+    Schema.Struct({ command: Schema.String, exit_code: Schema.NullOr(Schema.Number) }),
+  ),
+  /** What a commit changed, as "3 files changed, 10 insertions(+)". */
+  changes: Schema.optionalKey(Schema.String),
+  /** The pull request the work was published as. */
+  pull_request: Schema.optionalKey(Schema.String),
+  /** A deploy of `commit`: where, the URL checked, and whether it answered. */
+  deploy: Schema.optionalKey(
+    Schema.Struct({
+      stage: Schema.Literals(["preview", "production"]),
+      url: Schema.NullOr(Schema.String),
+      live: Schema.Boolean,
+    }),
+  ),
+  /** The event this was recorded from; evidence from one source is recorded once. */
+  source: Schema.optionalKey(Schema.String),
+});
+
 /** What is owed: who is accountable, what's next, and the evidence once done. */
-export interface WorkItem {
-  id: string;
-  owner_employee_id: string;
-  title: string;
-  objective: string;
-  next_action: string;
-  wait_condition: string | null;
-  due_at: string | null;
-  state: WorkItemState;
-  /** The project it belongs to, if any. */
-  project_id: string | null;
+export const WorkItem = Schema.Struct({
+  id: Schema.String,
+  owner_employee_id: Schema.String,
+  title: Schema.String,
+  objective: Schema.String,
+  next_action: Schema.String,
+  wait_condition: Schema.NullOr(Schema.String),
+  due_at: Schema.NullOr(Timestamp),
+  state: WorkItemState,
+  /** The project it belongs to, if any; its thread is in that project's channel. */
+  project_id: Schema.NullOr(Schema.String),
   /** Values for capabilities' own constraint fields, by capability name. They only narrow. */
-  conditions: Record<string, Record<string, unknown>>;
-  /** What was done; a coding result names its commit and the check that ran against it. */
-  evidence: {
-    by: string;
-    note: string;
-    at: string;
-    commit?: string;
-    check?: { command: string; exitCode: number | null };
-    /** What a commit changed, as "3 files changed, 10 insertions(+)". */
-    changes?: string;
-    /** The pull request the work was published as. */
-    pullRequest?: string;
-    /** A deploy of `commit`: where, the URL checked, and whether it answered. */
-    deploy?: { stage: "preview" | "production"; url: string | null; live: boolean };
-    /** The event this was recorded from; evidence from one source is recorded once. */
-    source?: string;
-  }[];
-  revision: number;
+  conditions: Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.Unknown)),
+  evidence: Schema.Array(Evidence),
+  revision: Schema.Int,
   /** The person who took this over from the employee, if anyone. */
-  taken_over_by: string | null;
-  created_by: string;
-  updated_at: string;
-}
+  taken_over_by: Schema.NullOr(Schema.String),
+  /** `person:<id>` or `employee:<id>`. */
+  created_by: Schema.String,
+  updated_at: Timestamp,
+});
+export type WorkItem = typeof WorkItem.Type;
 
 /** A record a project shows: a reference, never a copy (an artifact or a business file). */
-export interface ProjectItem {
-  id: string;
-  ref: Ref;
-}
+export const ProjectItem = Schema.Struct({ id: Schema.String, ref: Ref });
+export type ProjectItem = typeof ProjectItem.Type;
 
 /** A bounded initiative. Its work items belong to it; it confers no access. */
-export interface Project {
-  id: string;
-  name: string;
-  goal: string | null;
+export const Project = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  goal: Schema.NullOr(Schema.String),
   /** A calendar date, `YYYY-MM-DD`. */
-  deadline: string | null;
+  deadline: Schema.NullOr(Schema.String),
   /** A spending limit in the currency's smallest unit; it narrows, never grants. */
-  budget: { cents: number; currency: string } | null;
+  budget: Schema.NullOr(Schema.Struct({ cents: Schema.Int, currency: Schema.String })),
   /** The employee who answers in the project's channel; null until one is chosen. */
-  lead_employee_id: string | null;
+  lead_employee_id: Schema.NullOr(Schema.String),
   /** The employees assigned to it, besides the lead. */
-  member_ids: string[];
-  items: ProjectItem[];
-}
+  member_ids: Schema.Array(Schema.String),
+  items: Schema.Array(ProjectItem),
+});
+export type Project = typeof Project.Type;

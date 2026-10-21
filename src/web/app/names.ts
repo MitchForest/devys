@@ -1,8 +1,6 @@
-import type { WorkItem, WorkItemState, Employee, RoleTemplateId } from "./api.ts";
+import type { RoleTemplateId } from "../../protocol/roles.ts";
+import type { WorkItem, WorkItemState } from "../../work/contract.ts";
 import type { Tone } from "../design/primitives.tsx";
-import type { Mood } from "../design/face.tsx";
-import type { Place, WorkspaceState } from "./workspace.tsx";
-import { valueOf } from "./workspace.tsx";
 
 /** Plain names for capabilities, as native `AccessNames`; the description carries the detail. */
 const titles: Record<string, string> = {
@@ -59,53 +57,14 @@ export const chipFor = (state: WorkItemState): { title: string; tone: Tone } =>
 
 export const isOpen = (state: WorkItemState) => state !== "completed" && state !== "cancelled";
 
-/**
- * A place's title, and in a thread the place above it (its project) so the breadcrumb reads
- * "Launch › Fix sitemap".
- */
-export function placeTitle(
-  state: WorkspaceState,
-  place: Place,
-): { title: string; parent?: { title: string; place: Place } } {
-  switch (place.kind) {
-    case "home":
-      return { title: "Home" };
-    case "direct":
-      return { title: state.employees.find((e) => e.id === place.employeeId)?.name ?? "Message" };
-    case "project":
-      return { title: valueOf(state.projects)?.find((p) => p.id === place.id)?.name ?? "Project" };
-    case "thread": {
-      const item = valueOf(state.work)?.find((w) => w.id === place.workId);
-      const project =
-        item?.project_id && valueOf(state.projects)?.find((p) => p.id === item.project_id);
-      return {
-        title: item?.title ?? "Thread",
-        ...(project
-          ? { parent: { title: project.name, place: { kind: "project", id: project.id } as Place } }
-          : {}),
-      };
-    }
-  }
-}
-
-/** An employee's face: Operations follows the voice conversation; everyone else their runtime. */
-export function moodOf(state: WorkspaceState, employee: Employee): Mood {
-  if (employee.id === state.operations?.id) return operationsMood(state);
-  const status = state.statusOf(employee.id);
-  if (status.status === "failed") return "oops";
-  return state.workingOf(employee.id) ? "working" : "idle";
-}
-
-function operationsMood(state: WorkspaceState): Mood {
-  // While talking by voice, Operations' face follows the conversation.
-  const voice = state.voice.kind;
-  if (voice === "starting" || voice === "listening" || voice === "finishing") return "listening";
-  if (voice === "awaitingReply") return "thinking";
-  if (voice === "speaking") return "working";
-  if (state.status.status === "failed") return "oops";
-  if (state.status.status === "loading") return "thinking";
-  return state.isRunning ? "working" : "idle";
-}
+export const filterOf = (state: WorkItemState) =>
+  state === "needs_decision"
+    ? "needsYou"
+    : state === "waiting"
+      ? "waiting"
+      : state === "completed" || state === "cancelled"
+        ? "done"
+        : "inProgress";
 
 /**
  * Who has taken a work item over, as the signed-in person reads it; undefined while its
@@ -127,7 +86,7 @@ export function outcomeOf(evidence: WorkItem["evidence"]) {
   const coding = evidence.filter((entry) => entry.commit);
   if (!coding.length) return undefined;
   const check = coding.findLast((entry) => entry.check)?.check;
-  const pullRequest = coding.findLast((entry) => entry.pullRequest)?.pullRequest;
+  const pullRequest = coding.findLast((entry) => entry.pull_request)?.pull_request;
   // The latest deploy to each stage: production shown before preview.
   const deploys = (["production", "preview"] as const).flatMap((stage) => {
     const entry = coding.findLast((each) => each.deploy?.stage === stage);
@@ -137,7 +96,7 @@ export function outcomeOf(evidence: WorkItem["evidence"]) {
     deploys,
     commit: coding.at(-1)!.commit!.slice(0, 7),
     changes: coding.findLast((entry) => entry.changes)?.changes,
-    check: check && { passed: check.exitCode === 0, command: check.command },
+    check: check && { passed: check.exit_code === 0, command: check.command },
     pullRequest: pullRequest && {
       url: pullRequest,
       label: /\/pull\/(\d+)/.exec(pullRequest)?.[1]

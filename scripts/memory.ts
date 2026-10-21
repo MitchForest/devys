@@ -82,7 +82,7 @@ if (command === "export") {
       kind: "manifest",
       format: "devys-memory",
       version: 1,
-      exportedAt: new Date().toISOString(),
+      exported_at: new Date().toISOString(),
     });
     let revision: number | undefined;
     let after: string | null = null,

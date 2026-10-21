@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import type { Env } from "./env.ts";
 import { artifactLocation, listArtifacts } from "../apps/documents/service.ts";
-import { type Business, type Person } from "../identity/contract.ts";
+import { Employee, type Business, type Person } from "../identity/contract.ts";
 import {
   activeEmployee,
   employeesOf,
@@ -21,6 +21,8 @@ import { memoryFor } from "./memory.ts";
 import { hire, hireInput } from "../identity/team.ts";
 import { hiring } from "./team.ts";
 import { body, forbidden, label, notFound } from "./request.ts";
+import { respond } from "../protocol/http.ts";
+import { BusinessDetail, BusinessUpdated } from "./wire.ts";
 import { employeeRoute, lookRoute } from "./employees.ts";
 import { decisionRoute, workRoute } from "./work.ts";
 import { projectRoute } from "./projects.ts";
@@ -43,7 +45,7 @@ export async function businessRoute(
       Effect.runPromise(membersOf(env.HYPERDRIVE, business.id)),
       Effect.runPromise(listArtifacts(env.HYPERDRIVE, business.id)),
     ]);
-    return Response.json({ business, employees, members, artifacts });
+    return respond(BusinessDetail, { business, employees, members, artifacts });
   }
   if (path === "" && method === "PUT") {
     if (!trusted) return forbidden();
@@ -58,7 +60,7 @@ export async function businessRoute(
         ...(brief !== undefined ? { brief } : {}),
       }),
     );
-    return Response.json({
+    return respond(BusinessUpdated, {
       business: {
         ...business,
         ...(name ? { name } : {}),
@@ -84,7 +86,7 @@ export async function businessRoute(
     const team = hiring(() => capabilities(env));
     const hireable = hireInput(input, team);
     if (typeof hireable === "string") return new Response(hireable, { status: 400 });
-    return Response.json(await hire(env.HYPERDRIVE, business.id, hireable, team), {
+    return respond(Employee, await hire(env.HYPERDRIVE, business.id, hireable, team), {
       status: 201,
     });
   }

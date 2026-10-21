@@ -41,7 +41,7 @@ it("exchanges a one-time code for a bearer session that authorizes without a bro
   const { owner, code } = await enrollment();
   const response = await exchange(code);
   expect(response.headers.get("set-cookie")).toBeNull();
-  const { sessionToken } = (await response.json()) as { sessionToken: string };
+  const { session_token: sessionToken } = (await response.json()) as { session_token: string };
   expect(await requestPerson(bearer(sessionToken), bindings)).toMatchObject({
     person: { id: owner },
     bearer: true,
@@ -51,7 +51,9 @@ it("exchanges a one-time code for a bearer session that authorizes without a bro
 
 it("judges an Authorization header alone, never falling back to the cookie", async () => {
   const { code } = await enrollment();
-  const { sessionToken } = (await (await exchange(code)).json()) as { sessionToken: string };
+  const { session_token: sessionToken } = (await (await exchange(code)).json()) as {
+    session_token: string;
+  };
   const forged = bearer("0".repeat(64), { cookie: `__Host-devys=${sessionToken}` });
   expect(await requestPerson(forged, bindings)).toBeUndefined();
   const malformed = new Request(`${origin}/api/status`, {
@@ -66,7 +68,9 @@ it("judges an Authorization header alone, never falling back to the cookie", asy
 
 it("signs a device out by revoking only its bearer session", async () => {
   const { code } = await enrollment();
-  const { sessionToken } = (await (await exchange(code)).json()) as { sessionToken: string };
+  const { session_token: sessionToken } = (await (await exchange(code)).json()) as {
+    session_token: string;
+  };
   const signedOut = await logout(
     new Request(`${origin}/api/logout`, {
       method: "POST",

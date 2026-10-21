@@ -1,3 +1,4 @@
+import type { Usage } from "@earendil-works/pi-ai";
 import type { PiHarness } from "agents/harness/pi";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { defaultLimits } from "../protocol/limits.ts";
@@ -14,7 +15,7 @@ export async function employeeStatus(
   const [pending, recent, checkpoint, usage, known] = await Promise.all([
     harness.pending(),
     storage.list<string>({ prefix: "recent:", reverse: true, limit: 100 }),
-    storage.get("workspaceCheckpoint"),
+    storage.get<Checkpoint>("workspaceCheckpoint"),
     // Pi's usage is already the sum of every conversation's own ledger.
     pi.usage(BACKGROUND_CONTEXT),
     sessions.all(),
@@ -40,7 +41,7 @@ export async function employeeStatus(
       return {
         id: message.id,
         text: message.text,
-        receivedAt: message.receivedAt,
+        received_at: message.receivedAt,
         status:
           state ??
           (submission?.status === "unanswered" || message.cancelled
@@ -62,8 +63,40 @@ export async function employeeStatus(
         }
       : null,
     inbox,
-    outbox: [...outbox.values()],
-    checkpoint,
-    usage,
+    outbox: [...outbox.values()].map(({ chatId, replyTo, ...reply }) => ({
+      ...reply,
+      chat_id: chatId,
+      ...(replyTo === undefined ? {} : { reply_to: replyTo }),
+    })),
+    checkpoint: checkpoint && checkpointOf(checkpoint),
+    usage: usage && { models: spendBy(usage.models), tools: spendBy(usage.tools) },
   };
 }
+
+/** The checkpoint as stored by the inbox, in the API's field names. */
+type Checkpoint =
+  | { status: "saved"; at: number; kind: "snapshot"; snapshotId: string; bytes: number }
+  | { status: "saved"; at: number; kind: "durable" }
+  | { status: "failed"; at: number; message: string };
+const checkpointOf = (checkpoint: Checkpoint) =>
+  "snapshotId" in checkpoint
+    ? (({ snapshotId, ...rest }) => ({ ...rest, snapshot_id: snapshotId }))(checkpoint)
+    : checkpoint;
+
+/** Pi's spend in the API's field names. */
+const spend = ({ cacheRead, cacheWrite, cacheWrite1h, totalTokens, cost, ...usage }: Usage) => ({
+  ...usage,
+  cache_read: cacheRead,
+  cache_write: cacheWrite,
+  ...(cacheWrite1h === undefined ? {} : { cache_write_1h: cacheWrite1h }),
+  total_tokens: totalTokens,
+  cost: {
+    input: cost.input,
+    output: cost.output,
+    cache_read: cost.cacheRead,
+    cache_write: cost.cacheWrite,
+    total: cost.total,
+  },
+});
+const spendBy = (byName: Record<string, Usage>) =>
+  Object.fromEntries(Object.entries(byName).map(([name, usage]) => [name, spend(usage)]));

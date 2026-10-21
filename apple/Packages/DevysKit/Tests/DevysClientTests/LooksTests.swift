@@ -35,7 +35,7 @@ struct LooksTests {
         #expect(encoded == ["kind": "face", "palette": "teal", "shape": "hexagon", "seed": 3])
         let employee = try JSONDecoder().decode(
             Employee.self,
-            from: Data(#"{"id":"e","name":"Ops","role":"Runs","paused":false,"model":"claude-opus-5-5","look":{"kind":"emoji","emoji":"🦉","tint":"blue"}}"#.utf8)
+            from: Data(#"{"id":"e","name":"Ops","responsibilities":"Runs","paused":false,"model":"claude-opus-5-5","look":{"kind":"emoji","emoji":"🦉","tint":"blue"}}"#.utf8)
         )
         #expect(employee.look == .emoji("🦉", tint: "blue"))
     }

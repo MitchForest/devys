@@ -6,29 +6,23 @@ import SwiftUI
 @main
 struct DevysMacApp: App {
     static let store = DevysComposition.makeLiveStore()
-    static let preferences = DevysComposition.makePreferencesStore()
     @AppStorage("appearance") private var appearance = "system"
 
-    /// QA: DEVYS_APPEARANCE=dark|light overrides the Settings choice.
     private var scheme: ColorScheme? {
-        switch ProcessInfo.processInfo.environment["DEVYS_APPEARANCE"] ?? appearance {
+        #if DEBUG
+            // QA: DEVYS_APPEARANCE=dark|light overrides the Settings choice.
+            let appearance = ProcessInfo.processInfo.environment["DEVYS_APPEARANCE"] ?? appearance
+        #endif
+        return switch appearance {
         case "dark": .dark
         case "light": .light
         default: nil
         }
     }
 
-    static let showsGallery = ProcessInfo.processInfo.environment["DEVYS_GALLERY"] == "1"
-
     var body: some Scene {
         WindowGroup {
-            Group {
-                if Self.showsGallery {
-                    DesignGallery()
-                } else {
-                    DevysAppScreen(store: Self.store)
-                }
-            }
+            root
                 #if DEBUG
                     .task { await DevysComposition.enrollFromEnvironment() }
                     .modifier(OpenSettingsForQA())
@@ -51,7 +45,7 @@ struct DevysMacApp: App {
         }
         .defaultSize(width: 900, height: 560)
         Settings {
-            PreferencesScreen(store: Self.preferences)
+            SettingsWindow(store: Self.store)
                 .preferredColorScheme(scheme)
         }
         #if DEBUG
@@ -59,6 +53,19 @@ struct DevysMacApp: App {
                 DesignGallery().frame(minWidth: 900, minHeight: 700)
             }
             .commands { DebugCommands() }
+        #endif
+    }
+
+    @ViewBuilder private var root: some View {
+        #if DEBUG
+            // QA: DEVYS_GALLERY=1 opens the design gallery instead of the app.
+            if ProcessInfo.processInfo.environment["DEVYS_GALLERY"] == "1" {
+                DesignGallery()
+            } else {
+                DevysAppScreen(store: Self.store)
+            }
+        #else
+            DevysAppScreen(store: Self.store)
         #endif
     }
 }

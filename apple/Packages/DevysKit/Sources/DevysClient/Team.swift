@@ -31,14 +31,6 @@ public struct Device: Equatable, Sendable, Decodable, Identifiable {
     public var addedDate: Date? { ServerDate.parse(createdAt) }
 }
 
-/// Timestamps as the server writes them: ISO 8601, with or without fractional seconds.
-public enum ServerDate {
-    public static func parse(_ text: String) -> Date? {
-        (try? Date(text, strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true)))
-            ?? (try? Date(text, strategy: .iso8601))
-    }
-}
-
 /// A single-use code that signs another device in as the same person, valid ten minutes.
 public struct DeviceCode: Equatable, Sendable {
     public let code: String
@@ -190,15 +182,22 @@ public struct NewWorkItem: Equatable, Sendable, Encodable {
     public let nextAction: String?
     /// ISO 8601.
     public let dueAt: String?
-    public let projectId: String?
+    public let projectID: String?
 
-    public init(title: String, owner: String, objective: String? = nil, nextAction: String? = nil, dueAt: String? = nil, projectId: String? = nil) {
+    public init(title: String, owner: String, objective: String? = nil, nextAction: String? = nil, dueAt: String? = nil, projectID: String? = nil) {
         self.title = title
         self.owner = owner
         self.objective = objective
         self.nextAction = nextAction
         self.dueAt = dueAt
-        self.projectId = projectId
+        self.projectID = projectID
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case title, owner, objective
+        case nextAction = "next_action"
+        case dueAt = "due_at"
+        case projectID = "project_id"
     }
 }
 
@@ -241,7 +240,13 @@ public struct WorkItemChange: Equatable, Sendable, Encodable {
         Self(expectedRevision: item.revision, owner: owner, state: .ready)
     }
 
-    enum CodingKeys: String, CodingKey { case expectedRevision, owner, state, title, nextAction, waitCondition, dueAt }
+    enum CodingKeys: String, CodingKey {
+        case owner, state, title
+        case expectedRevision = "expected_revision"
+        case nextAction = "next_action"
+        case waitCondition = "wait_condition"
+        case dueAt = "due_at"
+    }
 
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)

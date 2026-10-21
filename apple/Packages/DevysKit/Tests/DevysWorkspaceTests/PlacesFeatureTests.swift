@@ -28,7 +28,7 @@ private actor PlacesServer {
             text: text,
             mentions: mentions,
             ref: ref,
-            createdAt: Date(timeIntervalSince1970: 1_792_400_000 + Double(count)).formatted(.iso8601)
+            createdAt: ServerDate.format(Date(timeIntervalSince1970: 1_792_400_000 + Double(count)))
         )
         messages[key.rawValue, default: []].append(message)
         return message
@@ -59,7 +59,7 @@ private actor PlacesServer {
 
     func create(_ newItem: NewWorkItem) -> WorkItem {
         newItems.append(newItem)
-        let item = WorkItem(id: "c\(workItems.count + 1)", ownerEmployeeID: newItem.owner, title: newItem.title, projectID: newItem.projectId)
+        let item = WorkItem(id: "c\(workItems.count + 1)", ownerEmployeeID: newItem.owner, title: newItem.title, projectID: newItem.projectID)
         workItems.append(item)
         return item
     }
@@ -292,7 +292,7 @@ struct PlacesFeatureTests {
         store.send(.startThreadTapped(fromGrowth.id))
         await settle("thread from an employee's message") { store.place == .thread("c2") }
         #expect(store.history == [.project("p1")])
-        #expect(await server.newItems.last == NewWorkItem(title: "The sitemap drops /blog.", owner: "growth", objective: "The sitemap drops /blog.\n\nNeeds a fix.", projectId: "p1"))
+        #expect(await server.newItems.last == NewWorkItem(title: "The sitemap drops /blog.", owner: "growth", objective: "The sitemap drops /blog.\n\nNeeds a fix.", projectID: "p1"))
 
         store.send(.backTapped)
         await settle("the channel") { store.main?.key == .project("p1") && store.main?.messages.value != nil }
@@ -305,7 +305,7 @@ struct PlacesFeatureTests {
         store.send(.startThreadTapped(plain.id))
         await settle("thread for who answers here") { await server.newItems.count == 3 }
         // Nobody addressed: who answers in the channel (its lead), titled without the reference line.
-        #expect(await server.newItems.last == NewWorkItem(title: "Decide pricing", owner: "growth", objective: "Decide pricing", projectId: "p1"))
+        #expect(await server.newItems.last == NewWorkItem(title: "Decide pricing", owner: "growth", objective: "Decide pricing", projectID: "p1"))
     }
 
     @Test("A new project is created with its fields, and its channel opens")

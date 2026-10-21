@@ -32,7 +32,7 @@ private actor TeamServer {
     func hire(_ request: Hire) throws -> Employee {
         hires.append(request)
         guard let name = request.name, !name.isEmpty else { throw DevysHTTPError.rejected(status: 400, message: "") }
-        let employee = Employee(id: "e\(hires.count)", name: name, role: request.responsibilities ?? "", template: request.template, model: request.model ?? "claude-opus-5-5")
+        let employee = Employee(id: "e\(hires.count)", name: name, responsibilities: request.responsibilities ?? "", template: request.template, model: request.model ?? "claude-opus-5-5")
         employees.append(employee)
         return employee
     }
@@ -41,7 +41,7 @@ private actor TeamServer {
         profiles.append((id, change))
         guard let index = employees.firstIndex(where: { $0.id == id }) else { return }
         if let name = change.name { employees[index].name = name }
-        if let role = change.responsibilities { employees[index].role = role }
+        if let role = change.responsibilities { employees[index].responsibilities = role }
     }
 
     func retire(_ id: String, _ successor: String) -> String {
@@ -72,7 +72,7 @@ private actor TeamServer {
 
     func create(_ newItem: NewWorkItem) -> WorkItem {
         newItems.append(newItem)
-        let item = WorkItem(id: "c\(workItems.count + 1)", ownerEmployeeID: newItem.owner, title: newItem.title, projectID: newItem.projectId)
+        let item = WorkItem(id: "c\(workItems.count + 1)", ownerEmployeeID: newItem.owner, title: newItem.title, projectID: newItem.projectID)
         workItems.append(item)
         return item
     }
@@ -99,7 +99,7 @@ struct TeamFeatureTests {
                 status: { _ in .fixture },
                 stop: { _ in true },
                 memory: { _ in [] },
-                models: { .fixture },
+                models: { .golden },
                 work: { _ in await server.workItems },
                 createWorkItem: { _, newItem in await server.create(newItem) },
                 updateWorkItem: { _, id, change in try await server.update(id, change) },
@@ -124,7 +124,7 @@ struct TeamFeatureTests {
         store.send(.templateChosen("engineering"))
         guard var draft = store.team.hiring else { return #expect(Bool(false), "the sheet stays open") }
         #expect(draft.name == "Engineering" && draft.responsibilities == "Owns the code and releases.")
-        #expect(draft.model == ModelCatalog.fixture.defaults.employee)
+        #expect(draft.model == ModelCatalog.golden.defaults.employee)
         draft.name = "Ada"
         draft.model = "gpt-6.1-sol"
         store.send(.hireEdited(draft))
@@ -152,7 +152,7 @@ struct TeamFeatureTests {
         let server = TeamServer()
         let store = await makeStore(server)
         store.send(.profileSaved("growth", name: "Growth", responsibilities: "  PR and paid social  "))
-        #expect(store.snapshot.employees.first { $0.id == "growth" }?.role == "PR and paid social")
+        #expect(store.snapshot.employees.first { $0.id == "growth" }?.responsibilities == "PR and paid social")
         await settle("saved", until: { await server.profiles.count == 1 })
         let change = await server.profiles.first?.1
         #expect(change == ProfileChange(responsibilities: "PR and paid social"))
@@ -175,9 +175,9 @@ struct TeamFeatureTests {
     @Test("Mentions match whole names, longest first, in team order")
     func mentionParsing() {
         let team = [
-            Employee(id: "a", name: "Growth", role: ""),
-            Employee(id: "b", name: "Growth Lead", role: ""),
-            Employee(id: "c", name: "Head of Operations", role: "")
+            Employee(id: "a", name: "Growth", responsibilities: "", model: "claude-opus-5-5"),
+            Employee(id: "b", name: "Growth Lead", responsibilities: "", model: "claude-opus-5-5"),
+            Employee(id: "c", name: "Head of Operations", responsibilities: "", model: "claude-opus-5-5")
         ]
         #expect(Mentions.recipients(in: "@growth lead and @Head of Operations", team: team) == ["b", "c"])
         #expect(Mentions.recipients(in: "@Growth and @Growth Lead", team: team) == ["a", "b"])
@@ -200,7 +200,7 @@ struct TeamFeatureTests {
         #expect(store.history == [.project("p1")])
         #expect(store.work.value?.last?.projectID == "p1")
         let newItem = await server.newItems.first
-        #expect(newItem == NewWorkItem(title: "Book the domain", owner: "ops", objective: "acme.example or similar", projectId: "p1"))
+        #expect(newItem == NewWorkItem(title: "Book the domain", owner: "ops", objective: "acme.example or similar", projectID: "p1"))
 
         store.send(.newWorkItemTapped(owner: "engineering"))
         #expect(store.newWorkItem?.ownerID == "engineering" && store.newWorkItem?.projectID == nil)

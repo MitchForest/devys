@@ -64,7 +64,7 @@ it("lists the business folder, reads and saves text at a revision, and refuses a
   const save = (content: string, expectedRevision: string) =>
     call("/files/text", {
       method: "PUT",
-      body: JSON.stringify({ path, content, expectedRevision }),
+      body: JSON.stringify({ path, content, expected_revision: expectedRevision }),
     });
   expect((await save("# Plan\nOne.\n", read.revision)).status).toBe(200);
   const stale = await save("# Plan\nTwo.\n", read.revision);
@@ -83,7 +83,7 @@ it("serves raw bytes with their type, and stays inside the business folder", asy
   const revision = raw.headers.get("x-devys-revision")!;
   const put = (body: string, expected: string) =>
     call(
-      `/files/raw?path=${encodeURIComponent(join(root, "report.pdf"))}&expectedRevision=${expected}`,
+      `/files/raw?path=${encodeURIComponent(join(root, "report.pdf"))}&expected_revision=${expected}`,
       {
         method: "PUT",
         body,
@@ -97,8 +97,8 @@ it("serves raw bytes with their type, and stays inside the business folder", asy
       method: "PUT",
       body,
     });
-  expect((await exported("one", "&expectedRevision=none")).status).toBe(200);
-  expect((await exported("two", "&expectedRevision=none")).status).toBe(409);
+  expect((await exported("one", "&expected_revision=none")).status).toBe(200);
+  expect((await exported("two", "&expected_revision=none")).status).toBe(409);
   expect((await exported("three")).status).toBe(200);
   expect(objects.size).toBe(0);
   expect((await call(`/files?path=${encodeURIComponent(home)}`)).status).toBe(400);

@@ -1,0 +1,57 @@
+{
+  "state": {
+    "run": {
+      "id": "message-2",
+      "stopped": false,
+      "deadline": 1800000600000
+    },
+    "inbox": [
+      {
+        "id": "message-1",
+        "text": "What's left?",
+        "received_at": 1800000000000,
+        "status": "done"
+      },
+      {
+        "id": "message-2",
+        "text": "Check the site.",
+        "received_at": 1800000300000,
+        "status": "running"
+      }
+    ],
+    "outbox": [
+      {
+        "id": "message-1",
+        "chat_id": "app:b:e",
+        "text": "The booking page and the fittings order.",
+        "reply_to": "message-1",
+        "attempts": 1,
+        "status": "sent"
+      }
+    ],
+    "checkpoint": {
+      "status": "saved",
+      "at": 1800000100000,
+      "kind": "durable"
+    },
+    "usage": {
+      "models": {
+        "anthropic/claude-opus-5-5": {
+          "input": 3000,
+          "output": 1500,
+          "cache_read": 20000,
+          "cache_write": 0,
+          "total_tokens": 24500,
+          "cost": {
+            "input": 0.015,
+            "output": 0.0375,
+            "cache_read": 0.01,
+            "cache_write": 0,
+            "total": 0.0625
+          }
+        }
+      },
+      "tools": {}
+    }
+  }
+}

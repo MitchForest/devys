@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import type { Scope } from "../identity/contract.ts";
 
 /** Runner port. Adapters keep isolation, egress and receipts behind this contract. */
@@ -20,12 +21,19 @@ export interface SkillCatalog {
 }
 
 /** One entry of a folder. */
-export interface FileEntry {
-  name: string;
-  path: string;
-  kind: "file" | "directory" | "repository" | "other";
-  size: number;
-}
+export const FileEntry = Schema.Struct({
+  name: Schema.String,
+  path: Schema.String,
+  kind: Schema.Literals(["file", "directory", "repository", "other"]),
+  size: Schema.Number,
+});
+export type FileEntry = typeof FileEntry.Type;
+
+/** A file that was written: where, and its new revision. */
+export const SavedFile = Schema.Struct({ path: Schema.String, revision: Schema.String });
+/** A text file at the revision it was read. */
+export const FileText = Schema.Struct({ ...SavedFile.fields, content: Schema.String });
+export type FileText = typeof FileText.Type;
 
 /** A text file's revision: the SHA-256 of its UTF-8 bytes, in hex. */
 export const revisionConflict = "Revision conflict";
@@ -54,12 +62,9 @@ export interface WorkspacePort {
     path: string,
     content: string,
     expectedRevision?: string | null,
-  ): Promise<{ path: string; revision: string }>;
+  ): Promise<typeof SavedFile.Type>;
   /** Reads text up to `maximum` bytes (64 KB unless asked; at most 1 MB). */
-  read(
-    path: string,
-    maximum?: number,
-  ): Promise<{ path: string; content: string; revision: string }>;
+  read(path: string, maximum?: number): Promise<FileText>;
   /** The immediate entries of a folder. */
   list(path: string): Promise<FileEntry[]>;
   /** Prints an HTML file to a PDF with a real browser. */

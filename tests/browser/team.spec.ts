@@ -28,24 +28,26 @@ test("the owner hires from a template, edits and retires, and talks to any emplo
     // The new hire's direct chat opens; its desk is closed until the owner opens it.
     await expect(page.getByTestId("place-title")).toHaveText("Growth");
     await expect(page.getByRole("region", { name: "Growth's desk" })).toHaveCount(0);
-    const growth = (await sql.row<{ id: string; role: string }>(
-      "SELECT id, role FROM employees WHERE business_id = $1 AND template = 'growth' AND revoked_at IS NULL",
+    const growth = (await sql.row<{ id: string; responsibilities: string }>(
+      "SELECT id, responsibilities FROM employees WHERE business_id = $1 AND template = 'growth' AND revoked_at IS NULL",
       [owner.business],
     ))!;
-    expect(growth.role).toMatch(/^Grow the business\./);
+    expect(growth.responsibilities).toMatch(/^Grow the business\./);
 
     // The template's responsibilities show on the desk, and edits are saved.
     await page.getByRole("button", { name: /^Show side panel/ }).click();
     const desk = page.getByRole("region", { name: "Growth's desk" });
     await desk.getByText("Responsibilities", { exact: true }).click();
     const responsibilities = desk.getByLabel("Responsibilities");
-    await expect(responsibilities).toHaveValue(growth.role);
+    await expect(responsibilities).toHaveValue(growth.responsibilities);
     await responsibilities.fill("Own launch marketing for Acme. Report weekly with sources.");
     await desk.getByRole("button", { name: "Save responsibilities" }).click();
     await expect(desk.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
     expect(
-      (await sql.row<{ role: string }>("SELECT role FROM employees WHERE id = $1", [growth.id]))!
-        .role,
+      (await sql.row<{ responsibilities: string }>(
+        "SELECT responsibilities FROM employees WHERE id = $1",
+        [growth.id],
+      ))!.responsibilities,
     ).toBe("Own launch marketing for Acme. Report weekly with sources.");
 
     // The direct chat sends to Growth.
@@ -59,7 +61,7 @@ test("the owner hires from a template, edits and retires, and talks to any emplo
     });
 
     // Operations can't be retired. The desk stays open for every direct chat.
-    await sidebar(page).getByRole("button", { name: "Head of Operations" }).click();
+    await sidebar(page).getByRole("link", { name: "Head of Operations" }).click();
     await expect(page.getByTestId("place-title")).toHaveText("Head of Operations");
     const operationsDesk = page.getByRole("region", {
       name: "Head of Operations's desk",
@@ -111,7 +113,7 @@ test("the owner hires from a template, edits and retires, and talks to any emplo
     await expect(overview.getByText("Write the launch post")).toBeVisible();
 
     // Retiring Growth hands its open work to the chosen successor.
-    await sidebar(page).getByRole("button", { name: "Growth" }).click();
+    await sidebar(page).getByRole("link", { name: "Growth" }).click();
     await page
       .getByRole("region", { name: "Growth's desk" })
       .getByRole("button", { name: "Retire…" })
@@ -121,7 +123,7 @@ test("the owner hires from a template, edits and retires, and talks to any emplo
     await retire.getByLabel("Hand open work to").selectOption({ label: "Head of Operations" });
     await retire.getByRole("button", { name: "Retire", exact: true }).click();
     await expect(page.getByTestId("place-title")).toHaveText("Head of Operations");
-    await expect(sidebar(page).getByRole("button", { name: "Growth" })).toHaveCount(0);
+    await expect(sidebar(page).getByRole("link", { name: "Growth" })).toHaveCount(0);
     expect(
       (await sql.row<{ owner_employee_id: string }>(
         "SELECT owner_employee_id FROM work_items WHERE id = $1",

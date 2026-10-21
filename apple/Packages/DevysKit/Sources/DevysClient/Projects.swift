@@ -69,8 +69,8 @@ public struct Project: Equatable, Sendable, Decodable, Identifiable {
     }
 }
 
-/// A project's name, goal, deadline, budget, lead and team, saved as one change. A nil goal,
-/// deadline or budget clears it; a nil lead leaves it (the server picks Operations on create).
+/// A new project's name, goal, deadline, budget, lead and team. A nil goal, deadline or budget
+/// is none; a nil lead lets the server pick Operations.
 public struct ProjectChange: Equatable, Sendable, Encodable {
     public var name: String
     public var goal: String?
@@ -105,9 +105,9 @@ public struct ProjectChange: Equatable, Sendable, Encodable {
 
 /// An app in the directory, and whether this business has it.
 public struct AppEntry: Equatable, Sendable, Decodable, Identifiable {
-    public enum Status: String, Equatable, Sendable, Decodable { case available, coming }
+    public enum Status: String, Equatable, Sendable, WireEnum { case available, coming, unknown }
     /// System apps are always installed and never in the sidebar.
-    public enum Kind: String, Equatable, Sendable, Decodable { case system, business }
+    public enum Kind: String, Equatable, Sendable, WireEnum { case system, business, unknown }
 
     /// A skill an app ships, which employees load by name.
     public struct Skill: Equatable, Sendable, Decodable {
@@ -120,12 +120,24 @@ public struct AppEntry: Equatable, Sendable, Decodable, Identifiable {
         }
     }
 
+    /// A kind of record the app owns, which a `Ref` names as `<app>/<kind>`.
+    public struct Record: Equatable, Sendable, Decodable {
+        public let kind: String
+        public let title: String
+
+        public init(kind: String, title: String) {
+            self.kind = kind
+            self.title = title
+        }
+    }
+
     public let id: String
     public let name: String
     public let icon: String
     public let summary: String
     public let kind: Kind
     public let status: Status
+    public let records: [Record]
     /// The skills it ships, which employees load by name.
     public let skills: [Skill]
     public var installed: Bool
@@ -140,6 +152,7 @@ public struct AppEntry: Equatable, Sendable, Decodable, Identifiable {
         summary: String = "",
         kind: Kind = .business,
         status: Status = .available,
+        records: [Record] = [],
         skills: [Skill] = [],
         installed: Bool = true,
         pinned: Bool = true,
@@ -151,6 +164,7 @@ public struct AppEntry: Equatable, Sendable, Decodable, Identifiable {
         self.summary = summary
         self.kind = kind
         self.status = status
+        self.records = records
         self.skills = skills
         self.installed = installed
         self.pinned = pinned
@@ -162,7 +176,7 @@ public struct AppEntry: Equatable, Sendable, Decodable, Identifiable {
 
 /// One thing waiting on the owner: a decision, or work that needs one.
 public struct NeedsYouItem: Equatable, Sendable, Decodable, Identifiable {
-    public enum Kind: String, Equatable, Sendable, Decodable { case decision, work }
+    public enum Kind: String, Equatable, Sendable, WireEnum { case decision, work, unknown }
 
     public let kind: Kind
     public let id: String
@@ -182,9 +196,9 @@ public struct NeedsYouItem: Equatable, Sendable, Decodable, Identifiable {
 
     enum CodingKeys: String, CodingKey {
         case kind, id, title
-        case employeeID = "employeeId"
-        case workID = "workId"
-        case projectID = "projectId"
+        case employeeID = "employee_id"
+        case workID = "work_id"
+        case projectID = "project_id"
     }
 }
 
@@ -220,9 +234,12 @@ public struct GlanceItem: Equatable, Sendable, Decodable, Identifiable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, title, state, waitCondition, dueAt, updatedAt
-        case employeeID = "employeeId"
-        case projectID = "projectId"
+        case id, title, state
+        case employeeID = "employee_id"
+        case projectID = "project_id"
+        case waitCondition = "wait_condition"
+        case dueAt = "due_at"
+        case updatedAt = "updated_at"
     }
 }
 
@@ -239,6 +256,11 @@ public struct Home: Equatable, Sendable, Decodable {
             self.stuck = stuck
             self.spentCents = spentCents
         }
+
+        enum CodingKeys: String, CodingKey {
+            case moving, stuck
+            case spentCents = "spent_cents"
+        }
     }
 
     public let needsYou: [NeedsYouItem]
@@ -247,6 +269,11 @@ public struct Home: Equatable, Sendable, Decodable {
     public init(needsYou: [NeedsYouItem] = [], glance: Glance = Glance()) {
         self.needsYou = needsYou
         self.glance = glance
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case glance
+        case needsYou = "needs_you"
     }
 
     /// Whether Home's panel has anything to show; an empty one is never shown.
@@ -262,10 +289,6 @@ extension DevysHTTPClient {
 
     public func createProject(_ session: DeviceSession, businessID: String, _ project: ProjectChange) async throws -> Project {
         try await send(json(session, path: "api/businesses/\(businessID)/projects", method: "POST", body: project))
-    }
-
-    public func updateProject(_ session: DeviceSession, businessID: String, projectID: String, _ change: ProjectChange) async throws {
-        _ = try await raw(json(session, path: "api/businesses/\(businessID)/projects/\(projectID)", method: "PUT", body: change))
     }
 
     /// Keeps a record on a project's overview. Keeping it twice is harmless.

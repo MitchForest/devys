@@ -7,6 +7,7 @@ extension Business {
     var tileTint: BusinessTile.Tint { BusinessTile.Tint(rawValue: tint) ?? .blue }
 }
 
+@MainActor
 extension WorkItemState {
     var chip: StatusChip { chip(size: .regular) }
 
@@ -18,6 +19,7 @@ extension WorkItemState {
         case .ready, .proposed: StatusChip("Ready", tone: .waiting, size: size)
         case .completed: StatusChip("Done", tone: .done, size: size)
         case .cancelled: StatusChip("Cancelled", tone: .waiting, size: size)
+        case .unknown: StatusChip("Other", tone: .waiting, size: size)
         }
     }
 
@@ -25,7 +27,7 @@ extension WorkItemState {
         switch self {
         case .needsDecision: .needsYou
         case .inProgress, .ready, .proposed: .inProgress
-        case .waiting: .waiting
+        case .waiting, .unknown: .waiting
         case .completed, .cancelled: .done
         }
     }
@@ -77,6 +79,18 @@ extension Workspace.State {
     /// Whether the signed-in person has taken the work item over from its employee.
     func isMine(_ item: WorkItem) -> Bool {
         item.takenOverBy != nil && item.takenOverBy == account?.person.id
+    }
+
+    /// Layers are read-only. The owner edits by hand only open work they have taken over, which
+    /// fences its employee; otherwise they ask (owner decision, 2026-10-21).
+    func isHandEditable(_ item: WorkItem) -> Bool {
+        item.state.isOpen && isMine(item)
+    }
+
+    /// The work item of the thread on screen, which a layer opened here belongs to.
+    var threadItem: WorkItem? {
+        guard case .thread(let id) = place else { return nil }
+        return work.value?.first { $0.id == id }
     }
 
     /// Who has taken the work item over, as the signed-in person reads it; nil while its

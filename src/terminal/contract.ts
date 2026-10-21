@@ -1,24 +1,27 @@
+import { Schema } from "effect";
 import type { Scope } from "../identity/contract.ts";
+import { Timestamp } from "../protocol/time.ts";
 
 /**
  * A terminal session on the trusted Mac host (.docs/COMPONENTS.md#terminal). The host owns the
  * process and its recent output; clients attach, detach and attach again from any device.
  */
-export interface TerminalSession {
-  id: string;
-  title: string;
-  cwd: string;
+export const TerminalSession = Schema.Struct({
+  id: Schema.String,
+  title: Schema.String,
+  cwd: Schema.String,
   /** The coding session it resumed, for "Open in Codex/Claude". */
-  codingSessionId: string | null;
-  cols: number;
-  rows: number;
-  startedAt: string;
+  coding_session_id: Schema.NullOr(Schema.String),
+  cols: Schema.Int,
+  rows: Schema.Int,
+  started_at: Timestamp,
   /** Bytes of output written so far; attach from any offset still kept. */
-  offset: number;
+  offset: Schema.Number,
   /** The client id that types; others watch. */
-  writer: string | null;
-  exit: { code: number | null } | null;
-}
+  writer: Schema.NullOr(Schema.String),
+  exit: Schema.NullOr(Schema.Struct({ code: Schema.NullOr(Schema.Number) })),
+});
+export type TerminalSession = typeof TerminalSession.Type;
 
 /** A coding agent's own interactive CLI, resumed on its session id. */
 /** The provider is the Code app's (`codex`, `claude`); the host that composes both checks it. */

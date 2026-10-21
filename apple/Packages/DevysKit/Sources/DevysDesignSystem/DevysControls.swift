@@ -255,15 +255,19 @@ public struct BusinessTile: View {
             }
     }
 
-    private var colors: [Color] { Self.colors(for: tint) }
+    private var colors: [Color] {
+        let (light, deep) = Self.colors(for: tint)
+        return [light, deep]
+    }
 
-    public static func colors(for tint: Tint) -> [Color] {
+    /// The tile's gradient, from its light corner to its deep one.
+    public static func colors(for tint: Tint) -> (light: Color, deep: Color) {
         switch tint {
-        case .blue: [Color(light: 0x5A89F5, dark: 0x5A89F5), Color(light: 0x2F55C9, dark: 0x2F55C9)]
-        case .orange: [Color(light: 0xF59A58, dark: 0xF59A58), Color(light: 0xD9603A, dark: 0xD9603A)]
-        case .green: [Color(light: 0x4CC27E, dark: 0x4CC27E), Color(light: 0x23864D, dark: 0x23864D)]
-        case .purple: [Color(light: 0xA77AF0, dark: 0xA77AF0), Color(light: 0x6F45C9, dark: 0x6F45C9)]
-        case .pink: [Color(light: 0xF27DB2, dark: 0xF27DB2), Color(light: 0xC9457F, dark: 0xC9457F)]
+        case .blue: (Color(light: 0x5A89F5, dark: 0x5A89F5), Color(light: 0x2F55C9, dark: 0x2F55C9))
+        case .orange: (Color(light: 0xF59A58, dark: 0xF59A58), Color(light: 0xD9603A, dark: 0xD9603A))
+        case .green: (Color(light: 0x4CC27E, dark: 0x4CC27E), Color(light: 0x23864D, dark: 0x23864D))
+        case .purple: (Color(light: 0xA77AF0, dark: 0xA77AF0), Color(light: 0x6F45C9, dark: 0x6F45C9))
+        case .pink: (Color(light: 0xF27DB2, dark: 0xF27DB2), Color(light: 0xC9457F, dark: 0xC9457F))
         }
     }
 }

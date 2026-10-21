@@ -1,40 +1,29 @@
 import { Schema } from "effect";
+import { Timestamp } from "../protocol/time.ts";
+import { Claim, Evidence } from "./contract.ts";
 const string = (max: number) => Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(max));
 export const Key = string(200);
-const DateString = Schema.String.check(
-  Schema.makeFilter(
-    (value) =>
-      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value) &&
-      Number.isFinite(Date.parse(value)),
-  ),
-);
-const EvidenceSchema = Schema.Struct({
-  id: Key,
-  kind: Schema.Literals(["owner", "external"]),
-  observedAt: DateString,
-});
+/** The contract's evidence, with the limits a stored or imported record keeps. */
+const EvidenceSchema = Schema.Struct({ ...Evidence.fields, id: Key });
+/** The contract's claim, with the limits a stored or imported record keeps. */
 export const ClaimSchema = Schema.Struct({
+  ...Claim.fields,
   key: Key,
   content: string(64000),
   subject: string(300),
   scope: string(300),
-  source_kind: Schema.Literals(["user", "inference"]),
   source_operation_id: string(200),
   revision: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
-  updated_at: DateString,
-  validFrom: Schema.NullOr(DateString),
-  validUntil: Schema.NullOr(DateString),
   evidence: Schema.Array(EvidenceSchema).check(Schema.isMaxLength(20)),
   relations: Schema.Array(Schema.Struct({ predicate: Key, target: Key })).check(
     Schema.isMaxLength(10),
   ),
-  truncated: Schema.optional(Schema.Boolean),
 });
 export const PortableSchema = Schema.Union([
   Schema.Struct({
     version: Schema.Literal(1),
     kind: Schema.Literal("excluded-before"),
-    before: DateString,
+    before: Timestamp,
   }),
   Schema.Struct({ version: Schema.Literal(1), kind: Schema.Literal("claim"), claim: ClaimSchema }),
   Schema.Struct({
@@ -53,7 +42,18 @@ export const ChangeSchema = Schema.Struct({
   source: Schema.Literals(["user", "inference"]),
   subject: Schema.optional(Key),
   scope: Schema.optional(string(300)),
-  validFrom: Schema.optional(Schema.NullOr(DateString)),
-  validUntil: Schema.optional(Schema.NullOr(DateString)),
+  validFrom: Schema.optional(Schema.NullOr(Timestamp)),
+  validUntil: Schema.optional(Schema.NullOr(Timestamp)),
   expectedRevision: Schema.optional(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
+});
+/** `POST …/memory/remember`: the same change in the API's field names. */
+export const RememberRequest = Schema.Struct({
+  key: ChangeSchema.fields.key,
+  content: ChangeSchema.fields.content,
+  source: ChangeSchema.fields.source,
+  subject: ChangeSchema.fields.subject,
+  scope: ChangeSchema.fields.scope,
+  valid_from: ChangeSchema.fields.validFrom,
+  valid_until: ChangeSchema.fields.validUntil,
+  expected_revision: ChangeSchema.fields.expectedRevision,
 });

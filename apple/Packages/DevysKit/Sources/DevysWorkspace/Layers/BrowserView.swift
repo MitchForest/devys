@@ -27,12 +27,7 @@ struct BrowserLine: View {
                 .buttonStyle(.plain)
             }
         }
-        .task(id: item.id) {
-            while !Task.isCancelled {
-                status = try? await browser.status(store.businessID)
-                try? await Task.sleep(for: .seconds(5))
-            }
-        }
+        .poll(id: item.id, every: .seconds(5)) { status = try? await browser.status(store.businessID) }
     }
 }
 
@@ -66,17 +61,15 @@ struct BrowserLayer: View {
             Divider()
             footer.padding(12)
         }
-        .task {
-            while !Task.isCancelled {
-                let businessID = store.businessID
-                do {
-                    async let next = browser.status(businessID)
-                    async let shot = browser.picture(businessID)
-                    (status, picture) = try await (next, shot)
-                } catch {
-                    problem = error.localizedDescription
-                }
-                try? await Task.sleep(for: .milliseconds(1_200))
+        .poll(id: workID, every: .milliseconds(1_200)) {
+            let businessID = store.businessID
+            do {
+                async let next = browser.status(businessID)
+                async let shot = browser.picture(businessID)
+                (status, picture) = try await (next, shot)
+                problem = nil
+            } catch {
+                problem = failure("The browser couldn't be read.", error)
             }
         }
     }

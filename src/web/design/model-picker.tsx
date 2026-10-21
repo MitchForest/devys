@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import type { ModelCatalog, ModelOption, Usage } from "../app/api.ts";
+import type { ModelCatalog, ModelOption, Usage } from "../../app/wire.ts";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,13 +20,15 @@ export const dollars = (amount: number) =>
   amount > 0 && amount < 0.01 ? "< $0.01" : `$${amount.toFixed(2)}`;
 
 export const perTurn = (model: ModelOption) =>
-  model.typicalTurnUsd < 0.01 ? "< $0.01 per turn" : `≈ ${dollars(model.typicalTurnUsd)} per turn`;
+  model.typical_turn_usd < 0.01
+    ? "< $0.01 per turn"
+    : `≈ ${dollars(model.typical_turn_usd)} per turn`;
 
 /** Total spend across models, and the share of input served from cache. */
 export function spend(models: Record<string, Usage>) {
   const usage = Object.values(models);
   const total = usage.reduce((sum, u) => sum + u.cost.total, 0);
-  const cacheRead = usage.reduce((sum, u) => sum + u.cacheRead, 0);
+  const cacheRead = usage.reduce((sum, u) => sum + u.cache_read, 0);
   const read = cacheRead + usage.reduce((sum, u) => sum + u.input, 0);
   return { total, cacheShare: read > 0 ? cacheRead / read : undefined };
 }

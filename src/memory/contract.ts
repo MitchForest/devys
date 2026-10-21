@@ -1,30 +1,39 @@
 import { Effect, Schema } from "effect";
+import { Timestamp } from "../protocol/time.ts";
 
 export class MemoryError extends Schema.TaggedError<MemoryError>()("MemoryError", {
   code: Schema.Literals(["invalid", "conflict", "unavailable"]),
   message: Schema.String,
 }) {}
-export interface Evidence {
-  id: string;
-  kind: "owner" | "external";
-  observedAt: string;
-}
-export interface Claim {
+export const Evidence = Schema.Struct({
+  id: Schema.String,
+  kind: Schema.Literals(["owner", "external"]),
+  observed_at: Timestamp,
+});
+export type Evidence = typeof Evidence.Type;
+/** What the business remembers: one claim, its revision and the evidence behind it. */
+export const Claim = Schema.Struct({
   /** Search may return a marked excerpt; inspect/export return complete claims. */
-  truncated?: boolean;
-  key: string;
-  content: string;
-  source_kind: "user" | "inference";
-  source_operation_id: string;
-  revision: number;
-  updated_at: string;
-  subject: string;
-  scope: string;
-  validFrom: string | null;
-  validUntil: string | null;
-  evidence: Evidence[];
-  relations: { predicate: string; target: string }[];
-}
+  truncated: Schema.optionalKey(Schema.Boolean),
+  key: Schema.String,
+  content: Schema.String,
+  source_kind: Schema.Literals(["user", "inference"]),
+  source_operation_id: Schema.String,
+  revision: Schema.Int,
+  updated_at: Timestamp,
+  subject: Schema.String,
+  scope: Schema.String,
+  valid_from: Schema.NullOr(Timestamp),
+  valid_until: Schema.NullOr(Timestamp),
+  evidence: Schema.Array(Evidence),
+  relations: Schema.Array(Schema.Struct({ predicate: Schema.String, target: Schema.String })),
+});
+export type Claim = typeof Claim.Type;
+/** `GET …/memory`: a page of claims, oldest key first. */
+export const ClaimPage = Schema.Struct({
+  items: Schema.Array(Claim),
+  next: Schema.NullOr(Schema.String),
+});
 export interface Change {
   key: string;
   content: string;

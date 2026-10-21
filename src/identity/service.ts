@@ -77,7 +77,7 @@ export const businessName = (db: Database, businessId: string) =>
 export const employeesOf = (db: Database, businessId: string) =>
   database(db, (sql) =>
     sql.rows<Employee>(
-      `SELECT id, business_id, name, role, model, template, paused_at IS NOT NULL AS paused, look FROM employees
+      `SELECT id, business_id, name, responsibilities, model, template, paused_at IS NOT NULL AS paused, look FROM employees
        WHERE business_id = $1 AND revoked_at IS NULL ORDER BY created_at, id`,
       [businessId],
     ),
@@ -87,7 +87,7 @@ export const employeesOf = (db: Database, businessId: string) =>
 export const activeEmployee = (db: Database, scope: Scope) =>
   database(db, (sql) =>
     sql.row<Employee>(
-      `SELECT id, business_id, name, role, model, template, paused_at IS NOT NULL AS paused, look FROM employees
+      `SELECT id, business_id, name, responsibilities, model, template, paused_at IS NOT NULL AS paused, look FROM employees
        WHERE business_id = $1 AND id = $2 AND revoked_at IS NULL`,
       [scope.businessId, scope.employeeId],
     ),
@@ -101,7 +101,7 @@ export const createBusiness = (
     name: string;
     brief: string;
     model: string;
-    operations: { name: string; role: string };
+    operations: { name: string; responsibilities: string };
   },
 ) =>
   database(
@@ -113,7 +113,7 @@ export const createBusiness = (
         id: crypto.randomUUID(),
         business_id: business.id,
         name: input.operations.name,
-        role: input.operations.role,
+        responsibilities: input.operations.responsibilities,
         model,
         template: "operations",
         paused: false,
@@ -131,9 +131,9 @@ export const createBusiness = (
       );
       if (member !== 1) throw new Error("Person is not active");
       await sql.run(
-        `INSERT INTO employees (id, business_id, name, role, model, template)
+        `INSERT INTO employees (id, business_id, name, responsibilities, model, template)
          VALUES ($1, $2, $3, $4, $5, 'operations')`,
-        [operations.id, business.id, operations.name, operations.role, model],
+        [operations.id, business.id, operations.name, operations.responsibilities, model],
       );
       return { business, operations };
     },
@@ -143,7 +143,7 @@ export const createBusiness = (
 export const createEmployee = (
   db: Database,
   businessId: string,
-  input: { name: string; role: string; model: string; template: RoleTemplateId },
+  input: { name: string; responsibilities: string; model: string; template: RoleTemplateId },
 ) =>
   database(db, async (sql) => {
     const employee: Employee = {
@@ -154,9 +154,9 @@ export const createEmployee = (
       look: null,
     };
     await sql.run(
-      `INSERT INTO employees (id, business_id, name, role, model, template)
+      `INSERT INTO employees (id, business_id, name, responsibilities, model, template)
        VALUES ($1, $2, $3, $4, $5, $6)`,
-      [employee.id, businessId, input.name, input.role, input.model, input.template],
+      [employee.id, businessId, input.name, input.responsibilities, input.model, input.template],
     );
     return employee;
   });
@@ -165,13 +165,13 @@ export const createEmployee = (
 export const updateEmployee = (
   db: Database,
   scope: Scope,
-  change: { name?: string; role?: string },
+  change: { name?: string; responsibilities?: string },
 ) =>
   database(db, (sql) =>
     sql.run(
-      `UPDATE employees SET name = coalesce($3, name), role = coalesce($4, role)
+      `UPDATE employees SET name = coalesce($3, name), responsibilities = coalesce($4, responsibilities)
        WHERE business_id = $1 AND id = $2 AND revoked_at IS NULL`,
-      [scope.businessId, scope.employeeId, change.name ?? null, change.role ?? null],
+      [scope.businessId, scope.employeeId, change.name ?? null, change.responsibilities ?? null],
     ),
   );
 

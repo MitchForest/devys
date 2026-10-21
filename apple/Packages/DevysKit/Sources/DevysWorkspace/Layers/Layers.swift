@@ -18,7 +18,12 @@ struct LayerView: View {
             FileView(store: store, file: FileEntry(name: (path as NSString).lastPathComponent, path: path, kind: .file))
                 .id("\(path):\(store.turns)")
         case .app(let id):
-            if id == "code" { CodeApp(store: store) } else { DocumentsApp(store: store) }
+            switch id {
+            case "documents": DocumentsApp(store: store)
+            case "code": CodeApp(store: store)
+            // An app with no view on this client shows nothing of its own.
+            default: EmptyNote(text: "This app has nothing to show here yet.").padding(14)
+            }
         case .session(let workID, let sessionID):
             SessionLayer(store: store, workID: workID, sessionID: sessionID)
         case .browser(let workID):
@@ -66,8 +71,11 @@ private struct ArtifactLayer: View {
     }
 }
 
-/// Names never worth showing in the Documents app.
-private let hiddenNames: Set<String> = ["node_modules", "dist", "DerivedData"]
+/// The business folder's machine folders, hidden at its root: repositories the Code app shows and
+/// coding worktrees nobody browses (the Mac host lays them out: src/apps/code/host/worktree.ts).
+/// The same list as the web's Documents app.
+private let repositoriesFolder = "repos"
+private let machineFolders: Set<String> = [repositoriesFolder, "worktrees"]
 
 /// The Documents app: the business's pages and documents, filterable by project. Repositories
 /// belong to Code and never show here.
@@ -144,8 +152,11 @@ private struct DocumentsApp: View {
     }
 
     private var folderGroup: some View {
-        let entries = (listing?.entries ?? []).filter { $0.kind != .repository && !$0.name.hasPrefix(".") && !hiddenNames.contains($0.name) }
         let root = listing?.root ?? ""
+        let atRoot = folder == nil
+        let entries = (listing?.entries ?? []).filter { entry in
+            entry.kind != .repository && !entry.name.hasPrefix(".") && !(atRoot && machineFolders.contains(entry.name))
+        }
         let title = folder.map { String($0.dropFirst(root.count + 1)) }.flatMap { $0.isEmpty ? nil : $0 } ?? "Files"
         return group(title, parent: folder.map { current in
             {
@@ -238,9 +249,11 @@ private struct CodeApp: View {
         .sheet(isPresented: $starting) { NewCodingSessionSheet(store: store, isPresented: $starting) }
         .task(id: store.businessID) {
             let businessID = store.businessID
-            async let listed = files.list(businessID, nil)
             async let coded = coding.work(businessID)
-            repositories = ((try? await listed)?.entries ?? []).filter { $0.kind == .repository }
+            // Repositories are created in `<root>/repos`.
+            if let root = try? await files.list(businessID, nil).root {
+                repositories = ((try? await files.list(businessID, "\(root)/\(repositoriesFolder)"))?.entries ?? []).filter { $0.kind == .repository }
+            }
             withSessions = (try? await coded) ?? []
         }
     }

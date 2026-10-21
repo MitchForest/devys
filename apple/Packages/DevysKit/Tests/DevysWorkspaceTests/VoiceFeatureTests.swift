@@ -55,7 +55,7 @@ private actor Conversation {
             text: text,
             replyTo: replyTo,
             viaVoice: viaVoice,
-            createdAt: Date(timeIntervalSince1970: 1_792_400_000 + Double(messages.count)).formatted(.iso8601)
+            createdAt: ServerDate.format(Date(timeIntervalSince1970: 1_792_400_000 + Double(messages.count)))
         )
     }
 
@@ -241,7 +241,7 @@ struct VoiceFeatureTests {
         await settle("reactions sent") { await conversation.reactions.count == 3 }
         let sent = await conversation.reactions
         #expect(sent.map(\.1.isOn) == [true, false, true])
-        #expect(sent.allSatisfy { $0.0 == EmployeeScope(businessID: "acme", employeeID: "ops") && $0.1.targetId == "m2" })
+        #expect(sent.allSatisfy { $0.0 == EmployeeScope(businessID: "acme", employeeID: "ops") && $0.1.targetID == "m2" })
     }
 
     @Test("A failed send stays visible and retries with the same id")

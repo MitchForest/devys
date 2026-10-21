@@ -16,13 +16,11 @@ private func settle(_ what: String, until condition: @MainActor () -> Bool) asyn
 
 private actor Calls {
     var signIns: [(URL, String)] = []
-    var expired = 0
     var signedOut = 0
     var stops = 0
     var statusLoads = 0
 
     func signIn(_ server: URL, _ code: String) { signIns.append((server, code)) }
-    func expire() { expired += 1 }
     func signOut() { signedOut += 1 }
     func stop() { stops += 1 }
     func loadedStatus() { statusLoads += 1 }
@@ -41,8 +39,7 @@ struct RootRoutingTests {
             $0.sessionClient = SessionClient(
                 phases: { phases },
                 signIn: { _, _ in },
-                signOut: {},
-                expire: {}
+                signOut: {}
             )
             $0.runtimeClient = .fixture
             $0.continuousClock = ContinuousClock()
@@ -70,8 +67,7 @@ struct SignInFeatureTests {
                     await calls.signIn(server, code)
                     if fails { throw DevysHTTPError.rejected(status: 401, message: "used") }
                 },
-                signOut: {},
-                expire: {}
+                signOut: {}
             )
         } operation: {
             Store(initialState: SignIn.State()) { SignIn() }
@@ -111,7 +107,7 @@ struct SignInFeatureTests {
         store.send(.submitTapped)
         await settle("failure") { store.errorText != nil }
         #expect(!store.isSubmitting)
-        #expect(store.errorText?.contains("scripts/enroll.ts") == true)
+        #expect(store.errorText?.contains("Settings › Devices") == true)
     }
 }
 
@@ -126,8 +122,7 @@ struct WorkspaceFeatureTests {
             $0.sessionClient = SessionClient(
                 phases: { AsyncStream { $0.finish() } },
                 signIn: { _, _ in },
-                signOut: { await calls.signOut() },
-                expire: { await calls.expire() }
+                signOut: { await calls.signOut() }
             )
             $0.runtimeClient = RuntimeClient(
                 account: { .fixture },
@@ -161,13 +156,30 @@ struct WorkspaceFeatureTests {
         #expect(store.ownerFirstName == "Mitch")
     }
 
-    @Test("An ended session expires locally instead of showing an error")
-    func expiresOnUnauthorized() async {
+    @Test("An ended session shows no error: the session hub signs the device out")
+    func endedSession() async {
         let calls = Calls()
         let store = makeStore(calls: calls) { throw DevysHTTPError.unauthorized }
-        for _ in 0..<2_000 where await calls.expired == 0 { await Task.yield() }
-        #expect(await calls.expired == 1)
-        #expect(store.status.value == nil)
+        for _ in 0..<2_000 where await calls.statusLoads == 0 { await Task.yield() }
+        for _ in 0..<200 { await Task.yield() }
+        #expect(store.status.value == nil && store.notice == nil)
+        if case .failed = store.status { Issue.record("an ended session is not an error") }
+    }
+
+    @Test("The 5 s refresh pauses in the background; coming back reads everything at once")
+    func pausesInBackground() async {
+        let calls = Calls()
+        let store = makeStore(calls: calls)
+        await settle("first load") { store.status.value != nil }
+        for _ in 0..<200 { await Task.yield() }
+        let before = await calls.statusLoads
+        store.send(.activeChanged(false))
+        store.send(Workspace.Action(.tick))
+        for _ in 0..<200 { await Task.yield() }
+        #expect(await calls.statusLoads == before)
+        store.send(.activeChanged(true))
+        for _ in 0..<2_000 where await calls.statusLoads == before { await Task.yield() }
+        #expect(await calls.statusLoads > before)
     }
 
     @Test("A failed refresh keeps the last snapshot and says it is stale")
@@ -358,7 +370,7 @@ private actor WorkServer {
     }
     func create(_ newItem: NewWorkItem) -> WorkItem {
         created.append(newItem)
-        let item = WorkItem(id: "c\(workItems.count + 1)", ownerEmployeeID: newItem.owner, title: newItem.title, projectID: newItem.projectId)
+        let item = WorkItem(id: "c\(workItems.count + 1)", ownerEmployeeID: newItem.owner, title: newItem.title, projectID: newItem.projectID)
         workItems.append(item)
         return item
     }
@@ -470,7 +482,7 @@ struct ModelFeatureTests {
                 status: { _ in .fixture },
                 stop: { _ in true },
                 memory: { _ in [] },
-                models: { .fixture },
+                models: { .golden },
                 setModel: { scope, model in try await server.set(scope.employeeID, model) }
             )
             $0.continuousClock = ContinuousClock()
@@ -489,7 +501,7 @@ struct ModelFeatureTests {
         await settle("team", until: { store.operationsScope != nil })
         store.send(.modelRequested("growth"))
         await settle("catalog", until: { store.models.catalog != nil && store.models.usage["growth"] != nil })
-        #expect(store.models.catalog == .fixture)
+        #expect(store.models.catalog == .golden)
         #expect(store.models.usage["growth"]?.totalCost == 0.0625)
         await settle("operations' spend from its status", until: { store.state.usage(of: "ops") != nil })
     }

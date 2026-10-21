@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// Devices, businesses and their teams, and connections.
 extension DevysHTTPClient {
@@ -10,10 +10,8 @@ extension DevysHTTPClient {
 
     /// Issues a ten-minute, single-use code that signs another device in as this person.
     public func issueDeviceCode(_ session: DeviceSession) async throws -> DeviceCode {
-        struct Issued: Decodable { let code: String; let expiresAt: String }
-        let issued: Issued = try await send(authorized(session, path: "api/devices/codes", method: "POST"))
-        guard let expires = ServerDate.parse(issued.expiresAt) else { throw DevysHTTPError.invalidResponse }
-        return DeviceCode(code: issued.code, expiresAt: expires, server: session.server)
+        let issued: IssuedCode = try await send(authorized(session, path: "api/devices/codes", method: "POST"))
+        return DeviceCode(code: issued.code, expiresAt: issued.expiresAt, server: session.server)
     }
 
     /// Signs one of the person's devices out.
@@ -46,13 +44,35 @@ extension DevysHTTPClient {
 
     /// Retires an employee; its open work moves to `reassignTo`. Returns who took it.
     public func retire(_ session: DeviceSession, _ scope: EmployeeScope, reassignTo: String) async throws -> String {
-        struct Body: Encodable { let reassignTo: String }
-        struct Retired: Decodable { let reassignedTo: String }
+        struct Body: Encodable {
+            let reassignTo: String
+            enum CodingKeys: String, CodingKey { case reassignTo = "reassign_to" }
+        }
+        struct Retired: Decodable {
+            let reassignedTo: String
+            enum CodingKeys: String, CodingKey { case reassignedTo = "reassigned_to" }
+        }
         let retired: Retired = try await send(json(session, path: "\(scope.path)/retire", method: "POST", body: Body(reassignTo: reassignTo)))
         return retired.reassignedTo
     }
 
+    /// Everything the business has said and knows, as newline-delimited JSON (`GET …/export`).
+    public func exportBusiness(_ session: DeviceSession, id: String) async throws -> Data {
+        try await raw(authorized(session, path: "api/businesses/\(id)/export"))
+    }
+
     public func googleConnection(_ session: DeviceSession, businessID: String) async throws -> GoogleConnection {
         try await send(authorized(session, path: "api/businesses/\(businessID)/connections/google"))
+    }
+}
+
+/// `POST /api/devices/codes`.
+struct IssuedCode: Decodable {
+    let code: String
+    let expiresAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case code
+        case expiresAt = "expires_at"
     }
 }

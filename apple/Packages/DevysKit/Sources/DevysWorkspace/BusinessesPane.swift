@@ -1,7 +1,9 @@
 import ComposableArchitecture2
+import Dependencies
 import DevysClient
 import DevysDesignSystem
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Settings → Businesses: each business's name, brief and look, and new businesses.
 struct BusinessesPane: View {
@@ -36,6 +38,7 @@ struct BusinessesPane: View {
                 PaneScroll {
                     VStack(alignment: .leading, spacing: DevysSpacing.roomy) {
                         BusinessDetails(store: store, business: business)
+                        ExportBusiness(business: business)
                         LookEditor(
                             title: business.name,
                             current: business.look,
@@ -96,6 +99,75 @@ private struct BusinessDetails: View {
     private func reset() {
         name = business.name
         brief = business.brief
+    }
+}
+
+/// Downloads everything the business has said and knows (`GET …/export`) and saves it where the
+/// owner chooses.
+private struct ExportBusiness: View {
+    let business: Business
+    @Dependency(\.runtimeClient) private var runtime
+    @State private var file: ExportFile?
+    @State private var busy = false
+    @State private var problem: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Export").font(DevysTypography.label).foregroundStyle(DevysColors.ink3)
+            HStack(spacing: 8) {
+                Text("Every conversation, memory and index of files, without credentials.")
+                    .font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3)
+                Spacer()
+                Button(busy ? "Exporting…" : "Export…", systemImage: "square.and.arrow.down", action: export)
+                    .buttonStyle(DevysButtonStyle(.quiet, compact: true))
+                    .disabled(busy)
+            }
+            if let problem {
+                Label(problem, systemImage: "exclamationmark.circle.fill").font(DevysTypography.secondary).foregroundStyle(DevysColors.red)
+            }
+        }
+        .fileExporter(
+            isPresented: Binding(get: { file != nil }, set: { if !$0 { file = nil } }),
+            document: file,
+            contentType: ExportFile.type,
+            defaultFilename: "devys-export.ndjson"
+        ) { result in
+            if case .failure(let error) = result { problem = error.localizedDescription }
+        }
+    }
+
+    private func export() {
+        busy = true
+        problem = nil
+        let id = business.id
+        Task {
+            do {
+                file = ExportFile(data: try await runtime.exportBusiness(id))
+            } catch {
+                problem = failure("The export couldn't be downloaded.", error)
+            }
+            busy = false
+        }
+    }
+}
+
+/// A business export as a file to save.
+private struct ExportFile: FileDocument {
+    static let type = UTType(filenameExtension: "ndjson", conformingTo: .plainText) ?? .plainText
+    static let readableContentTypes = [type]
+
+    let data: Data
+
+    init(data: Data) {
+        self.data = data
+    }
+
+    init(configuration: ReadConfiguration) throws {
+        data = configuration.file.regularFileContents ?? Data()
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: data)
     }
 }
 

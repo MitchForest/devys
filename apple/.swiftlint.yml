@@ -55,6 +55,11 @@ cyclomatic_complexity:
   warning: 20
   error: 25
 
+# Wire types name their snake_case keys in a CodingKeys enum (DevysClient/Wire.swift), so a
+# nested record's keys don't count as nesting.
+nesting:
+  ignore_coding_keys: true
+
 reporter: xcode
 
 custom_rules:

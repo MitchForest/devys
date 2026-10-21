@@ -1,3 +1,13 @@
+import { Schema } from "effect";
+
+/** Starting a connection: the provider's consent page the owner is sent to. */
+export const Authorization = Schema.Struct({ url: Schema.String });
+/** Removing a connection; `revoked` says whether the provider confirmed the revocation. */
+export const Disconnected = Schema.Struct({
+  disconnected: Schema.Literal(true),
+  revoked: Schema.Boolean,
+});
+
 /**
  * A business's connection to an outside account, as an app that uses it sees it. The
  * connections component holds the grant and its stored credential; an app gets only a

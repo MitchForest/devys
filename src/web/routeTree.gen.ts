@@ -10,12 +10,48 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as BusinessRouteImport } from './routes/$business'
+import { Route as BusinessIndexRouteImport } from './routes/$business/index'
+import { Route as BusinessChatEmployeeRouteImport } from './routes/$business/chat.$employee'
+import { Route as BusinessProjectProjectRouteImport } from './routes/$business/project.$project'
+import { Route as BusinessSettingsSectionRouteImport } from './routes/$business/settings.$section'
+import { Route as BusinessThreadWorkRouteImport } from './routes/$business/thread.$work'
 import { Route as TerminalBusinessIdRouteImport } from './routes/terminal.$business.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const BusinessRoute = BusinessRouteImport.update({
+  id: '/$business',
+  path: '/$business',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BusinessIndexRoute = BusinessIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => BusinessRoute,
+} as any)
+const BusinessChatEmployeeRoute = BusinessChatEmployeeRouteImport.update({
+  id: '/chat/$employee',
+  path: '/chat/$employee',
+  getParentRoute: () => BusinessRoute,
+} as any)
+const BusinessProjectProjectRoute = BusinessProjectProjectRouteImport.update({
+  id: '/project/$project',
+  path: '/project/$project',
+  getParentRoute: () => BusinessRoute,
+} as any)
+const BusinessSettingsSectionRoute = BusinessSettingsSectionRouteImport.update({
+  id: '/settings/$section',
+  path: '/settings/$section',
+  getParentRoute: () => BusinessRoute,
+} as any)
+const BusinessThreadWorkRoute = BusinessThreadWorkRouteImport.update({
+  id: '/thread/$work',
+  path: '/thread/$work',
+  getParentRoute: () => BusinessRoute,
 } as any)
 const TerminalBusinessIdRoute = TerminalBusinessIdRouteImport.update({
   id: '/terminal/$business/$id',
@@ -25,27 +61,69 @@ const TerminalBusinessIdRoute = TerminalBusinessIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/$business': typeof BusinessRouteWithChildren
+  '/$business/': typeof BusinessIndexRoute
+  '/$business/chat/$employee': typeof BusinessChatEmployeeRoute
+  '/$business/project/$project': typeof BusinessProjectProjectRoute
+  '/$business/settings/$section': typeof BusinessSettingsSectionRoute
+  '/$business/thread/$work': typeof BusinessThreadWorkRoute
   '/terminal/$business/$id': typeof TerminalBusinessIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/$business': typeof BusinessIndexRoute
+  '/$business/chat/$employee': typeof BusinessChatEmployeeRoute
+  '/$business/project/$project': typeof BusinessProjectProjectRoute
+  '/$business/settings/$section': typeof BusinessSettingsSectionRoute
+  '/$business/thread/$work': typeof BusinessThreadWorkRoute
   '/terminal/$business/$id': typeof TerminalBusinessIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/$business': typeof BusinessRouteWithChildren
+  '/$business/': typeof BusinessIndexRoute
+  '/$business/chat/$employee': typeof BusinessChatEmployeeRoute
+  '/$business/project/$project': typeof BusinessProjectProjectRoute
+  '/$business/settings/$section': typeof BusinessSettingsSectionRoute
+  '/$business/thread/$work': typeof BusinessThreadWorkRoute
   '/terminal/$business/$id': typeof TerminalBusinessIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/terminal/$business/$id'
+  fullPaths:
+    | '/'
+    | '/$business'
+    | '/$business/'
+    | '/$business/chat/$employee'
+    | '/$business/project/$project'
+    | '/$business/settings/$section'
+    | '/$business/thread/$work'
+    | '/terminal/$business/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/terminal/$business/$id'
-  id: '__root__' | '/' | '/terminal/$business/$id'
+  to:
+    | '/'
+    | '/$business'
+    | '/$business/chat/$employee'
+    | '/$business/project/$project'
+    | '/$business/settings/$section'
+    | '/$business/thread/$work'
+    | '/terminal/$business/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/$business'
+    | '/$business/'
+    | '/$business/chat/$employee'
+    | '/$business/project/$project'
+    | '/$business/settings/$section'
+    | '/$business/thread/$work'
+    | '/terminal/$business/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BusinessRoute: typeof BusinessRouteWithChildren
   TerminalBusinessIdRoute: typeof TerminalBusinessIdRoute
 }
 
@@ -58,6 +136,48 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/$business': {
+      id: '/$business'
+      path: '/$business'
+      fullPath: '/$business'
+      preLoaderRoute: typeof BusinessRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/$business/': {
+      id: '/$business/'
+      path: '/'
+      fullPath: '/$business/'
+      preLoaderRoute: typeof BusinessIndexRouteImport
+      parentRoute: typeof BusinessRoute
+    }
+    '/$business/chat/$employee': {
+      id: '/$business/chat/$employee'
+      path: '/chat/$employee'
+      fullPath: '/$business/chat/$employee'
+      preLoaderRoute: typeof BusinessChatEmployeeRouteImport
+      parentRoute: typeof BusinessRoute
+    }
+    '/$business/project/$project': {
+      id: '/$business/project/$project'
+      path: '/project/$project'
+      fullPath: '/$business/project/$project'
+      preLoaderRoute: typeof BusinessProjectProjectRouteImport
+      parentRoute: typeof BusinessRoute
+    }
+    '/$business/settings/$section': {
+      id: '/$business/settings/$section'
+      path: '/settings/$section'
+      fullPath: '/$business/settings/$section'
+      preLoaderRoute: typeof BusinessSettingsSectionRouteImport
+      parentRoute: typeof BusinessRoute
+    }
+    '/$business/thread/$work': {
+      id: '/$business/thread/$work'
+      path: '/thread/$work'
+      fullPath: '/$business/thread/$work'
+      preLoaderRoute: typeof BusinessThreadWorkRouteImport
+      parentRoute: typeof BusinessRoute
+    }
     '/terminal/$business/$id': {
       id: '/terminal/$business/$id'
       path: '/terminal/$business/$id'
@@ -68,8 +188,29 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface BusinessRouteChildren {
+  BusinessIndexRoute: typeof BusinessIndexRoute
+  BusinessChatEmployeeRoute: typeof BusinessChatEmployeeRoute
+  BusinessProjectProjectRoute: typeof BusinessProjectProjectRoute
+  BusinessSettingsSectionRoute: typeof BusinessSettingsSectionRoute
+  BusinessThreadWorkRoute: typeof BusinessThreadWorkRoute
+}
+
+const BusinessRouteChildren: BusinessRouteChildren = {
+  BusinessIndexRoute: BusinessIndexRoute,
+  BusinessChatEmployeeRoute: BusinessChatEmployeeRoute,
+  BusinessProjectProjectRoute: BusinessProjectProjectRoute,
+  BusinessSettingsSectionRoute: BusinessSettingsSectionRoute,
+  BusinessThreadWorkRoute: BusinessThreadWorkRoute,
+}
+
+const BusinessRouteWithChildren = BusinessRoute._addFileChildren(
+  BusinessRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BusinessRoute: BusinessRouteWithChildren,
   TerminalBusinessIdRoute: TerminalBusinessIdRoute,
 }
 export const routeTree = rootRouteImport

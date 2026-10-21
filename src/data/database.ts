@@ -19,6 +19,14 @@ export interface Sql {
 pg.types.setTypeParser(pg.types.builtins.TIMESTAMPTZ, (value) => new Date(value).toISOString());
 pg.types.setTypeParser(pg.types.builtins.INT8, Number);
 
+/**
+ * A `timestamptz` expression written as the API writes timestamps (ISO, UTC, milliseconds), for
+ * values Postgres puts into JSON itself: its own JSON form keeps the session's offset and drops
+ * trailing zeros of the fraction.
+ */
+export const isoText = (expression: string) =>
+  `to_char(${expression} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
+
 function sql(client: pg.Client): Sql {
   return {
     rows: async (text, values = []) => (await client.query(text, [...values])).rows,

@@ -1,0 +1,25 @@
+{
+  "items": [
+    {
+      "key": "service-area",
+      "content": "Serves the north and east of the city",
+      "source_kind": "user",
+      "source_operation_id": "web:wire-memory",
+      "revision": 1,
+      "updated_at": "2026-01-01T00:00:00.000Z",
+      "subject": "owner",
+      "scope": "unspecified",
+      "valid_from": null,
+      "valid_until": null,
+      "evidence": [
+        {
+          "id": "web:0000000000000000000000000000000000000000000000000000000000000003",
+          "kind": "owner",
+          "observed_at": "2026-01-01T00:00:00.000Z"
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "next": null
+}

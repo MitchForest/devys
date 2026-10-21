@@ -4,6 +4,7 @@ import { appChat, composeAppMessage } from "../channels/app.ts";
 import { employeeChatOf, type Binding } from "../channels/contract.ts";
 import {
   employeeOf,
+  mentionsIn,
   namer,
   kindOf,
   nextResponder,
@@ -13,7 +14,7 @@ import {
   type Message,
 } from "../conversations/contract.ts";
 import { markSeen, messages, postMessage, unseenBy, messageIn } from "../conversations/service.ts";
-import { scopeName, type Employee, type Scope } from "../identity/contract.ts";
+import { scopeName, type Scope } from "../identity/contract.ts";
 import { activePerson, employeesOf } from "../identity/service.ts";
 import { ref, type Ref } from "../protocol/ref.ts";
 import { workItem } from "../work/service.ts";
@@ -67,15 +68,6 @@ const defaultResponder = async (env: Env, businessId: string, key: ConversationK
 /** Whether a conversation key names something of this business that can be talked in. */
 export const conversationExists = async (env: Env, businessId: string, key: ConversationKey) =>
   Boolean(await resolve(env, businessId, key));
-
-/** `@Name` mentions of the business's employees in a message, longest names first. */
-export function mentionsIn(text: string, employees: readonly Pick<Employee, "id" | "name">[]) {
-  const lower = text.toLowerCase();
-  return [...employees]
-    .sort((a, b) => b.name.length - a.name.length)
-    .filter((employee) => lower.includes(`@${employee.name.toLowerCase()}`))
-    .map((employee) => employee.id);
-}
 
 /**
  * Hands a message to the employees it addresses. Each sees what was said since it last

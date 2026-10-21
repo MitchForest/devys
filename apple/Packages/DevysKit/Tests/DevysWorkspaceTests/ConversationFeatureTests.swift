@@ -28,7 +28,7 @@ private actor ConversationServer {
             text: text,
             replyTo: replyTo,
             ref: ref,
-            createdAt: Date(timeIntervalSince1970: 1_792_400_000 + Double(count)).formatted(.iso8601)
+            createdAt: ServerDate.format(Date(timeIntervalSince1970: 1_792_400_000 + Double(count)))
         )
         messages[key.rawValue, default: []].append(message)
         return message

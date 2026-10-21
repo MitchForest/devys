@@ -1,3 +1,4 @@
+import type { Mutable } from "effect/Types";
 import type { Claim, Page } from "./contract.ts";
 import { claim, type Row, type Storage } from "./store.ts";
 import { bounded } from "./validation.ts";
@@ -51,8 +52,8 @@ export async function searchClaims(
   const rows = await storage.rows<Row>(
     `WITH current AS (
       SELECT * FROM memories WHERE scope_id=$1
-        AND (details->>'validFrom' IS NULL OR details->>'validFrom'<=$4)
-        AND (details->>'validUntil' IS NULL OR details->>'validUntil'>$4)
+        AND (details->>'valid_from' IS NULL OR details->>'valid_from'<=$4)
+        AND (details->>'valid_until' IS NULL OR details->>'valid_until'>$4)
     ), matches AS (
       SELECT * FROM current WHERE jsonb_array_length($3::jsonb)=0 OR EXISTS (SELECT 1 FROM jsonb_array_elements_text($3::jsonb) term
         WHERE strpos(lower(current.content),term)>0 OR strpos(lower(current.key),term)>0
@@ -98,7 +99,13 @@ function fit(rows: Row[], limit: number) {
 
 /** The longest prefix of a claim's content that fits in `limit`, without evidence or relations. */
 function excerpt(row: Row, limit: number) {
-  const item: Claim = { ...claim(row), content: "", evidence: [], relations: [], truncated: true };
+  const item: Mutable<Claim> = {
+    ...claim(row),
+    content: "",
+    evidence: [],
+    relations: [],
+    truncated: true,
+  };
   if (JSON.stringify([item]).length > limit) {
     item.subject = item.subject.slice(0, 16);
     item.scope = item.scope.slice(0, 16);
@@ -121,8 +128,8 @@ export const currentClaims = async (storage: Storage) =>
   (
     await storage.rows<Row>(
       `SELECT * FROM memories WHERE scope_id=$1
-          AND (details->>'validFrom' IS NULL OR details->>'validFrom'<=$2)
-          AND (details->>'validUntil' IS NULL OR details->>'validUntil'>$2)
+          AND (details->>'valid_from' IS NULL OR details->>'valid_from'<=$2)
+          AND (details->>'valid_until' IS NULL OR details->>'valid_until'>$2)
           ORDER BY source_kind DESC,updated_at DESC,key LIMIT 30`,
       new Date().toISOString(),
     )
@@ -142,8 +149,8 @@ export function contextText(relevant: Claim[], current: Claim[], maxChars: numbe
         content: item.content.slice(0, 1500),
         excerpt: item.content.length > 1500,
         source: item.source_kind,
-        validFrom: item.validFrom,
-        validUntil: item.validUntil,
+        validFrom: item.valid_from,
+        validUntil: item.valid_until,
         relations: item.relations,
       }) + "\n";
     if (text.length + line.length <= maxChars) text += line;

@@ -1,0 +1,106 @@
+{
+  "defaults": {
+    "employee": "claude-opus-5-5",
+    "background": "gpt-6-luna"
+  },
+  "models": [
+    {
+      "id": "claude-opus-5-5",
+      "label": "Claude Opus 5.5",
+      "vendor": "Anthropic",
+      "provider": "TrueFoundry gateway",
+      "summary": "Best judgment and the most reliable long, tool-heavy work.",
+      "effort": "medium",
+      "price": {
+        "input": 4,
+        "output": 20,
+        "cache_read": 0.2
+      },
+      "typical_turn_usd": 0.046
+    },
+    {
+      "id": "claude-fable-5-1",
+      "label": "Claude Fable 5.1",
+      "vendor": "Anthropic",
+      "provider": "TrueFoundry gateway",
+      "summary": "Anthropic's most capable model, for the hardest problems. Costs the most.",
+      "effort": "medium",
+      "price": {
+        "input": 10,
+        "output": 50,
+        "cache_read": 0.25
+      },
+      "typical_turn_usd": 0.11
+    },
+    {
+      "id": "gpt-6.1-sol",
+      "label": "GPT-6.1 Sol",
+      "vendor": "OpenAI",
+      "provider": "TrueFoundry gateway",
+      "summary": "Strong all-round reasoning at half the price of Opus.",
+      "effort": "medium",
+      "price": {
+        "input": 2,
+        "output": 10,
+        "cache_read": 0.1
+      },
+      "typical_turn_usd": 0.023
+    },
+    {
+      "id": "gpt-6-astra",
+      "label": "GPT-6 Astra",
+      "vendor": "OpenAI",
+      "provider": "TrueFoundry gateway",
+      "summary": "OpenAI's most capable model. About five times Sol's price.",
+      "effort": "medium",
+      "price": {
+        "input": 10,
+        "output": 50,
+        "cache_read": 1
+      },
+      "typical_turn_usd": 0.125
+    },
+    {
+      "id": "gpt-6-luna",
+      "label": "GPT-6 Luna",
+      "vendor": "OpenAI",
+      "provider": "TrueFoundry gateway",
+      "summary": "Very fast and very cheap; suited to background and routine work.",
+      "effort": "low",
+      "price": {
+        "input": 0.1,
+        "output": 0.5,
+        "cache_read": 0.01
+      },
+      "typical_turn_usd": 0.00125
+    },
+    {
+      "id": "gemini-4-argon",
+      "label": "Gemini 4 Argon",
+      "vendor": "Google",
+      "provider": "TrueFoundry gateway",
+      "summary": "Long documents and images. Introductory price until 30 November 2026.",
+      "effort": "medium",
+      "price": {
+        "input": 2,
+        "output": 10,
+        "cache_read": 0.1
+      },
+      "typical_turn_usd": 0.023
+    },
+    {
+      "id": "gemini-3.8-flash",
+      "label": "Gemini 3.8 Flash",
+      "vendor": "Google",
+      "provider": "TrueFoundry gateway",
+      "summary": "Quick and inexpensive, with a very large context.",
+      "effort": "medium",
+      "price": {
+        "input": 0.75,
+        "output": 3.75,
+        "cache_read": 0.075
+      },
+      "typical_turn_usd": 0.009375
+    }
+  ]
+}

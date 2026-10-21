@@ -46,7 +46,9 @@ struct WorkRow: View {
     }
 }
 
-/// The same actions an employee has, applied by the owner at the revision on screen.
+/// What the owner can do to a work item from a row: open its thread and take it over. Changing it
+/// by hand (reassigning, marking it, cancelling) is for work the owner has taken over; otherwise
+/// they ask in its thread.
 struct WorkActions: View {
     let store: StoreOf<Workspace>
     let item: WorkItem
@@ -54,6 +56,10 @@ struct WorkActions: View {
     var body: some View {
         Button("Open thread", systemImage: "arrow.up.right.square") { store.send(.threadOpened(item.id)) }
         if item.state.isOpen {
+            TakeoverButton(store: store, item: item)
+        }
+        if item.state.isOpen, store.state.isMine(item) {
+            Divider()
             Menu("Reassign to") {
                 ForEach(store.snapshot.employees.filter { $0.id != item.ownerEmployeeID }) { employee in
                     Button(employee.name) { store.send(.reassigned(item.id, to: employee.id)) }
@@ -62,11 +68,7 @@ struct WorkActions: View {
             if item.state != .ready { Button("Mark ready", systemImage: "arrow.uturn.forward") { store.send(.workItemStateSet(item.id, .ready)) } }
             if item.state != .waiting { Button("Mark waiting", systemImage: "clock") { store.send(.workItemStateSet(item.id, .waiting)) } }
             Button("Mark done", systemImage: "checkmark.circle") { store.send(.workItemStateSet(item.id, .completed)) }
-            Divider()
-            TakeoverButton(store: store, item: item)
             Button("Cancel", systemImage: "xmark.circle", role: .destructive) { store.send(.workItemStateSet(item.id, .cancelled)) }
-        } else {
-            Button("Reopen", systemImage: "arrow.uturn.backward") { store.send(.workItemStateSet(item.id, .ready)) }
         }
     }
 }

@@ -1,350 +1,91 @@
 /**
  * The Devys HTTP API as the web app uses it: the same endpoints as the native apps,
- * authenticated by the browser's session cookie. Mutations are same-origin POSTs.
+ * authenticated by the browser's session cookie. Mutations are same-origin POSTs. Every
+ * response is decoded with the schema its route answers with (`src/app/wire.ts` and the
+ * components' contracts), so a drifted shape fails here, plainly, instead of deep in the UI.
  */
+import { Schema } from "effect";
 import type { Ref } from "../../protocol/ref.ts";
+import type { RoleTemplateId } from "../../protocol/roles.ts";
+import { Transcript, WorkingDiff } from "../../apps/code/contract.ts";
+import { Grant } from "../../authority/contract.ts";
+import { BrowserStatus, PageState, Screenshot, type OwnerInput } from "../../browser/contract.ts";
+import type { ConversationKey } from "../../conversations/contract.ts";
+import { DeviceCode, DeviceList, Employee, type SettableLook } from "../../identity/contract.ts";
+import { ClaimPage } from "../../memory/contract.ts";
+import { Authorization, Disconnected } from "../../connections/contract.ts";
+import { TerminalSession } from "../../terminal/contract.ts";
+import {
+  Project,
+  ProjectItem,
+  WorkItem,
+  type NewWorkItem,
+  type ProjectChange,
+  type WorkItemState,
+} from "../../work/contract.ts";
+import { FileText, SavedFile } from "../../workspace/contract.ts";
+import {
+  AccessList,
+  Answered,
+  AppChanged,
+  Apps,
+  BusinessCreated,
+  BusinessDetail,
+  BusinessUpdated,
+  BytesConflict,
+  Closed,
+  CodedWork,
+  CodingSessions,
+  CodingStarted,
+  ConversationPage,
+  Conversations,
+  Decisions,
+  DrivePicker,
+  DriveSelected,
+  Folder,
+  Following,
+  GoogleConnection,
+  Home,
+  Interrupted,
+  LookChanged,
+  Me,
+  ModelCatalog,
+  ModelChanged,
+  PausedChanged,
+  Posted,
+  ProfileChanged,
+  Projects,
+  Read,
+  Removed,
+  Retired,
+  Revoked,
+  Roles,
+  RuntimeStatus,
+  Steered,
+  Stopped,
+  Terminals,
+  TextConflict,
+  WorkItems,
+  type FileComments,
+} from "../../app/wire.ts";
 
-export interface Person {
-  id: string;
-  display_name: string;
-}
-/** How a business or employee appears, the same in every client. */
-export type Look =
-  | { kind: "face"; palette: string; shape: string; seed: number }
-  | { kind: "emoji"; emoji: string; tint: string }
-  | { kind: "photo"; version: string };
-export type SettableLook = Exclude<Look, { kind: "photo" }> | null;
-export interface Business {
-  id: string;
-  name: string;
-  look: Look | null;
-  /** What the business does, its goals and constraints; every employee reads it. */
-  brief: string;
-}
-export type RoleTemplateId =
-  | "operations"
-  | "engineering"
-  | "growth"
-  | "business-operations"
-  | "custom";
-/** A role to hire from: copied into an ordinary employee, with its starting access. */
-export interface RoleTemplate {
-  id: Exclude<RoleTemplateId, "operations">;
-  name: string;
-  summary: string;
-  responsibilities: string;
-  capabilities: string[];
-}
 /** The templates a new business can start its team with, beside the Head of Operations. */
-export type StartingRole = "engineering" | "growth" | "business-operations";
-/** A signed-in browser or app of the current person. */
-export interface Device {
-  id: string;
-  /** The name an app gave when it signed in; browsers have none. */
-  label: string | null;
-  created_at: string;
-  expires_at: string;
-  current: boolean;
-}
-export interface Employee {
-  id: string;
-  business_id: string;
-  name: string;
-  /** Responsibilities, up to 2000 characters. */
-  role: string;
-  template: RoleTemplateId;
-  paused: boolean;
-  look: Look | null;
-  /** A model id from the catalog. */
-  model: string;
-}
-/** A model employees can use, priced in dollars per million tokens. */
-export interface ModelOption {
-  id: string;
-  label: string;
-  vendor: string;
-  provider: string;
-  summary: string;
-  effort: "low" | "medium" | "high";
-  price: { input: number; output: number; cacheRead: number };
-  typicalTurnUsd: number;
-}
-export interface ModelCatalog {
-  defaults: { employee: string; background: string };
-  models: ModelOption[];
-}
-/** Tokens and dollars spent, as pi-ai reports them. */
-export interface Usage {
-  input: number;
-  output: number;
-  cacheRead: number;
-  cacheWrite: number;
-  totalTokens: number;
-  cost: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
-}
-export interface Artifact {
-  id: string;
-  filename: string;
-  content_type: string;
-  byte_length: number;
-  created_at: string;
-}
-export interface RuntimeState {
-  run: { id: string; stopped: boolean; deadline: number | null } | null;
-  inbox: { id: string; text?: string; receivedAt: number; status: string }[];
-  outbox: { id: string; text: string; status: string }[];
-  /** Spend by "provider/modelId" and by tool. */
-  usage?: { models: Record<string, Usage>; tools: Record<string, Usage> };
-}
-/** `direct:<employee>`, `project:<project>` or `work:<workItem>`. */
-export type ConversationKey = `${"direct" | "project" | "work"}:${string}`;
-/** One entry in a conversation: something someone said, or an event such as a hand-off. */
-export interface Message {
-  id: string;
-  conversation: ConversationKey;
-  /** `person:<id>`, `employee:<id>` or `system`. */
-  author: string;
-  kind: "message" | "event";
-  text: string;
-  reply_to: string | null;
-  /** Employee ids this message addresses. */
-  mentions: string[];
-  via_voice: boolean;
-  /** The record an event is about: a work item's hand-off card, a page, a coding session. */
-  ref: Ref | null;
-  created_at: string;
-}
-export interface ShownMessage extends Message {
-  reactions: string[];
-}
-export interface ConversationSummary {
-  key: ConversationKey;
-  last: Message | null;
-  unread: number;
-  /** The signed-in person follows it: a work thread they hear each milestone of. */
-  following: boolean;
-}
+export type StartingRole = Exclude<RoleTemplateId, "operations" | "custom">;
 interface OutgoingMessage {
   /** The sender's own id, so a retried post is stored once. */
   id: string;
   text: string;
-  replyTo?: string;
+  reply_to?: string;
   mentions?: string[];
-  viaVoice?: boolean;
+  via_voice?: boolean;
 }
-export type WorkItemState =
-  | "proposed"
-  | "ready"
-  | "in_progress"
-  | "waiting"
-  | "needs_decision"
-  | "completed"
-  | "cancelled";
-export interface WorkItem {
-  id: string;
-  owner_employee_id: string;
-  title: string;
-  objective: string;
-  next_action: string;
-  wait_condition: string | null;
-  due_at: string | null;
-  state: WorkItemState;
-  evidence: {
-    by: string;
-    note: string;
-    at: string;
-    commit?: string;
-    check?: { command: string; exitCode: number | null };
-    changes?: string;
-    pullRequest?: string;
-    deploy?: { stage: "preview" | "production"; url: string | null; live: boolean };
-  }[];
-  revision: number;
-  taken_over_by: string | null;
-  /** The project the work belongs to, if any; its thread is in that project's channel. */
-  project_id: string | null;
-  updated_at: string;
-}
-/** A Codex or Claude Code session on a work item, with its live state from the provider. */
-export interface CodingSession {
-  id: string;
-  work_item_id: string;
-  employee_id: string;
-  provider: "codex" | "claude";
-  purpose: "build" | "review";
-  objective: string;
-  repository: string | null;
-  /** The commit the session's branch started from, which its diff is against. */
-  base_commit: string | null;
-  branch: string | null;
-  worktree: string | null;
-  created_at: string;
-  state: "working" | "idle" | "interrupted" | "failed" | "unavailable";
-  reply: string | null;
-  diffStat: string;
-  error: string | null;
-}
-/** One step of what a coding session did, read from the harness when asked. */
-export interface TranscriptEntry {
-  kind: "prompt" | "reply" | "plan" | "command" | "files" | "tool";
-  text: string;
-  detail?: string;
-  failed?: boolean;
-}
-/** The business's browser at a glance. */
-export interface BrowserStatus {
-  open: boolean;
-  url: string | null;
-  title: string | null;
-  /** The work item (or conversation) the last employee action served. */
-  driver: string | null;
-}
-/** The owner acting on the business's browser directly. */
-export type OwnerInput =
-  | { kind: "click"; x: number; y: number }
-  | { kind: "type"; text: string }
-  | { kind: "key"; key: string }
-  | { kind: "open"; url: string };
-export interface WorkingDiff {
-  files: { path: string; status: string; added: number; removed: number }[];
-  patch: string;
-}
-/** A terminal on the owner's Mac; the host keeps it while devices come and go. */
-export interface TerminalSession {
-  id: string;
-  title: string;
-  cwd: string;
-  codingSessionId: string | null;
-  startedAt: string;
-  offset: number;
-  writer: string | null;
-  exit: { code: number | null } | null;
-}
-
-export interface FileEntry {
-  name: string;
-  path: string;
-  kind: "file" | "directory" | "repository" | "other";
-  size: number;
-}
-export interface FileText {
-  path: string;
-  content: string;
-  revision: string;
-}
-export type FileAnchor =
-  | { kind: "text"; start: number; end: number; quote: string }
-  | { kind: "pdf"; page: number; rects: { x: number; y: number; width: number; height: number }[] };
-
 export interface NewCodingSession {
-  clientId: string;
+  client_id: string;
   employee: string;
   provider: "codex" | "claude";
   objective: string;
   repository?: string;
-  newRepository?: string;
-}
-
-export interface Decision {
-  id: string;
-  employee_id: string;
-  capability: string;
-  input: unknown;
-  work_item_id: string | null;
-  status: "pending" | "approved" | "rejected" | "used";
-  requested_at: string;
-  expires_at: string;
-}
-/** A record a project shows: a reference, never a copy (an artifact or a business file). */
-export interface ProjectItem {
-  id: string;
-  ref: Ref;
-}
-/** A bounded initiative: a channel, its work and the records it touches. */
-export interface Project {
-  id: string;
-  name: string;
-  goal: string | null;
-  deadline: string | null;
-  budget: { cents: number; currency: string } | null;
-  /** The employee who answers in the channel unless the owner mentions someone. */
-  lead_employee_id: string | null;
-  member_ids: string[];
-  items: ProjectItem[];
-}
-export interface ProjectChange {
-  name?: string;
-  goal?: string | null;
-  deadline?: string | null;
-  budget?: { cents: number; currency: string } | null;
-  lead?: string;
-  members?: string[];
-}
-/** An app in the directory, and whether this business has it. */
-export interface AppEntry {
-  id: string;
-  name: string;
-  icon: string;
-  summary: string;
-  /** System apps are always installed and never in the sidebar. */
-  kind: "system" | "business";
-  status: "available" | "coming";
-  /** The skills it ships, which employees load by name. */
-  skills: { name: string; description: string }[];
-  installed: boolean;
-  pinned: boolean;
-  /** Installed and has something to show, so the sidebar lists it. */
-  visible: boolean;
-}
-/** One thing waiting on the owner: a decision, or work that needs one. */
-export interface NeedsYouItem {
-  kind: "decision" | "work";
-  id: string;
-  title: string;
-  employeeId: string | null;
-  workId: string | null;
-  projectId: string | null;
-}
-/** Work at a glance: what moves, what is stuck. */
-export interface GlanceItem {
-  id: string;
-  title: string;
-  employeeId: string;
-  projectId: string | null;
-  state: WorkItemState;
-  waitCondition: string | null;
-  dueAt: string | null;
-  updatedAt: string;
-}
-export interface Home {
-  needsYou: NeedsYouItem[];
-  glance: { moving: GlanceItem[]; stuck: GlanceItem[]; spentCents: number | null };
-}
-export interface NewWorkItem {
-  title: string;
-  owner: string;
-  objective?: string;
-  dueAt?: string;
-  projectId?: string;
-}
-export interface Grant {
-  id: string;
-  capability: string;
-  mode: "auto" | "ask";
-  constraints: { hosts?: string[] };
-  description?: string;
-  effect?: string;
-}
-export interface AccessList {
-  grants: Grant[];
-  available: { capability: string; description: string; effect: string }[];
-}
-export interface MemoryClaim {
-  key: string;
-  content: string;
-  source_kind: string;
-  revision: number;
-  updated_at: string;
+  new_repository?: string;
 }
 
 export class ApiError extends Error {
@@ -356,20 +97,59 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+/** A response whose shape is not the one its route's schema defines. */
+class WireError extends Error {
+  constructor(path: string, cause: unknown) {
+    super(
+      `The server's answer to ${path} was not in the expected shape: ${cause instanceof Error ? cause.message : String(cause)}`,
+    );
+  }
+}
+
+/** A JSON value decoded with its route's schema. */
+const decode = <T, E>(schema: Schema.Codec<T, E>, path: string, value: unknown): T => {
+  try {
+    return Schema.decodeUnknownSync(schema)(value);
+  } catch (error) {
+    throw new WireError(path, error);
+  }
+};
+
+async function request<T, E>(
+  schema: Schema.Codec<T, E>,
+  path: string,
+  init?: RequestInit,
+): Promise<T> {
   const response = await fetch(path, {
     ...init,
     headers: init?.body ? { "content-type": "application/json", ...init.headers } : init?.headers,
   });
   if (!response.ok) throw new ApiError(response.status, await response.text());
   const text = await response.text();
-  return (text ? JSON.parse(text) : undefined) as T;
+  let value: unknown;
+  try {
+    value = text ? JSON.parse(text) : undefined;
+  } catch (error) {
+    throw new WireError(path, error);
+  }
+  return decode(schema, path, value);
 }
-const get = <T>(path: string) => request<T>(path);
-const post = <T = unknown>(path: string, body: unknown = {}) =>
-  request<T>(path, { method: "POST", body: JSON.stringify(body) });
-const put = <T = unknown>(path: string, body: unknown) =>
-  request<T>(path, { method: "PUT", body: JSON.stringify(body) });
+const get = <T, E>(schema: Schema.Codec<T, E>, path: string) => request(schema, path);
+const post = <T, E>(schema: Schema.Codec<T, E>, path: string, body: unknown = {}) =>
+  request(schema, path, { method: "POST", body: JSON.stringify(body) });
+const put = <T, E>(schema: Schema.Codec<T, E>, path: string, body: unknown) =>
+  request(schema, path, { method: "PUT", body: JSON.stringify(body) });
+/** A call whose answer carries nothing to read (sign-in, sign-out, a reaction's 204). */
+async function send(path: string, init: RequestInit) {
+  const response = await fetch(path, {
+    ...init,
+    headers: init.body ? { "content-type": "application/json", ...init.headers } : init.headers,
+  });
+  if (!response.ok) throw new ApiError(response.status, await response.text());
+}
+/** Both refusals the save routes answer with 409, decoded like any other answer. */
+const conflictOf = async <T, E>(schema: Schema.Codec<T, E>, path: string, response: Response) =>
+  decode(schema, path, await response.json());
 
 const business = (id: string) => `/api/businesses/${id}`;
 const employee = (b: string, e: string) => `${business(b)}/employees/${e}`;
@@ -377,126 +157,109 @@ const conversation = (b: string, key: ConversationKey) =>
   `${business(b)}/conversations/${encodeURIComponent(key)}`;
 
 export const api = {
-  enroll: (token: string) => post("/api/enroll", { token }),
-  logout: () => post("/api/logout"),
-  me: () => get<{ person: Person; businesses: Business[] }>("/api/me"),
+  enroll: (token: string) =>
+    send("/api/enroll", { method: "POST", body: JSON.stringify({ token }) }),
+  logout: () => send("/api/logout", { method: "POST", body: "{}" }),
+  me: () => get(Me, "/api/me"),
   createBusiness: (input: { name: string; brief: string; team: StartingRole[] }) =>
-    post<{ business: Business; operations: Employee; team: Employee[] }>("/api/businesses", input),
+    post(BusinessCreated, "/api/businesses", input),
   updateBusiness: (id: string, change: { name?: string; brief?: string }) =>
-    put<{ business: Business }>(business(id), change),
-  business: (id: string) =>
-    get<{
-      business: Business;
-      employees: Employee[];
-      members: Person[];
-      artifacts: Artifact[];
-    }>(business(id)),
-  roles: () => get<{ roles: RoleTemplate[] }>("/api/roles"),
+    put(BusinessUpdated, business(id), change),
+  business: (id: string) => get(BusinessDetail, business(id)),
+  roles: () => get(Roles, "/api/roles"),
   hire: (
     b: string,
     input: { template: string; name?: string; responsibilities?: string; model?: string },
-  ) => post<Employee>(`${business(b)}/employees`, input),
+  ) => post(Employee, `${business(b)}/employees`, input),
   setProfile: (b: string, e: string, change: { name?: string; responsibilities?: string }) =>
-    put<{ name?: string; role?: string }>(`${employee(b, e)}/profile`, change),
+    put(ProfileChanged, `${employee(b, e)}/profile`, change),
   retire: (b: string, e: string, reassignTo: string) =>
-    post<{ retired: true; reassignedTo: string }>(`${employee(b, e)}/retire`, { reassignTo }),
-  devices: () => get<{ devices: Device[] }>("/api/devices"),
-  issueDeviceCode: () => post<{ code: string; expiresAt: string }>("/api/devices/codes"),
-  revokeDevice: (id: string) => post(`/api/devices/${id}/revoke`),
-  models: () => get<ModelCatalog>("/api/models"),
+    post(Retired, `${employee(b, e)}/retire`, { reassign_to: reassignTo }),
+  devices: () => get(DeviceList, "/api/devices"),
+  issueDeviceCode: () => post(DeviceCode, "/api/devices/codes"),
+  revokeDevice: (id: string) => post(Revoked, `/api/devices/${id}/revoke`),
+  models: () => get(ModelCatalog, "/api/models"),
   setEmployeeModel: (b: string, e: string, model: string) =>
-    put<{ model: string }>(`${employee(b, e)}/model`, { model }),
-  status: (b: string, e: string) => get<{ state: RuntimeState }>(`${employee(b, e)}/status`),
-  stop: (b: string, e: string) => post(`${employee(b, e)}/stop`),
+    put(ModelChanged, `${employee(b, e)}/model`, { model }),
+  status: (b: string, e: string) => get(RuntimeStatus, `${employee(b, e)}/status`),
+  stop: (b: string, e: string) => post(Stopped, `${employee(b, e)}/stop`),
   setPaused: (b: string, e: string, paused: boolean) =>
-    post(`${employee(b, e)}/${paused ? "pause" : "resume"}`),
+    post(PausedChanged, `${employee(b, e)}/${paused ? "pause" : "resume"}`),
   react: (
     b: string,
     e: string,
-    reaction: { targetId: string; targetText: string; emoji: string; on: boolean },
-  ) => post(`${employee(b, e)}/reactions`, reaction),
-  access: (b: string, e: string) => get<AccessList>(`${employee(b, e)}/access`),
+    reaction: { target_id: string; target_text: string; emoji: string; on: boolean },
+  ) => send(`${employee(b, e)}/reactions`, { method: "POST", body: JSON.stringify(reaction) }),
+  access: (b: string, e: string) => get(AccessList, `${employee(b, e)}/access`),
   grant: (b: string, e: string, capability: string, mode: "auto" | "ask") =>
-    post(`${employee(b, e)}/access`, { capability, mode }),
+    post(Grant, `${employee(b, e)}/access`, { capability, mode }),
   revoke: (b: string, e: string, grantId: string) =>
-    post(`${employee(b, e)}/access/${grantId}/revoke`),
+    post(Revoked, `${employee(b, e)}/access/${grantId}/revoke`),
   follow: (b: string, key: ConversationKey, on: boolean) =>
-    post<{ following: boolean }>(`${business(b)}/conversations/${encodeURIComponent(key)}/follow`, {
-      on,
-    }),
-  conversations: (b: string) =>
-    get<{ conversations: ConversationSummary[] }>(`${business(b)}/conversations`),
+    post(Following, `${conversation(b, key)}/follow`, { on }),
+  conversations: (b: string) => get(Conversations, `${business(b)}/conversations`),
   /** The newest 50 messages, oldest first, or the 50 before a message. */
   conversation: (b: string, key: ConversationKey, before?: string) =>
-    get<{ messages: ShownMessage[]; respondent: string | null }>(
+    get(
+      ConversationPage,
       `${conversation(b, key)}${before ? `?before=${encodeURIComponent(before)}` : ""}`,
     ),
   /** Posts in a conversation; `to` is who answers. A 409 says everyone who would is paused. */
   post: (b: string, key: ConversationKey, message: OutgoingMessage) =>
-    post<{ message: Message; to: string[] }>(`${conversation(b, key)}/messages`, message),
+    post(Posted, `${conversation(b, key)}/messages`, message),
   markRead: (b: string, key: ConversationKey, at: string) =>
-    post(`${conversation(b, key)}/read`, { at }),
-  memory: (b: string) => get<{ items: MemoryClaim[] }>(`${business(b)}/memory`),
-  work: (b: string) => get<{ workItems: WorkItem[] }>(`${business(b)}/work`),
+    post(Read, `${conversation(b, key)}/read`, { at }),
+  memory: (b: string) => get(ClaimPage, `${business(b)}/memory`),
+  work: (b: string) => get(WorkItems, `${business(b)}/work`),
   createWorkItem: (b: string, workItem: NewWorkItem) =>
-    post<WorkItem>(`${business(b)}/work`, workItem),
+    post(WorkItem, `${business(b)}/work`, workItem),
   updateWorkItem: (
     b: string,
     item: WorkItem,
     change: {
       state?: WorkItemState;
       owner?: string;
-      nextAction?: string;
-      waitCondition?: string | null;
-      dueAt?: string | null;
+      next_action?: string;
+      wait_condition?: string | null;
+      due_at?: string | null;
     },
   ) =>
-    post<WorkItem>(`${business(b)}/work/${item.id}`, {
-      expectedRevision: item.revision,
+    post(WorkItem, `${business(b)}/work/${item.id}`, {
+      expected_revision: item.revision,
       ...change,
     }),
   setTakeover: (b: string, id: string, takeOver: boolean) =>
-    post(`${business(b)}/work/${id}/${takeOver ? "takeover" : "release"}`),
+    post(WorkItem, `${business(b)}/work/${id}/${takeOver ? "takeover" : "release"}`),
   codingSessions: (b: string, work: string) =>
-    get<{ sessions: CodingSession[] }>(`${business(b)}/work/${work}/sessions`),
+    get(CodingSessions, `${business(b)}/work/${work}/sessions`),
   sessionTranscript: (b: string, work: string, session: string) =>
-    get<{ entries: TranscriptEntry[] }>(
-      `${business(b)}/work/${work}/sessions/${session}/transcript`,
-    ),
+    get(Transcript, `${business(b)}/work/${work}/sessions/${session}/transcript`),
   sessionDiff: (b: string, work: string, session: string) =>
-    get<WorkingDiff>(`${business(b)}/work/${work}/sessions/${session}/diff`),
+    get(WorkingDiff, `${business(b)}/work/${work}/sessions/${session}/diff`),
   steerSession: (b: string, work: string, session: string, text: string) =>
-    post<{ steered: boolean }>(`${business(b)}/work/${work}/sessions/${session}/send`, { text }),
+    post(Steered, `${business(b)}/work/${work}/sessions/${session}/send`, { text }),
   stopSession: (b: string, work: string, session: string) =>
-    post(`${business(b)}/work/${work}/sessions/${session}/interrupt`),
+    post(Interrupted, `${business(b)}/work/${work}/sessions/${session}/interrupt`),
   /** Work items that have coding sessions, newest first. */
-  codingWork: (b: string) => get<{ work: string[] }>(`${business(b)}/coding`),
+  codingWork: (b: string) => get(CodedWork, `${business(b)}/coding`),
   startCoding: (b: string, session: NewCodingSession) =>
-    post<{ work: string; codingSession: string }>(`${business(b)}/coding`, session),
+    post(CodingStarted, `${business(b)}/coding`, session),
   files: (b: string, path?: string) =>
-    get<{ root: string; path: string; entries: FileEntry[] }>(
-      `${business(b)}/files${path ? `?path=${encodeURIComponent(path)}` : ""}`,
-    ),
+    get(Folder, `${business(b)}/files${path ? `?path=${encodeURIComponent(path)}` : ""}`),
   fileText: (b: string, path: string) =>
-    get<FileText>(`${business(b)}/files/text?path=${encodeURIComponent(path)}`),
+    get(FileText, `${business(b)}/files/text?path=${encodeURIComponent(path)}`),
   /** Saves over the revision that was read; a newer file on the Mac comes back as `conflict`. */
   saveFile: async (b: string, path: string, content: string, expectedRevision: string | null) => {
-    const response = await fetch(`${business(b)}/files/text`, {
+    const url = `${business(b)}/files/text`;
+    const response = await fetch(url, {
       method: "PUT",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ path, content, expectedRevision }),
+      body: JSON.stringify({ path, content, expected_revision: expectedRevision }),
     });
-    if (response.status === 409)
-      return {
-        conflict: true as const,
-        current: ((await response.json()) as { current: FileText | null }).current,
-      };
+    if (response.status === 409) return await conflictOf(TextConflict, url, response);
     if (!response.ok)
       throw new ApiError(response.status, (await response.text()) || "The file couldn't be saved.");
-    return {
-      conflict: false as const,
-      ...((await response.json()) as { path: string; revision: string }),
-    };
+    return { conflict: false as const, ...decode(SavedFile, url, await response.json()) };
   },
   /** A file's bytes and the revision they were read at. */
   fileBytes: async (b: string, path: string) => {
@@ -518,60 +281,45 @@ export const api = {
     expectedRevision?: string | null,
   ) => {
     const revision =
-      expectedRevision === undefined ? "" : `&expectedRevision=${expectedRevision ?? "none"}`;
-    const response = await fetch(
-      `${business(b)}/files/raw?path=${encodeURIComponent(path)}${revision}`,
-      { method: "PUT", body: bytes },
-    );
-    if (response.status === 409) return { conflict: true as const };
+      expectedRevision === undefined ? "" : `&expected_revision=${expectedRevision ?? "none"}`;
+    const url = `${business(b)}/files/raw?path=${encodeURIComponent(path)}${revision}`;
+    const response = await fetch(url, { method: "PUT", body: bytes });
+    if (response.status === 409) return await conflictOf(BytesConflict, url, response);
     if (!response.ok)
       throw new ApiError(response.status, (await response.text()) || "The file couldn't be saved.");
-    return {
-      conflict: false as const,
-      ...((await response.json()) as { path: string; revision: string }),
-    };
+    return { conflict: false as const, ...decode(SavedFile, url, await response.json()) };
   },
   fileUrl: (b: string, path: string) => `${business(b)}/files/raw?path=${encodeURIComponent(path)}`,
-  commentOnFile: (
-    b: string,
-    comment: {
-      id: string;
-      path: string;
-      /** An employee's DM, or a work item's thread (addressed to its owner). */
-      employee?: string;
-      work?: string;
-      comments: { anchor: FileAnchor; text: string }[];
-    },
-  ) => post(`${business(b)}/files/comments`, comment),
-  terminals: (b: string) => get<{ terminals: TerminalSession[] }>(`${business(b)}/terminals`),
+  /** Comments sent as one message: to an employee's DM, or a work item's thread (its owner). */
+  commentOnFile: (b: string, comment: typeof FileComments.Encoded) =>
+    post(Posted, `${business(b)}/files/comments`, comment),
+  terminals: (b: string) => get(Terminals, `${business(b)}/terminals`),
   openTerminal: (b: string, open: { work?: string; resume?: string; cols: number; rows: number }) =>
-    post<TerminalSession>(`${business(b)}/terminals`, open),
-  closeTerminal: (b: string, id: string) => post(`${business(b)}/terminals/${id}/close`),
+    post(TerminalSession, `${business(b)}/terminals`, open),
+  closeTerminal: (b: string, id: string) => post(Closed, `${business(b)}/terminals/${id}/close`),
   terminalSocket: (b: string, id: string, offset: number) =>
     `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${business(b)}/terminals/${id}/socket?offset=${offset}`,
-  decisions: (b: string) => get<{ decisions: Decision[] }>(`${business(b)}/decisions`),
+  decisions: (b: string) => get(Decisions, `${business(b)}/decisions`),
   /** One work item's requests, answered ones included. */
   workDecisions: (b: string, workItem: string) =>
-    get<{ decisions: Decision[] }>(
-      `${business(b)}/decisions?workItem=${encodeURIComponent(workItem)}`,
-    ),
+    get(Decisions, `${business(b)}/decisions?work_item=${encodeURIComponent(workItem)}`),
   answer: (b: string, id: string, approve: boolean) =>
-    post(`${business(b)}/decisions/${id}/${approve ? "approve" : "reject"}`),
-  projects: (b: string) => get<{ projects: Project[] }>(`${business(b)}/projects`),
+    post(Answered, `${business(b)}/decisions/${id}/${approve ? "approve" : "reject"}`),
+  projects: (b: string) => get(Projects, `${business(b)}/projects`),
   createProject: (b: string, project: ProjectChange & { name: string }) =>
-    post<Project>(`${business(b)}/projects`, project),
+    post(Project, `${business(b)}/projects`, project),
   updateProject: (b: string, id: string, change: ProjectChange) =>
-    put(`${business(b)}/projects/${id}`, change),
+    put(Project, `${business(b)}/projects/${id}`, change),
   addToProject: (b: string, project: string, ref: Ref) =>
-    post(`${business(b)}/projects/${project}/items`, { ref }),
+    post(ProjectItem, `${business(b)}/projects/${project}/items`, { ref }),
   removeFromProject: (b: string, project: string, item: string) =>
-    post(`${business(b)}/projects/${project}/items/${item}/remove`),
-  apps: (b: string) => get<{ apps: AppEntry[] }>(`${business(b)}/apps`),
+    post(Removed, `${business(b)}/projects/${project}/items/${item}/remove`),
+  apps: (b: string) => get(Apps, `${business(b)}/apps`),
   installApp: (b: string, app: string, on: boolean) =>
-    post(`${business(b)}/apps/${app}/${on ? "install" : "uninstall"}`),
+    post(AppChanged, `${business(b)}/apps/${app}/${on ? "install" : "uninstall"}`),
   pinApp: (b: string, app: string, pinned: boolean) =>
-    post(`${business(b)}/apps/${app}/pin`, { pinned }),
-  home: (b: string) => get<Home>(`${business(b)}/home`),
+    post(AppChanged, `${business(b)}/apps/${app}/pin`, { pinned }),
+  home: (b: string) => get(Home, `${business(b)}/home`),
   artifactText: async (b: string, id: string) => {
     const response = await fetch(`${business(b)}/artifacts/${id}`);
     if (!response.ok) throw new ApiError(response.status, "This file couldn't be opened.");
@@ -579,19 +327,26 @@ export const api = {
   },
   artifactUrl: (b: string, id: string) => `${business(b)}/artifacts/${id}`,
   /** The business's browser: where it is and which work drives it. */
-  browserStatus: (b: string) => get<BrowserStatus>(`${business(b)}/browser`),
-  browserScreenshot: (b: string) =>
-    get<{ jpeg: string; width: number; height: number }>(`${business(b)}/browser/screenshot`),
+  browserStatus: (b: string) => get(BrowserStatus, `${business(b)}/browser`),
+  browserScreenshot: (b: string) => get(Screenshot, `${business(b)}/browser/screenshot`),
   browserInput: (b: string, action: OwnerInput) =>
-    post<{ url: string; title: string }>(`${business(b)}/browser/input`, action),
+    post(PageState, `${business(b)}/browser/input`, action),
   exportUrl: (b: string) => `${business(b)}/export`,
+  /** Google Drive for Documents: the connection, connecting, the picker and picked files. */
+  google: (b: string) => get(GoogleConnection, `${business(b)}/connections/google`),
+  connectGoogle: (b: string) => post(Authorization, `${business(b)}/connections/google/connect`),
+  disconnectGoogle: (b: string) =>
+    post(Disconnected, `${business(b)}/connections/google/disconnect`),
+  drivePicker: (b: string) => post(DrivePicker, `${business(b)}/connections/google/picker`),
+  selectDrive: (b: string, ids: string[]) =>
+    post(DriveSelected, `${business(b)}/connections/google/select`, { ids }),
   setBusinessLook: (b: string, look: SettableLook) =>
-    post<{ look: Look | null }>(`${business(b)}/look`, { look }),
+    post(LookChanged, `${business(b)}/look`, { look }),
   setEmployeeLook: (b: string, e: string, look: SettableLook) =>
-    post<{ look: Look | null }>(`${employee(b, e)}/look`, { look }),
+    post(LookChanged, `${employee(b, e)}/look`, { look }),
   /** Uploads a photo already downscaled by the browser; the server makes it the look. */
   uploadLookPhoto: (path: string, image: Blob) =>
-    request<{ look: Look }>(`${path}/look/photo`, {
+    request(LookChanged, `${path}/look/photo`, {
       method: "PUT",
       body: image,
       headers: { "content-type": image.type },
@@ -600,10 +355,10 @@ export const api = {
   employeePath: employee,
   profilePhotoUrl: "/api/profile/photo",
   uploadProfilePhoto: (image: Blob) =>
-    request(`/api/profile/photo`, {
+    send(`/api/profile/photo`, {
       method: "PUT",
       body: image,
       headers: { "content-type": image.type },
     }),
-  removeProfilePhoto: () => request(`/api/profile/photo`, { method: "DELETE" }),
+  removeProfilePhoto: () => send(`/api/profile/photo`, { method: "DELETE" }),
 };

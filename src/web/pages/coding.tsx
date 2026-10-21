@@ -1,17 +1,22 @@
 import { Code2, SquareTerminal } from "lucide-react";
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
-import { api, type CodingSession, type WorkItem, type TerminalSession } from "../app/api.ts";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { lazy, Suspense, useState } from "react";
+import { api } from "../app/api.ts";
+import type { LiveCodingSession } from "../../apps/code/contract.ts";
+import type { WorkItem } from "../../work/contract.ts";
 import { openTerminalWindow } from "./terminal-window.tsx";
-import { useWorkspace, valueOf } from "../app/workspace.tsx";
+import { useBusinessId, useEmployees, useWork } from "../app/data.ts";
+import { useNav } from "../app/navigation.ts";
+import { keys, poll, problemOf } from "../app/query.ts";
 import { DevysButton } from "../design/buttons.tsx";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusChip, type Tone } from "../design/primitives.tsx";
 
-export const providerName = (provider: CodingSession["provider"]) =>
+export const providerName = (provider: LiveCodingSession["provider"]) =>
   provider === "codex" ? "Codex" : "Claude Code";
 
-export const stateChip: Record<CodingSession["state"], { tone: Tone; title: string }> = {
+export const stateChip: Record<LiveCodingSession["state"], { tone: Tone; title: string }> = {
   working: { tone: "inProgress", title: "Working" },
   idle: { tone: "done", title: "Turn finished" },
   interrupted: { tone: "waiting", title: "Interrupted" },
@@ -31,27 +36,19 @@ const changeLine = (diffStat: string) =>
 
 /** Polls a work item's coding sessions while it is shown; the provider is the source. */
 function useSessions(businessId: string, workId: string) {
-  const [sessions, setSessions] = useState<CodingSession[]>([]);
-  const load = useCallback(
-    () =>
-      api
-        .codingSessions(businessId, workId)
-        .then((result) => setSessions(result.sessions))
-        .catch(() => undefined),
-    [businessId, workId],
-  );
-  useEffect(() => {
-    void load();
-    const timer = setInterval(() => void load(), 5_000);
-    return () => clearInterval(timer);
-  }, [load]);
-  return { sessions, reload: load };
+  return useQuery({
+    queryKey: keys.sessions(businessId, workId),
+    queryFn: () => api.codingSessions(businessId, workId),
+    select: (result) => result.sessions,
+    refetchInterval: poll,
+  });
 }
 
 /** The coding sessions on a work item, each opening its session view. */
 export function CodingSessions({ item }: { item: WorkItem }) {
-  const { businessId, actions } = useWorkspace();
-  const { sessions } = useSessions(businessId, item.id);
+  const businessId = useBusinessId();
+  const nav = useNav();
+  const sessions = useSessions(businessId, item.id).data ?? [];
   if (!sessions.length) return null;
   return (
     <div className="flex flex-col gap-1" data-testid="coding-sessions">
@@ -74,7 +71,7 @@ export function CodingSessions({ item }: { item: WorkItem }) {
             key={session.id}
             type="button"
             onClick={() =>
-              actions.openLayer({ kind: "session", workId: item.id, sessionId: session.id })
+              nav.openLayer({ kind: "session", workId: item.id, sessionId: session.id })
             }
             className="flex items-center gap-2 rounded-[8px] px-2 py-1.5 text-left hover:bg-sheet-tint"
           >
@@ -85,7 +82,7 @@ export function CodingSessions({ item }: { item: WorkItem }) {
                 {session.purpose === "review" ? " · review" : ""}
               </span>
               <span className="truncate text-caption text-ink-3">
-                {session.branch} · {changeLine(session.diffStat)}
+                {session.branch} · {changeLine(session.diff_stat)}
               </span>
             </span>
             <span className="ml-auto shrink-0">
@@ -102,14 +99,20 @@ export function CodingSessions({ item }: { item: WorkItem }) {
 
 /** One coding session as a layer, read live from its work item's sessions. */
 export function SessionLayer({ workId, sessionId }: { workId: string; sessionId: string }) {
-  const { businessId, work } = useWorkspace();
-  const { sessions, reload } = useSessions(businessId, workId);
-  const item = valueOf(work)?.find((w) => w.id === workId);
-  const session = sessions.find((each) => each.id === sessionId);
+  const businessId = useBusinessId();
+  const sessions = useSessions(businessId, workId);
+  const item = useWork().data?.find((w) => w.id === workId);
+  const session = sessions.data?.find((each) => each.id === sessionId);
+  if (sessions.isError)
+    return (
+      <p role="alert" className="p-4 text-body text-ink-3">
+        {problemOf(sessions.error, "This coding session is unavailable.")}
+      </p>
+    );
   if (!item || !session) return <p className="p-4 text-body text-ink-3">Loading…</p>;
   return (
     <Suspense fallback={null}>
-      <SessionView item={item} session={session} onChanged={() => void reload()} />
+      <SessionView item={item} session={session} onChanged={() => void sessions.refetch()} />
     </Suspense>
   );
 }
@@ -120,33 +123,39 @@ export function SessionLayer({ workId, sessionId }: { workId: string; sessionId:
  * verify and ship.
  */
 export function NewCodingSession({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { businessId, employees, actions } = useWorkspace();
+  const businessId = useBusinessId();
+  const employees = useEmployees();
+  const nav = useNav();
+  const client = useQueryClient();
   const engineering = employees.find((e) => e.template === "engineering") ?? employees[0];
   const [employee, setEmployee] = useState(engineering?.id ?? "");
   const [provider, setProvider] = useState<"codex" | "claude">("codex");
   const [where, setWhere] = useState<"existing" | "new">("existing");
   const [repository, setRepository] = useState("");
   const [objective, setObjective] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [clientId] = useState(() => crypto.randomUUID());
-  const start = async () => {
-    try {
-      const started = await api.startCoding(businessId, {
-        clientId,
+  const starting = useMutation({
+    mutationFn: () =>
+      api.startCoding(businessId, {
+        client_id: clientId,
         employee: employee || engineering?.id || "",
         provider,
         objective: objective.trim(),
         ...(where === "existing"
           ? { repository: repository.trim() }
-          : { newRepository: repository.trim() }),
-      });
-      actions.refresh();
-      actions.openThread(started.work);
+          : { new_repository: repository.trim() }),
+      }),
+    onSuccess: (started) => {
+      void client.invalidateQueries({ queryKey: keys.business(businessId) });
+      nav.openThread(started.work);
       onClose();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "The session couldn't start.");
-    }
-  };
+    },
+  });
+  const error = starting.isError
+    ? starting.error instanceof Error
+      ? starting.error.message
+      : "The session couldn't start."
+    : null;
   const field =
     "rounded-[8px] bg-sheet-tint px-2.5 py-1.5 text-body text-ink outline-none focus-visible:ring-2 focus-visible:ring-indigo/40";
   return (
@@ -208,7 +217,7 @@ export function NewCodingSession({ open, onClose }: { open: boolean; onClose: ()
           {error && <span className="text-detail text-ink-2">{error}</span>}
           <DevysButton
             disabled={!objective.trim() || !repository.trim()}
-            onClick={() => void start()}
+            onClick={() => starting.mutate()}
           >
             Start session
           </DevysButton>
@@ -220,19 +229,17 @@ export function NewCodingSession({ open, onClose }: { open: boolean; onClose: ()
 
 /** The business's open terminals, any of which a device can reopen; and a new one. */
 export function Terminals() {
-  const { businessId } = useWorkspace();
-  const [terminals, setTerminals] = useState<TerminalSession[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    const load = () =>
-      api
-        .terminals(businessId)
-        .then((result) => setTerminals(result.terminals.filter((t) => !t.exit)))
-        .catch(() => setTerminals([]));
-    void load();
-    const timer = setInterval(() => void load(), 10_000);
-    return () => clearInterval(timer);
-  }, [businessId]);
+  const businessId = useBusinessId();
+  const list = useQuery({
+    queryKey: keys.terminals(businessId),
+    queryFn: () => api.terminals(businessId),
+    select: (result) => result.terminals.filter((t) => !t.exit),
+    refetchInterval: 10_000,
+  });
+  const terminals = list.data ?? [];
+  const [opening, setError] = useState<string | null>(null);
+  const error =
+    opening ?? (list.isError ? problemOf(list.error, "Terminals are unavailable.") : null);
   return (
     <div className="flex flex-col gap-1.5" data-testid="terminals">
       <div className="flex items-center gap-2">

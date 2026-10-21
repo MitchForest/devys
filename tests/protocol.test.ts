@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Effect, Schema } from "effect";
 import { capability, CapabilityError, Invocation, FilePath } from "../src/protocol/capability.ts";
+import { respond } from "../src/protocol/http.ts";
 
 const input = Schema.Struct({ value: Schema.Number });
 const output = Schema.Struct({ doubled: Schema.Number });
@@ -61,4 +62,21 @@ describe("Effect capability boundary", () => {
       expect(() => Schema.decodeUnknownSync(FilePath)(path)).toThrow();
     },
   );
+});
+
+describe("wire responses", () => {
+  const Answer = Schema.Struct({ id: Schema.String, done: Schema.Boolean });
+  it("answer in exactly their schema's shape", async () => {
+    const response = respond(Answer, { id: "a", done: true }, { status: 201 });
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({ id: "a", done: true });
+  });
+  it("refuse a missing, mistyped or extra field instead of sending it", () => {
+    for (const drifted of [
+      { id: "a" },
+      { id: "a", done: "yes" },
+      { id: "a", done: true, secret: "x" },
+    ])
+      expect(() => respond(Answer, drifted as never)).toThrow();
+  });
 });

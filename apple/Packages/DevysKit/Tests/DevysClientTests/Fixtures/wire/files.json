@@ -1,0 +1,24 @@
+{
+  "root": "/Users/owner/Devys/00000000-0000-4000-8000-000000000002",
+  "path": "/Users/owner/Devys/00000000-0000-4000-8000-000000000002",
+  "entries": [
+    {
+      "name": "brief.md",
+      "path": "/Users/owner/Devys/00000000-0000-4000-8000-000000000002/brief.md",
+      "kind": "file",
+      "size": 512
+    },
+    {
+      "name": "repos",
+      "path": "/Users/owner/Devys/00000000-0000-4000-8000-000000000002/repos",
+      "kind": "directory",
+      "size": 96
+    },
+    {
+      "name": "site",
+      "path": "/Users/owner/Devys/00000000-0000-4000-8000-000000000002/site",
+      "kind": "repository",
+      "size": 160
+    }
+  ]
+}

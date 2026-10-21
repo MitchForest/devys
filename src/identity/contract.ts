@@ -1,10 +1,10 @@
-import type { RoleTemplateId } from "../protocol/roles.ts";
+import { Schema } from "effect";
+import { HireableRoleId, RoleTemplateId } from "../protocol/roles.ts";
+import { Timestamp } from "../protocol/time.ts";
 
 /** Public identity facts other components may rely on. Storage stays internal. */
-export interface Person {
-  id: string;
-  display_name: string;
-}
+export const Person = Schema.Struct({ id: Schema.String, display_name: Schema.String });
+export type Person = typeof Person.Type;
 
 export const palettes = [
   "brown",
@@ -30,45 +30,85 @@ export const shapes = [
 ] as const;
 export const tints = ["blue", "orange", "green", "purple", "pink"] as const;
 
+const FaceLook = Schema.Struct({
+  kind: Schema.Literal("face"),
+  palette: Schema.Literals(palettes),
+  shape: Schema.Literals(shapes),
+  seed: Schema.Int,
+});
+const EmojiLook = Schema.Struct({
+  kind: Schema.Literal("emoji"),
+  emoji: Schema.String,
+  tint: Schema.Literals(tints),
+});
 /**
  * How a business or employee appears, the same in every client: a Face, an emoji on a
  * tinted tile, or a photo. `version` changes with each upload so clients refetch it.
  */
-export type Look =
-  | {
-      kind: "face";
-      palette: (typeof palettes)[number];
-      shape: (typeof shapes)[number];
-      seed: number;
-    }
-  | { kind: "emoji"; emoji: string; tint: (typeof tints)[number] }
-  | { kind: "photo"; version: string };
+export const Look = Schema.Union([
+  FaceLook,
+  EmojiLook,
+  Schema.Struct({ kind: Schema.Literal("photo"), version: Schema.String }),
+]);
+export type Look = typeof Look.Type;
+/** A look a client sets directly: a Face, an emoji, or null for the default. Photos upload. */
+export type SettableLook = Exclude<Look, { kind: "photo" }> | null;
 
 /** The tenant and security boundary. */
-export interface Business {
-  id: string;
-  name: string;
+export const Business = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
   /** Null shows the business's initial on its tile. */
-  look: Look | null;
+  look: Schema.NullOr(Look),
   /** What the business does, its goals and constraints; every employee reads it. */
-  brief: string;
-}
+  brief: Schema.String,
+});
+export type Business = typeof Business.Type;
 
 /** An agent principal. It belongs to exactly one business. */
-export interface Employee {
-  id: string;
-  business_id: string;
-  name: string;
-  role: string;
+export const Employee = Schema.Struct({
+  id: Schema.String,
+  business_id: Schema.String,
+  name: Schema.String,
+  /** What the employee is accountable for, up to 2000 characters. */
+  responsibilities: Schema.String,
   /** A model id from config/models.ts, chosen when the employee is set up. */
-  model: string;
+  model: Schema.String,
   /** The role template the employee was hired from. */
-  template: RoleTemplateId;
+  template: RoleTemplateId,
   /** Paused employees take no actions until the owner resumes them. */
-  paused: boolean;
+  paused: Schema.Boolean,
   /** Null shows the employee's default Face. */
-  look: Look | null;
-}
+  look: Schema.NullOr(Look),
+});
+export type Employee = typeof Employee.Type;
+
+/** A role to hire from: copied into an ordinary employee, with its starting access. */
+export const RoleTemplate = Schema.Struct({
+  id: HireableRoleId,
+  name: Schema.String,
+  summary: Schema.String,
+  responsibilities: Schema.String,
+  /** The capabilities its employees are granted at hire. */
+  capabilities: Schema.Array(Schema.String),
+});
+export type RoleTemplate = typeof RoleTemplate.Type;
+
+/** A signed-in browser or app of a person. */
+export const Device = Schema.Struct({
+  id: Schema.String,
+  /** The name an app gave when it signed in; browsers have none. */
+  label: Schema.NullOr(Schema.String),
+  created_at: Timestamp,
+  expires_at: Timestamp,
+  /** The device this request came from. */
+  current: Schema.Boolean,
+});
+/** `GET /api/devices`. */
+export type Device = typeof Device.Type;
+export const DeviceList = Schema.Struct({ devices: Schema.Array(Device) });
+/** `POST /api/devices/codes`: a one-time code that signs in another device. */
+export const DeviceCode = Schema.Struct({ code: Schema.String, expires_at: Timestamp });
 
 /** One employee of one business: names its agent runtime and its workspace. */
 export interface Scope {

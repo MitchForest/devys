@@ -1,8 +1,11 @@
 /// <reference types="google.picker" />
 import { FileText } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { DevysButton } from "../design/buttons.tsx";
 import { EmptyNote, LiveTag, SectionHeader, StatusChip } from "../design/primitives.tsx";
+import { api } from "../app/api.ts";
+import { keys, problemOf } from "../app/query.ts";
 
 declare const gapi: {
   load(
@@ -29,41 +32,27 @@ function loadPicker() {
     document.head.appendChild(script);
   }));
 }
-interface Connection {
-  configured: boolean;
-  connected: boolean;
-  files: { id: string; name: string }[];
-}
 export function DriveConnection({ businessId }: { businessId: string }) {
-  const [connection, setConnection] = useState<Connection>();
+  const client = useQueryClient();
+  const query = useQuery({
+    queryKey: keys.google(businessId),
+    queryFn: () => api.google(businessId),
+  });
+  const connection = query.data;
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState("");
-  const refresh = useCallback(async () => {
-    const response = await fetch(`/api/businesses/${businessId}/connections/google`);
-    if (!response.ok) throw new Error("Couldn't load Google Drive connection");
-    setConnection(await response.json());
-  }, [businessId]);
-  useEffect(() => {
-    void refresh().catch((error: Error) => setNotice(error.message));
-  }, [refresh]);
-  const post = async (action: string, body?: unknown) => {
-    const response = await fetch(`/api/businesses/${businessId}/connections/google/${action}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      ...(body ? { body: JSON.stringify(body) } : {}),
-    });
-    if (!response.ok) throw new Error(await response.text());
-    return response;
-  };
+  const [said, setNotice] = useState("");
+  const notice =
+    said || (query.isError ? problemOf(query.error, "Google Drive is unavailable.") : "");
+  const refresh = () => client.invalidateQueries({ queryKey: keys.google(businessId) });
   const act = async (action: "connect" | "disconnect" | "picker") => {
     setBusy(true);
     setNotice("");
     try {
       if (action === "connect") {
-        const { url } = (await (await post(action)).json()) as { url: string };
+        const { url } = await api.connectGoogle(businessId);
         window.location.assign(url);
       } else if (action === "disconnect") {
-        const { revoked } = (await (await post(action)).json()) as { revoked: boolean };
+        const { revoked } = await api.disconnectGoogle(businessId);
         setNotice(
           revoked
             ? "Google Drive disconnected."
@@ -72,11 +61,7 @@ export function DriveConnection({ businessId }: { businessId: string }) {
         await refresh();
       } else {
         await loadPicker();
-        const { token, key, appId } = (await (await post(action)).json()) as {
-          token: string;
-          key: string;
-          appId: string;
-        };
+        const { token, key, app_id: appId } = await api.drivePicker(businessId);
         const ids = await new Promise<string[]>((resolve) => {
           const picker = new google.picker.PickerBuilder()
             .setDeveloperKey(key)
@@ -103,7 +88,7 @@ export function DriveConnection({ businessId }: { businessId: string }) {
           picker.setVisible(true);
         });
         if (ids.length) {
-          await post("select", { ids });
+          await api.selectDrive(businessId, ids);
           await refresh();
         }
       }

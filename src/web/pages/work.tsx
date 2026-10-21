@@ -9,8 +9,11 @@ import {
   Redo2,
   Undo2,
 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
-import { api, type WorkItem, type Decision } from "../app/api.ts";
+import { useQuery } from "@tanstack/react-query";
+import { useState, type ReactNode } from "react";
+import { api } from "../app/api.ts";
+import type { Decision } from "../../authority/contract.ts";
+import type { WorkItem } from "../../work/contract.ts";
 import {
   accessTitle,
   chipFor,
@@ -20,7 +23,34 @@ import {
   templateTitle,
 } from "../app/names.ts";
 import { EmployeePortrait } from "../design/portrait.tsx";
-import { useWorkspace, valueOf } from "../app/workspace.tsx";
+import {
+  useBusinessId,
+  useDecisions,
+  useEmployeeName,
+  useEmployees,
+  useMembers,
+  usePerson,
+} from "../app/data.ts";
+import { useAnswer, useTakeover, useUpdateWorkItem } from "../app/mutations.ts";
+import { useNav } from "../app/navigation.ts";
+import { keys } from "../app/query.ts";
+
+/** The owner's changes to a work item, as the menus and buttons apply them. */
+function useWorkChanges() {
+  const update = useUpdateWorkItem();
+  const takeover = useTakeover();
+  return {
+    setState: (item: WorkItem, state: WorkItem["state"]) =>
+      update.mutate({ item, change: { state }, failure: "That work item changed." }),
+    reassign: (item: WorkItem, owner: string) =>
+      update.mutate({
+        item,
+        change: { owner, state: "ready" },
+        failure: "That work couldn't be reassigned.",
+      }),
+    toggleTakeover: (item: WorkItem) => takeover.mutate(item),
+  };
+}
 import { DevysButton } from "../design/buttons.tsx";
 import { StatusChip, Card } from "../design/primitives.tsx";
 import { Field, fieldClass } from "../design/fields.tsx";
@@ -43,11 +73,11 @@ import {
 
 /** The same actions an employee has, applied by the owner at the revision on screen. */
 function WorkActions({ item, extra }: { item: WorkItem; extra?: ReactNode }) {
-  const { actions } = useWorkspace();
+  const actions = useWorkChanges();
   if (!isOpen(item.state))
     return (
       <>
-        <ContextMenuItem onClick={() => actions.setWorkItemState(item, "ready")}>
+        <ContextMenuItem onClick={() => actions.setState(item, "ready")}>
           <Undo2 /> Reopen
         </ContextMenuItem>
         {extra}
@@ -56,16 +86,16 @@ function WorkActions({ item, extra }: { item: WorkItem; extra?: ReactNode }) {
   return (
     <>
       {item.state !== "ready" && (
-        <ContextMenuItem onClick={() => actions.setWorkItemState(item, "ready")}>
+        <ContextMenuItem onClick={() => actions.setState(item, "ready")}>
           <Redo2 /> Mark ready
         </ContextMenuItem>
       )}
       {item.state !== "waiting" && (
-        <ContextMenuItem onClick={() => actions.setWorkItemState(item, "waiting")}>
+        <ContextMenuItem onClick={() => actions.setState(item, "waiting")}>
           <Clock /> Mark waiting
         </ContextMenuItem>
       )}
-      <ContextMenuItem onClick={() => actions.setWorkItemState(item, "completed")}>
+      <ContextMenuItem onClick={() => actions.setState(item, "completed")}>
         <CircleCheck /> Mark done
       </ContextMenuItem>
       <ContextMenuSeparator />
@@ -80,10 +110,7 @@ function WorkActions({ item, extra }: { item: WorkItem; extra?: ReactNode }) {
           </>
         )}
       </ContextMenuItem>
-      <ContextMenuItem
-        variant="destructive"
-        onClick={() => actions.setWorkItemState(item, "cancelled")}
-      >
+      <ContextMenuItem variant="destructive" onClick={() => actions.setState(item, "cancelled")}>
         <CircleX /> Cancel
       </ContextMenuItem>
       {extra}
@@ -124,7 +151,10 @@ export function WorkRow({
   /** In a panel: smaller, flush with the panel's edge. */
   compact?: boolean;
 }) {
-  const { employeeName, actions, person, members } = useWorkspace();
+  const employeeName = useEmployeeName();
+  const nav = useNav();
+  const person = usePerson();
+  const members = useMembers();
   const takeover = takeoverTitle(item.taken_over_by, person?.id, members);
   const owner = employeeName(item.owner_employee_id);
   const done = item.evidence[item.evidence.length - 1];
@@ -141,7 +171,7 @@ export function WorkRow({
     <WithWorkActions item={item} extra={extra}>
       <button
         type="button"
-        onClick={() => actions.openThread(item.id)}
+        onClick={() => nav.openThread(item.id)}
         className={
           compact
             ? "-mx-2 flex w-[calc(100%+16px)] items-center gap-2.5 rounded-[9px] px-2 py-1.5 text-left transition-colors duration-150 hover:bg-sheet-tint"
@@ -205,7 +235,8 @@ export function decisionTitle(decision: Decision) {
 
 /** One exact request: who asked, what they will do, and the input it will run with. */
 export function DecisionCard({ decision }: { decision: Decision }) {
-  const { actions, employeeName } = useWorkspace();
+  const employeeName = useEmployeeName();
+  const answer = useAnswer();
   return (
     <Card>
       <div className="flex flex-col items-start gap-2.5">
@@ -227,12 +258,14 @@ export function DecisionCard({ decision }: { decision: Decision }) {
         <div className="flex gap-2 pt-0.5">
           <DevysButton
             kind="aurora"
-            onClick={() => actions.answer(decision.id, true)}
+            onClick={() => answer.mutate({ id: decision.id, approve: true })}
             title="Allows this exact request once. Face ID signing arrives with signed decisions."
           >
             <Check /> Approve
           </DevysButton>
-          <DevysButton onClick={() => actions.answer(decision.id, false)}>Decline</DevysButton>
+          <DevysButton onClick={() => answer.mutate({ id: decision.id, approve: false })}>
+            Decline
+          </DevysButton>
         </div>
       </div>
     </Card>
@@ -253,7 +286,7 @@ const dateField = (due: string | null) => {
  * screen. If someone changed the item meanwhile, the latest loads and the draft stays to save again.
  */
 function WorkPlan({ item, editable }: { item: WorkItem; editable: boolean }) {
-  const { actions } = useWorkspace();
+  const update = useUpdateWorkItem();
   const [editing, setEditing] = useState(false);
   const [next, setNext] = useState("");
   const [waiting, setWaiting] = useState("");
@@ -269,15 +302,20 @@ function WorkPlan({ item, editable }: { item: WorkItem; editable: boolean }) {
   };
   const save = async () => {
     const change = {
-      ...(next.trim() !== item.next_action ? { nextAction: next.trim() } : {}),
+      ...(next.trim() !== item.next_action ? { next_action: next.trim() } : {}),
       ...(waiting.trim() !== (item.wait_condition ?? "")
-        ? { waitCondition: waiting.trim() || null }
+        ? { wait_condition: waiting.trim() || null }
         : {}),
-      ...(due !== dateField(item.due_at) ? { dueAt: due ? endOfDay(due) : null } : {}),
+      ...(due !== dateField(item.due_at) ? { due_at: due ? endOfDay(due) : null } : {}),
     };
     if (Object.keys(change).length === 0) return setEditing(false);
     setBusy(true);
-    const saved = await actions.editWorkItem(item, change);
+    const saved = await update
+      .mutateAsync({ item, change, failure: "That work couldn't be saved." })
+      .then(
+        () => true,
+        () => false,
+      );
     setBusy(false);
     if (saved) setEditing(false);
     else
@@ -367,19 +405,14 @@ function WorkPlan({ item, editable }: { item: WorkItem; editable: boolean }) {
 
 /** A work item's answered requests, reloaded when the item changes. */
 function useAnswered(item: WorkItem) {
-  const { businessId } = useWorkspace();
-  const [answered, setAnswered] = useState<Decision[]>([]);
-  useEffect(() => {
-    let live = true;
-    api
-      .workDecisions(businessId, item.id)
-      .then((result) => live && setAnswered(result.decisions.filter((d) => d.status !== "pending")))
-      .catch(() => undefined);
-    return () => {
-      live = false;
-    };
-  }, [businessId, item.id, item.revision]);
-  return answered;
+  const businessId = useBusinessId();
+  return (
+    useQuery({
+      queryKey: keys.workDecisions(businessId, item.id, item.revision),
+      queryFn: () => api.workDecisions(businessId, item.id),
+      select: (result) => result.decisions.filter((d) => d.status !== "pending"),
+    }).data ?? []
+  );
 }
 
 /**
@@ -387,9 +420,14 @@ function useAnswered(item: WorkItem) {
  * next, its evidence and decisions, with takeover and handing it to another employee.
  */
 export function WorkDetail({ item }: { item: WorkItem }) {
-  const { employees, actions, employeeName, person, members, decisions } = useWorkspace();
+  const employees = useEmployees();
+  const actions = useWorkChanges();
+  const employeeName = useEmployeeName();
+  const person = usePerson();
+  const members = useMembers();
+  const decisions = useDecisions().data;
   const takeover = takeoverTitle(item.taken_over_by, person?.id, members);
-  const waiting = (valueOf(decisions) ?? []).filter((d) => d.work_item_id === item.id);
+  const waiting = (decisions ?? []).filter((d) => d.work_item_id === item.id);
   const answered = useAnswered(item);
   const owner = employees.find((e) => e.id === item.owner_employee_id);
   const chip = chipFor(item.state);
@@ -449,11 +487,11 @@ export function WorkDetail({ item }: { item: WorkItem }) {
       <div className="flex flex-wrap gap-1.5">
         {open ? (
           <>
-            <DevysButton compact onClick={() => actions.setWorkItemState(item, "completed")}>
+            <DevysButton compact onClick={() => actions.setState(item, "completed")}>
               <CircleCheck /> Mark done
             </DevysButton>
             {item.state !== "waiting" && (
-              <DevysButton compact onClick={() => actions.setWorkItemState(item, "waiting")}>
+              <DevysButton compact onClick={() => actions.setState(item, "waiting")}>
                 <Clock /> Waiting
               </DevysButton>
             )}
@@ -468,16 +506,12 @@ export function WorkDetail({ item }: { item: WorkItem }) {
                 </>
               )}
             </DevysButton>
-            <DevysButton
-              kind="quiet"
-              compact
-              onClick={() => actions.setWorkItemState(item, "cancelled")}
-            >
+            <DevysButton kind="quiet" compact onClick={() => actions.setState(item, "cancelled")}>
               <CircleX /> Cancel
             </DevysButton>
           </>
         ) : (
-          <DevysButton compact onClick={() => actions.setWorkItemState(item, "ready")}>
+          <DevysButton compact onClick={() => actions.setState(item, "ready")}>
             <Undo2 /> Reopen
           </DevysButton>
         )}
@@ -515,7 +549,7 @@ export function WorkDetail({ item }: { item: WorkItem }) {
  * opens the full record; otherwise the evidence notes themselves.
  */
 function Evidence({ item }: { item: WorkItem }) {
-  const { employeeName } = useWorkspace();
+  const employeeName = useEmployeeName();
   const [open, setOpen] = useState(false);
   const outcome = outcomeOf(item.evidence);
   if (!item.evidence.length) return null;

@@ -145,7 +145,7 @@ private struct EditableName: View {
         editing = false
         let next = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !next.isEmpty, next != employee.name, next.count <= 80 else { return }
-        store.send(.profileSaved(employee.id, name: next, responsibilities: employee.role))
+        store.send(.profileSaved(employee.id, name: next, responsibilities: employee.responsibilities))
     }
 }
 
@@ -156,7 +156,7 @@ private struct ResponsibilitiesEditor: View {
     @State private var text = ""
 
     var body: some View {
-        let changed = text.trimmingCharacters(in: .whitespacesAndNewlines) != employee.role.trimmingCharacters(in: .whitespacesAndNewlines)
+        let changed = text.trimmingCharacters(in: .whitespacesAndNewlines) != employee.responsibilities.trimmingCharacters(in: .whitespacesAndNewlines)
         VStack(alignment: .leading, spacing: 8) {
             Text("Accountable for").font(DevysTypography.label).foregroundStyle(DevysColors.ink3)
             FieldBox { TextField("What they're accountable for", text: $text, axis: .vertical).lineLimit(4...12) }
@@ -164,7 +164,7 @@ private struct ResponsibilitiesEditor: View {
                 Text("\(text.count) of 2000 characters").font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
                 Spacer(minLength: 4)
                 if changed {
-                    Button("Discard") { text = employee.role }.buttonStyle(DevysButtonStyle(.quiet, compact: true))
+                    Button("Discard") { text = employee.responsibilities }.buttonStyle(DevysButtonStyle(.quiet, compact: true))
                 }
                 Button("Save responsibilities") {
                     store.send(.profileSaved(employee.id, name: employee.name, responsibilities: text.trimmingCharacters(in: .whitespacesAndNewlines)))
@@ -173,7 +173,7 @@ private struct ResponsibilitiesEditor: View {
                 .disabled(!changed || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || text.count > 2000)
             }
         }
-        .onAppear { text = employee.role }
+        .onAppear { text = employee.responsibilities }
     }
 }
 

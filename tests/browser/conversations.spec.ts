@@ -16,8 +16,8 @@ test("a direct chat is the middle; who answers follows replies and @mentions; re
   const direct = `direct:${owner.operations}`;
   try {
     await signIn(page, sql, owner.person);
-    await expect(sidebar(page).getByRole("button", { name: "Growth" })).toBeVisible();
-    await sidebar(page).getByRole("button", { name: "Head of Operations" }).click();
+    await expect(sidebar(page).getByRole("link", { name: "Growth" })).toBeVisible();
+    await sidebar(page).getByRole("link", { name: "Head of Operations" }).click();
     await expect(page.getByTestId("place-title")).toHaveText("Head of Operations");
     const field = page.getByLabel("Message Head of Operations");
     await expect(field).toBeVisible();
@@ -73,7 +73,7 @@ test("a direct chat is the middle; who answers follows replies and @mentions; re
     await expect.poll(() => sent.length).toBe(2);
     expect(sent[1]!.body).toMatchObject({
       text: "Start with the pricing page.",
-      replyTo: answer,
+      reply_to: answer,
     });
 
     // @-autocomplete inserts the name and mentions Growth, who then answers.
@@ -130,7 +130,7 @@ test("a project opens on its channel; a hand-off card opens the thread; Back and
   const workItem = await post<{ id: string }>(`${path}/work`, {
     title: "Write a tagline",
     owner: growth.id,
-    projectId: project.id,
+    project_id: project.id,
   });
   const channel = `project:${project.id}`;
   await insertMessage(sql, owner.business, channel, {
@@ -148,7 +148,7 @@ test("a project opens on its channel; a hand-off card opens the thread; Back and
     await signIn(page, sql, owner.person);
 
     // Unread messages show on the project in the sidebar.
-    const row = sidebar(page).getByRole("button", { name: /^Launch/ });
+    const row = sidebar(page).getByRole("link", { name: /^Launch/ });
     await expect(row).toHaveAccessibleName("Launch, 2 unread");
     await expect(row.getByTestId("unread")).toHaveText("2");
 
@@ -175,22 +175,31 @@ test("a project opens on its channel; a hand-off card opens the thread; Back and
       )
       .toBe(0);
     await page.reload();
-    await expect(sidebar(page).getByRole("button", { name: /^Launch/ })).toHaveAccessibleName(
+    await expect(sidebar(page).getByRole("link", { name: /^Launch/ })).toHaveAccessibleName(
       "Launch",
     );
 
     // The hand-off card moves the middle into the work item's thread; its card is the panel.
     await sidebar(page)
-      .getByRole("button", { name: /^Launch/ })
+      .getByRole("link", { name: /^Launch/ })
       .click();
     await page.getByTestId("handoff").click();
     await expect(page.getByTestId("place-title")).toHaveText("Write a tagline");
     await expect(
-      page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("button", { name: "Launch" }),
+      page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Launch" }),
     ).toBeVisible();
     const card = page.getByRole("region", { name: "Work item" });
     await expect(card.getByTestId("panel-title")).toHaveText("Write a tagline");
     await expect(card.getByTestId("work-item-owner")).toHaveText("Growth");
+    // The thread is an address: a reload keeps it and its Back; the browser's Back leaves it.
+    await expect(page).toHaveURL(`/${owner.business}/thread/${workItem.id}`);
+    await page.reload();
+    await expect(page.getByTestId("place-title")).toHaveText("Write a tagline");
+    await page.goBack();
+    await expect(page.getByTestId("place-title")).toHaveText("Launch");
+    await page.goForward();
+    await expect(page.getByTestId("place-title")).toHaveText("Write a tagline");
+    await expect(page.getByRole("button", { name: "Back (⌘[)" })).toBeVisible();
     await expect(page.getByText("Growth, can you write the tagline?")).toHaveCount(0);
     await insertMessage(sql, owner.business, `work:${workItem.id}`, {
       author: `employee:${growth.id}`,

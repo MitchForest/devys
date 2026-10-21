@@ -5,6 +5,7 @@ import SwiftUI
 /// width (iPhone, narrow iPad) gets tabs with full-screen conversations.
 struct WorkspaceScreen: View {
     let store: StoreOf<Workspace>
+    @Environment(\.scenePhase) private var scenePhase
 
     #if os(iOS)
         @Environment(\.horizontalSizeClass) private var sizeClass
@@ -12,6 +13,7 @@ struct WorkspaceScreen: View {
 
     var body: some View {
         shell.modifier(WorkspaceSheets(store: store))
+            .onChange(of: scenePhase, initial: true) { _, phase in store.send(.activeChanged(phase == .active)) }
     }
 
     @ViewBuilder private var shell: some View {

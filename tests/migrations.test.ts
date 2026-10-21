@@ -7,6 +7,7 @@ const name = "devys_migration_test";
 const projects = "20261023000000_projects";
 const refs = "20261024000000_refs";
 const names = "20261025000000_names";
+const wire = "20261027000000_wire";
 const migrations = readdirSync("migrations").sort();
 const apply = (client: pg.Client, only: (migration: string) => boolean) =>
   migrations
@@ -180,7 +181,7 @@ it("AL2 names work items and coding sessions, and reissues the work grants under
     ('g3', 'b1', 'ops', 'commitmentList', 'auto'), ('g4', 'b1', 'ops', 'commitmentComplete', 'ask')`);
   await q("UPDATE assignments SET session_id = 'thread-1', worktree = '/w' WHERE id = 's1'");
 
-  await apply(client, (migration) => migration >= names);
+  await apply(client, (migration) => migration >= names && migration < wire);
 
   expect(
     (await q("SELECT id, work_item_id, provider_session_id FROM coding_sessions")).rows,
@@ -207,4 +208,74 @@ it("AL2 names work items and coding sessions, and reissues the work grants under
       "INSERT INTO coding_sessions (id, business_id, work_item_id, employee_id, provider, purpose, objective) VALUES ('s2', 'b1', 'w-missing', 'ops', 'codex', 'build', 'Build')",
     ),
   ).rejects.toThrow();
+});
+
+it("AL4 names responsibilities and writes stored evidence in the API's names and timestamp form", async () => {
+  const q = (text: string, values: unknown[] = []) => client.query(text, values);
+  // Evidence written by Postgres's JSON form: the session offset and a short fraction.
+  await q(`UPDATE work_items SET evidence = $1::jsonb WHERE id = 'w-both'`, [
+    JSON.stringify([
+      { by: "devys", note: "Committed", at: "2026-10-21T11:30:00.12+02:00", commit: "a" },
+      {
+        by: "devys",
+        note: "Checked",
+        at: "2026-10-21T09:31:00+00:00",
+        commit: "a",
+        check: { command: "bun test", exitCode: 0 },
+      },
+      { by: "devys", note: "Published", at: "2026-10-21T09:32:05.5-00:00", pullRequest: "u" },
+    ]),
+  ]);
+  const evidence = { id: "web:1", kind: "owner", observedAt: "2026-10-20T08:00:00.000Z" };
+  await q(
+    `INSERT INTO memories (scope_id, key, content, source_operation_id, source_kind, details)
+     VALUES ('b1', 'area', 'North side', 'op', 'user', $1::jsonb)`,
+    [
+      JSON.stringify({
+        subject: "owner",
+        scope: "unspecified",
+        validFrom: "2026-10-01T00:00:00.000Z",
+        validUntil: null,
+        evidence: [evidence],
+        relations: [],
+      }),
+    ],
+  );
+  await q(
+    `INSERT INTO memory_links (scope_id, key, source_id, evidence) VALUES ('b1', 'area', 'web:1', $1::jsonb)`,
+    [JSON.stringify(evidence)],
+  );
+
+  await apply(client, (migration) => migration >= wire);
+
+  expect((await q("SELECT responsibilities FROM employees WHERE id = 'ops'")).rows).toEqual([
+    { responsibilities: "Runs it" },
+  ]);
+  expect((await q("SELECT evidence FROM work_items WHERE id = 'w-both'")).rows[0].evidence).toEqual(
+    [
+      { by: "devys", note: "Committed", at: "2026-10-21T09:30:00.120Z", commit: "a" },
+      {
+        by: "devys",
+        note: "Checked",
+        at: "2026-10-21T09:31:00.000Z",
+        commit: "a",
+        check: { command: "bun test", exit_code: 0 },
+      },
+      { by: "devys", note: "Published", at: "2026-10-21T09:32:05.500Z", pull_request: "u" },
+    ],
+  );
+  expect((await q("SELECT evidence FROM work_items WHERE id = 'w-none'")).rows[0].evidence).toEqual(
+    [],
+  );
+  const observed = { id: "web:1", kind: "owner", observed_at: "2026-10-20T08:00:00.000Z" };
+  expect((await q("SELECT details FROM memories WHERE key = 'area'")).rows[0].details).toEqual({
+    subject: "owner",
+    scope: "unspecified",
+    valid_from: "2026-10-01T00:00:00.000Z",
+    valid_until: null,
+    evidence: [observed],
+    relations: [],
+  });
+  expect((await q("SELECT evidence FROM memory_links")).rows).toEqual([{ evidence: observed }]);
+  await expect(q("UPDATE employees SET responsibilities = '' WHERE id = 'ops'")).rejects.toThrow();
 });

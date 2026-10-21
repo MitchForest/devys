@@ -148,12 +148,12 @@ extension Workspace {
         let current = state.snapshot.employees[index]
         let change = ProfileChange(
             name: name == current.name ? nil : String(name.prefix(80)),
-            responsibilities: responsibilities == current.role ? nil : String(responsibilities.prefix(2000))
+            responsibilities: responsibilities == current.responsibilities ? nil : String(responsibilities.prefix(2000))
         )
         guard change.name != nil || change.responsibilities != nil else { return }
         state.snapshot.employees[index].name = change.name ?? current.name
-        state.snapshot.employees[index].role = change.responsibilities ?? current.role
-        state.snapshot.employees[index].summary = state.snapshot.employees[index].role
+        state.snapshot.employees[index].responsibilities = change.responsibilities ?? current.responsibilities
+        state.snapshot.employees[index].summary = state.snapshot.employees[index].responsibilities
         let runtime = runtime
         let businessID = state.businessID
         store.addTask {

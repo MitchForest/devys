@@ -30,7 +30,7 @@ struct TeamAPITests {
     @Test("Enrollment sends the device's name with the code")
     func enrollWithName() async throws {
         let recorder = Recorder()
-        _ = try await api(body: #"{"sessionToken":"abc"}"#, recorder: recorder).enroll(server: Self.server, code: "f00d", name: "Mitch's iPad")
+        _ = try await api(body: #"{"session_token":"abc"}"#, recorder: recorder).enroll(server: Self.server, code: "f00d", name: "Mitch's iPad")
         let (_, body) = try await sent(recorder)
         #expect(body["token"] as? String == "f00d")
         #expect(body["name"] as? String == "Mitch's iPad")
@@ -53,7 +53,7 @@ struct TeamAPITests {
         #expect(await recorder.requests.last?.url?.path() == "/api/devices")
 
         let hex = String(repeating: "ab", count: 32)
-        let code = try await api(status: 201, body: #"{"code":"\#(hex)","expiresAt":"2026-10-19T15:10:00.000Z"}"#, recorder: recorder)
+        let code = try await api(status: 201, body: #"{"code":"\#(hex)","expires_at":"2026-10-19T15:10:00.000Z"}"#, recorder: recorder)
             .issueDeviceCode(Self.session)
         #expect(code.code == hex && code.server == Self.server)
         #expect(code.link == EnrollLink(server: Self.server, code: hex))
@@ -118,10 +118,10 @@ struct TeamAPITests {
         let recorder = Recorder()
         let employee = try await api(
             status: 201,
-            body: #"{"id":"e9","business_id":"b1","name":"Growth","role":"Grows it.","model":"gpt-6.1-sol","template":"growth","paused":false,"look":null}"#,
+            body: #"{"id":"e9","business_id":"b1","name":"Growth","responsibilities":"Grows it.","model":"gpt-6.1-sol","template":"growth","paused":false,"look":null}"#,
             recorder: recorder
         ).hire(Self.session, businessID: "b1", Hire(template: "growth", name: "Growth", responsibilities: "Grows it.", model: "gpt-6.1-sol"))
-        #expect(employee.template == "growth" && employee.role == "Grows it.")
+        #expect(employee.template == "growth" && employee.responsibilities == "Grows it.")
         let (request, body) = try await sent(recorder)
         #expect(request.url?.path() == "/api/businesses/b1/employees" && request.httpMethod == "POST")
         #expect(body["template"] as? String == "growth")
@@ -137,12 +137,12 @@ struct TeamAPITests {
         #expect(request.httpMethod == "PUT" && request.url?.path() == "/api/businesses/b1/employees/e1/profile")
         #expect(body["name"] as? String == "Ada" && body["responsibilities"] == nil)
 
-        let successor = try await api(body: #"{"retired":true,"reassignedTo":"ops"}"#, recorder: recorder)
+        let successor = try await api(body: #"{"retired":true,"reassigned_to":"ops"}"#, recorder: recorder)
             .retire(Self.session, Self.scope, reassignTo: "ops")
         #expect(successor == "ops")
         (request, body) = try await sent(recorder)
         #expect(request.url?.path() == "/api/businesses/b1/employees/e1/retire")
-        #expect(body["reassignTo"] as? String == "ops")
+        #expect(body["reassign_to"] as? String == "ops")
         await #expect(throws: DevysHTTPError.rejected(status: 409, message: "The Head of Operations can't be retired")) {
             try await api(status: 409, body: "The Head of Operations can't be retired", recorder: recorder)
                 .retire(Self.session, Self.scope, reassignTo: "e2")
@@ -176,7 +176,7 @@ struct TeamAPITests {
         #expect(await recorder.requests.last?.url?.path() == "/api/businesses/b1/projects")
     }
 
-    @Test("Creating and editing a project send every field; nil clears a goal, deadline or budget")
+    @Test("Creating a project sends every field; keeping and removing a record post to the project")
     func projectChanges() async throws {
         let recorder = Recorder()
         let created = try await api(status: 201, body: #"{"id":"p3","name":"Launch","goal":null,"deadline":null,"budget":null,"lead_employee_id":"ops","member_ids":[],"items":[]}"#, recorder: recorder)
@@ -186,12 +186,6 @@ struct TeamAPITests {
         #expect(request.httpMethod == "POST" && request.url?.path() == "/api/businesses/b1/projects")
         #expect(body["goal"] is NSNull && body["deadline"] as? String == "2026-11-30" && body["lead"] == nil)
         #expect((body["budget"] as? [String: Any])?["cents"] as? Int == 1_200 && body["members"] as? [String] == ["growth"])
-
-        try await api(body: "{}", recorder: recorder)
-            .updateProject(Self.session, businessID: "b1", projectID: "p3", ProjectChange(name: "Launch", goal: "Ship", lead: "growth"))
-        (request, body) = try await sent(recorder)
-        #expect(request.httpMethod == "PUT" && request.url?.path() == "/api/businesses/b1/projects/p3")
-        #expect(body["goal"] as? String == "Ship" && body["lead"] as? String == "growth" && body["budget"] is NSNull)
 
         try await api(body: "{}", recorder: recorder).addToProject(Self.session, businessID: "b1", projectID: "p3", ref: .artifact("a1"))
         (request, body) = try await sent(recorder)
@@ -206,11 +200,11 @@ struct TeamAPITests {
         let recorder = Recorder()
         let apps = try await api(
             body: """
-            {"apps":[{"id":"documents","name":"Documents","icon":"file-text","summary":"Pages and files","kind":"business","status":"available",
+            {"apps":[{"id":"documents","name":"Documents","icon":"file-text","summary":"Pages and files","kind":"business","status":"available","records":[],
               "skills":[{"name":"pages","description":"Publish a page"}],"installed":true,"pinned":true,"visible":true},
-             {"id":"memory","name":"Memory","icon":"brain","summary":"What employees remember","kind":"system","status":"available",
+             {"id":"memory","name":"Memory","icon":"brain","summary":"What employees remember","kind":"system","status":"available","records":[],
               "skills":[],"installed":true,"pinned":false,"visible":false},
-             {"id":"mail","name":"Mail","icon":"mail","summary":"Mailboxes","kind":"business","status":"coming","skills":[],"installed":false,"pinned":false,"visible":false}]}
+             {"id":"mail","name":"Mail","icon":"mail","summary":"Mailboxes","kind":"business","status":"coming","records":[],"skills":[],"installed":false,"pinned":false,"visible":false}]}
             """,
             recorder: recorder
         ).apps(Self.session, businessID: "b1")
@@ -230,10 +224,10 @@ struct TeamAPITests {
         let recorder = Recorder()
         let home = try await api(
             body: """
-            {"needsYou":[{"kind":"decision","id":"d1","title":"Buy domain","employeeId":"growth","workId":"c1","projectId":"p1"},
-             {"kind":"work","id":"c2","title":"Decide pricing","employeeId":null,"workId":"c2","projectId":null}],
-             "glance":{"moving":[{"id":"c3","title":"Fix sitemap","employeeId":"engineering","projectId":"p1","state":"in_progress",
-              "waitCondition":null,"dueAt":null,"updatedAt":"2026-10-20T10:00:00.000Z"}],"stuck":[],"spentCents":3800}}
+            {"needs_you":[{"kind":"decision","id":"d1","title":"Buy domain","employee_id":"growth","work_id":"c1","project_id":"p1"},
+             {"kind":"work","id":"c2","title":"Decide pricing","employee_id":null,"work_id":"c2","project_id":null}],
+             "glance":{"moving":[{"id":"c3","title":"Fix sitemap","employee_id":"engineering","project_id":"p1","state":"in_progress",
+              "wait_condition":null,"due_at":null,"updated_at":"2026-10-20T10:00:00.000Z"}],"stuck":[],"spent_cents":3800}}
             """,
             recorder: recorder
         ).home(Self.session, businessID: "b1")
@@ -255,31 +249,31 @@ struct TeamAPITests {
         let created = try await api(status: 201, body: workItem, recorder: recorder).createWorkItem(
             Self.session,
             businessID: "b1",
-            NewWorkItem(title: "PR inquiry", owner: "growth", objective: "Ten units", dueAt: "2026-10-20T15:00:00Z", projectId: "p1")
+            NewWorkItem(title: "PR inquiry", owner: "growth", objective: "Ten units", dueAt: "2026-10-20T15:00:00Z", projectID: "p1")
         )
         #expect(created.revision == 4 && created.projectID == "p1")
         var (request, body) = try await sent(recorder)
         #expect(request.url?.path() == "/api/businesses/b1/work" && request.httpMethod == "POST")
-        #expect(body["projectId"] as? String == "p1" && body["dueAt"] as? String == "2026-10-20T15:00:00Z" && body["objective"] as? String == "Ten units")
+        #expect(body["project_id"] as? String == "p1" && body["due_at"] as? String == "2026-10-20T15:00:00Z" && body["objective"] as? String == "Ten units")
 
         _ = try await api(body: workItem, recorder: recorder)
             .updateWorkItem(Self.session, businessID: "b1", id: "c1", .reassign(created, to: "ops"))
         (request, body) = try await sent(recorder)
         #expect(request.url?.path() == "/api/businesses/b1/work/c1")
-        #expect(body["expectedRevision"] as? Int == 4 && body["owner"] as? String == "ops" && body["state"] as? String == "ready")
-        #expect(body.keys.sorted() == ["expectedRevision", "owner", "state"])
+        #expect(body["expected_revision"] as? Int == 4 && body["owner"] as? String == "ops" && body["state"] as? String == "ready")
+        #expect(body.keys.sorted() == ["expected_revision", "owner", "state"])
 
         _ = try await api(body: workItem, recorder: recorder)
             .updateWorkItem(Self.session, businessID: "b1", id: "c1", WorkItemChange(expectedRevision: 4, waitCondition: .set("Supplier"), dueAt: .clear))
         (_, body) = try await sent(recorder)
-        #expect(body["waitCondition"] as? String == "Supplier")
-        #expect(body["dueAt"] is NSNull)
+        #expect(body["wait_condition"] as? String == "Supplier")
+        #expect(body["due_at"] is NSNull)
 
-        let listed = try await api(body: #"{"workItems":[\#(workItem)]}"#, recorder: recorder).work(Self.session, businessID: "b1")
+        let listed = try await api(body: #"{"work_items":[\#(workItem)]}"#, recorder: recorder).work(Self.session, businessID: "b1")
         #expect(listed.map(\.id) == ["c1"])
     }
 
-    @Test("A work item's decisions are asked for by workItem and name it")
+    @Test("A work item's decisions are asked for by work_item and name it")
     func workDecisions() async throws {
         let recorder = Recorder()
         let page = """
@@ -289,7 +283,7 @@ struct TeamAPITests {
         let decisions = try await api(body: page, recorder: recorder).decisions(Self.session, businessID: "b1", workItemID: "c1")
         #expect(decisions.first?.workItemID == "c1")
         let url = try #require(await recorder.requests.last?.url)
-        #expect(url.path() == "/api/businesses/b1/decisions" && url.query() == "workItem=c1")
+        #expect(url.path() == "/api/businesses/b1/decisions" && url.query() == "work_item=c1")
     }
 
     @Test("Google Drive's connection state decodes and ignores the file list")

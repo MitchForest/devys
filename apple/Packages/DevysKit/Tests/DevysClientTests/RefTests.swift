@@ -24,15 +24,12 @@ struct RefTests {
         #expect(Ref("devys:work/item/w1") == .workItem("w1") && Ref("devys:work/item/w1")?.app == "work")
     }
 
-    @Test("Parsing is strict: only the closed kinds, a non-empty id in the encoding a ref gives it")
+    @Test("Parsing is strict about the form: a non-empty id in the encoding a ref gives it")
     func rejects() {
         for value in [
             "artifact:123",
             "123",
             "devys:documents/artifact/",
-            "devys:documents/page/1",
-            "devys:code/item/1",
-            "devys:mail/thread/1",
             "devys:documents/file//Users/o",
             "devys:documents/file/a%2",
             "devys:documents/file/a%2fb",
@@ -40,12 +37,25 @@ struct RefTests {
             "devys:Documents/artifact/1",
             "devys:documents/artifact/1/2",
             " devys:work/item/1",
-            "devys:work/session/1",
             "devys:documents/file/a%+Fb",
             "devys:documents/file/%C3",
             "devys:documents/file/ü"
         ] {
             #expect(Ref(value) == nil, "\(value)")
+        }
+    }
+
+    @Test("A kind this client does not know is kept as unknown, never dropped or misread")
+    func unknownKinds() {
+        for (value, app, kind) in [
+            ("devys:documents/page/1", "documents", "page"),
+            ("devys:code/item/1", "code", "item"),
+            ("devys:mail/thread/1", "mail", "thread"),
+            ("devys:work/session/1", "work", "session")
+        ] {
+            let ref = Ref(value)
+            #expect(ref == .unknown(app: app, kind: kind, id: "1"), "\(value)")
+            #expect(ref?.description == value && ref?.recordKind == "\(app)/\(kind)")
         }
     }
 

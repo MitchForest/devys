@@ -1,0 +1,579 @@
+{
+  "apps": [
+    {
+      "id": "computer",
+      "name": "Computer",
+      "icon": "desktopcomputer",
+      "summary": "Commands, files, PDFs and skills where each employee works.",
+      "kind": "system",
+      "status": "available",
+      "records": [],
+      "capabilities": [
+        "run",
+        "read",
+        "write",
+        "printPdf",
+        "importAttachment",
+        "readSkill"
+      ],
+      "skills": [],
+      "connections": [],
+      "appears": "never",
+      "default_grants": {
+        "operations": [
+          "run",
+          "read",
+          "write",
+          "printPdf",
+          "importAttachment",
+          "readSkill"
+        ],
+        "engineering": [
+          "run",
+          "read",
+          "write",
+          "printPdf",
+          "importAttachment",
+          "readSkill"
+        ],
+        "growth": [
+          "run",
+          "read",
+          "write",
+          "printPdf",
+          "importAttachment",
+          "readSkill"
+        ],
+        "business-operations": [
+          "run",
+          "read",
+          "write",
+          "printPdf",
+          "importAttachment",
+          "readSkill"
+        ],
+        "custom": [
+          "run",
+          "read",
+          "write",
+          "readSkill"
+        ]
+      },
+      "installed": true,
+      "pinned": false,
+      "visible": false
+    },
+    {
+      "id": "browser",
+      "name": "Browser",
+      "icon": "safari",
+      "summary": "The business's own browser: open, read, click, type and press keys.",
+      "kind": "system",
+      "status": "available",
+      "records": [],
+      "capabilities": [
+        "browserOpen",
+        "browserRead",
+        "browserClick",
+        "browserType",
+        "browserPress"
+      ],
+      "skills": [],
+      "connections": [],
+      "appears": "never",
+      "default_grants": {
+        "operations": [
+          "browserOpen",
+          "browserRead",
+          "browserClick",
+          "browserType",
+          "browserPress"
+        ],
+        "engineering": [
+          "browserOpen",
+          "browserRead",
+          "browserClick",
+          "browserType",
+          "browserPress"
+        ],
+        "growth": [
+          "browserOpen",
+          "browserRead",
+          "browserClick",
+          "browserType",
+          "browserPress"
+        ],
+        "business-operations": [
+          "browserOpen",
+          "browserRead",
+          "browserClick",
+          "browserType",
+          "browserPress"
+        ]
+      },
+      "installed": true,
+      "pinned": false,
+      "visible": false
+    },
+    {
+      "id": "web",
+      "name": "Web",
+      "icon": "network",
+      "summary": "Reads public web pages.",
+      "kind": "system",
+      "status": "available",
+      "records": [],
+      "capabilities": [
+        "readPublicUrl"
+      ],
+      "skills": [],
+      "connections": [],
+      "appears": "never",
+      "default_grants": {
+        "operations": [
+          "readPublicUrl"
+        ],
+        "engineering": [
+          "readPublicUrl"
+        ],
+        "growth": [
+          "readPublicUrl"
+        ],
+        "business-operations": [
+          "readPublicUrl"
+        ]
+      },
+      "installed": true,
+      "pinned": false,
+      "visible": false
+    },
+    {
+      "id": "memory",
+      "name": "Memory",
+      "icon": "brain",
+      "summary": "What the business knows: facts and corrections employees recall, save and forget.",
+      "kind": "system",
+      "status": "available",
+      "records": [],
+      "capabilities": [
+        "recall",
+        "remember",
+        "forget"
+      ],
+      "skills": [],
+      "connections": [],
+      "appears": "never",
+      "default_grants": {
+        "operations": [
+          "recall",
+          "remember",
+          "forget"
+        ],
+        "engineering": [
+          "recall",
+          "remember",
+          "forget"
+        ],
+        "growth": [
+          "recall",
+          "remember",
+          "forget"
+        ],
+        "business-operations": [
+          "recall",
+          "remember",
+          "forget"
+        ],
+        "custom": [
+          "recall",
+          "remember",
+          "forget"
+        ]
+      },
+      "installed": true,
+      "pinned": false,
+      "visible": false
+    },
+    {
+      "id": "conversations",
+      "name": "Conversations",
+      "icon": "bubble.left.and.bubble.right",
+      "summary": "What was said in direct messages, project channels and work threads.",
+      "kind": "system",
+      "status": "available",
+      "records": [],
+      "capabilities": [
+        "conversationHistory"
+      ],
+      "skills": [],
+      "connections": [],
+      "appears": "never",
+      "default_grants": {
+        "operations": [
+          "conversationHistory"
+        ],
+        "engineering": [
+          "conversationHistory"
+        ],
+        "growth": [
+          "conversationHistory"
+        ],
+        "business-operations": [
+          "conversationHistory"
+        ],
+        "custom": [
+          "conversationHistory"
+        ]
+      },
+      "installed": true,
+      "pinned": false,
+      "visible": false
+    },
+    {
+      "id": "work",
+      "name": "Work",
+      "icon": "checklist",
+      "summary": "Work items the business owes and the projects they belong to.",
+      "kind": "system",
+      "status": "available",
+      "records": [
+        {
+          "kind": "item",
+          "title": "Work item"
+        },
+        {
+          "kind": "project",
+          "title": "Project"
+        }
+      ],
+      "capabilities": [
+        "workList",
+        "workCreate",
+        "workUpdate",
+        "workComplete",
+        "projectList",
+        "projectCreate",
+        "projectUpdate",
+        "projectAdd"
+      ],
+      "skills": [],
+      "connections": [],
+      "appears": "never",
+      "default_grants": {
+        "operations": [
+          "workList",
+          "workCreate",
+          "workUpdate",
+          "workComplete",
+          "projectList",
+          "projectCreate",
+          "projectUpdate",
+          "projectAdd"
+        ],
+        "engineering": [
+          "workList",
+          "workCreate",
+          "workUpdate",
+          "workComplete",
+          "projectList",
+          "projectCreate",
+          "projectUpdate",
+          "projectAdd"
+        ],
+        "growth": [
+          "workList",
+          "workCreate",
+          "workUpdate",
+          "workComplete",
+          "projectList",
+          "projectCreate",
+          "projectUpdate",
+          "projectAdd"
+        ],
+        "business-operations": [
+          "workList",
+          "workCreate",
+          "workUpdate",
+          "workComplete",
+          "projectList",
+          "projectCreate",
+          "projectUpdate",
+          "projectAdd"
+        ],
+        "custom": [
+          "workList",
+          "workCreate",
+          "workUpdate",
+          "workComplete",
+          "projectList",
+          "projectCreate",
+          "projectUpdate",
+          "projectAdd"
+        ]
+      },
+      "installed": true,
+      "pinned": false,
+      "visible": false
+    },
+    {
+      "id": "team",
+      "name": "Team",
+      "icon": "person.3",
+      "summary": "The business's employees: hiring from a role template.",
+      "kind": "system",
+      "status": "available",
+      "records": [],
+      "capabilities": [
+        "hireEmployee"
+      ],
+      "skills": [],
+      "connections": [],
+      "appears": "never",
+      "default_grants": {
+        "operations": [
+          "hireEmployee"
+        ]
+      },
+      "installed": true,
+      "pinned": false,
+      "visible": false
+    },
+    {
+      "id": "documents",
+      "name": "Documents",
+      "icon": "doc.text",
+      "summary": "Documents, pages, sheets, slides, whiteboards, PDFs and uploads, and Google Drive.",
+      "kind": "business",
+      "status": "available",
+      "records": [
+        {
+          "kind": "artifact",
+          "title": "Artifact"
+        },
+        {
+          "kind": "file",
+          "title": "File"
+        }
+      ],
+      "capabilities": [
+        "artifactPage",
+        "artifactEdit",
+        "publishArtifact",
+        "driveList",
+        "driveRead",
+        "driveCreate",
+        "driveUpdate"
+      ],
+      "skills": [
+        {
+          "name": "writing-pages",
+          "description": "Write a page with artifactPage (a report, dashboard, comparison or plan) that renders offline on any screen, and change it with artifactEdit."
+        }
+      ],
+      "connections": [
+        {
+          "provider": "google",
+          "scopes": [
+            "https://www.googleapis.com/auth/drive.file"
+          ]
+        }
+      ],
+      "appears": "always",
+      "default_grants": {
+        "operations": [
+          "artifactPage",
+          "artifactEdit",
+          "publishArtifact",
+          "driveList",
+          "driveRead",
+          "driveCreate",
+          "driveUpdate"
+        ],
+        "engineering": [
+          "artifactPage",
+          "artifactEdit",
+          "publishArtifact"
+        ],
+        "growth": [
+          "artifactPage",
+          "artifactEdit",
+          "publishArtifact"
+        ],
+        "business-operations": [
+          "artifactPage",
+          "artifactEdit",
+          "publishArtifact",
+          "driveList",
+          "driveRead",
+          "driveCreate",
+          "driveUpdate"
+        ]
+      },
+      "installed": true,
+      "pinned": true,
+      "visible": true
+    },
+    {
+      "id": "code",
+      "name": "Code",
+      "icon": "chevron.left.forwardslash.chevron.right",
+      "summary": "Repositories, coding sessions, pull requests and deploys.",
+      "kind": "business",
+      "status": "available",
+      "records": [
+        {
+          "kind": "session",
+          "title": "Coding session"
+        }
+      ],
+      "capabilities": [
+        "codingStart",
+        "codingStatus",
+        "codingSend",
+        "codingStop",
+        "codingAccept",
+        "codingPublish",
+        "deployPreview",
+        "deployProduction"
+      ],
+      "skills": [],
+      "connections": [
+        {
+          "provider": "github",
+          "scopes": []
+        }
+      ],
+      "appears": "records",
+      "default_grants": {
+        "operations": [
+          "codingStart",
+          "codingStatus",
+          "codingSend",
+          "codingStop",
+          "codingAccept",
+          "codingPublish",
+          "deployPreview",
+          "deployProduction"
+        ],
+        "engineering": [
+          "codingStart",
+          "codingStatus",
+          "codingSend",
+          "codingStop",
+          "codingAccept",
+          "codingPublish",
+          "deployPreview",
+          "deployProduction"
+        ]
+      },
+      "installed": true,
+      "pinned": true,
+      "visible": false
+    },
+    {
+      "id": "mail",
+      "name": "Mail",
+      "icon": "envelope",
+      "summary": "The business's mailboxes: threads, drafts and sending.",
+      "kind": "business",
+      "status": "coming",
+      "records": [],
+      "capabilities": [],
+      "skills": [],
+      "connections": [
+        {
+          "provider": "google",
+          "scopes": []
+        }
+      ],
+      "appears": "connected",
+      "installed": false,
+      "pinned": false,
+      "visible": false
+    },
+    {
+      "id": "money",
+      "name": "Money",
+      "icon": "creditcard",
+      "summary": "Payments, cards and transactions.",
+      "kind": "business",
+      "status": "coming",
+      "records": [],
+      "capabilities": [],
+      "skills": [],
+      "connections": [
+        {
+          "provider": "stripe",
+          "scopes": []
+        }
+      ],
+      "appears": "connected",
+      "installed": false,
+      "pinned": false,
+      "visible": false
+    },
+    {
+      "id": "website",
+      "name": "Website",
+      "icon": "globe",
+      "summary": "The business's site, domains and pages.",
+      "kind": "business",
+      "status": "coming",
+      "records": [],
+      "capabilities": [],
+      "skills": [],
+      "connections": [
+        {
+          "provider": "cloudflare",
+          "scopes": []
+        }
+      ],
+      "appears": "connected",
+      "installed": false,
+      "pinned": false,
+      "visible": false
+    },
+    {
+      "id": "ads",
+      "name": "Ads",
+      "icon": "megaphone",
+      "summary": "Ad campaigns, spend and results.",
+      "kind": "business",
+      "status": "coming",
+      "records": [],
+      "capabilities": [],
+      "skills": [],
+      "connections": [
+        {
+          "provider": "meta",
+          "scopes": []
+        }
+      ],
+      "appears": "connected",
+      "installed": false,
+      "pinned": false,
+      "visible": false
+    },
+    {
+      "id": "customers",
+      "name": "Customers",
+      "icon": "person.2",
+      "summary": "Customers, conversations and follow-ups.",
+      "kind": "business",
+      "status": "coming",
+      "records": [],
+      "capabilities": [],
+      "skills": [],
+      "connections": [
+        {
+          "provider": "google",
+          "scopes": []
+        }
+      ],
+      "appears": "connected",
+      "installed": false,
+      "pinned": false,
+      "visible": false
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import type { Mutable } from "effect/Types";
 /**
  * Claude Code through the installed, unmodified `claude` CLI in its stream-json mode: one
  * process per running turn. A message written while a turn runs joins that turn (steering);
@@ -38,7 +39,7 @@ function toolEntry(name: string, input: Record<string, unknown>): TranscriptEntr
  */
 export function claudeEntries(jsonl: string): TranscriptEntry[] {
   const entries: TranscriptEntry[] = [];
-  const calls = new Map<string, TranscriptEntry>();
+  const calls = new Map<string, Mutable<TranscriptEntry>>();
   for (const line of jsonl.split("\n")) {
     if (!line.trim()) continue;
     let record: { type?: string; message?: { content?: string | Part[] } };

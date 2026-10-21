@@ -14,7 +14,7 @@ it("status returns the latest 100 messages with their matching replies", async (
     expect(status.inbox).toHaveLength(100);
     expect(
       status.inbox
-        .map((message: { receivedAt: number }) => message.receivedAt)
+        .map((message: { received_at: number }) => message.received_at)
         .sort((a: number, b: number) => a - b),
     ).toEqual(Array.from({ length: 100 }, (_, i) => i + 50));
     expect(status.outbox).toHaveLength(100);

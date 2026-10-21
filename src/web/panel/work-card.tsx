@@ -1,5 +1,7 @@
 import { Bell, BellRing } from "lucide-react";
-import { useWorkspace, valueOf } from "../app/workspace.tsx";
+import { useFollowed, useWork } from "../app/data.ts";
+import { useFollow } from "../app/mutations.ts";
+import { problemOf } from "../app/query.ts";
 import { ToolbarIconButton } from "../design/buttons.tsx";
 import { EmptyNote } from "../design/primitives.tsx";
 import { WorkDetail } from "../pages/work.tsx";
@@ -10,8 +12,10 @@ import { PanelBody, PanelHeader } from "./panel.tsx";
  * the decision waiting on the owner, its coding sessions, the live browser and its evidence.
  */
 export function WorkCard({ workId, close }: { workId: string; close: () => void }) {
-  const { work, followed, actions } = useWorkspace();
-  const item = valueOf(work)?.find((w) => w.id === workId);
+  const work = useWork();
+  const followed = useFollowed();
+  const follow = useFollow();
+  const item = work.data?.find((w) => w.id === workId);
   const following = followed.includes(workId);
   return (
     <section aria-label="Work item" className="flex h-full flex-col">
@@ -19,7 +23,7 @@ export function WorkCard({ workId, close }: { workId: string; close: () => void 
         {item && (
           <ToolbarIconButton
             label={following ? "Following: told at each step. Stop following" : "Follow each step"}
-            onClick={() => void actions.setFollowing(item.id, !following)}
+            onClick={() => follow.mutate({ workId: item.id, on: !following })}
           >
             {following ? <BellRing /> : <Bell />}
           </ToolbarIconButton>
@@ -30,7 +34,11 @@ export function WorkCard({ workId, close }: { workId: string; close: () => void 
           <WorkDetail item={item} />
         ) : (
           <EmptyNote>
-            {work.status === "loading" ? "Loading…" : "This work item no longer exists."}
+            {work.isPending
+              ? "Loading…"
+              : work.isError
+                ? problemOf(work.error, "This work item couldn't be loaded.")
+                : "This work item no longer exists."}
           </EmptyNote>
         )}
       </PanelBody>

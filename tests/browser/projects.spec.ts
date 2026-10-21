@@ -59,7 +59,7 @@ test("New project with goal, deadline, budget, lead and team opens its channel a
     await expect(page.getByTestId("place-title")).toHaveText("Launch");
     await expect(page.getByLabel("Message Launch")).toBeVisible();
     await expect(sidebar(page).getByRole("heading", { name: "Projects" })).toBeVisible();
-    await expect(sidebar(page).getByRole("button", { name: "Launch" })).toHaveAttribute(
+    await expect(sidebar(page).getByRole("link", { name: "Launch" })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -143,7 +143,7 @@ test("a page card opens a layer, is kept in the project, and a new version repla
   try {
     await signIn(page, sql, owner.person);
     await sidebar(page)
-      .getByRole("button", { name: /^Launch/ })
+      .getByRole("link", { name: /^Launch/ })
       .click();
     await expect(page.getByTestId("place-title")).toHaveText("Launch");
     const overview = page.getByRole("region", { name: "Launch overview" });
@@ -159,6 +159,13 @@ test("a page card opens a layer, is kept in the project, and a new version repla
         name: "Pricing v1",
       }),
     ).toBeVisible();
+    await expect(page.getByTestId("reference-chip")).toHaveText("Viewing Pricing");
+    // The layer is in the address: reloading (or opening the link) shows the same page.
+    await expect(page).toHaveURL(
+      `/${owner.business}/project/${project.id}?layer=devys:documents/artifact/${first.id}`,
+    );
+    await page.reload();
+    await expect(layer.getByTestId("panel-title")).toHaveText("Pricing");
     await expect(page.getByTestId("reference-chip")).toHaveText("Viewing Pricing");
     // The next message names the page by its ref.
     await page.getByLabel("Message Launch").fill("Make it shorter");
@@ -255,31 +262,31 @@ test("the Documents app opens as a layer; Esc goes back one layer; the panel is 
     await expect(page.getByTestId("panel-title")).toHaveCount(0);
 
     // A project's overview is open by default; hiding it is remembered for projects only.
-    await sidebar(page).getByRole("button", { name: "Launch" }).click();
+    await sidebar(page).getByRole("link", { name: "Launch" }).click();
     const overview = page.getByRole("region", { name: "Launch overview" });
     await expect(overview).toBeVisible();
     await toolbarPanel(page, true).click();
     await expect(overview).toHaveCount(0);
 
     // A direct chat's desk is closed by default; opening it is remembered for direct chats.
-    await sidebar(page).getByRole("button", { name: "Growth" }).click();
+    await sidebar(page).getByRole("link", { name: "Growth" }).click();
     const desk = page.getByRole("region", { name: "Growth's desk" });
     await expect(desk).toHaveCount(0);
     await toolbarPanel(page, false).click();
     await expect(desk).toBeVisible();
 
-    await sidebar(page).getByRole("button", { name: "Launch" }).click();
+    await sidebar(page).getByRole("link", { name: "Launch" }).click();
     await expect(overview).toHaveCount(0);
-    await sidebar(page).getByRole("button", { name: "Head of Operations" }).click();
+    await sidebar(page).getByRole("link", { name: "Head of Operations" }).click();
     await expect(page.getByRole("region", { name: "Head of Operations's desk" })).toBeVisible();
 
     // Remembered across visits, on this device.
     await page.reload();
-    await sidebar(page).getByRole("button", { name: "Growth" }).click();
+    await sidebar(page).getByRole("link", { name: "Growth" }).click();
     await expect(desk).toBeVisible();
     await desk.getByRole("button", { name: "Hide side panel", exact: true }).click();
     await expect(desk).toHaveCount(0);
-    await sidebar(page).getByRole("button", { name: "Launch" }).click();
+    await sidebar(page).getByRole("link", { name: "Launch" }).click();
     await expect(overview).toHaveCount(0);
     await toolbarPanel(page, false).click();
     await expect(overview).toBeVisible();

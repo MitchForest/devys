@@ -1,6 +1,7 @@
 import { FolderInput } from "lucide-react";
 import type { Ref } from "../../protocol/ref.ts";
-import { useWorkspace, valueOf } from "../app/workspace.tsx";
+import { useProjects } from "../app/data.ts";
+import { useKeep } from "../app/mutations.ts";
 import { DevysButton } from "../design/buttons.tsx";
 import {
   DropdownMenu,
@@ -14,8 +15,8 @@ import {
  * Says where it is kept; dashed while it is kept nowhere.
  */
 export function KeepInProject({ record }: { record: Ref }) {
-  const { projects, actions } = useWorkspace();
-  const all = valueOf(projects) ?? [];
+  const all = useProjects().data ?? [];
+  const keep = useKeep();
   const keptIn = all.filter((project) => project.items.some((item) => item.ref === record));
   if (!all.length) return null;
   return (
@@ -38,9 +39,11 @@ export function KeepInProject({ record }: { record: Ref }) {
             <DropdownMenuItem
               key={project.id}
               onClick={() =>
-                entry
-                  ? actions.removeFromProject(project.id, entry.id)
-                  : actions.addToProject(project.id, record)
+                keep.mutate(
+                  entry
+                    ? { projectId: project.id, remove: entry.id }
+                    : { projectId: project.id, add: record },
+                )
               }
             >
               {entry ? `Remove from ${project.name}` : `Keep in ${project.name}`}

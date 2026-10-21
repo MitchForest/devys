@@ -31,8 +31,7 @@ struct EnrollLinkTests {
             $0.sessionClient = SessionClient(
                 phases: { phases },
                 signIn: { server, code in await signIns.record(server, code) },
-                signOut: {},
-                expire: {}
+                signOut: {}
             )
             $0.runtimeClient = .fixture
             $0.continuousClock = ContinuousClock()

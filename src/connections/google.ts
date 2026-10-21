@@ -2,7 +2,8 @@ import * as oauth from "oauth4webapi";
 import { query, transaction, type Database } from "../data/database.ts";
 import { sha256 } from "../protocol/bytes.ts";
 import { sessionCookie } from "../identity/contract.ts";
-import type { Connection, ConnectionAccess } from "./contract.ts";
+import { Authorization, type Connection, type ConnectionAccess } from "./contract.ts";
+import { respond } from "../protocol/http.ts";
 
 /** What the Google connection needs from the deployment: its OAuth client and storage key. */
 interface GoogleBindings {
@@ -109,7 +110,7 @@ export async function beginGoogle(
     access_type: "offline",
     prompt: "consent",
   }).toString();
-  return Response.json({ url: url.href });
+  return respond(Authorization, { url: url.href });
 }
 
 /** The callback URL is fixed, so the business comes from the stored state; wiring confirms membership. */

@@ -1,4 +1,7 @@
-import { useWorkspace, valueOf } from "../app/workspace.tsx";
+import { useEmployees, useOperations, useProjects } from "../app/data.ts";
+import { usePlace } from "../app/navigation.ts";
+import { ui, useUi } from "../app/ui.ts";
+import { useMain } from "../app/workspace.tsx";
 import { EmployeePortrait } from "../design/portrait.tsx";
 import { Composer, ConversationView } from "./chat.tsx";
 
@@ -7,16 +10,19 @@ import { Composer, ConversationView } from "./chat.tsx";
  * chat, a project's channel or a work item's thread.
  */
 export function ConversationPane() {
-  const state = useWorkspace();
-  const { place, main, employees, operations, notice, actions } = state;
+  const place = usePlace();
+  const main = useMain();
+  const employees = useEmployees();
+  const operations = useOperations();
+  const projects = useProjects().data;
+  const notice = useUi((state) => state.notice);
   const employee =
     place.kind === "direct"
       ? employees.find((e) => e.id === place.employeeId)
       : place.kind === "home"
         ? operations
         : undefined;
-  const project =
-    place.kind === "project" ? valueOf(state.projects)?.find((p) => p.id === place.id) : undefined;
+  const project = place.kind === "project" ? projects?.find((p) => p.id === place.id) : undefined;
   const label =
     place.kind === "thread"
       ? "Reply"
@@ -54,7 +60,7 @@ export function ConversationPane() {
               type="button"
               aria-label="Dismiss"
               className="text-ink-3 hover:text-ink-2"
-              onClick={actions.dismissNotice}
+              onClick={ui.dismissNotice}
             >
               ×
             </button>

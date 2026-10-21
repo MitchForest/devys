@@ -48,10 +48,11 @@ func pptxPath(_ path: String) -> String {
     path.replacingOccurrences(of: #"(\.slides)?\.(md|markdown)$"#, with: "", options: [.regularExpression, .caseInsensitive]) + ".pptx"
 }
 
-/// A file in the business's folder on the owner's Mac, as a layer. Documents, decks, spreadsheets
-/// and whiteboards edit in place through the web surfaces and save over the revision they were
-/// opened at; PDFs open in PDFKit, Office and iWork files in QuickLook. Comments on a text range
-/// or a PDF selection go to an employee.
+/// A file in the business's folder on the owner's Mac, as a layer: read-only, with Ask on the file
+/// and on a selection, and comments on a text range or a PDF selection for an employee. In the
+/// thread of a work item the owner has taken over, documents, decks, spreadsheets and whiteboards
+/// edit in place through the web surfaces and save over the revision they were opened at
+/// (owner decision, 2026-10-21). PDFs open in PDFKit, Office and iWork files in QuickLook.
 struct FileView: View {
     let store: StoreOf<Workspace>
     let file: FileEntry
@@ -68,37 +69,50 @@ struct FileView: View {
     /// A save, reload or export that failed; the file stays open.
     @State private var actionError: String?
     @State private var selection: FileAnchor?
+    /// The selected text, for Ask.
+    @State private var quote: String?
     @State private var comments: [FileComment] = []
     @State private var saved: String?
     @State private var surface = SurfaceHandle()
 
     private var kind: FileKind { FileKind(file.name) }
-    private var editable: Bool { kind == .markdown || kind == .sheet || kind == .whiteboard }
+    /// The thread's work item, when the file is open in one.
+    private var item: WorkItem? { store.state.threadItem }
+    /// Only these kinds have an editor, and only after Take over.
+    private var editable: Bool {
+        (kind == .markdown || kind == .sheet || kind == .whiteboard) && item.map(store.state.isHandEditable) == true
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             // What can be done to the file; the layer's header already names it.
-            if editable || deck {
-                HStack(spacing: 8) {
-                    if editable {
-                        Text(edited ? "Edited" : saved.map { "Saved \($0)" } ?? "Saved on the Mac")
-                            .font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
-                    }
-                    Spacer(minLength: 4)
-                    if deck {
-                        Button("Export .pptx", systemImage: "rectangle.on.rectangle") { Task { await exportDeck() } }
-                            .buttonStyle(DevysButtonStyle(.quiet, compact: true))
-                    }
-                    if editable {
-                        Button("Save", systemImage: "square.and.arrow.down") { Task { await save() } }
-                            .buttonStyle(DevysButtonStyle(.raised, compact: true))
-                            .disabled(!edited)
-                            .keyboardShortcut("s", modifiers: .command)
-                    }
+            HStack(spacing: 8) {
+                Text(editable ? (edited ? "Edited" : saved.map { "Saved \($0)" } ?? "Saved on the Mac") : "Read-only")
+                    .font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
+                Spacer(minLength: 4)
+                // The owner changes a file by asking: the selection (or the file) goes into the composer.
+                Button("Ask", systemImage: "quote.bubble") {
+                    store.send(.askTapped(quote ?? file.path))
+                    selection = nil
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                    .buttonStyle(DevysButtonStyle(.quiet, compact: true))
+                    .help(quote == nil ? "Ask about this file" : "Ask about the selection")
+                if deck {
+                    Button("Export .pptx", systemImage: "rectangle.on.rectangle") { Task { await exportDeck() } }
+                        .buttonStyle(DevysButtonStyle(.quiet, compact: true))
+                }
+                if let item, item.state.isOpen {
+                    TakeoverButton(store: store, item: item).buttonStyle(DevysButtonStyle(.quiet, compact: true))
+                }
+                if editable {
+                    Button("Save", systemImage: "square.and.arrow.down") { Task { await save() } }
+                        .buttonStyle(DevysButtonStyle(.raised, compact: true))
+                        .disabled(!edited)
+                        .keyboardShortcut("s", modifiers: .command)
+                }
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
             if let actionError {
                 Text(actionError)
                     .font(DevysTypography.caption).foregroundStyle(DevysColors.ink2)
@@ -120,12 +134,13 @@ struct FileView: View {
             }
             Divider()
             viewer.frame(maxWidth: .infinity, maxHeight: .infinity)
-            if (kind == .markdown && !deck) || kind == .pdf {
+            if (kind == .markdown && !deck) || kind == .pdf || kind == .text {
                 Divider()
                 CommentBar(store: store, path: file.path, selection: $selection, comments: $comments).padding(10)
             }
         }
         .task(id: file.path) { await load() }
+        .onChange(of: selection) { _, next in if next == nil { quote = nil } }
     }
 
     @ViewBuilder private var viewer: some View {
@@ -135,23 +150,27 @@ struct FileView: View {
             switch (kind, loaded) {
             case (.markdown, .text(let text)):
                 SurfaceView(
-                    .markdown(text.content, name: file.name, version: version),
+                    .markdown(text.content, name: file.name, version: version, readOnly: !editable),
                     onChange: { next in
+                        guard editable else { return }
                         draft = next == text.content ? nil : next
                         edited = draft != nil
                     },
-                    onSelectText: { picked in selection = picked.map { .text(start: $0.start, end: $0.end, quote: $0.quote) } },
+                    onSelectText: select,
                     onDeck: { deck = true },
                     handle: surface
                 )
             case (.text, .text(let text)):
-                SurfaceView(.code(name: file.name, contents: text.content))
+                SurfaceView(.code(name: file.name, contents: text.content), onSelectText: select)
             case (.whiteboard, .text(let text)):
-                SurfaceView(.whiteboard(text.content, version: version), onEdited: { edited = true }, handle: surface)
+                SurfaceView(.whiteboard(text.content, version: version, readOnly: !editable), onEdited: { edited = editable }, handle: surface)
             case (.sheet, .bytes(let bytes)):
-                SurfaceView(.sheet(bytes.data, name: file.name, version: version), onEdited: { edited = true }, handle: surface)
+                SurfaceView(.sheet(bytes.data, name: file.name, version: version, readOnly: !editable), onEdited: { edited = editable }, handle: surface)
             case (.pdf, .bytes(let bytes)):
-                PDFDocumentView(data: bytes.data) { selection = $0 }
+                PDFDocumentView(data: bytes.data) { anchor, text in
+                    selection = anchor
+                    quote = text
+                }
             case (.image, .bytes(let bytes)):
                 ImageView(data: bytes.data)
             case (.office, .bytes(let bytes)), (.other, .bytes(let bytes)):
@@ -160,6 +179,11 @@ struct FileView: View {
                 EmptyView()
             }
         }
+    }
+
+    private func select(_ picked: DevysSurfaces.TextSelection?) {
+        selection = picked.map { .text(start: $0.start, end: $0.end, quote: $0.quote) }
+        quote = picked?.quote
     }
 
     private func read() async throws -> Loaded {
@@ -178,8 +202,11 @@ struct FileView: View {
     }
 
     private func reload() async {
-        guard let newer = try? await read() else {
-            actionError = "The newer version couldn't be loaded."
+        let newer: Loaded
+        do {
+            newer = try await read()
+        } catch {
+            actionError = failure("The newer version couldn't be loaded.", error)
             return
         }
         actionError = nil
@@ -197,13 +224,22 @@ struct FileView: View {
     }
 
     private func save(overwrite: Bool = false) async {
-        guard let loaded, let content = await written() else { return }
-        // Keeping mine saves over whatever is on the Mac now.
-        let revision = overwrite ? ((try? await read())?.revision ?? loaded.revision) : loaded.revision
-        let result: FileSave?
-        switch content {
-        case .text(let text): result = try? await files.save(store.businessID, file.path, text, revision)
-        case .bytes(let data): result = try? await files.saveBytes(store.businessID, file.path, data, .revision(revision))
+        guard editable, let loaded, let content = await written() else { return }
+        let result: FileSave
+        do {
+            // Keeping mine saves over whatever is on the Mac now.
+            let revision = overwrite ? try await read().revision : loaded.revision
+            switch content {
+            case .text(let text): result = try await files.save(store.businessID, file.path, text, revision)
+            case .bytes(let data): result = try await files.saveBytes(store.businessID, file.path, data, .revision(revision))
+            }
+        } catch DevysHTTPError.rejected(_, let message) where !message.isEmpty {
+            // The server says why, such as a file too large or a path outside the business.
+            actionError = "The file wasn't saved: \(message) Your changes are still here."
+            return
+        } catch {
+            actionError = failure("The file couldn't be saved; your changes are still here.", error)
+            return
         }
         switch result {
         case .saved(let revision):
@@ -218,8 +254,6 @@ struct FileView: View {
             actionError = nil
         case .conflict:
             conflict = true
-        case nil:
-            actionError = "The file couldn't be saved. Your changes are still here."
         }
     }
 
@@ -229,11 +263,15 @@ struct FileView: View {
             return
         }
         let target = pptxPath(file.path)
-        if case .saved = try? await files.saveBytes(store.businessID, target, data, .overwrite) {
+        do {
+            guard case .saved = try await files.saveBytes(store.businessID, target, data, .overwrite) else {
+                actionError = "The PowerPoint copy changed on the Mac; export again."
+                return
+            }
             saved = "· exported \((target as NSString).lastPathComponent)"
             actionError = nil
-        } else {
-            actionError = "The PowerPoint copy couldn't be saved."
+        } catch {
+            actionError = failure("The PowerPoint copy couldn't be saved.", error)
         }
     }
 }
@@ -257,14 +295,6 @@ private struct CommentBar: View {
                     Text(describe(selection)).font(DevysTypography.caption).foregroundStyle(DevysColors.ink3).lineLimit(1)
                     FieldBox { TextField("Comment on this", text: $text).onSubmit(add) }
                     Button("Add", action: add).buttonStyle(DevysButtonStyle(.raised, compact: true))
-                    // The owner edits by asking: the passage goes into the conversation's composer.
-                    if case .text(_, _, let quote) = selection {
-                        Button("Ask", systemImage: "quote.bubble") {
-                            store.send(.askTapped(quote))
-                            self.selection = nil
-                        }
-                        .buttonStyle(DevysButtonStyle(.quiet, compact: true))
-                    }
                 }
             }
             if !comments.isEmpty {
@@ -317,10 +347,10 @@ private struct CommentBar: View {
 }
 
 /// A PDF in PDFKit. Selecting text marks it for a comment, as page regions in points from the
-/// page's top left, the same as on the web.
+/// page's top left, the same as on the web, and for Ask as its text.
 private struct PDFDocumentView {
     let data: Data
-    let onSelect: (FileAnchor?) -> Void
+    let onSelect: (FileAnchor?, String?) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(onSelect: onSelect) }
 
@@ -333,18 +363,18 @@ private struct PDFDocumentView {
     }
 
     final class Coordinator: NSObject {
-        let onSelect: (FileAnchor?) -> Void
-        init(onSelect: @escaping (FileAnchor?) -> Void) { self.onSelect = onSelect }
+        let onSelect: (FileAnchor?, String?) -> Void
+        init(onSelect: @escaping (FileAnchor?, String?) -> Void) { self.onSelect = onSelect }
 
         @objc func selectionChanged(_ notification: Notification) {
             guard let view = notification.object as? PDFView, let selection = view.currentSelection,
                   let page = selection.pages.first, let document = view.document
-            else { return onSelect(nil) }
+            else { return onSelect(nil, nil) }
             let height = page.bounds(for: .mediaBox).height
             let bounds = selection.bounds(for: page)
             // PDF space starts at the bottom left; comments measure from the top left.
             let rect = CGRect(x: bounds.minX, y: height - bounds.maxY, width: bounds.width, height: bounds.height)
-            onSelect(.pdf(page: document.index(for: page) + 1, rects: [rect]))
+            onSelect(.pdf(page: document.index(for: page) + 1, rects: [rect]), selection.string)
         }
     }
 }

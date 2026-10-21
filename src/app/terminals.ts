@@ -9,6 +9,9 @@ import { workItem, setTakeover } from "../work/service.ts";
 import { postEvent } from "./conversations.ts";
 import { modeOf } from "./mode.ts";
 import { body } from "./request.ts";
+import { respond } from "../protocol/http.ts";
+import { TerminalSession } from "../terminal/contract.ts";
+import { Closed, Terminals } from "./wire.ts";
 
 type Access = { person: Person; business: Business; trusted: boolean; path: string };
 /**
@@ -23,7 +26,7 @@ export async function terminalRoute(request: Request, env: Env, access: Access) 
   const mode = modeOf(env);
   const terminals = mode.terminals(business.id);
   if (path === "/terminals" && request.method === "GET")
-    return Response.json({
+    return respond(Terminals, {
       terminals: await terminals.list({ businessId: business.id, employeeId: "owner" }),
     });
   // Everything else acts on the Mac: a bearer token, or a browser request from this origin.
@@ -42,7 +45,7 @@ export async function terminalRoute(request: Request, env: Env, access: Access) 
   const closing = /^\/terminals\/([A-Za-z0-9-]{1,64})\/close$/.exec(path)?.[1];
   if (closing && request.method === "POST") {
     await terminals.close({ businessId: business.id, employeeId: "owner" }, closing);
-    return Response.json({ closed: true });
+    return respond(Closed, { closed: true });
   }
   if (path !== "/terminals" || request.method !== "POST")
     return new Response("Not found", { status: 404 });
@@ -71,7 +74,8 @@ export async function terminalRoute(request: Request, env: Env, access: Access) 
       `${person.display_name} opened ${providerName(item.provider)} in a terminal.`,
       item.id,
     );
-    return Response.json(
+    return respond(
+      TerminalSession,
       await terminals.open({
         scope,
         title: `${providerName(item.provider)} · ${item.branch ?? item.id.slice(0, 8)}`,
@@ -101,13 +105,15 @@ export async function terminalRoute(request: Request, env: Env, access: Access) 
       `${person.display_name} opened a terminal in the worktree.`,
       build.id,
     );
-    return Response.json(
+    return respond(
+      TerminalSession,
       await terminals.open({ scope, title: work.title, cwd: build.worktree, ...size }),
       { status: 201 },
     );
   }
   // The business's own folder on the Mac.
-  return Response.json(
+  return respond(
+    TerminalSession,
     await terminals.open({
       scope,
       title: business.name,

@@ -1,0 +1,56 @@
+{
+  "work_items": [
+    {
+      "id": "00000000-0000-4000-8000-000000000009",
+      "owner_employee_id": "00000000-0000-4000-8000-000000000003",
+      "title": "Order fittings",
+      "objective": "",
+      "next_action": "",
+      "wait_condition": "The supplier confirms the price",
+      "due_at": null,
+      "state": "waiting",
+      "project_id": "00000000-0000-4000-8000-000000000005",
+      "conditions": {},
+      "evidence": [],
+      "revision": 2,
+      "taken_over_by": null,
+      "created_by": "person:00000000-0000-4000-8000-000000000001",
+      "updated_at": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000008",
+      "owner_employee_id": "00000000-0000-4000-8000-000000000004",
+      "title": "Publish the booking page",
+      "objective": "Customers book a visit online",
+      "next_action": "Deploy a preview",
+      "wait_condition": null,
+      "due_at": "2026-01-01T00:00:00.000Z",
+      "state": "in_progress",
+      "project_id": "00000000-0000-4000-8000-000000000005",
+      "conditions": {},
+      "evidence": [
+        {
+          "by": "employee:00000000-0000-4000-8000-000000000004",
+          "note": "Deployed a preview and checked it answers.",
+          "at": "2026-01-01T00:00:00.000Z",
+          "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "check": {
+            "command": "bun test",
+            "exit_code": 0
+          },
+          "changes": "3 files changed, 42 insertions(+)",
+          "deploy": {
+            "stage": "preview",
+            "url": "https://preview.acme.test",
+            "live": true
+          },
+          "source": "wire-fixture"
+        }
+      ],
+      "revision": 3,
+      "taken_over_by": null,
+      "created_by": "person:00000000-0000-4000-8000-000000000001",
+      "updated_at": "2026-01-01T00:00:00.000Z"
+    }
+  ]
+}

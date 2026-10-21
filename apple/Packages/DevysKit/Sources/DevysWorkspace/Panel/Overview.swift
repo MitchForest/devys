@@ -5,12 +5,12 @@ import DevysDesignSystem
 import SwiftUI
 
 /// A channel's permanent view: what the project is for and by when, who is on it, its work by
-/// status and the records it keeps. Everything opens a thread or a layer.
+/// status and the records it keeps. Everything opens a thread or a layer. It is read-only: the
+/// owner changes a project by asking in its channel, and Ask starts that message.
 struct Overview: View {
     let store: StoreOf<Workspace>
     let projectID: String
     let close: () -> Void
-    @State private var editing = false
     @State private var showsDone = false
 
     var body: some View {
@@ -18,21 +18,10 @@ struct Overview: View {
             let work = (store.work.value ?? []).filter { $0.projectID == project.id }
             VStack(spacing: 0) {
                 PanelHeader(title: "Overview", close: close) {
-                    if !editing {
-                        ToolbarIconButton("Edit project", symbol: "pencil") { editing = true }
-                    }
+                    ToolbarIconButton("Ask to change the project", symbol: "quote.bubble") { store.send(.askTapped(ProjectText.brief(project))) }
                 }
                 PanelBody {
-                    if editing {
-                        ProjectForm(store: store, initial: project, submitLabel: "Save") { change in
-                            store.send(.projectUpdated(project.id, change))
-                            editing = false
-                        } cancel: {
-                            editing = false
-                        }
-                    } else {
-                        summary(project, work: work)
-                    }
+                    summary(project, work: work)
                     workSection(project, work: work)
                     kept(project)
                 }
@@ -48,10 +37,7 @@ struct Overview: View {
     @ViewBuilder private func summary(_ project: Project, work: [WorkItem]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             if let goal = project.goal {
-                Text(goal).font(DevysTypography.body).foregroundStyle(DevysColors.ink)
-            } else {
-                Button("Add a goal") { editing = true }
-                    .buttonStyle(.plain).font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3)
+                Text(goal).font(DevysTypography.body).foregroundStyle(DevysColors.ink).textSelection(.enabled)
             }
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
                 if let deadline = project.deadline {
@@ -180,6 +166,16 @@ enum ProjectText {
         return days < 0 ? "\(label) · \(-days)d late" : days == 0 ? "\(label) · today" : "\(label) · \(days)d"
     }
 
+    /// The project as Ask quotes it into the channel's composer: what it is now.
+    static func brief(_ project: Project) -> String {
+        [
+            project.name,
+            project.goal.map { "Goal: \($0)" },
+            project.deadline.map { "Deadline: \($0)" },
+            project.budget.map { "Budget: \(money($0))" }
+        ].compactMap(\.self).joined(separator: "\n")
+    }
+
     static func money(_ budget: Budget) -> String {
         (Double(budget.cents) / 100).formatted(.currency(code: budget.currency).precision(.fractionLength(0)))
     }
@@ -194,10 +190,9 @@ enum ProjectText {
     }()
 }
 
-/// Name, goal, deadline, budget, lead and team, saved as one change.
+/// A new project's name, goal, deadline, budget, lead and team.
 struct ProjectForm: View {
     let store: StoreOf<Workspace>
-    var initial: Project?
     let submitLabel: String
     var busy = false
     let submit: (ProjectChange) -> Void
@@ -283,22 +278,14 @@ struct ProjectForm: View {
             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
             goal: goal.isEmpty ? nil : String(goal.prefix(500)),
             deadline: hasDeadline ? ProjectText.day.string(from: deadline) : nil,
-            budget: amount.flatMap { $0 >= 0 ? Budget(cents: Int(($0 * 100).rounded()), currency: initial?.budget?.currency ?? "USD") : nil },
+            budget: amount.flatMap { $0 >= 0 ? Budget(cents: Int(($0 * 100).rounded())) : nil },
             lead: lead.isEmpty ? nil : lead,
             members: members.filter { $0 != lead }
         )
     }
 
     private func reset() {
-        name = initial?.name ?? ""
-        goal = initial?.goal ?? ""
-        if let day = initial?.deadline.flatMap(ProjectText.day.date(from:)) {
-            hasDeadline = true
-            deadline = day
-        }
-        budget = initial?.budget.map { String($0.cents / 100) } ?? ""
-        lead = initial?.leadEmployeeID ?? store.operations?.id ?? ""
-        members = initial?.memberIDs ?? []
+        lead = store.operations?.id ?? ""
     }
 
     private func field(_ label: String, @ViewBuilder content: () -> some View) -> some View {
@@ -309,7 +296,7 @@ struct ProjectForm: View {
     }
 }
 
-/// New project: the same fields as the overview's edit form; it opens once created.
+/// New project: its fields; it opens once created.
 struct NewProjectSheet: View {
     let store: StoreOf<Workspace>
 

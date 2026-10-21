@@ -23,7 +23,7 @@ test("Home's Needs you approves an exact request; new work opens its thread and 
     await signIn(page, sql, owner.person);
 
     // The request waits on Home: counted on its row, in Needs you, and inline in the chat.
-    await expect(sidebar(page).getByRole("button", { name: /^Home/ })).toHaveAccessibleName(
+    await expect(sidebar(page).getByRole("link", { name: /^Home/ })).toHaveAccessibleName(
       "Home, 1",
     );
     const needsYou = page.getByRole("region", { name: "Needs you" });
@@ -38,7 +38,7 @@ test("Home's Needs you approves an exact request; new work opens its thread and 
     await needsYou.getByRole("button", { name: "Approve" }).click();
     await expect(needsYou).toBeHidden();
     await expect(page.getByRole("main").getByText("https://example.com")).toHaveCount(0);
-    await expect(sidebar(page).getByRole("button", { name: /^Home/ })).toHaveAccessibleName("Home");
+    await expect(sidebar(page).getByRole("link", { name: /^Home/ })).toHaveAccessibleName("Home");
     await expect
       .poll(
         async () =>
@@ -128,15 +128,15 @@ test("Settings → Businesses creates a business with its starting team and swit
     await expect(settings).toBeHidden();
 
     // The new business is selected: its own Home, sidebar and team.
-    await expect(page.getByRole("button", { name: "Switch to Globex" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
+    await expect(page.getByRole("link", { name: "Switch to Globex" })).toHaveAttribute(
+      "aria-current",
+      "page",
     );
     await expect(page.getByTestId("place-title")).toHaveText("Home");
     await expect(sidebar(page).getByRole("heading", { name: "Globex" })).toBeVisible();
     for (const name of ["Head of Operations", "Engineering", "Business Operations"])
-      await expect(sidebar(page).getByRole("button", { name, exact: true })).toBeVisible();
-    await expect(sidebar(page).getByRole("button", { name: "Growth", exact: true })).toHaveCount(0);
+      await expect(sidebar(page).getByRole("link", { name, exact: true })).toBeVisible();
+    await expect(sidebar(page).getByRole("link", { name: "Growth", exact: true })).toHaveCount(0);
     expect(
       (await sql.row<{ brief: string }>("SELECT brief FROM businesses WHERE id = $1", [
         await created(),
@@ -144,11 +144,11 @@ test("Settings → Businesses creates a business with its starting team and swit
     ).toBe("Sells widgets online.");
 
     // Switching back shows Acme's own team, nothing shared.
-    await page.getByRole("button", { name: "Switch to Acme" }).click();
+    await page.getByRole("link", { name: "Switch to Acme" }).click();
     await expect(sidebar(page).getByRole("heading", { name: "Acme" })).toBeVisible();
-    await expect(
-      sidebar(page).getByRole("button", { name: "Engineering", exact: true }),
-    ).toHaveCount(0);
+    await expect(sidebar(page).getByRole("link", { name: "Engineering", exact: true })).toHaveCount(
+      0,
+    );
   } finally {
     await page.close();
     const other = await created();

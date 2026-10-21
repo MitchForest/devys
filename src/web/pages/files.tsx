@@ -1,9 +1,16 @@
 import { MessageSquarePlus, Presentation, Save, Send } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
-import { api, type FileAnchor, type FileEntry } from "../app/api.ts";
+import { api } from "../app/api.ts";
+import type { FileAnchor } from "../../app/wire.ts";
+
+/** What the owner can select here: text in a document, or regions of a PDF page. */
+type Anchor = Exclude<FileAnchor, { kind: "lines" }>;
+import type { FileEntry } from "../../workspace/contract.ts";
 import { useDark } from "../app/theme.ts";
 import { isOpen } from "../app/names.ts";
-import { useWorkspace, valueOf } from "../app/workspace.tsx";
+import { useEmployees, useWork } from "../app/data.ts";
+import { keys } from "../app/query.ts";
 import { DevysButton } from "../design/buttons.tsx";
 import { EmptyNote } from "../design/primitives.tsx";
 import { fileKind } from "../../surfaces/files/kind.ts";
@@ -35,7 +42,7 @@ const CodeFile = lazy(() =>
 const slides = () => import("../../surfaces/files/slides.tsx");
 
 interface Comment {
-  anchor: FileAnchor;
+  anchor: Anchor;
   text: string;
 }
 
@@ -43,18 +50,26 @@ interface Comment {
 type Loaded = { text: string; revision: string } | { bytes: ArrayBuffer; revision: string };
 
 /** One file from the business's folder: edited in place where an editor exists, else viewed. */
-export function FileView({ businessId, file }: { businessId: string; file: FileEntry }) {
+export function FileView({
+  businessId,
+  file,
+  turn = 0,
+}: {
+  businessId: string;
+  file: FileEntry;
+  /** The turn it is read at: a finished turn reads it again. */
+  turn?: number;
+}) {
   const kind = fileKind(file.name);
   const binary = kind === "pdf" || kind === "word" || kind === "sheet";
   const readable = binary || kind === "markdown" || kind === "text" || kind === "whiteboard";
-  const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const client = useQueryClient();
   // Changes when the file is replaced from outside, as after a conflict, so editors reload.
   const [version, setVersion] = useState("first");
   // The edited file, written out only when it is saved.
   const [draft, setDraft] = useState<(() => string | ArrayBuffer) | null>(null);
   const [conflict, setConflict] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-  const [selection, setSelection] = useState<FileAnchor | null>(null);
+  const [selection, setSelection] = useState<Anchor | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [saved, setSaved] = useState<string | null>(null);
   const [deck, setDeck] = useState(false);
@@ -69,12 +84,24 @@ export function FileView({ businessId, file }: { businessId: string; file: FileE
             .then(({ content, revision }) => ({ text: content, revision })),
     [binary, businessId, file.path],
   );
-  useEffect(() => {
-    if (!readable) return;
-    read().then(setLoaded, () =>
-      setProblem(binary ? "This file couldn't be opened." : "This file couldn't be read as text."),
-    );
-  }, [read, readable, binary]);
+  // What is on screen is what was read: an editor's file is never swapped underneath it.
+  const queryKey = keys.file(businessId, file.path, turn);
+  const query = useQuery({
+    queryKey,
+    queryFn: read,
+    enabled: readable,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+  const loaded = query.data ?? null;
+  const setLoaded = (next: Loaded) => client.setQueryData(queryKey, next);
+  const problem = query.isError
+    ? binary
+      ? "This file couldn't be opened."
+      : "This file couldn't be read as text."
+    : null;
   useEffect(() => {
     if (kind !== "markdown" || !loaded || !("text" in loaded)) return;
     void slides().then((m) => setDeck(m.isDeck(file.name, loaded.text)));
@@ -288,38 +315,39 @@ function CommentBar({
 }: {
   businessId: string;
   path: string;
-  selection: FileAnchor | null;
+  selection: Anchor | null;
   comments: Comment[];
   onAdd: (comment: Comment) => void;
   onSent: () => void;
 }) {
-  const { employees, work } = useWorkspace();
-  const openWork = (valueOf(work) ?? []).filter((item) => isOpen(item.state));
+  const employees = useEmployees();
+  const openWork = (useWork().data ?? []).filter((item) => isOpen(item.state));
   const [text, setText] = useState("");
   const [to, setTo] = useState(
     employees.find((e) => e.template === "engineering")?.id ?? employees[0]?.id ?? "",
   );
-  const [problem, setProblem] = useState<string | null>(null);
-  const where = selection
-    ? selection.kind === "text"
-      ? `“${selection.quote.slice(0, 60)}${selection.quote.length > 60 ? "…" : ""}”`
-      : `page ${selection.page} region`
-    : null;
-  const send = async () => {
-    try {
-      await api.commentOnFile(businessId, {
+  const sending = useMutation({
+    mutationFn: () =>
+      api.commentOnFile(businessId, {
         id: crypto.randomUUID(),
         path,
         // A work item's thread (addressed to its owner) or an employee's DM.
         ...(to.startsWith("work:") ? { work: to.slice("work:".length) } : { employee: to }),
         comments,
-      });
-      onSent();
-      setProblem(null);
-    } catch (error) {
-      setProblem(error instanceof Error ? error.message : "The comments couldn't be sent.");
-    }
-  };
+      }),
+    onSuccess: onSent,
+  });
+  const problem = sending.isError
+    ? sending.error instanceof Error
+      ? sending.error.message
+      : "The comments couldn't be sent."
+    : null;
+  const where = selection
+    ? selection.kind === "text"
+      ? `“${selection.quote.slice(0, 60)}${selection.quote.length > 60 ? "…" : ""}”`
+      : `page ${selection.page} region`
+    : null;
+  const send = () => sending.mutate();
   return (
     <div
       className="flex flex-col gap-2 border-t border-hairline px-3 py-2"
@@ -379,7 +407,7 @@ function CommentBar({
               </optgroup>
             )}
           </select>
-          <DevysButton compact onClick={() => void send()}>
+          <DevysButton compact onClick={send}>
             <Send /> Send
           </DevysButton>
         </div>

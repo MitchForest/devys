@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import type { Database } from "../data/database.ts";
 import {
   deleteSession,
@@ -9,8 +9,14 @@ import {
   sessionPerson,
 } from "./sessions.ts";
 import { sha256, readBounded } from "../protocol/bytes.ts";
-import { sameOrigin } from "../protocol/http.ts";
-import { sessionCookie } from "./contract.ts";
+import { respond, sameOrigin } from "../protocol/http.ts";
+import { DeviceCode, DeviceList, sessionCookie } from "./contract.ts";
+
+/** `POST /api/native/session`: a device session for an app, returned in the body. */
+export const DeviceSession = Schema.Struct({
+  session_token: Schema.String,
+  expires_in_seconds: Schema.Number,
+});
 
 // Lax permits the Google OAuth callback; every browser mutation also checks Origin.
 export const cookie = (token: string, age = 60 * 60 * 24 * 7) =>
@@ -70,7 +76,7 @@ export async function enrollDevice(request: Request, env: { HYPERDRIVE: Database
   const session = await redeem(request, env, "Device");
   if (session === "invalid") return new Response("Invalid enrollment token", { status: 400 });
   if (session === "expired") return new Response("Token expired or already used", { status: 401 });
-  return Response.json({ sessionToken: session, expiresInSeconds: 60 * 60 * 24 * 7 });
+  return respond(DeviceSession, { session_token: session, expires_in_seconds: 60 * 60 * 24 * 7 });
 }
 
 export async function enroll(request: Request, env: { HYPERDRIVE: Database }) {
@@ -89,7 +95,7 @@ export async function logout(request: Request, env: { HYPERDRIVE: Database }) {
     authorization === null ? cookieToken(request) : /^Bearer (\S+)$/.exec(authorization)?.[1];
   if (token) await Effect.runPromise(deleteSession(env.HYPERDRIVE, await sha256(token)));
   return Response.json(
-    { signedOut: true },
+    { signed_out: true },
     authorization === null ? { headers: { "set-cookie": cookie("", 0) } } : undefined,
   );
 }
@@ -104,7 +110,7 @@ export async function devicesRoute(
   access: { personId: string; device: string; trusted: boolean; path: string },
 ) {
   if (access.path === "/api/devices" && request.method === "GET")
-    return Response.json({
+    return respond(DeviceList, {
       devices: (await Effect.runPromise(devices(env.HYPERDRIVE, access.personId))).map(
         (device) => ({ ...device, current: device.id === access.device }),
       ),
@@ -114,8 +120,9 @@ export async function devicesRoute(
   if (access.path === "/api/devices/codes") {
     const code = randomToken();
     await Effect.runPromise(issueDeviceCode(env.HYPERDRIVE, access.personId, await sha256(code)));
-    return Response.json(
-      { code, expiresAt: new Date(Date.now() + 10 * 60_000).toISOString() },
+    return respond(
+      DeviceCode,
+      { code, expires_at: new Date(Date.now() + 10 * 60_000).toISOString() },
       { status: 201 },
     );
   }

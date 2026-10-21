@@ -315,16 +315,23 @@ private struct ChatActionButton: View {
     }
 }
 
-/// A hand-off or other event. A hand-off is the work item's card: its owner, live status and
-/// whether it has unread replies; it opens the thread. A published page opens as a layer.
+/// A hand-off or other event, opened through the record registry. A hand-off is the work item's
+/// card: its owner, live status and whether it has unread replies; it opens the thread. A
+/// published page opens as a layer, any other record where the registry says; a record kind this
+/// client does not know is only its text.
 struct EventCard: View {
     let store: StoreOf<Workspace>
     let event: ChatTimeline.Event
 
-    private var artifactID: String? { event.ref?.page }
+    private var target: RecordTarget? { event.ref.flatMap { Records.open($0, work: store.state.threadItem?.id) } }
+
+    private var artifactID: String? {
+        guard case .layer(.artifact(let id, _)) = target else { return nil }
+        return id
+    }
 
     private var workItem: WorkItem? {
-        guard case .workItem(let id) = event.ref else { return nil }
+        guard case .place(.thread(let id)) = target else { return nil }
         return store.work.value?.first { $0.id == id }
     }
 
@@ -342,6 +349,11 @@ struct EventCard: View {
                 }
             } else if let item = workItem {
                 handoff(item)
+            } else if let target {
+                ConversationCard(help: "Open it") { open(target) } label: {
+                    Image(systemName: "arrow.up.right.square").foregroundStyle(DevysColors.indigo).accessibilityHidden(true)
+                    lines(event.text, "")
+                }
             } else {
                 HStack(spacing: 8) {
                     Image(systemName: "checklist").foregroundStyle(DevysColors.indigo).accessibilityHidden(true)
@@ -373,6 +385,14 @@ struct EventCard: View {
                 Text("\(unread) new").font(DevysTypography.caption.weight(.semibold)).foregroundStyle(DevysColors.indigo)
             }
             item.state.chip(size: .small)
+        }
+    }
+
+    private func open(_ target: RecordTarget) {
+        switch target {
+        case .layer(let layer): store.send(.layerOpened(layer))
+        case .place(.thread(let id)): store.send(.threadOpened(id))
+        case .place(let place): store.send(.placeSelected(place))
         }
     }
 

@@ -7,12 +7,13 @@ public enum SurfaceContent: Equatable, Sendable {
     case diff(patch: String, comments: [DiffComment])
     /// A markdown document; `version` changes when its text is replaced from outside. A deck
     /// (`*.slides.md` or `marp: true`) edits beside its slides, and the page says `deck`.
-    case markdown(String, name: String, version: String)
+    /// `readOnly` shows it without editing.
+    case markdown(String, name: String, version: String, readOnly: Bool)
     case code(name: String, contents: String)
-    /// A spreadsheet file (xlsx, xls or CSV), edited in place.
-    case sheet(Data, name: String, version: String)
-    /// An Excalidraw drawing as its JSON.
-    case whiteboard(String, version: String)
+    /// A spreadsheet file (xlsx, xls or CSV), edited in place unless `readOnly`.
+    case sheet(Data, name: String, version: String, readOnly: Bool)
+    /// An Excalidraw drawing as its JSON, edited in place unless `readOnly`.
+    case whiteboard(String, version: String, readOnly: Bool)
 }
 
 /// An edited file as the page writes it: text, or bytes.
@@ -166,10 +167,12 @@ public final class SurfaceBridge: NSObject, WKScriptMessageHandler {
                 "kind": "diff", "patch": patch, "dark": dark,
                 "comments": comments.map { ["path": $0.path, "side": $0.side, "start": $0.start, "end": $0.end, "text": $0.text] }
             ]
-        case .markdown(let markdown, let name, let version): ["kind": "markdown", "name": name, "markdown": markdown, "version": version, "dark": dark]
+        case .markdown(let markdown, let name, let version, let readOnly):
+            ["kind": "markdown", "name": name, "markdown": markdown, "version": version, "readOnly": readOnly, "dark": dark]
         case .code(let name, let contents): ["kind": "code", "name": name, "contents": contents, "dark": dark]
-        case .sheet(let data, let name, let version): ["kind": "sheet", "name": name, "base64": data.base64EncodedString(), "version": version, "dark": dark]
-        case .whiteboard(let json, let version): ["kind": "whiteboard", "json": json, "version": version, "dark": dark]
+        case .sheet(let data, let name, let version, let readOnly):
+            ["kind": "sheet", "name": name, "base64": data.base64EncodedString(), "version": version, "readOnly": readOnly, "dark": dark]
+        case .whiteboard(let json, let version, let readOnly): ["kind": "whiteboard", "json": json, "version": version, "readOnly": readOnly, "dark": dark]
         }
         guard let data = try? JSONSerialization.data(withJSONObject: payload), let json = String(bytes: data, encoding: .utf8) else { return }
         view.evaluateJavaScript("window.devysSurface.show(\(json))")

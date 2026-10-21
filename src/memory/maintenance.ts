@@ -139,7 +139,7 @@ function mayReplace(change: ConsolidationChange, observations: Observation[]) {
     ...cited.map((observation) => Date.parse(observation.observedAt)),
   );
   return (old: Claim) => {
-    const oldEvidence = old.evidence.map((evidence) => Date.parse(evidence.observedAt));
+    const oldEvidence = old.evidence.map((evidence) => Date.parse(evidence.observed_at));
     if (latestEvidence < Math.max(...oldEvidence)) return false;
     if (old.source_operation_id.startsWith("consolidate:")) return true;
     const priorTime = Math.max(Date.parse(old.updated_at), ...oldEvidence);

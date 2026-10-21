@@ -79,13 +79,11 @@ extension Workspace {
         setModel(model, for: employeeID, state: &state)
         state.models.errors[employeeID] = nil
         let runtime = runtime
-        let session = session
         store.addTask {
             do {
                 let saved = try await runtime.setModel(scope, model)
                 try store.send(Action(.model(.saved(employeeID: employeeID, model: saved))))
             } catch let error as DevysHTTPError {
-                if error == .unauthorized { await session.expire() }
                 try store.send(Action(.model(.saveFailed(employeeID: employeeID, previous: previous, message: Self.modelMessage(for: error)))))
             } catch {
                 try store.send(Action(.model(.saveFailed(
