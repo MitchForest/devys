@@ -43,7 +43,7 @@ export const Api = Cloudflare.Worker(
       vite: {},
       compatibilityDate: "2026-10-03",
       compatibilityFlags: ["nodejs_compat"],
-      // The dispatcher: ready commitments reach their employees within a minute.
+      // The dispatcher: ready work items reach their employees within a minute.
       crons: ["* * * * *"],
       observability: { enabled: true, traces: { enabled: true } },
       env: {

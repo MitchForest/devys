@@ -45,7 +45,7 @@ struct Overview: View {
         }
     }
 
-    @ViewBuilder private func summary(_ project: Project, work: [Commitment]) -> some View {
+    @ViewBuilder private func summary(_ project: Project, work: [WorkItem]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             if let goal = project.goal {
                 Text(goal).font(DevysTypography.body).foregroundStyle(DevysColors.ink)
@@ -109,10 +109,10 @@ struct Overview: View {
         }
     }
 
-    @ViewBuilder private func workSection(_ project: Project, work: [Commitment]) -> some View {
+    @ViewBuilder private func workSection(_ project: Project, work: [WorkItem]) -> some View {
         let done = work.filter { $0.state.group == .done }
         PanelSection(title: "Work") {
-            PanelAction(title: "Thread") { store.send(.newTaskTapped(project: project.id)) }
+            PanelAction(title: "Thread") { store.send(.newWorkItemTapped(project: project.id)) }
         } content: {
             if work.isEmpty {
                 Text("No threads yet. Ask in the channel and work starts here.")

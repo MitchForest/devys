@@ -50,7 +50,7 @@ struct RightPanel: View {
         case .home: NeedsYou(store: store, close: close)
         case .direct(let id): Desk(store: store, employeeID: id, close: close).id(id)
         case .project(let id): Overview(store: store, projectID: id, close: close).id(id)
-        case .thread(let id): WorkCard(store: store, commitmentID: id, close: close).id(id)
+        case .thread(let id): WorkCard(store: store, workItemID: id, close: close).id(id)
         }
     }
 }
@@ -145,7 +145,7 @@ extension PanelSection where Action == EmptyView {
     }
 }
 
-/// A small text button beside a panel section's title, as "+ Task".
+/// A small text button beside a panel section's title, as "+ Work item".
 struct PanelAction: View {
     let title: String
     let action: () -> Void

@@ -9,7 +9,7 @@ import { apiRoute } from "../src/app/http.ts";
 import { answerDecision, grant, pendingDecisions } from "../src/authority/service.ts";
 import { sha256 } from "../src/protocol/bytes.ts";
 import { Invocation } from "../src/protocol/capability.ts";
-import { createCommitment, commitment } from "../src/work/service.ts";
+import { createWorkItem, workItem } from "../src/work/service.ts";
 import { createProject } from "../src/work/projects.ts";
 import { messages } from "../src/conversations/service.ts";
 import { createEmployee } from "../src/identity/service.ts";
@@ -18,14 +18,14 @@ import { business, db, sql } from "./fixtures/postgres.ts";
 const bindings = env as unknown as Env;
 const catalog = capabilities(bindings);
 const named = (name: string) => catalog.find((item) => item.name === name)!;
-const as = (scope: { businessId: string; employeeId: string }, commitmentId?: string) =>
+const as = (scope: { businessId: string; employeeId: string }, workItemId?: string) =>
   Effect.provideService(Invocation, {
     ...scope,
-    ...(commitmentId ? { commitmentId } : {}),
+    ...(workItemId ? { workItemId } : {}),
     operationId: crypto.randomUUID(),
     authorize: (capability, input) =>
       Effect.promise(() =>
-        authorize(bindings, scope, capability, input, commitmentId ? { commitmentId } : {}),
+        authorize(bindings, scope, capability, input, workItemId ? { workItemId } : {}),
       ).pipe(
         Effect.flatMap((outcome) =>
           outcome.outcome === "allow" ? Effect.void : Effect.fail(new Error(outcome.outcome)),
@@ -127,7 +127,7 @@ it("an owner's rejection stands, and an approval covers only the work item it wa
   const [one, two] = await Promise.all(
     ["One", "Two"].map((title) =>
       Effect.runPromise(
-        createCommitment(db, scope.businessId, {
+        createWorkItem(db, scope.businessId, {
           id: crypto.randomUUID(),
           owner: scope.employeeId,
           title,
@@ -137,15 +137,15 @@ it("an owner's rejection stands, and an approval covers only the work item it wa
     ),
   );
   const other = { name: "c.txt", content: "C" };
-  const forOne = await authorize(bindings, scope, create, other, { commitmentId: one!.id });
+  const forOne = await authorize(bindings, scope, create, other, { workItemId: one!.id });
   const oneId = forOne.outcome === "ask" ? forOne.decisionId! : "";
   await Effect.runPromise(
     answerDecision(db, scope.businessId, oneId, { approve: true, by: person }),
   );
-  expect((await authorize(bindings, scope, create, other, { commitmentId: two!.id })).outcome).toBe(
+  expect((await authorize(bindings, scope, create, other, { workItemId: two!.id })).outcome).toBe(
     "ask",
   );
-  expect((await authorize(bindings, scope, create, other, { commitmentId: one!.id })).outcome).toBe(
+  expect((await authorize(bindings, scope, create, other, { workItemId: one!.id })).outcome).toBe(
     "allow",
   );
 });
@@ -155,7 +155,7 @@ it("work's conditions only narrow, and taking it over stops the employee acting 
   const read = named("readPublicUrl");
   await Effect.runPromise(grant(db, scope, { capability: read, mode: "auto" }));
   const work = await Effect.runPromise(
-    createCommitment(db, scope.businessId, {
+    createWorkItem(db, scope.businessId, {
       id: crypto.randomUUID(),
       owner: scope.employeeId,
       title: "Research Search Intelligence",
@@ -170,7 +170,7 @@ it("work's conditions only narrow, and taking it over stops the employee acting 
         scope,
         read,
         { url: "https://searchintelligence.com/x" },
-        { commitmentId: work.id },
+        { workItemId: work.id },
       )
     ).outcome,
   ).toBe("allow");
@@ -181,15 +181,15 @@ it("work's conditions only narrow, and taking it over stops the employee acting 
         scope,
         read,
         { url: "https://example.com" },
-        { commitmentId: work.id },
+        { workItemId: work.id },
       )
     ).outcome,
   ).toBe("deny");
-  // Outside that commitment the grant alone applies.
+  // Outside that work item the grant alone applies.
   expect((await authorize(bindings, scope, read, { url: "https://example.com" })).outcome).toBe(
     "allow",
   );
-  await sql.run("UPDATE commitments SET taken_over_by = 'someone' WHERE id = $1", [work.id]);
+  await sql.run("UPDATE work_items SET taken_over_by = 'someone' WHERE id = $1", [work.id]);
   expect(
     (
       await authorize(
@@ -197,12 +197,12 @@ it("work's conditions only narrow, and taking it over stops the employee acting 
         scope,
         read,
         { url: "https://searchintelligence.com/x" },
-        { commitmentId: work.id },
+        { workItemId: work.id },
       )
     ).outcome,
   ).toBe("deny");
   // The employee cannot change work a person has taken over.
-  const update = named("commitmentUpdate");
+  const update = named("workUpdate");
   await Effect.runPromise(grant(db, scope, { capability: update, mode: "auto" }));
   const result = await Effect.runPromise(
     update
@@ -228,18 +228,18 @@ it("due work reaches its employee once per revision, and a lost hand-off is resu
     },
   } as unknown as Env;
   const work = await Effect.runPromise(
-    createCommitment(db, scope.businessId, {
+    createWorkItem(db, scope.businessId, {
       id: crypto.randomUUID(),
       owner: scope.employeeId,
       title: "Draft the PR inquiry",
       createdBy: "person:test",
     }),
   );
-  // Simulate the hand-off landing but its record failing: the commitment stays due.
+  // Simulate the hand-off landing but its record failing: the work item stays due.
   const revert = async () => {
     if (failMark)
       await sql.run(
-        "UPDATE commitments SET state = 'ready', submitted_revision = NULL WHERE id = $1",
+        "UPDATE work_items SET state = 'ready', submitted_revision = NULL WHERE id = $1",
         [work.id],
       );
     failMark = false;
@@ -250,13 +250,13 @@ it("due work reaches its employee once per revision, and a lost hand-off is resu
   await dispatchDue(agentEnv);
   const mine = received.filter((item) => item.chatId.endsWith(work.id));
   expect(mine.map((item) => item.messageId)).toEqual([`${work.id}:1`, `${work.id}:1`]);
-  expect((await Effect.runPromise(commitment(db, scope.businessId, work.id)))?.state).toBe(
+  expect((await Effect.runPromise(workItem(db, scope.businessId, work.id)))?.state).toBe(
     "in_progress",
   );
   // A paused employee's work waits.
   await sql.run("UPDATE employees SET paused_at = now() WHERE id = $1", [scope.employeeId]);
   const later = await Effect.runPromise(
-    createCommitment(db, scope.businessId, {
+    createWorkItem(db, scope.businessId, {
       id: crypto.randomUUID(),
       owner: scope.employeeId,
       title: "Later",
@@ -277,7 +277,7 @@ it("work in a project is handed over with a card in its thread and in the projec
     createProject(db, scope.businessId, { id: crypto.randomUUID(), name: "Launch" }),
   );
   const work = await Effect.runPromise(
-    createCommitment(db, scope.businessId, {
+    createWorkItem(db, scope.businessId, {
       id: crypto.randomUUID(),
       owner: scope.employeeId,
       title: "Started from a message",
@@ -297,7 +297,7 @@ it("paused employees' work and a failing hand-off never hold up other work", asy
   const paused = await business();
   for (let index = 0; index < 21; index++)
     await Effect.runPromise(
-      createCommitment(db, paused.scope.businessId, {
+      createWorkItem(db, paused.scope.businessId, {
         id: crypto.randomUUID(),
         owner: paused.scope.employeeId,
         title: `Waiting ${index}`,
@@ -307,7 +307,7 @@ it("paused employees' work and a failing hand-off never hold up other work", asy
   await sql.run("UPDATE employees SET paused_at = now() WHERE id = $1", [paused.scope.employeeId]);
   const { scope } = await business();
   const broken = await Effect.runPromise(
-    createCommitment(db, scope.businessId, {
+    createWorkItem(db, scope.businessId, {
       id: crypto.randomUUID(),
       owner: scope.employeeId,
       title: "Fails",
@@ -315,7 +315,7 @@ it("paused employees' work and a failing hand-off never hold up other work", asy
     }),
   );
   const fine = await Effect.runPromise(
-    createCommitment(db, scope.businessId, {
+    createWorkItem(db, scope.businessId, {
       id: crypto.randomUUID(),
       owner: scope.employeeId,
       title: "Works",
@@ -337,9 +337,7 @@ it("paused employees' work and a failing hand-off never hold up other work", asy
   } as unknown as Env;
   await dispatchDue(agentEnv);
   expect(received.some((chat) => chat.endsWith(fine.id))).toBe(true);
-  expect((await Effect.runPromise(commitment(db, scope.businessId, broken.id)))?.state).toBe(
-    "ready",
-  );
+  expect((await Effect.runPromise(workItem(db, scope.businessId, broken.id)))?.state).toBe("ready");
 });
 
 it("members manage work and answer requests over HTTP; stale revisions conflict", async () => {
@@ -389,8 +387,8 @@ it("members manage work and answer requests over HTTP; stale revisions conflict"
     taken_over_by: string;
   };
   expect(taken.taken_over_by).toBe(person);
-  const listed = (await (await call("/work")).json()) as { commitments: { id: string }[] };
-  expect(listed.commitments.map((c) => c.id)).toContain(created.id);
+  const listed = (await (await call("/work")).json()) as { workItems: { id: string }[] };
+  expect(listed.workItems.map((c) => c.id)).toContain(created.id);
 
   await Effect.runPromise(grant(db, scope, { capability: named("driveCreate"), mode: "ask" }));
   // Asked for a work item the employee still holds (a taken-over one fences it).
@@ -402,7 +400,7 @@ it("members manage work and answer requests over HTTP; stale revisions conflict"
     scope,
     named("driveCreate"),
     { name: "n.txt", content: "c" },
-    { commitmentId: asking.id },
+    { workItemId: asking.id },
   );
   const { decisions } = (await (await call("/decisions")).json()) as {
     decisions: { id: string }[];
@@ -411,7 +409,7 @@ it("members manage work and answer requests over HTTP; stale revisions conflict"
   expect((await call(`/decisions/${decisions[0]!.id}/approve`, {})).status).toBe(200);
   expect((await call(`/decisions/${decisions[0]!.id}/reject`, {})).status).toBe(409);
   // The work item still lists the request once answered; the business names its members.
-  const forItem = (await (await call(`/decisions?commitment=${asking.id}`)).json()) as {
+  const forItem = (await (await call(`/decisions?workItem=${asking.id}`)).json()) as {
     decisions: { id: string; status: string }[];
   };
   expect(forItem.decisions).toEqual([
@@ -524,7 +522,7 @@ it("handing back work with no coding sessions puts it back in the dispatcher's h
   const { markSubmitted } = await import("../src/work/service.ts");
   const { scope } = await business();
   const work = await Effect.runPromise(
-    createCommitment(db, scope.businessId, {
+    createWorkItem(db, scope.businessId, {
       id: crypto.randomUUID(),
       owner: scope.employeeId,
       title: "Taken and returned",
@@ -533,7 +531,7 @@ it("handing back work with no coding sessions puts it back in the dispatcher's h
   );
   await Effect.runPromise(markSubmitted(db, work.id, work.revision));
   await handBack(bindings, scope.businessId, work.id);
-  const after = (await Effect.runPromise(commitment(db, scope.businessId, work.id)))!;
+  const after = (await Effect.runPromise(workItem(db, scope.businessId, work.id)))!;
   expect(after.state).toBe("ready");
   expect(after.revision).toBeGreaterThan(work.revision);
 });
@@ -551,14 +549,14 @@ it("a create rerun under the same operation id makes one work item and one proje
         }),
       ),
     );
-  const work = named("commitmentCreate").execute({ title: "Draft the inquiry" });
+  const work = named("workCreate").execute({ title: "Draft the inquiry" });
   const first = (await rerun(work)) as { id: string };
   expect(((await rerun(work)) as { id: string }).id).toBe(first.id);
   const project = named("projectCreate").execute({ name: "Launch" });
   const made = (await rerun(project)) as { id: string };
   expect(((await rerun(project)) as { id: string }).id).toBe(made.id);
   const counted = await sql.row<{ items: number; projects: number }>(
-    `SELECT (SELECT count(*)::int FROM commitments WHERE business_id = $1) AS items,
+    `SELECT (SELECT count(*)::int FROM work_items WHERE business_id = $1) AS items,
             (SELECT count(*)::int FROM projects WHERE business_id = $1) AS projects`,
     [scope.businessId],
   );
@@ -584,7 +582,7 @@ it("an employee changes only its own work items; Operations changes anyone's", a
       assertActive: () => Effect.void,
     });
   const mine = await Effect.runPromise(
-    createCommitment(db, scope.businessId, {
+    createWorkItem(db, scope.businessId, {
       id: crypto.randomUUID(),
       owner: scope.employeeId,
       title: "Plan the launch",
@@ -592,13 +590,13 @@ it("an employee changes only its own work items; Operations changes anyone's", a
     }),
   );
   const update = (id: string, revision: number) =>
-    named("commitmentUpdate").execute({ id, expectedRevision: revision, nextAction: "Draft" });
+    named("workUpdate").execute({ id, expectedRevision: revision, nextAction: "Draft" });
   const refused = await Effect.runPromise(
     Effect.flip(update(mine.id, mine.revision).pipe(acting(engineer.id))),
   );
   expect(refused).toMatchObject({ code: "forbidden" });
   const theirs = await Effect.runPromise(
-    createCommitment(db, scope.businessId, {
+    createWorkItem(db, scope.businessId, {
       id: crypto.randomUUID(),
       owner: engineer.id,
       title: "Build the page",

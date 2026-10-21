@@ -25,7 +25,7 @@ public struct TerminalInfo: Equatable, Sendable, Decodable, Identifiable, Hashab
 public enum TerminalTarget: Equatable, Sendable {
     case business
     case work(String)
-    case resume(assignmentID: String)
+    case resume(codingSessionID: String)
 }
 
 extension DevysHTTPClient {

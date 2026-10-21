@@ -43,7 +43,7 @@ today; target design and historical evidence must remain distinguishable.
 - Devys is intended to be open source and use existing models. No model training
   or fine-tuning. Keep Pi's installed provider/configuration boundary: models and
   providers are declared once in `config/models.ts`; employees pick one at setup. Coding
-  harness SDKs are explicit delegate adapters, not a new foreground model router.
+  harness SDKs are explicit coding-session adapters, not a new foreground model router.
 - Prefer general tools, context, compute, and feedback. Add reasoning scaffolding
   for observed failures, record evidence, and reevaluate it as models improve.
 - Preserve separate principals and private context. Memory and external replies
@@ -69,7 +69,7 @@ today; target design and historical evidence must remain distinguishable.
   compaction, retries, task state and recovery. Derive execution status from Pi. The
   conversations component owns the shared record of what was said in direct chats, project channels and
   work threads; employees read it through deliveries and write it through the channel.
-- Codex/Claude Code own their delegated coding sessions. Devys owns assignment
+- Codex/Claude Code own their delegated coding sessions. Devys owns the coding session's
   scope, runner handles, authority and accepted artifacts; do not mirror provider
   turns into a second agent run ledger or silently replay uncertain side effects.
 - Business records use Postgres through Hyperdrive (PlanetScale in cloud mode, local
@@ -78,7 +78,7 @@ today; target design and historical evidence must remain distinguishable.
   writable authority.
 - Use Bidnight's actual PiHarness/Pi Durable pattern. Closekit's request-scoped
   assistant run records are not a Pi runtime implementation.
-- Business commitments, outboxes and reconciliation survive stopped agents.
+- Business work items, outboxes and reconciliation survive stopped agents.
   The dispatcher is wiring: it submits due work to Pi under a stable operation id
   and relies on Pi's idempotent `submit`. No handoff ledger or second scheduler.
   One Durable Object per business employee. Its Pi sessions (one per direct chat, channel or
@@ -95,7 +95,7 @@ today; target design and historical evidence must remain distinguishable.
 - Memory callers use its contract. Preserve evidence, revision checks, forgetting
   exclusions and portable migration; adapters cannot query another domain's tables.
 - Effect 4 is the Devys capability language. Share validation and authority across
-  native tools, Code Mode, HTTP/MCP, views, browser actions and coding delegates.
+  native tools, Code Mode, HTTP/MCP, views, browser actions and coding sessions.
 - Use supported Code Mode and sandbox APIs. Report arbitrary interrupted programs
   truthfully; do not add automatic nested replay or dependency patches to promise
   stronger recovery. Preserve bounded execution, stop and durable-result receipts.
@@ -117,7 +117,7 @@ today; target design and historical evidence must remain distinguishable.
   MFA, CAPTCHA, business verification and provider enablement are external
   dependencies; use secure owner handoffs rather than inventing substitutes.
 - `.docs/AUTHORITY.md` owns vocabulary and semantics: grants with capability-typed
-  constraints, commitment conditions that only narrow, owner decisions signed by
+  constraints, work-item conditions that only narrow, owner decisions signed by
   Secure Enclave device keys, and credentials held by the broker.
 - Payment credentials and connection secrets stay out of models, logs, screenshots,
   ordinary workspaces and generated UI. The broker injects them; agents hold handles.
@@ -130,7 +130,7 @@ today; target design and historical evidence must remain distinguishable.
 - Record intent, dispatch identity, receipts and uncertainty. Inspect uncertain
   sends, charges, domain orders, account creation and deployments before retry.
   Stop/revocation cannot undo an effect already accepted remotely.
-- Use one coding worktree per assignment. Isolation guarantees belong to sandboxed
+- Use one coding worktree per coding session. Isolation guarantees belong to sandboxed
   runners; the trusted Mac host claims only behaviour guarantees. Separate edit
   authority from repository publication, deployment, purchases and policy changes.
 - Account ownership must remain explicit: Devys email is not automatically a business's

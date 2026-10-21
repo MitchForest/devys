@@ -9,7 +9,7 @@ export interface TerminalSession {
   title: string;
   cwd: string;
   /** The coding session it resumed, for "Open in Codex/Claude". */
-  assignmentId: string | null;
+  codingSessionId: string | null;
   cols: number;
   rows: number;
   startedAt: string;
@@ -29,7 +29,7 @@ export interface OpenRequest {
   cwd: string;
   /** Without one, the owner's login shell. */
   resume?: ResumeCommand;
-  assignmentId?: string;
+  codingSessionId?: string;
   cols: number;
   rows: number;
 }

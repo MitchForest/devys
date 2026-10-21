@@ -194,7 +194,7 @@ public struct GlanceItem: Equatable, Sendable, Decodable, Identifiable {
     public let title: String
     public let employeeID: String
     public let projectID: String?
-    public let state: CommitmentState
+    public let state: WorkItemState
     public let waitCondition: String?
     public let dueAt: String?
     public let updatedAt: String
@@ -204,7 +204,7 @@ public struct GlanceItem: Equatable, Sendable, Decodable, Identifiable {
         title: String,
         employeeID: String,
         projectID: String? = nil,
-        state: CommitmentState = .inProgress,
+        state: WorkItemState = .inProgress,
         waitCondition: String? = nil,
         dueAt: String? = nil,
         updatedAt: String = "2026-10-19T00:00:00.000Z"

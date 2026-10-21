@@ -81,7 +81,7 @@ export function terminalsHost(
       id,
       title: request.title.slice(0, 120),
       cwd: request.cwd,
-      assignmentId: request.assignmentId ?? null,
+      codingSessionId: request.codingSessionId ?? null,
       cols: request.cols,
       rows: request.rows,
       startedAt: new Date().toISOString(),

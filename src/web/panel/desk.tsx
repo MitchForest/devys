@@ -107,10 +107,10 @@ export function Desk({ employeeId, close }: { employeeId: string; close: () => v
           action={
             <button
               type="button"
-              onClick={() => actions.newTask({ owner: employee.id })}
+              onClick={() => actions.newWorkItem({ owner: employee.id })}
               className="text-caption text-ink-3 hover:text-ink-2"
             >
-              <Plus className="inline size-3" /> Task
+              <Plus className="inline size-3" /> Work item
             </button>
           }
         >
@@ -315,7 +315,7 @@ function RetireButton({ employee }: { employee: Employee }) {
             <p className="text-body text-ink-2">
               {openWork === 0
                 ? `${employee.name} has no open work.`
-                : `${employee.name}'s ${openWork} open ${openWork === 1 ? "task moves" : "tasks move"} to the colleague you choose.`}
+                : `${employee.name}'s ${openWork} open ${openWork === 1 ? "work item moves" : "work items move"} to the colleague you choose.`}
             </p>
             <Field label="Hand open work to">
               <select

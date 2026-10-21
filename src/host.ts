@@ -1,12 +1,12 @@
 /**
- * The trusted Mac host process (local mode): the runner and the coding delegates behind one
+ * The trusted Mac host process (local mode): the runner and the coding sessions behind one
  * loopback server and one token. The local launcher bundles and supervises it.
  */
 import { join } from "node:path";
 import { browsersHost } from "./browser/host/server.ts";
 import { claudeAdapter } from "./apps/code/host/claude.ts";
 import { codexAdapter } from "./apps/code/host/codex.ts";
-import { delegatesHost } from "./apps/code/host/server.ts";
+import { codingHost } from "./apps/code/host/server.ts";
 import { forgetHostSettings } from "./protocol/host.ts";
 import { bunPty, terminalsHost } from "./terminal/host/server.ts";
 import { startHost } from "./workspace/host/server.ts";
@@ -22,7 +22,7 @@ const port = Number(process.env.DEVYS_HOST_PORT ?? 8788);
 
 const codexHome = process.env.DEVYS_CODEX_HOME ?? join(home, ".codex");
 const claudeConfig = process.env.DEVYS_CLAUDE_CONFIG_DIR ?? join(home, ".claude");
-// Everything below inherits this environment: employees' shells, coding delegates and
+// Everything below inherits this environment: employees' shells, coding sessions and
 // terminals. The host's settings, including its token, stop here.
 forgetHostSettings(process.env);
 /** The owner's environment without Anthropic or Claude Code settings that override a login. */
@@ -45,7 +45,7 @@ const terminals = terminalsHost({
         },
 });
 
-const delegates = delegatesHost({
+const coding = codingHost({
   spared: () => terminals.ttys(),
   work,
   data,
@@ -60,12 +60,12 @@ const delegates = delegatesHost({
     ),
   }),
   async deliver(events) {
-    const response = await fetch(`${worker}/internal/delegates/events`, {
+    const response = await fetch(`${worker}/internal/coding/events`, {
       method: "POST",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       body: JSON.stringify({ events }),
     });
-    if (!response.ok) throw new Error(`The Worker refused delegate events: ${response.status}`);
+    if (!response.ok) throw new Error(`The Worker refused coding events: ${response.status}`);
     return ((await response.json()) as { delivered: string[] }).delivered;
   },
 });
@@ -75,7 +75,7 @@ const host = await startHost({
   data,
   work,
   port,
-  routes: [delegates, terminals, browsersHost({ data })],
+  routes: [coding, terminals, browsersHost({ data })],
 });
 console.log(`Devys Mac host on 127.0.0.1:${host.port}`);
 const stop = () => void host.close().then(() => process.exit(0));

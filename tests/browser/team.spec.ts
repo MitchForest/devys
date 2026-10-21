@@ -80,33 +80,33 @@ test("the owner hires from a template, edits and retires, and talks to any emplo
     ))!;
     const overview = page.getByRole("region", { name: "Launch overview" });
     await overview.getByRole("button", { name: "Thread" }).click();
-    const dialog = page.getByRole("dialog", { name: "New task" });
+    const dialog = page.getByRole("dialog", { name: "New work item" });
     await dialog.getByLabel("Title").fill("Write the launch post");
     await dialog.getByLabel("Owner").selectOption({ label: "Growth" });
     await dialog.getByLabel("Objective").fill("A post the owner approves before Friday");
     await expect(dialog.getByLabel("Project")).toHaveValue(project.id);
-    await dialog.getByRole("button", { name: "Create task" }).click();
+    await dialog.getByRole("button", { name: "Create work item" }).click();
     await expect(dialog).toBeHidden();
-    const task = (await sql.row<{
+    const workItem = (await sql.row<{
       id: string;
       owner_employee_id: string;
       project_id: string;
     }>(
-      "SELECT id, owner_employee_id, project_id FROM commitments WHERE business_id = $1 AND title = 'Write the launch post'",
+      "SELECT id, owner_employee_id, project_id FROM work_items WHERE business_id = $1 AND title = 'Write the launch post'",
       [owner.business],
     ))!;
-    expect(task.owner_employee_id).toBe(growth.id);
-    expect(task.project_id).toBe(project.id);
+    expect(workItem.owner_employee_id).toBe(growth.id);
+    expect(workItem.project_id).toBe(project.id);
 
     // Its thread opens in the middle, under the project, with its work card.
     await expect(page.getByTestId("place-title")).toHaveText("Write the launch post");
     const card = page.getByRole("region", { name: "Work item" });
-    await expect(card.getByTestId("task-owner")).toHaveText("Growth");
+    await expect(card.getByTestId("work-item-owner")).toHaveText("Growth");
     await expect(card.getByTestId("panel-title")).toHaveText("Write the launch post");
     await page.getByRole("textbox", { name: "Reply" }).fill("Start with the outline.");
     await page.getByRole("button", { name: "Send" }).click();
     await expect.poll(() => sent.length).toBe(2);
-    expect(sent[1]!.key).toBe(`work:${task.id}`);
+    expect(sent[1]!.key).toBe(`work:${workItem.id}`);
     await page.getByRole("button", { name: "Back (⌘[)" }).click();
     await expect(overview.getByText("Write the launch post")).toBeVisible();
 
@@ -117,15 +117,15 @@ test("the owner hires from a template, edits and retires, and talks to any emplo
       .getByRole("button", { name: "Retire…" })
       .click();
     const retire = page.getByRole("dialog", { name: "Retire Growth?" });
-    await expect(retire).toContainText("1 open task moves");
+    await expect(retire).toContainText("1 open work item moves");
     await retire.getByLabel("Hand open work to").selectOption({ label: "Head of Operations" });
     await retire.getByRole("button", { name: "Retire", exact: true }).click();
     await expect(page.getByTestId("place-title")).toHaveText("Head of Operations");
     await expect(sidebar(page).getByRole("button", { name: "Growth" })).toHaveCount(0);
     expect(
       (await sql.row<{ owner_employee_id: string }>(
-        "SELECT owner_employee_id FROM commitments WHERE id = $1",
-        [task.id],
+        "SELECT owner_employee_id FROM work_items WHERE id = $1",
+        [workItem.id],
       ))!.owner_employee_id,
     ).toBe(owner.operations);
     expect(

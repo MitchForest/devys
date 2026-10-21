@@ -91,7 +91,7 @@ it("browser actions name the work they serve, so the owner sees the browser ther
   await Effect.runPromise(
     named("browserOpen")
       .execute({ url: "https://a.example/" })
-      .pipe(as(scope, { commitmentId: "work-7" })),
+      .pipe(as(scope, { workItemId: "work-7" })),
   );
   await Effect.runPromise(
     named("browserRead")

@@ -10,10 +10,10 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, expect, it } from "vitest";
-import type { DelegateEvent, StartRequest } from "../src/apps/code/contract.ts";
-import { hostDelegates } from "../src/apps/code/host-client.ts";
+import type { CodingEvent, StartRequest } from "../src/apps/code/contract.ts";
+import { hostCoding } from "../src/apps/code/host-client.ts";
 import type { ProviderAdapter, ProviderEvents } from "../src/apps/code/host/provider.ts";
-import { delegatesHost } from "../src/apps/code/host/server.ts";
+import { codingHost } from "../src/apps/code/host/server.ts";
 import { startHost } from "../src/workspace/host/server.ts";
 
 const token = "test-token";
@@ -86,14 +86,14 @@ function fakeProvider() {
 }
 
 async function host() {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), "devys-delegates-")));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "devys-coding-")));
   const repository = join(root, "repo");
   mkdirSync(repository);
   git(repository, "init", "--initial-branch=main");
   writeFileSync(join(repository, "README.md"), "hello\n");
   git(repository, "add", ".");
   git(repository, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "init");
-  const delivered: DelegateEvent[] = [];
+  const delivered: CodingEvent[] = [];
   let refuse = false;
   // Event kinds the stand-in Worker fails to deliver, as with an event it cannot process.
   const poison = new Set<string>();
@@ -136,7 +136,7 @@ esac
       shell: "/bin/sh",
       env,
       routes: [
-        delegatesHost({
+        codingHost({
           work: join(root, "work"),
           data,
           providers: provider.factory,
@@ -159,8 +159,7 @@ esac
     return server;
   };
   let server = await open();
-  const client = (as = scope) =>
-    hostDelegates({ url: `http://127.0.0.1:${server.port}`, token }, as);
+  const client = (as = scope) => hostCoding({ url: `http://127.0.0.1:${server.port}`, token }, as);
   return {
     root,
     repository,
@@ -198,7 +197,7 @@ const until = async <T>(read: () => T, done: (value: T) => boolean) => {
   throw new Error("Timed out");
 };
 
-it("each assignment gets its own worktree and branch from the repository's head, once", async () => {
+it("each coding session gets its own worktree and branch from the repository's head, once", async () => {
   const state = await host();
   const head = git(state.repository, "rev-parse", "HEAD");
   const started = await state.client().start(request("a-1", { path: state.repository }));
@@ -208,7 +207,7 @@ it("each assignment gets its own worktree and branch from the repository's head,
     branch: "devys/a-1",
   });
   expect(git(started.worktree, "rev-parse", "--abbrev-ref", "HEAD")).toBe("devys/a-1");
-  // Starting the same assignment again returns it without a second session.
+  // Starting the same coding session again returns it without a second session.
   expect(await state.client().start(request("a-1", { path: state.repository }))).toEqual(started);
   expect(state.provider.calls.filter((call) => call.kind === "start")).toHaveLength(1);
   await until(
@@ -218,7 +217,7 @@ it("each assignment gets its own worktree and branch from the repository's head,
   // Another business cannot see it.
   await expect(
     state.client({ businessId: "business-2", employeeId: "employee-1" }).inspect("a-1"),
-  ).rejects.toThrow(/No such assignment/);
+  ).rejects.toThrow(/No such coding session/);
 });
 
 it("a new repository starts empty with a first commit to branch from", async () => {
@@ -235,12 +234,15 @@ it("a finished turn is delivered with what changed; steering only while it works
   const state = await host();
   const started = await state.client().start(request("a-2", { path: state.repository }));
   expect(await state.client().send("a-2", "Also add tests")).toEqual({ steered: true });
-  state.provider.finish(started.sessionId, "Added the feature and its tests.");
+  state.provider.finish(started.providerSessionId, "Added the feature and its tests.");
   const finished = await until(
     () => state.delivered.find((event) => event.kind === "finished"),
     Boolean,
   );
-  expect(finished).toMatchObject({ assignmentId: "a-2", text: "Added the feature and its tests." });
+  expect(finished).toMatchObject({
+    codingSessionId: "a-2",
+    text: "Added the feature and its tests.",
+  });
   expect(finished!.diffStat).toContain("feature.txt (new)");
   expect(await state.client().inspect("a-2")).toMatchObject({
     state: "idle",
@@ -273,7 +275,7 @@ it("deploys run the accepted commit with the business's secrets, check the URL, 
   const deploy = (command: string, extra: { commit?: string } = {}) =>
     state.client().deploy("a-d", { stage: "preview", command, ...extra });
   await expect(deploy("true")).rejects.toThrow(/still working|accept it first/);
-  state.provider.finish(started.sessionId, "Done.");
+  state.provider.finish(started.providerSessionId, "Done.");
   await until(
     () => state.delivered,
     (events) => events.some((event) => event.kind === "finished"),
@@ -330,7 +332,7 @@ it("an event the Worker cannot deliver is retried without holding up later event
   const state = await host();
   state.poison.add("started");
   const started = await state.client().start(request("a-poison", { path: state.repository }));
-  state.provider.finish(started.sessionId, "Done.");
+  state.provider.finish(started.providerSessionId, "Done.");
   await until(
     () => state.delivered,
     (events) => events.some((event) => event.kind === "finished"),
@@ -349,7 +351,7 @@ it("accepting commits on the branch and reports the check against that commit", 
   await expect(state.client().accept("a-3", { message: "x", check: "true" })).rejects.toThrow(
     /still working/,
   );
-  state.provider.finish(started.sessionId, "Done.");
+  state.provider.finish(started.providerSessionId, "Done.");
   await until(
     () => state.delivered,
     (events) => events.some((event) => event.kind === "finished"),
@@ -368,11 +370,11 @@ it("accepting commits on the branch and reports the check against that commit", 
   );
   expect(checked!.check).toMatchObject({ commit: accepted.commit, exitCode: 0 });
   expect(checked!.check!.output).toContain("checked");
-  // The repository's own branch is untouched; the work lives on the assignment's branch.
+  // The repository's own branch is untouched; the work lives on the coding session's branch.
   expect(git(state.repository, "log", "-1", "--format=%s", "main")).toBe("init");
 });
 
-it("an assignment clones the business's GitHub repository and publishes accepted work once", async () => {
+it("a coding session clones the business's GitHub repository and publishes accepted work once", async () => {
   const state = await host();
   // A bare repository stands in for github.com/acme/site.
   const remote = join(state.root, "remote.git");
@@ -392,7 +394,7 @@ it("an assignment clones the business's GitHub repository and publishes accepted
     const publish = () =>
       state.client().publish("a-p", { repository: "acme/site", title: "Add it", body: "Checked." });
     await expect(publish()).rejects.toThrow(/still working/);
-    state.provider.finish(started.sessionId, "Done.");
+    state.provider.finish(started.providerSessionId, "Done.");
     await until(
       () => state.delivered,
       (events) => events.some((event) => event.kind === "finished"),
@@ -448,12 +450,12 @@ it("events wait for the Worker, and a host restart reports a working session int
   await state.client().start(request("a-4", { path: state.repository }));
   await new Promise((resolve) => setTimeout(resolve, 50));
   expect(state.delivered).toHaveLength(0);
-  expect(readFileSync(join(state.data, "delegate-events.json"), "utf8")).toContain("a-4:started");
+  expect(readFileSync(join(state.data, "coding-events.json"), "utf8")).toContain("a-4:started");
   await state.restart();
   state.refuse(false);
   const kinds = await until(
     () =>
-      state.delivered.filter((event) => event.assignmentId === "a-4").map((event) => event.kind),
+      state.delivered.filter((event) => event.codingSessionId === "a-4").map((event) => event.kind),
     (seen) => seen.includes("started") && seen.includes("interrupted"),
   );
   expect(kinds.filter((kind) => kind === "started")).toHaveLength(1);
@@ -497,13 +499,13 @@ it("interrupting a build stops what still runs in its worktree", async () => {
   ).toBe("stopped");
 });
 
-it("a moving repository head doesn't move an assignment's base", async () => {
+it("a moving repository head doesn't move a coding session's base", async () => {
   const state = await host();
   const started = await state.client().start(request("a-8", { path: state.repository }));
   writeFileSync(join(state.repository, "other.txt"), "meanwhile\n");
   git(state.repository, "add", ".");
   git(state.repository, "commit", "-m", "Someone else's change");
-  state.provider.finish(started.sessionId, "Done.");
+  state.provider.finish(started.providerSessionId, "Done.");
   await until(
     () => state.delivered,
     (events) => events.some((event) => event.kind === "finished"),

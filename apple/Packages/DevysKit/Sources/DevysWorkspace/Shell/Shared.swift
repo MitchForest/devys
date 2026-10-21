@@ -7,7 +7,7 @@ extension Business {
     var tileTint: BusinessTile.Tint { BusinessTile.Tint(rawValue: tint) ?? .blue }
 }
 
-extension CommitmentState {
+extension WorkItemState {
     var chip: StatusChip { chip(size: .regular) }
 
     func chip(size: StatusChip.Size) -> StatusChip {
@@ -75,21 +75,21 @@ extension Workspace.State {
     }
 
     /// Whether the signed-in person has taken the work item over from its employee.
-    func isMine(_ item: Commitment) -> Bool {
+    func isMine(_ item: WorkItem) -> Bool {
         item.takenOverBy != nil && item.takenOverBy == account?.person.id
     }
 
     /// Who has taken the work item over, as the signed-in person reads it; nil while its
     /// employee has it.
-    func takeoverTitle(_ item: Commitment) -> String? {
+    func takeoverTitle(_ item: WorkItem) -> String? {
         guard let person = item.takenOverBy else { return nil }
         if isMine(item) { return "You have it" }
         return "Taken over by \(members.first { $0.id == person }?.displayName ?? "another person")"
     }
 
     /// The owner's decisions waiting on this work item.
-    func decisions(for item: Commitment) -> [Decision] {
-        decisions.value?.filter { $0.commitmentID == item.id } ?? []
+    func decisions(for item: WorkItem) -> [Decision] {
+        decisions.value?.filter { $0.workItemID == item.id } ?? []
     }
 
     func employeeName(_ id: String) -> String {

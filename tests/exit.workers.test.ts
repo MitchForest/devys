@@ -5,7 +5,7 @@ import type { Env } from "../infra/api.ts";
 import { capabilities } from "../src/app/capabilities.ts";
 import { createMemory } from "../src/memory/service.ts";
 import { Invocation } from "../src/protocol/capability.ts";
-import { createCommitment } from "../src/work/service.ts";
+import { createWorkItem } from "../src/work/service.ts";
 import { createProject } from "../src/work/projects.ts";
 import { business, db, sql } from "./fixtures/postgres.ts";
 
@@ -30,7 +30,7 @@ it("B0 exit: an employee's capabilities see only its own business's work, projec
   const acme = await business("Acme");
   const globex = await business("Globex");
   await Effect.runPromise(
-    createCommitment(db, acme.business.id, {
+    createWorkItem(db, acme.business.id, {
       id: crypto.randomUUID(),
       owner: acme.scope.employeeId,
       title: "Acme launch",
@@ -46,9 +46,9 @@ it("B0 exit: an employee's capabilities see only its own business's work, projec
       "op-1",
     ),
   );
-  const theirs = (await call(acme.scope, "commitmentList", {})) as { commitments: unknown[] };
-  expect(theirs.commitments).toHaveLength(1);
-  expect(await call(globex.scope, "commitmentList", {})).toEqual({ commitments: [] });
+  const theirs = (await call(acme.scope, "workList", {})) as { workItems: unknown[] };
+  expect(theirs.workItems).toHaveLength(1);
+  expect(await call(globex.scope, "workList", {})).toEqual({ workItems: [] });
   expect(await call(globex.scope, "projectList", {})).toEqual({ projects: [] });
   const recalled = (await call(globex.scope, "recall", { query: "launch November" })) as {
     items: unknown[];
@@ -56,11 +56,11 @@ it("B0 exit: an employee's capabilities see only its own business's work, projec
   expect(recalled.items).toEqual([]);
   // A Globex employee cannot put itself in charge of Acme work.
   await expect(
-    call(globex.scope, "commitmentCreate", { title: "x", owner: acme.scope.employeeId }),
+    call(globex.scope, "workCreate", { title: "x", owner: acme.scope.employeeId }),
   ).rejects.toMatchObject({ code: "invalid_input" });
   // Nor put its own work in Acme's project, or change that project.
   await expect(
-    call(globex.scope, "commitmentCreate", { title: "x", projectId: launch.id }),
+    call(globex.scope, "workCreate", { title: "x", projectId: launch.id }),
   ).rejects.toMatchObject({ code: "invalid_input" });
   await expect(
     call(globex.scope, "projectUpdate", { id: launch.id, goal: "Theirs now" }),
@@ -70,7 +70,7 @@ it("B0 exit: an employee's capabilities see only its own business's work, projec
 it("capabilities that create a record return its ref; projectAdd takes refs of this business only", async () => {
   const acme = await business("Acme refs");
   const globex = await business("Globex refs");
-  const task = (await call(acme.scope, "commitmentCreate", { title: "Write the plan" })) as {
+  const task = (await call(acme.scope, "workCreate", { title: "Write the plan" })) as {
     id: string;
     ref: string;
   };

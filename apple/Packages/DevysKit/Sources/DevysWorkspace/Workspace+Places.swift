@@ -30,7 +30,7 @@ package enum PlaceIntent {
     case askTapped(String)
     /// Starts a thread on a message in the conversation on screen.
     case startThreadTapped(messageID: String)
-    case threadCreated(Commitment)
+    case threadCreated(WorkItem)
 }
 
 extension Workspace.State {
@@ -189,7 +189,7 @@ extension Workspace {
         let text = message.text
             .replacingOccurrences(of: #"\n\n_Viewing: [^\n]*_$"#, with: "", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let task = NewTask(
+        let newItem = NewWorkItem(
             title: String((text.split(separator: "\n").first.map(String.init) ?? text).prefix(80)),
             owner: owner,
             objective: String(text.prefix(4000)),
@@ -198,9 +198,9 @@ extension Workspace {
         let businessID = state.businessID
         let runtime = runtime
         store.addTask {
-            let created: Commitment
+            let created: WorkItem
             do {
-                created = try await runtime.createCommitment(businessID, task)
+                created = try await runtime.createWorkItem(businessID, newItem)
             } catch {
                 try store.send(Action(.stopFinished("That thread couldn't be started.")))
                 return

@@ -18,7 +18,7 @@ import { BusinessPortrait, EmployeePortrait } from "../design/portrait.tsx";
 import { RightPanel } from "../panel/panel.tsx";
 import { ConversationPane } from "./conversation.tsx";
 import { defaultPanel, layout, panelRange, sidebarWidth } from "./layout.ts";
-import { HireSheet, NewProjectDialog, NewTaskDialog } from "./dialogs.tsx";
+import { HireSheet, NewProjectDialog, NewWorkItemDialog } from "./dialogs.tsx";
 import { CommandPalette } from "./palette.tsx";
 import { Settings } from "./settings.tsx";
 import { Sidebar, SidebarSections } from "./sidebar.tsx";
@@ -78,7 +78,7 @@ export function Shell() {
       <Settings />
       <HireSheet />
       <NewProjectDialog />
-      <NewTaskDialog />
+      <NewWorkItemDialog />
     </>
   );
 }

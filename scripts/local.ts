@@ -331,7 +331,7 @@ function supervise(
 /**
  * The Mac host's environment: the launcher's own, without anything `.env` supplied (the model
  * key and other Worker secrets), except the two login folders the host needs. Employees' shells,
- * coding delegates and terminals inherit what the host has, and secrets must not reach them.
+ * coding sessions and terminals inherit what the host has, and secrets must not reach them.
  */
 export function hostEnvironment(
   env: NodeJS.ProcessEnv,
@@ -393,7 +393,7 @@ async function run() {
       DEVYS_HOST_TOKEN: token,
       DEVYS_HOST_PORT: String(hostPort),
       DEVYS_HOST_DATA: paths.host,
-      // Delegate events come back to the Worker on loopback.
+      // Coding events come back to the Worker on loopback.
       DEVYS_WORKER_URL: `http://127.0.0.1:${appPort}`,
     }),
   }));

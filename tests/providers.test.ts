@@ -86,7 +86,7 @@ it("a Claude session file reads as prompts, replies and tool calls with their re
   ]);
 });
 
-it("a coding delegate sees none of the host's settings or the Worker's secrets", async () => {
+it("a coding session sees none of the host's settings or the Worker's secrets", async () => {
   const { forgetHostSettings } = await import("../src/protocol/host.ts");
   // The launcher's host environment never had .env's secrets; the host drops its own settings.
   const env = forgetHostSettings({

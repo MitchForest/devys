@@ -64,7 +64,7 @@ export class SessionsProbe extends AgentRuntime {
       capabilities: [],
       workplace: "Test workplace.",
       skills: async () => [],
-      interruptDelegates: async () => {},
+      interruptCoding: async () => {},
       runner: () =>
         ({
           cancel: async () => {
@@ -145,9 +145,9 @@ export class SessionsProbe extends AgentRuntime {
     return (await this.harness.pending()).filter((operation) => operation.status === "running");
   }
 
-  /** The commitment a tool running in `session` would act for. */
-  async commitmentIn(session: string) {
-    return (await this.authority(undefined, session)).commitmentId ?? null;
+  /** The work item a tool running in `session` would act for. */
+  async workItemIn(session: string) {
+    return (await this.authority(undefined, session)).workItemId ?? null;
   }
 
   async sessionCount() {

@@ -3,10 +3,10 @@ import type { Env } from "./env.ts";
 import { ref } from "../protocol/ref.ts";
 import { providerName } from "../apps/code/capabilities.ts";
 import type { Provider } from "../apps/code/contract.ts";
-import { assignment, assignmentsFor } from "../apps/code/service.ts";
+import { codingSession, codingSessionsFor } from "../apps/code/service.ts";
 import type { Business, Person } from "../identity/contract.ts";
 import { relayTerminal } from "../terminal/host-client.ts";
-import { commitment, setTakeover } from "../work/service.ts";
+import { workItem, setTakeover } from "../work/service.ts";
 import { postEvent } from "./conversations.ts";
 import { modeOf } from "./mode.ts";
 import { body } from "./request.ts";
@@ -60,17 +60,17 @@ export async function terminalRoute(request: Request, env: Env, access: Access) 
   const scope = { businessId: business.id, employeeId: "owner" };
   // A coding agent's own CLI on its session: stop the background turn first, then take over.
   if (input.resume) {
-    const item = await Effect.runPromise(assignment(env.HYPERDRIVE, business.id, input.resume));
-    if (!item?.session_id || !item.worktree)
+    const item = await Effect.runPromise(codingSession(env.HYPERDRIVE, business.id, input.resume));
+    if (!item?.provider_session_id || !item.worktree)
       return new Response("No such coding session", { status: 404 });
     await mode
-      .delegates({ businessId: business.id, employeeId: item.employee_id })
+      .coding({ businessId: business.id, employeeId: item.employee_id })
       .interrupt(item.id)
       .catch(() => undefined);
     await takeOver(
       env,
       business.id,
-      item.commitment_id,
+      item.work_item_id,
       person,
       `${person.display_name} opened ${providerName(item.provider)} in a terminal.`,
       item.id,
@@ -80,8 +80,8 @@ export async function terminalRoute(request: Request, env: Env, access: Access) 
         scope,
         title: `${providerName(item.provider)} · ${item.branch ?? item.id.slice(0, 8)}`,
         cwd: item.worktree,
-        resume: { provider: item.provider as Provider, session: item.session_id },
-        assignmentId: item.id,
+        resume: { provider: item.provider as Provider, session: item.provider_session_id },
+        codingSessionId: item.id,
         ...size,
       }),
       { status: 201 },
@@ -89,8 +89,10 @@ export async function terminalRoute(request: Request, env: Env, access: Access) 
   }
   // A work item's build worktree.
   if (input.work) {
-    const work = await Effect.runPromise(commitment(env.HYPERDRIVE, business.id, input.work));
-    const build = (await Effect.runPromise(assignmentsFor(env.HYPERDRIVE, business.id, input.work)))
+    const work = await Effect.runPromise(workItem(env.HYPERDRIVE, business.id, input.work));
+    const build = (
+      await Effect.runPromise(codingSessionsFor(env.HYPERDRIVE, business.id, input.work))
+    )
       .filter((item) => item.purpose === "build" && item.worktree)
       .at(-1);
     if (!work || !build?.worktree)
@@ -130,12 +132,12 @@ async function takeOver(
   person: Person,
   note: string,
   /** The coding session it takes over. */
-  assignmentId: string,
+  codingSessionId: string,
 ) {
   await Effect.runPromise(setTakeover(env.HYPERDRIVE, businessId, workId, person.id));
   await postEvent(env, businessId, `work:${workId}`, {
     clientId: `terminal:${crypto.randomUUID()}`,
     text: note,
-    ref: ref("code", "session", assignmentId),
+    ref: ref("code", "session", codingSessionId),
   });
 }

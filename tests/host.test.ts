@@ -217,7 +217,7 @@ describe("deployment mode", () => {
     const missing = modeOf({ ...base, DEVYS_MODE: "local" } as unknown as Env);
     expect(missing.host).toBeUndefined();
     expect(() => missing.runner()(scope)).toThrow("not configured");
-    expect(() => missing.delegates(scope)).toThrow("not configured");
+    expect(() => missing.coding(scope)).toThrow("not configured");
   });
   it("refuses an unknown mode", () => {
     expect(() => modeOf({ ...base } as unknown as Env)).toThrow("DEVYS_MODE");

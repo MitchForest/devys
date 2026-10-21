@@ -4,8 +4,8 @@ import { pendingDecisions } from "../authority/service.ts";
 import { postMessage, readAt } from "../conversations/service.ts";
 import { type Business, type Person } from "../identity/contract.ts";
 import { employeesOf } from "../identity/service.ts";
-import type { Commitment } from "../work/contract.ts";
-import { commitments } from "../work/service.ts";
+import type { WorkItem } from "../work/contract.ts";
+import { workItems } from "../work/service.ts";
 
 const hour = 3_600_000;
 /** Waiting this long without a change, or past its due date, waiting work is stuck. */
@@ -13,13 +13,13 @@ const stuckAfter = 24 * hour;
 /** The owner gets a briefing when they return after this long. */
 const awayFor = 8 * hour;
 
-const stuck = (item: Commitment, now: number) =>
+const stuck = (item: WorkItem, now: number) =>
   item.state === "waiting" &&
   ((item.due_at !== null && Date.parse(item.due_at) < now) ||
     Date.parse(item.updated_at) < now - stuckAfter);
 
 /** A work item as Home shows it, with what a client needs to open its thread. */
-const card = (item: Commitment) => ({
+const card = (item: WorkItem) => ({
   id: item.id,
   title: item.title,
   employeeId: item.owner_employee_id,
@@ -32,7 +32,7 @@ const card = (item: Commitment) => ({
 });
 
 /** `"A", "B" and 3 more`. */
-function titles(items: readonly Commitment[]) {
+function titles(items: readonly WorkItem[]) {
   const shown = items.slice(0, 5).map((item) => `"${item.title}"`);
   return items.length > 5 ? `${shown.join(", ")} and ${items.length - 5} more` : shown.join(", ");
 }
@@ -41,7 +41,7 @@ function titles(items: readonly Commitment[]) {
  * Operations' briefing, composed from records: what got done, started and became stuck since
  * the owner last read their direct chat. Nothing when nothing happened.
  */
-export function briefing(work: readonly Commitment[], since: string, now: number) {
+export function briefing(work: readonly WorkItem[], since: string, now: number) {
   const after = (at: string | null) => at !== null && at > since;
   const done = work.filter((item) => item.state === "completed" && after(item.updated_at));
   const moving = work.filter((item) => item.state === "in_progress" && after(item.updated_at));
@@ -70,22 +70,22 @@ export async function homeRoute(
   const { person, business, trusted } = access;
   const [decisions, work, employees] = await Promise.all([
     Effect.runPromise(pendingDecisions(env.HYPERDRIVE, business.id)),
-    Effect.runPromise(commitments(env.HYPERDRIVE, business.id)),
+    Effect.runPromise(workItems(env.HYPERDRIVE, business.id)),
     Effect.runPromise(employeesOf(env.HYPERDRIVE, business.id)),
   ]);
   const now = Date.now();
   const workOf = (id: string | null) => work.find((item) => item.id === id);
-  const asked = new Set(decisions.map((decision) => decision.commitment_id));
+  const asked = new Set(decisions.map((decision) => decision.work_item_id));
   const needsYou = [
     ...decisions.map((decision) => {
-      const item = workOf(decision.commitment_id);
+      const item = workOf(decision.work_item_id);
       return {
         kind: "decision" as const,
         id: decision.id,
         title: item?.title ?? decision.capability,
         employeeId: decision.employee_id,
         conversation: decision.conversation,
-        workId: decision.commitment_id,
+        workId: decision.work_item_id,
         projectId: item?.project_id ?? null,
         at: decision.requested_at,
         capability: decision.capability,

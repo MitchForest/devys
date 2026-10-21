@@ -112,9 +112,9 @@ export function ConversationView({
     place.kind === "home"
       ? false
       : key?.startsWith("direct:")
-        ? d.employee_id === ref && !d.commitment_id
+        ? d.employee_id === ref && !d.work_item_id
         : key?.startsWith("work:")
-          ? d.commitment_id === ref
+          ? d.work_item_id === ref
           : false,
   );
   const lastMine = items.findLastIndex((item) => item.kind !== "heading" && item.bubble.mine);

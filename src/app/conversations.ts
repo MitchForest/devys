@@ -1,7 +1,7 @@
 import { Effect, Schema } from "effect";
 import type { Env } from "./env.ts";
 import { appChat, composeAppMessage } from "../channels/app.ts";
-import { addressOf, contextOf, type Binding } from "../channels/contract.ts";
+import { employeeChatOf, type Binding } from "../channels/contract.ts";
 import {
   conversationKey,
   employeeOf,
@@ -18,7 +18,7 @@ import { activePerson, employeesOf } from "../identity/service.ts";
 import { capability, CapabilityError, Invocation } from "../protocol/capability.ts";
 import type { Ref } from "../protocol/ref.ts";
 import { rpc } from "../protocol/rpc.ts";
-import { commitment } from "../work/service.ts";
+import { workItem } from "../work/service.ts";
 import { project } from "../work/projects.ts";
 
 /** How much of a conversation an addressed employee is shown before the new message. */
@@ -52,7 +52,7 @@ async function resolve(env: Env, businessId: string, key: ConversationKey) {
       };
     }
     case "work": {
-      const item = await Effect.runPromise(commitment(env.HYPERDRIVE, businessId, id));
+      const item = await Effect.runPromise(workItem(env.HYPERDRIVE, businessId, id));
       return item
         ? {
             defaultResponder: item.owner_employee_id as string | undefined,
@@ -138,15 +138,12 @@ async function deliver(
         ...(about ? { about } : {}),
       }),
     );
-    // An employee's own DM is its root session; anything else is its own context.
-    const context =
-      kindOf(key) === "direct" && idOf(key) === target
-        ? undefined
-        : { kind: kindOf(key), id: idOf(key) };
+    // An employee's own DM is its root session; any other conversation is named.
+    const own = key === `direct:${target}`;
     await env.AGENT.getByName(scopeName(scope)).receive(scope, {
       messageId: message.id,
       senderId: message.author,
-      chatId: appChat(scope, context),
+      chatId: appChat(scope, own ? undefined : key),
       text,
     });
     await Effect.runPromise(
@@ -230,13 +227,10 @@ export async function postFromEmployee(
   operationId: string,
   inReplyTo?: string,
 ) {
-  const [businessId, employeeId] = addressOf(chatId).split(":");
-  if (!businessId || !employeeId) throw new Error(`No conversation for chat ${chatId}`);
-  const context = contextOf(chatId);
-  const key = (
-    context ? `${context.kind}:${context.id}` : `direct:${employeeId}`
-  ) as ConversationKey;
-  await reply(env, { businessId, employeeId }, key, text, operationId, inReplyTo);
+  const chat = employeeChatOf(chatId);
+  if (!chat) throw new Error(`No conversation for chat ${chatId}`);
+  const key = chat.conversation ?? (`direct:${chat.scope.employeeId}` as const);
+  await reply(env, chat.scope, key, text, operationId, inReplyTo);
 }
 
 async function reply(

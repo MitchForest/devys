@@ -6,7 +6,7 @@ import type { Ref } from "../protocol/ref.ts";
  */
 export type ConversationKind = "direct" | "project" | "work";
 
-/** `direct:<employee>`, `project:<project>` or `work:<commitment>`. */
+/** `direct:<employee>`, `project:<project>` or `work:<workItem>`. */
 export type ConversationKey = `${ConversationKind}:${string}`;
 
 export const conversationKey = (value: unknown): ConversationKey | undefined =>

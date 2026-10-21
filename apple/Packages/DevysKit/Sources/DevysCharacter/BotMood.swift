@@ -21,7 +21,7 @@ public enum BotMood: CaseIterable, Equatable, Sendable {
         case .thinking: "thinking"
         case .working: "working"
         case .waiting: "waiting for you"
-        case .celebrate: "finished a task"
+        case .celebrate: "finished a work item"
         case .oops: "hit a snag"
         case .asleep: "asleep"
         case .off: "paused"

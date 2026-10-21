@@ -127,7 +127,7 @@ test("a project opens on its channel; a hand-off card opens the thread; Back and
     goal: "Ship Acme v1",
     lead: owner.operations,
   });
-  const task = await post<{ id: string }>(`${path}/work`, {
+  const workItem = await post<{ id: string }>(`${path}/work`, {
     title: "Write a tagline",
     owner: growth.id,
     projectId: project.id,
@@ -141,7 +141,7 @@ test("a project opens on its channel; a hand-off card opens the thread; Back and
     author: "system",
     kind: "event",
     text: 'Growth took on "Write a tagline".',
-    ref: `devys:work/item/${task.id}`,
+    ref: `devys:work/item/${workItem.id}`,
   });
   const sent = await stubPosting(page, () => [growth.id]);
   try {
@@ -190,9 +190,9 @@ test("a project opens on its channel; a hand-off card opens the thread; Back and
     ).toBeVisible();
     const card = page.getByRole("region", { name: "Work item" });
     await expect(card.getByTestId("panel-title")).toHaveText("Write a tagline");
-    await expect(card.getByTestId("task-owner")).toHaveText("Growth");
+    await expect(card.getByTestId("work-item-owner")).toHaveText("Growth");
     await expect(page.getByText("Growth, can you write the tagline?")).toHaveCount(0);
-    await insertMessage(sql, owner.business, `work:${task.id}`, {
+    await insertMessage(sql, owner.business, `work:${workItem.id}`, {
       author: `employee:${growth.id}`,
       text: "Drafting three options.",
     });
@@ -203,7 +203,7 @@ test("a project opens on its channel; a hand-off card opens the thread; Back and
     await page.getByRole("textbox", { name: "Reply" }).fill("Keep it under six words.");
     await page.getByRole("button", { name: "Send" }).click();
     await expect.poll(() => sent.length).toBe(1);
-    expect(sent[0]!.key).toBe(`work:${task.id}`);
+    expect(sent[0]!.key).toBe(`work:${workItem.id}`);
 
     // Back returns to the channel and its overview.
     await page.getByRole("button", { name: "Back (⌘[)" }).click();
@@ -216,11 +216,11 @@ test("a project opens on its channel; a hand-off card opens the thread; Back and
     await page.getByRole("menuitem", { name: "Start a thread" }).click();
     await expect(page.getByTestId("place-title")).toHaveText("Growth, can you write the tagline?");
     await expect(
-      page.getByRole("region", { name: "Work item" }).getByTestId("task-owner"),
+      page.getByRole("region", { name: "Work item" }).getByTestId("work-item-owner"),
     ).toHaveText("Head of Operations");
     expect(
       await sql.row<{ owner_employee_id: string; project_id: string }>(
-        "SELECT owner_employee_id, project_id FROM commitments WHERE business_id = $1 AND title = $2",
+        "SELECT owner_employee_id, project_id FROM work_items WHERE business_id = $1 AND title = $2",
         [owner.business, "Growth, can you write the tagline?"],
       ),
     ).toEqual({ owner_employee_id: owner.operations, project_id: project.id });

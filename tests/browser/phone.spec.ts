@@ -18,7 +18,7 @@ test("on a phone: tabs of Home, Projects, Team and Apps; the conversation full s
     goal: "Ship Acme v1",
     lead: growth.id,
   });
-  const task = await post<{ id: string }>(`${path}/work`, {
+  const workItem = await post<{ id: string }>(`${path}/work`, {
     title: "Write a tagline",
     owner: growth.id,
     projectId: project.id,
@@ -27,7 +27,7 @@ test("on a phone: tabs of Home, Projects, Team and Apps; the conversation full s
     author: "system",
     kind: "event",
     text: 'Growth took on "Write a tagline".',
-    ref: `devys:work/item/${task.id}`,
+    ref: `devys:work/item/${workItem.id}`,
   });
   const sent = await stubPosting(page);
   try {
@@ -70,13 +70,13 @@ test("on a phone: tabs of Home, Projects, Team and Apps; the conversation full s
     await expect(page.getByRole("textbox", { name: "Reply" })).toBeVisible();
     await page.getByRole("button", { name: "Details" }).click();
     await expect(details.getByRole("region", { name: "Work item" })).toBeVisible();
-    await expect(details.getByTestId("task-owner")).toHaveText("Growth");
+    await expect(details.getByTestId("work-item-owner")).toHaveText("Growth");
     await page.keyboard.press("Escape");
     await expect(details).toBeHidden();
     await page.getByRole("textbox", { name: "Reply" }).fill("Under six words.");
     await page.getByRole("button", { name: "Send" }).click();
     await expect.poll(() => sent.length).toBe(1);
-    expect(sent[0]!.key).toBe(`work:${task.id}`);
+    expect(sent[0]!.key).toBe(`work:${workItem.id}`);
 
     // Back returns to the channel, then to the list it was opened from.
     await page.getByRole("button", { name: "Back", exact: true }).click();

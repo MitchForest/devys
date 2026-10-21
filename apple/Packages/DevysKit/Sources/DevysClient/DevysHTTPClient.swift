@@ -96,19 +96,19 @@ public struct DevysHTTPClient: Sendable {
         _ = try await raw(authorized(session, path: "\(scope.path)/\(paused ? "pause" : "resume")", method: "POST"))
     }
 
-    public func work(_ session: DeviceSession, businessID: String) async throws -> [Commitment] {
-        struct Page: Decodable { let commitments: [Commitment] }
+    public func work(_ session: DeviceSession, businessID: String) async throws -> [WorkItem] {
+        struct Page: Decodable { let workItems: [WorkItem] }
         let page: Page = try await send(authorized(session, path: "api/businesses/\(businessID)/work"))
-        return page.commitments
+        return page.workItems
     }
 
-    /// Creates a task for an employee, in a project when one is given.
-    public func createCommitment(_ session: DeviceSession, businessID: String, _ task: NewTask) async throws -> Commitment {
-        try await send(json(session, path: "api/businesses/\(businessID)/work", method: "POST", body: task))
+    /// Creates a work item for an employee, in a project when one is given.
+    public func createWorkItem(_ session: DeviceSession, businessID: String, _ newItem: NewWorkItem) async throws -> WorkItem {
+        try await send(json(session, path: "api/businesses/\(businessID)/work", method: "POST", body: newItem))
     }
 
-    /// Changes a commitment at the revision the caller saw; a stale revision is rejected with 409.
-    public func updateCommitment(_ session: DeviceSession, businessID: String, id: String, _ change: CommitmentChange) async throws -> Commitment {
+    /// Changes a work item at the revision the caller saw; a stale revision is rejected with 409.
+    public func updateWorkItem(_ session: DeviceSession, businessID: String, id: String, _ change: WorkItemChange) async throws -> WorkItem {
         try await send(json(session, path: "api/businesses/\(businessID)/work/\(id)", method: "POST", body: change))
     }
 
@@ -122,10 +122,10 @@ public struct DevysHTTPClient: Sendable {
     }
 
     /// Pending requests, or one work item's requests with their answers.
-    public func decisions(_ session: DeviceSession, businessID: String, commitmentID: String? = nil) async throws -> [Decision] {
+    public func decisions(_ session: DeviceSession, businessID: String, workItemID: String? = nil) async throws -> [Decision] {
         struct Page: Decodable { let decisions: [Decision] }
         var request = authorized(session, path: "api/businesses/\(businessID)/decisions")
-        if let commitmentID { request.url?.append(queryItems: [URLQueryItem(name: "commitment", value: commitmentID)]) }
+        if let workItemID { request.url?.append(queryItems: [URLQueryItem(name: "workItem", value: workItemID)]) }
         let page: Page = try await send(request)
         return page.decisions
     }

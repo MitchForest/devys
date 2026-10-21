@@ -166,7 +166,7 @@ export function Overview({ projectId, close }: { projectId: string; close: () =>
           action={
             <button
               type="button"
-              onClick={() => actions.newTask({ projectId: project.id })}
+              onClick={() => actions.newWorkItem({ projectId: project.id })}
               className="text-caption text-ink-3 hover:text-ink-2"
             >
               <Plus className="inline size-3" /> Thread

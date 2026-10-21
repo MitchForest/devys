@@ -61,13 +61,13 @@ public struct RuntimeClient: Sendable {
     public var models: @Sendable () async throws -> ModelCatalog
     /// Returns the model the server saved.
     public var setModel: @Sendable (EmployeeScope, _ model: String) async throws -> String
-    public var work: @Sendable (_ businessID: String) async throws -> [Commitment]
-    public var createCommitment: @Sendable (_ businessID: String, NewTask) async throws -> Commitment
-    public var updateCommitment: @Sendable (_ businessID: String, _ commitmentID: String, CommitmentChange) async throws -> Commitment
-    public var setTakeover: @Sendable (_ businessID: String, _ commitmentID: String, _ takeOver: Bool) async throws -> Void
+    public var work: @Sendable (_ businessID: String) async throws -> [WorkItem]
+    public var createWorkItem: @Sendable (_ businessID: String, NewWorkItem) async throws -> WorkItem
+    public var updateWorkItem: @Sendable (_ businessID: String, _ workItemID: String, WorkItemChange) async throws -> WorkItem
+    public var setTakeover: @Sendable (_ businessID: String, _ workItemID: String, _ takeOver: Bool) async throws -> Void
     public var decisions: @Sendable (_ businessID: String) async throws -> [Decision]
     /// One work item's requests, answered ones included.
-    public var workDecisions: @Sendable (_ businessID: String, _ commitmentID: String) async throws -> [Decision]
+    public var workDecisions: @Sendable (_ businessID: String, _ workItemID: String) async throws -> [Decision]
     public var answer: @Sendable (_ businessID: String, _ decisionID: String, _ approve: Bool) async throws -> Void
     public var projects: @Sendable (_ businessID: String) async throws -> [Project]
     public var createProject: @Sendable (_ businessID: String, ProjectChange) async throws -> Project
@@ -119,11 +119,11 @@ public struct RuntimeClient: Sendable {
         setPaused: @escaping @Sendable (EmployeeScope, Bool) async throws -> Void = { _, _ in },
         models: @escaping @Sendable () async throws -> ModelCatalog = { ModelCatalog(defaults: .init(employee: "", background: ""), models: []) },
         setModel: @escaping @Sendable (EmployeeScope, String) async throws -> String = { _, model in model },
-        work: @escaping @Sendable (String) async throws -> [Commitment] = { _ in [] },
-        createCommitment: @escaping @Sendable (String, NewTask) async throws -> Commitment = { _, task in
-            Commitment(id: UUID().uuidString, ownerEmployeeID: task.owner, title: task.title)
+        work: @escaping @Sendable (String) async throws -> [WorkItem] = { _ in [] },
+        createWorkItem: @escaping @Sendable (String, NewWorkItem) async throws -> WorkItem = { _, newItem in
+            WorkItem(id: UUID().uuidString, ownerEmployeeID: newItem.owner, title: newItem.title)
         },
-        updateCommitment: @escaping @Sendable (String, String, CommitmentChange) async throws -> Commitment = { _, _, _ in
+        updateWorkItem: @escaping @Sendable (String, String, WorkItemChange) async throws -> WorkItem = { _, _, _ in
             throw DevysHTTPError.unauthorized
         },
         setTakeover: @escaping @Sendable (String, String, Bool) async throws -> Void = { _, _, _ in },
@@ -171,8 +171,8 @@ public struct RuntimeClient: Sendable {
         self.models = models
         self.setModel = setModel
         self.work = work
-        self.createCommitment = createCommitment
-        self.updateCommitment = updateCommitment
+        self.createWorkItem = createWorkItem
+        self.updateWorkItem = updateWorkItem
         self.setTakeover = setTakeover
         self.decisions = decisions
         self.workDecisions = workDecisions
@@ -334,16 +334,16 @@ extension RuntimeClient {
             models: { try await hub.call { api, session in try await api.models(session) } },
             setModel: { scope, model in try await hub.call { api, session in try await api.setModel(session, scope, model: model) } },
             work: { id in try await hub.call { api, session in try await api.work(session, businessID: id) } },
-            createCommitment: { id, task in try await hub.call { api, session in try await api.createCommitment(session, businessID: id, task) } },
-            updateCommitment: { id, item, change in
-                try await hub.call { api, session in try await api.updateCommitment(session, businessID: id, id: item, change) }
+            createWorkItem: { id, newItem in try await hub.call { api, session in try await api.createWorkItem(session, businessID: id, newItem) } },
+            updateWorkItem: { id, item, change in
+                try await hub.call { api, session in try await api.updateWorkItem(session, businessID: id, id: item, change) }
             },
-            setTakeover: { id, commitment, takeOver in
-                try await hub.call { api, session in try await api.setTakeover(session, businessID: id, id: commitment, takeOver: takeOver) }
+            setTakeover: { id, workItem, takeOver in
+                try await hub.call { api, session in try await api.setTakeover(session, businessID: id, id: workItem, takeOver: takeOver) }
             },
             decisions: { id in try await hub.call { api, session in try await api.decisions(session, businessID: id) } },
-            workDecisions: { id, commitment in
-                try await hub.call { api, session in try await api.decisions(session, businessID: id, commitmentID: commitment) }
+            workDecisions: { id, workItem in
+                try await hub.call { api, session in try await api.decisions(session, businessID: id, workItemID: workItem) }
             },
             answer: { id, decision, approve in
                 try await hub.call { api, session in try await api.answer(session, businessID: id, decisionID: decision, approve: approve) }

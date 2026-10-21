@@ -7,13 +7,13 @@ import Foundation
 
 /// Everything the sidebar and the permanent views read, loaded together every tick.
 package struct WorkRecords: Sendable {
-    package var work: [Commitment]
+    package var work: [WorkItem]
     package var decisions: [Decision]
     package var projects: [Project]
     package var home: Home
     package var apps: [AppEntry]
 
-    package init(work: [Commitment], decisions: [Decision], projects: [Project], home: Home, apps: [AppEntry]) {
+    package init(work: [WorkItem], decisions: [Decision], projects: [Project], home: Home, apps: [AppEntry]) {
         self.work = work
         self.decisions = decisions
         self.projects = projects
@@ -55,10 +55,10 @@ extension Workspace {
             state.apps = .loaded(records.apps)
         case .decisionAnswered(let decisionID, let approve):
             answer(decisionID, approve: approve, state: &state)
-        case .commitmentStateSet(let commitmentID, let target):
-            setState(commitmentID, target, state: state)
-        case .takeoverToggled(let commitmentID):
-            toggleTakeover(commitmentID, state: state)
+        case .workItemStateSet(let workItemID, let target):
+            setState(workItemID, target, state: state)
+        case .takeoverToggled(let workItemID):
+            toggleTakeover(workItemID, state: state)
         default:
             break
         }
@@ -133,16 +133,16 @@ extension Workspace {
         }
     }
 
-    func setState(_ commitmentID: String, _ target: CommitmentState, state: State) {
-        guard let item = state.work.value?.first(where: { $0.id == commitmentID }), item.state != target else { return }
-        updateCommitment(commitmentID, CommitmentChange(expectedRevision: item.revision, state: target), state: state)
+    func setState(_ workItemID: String, _ target: WorkItemState, state: State) {
+        guard let item = state.work.value?.first(where: { $0.id == workItemID }), item.state != target else { return }
+        updateWorkItem(workItemID, WorkItemChange(expectedRevision: item.revision, state: target), state: state)
     }
 
-    func toggleTakeover(_ commitmentID: String, state: State) {
-        guard let item = state.work.value?.first(where: { $0.id == commitmentID }) else { return }
+    func toggleTakeover(_ workItemID: String, state: State) {
+        guard let item = state.work.value?.first(where: { $0.id == workItemID }) else { return }
         let takeOver = item.takenOverBy == nil
         changeWork(state, failure: "Couldn't change who handles that work.") { runtime, businessID in
-            try await runtime.setTakeover(businessID, commitmentID, takeOver)
+            try await runtime.setTakeover(businessID, workItemID, takeOver)
         }
     }
 

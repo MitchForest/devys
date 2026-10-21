@@ -96,7 +96,7 @@ export interface RuntimeState {
   /** Spend by "provider/modelId" and by tool. */
   usage?: { models: Record<string, Usage>; tools: Record<string, Usage> };
 }
-/** `direct:<employee>`, `project:<project>` or `work:<commitment>`. */
+/** `direct:<employee>`, `project:<project>` or `work:<workItem>`. */
 export type ConversationKey = `${"direct" | "project" | "work"}:${string}`;
 /** One entry in a conversation: something someone said, or an event such as a hand-off. */
 export interface Message {
@@ -132,7 +132,7 @@ export interface OutgoingMessage {
   mentions?: string[];
   viaVoice?: boolean;
 }
-export type CommitmentState =
+export type WorkItemState =
   | "proposed"
   | "ready"
   | "in_progress"
@@ -140,7 +140,7 @@ export type CommitmentState =
   | "needs_decision"
   | "completed"
   | "cancelled";
-export interface Commitment {
+export interface WorkItem {
   id: string;
   owner_employee_id: string;
   title: string;
@@ -148,7 +148,7 @@ export interface Commitment {
   next_action: string;
   wait_condition: string | null;
   due_at: string | null;
-  state: CommitmentState;
+  state: WorkItemState;
   evidence: {
     by: string;
     note: string;
@@ -168,7 +168,7 @@ export interface Commitment {
 /** A Codex or Claude Code session on a work item, with its live state from the provider. */
 export interface CodingSession {
   id: string;
-  commitment_id: string;
+  work_item_id: string;
   employee_id: string;
   provider: "codex" | "claude";
   purpose: "build" | "review";
@@ -214,7 +214,7 @@ export interface TerminalSession {
   id: string;
   title: string;
   cwd: string;
-  assignmentId: string | null;
+  codingSessionId: string | null;
   startedAt: string;
   offset: number;
   writer: string | null;
@@ -250,7 +250,7 @@ export interface Decision {
   employee_id: string;
   capability: string;
   input: unknown;
-  commitment_id: string | null;
+  work_item_id: string | null;
   status: "pending" | "approved" | "rejected" | "used";
   requested_at: string;
   expires_at: string;
@@ -311,7 +311,7 @@ export interface GlanceItem {
   title: string;
   employeeId: string;
   projectId: string | null;
-  state: CommitmentState;
+  state: WorkItemState;
   waitCondition: string | null;
   dueAt: string | null;
   updatedAt: string;
@@ -320,7 +320,7 @@ export interface Home {
   needsYou: NeedsYouItem[];
   glance: { moving: GlanceItem[]; stuck: GlanceItem[]; spentCents: number | null };
 }
-export interface NewTask {
+export interface NewWorkItem {
   title: string;
   owner: string;
   objective?: string;
@@ -437,20 +437,21 @@ export const api = {
   markRead: (b: string, key: ConversationKey, at: string) =>
     post(`${conversation(b, key)}/read`, { at }),
   memory: (b: string) => get<{ items: MemoryClaim[] }>(`${business(b)}/memory`),
-  work: (b: string) => get<{ commitments: Commitment[] }>(`${business(b)}/work`),
-  createCommitment: (b: string, task: NewTask) => post<Commitment>(`${business(b)}/work`, task),
-  updateCommitment: (
+  work: (b: string) => get<{ workItems: WorkItem[] }>(`${business(b)}/work`),
+  createWorkItem: (b: string, workItem: NewWorkItem) =>
+    post<WorkItem>(`${business(b)}/work`, workItem),
+  updateWorkItem: (
     b: string,
-    item: Commitment,
+    item: WorkItem,
     change: {
-      state?: CommitmentState;
+      state?: WorkItemState;
       owner?: string;
       nextAction?: string;
       waitCondition?: string | null;
       dueAt?: string | null;
     },
   ) =>
-    post<Commitment>(`${business(b)}/work/${item.id}`, {
+    post<WorkItem>(`${business(b)}/work/${item.id}`, {
       expectedRevision: item.revision,
       ...change,
     }),
@@ -471,7 +472,7 @@ export const api = {
   /** Work items that have coding sessions, newest first. */
   codingWork: (b: string) => get<{ work: string[] }>(`${business(b)}/coding`),
   startCoding: (b: string, session: NewCodingSession) =>
-    post<{ work: string; assignment: string }>(`${business(b)}/coding`, session),
+    post<{ work: string; codingSession: string }>(`${business(b)}/coding`, session),
   files: (b: string, path?: string) =>
     get<{ root: string; path: string; entries: FileEntry[] }>(
       `${business(b)}/files${path ? `?path=${encodeURIComponent(path)}` : ""}`,
@@ -550,9 +551,9 @@ export const api = {
     `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${business(b)}/terminals/${id}/socket?offset=${offset}`,
   decisions: (b: string) => get<{ decisions: Decision[] }>(`${business(b)}/decisions`),
   /** One work item's requests, answered ones included. */
-  workDecisions: (b: string, commitment: string) =>
+  workDecisions: (b: string, workItem: string) =>
     get<{ decisions: Decision[] }>(
-      `${business(b)}/decisions?commitment=${encodeURIComponent(commitment)}`,
+      `${business(b)}/decisions?workItem=${encodeURIComponent(workItem)}`,
     ),
   answer: (b: string, id: string, approve: boolean) =>
     post(`${business(b)}/decisions/${id}/${approve ? "approve" : "reject"}`),

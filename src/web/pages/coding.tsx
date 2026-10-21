@@ -1,6 +1,6 @@
 import { Code2, SquareTerminal } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
-import { api, type CodingSession, type Commitment, type TerminalSession } from "../app/api.ts";
+import { api, type CodingSession, type WorkItem, type TerminalSession } from "../app/api.ts";
 import { openTerminalWindow } from "./terminal-window.tsx";
 import { useWorkspace, valueOf } from "../app/workspace.tsx";
 import { DevysButton } from "../design/buttons.tsx";
@@ -49,7 +49,7 @@ function useSessions(businessId: string, workId: string) {
 }
 
 /** The coding sessions on a work item, each opening its session view. */
-export function CodingSessions({ item }: { item: Commitment }) {
+export function CodingSessions({ item }: { item: WorkItem }) {
   const { businessId, actions } = useWorkspace();
   const { sessions } = useSessions(businessId, item.id);
   if (!sessions.length) return null;

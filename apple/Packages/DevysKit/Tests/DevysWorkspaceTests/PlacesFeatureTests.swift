@@ -8,11 +8,11 @@ import Testing
 /// A business with one project, its work and conversations, as the server keeps them.
 private actor PlacesServer {
     var messages: [String: [ConversationMessage]] = [:]
-    var commitments = [Commitment(id: "c1", ownerEmployeeID: "growth", title: "Fix sitemap", state: .inProgress, projectID: "p1")]
+    var workItems = [WorkItem(id: "c1", ownerEmployeeID: "growth", title: "Fix sitemap", state: .inProgress, projectID: "p1")]
     var projects = [Project(id: "p1", name: "Launch", leadEmployeeID: "ops")]
     var artifacts: [Artifact] = []
     var home = Home()
-    var tasks: [NewTask] = []
+    var newItems: [NewWorkItem] = []
     var created: [ProjectChange] = []
     var posts: [NewMessage] = []
     private var count = 0
@@ -47,7 +47,7 @@ private actor PlacesServer {
         let fallback: String? = switch key.kind {
         case .direct: key.ref
         case .project: projects.first { $0.id == key.ref }?.leadEmployeeID
-        case .work: commitments.first { $0.id == key.ref }?.ownerEmployeeID
+        case .work: workItems.first { $0.id == key.ref }?.ownerEmployeeID
         }
         return ConversationPage(messages: messages, respondent: messages.last { $0.employeeID != nil && !$0.isEvent }?.employeeID ?? fallback)
     }
@@ -57,10 +57,10 @@ private actor PlacesServer {
         return PostedMessage(message: add(key, "person:person-preview", message.text), recipients: [])
     }
 
-    func create(_ task: NewTask) -> Commitment {
-        tasks.append(task)
-        let item = Commitment(id: "c\(commitments.count + 1)", ownerEmployeeID: task.owner, title: task.title, projectID: task.projectId)
-        commitments.append(item)
+    func create(_ newItem: NewWorkItem) -> WorkItem {
+        newItems.append(newItem)
+        let item = WorkItem(id: "c\(workItems.count + 1)", ownerEmployeeID: newItem.owner, title: newItem.title, projectID: newItem.projectId)
+        workItems.append(item)
         return item
     }
 
@@ -91,8 +91,8 @@ struct PlacesFeatureTests {
                 memory: { _ in [] },
                 conversation: { _, key, _ in await server.page(key) },
                 postMessage: { _, key, message in await server.post(key, message) },
-                work: { _ in await server.commitments },
-                createCommitment: { _, task in await server.create(task) },
+                work: { _ in await server.workItems },
+                createWorkItem: { _, newItem in await server.create(newItem) },
                 projects: { _ in await server.projects },
                 createProject: { _, change in await server.createProject(change) },
                 home: { _ in await server.home }
@@ -292,20 +292,20 @@ struct PlacesFeatureTests {
         store.send(.startThreadTapped(fromGrowth.id))
         await settle("thread from an employee's message") { store.place == .thread("c2") }
         #expect(store.history == [.project("p1")])
-        #expect(await server.tasks.last == NewTask(title: "The sitemap drops /blog.", owner: "growth", objective: "The sitemap drops /blog.\n\nNeeds a fix.", projectId: "p1"))
+        #expect(await server.newItems.last == NewWorkItem(title: "The sitemap drops /blog.", owner: "growth", objective: "The sitemap drops /blog.\n\nNeeds a fix.", projectId: "p1"))
 
         store.send(.backTapped)
         await settle("the channel") { store.main?.key == .project("p1") && store.main?.messages.value != nil }
         store.send(.startThreadTapped(mentioning.id))
-        await settle("thread for the mentioned") { await server.tasks.count == 2 }
-        #expect(await server.tasks.last?.owner == "engineering")
+        await settle("thread for the mentioned") { await server.newItems.count == 2 }
+        #expect(await server.newItems.last?.owner == "engineering")
 
         store.send(.backTapped)
         await settle("the channel again") { store.main?.key == .project("p1") && store.main?.messages.value != nil }
         store.send(.startThreadTapped(plain.id))
-        await settle("thread for who answers here") { await server.tasks.count == 3 }
+        await settle("thread for who answers here") { await server.newItems.count == 3 }
         // Nobody addressed: who answers in the channel (its lead), titled without the reference line.
-        #expect(await server.tasks.last == NewTask(title: "Decide pricing", owner: "growth", objective: "Decide pricing", projectId: "p1"))
+        #expect(await server.newItems.last == NewWorkItem(title: "Decide pricing", owner: "growth", objective: "Decide pricing", projectId: "p1"))
     }
 
     @Test("A new project is created with its fields, and its channel opens")

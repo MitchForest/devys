@@ -203,9 +203,9 @@ export function HireSheet() {
 /** The end of the chosen day, in the owner's time zone. */
 export const endOfDay = (date: string) => new Date(`${date}T23:59:00`).toISOString();
 
-/** A new task: what, who owns it, why, by when and which project it is in. Its thread opens. */
-export function NewTaskDialog() {
-  const { taskDefaults, actions, employees, projects, operations } = useWorkspace();
+/** A new work item: what, who owns it, why, by when and which project it is in. Its thread opens. */
+export function NewWorkItemDialog() {
+  const { workItemDefaults, actions, employees, projects, operations } = useWorkspace();
   const [title, setTitle] = useState("");
   const [owner, setOwner] = useState("");
   const [objective, setObjective] = useState("");
@@ -214,34 +214,37 @@ export function NewTaskDialog() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   useEffect(() => {
-    if (!taskDefaults) return;
+    if (!workItemDefaults) return;
     setTitle("");
     setObjective("");
     setDue("");
-    setOwner(taskDefaults.owner ?? operations?.id ?? "");
-    setProjectId(taskDefaults.projectId ?? "");
+    setOwner(workItemDefaults.owner ?? operations?.id ?? "");
+    setProjectId(workItemDefaults.projectId ?? "");
     setError(undefined);
     setBusy(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskDefaults]);
+  }, [workItemDefaults]);
   const create = () => {
     if (!title.trim() || !owner) return;
     setBusy(true);
     setError(undefined);
     actions
-      .createTask({
+      .createWorkItem({
         title: title.trim().slice(0, 200),
         owner,
         ...(objective.trim() ? { objective: objective.trim() } : {}),
         ...(due ? { dueAt: endOfDay(due) } : {}),
         ...(projectId ? { projectId } : {}),
       })
-      .then(() => actions.closeNewTask())
-      .catch(() => setError("The task couldn't be saved. Try again."))
+      .then(() => actions.closeNewWorkItem())
+      .catch(() => setError("The work item couldn't be saved. Try again."))
       .finally(() => setBusy(false));
   };
   return (
-    <Dialog open={Boolean(taskDefaults)} onOpenChange={(open) => !open && actions.closeNewTask()}>
+    <Dialog
+      open={Boolean(workItemDefaults)}
+      onOpenChange={(open) => !open && actions.closeNewWorkItem()}
+    >
       <DialogContent className="w-[480px] max-w-[calc(100%-2rem)] gap-0 rounded-card! bg-sheet p-0 shadow-raised sm:max-w-[480px]">
         <form
           className="flex flex-col gap-4 p-6"
@@ -250,7 +253,7 @@ export function NewTaskDialog() {
             create();
           }}
         >
-          <DialogTitle className="text-heading font-semibold text-ink">New task</DialogTitle>
+          <DialogTitle className="text-heading font-semibold text-ink">New work item</DialogTitle>
           <Field label="Title">
             <input
               autoFocus
@@ -313,11 +316,11 @@ export function NewTaskDialog() {
             </p>
           )}
           <div className="flex justify-end gap-2 pt-1">
-            <DevysButton kind="quiet" onClick={actions.closeNewTask}>
+            <DevysButton kind="quiet" onClick={actions.closeNewWorkItem}>
               Cancel
             </DevysButton>
             <DevysButton kind="aurora" type="submit" disabled={busy || !title.trim() || !owner}>
-              {busy ? "Creating…" : "Create task"}
+              {busy ? "Creating…" : "Create work item"}
             </DevysButton>
           </div>
         </form>

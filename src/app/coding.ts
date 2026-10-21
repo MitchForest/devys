@@ -2,28 +2,37 @@ import { Effect } from "effect";
 import type { Env } from "./env.ts";
 import { ref } from "../protocol/ref.ts";
 import { workChat } from "../channels/work.ts";
-import { delegateInstructions, providerName } from "../apps/code/capabilities.ts";
+import {
+  codingInstructions,
+  providerName,
+  type CodingDependencies,
+} from "../apps/code/capabilities.ts";
 import {
   providers,
-  type Assignment,
-  type Delegates,
+  type CodingEvent,
+  type CodingHost,
+  type CodingSession,
   type Provider,
 } from "../apps/code/contract.ts";
 import {
-  assignment,
-  assignmentsFor,
   codedWork,
-  recordAssignment,
+  codingSession,
+  codingSessionById,
+  codingSessionsFor,
+  employeeCodingSessions,
+  recordCodingSession,
   recordStarted,
 } from "../apps/code/service.ts";
 import { scopeName, type Business, type Person, type Scope } from "../identity/contract.ts";
 import { activeEmployee } from "../identity/service.ts";
-import { stableId } from "../protocol/bytes.ts";
+import { sha256, stableId } from "../protocol/bytes.ts";
 import { setFollowing } from "../conversations/service.ts";
-import { commitment, createCommitment, requeue } from "../work/service.ts";
+import type { WorkItem } from "../work/contract.ts";
+import { addEvidence, createWorkItem, requeue, workItem } from "../work/service.ts";
 import { modeOf } from "./mode.ts";
 import { postEvent } from "./conversations.ts";
 import { body } from "./request.ts";
+import { coordinates } from "./team.ts";
 
 type Access = { person: Person; business: Business; trusted: boolean; path: string };
 
@@ -37,34 +46,34 @@ export async function codingRoute(
   request: Request,
   env: Env,
   access: Access,
-  delegates: (scope: Scope) => Delegates = modeOf(env).delegates,
+  coding: (scope: Scope) => CodingHost = modeOf(env).coding,
 ) {
   const { person, business, trusted, path } = access;
   if (path === "/coding" && request.method === "GET")
     return Response.json({ work: await Effect.runPromise(codedWork(env.HYPERDRIVE, business.id)) });
   if (path === "/coding" && request.method === "POST")
-    return trusted ? startOwned(request, env, access, delegates) : forbidden();
+    return trusted ? startOwned(request, env, access, coding) : forbidden();
   const match =
     /^\/work\/([A-Za-z0-9-]{1,64})\/sessions(?:\/([A-Za-z0-9-]{1,64})(?:\/(diff|transcript|send|interrupt))?)?$/.exec(
       path,
     );
   if (!match) return undefined;
-  const [, workId, assignmentId, action] = match;
-  const work = await Effect.runPromise(commitment(env.HYPERDRIVE, business.id, workId!));
+  const [, workId, codingSessionId, action] = match;
+  const work = await Effect.runPromise(workItem(env.HYPERDRIVE, business.id, workId!));
   if (!work) return notFound();
-  if (!assignmentId && request.method === "GET") {
+  if (!codingSessionId && request.method === "GET") {
     const items = (
-      await Effect.runPromise(assignmentsFor(env.HYPERDRIVE, business.id, work.id))
-    ).filter((item) => item.session_id);
+      await Effect.runPromise(codingSessionsFor(env.HYPERDRIVE, business.id, work.id))
+    ).filter((item) => item.provider_session_id);
     return Response.json({
-      sessions: await Promise.all(items.map((item) => sessionOf(delegates, business.id, item))),
+      sessions: await Promise.all(items.map((item) => sessionOf(coding, business.id, item))),
     });
   }
-  const item = assignmentId
-    ? await Effect.runPromise(assignment(env.HYPERDRIVE, business.id, assignmentId))
+  const item = codingSessionId
+    ? await Effect.runPromise(codingSession(env.HYPERDRIVE, business.id, codingSessionId))
     : undefined;
-  if (!item || item.commitment_id !== work.id || !item.session_id) return notFound();
-  const host = delegates({ businessId: business.id, employeeId: item.employee_id });
+  if (!item || item.work_item_id !== work.id || !item.provider_session_id) return notFound();
+  const host = coding({ businessId: business.id, employeeId: item.employee_id });
   if (action === "diff" && request.method === "GET") return Response.json(await host.diff(item.id));
   if (action === "transcript" && request.method === "GET")
     return Response.json(await host.transcript(item.id));
@@ -96,12 +105,12 @@ export async function codingRoute(
 
 /** A session as the owner sees it: the reference, plus live state from the provider. */
 async function sessionOf(
-  delegates: (scope: Scope) => Delegates,
+  coding: (scope: Scope) => CodingHost,
   businessId: string,
-  item: Assignment,
+  item: CodingSession,
 ) {
   try {
-    const status = await delegates({ businessId, employeeId: item.employee_id }).inspect(item.id);
+    const status = await coding({ businessId, employeeId: item.employee_id }).inspect(item.id);
     return { ...item, ...status };
   } catch (error) {
     return {
@@ -122,7 +131,7 @@ async function startOwned(
   request: Request,
   env: Env,
   access: Access,
-  delegates: (scope: Scope) => Delegates,
+  coding: (scope: Scope) => CodingHost,
 ) {
   const { person, business } = access;
   const input = await body<{
@@ -152,12 +161,12 @@ async function startOwned(
       status: 400,
     });
   const id = await stableId(`${business.id}:owned:${input.clientId}`);
-  const existing = await Effect.runPromise(assignment(env.HYPERDRIVE, business.id, id));
+  const existing = await Effect.runPromise(codingSession(env.HYPERDRIVE, business.id, id));
   const workId =
-    existing?.commitment_id ??
+    existing?.work_item_id ??
     (
       await Effect.runPromise(
-        createCommitment(env.HYPERDRIVE, business.id, {
+        createWorkItem(env.HYPERDRIVE, business.id, {
           id: await stableId(`${business.id}:owned-work:${input.clientId}`),
           owner: scope.employeeId,
           title: input.objective.split("\n")[0]!.slice(0, 200),
@@ -169,30 +178,30 @@ async function startOwned(
       )
     ).id;
   await Effect.runPromise(
-    recordAssignment(env.HYPERDRIVE, business.id, {
+    recordCodingSession(env.HYPERDRIVE, business.id, {
       id,
-      commitmentId: workId,
+      workItemId: workId,
       employeeId: scope.employeeId,
       provider: input.provider as Provider,
       purpose: "build",
       objective: input.objective,
     }),
   );
-  const started = await delegates(scope).start({
+  const started = await coding(scope).start({
     id,
     scope,
     provider: input.provider as Provider,
     purpose: "build",
     repository: input.repository ? { path: input.repository } : { create: input.newRepository! },
     objective: input.objective,
-    instructions: delegateInstructions("build"),
+    instructions: codingInstructions("build"),
   });
   await Effect.runPromise(recordStarted(env.HYPERDRIVE, business.id, id, started));
   // The owner drives this one, so they follow each milestone of it.
   await Effect.runPromise(
     setFollowing(env.HYPERDRIVE, business.id, `work:${workId}`, person.id, true),
   );
-  return Response.json({ work: workId, assignment: id, ...started }, { status: 201 });
+  return Response.json({ work: workId, codingSession: id, ...started }, { status: 201 });
 }
 
 /**
@@ -203,18 +212,18 @@ export async function handBack(
   env: Env,
   businessId: string,
   workId: string,
-  delegates: (scope: Scope) => Delegates = modeOf(env).delegates,
+  coding: (scope: Scope) => CodingHost = modeOf(env).coding,
 ) {
-  const work = await Effect.runPromise(commitment(env.HYPERDRIVE, businessId, workId));
+  const work = await Effect.runPromise(workItem(env.HYPERDRIVE, businessId, workId));
   if (!work) return;
   const items = (
-    await Effect.runPromise(assignmentsFor(env.HYPERDRIVE, businessId, workId))
-  ).filter((item) => item.session_id);
+    await Effect.runPromise(codingSessionsFor(env.HYPERDRIVE, businessId, workId))
+  ).filter((item) => item.provider_session_id);
   // Without coding sessions there is nothing to brief: the dispatcher hands the work over again.
   if (!items.length)
     return void (await Effect.runPromise(requeue(env.HYPERDRIVE, businessId, workId)));
   const scope = { businessId, employeeId: work.owner_employee_id };
-  const sessions = await Promise.all(items.map((item) => sessionOf(delegates, businessId, item)));
+  const sessions = await Promise.all(items.map((item) => sessionOf(coding, businessId, item)));
   const text = [
     "The owner handed this work item back to you after driving its coding sessions. Read what changed, then carry on: review, iterate with codingSend, accept with codingAccept and the repository's check.",
     ...sessions.map(
@@ -226,6 +235,165 @@ export async function handBack(
     messageId: `handback:${workId}:${work.revision}`,
     senderId: "dispatcher",
     chatId: workChat(scope, workId),
+    text,
+  });
+}
+
+export function codingDependencies(env: Env): CodingDependencies {
+  return {
+    db: env.HYPERDRIVE,
+    coding: modeOf(env).coding,
+    note: async (scope, workItemId, note) => {
+      await postEvent(env, scope.businessId, `work:${workItemId}`, note);
+    },
+    evidence: async (scope, workItemId, entry) => {
+      await Effect.runPromise(
+        addEvidence(env.HYPERDRIVE, scope.businessId, workItemId, {
+          by: `employee:${scope.employeeId}`,
+          ...entry,
+        }),
+      );
+    },
+    coordinates: (scope) => coordinates(env, scope),
+    knownCommits: async (scope, workItemId) =>
+      (
+        (await Effect.runPromise(workItem(env.HYPERDRIVE, scope.businessId, workItemId)))
+          ?.evidence ?? []
+      ).flatMap((entry) => (entry.commit ? [entry.commit] : [])),
+  };
+}
+
+/**
+ * Work with a coding build is complete only once its last accepted commit passed the
+ * repository's check (the check's result is recorded as evidence when it reports).
+ */
+export async function codingIncomplete(env: Env, businessId: string, work: WorkItem) {
+  const builds = (
+    await Effect.runPromise(codingSessionsFor(env.HYPERDRIVE, businessId, work.id))
+  ).filter((item) => item.purpose === "build");
+  if (!builds.length) return undefined;
+  // An acceptance records the commit with its changes; its check reports later against it.
+  const accepted = work.evidence.findLast((entry) => entry.changes !== undefined)?.commit;
+  const check =
+    accepted && work.evidence.findLast((entry) => entry.check && entry.commit === accepted)?.check;
+  if (!check)
+    return "This work has a coding session: accept it with codingAccept and wait for the check of the accepted commit to pass before completing.";
+  if (check.exitCode !== 0)
+    return "The last check failed: fix it with codingSend, accept again, and complete once the check passes.";
+  return undefined;
+}
+
+/** Employee Stop also interrupts its coding sessions, so no child keeps working unnoticed. */
+export async function interruptCodingSessions(env: Env, scope: Scope) {
+  const coding = modeOf(env).coding(scope);
+  const started = await Effect.runPromise(
+    employeeCodingSessions(env.HYPERDRIVE, scope.businessId, scope.employeeId),
+  );
+  // Interrupting an idle session changes nothing, so all are asked at once.
+  await Promise.allSettled(started.map((item) => coding.interrupt(item.id)));
+}
+
+/** The "3 files changed, …" line of a diff stat, or how many files are new. */
+const changeSummary = (diffStat: string) => {
+  const lines = diffStat.split("\n");
+  const total = lines.find((line) => /files? changed/.test(line))?.trim();
+  const added = lines.filter((line) => line.endsWith("(new)")).length;
+  return [total, added ? `${added} new file${added === 1 ? "" : "s"}` : ""]
+    .filter(Boolean)
+    .join(", ");
+};
+
+/**
+ * Events from the Mac host. Each becomes a card in the work item's thread; anything but a
+ * start also wakes the employee that started the session, in its session for that work.
+ * Both are keyed by the event id, so a repeated delivery changes nothing.
+ */
+export async function codingEventsRoute(request: Request, env: Env) {
+  const token = env.DEVYS_HOST_TOKEN;
+  const offered = await sha256(request.headers.get("authorization") ?? "");
+  if (!token || offered !== (await sha256(`Bearer ${token}`)))
+    return new Response("Unauthorized", { status: 401 });
+  const { events } = await body<{ events: CodingEvent[] }>(request, 8_000_000);
+  // Each event is answered on its own, so one that keeps failing never holds up the rest.
+  const delivered: string[] = [];
+  for (const event of Array.isArray(events) ? events : [])
+    await deliverEvent(env, event).then(
+      () => delivered.push(event.id),
+      (error: unknown) => console.error(`Coding event ${event.id} failed:`, error),
+    );
+  return Response.json({ delivered });
+}
+
+async function deliverEvent(env: Env, event: CodingEvent) {
+  const item = await Effect.runPromise(codingSessionById(env.HYPERDRIVE, event.codingSessionId));
+  if (!item) return;
+  const scope = { businessId: item.business_id, employeeId: item.employee_id };
+  const employee = await Effect.runPromise(activeEmployee(env.HYPERDRIVE, scope));
+  const who = providerName(item.provider);
+  const changed = event.diffStat ? changeSummary(event.diffStat) : "";
+  const card = {
+    started: `${employee?.name ?? "An employee"} started ${who}${item.purpose === "review" ? " (review)" : ""}${item.branch ? ` · ${item.branch}` : ""}: ${item.objective.slice(0, 200)}`,
+    finished: `${who} finished${changed ? ` · ${changed}` : ""}: ${event.text.slice(0, 600)}`,
+    failed: `${who} failed: ${event.text.slice(0, 600)}`,
+    interrupted: `${who} was interrupted: ${event.text.slice(0, 600)}`,
+    checked: event.text.slice(0, 2000),
+    deployed: event.text.slice(0, 2000),
+  }[event.kind];
+  await postEvent(env, item.business_id, `work:${item.work_item_id}`, {
+    clientId: `coding:${event.id}`,
+    text: card,
+    ref: ref("code", "session", item.id),
+  });
+  if (event.kind === "checked" && event.check)
+    await Effect.runPromise(
+      addEvidence(env.HYPERDRIVE, item.business_id, item.work_item_id, {
+        by: "devys",
+        note: `\`${event.check.command}\` ${event.check.exitCode === 0 ? "passed" : `failed (exit ${event.check.exitCode ?? "killed"})`} on ${event.check.commit.slice(0, 12)}.`,
+        commit: event.check.commit,
+        check: { command: event.check.command, exitCode: event.check.exitCode },
+        source: `coding:${event.id}`,
+      }),
+    );
+  if (event.kind === "deployed" && event.deploy)
+    await Effect.runPromise(
+      addEvidence(env.HYPERDRIVE, item.business_id, item.work_item_id, {
+        by: "devys",
+        note: event.text,
+        commit: event.deploy.commit,
+        deploy: { stage: event.deploy.stage, url: event.deploy.url, live: event.deploy.live },
+        source: `coding:${event.id}`,
+      }),
+    );
+  if (event.kind === "started") return;
+  // While a person holds the work they drive the session; its employee is briefed once, on
+  // hand-back, rather than woken by every turn it may not act on.
+  const work = await Effect.runPromise(
+    workItem(env.HYPERDRIVE, item.business_id, item.work_item_id),
+  );
+  if (work?.taken_over_by) return;
+  const text = [
+    `Your ${who} session ${item.id} (${item.purpose}) on this work item: ${card}`,
+    event.diffStat &&
+      `Changes in its worktree ${item.worktree}:\n${event.diffStat.length > 8000 ? `${event.diffStat.slice(0, 8000)}\n… (run git diff --stat in the worktree for the rest)` : event.diffStat}`,
+    event.check?.output && `Check output (end):\n${event.check.output.slice(-6000)}`,
+    event.deploy?.output &&
+      `Deploy output (end, secrets redacted):\n${event.deploy.output.slice(-6000)}`,
+    event.kind === "deployed"
+      ? event.deploy?.live
+        ? "It is live and recorded as evidence. If the work item is done, complete it; production needs its own deploy."
+        : "It isn't working: read the output, fix it in the session, accept again and redeploy, or roll back by deploying the last good commit."
+      : event.kind === "checked"
+        ? event.check?.exitCode === 0
+          ? "The check passed and is recorded as evidence. Decide whether the work item is done; publishing and deploying are separate."
+          : "Fix it: tell the session what failed with codingSend, then accept again."
+        : "Review the result (codingStatus, or read and run things in the worktree). Iterate with codingSend, or accept with codingAccept and the repository's check command.",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  await env.AGENT.getByName(scopeName(scope)).receive(scope, {
+    messageId: `coding:${event.id}`.slice(0, 512),
+    senderId: "coding",
+    chatId: workChat(scope, item.work_item_id),
     text,
   });
 }

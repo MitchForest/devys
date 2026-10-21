@@ -55,7 +55,7 @@ struct DecisionRow: View {
 
     var body: some View {
         let employee = store.state.employee(decision.employeeID)
-        let item = store.work.value?.first { $0.id == decision.commitmentID }
+        let item = store.work.value?.first { $0.id == decision.workItemID }
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 if let employee { Portrait(store.state.portrait(for: employee), size: 22, isAnimated: false) }
@@ -75,7 +75,7 @@ struct DecisionRow: View {
                 Spacer(minLength: 4)
                 Button(open ? "Hide details" : "Details") { open.toggle() }
                     .buttonStyle(.plain).font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
-                if let workID = decision.commitmentID {
+                if let workID = decision.workItemID {
                     Button("Thread") { store.send(.threadOpened(workID)) }
                         .buttonStyle(.plain).font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
                 }
@@ -99,10 +99,10 @@ struct DecisionCard: View {
                 .foregroundStyle(DevysColors.ink2)
             DecisionFields(decision: decision)
             HStack(spacing: DevysSpacing.small) {
-                Button("Approve once", systemImage: "checkmark") { store.send(.decisionAnswered(decision.id, approve: true)) }
+                Button("Approve", systemImage: "checkmark") { store.send(.decisionAnswered(decision.id, approve: true)) }
                     .buttonStyle(.aurora)
                     .help("Allows this exact request once. Face ID signing arrives with signed decisions.")
-                Button("Reject") { store.send(.decisionAnswered(decision.id, approve: false)) }
+                Button("Decline") { store.send(.decisionAnswered(decision.id, approve: false)) }
                     .buttonStyle(.raised)
             }
             .padding(.top, 2)

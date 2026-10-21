@@ -25,7 +25,7 @@ export interface Decision {
   capability: string;
   /** The exact input the employee asked to run. */
   input: unknown;
-  commitment_id: string | null;
+  work_item_id: string | null;
   /** The conversation the asking turn was answering; the answer is posted there. */
   conversation: string | null;
   status: "pending" | "approved" | "rejected" | "used";

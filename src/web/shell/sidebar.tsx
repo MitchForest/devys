@@ -10,7 +10,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import type { Commitment, Employee } from "../app/api.ts";
+import type { WorkItem, Employee } from "../app/api.ts";
 import { moodOf } from "../app/names.ts";
 import { samePlace, useWorkspace, valueOf, type Layer, type Place } from "../app/workspace.tsx";
 import { BusinessTile } from "../design/face.tsx";
@@ -63,7 +63,7 @@ export function Sidebar() {
   );
 }
 
-/** **New**: a project, a hire or a task. A message needs nothing: the composer is always there. */
+/** **New**: a project, a hire or a work item. A message needs nothing: the composer is always there. */
 function NewMenu() {
   const { actions } = useWorkspace();
   return (
@@ -79,8 +79,8 @@ function NewMenu() {
         <DropdownMenuItem onClick={() => actions.setProjectOpen(true)}>
           <LayoutGrid /> New project
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => actions.newTask()}>
-          <ListChecks /> New task
+        <DropdownMenuItem onClick={() => actions.newWorkItem()}>
+          <ListChecks /> New work item
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => actions.setHireOpen(true)}>
           <UserPlus /> Hire
@@ -163,7 +163,7 @@ export function SidebarSections() {
  */
 function useNestedThreads() {
   const { work, followed, decisions } = useWorkspace();
-  const waiting = new Set((valueOf(decisions) ?? []).map((d) => d.commitment_id));
+  const waiting = new Set((valueOf(decisions) ?? []).map((d) => d.work_item_id));
   const shown = (valueOf(work) ?? []).filter(
     (item) =>
       item.state !== "completed" &&
@@ -278,7 +278,7 @@ function UnreadBadge({ count }: { count: number }) {
 }
 
 /** A thread nested under its project: indented, opening the thread. */
-function ThreadRow({ item }: { item: Commitment }) {
+function ThreadRow({ item }: { item: WorkItem }) {
   const { place, actions, unreadOf } = useWorkspace();
   const selected = place.kind === "thread" && place.workId === item.id;
   const unread = unreadOf(`work:${item.id}`);

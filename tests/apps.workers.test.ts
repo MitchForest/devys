@@ -90,23 +90,23 @@ it("system apps are listed as installed without an install row, never pinned or 
 it("an uninstalled app's capabilities are hidden from discovery and refused at the gate", async () => {
   const { scope } = await business("Gated");
   const named = (name: string) => catalog.find((item) => item.name === name)!;
-  for (const name of ["codingStatus", "commitmentList"])
+  for (const name of ["codingStatus", "workList"])
     await Effect.runPromise(grant(db, scope, { capability: named(name), mode: "auto" }));
   const granted = () => agentDependencies(bindings).granted(scope);
   const outcome = async (name: string) =>
     (await authorize(bindings, scope, named(name), {})).outcome;
-  expect(await granted()).toEqual(expect.arrayContaining(["codingStatus", "commitmentList"]));
+  expect(await granted()).toEqual(expect.arrayContaining(["codingStatus", "workList"]));
   expect(await outcome("codingStatus")).toBe("allow");
 
   await Effect.runPromise(uninstall(db, scope.businessId, "code"));
   expect(await granted()).not.toContain("codingStatus");
   // A system app's capabilities need no install.
-  expect(await granted()).toContain("commitmentList");
+  expect(await granted()).toContain("workList");
   expect(await authorize(bindings, scope, named("codingStatus"), {})).toMatchObject({
     outcome: "deny",
     reason: expect.stringContaining("hasn't installed"),
   });
-  expect(await outcome("commitmentList")).toBe("allow");
+  expect(await outcome("workList")).toBe("allow");
 
   await Effect.runPromise(install(db, scope.businessId, ["code"]));
   expect(await outcome("codingStatus")).toBe("allow");

@@ -27,8 +27,8 @@ export class Invocation extends Context.Service<
     readonly employeeId: string;
     readonly operationId: string;
     readonly evidenceIds?: string[];
-    /** The commitment this run serves, when the dispatcher handed it over. */
-    readonly commitmentId?: string;
+    /** The work item this run serves, when the dispatcher handed it over. */
+    readonly workItemId?: string;
     /** The conversation the running turn answers (`direct:`, `project:` or `work:` key). */
     readonly conversation?: string;
     /** Re-reads the employee's grant for this exact input; fails when it isn't allowed now. */

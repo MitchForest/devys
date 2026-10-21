@@ -14,8 +14,8 @@ import { publicCapabilities } from "../egress/capabilities.ts";
 import { workCapabilities } from "../work/capabilities.ts";
 import { activeEmployee } from "../identity/service.ts";
 import { Effect } from "effect";
-import { delegateCapabilities } from "../apps/code/capabilities.ts";
-import { codingIncomplete, delegateDependencies } from "./delegates.ts";
+import { codingCapabilities } from "../apps/code/capabilities.ts";
+import { codingIncomplete, codingDependencies } from "./coding.ts";
 import type { Capability } from "../protocol/capability.ts";
 import { appSkills } from "./apps.ts";
 import { keepable } from "./projects.ts";
@@ -36,7 +36,7 @@ export function capabilities(
       const key = conversationKey(invocation.conversation ?? `direct:${invocation.employeeId}`);
       if (key) await postEvent(env, invocation.businessId, key, card);
     }),
-    ...delegateCapabilities(delegateDependencies(env)),
+    ...codingCapabilities(codingDependencies(env)),
     ...browserCapabilities(modeOf(env).browser),
     ...workCapabilities(
       env.HYPERDRIVE,

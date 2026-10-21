@@ -12,7 +12,7 @@ struct WorkspaceSheets: ViewModifier {
             .sheet(isPresented: Binding(get: { store.team.hiring != nil }, set: { if !$0 { store.send(.hireCancelled) } })) {
                 HireSheet(store: store)
             }
-            .sheet(isPresented: Binding(get: { store.newTask != nil }, set: { if !$0 { store.send(.taskCancelled) } })) {
+            .sheet(isPresented: Binding(get: { store.newWorkItem != nil }, set: { if !$0 { store.send(.workItemCancelled) } })) {
                 NewTaskSheet(store: store)
             }
             .sheet(isPresented: Binding(get: { store.newProject != nil }, set: { if !$0 { store.send(.newProjectDismissed) } })) {
@@ -143,14 +143,14 @@ struct HireSheet: View {
     }
 }
 
-/// New task: a title, its owner, what it's for, when it's due, and optionally a project.
+/// New work item: a title, its owner, what it's for, when it's due, and optionally a project.
 struct NewTaskSheet: View {
     let store: StoreOf<Workspace>
 
     var body: some View {
-        if let draft = store.newTask {
+        if let draft = store.newWorkItem {
             VStack(alignment: .leading, spacing: DevysSpacing.regular) {
-                Text("New task").font(DevysTypography.title).foregroundStyle(DevysColors.ink)
+                Text("New work item").font(DevysTypography.title).foregroundStyle(DevysColors.ink)
                 FieldBox { TextField("Title", text: binding(\.title)) }
                 EmployeePicker(title: "Owner", employees: store.snapshot.employees, selection: binding(\.ownerID))
                 FieldBox { TextField("Objective (optional)", text: binding(\.objective), axis: .vertical).lineLimit(3...8) }
@@ -182,8 +182,8 @@ struct NewTaskSheet: View {
                 Spacer(minLength: 0)
                 HStack {
                     Spacer()
-                    Button("Cancel") { store.send(.taskCancelled) }.buttonStyle(.quiet)
-                    Button(draft.isSubmitting ? "Creating…" : "Create") { store.send(.taskConfirmed) }
+                    Button("Cancel") { store.send(.workItemCancelled) }.buttonStyle(.quiet)
+                    Button(draft.isSubmitting ? "Creating…" : "Create") { store.send(.workItemConfirmed) }
                         .buttonStyle(.aurora)
                         .disabled(!draft.canCreate)
                         .keyboardShortcut(.defaultAction)
@@ -196,14 +196,14 @@ struct NewTaskSheet: View {
         }
     }
 
-    private func binding(_ keyPath: WritableKeyPath<TaskDraft, String>) -> Binding<String> {
-        Binding(get: { store.newTask?[keyPath: keyPath] ?? "" }, set: { value in edit { $0[keyPath: keyPath] = value } })
+    private func binding(_ keyPath: WritableKeyPath<WorkItemDraft, String>) -> Binding<String> {
+        Binding(get: { store.newWorkItem?[keyPath: keyPath] ?? "" }, set: { value in edit { $0[keyPath: keyPath] = value } })
     }
 
-    private func edit(_ change: (inout TaskDraft) -> Void) {
-        guard var draft = store.newTask else { return }
+    private func edit(_ change: (inout WorkItemDraft) -> Void) {
+        guard var draft = store.newWorkItem else { return }
         change(&draft)
-        store.send(.taskEdited(draft))
+        store.send(.workItemEdited(draft))
     }
 }
 

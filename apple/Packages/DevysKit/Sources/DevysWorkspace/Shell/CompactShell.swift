@@ -192,7 +192,7 @@ private struct BusinessMenu: View {
             }
             Divider()
             Button("New project") { store.send(.newProjectTapped) }
-            Button("New task") { store.send(.newTaskTapped()) }
+            Button("New work item") { store.send(.newWorkItemTapped()) }
             Button("Hire") { store.send(.hireTapped) }
             Button("Settings") { store.send(.preferencesToggled(true)) }
             Button("Apps & connections") { store.send(.settingsOpened(.apps)) }

@@ -4,7 +4,7 @@ import { appChannel } from "../channels/app.ts";
 import { channelOf, type Channel } from "../channels/contract.ts";
 import { imessageChannel } from "../channels/photon-adapter.ts";
 import { workChannel } from "../channels/work.ts";
-import { commitment } from "../work/service.ts";
+import { workItem } from "../work/service.ts";
 import { activeEmployee, channelBinding, memberBusiness } from "../identity/service.ts";
 import type { Scope } from "../identity/contract.ts";
 import { postFromEmployee, recordChannelMessage, recordChannelReply } from "./conversations.ts";
@@ -54,10 +54,8 @@ export function channelFor(env: Env): Channel {
       postFromEmployee(env, chatId, text, operationId, inReplyTo),
   });
   const work = workChannel({
-    open: async (scope, commitmentId) => {
-      const item = await Effect.runPromise(
-        commitment(env.HYPERDRIVE, scope.businessId, commitmentId),
-      );
+    open: async (scope, workItemId) => {
+      const item = await Effect.runPromise(workItem(env.HYPERDRIVE, scope.businessId, workItemId));
       return (
         item?.owner_employee_id === scope.employeeId &&
         !item.taken_over_by &&

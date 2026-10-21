@@ -4,11 +4,11 @@ import type { Outcome } from "../authority/contract.ts";
 import { activeGrant, decide, settleAsk } from "../authority/service.ts";
 import type { Scope } from "../identity/contract.ts";
 import type { Capability } from "../protocol/capability.ts";
-import { commitment } from "../work/service.ts";
+import { workItem } from "../work/service.ts";
 import { usableIn } from "./apps.ts";
 
 /**
- * The one authorization path: the app gate, the commitment's fence and conditions, then the grant.
+ * The one authorization path: the app gate, the work item's fence and conditions, then the grant.
  * An `ask` uses an approved decision for this exact request once, or opens one.
  */
 export async function authorize(
@@ -16,18 +16,16 @@ export async function authorize(
   scope: Scope,
   capability: Capability,
   input: unknown,
-  context: { commitmentId?: string; conversation?: string } = {},
+  context: { workItemId?: string; conversation?: string } = {},
 ): Promise<Outcome> {
-  const { commitmentId, conversation } = context;
+  const { workItemId, conversation } = context;
   if (!(await usableIn(env.HYPERDRIVE, scope.businessId))(capability.name))
     return {
       outcome: "deny",
       reason: `${capability.name} belongs to an app this business hasn't installed`,
     };
-  if (commitmentId) {
-    const work = await Effect.runPromise(
-      commitment(env.HYPERDRIVE, scope.businessId, commitmentId),
-    );
+  if (workItemId) {
+    const work = await Effect.runPromise(workItem(env.HYPERDRIVE, scope.businessId, workItemId));
     // Completed work stays reachable so a conversation in its thread can reopen it.
     if (!work || work.taken_over_by || work.state === "cancelled")
       return { outcome: "deny", reason: "That work was taken over or cancelled" };
@@ -35,7 +33,7 @@ export async function authorize(
     if (conditions && !withinConditions(capability, conditions, input))
       return {
         outcome: "deny",
-        reason: `Outside this commitment's conditions for ${capability.name}`,
+        reason: `Outside this work item's conditions for ${capability.name}`,
       };
   }
   const decision = decide(
@@ -49,7 +47,7 @@ export async function authorize(
       grantId: decision.grantId,
       capability: capability.name,
       input,
-      ...(commitmentId ? { commitmentId } : {}),
+      ...(workItemId ? { workItemId } : {}),
       ...(conversation ? { conversation } : {}),
     }),
   );

@@ -1,4 +1,6 @@
 import { env } from "cloudflare:workers";
+import { workChat } from "../src/channels/work.ts";
+import type { ConversationKey } from "../src/conversations/contract.ts";
 import { expect, it } from "vitest";
 import type { SessionsProbe } from "./fixtures/sessions.ts";
 import { scopeName } from "../src/identity/contract.ts";
@@ -12,7 +14,7 @@ function employee() {
     env as unknown as { SESSIONS: DurableObjectNamespace<SessionsProbe> }
   ).SESSIONS.getByName(scopeName(scope));
   const app = `app:${scope.businessId}:${scope.employeeId}`;
-  const work = (id: string) => `work:${scope.businessId}:${scope.employeeId}:${id}`;
+  const work = (id: string) => workChat(scope, id);
   return { scope, agent, app, work };
 }
 
@@ -41,12 +43,12 @@ const answered = (target: ReturnType<typeof employee>, messageId: string) =>
     (outbox) => outbox?.status === "sent",
   );
 
-/** One context's said turns, oldest first, read from Pi's entries. */
+/** One conversation's said turns, oldest first, read from Pi's entries. */
 const turns = async (
   { scope, agent }: ReturnType<typeof employee>,
-  context?: { kind: "work" | "project"; id: string },
+  conversation?: ConversationKey,
 ) =>
-  (JSON.parse(await agent.history(scope, undefined, context)) as { entries: Entry[] }).entries
+  (JSON.parse(await agent.history(scope, undefined, conversation)) as { entries: Entry[] }).entries
     .flatMap((entry) => {
       const content = entry.model?.[0]?.content;
       const text =
@@ -81,25 +83,21 @@ it("each context keeps its own conversation and the direct chat is unchanged", a
     { role: "owner", text: "Hello there" },
     { role: "agent", text: "Re: Hello there" },
   ]);
-  expect((await turns(target, { kind: "project", id: "launch" })).map((t) => t.text)).toEqual([
+  expect((await turns(target, "project:launch")).map((t) => t.text)).toEqual([
     "Plan the launch",
     "Re: Plan the launch",
   ]);
   // Dispatched work and the app's view of the same work item share one session.
-  expect(await turns(target, { kind: "work", id: "c-1" })).toEqual([
+  expect(await turns(target, "work:c-1")).toEqual([
     expect.objectContaining({ text: "Draft the brochure" }),
     expect.objectContaining({ text: "Re: Draft the brochure" }),
     expect.objectContaining({ text: "Make it shorter" }),
     expect.objectContaining({ text: "Re: Make it shorter" }),
   ]);
-  expect(
-    JSON.parse(
-      await target.agent.history(target.scope, undefined, {
-        kind: "work",
-        id: "unknown",
-      }),
-    ),
-  ).toEqual({ entries: [], nextBefore: null });
+  expect(JSON.parse(await target.agent.history(target.scope, undefined, "work:unknown"))).toEqual({
+    entries: [],
+    nextBefore: null,
+  });
   expect(await target.agent.sessionCount()).toBe(3);
 
   // Every model turn is counted, whichever session it ran in.
@@ -120,7 +118,7 @@ it("a repeated message id is admitted once in its context", async () => {
   expect(await send(target, "m-once", chat, "Check the stock")).toEqual({ accepted: true });
   expect(await send(target, "m-once", chat, "Check the stock")).toEqual({ accepted: false });
   await answered(target, "m-once");
-  expect((await turns(target, { kind: "project", id: "ops" })).map((t) => t.text)).toEqual([
+  expect((await turns(target, "project:ops")).map((t) => t.text)).toEqual([
     "Check the stock",
     "Re: Check the stock",
   ]);
@@ -137,9 +135,9 @@ it("stop aborts work running in a work session", async () => {
   expect(running).toMatchObject({ operationId: id });
   expect(running!.session).not.toBe("1");
   expect(JSON.parse(await target.agent.inspect(target.scope)).run).toMatchObject({ id });
-  // A tool in the work session acts for its commitment; the direct chat serves none.
-  expect(await target.agent.commitmentIn(running!.session)).toBe("c-9");
-  expect(await target.agent.commitmentIn("1")).toBeNull();
+  // A tool in the work session acts for its work item; the direct chat serves none.
+  expect(await target.agent.workItemIn(running!.session)).toBe("c-9");
+  expect(await target.agent.workItemIn("1")).toBeNull();
 
   await target.agent.stop(target.scope);
   await until(
@@ -152,7 +150,7 @@ it("stop aborts work running in a work session", async () => {
   expect(status.inbox).toEqual([expect.objectContaining({ id, status: "failed" })]);
 });
 
-it("a message in a work item's thread acts for that commitment", async () => {
+it("a message in a work item's thread acts for that work item", async () => {
   const target = employee();
   await send(target, "m-thread", `${target.app}:work:c-7`, "Do the slow thing");
   const [running] = await until(
@@ -160,7 +158,7 @@ it("a message in a work item's thread acts for that commitment", async () => {
     (operations) => operations.length === 1,
   );
   // The owner talking in the thread is fenced by the work item, as dispatched work is.
-  expect(await target.agent.commitmentIn(running!.session)).toBe("c-7");
+  expect(await target.agent.workItemIn(running!.session)).toBe("c-7");
   await target.agent.stop(target.scope);
   await until(
     () => target.agent.runningWork(),

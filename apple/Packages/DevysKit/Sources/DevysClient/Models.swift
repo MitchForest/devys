@@ -330,7 +330,7 @@ public indirect enum JSONValue: Equatable, Sendable, Decodable {
     }
 }
 
-public enum CommitmentState: String, Equatable, Sendable, Decodable, CaseIterable {
+public enum WorkItemState: String, Equatable, Sendable, Decodable, CaseIterable {
     case proposed
     case ready
     case inProgress = "in_progress"
@@ -343,7 +343,7 @@ public enum CommitmentState: String, Equatable, Sendable, Decodable, CaseIterabl
 }
 
 /// What was done and by whom, recorded when work completes.
-public struct CommitmentEvidence: Equatable, Sendable, Decodable {
+public struct WorkItemEvidence: Equatable, Sendable, Decodable {
     public struct Check: Equatable, Sendable, Decodable {
         public let command: String
         public let exitCode: Int?
@@ -411,7 +411,7 @@ public struct CodingOutcome: Equatable, Sendable {
     public let checkPassed: Bool?
     public let pullRequest: URL?
     /// The latest deploy to each stage, production first.
-    public let deploys: [CommitmentEvidence.Deploy]
+    public let deploys: [WorkItemEvidence.Deploy]
 
     /// The pull request's "PR #12", or nil without one.
     public var pullRequestLabel: String? {
@@ -421,7 +421,7 @@ public struct CodingOutcome: Equatable, Sendable {
         return "Pull request"
     }
 
-    public init?(_ evidence: [CommitmentEvidence]) {
+    public init?(_ evidence: [WorkItemEvidence]) {
         let coding = evidence.filter { $0.commit != nil }
         guard let last = coding.last?.commit else { return nil }
         commit = String(last.prefix(7))
@@ -433,7 +433,7 @@ public struct CodingOutcome: Equatable, Sendable {
 }
 
 /// What the business owes: who is accountable, what's next, and evidence when done.
-public struct Commitment: Equatable, Sendable, Decodable, Identifiable {
+public struct WorkItem: Equatable, Sendable, Decodable, Identifiable {
     public let id: String
     public let ownerEmployeeID: String
     public let title: String
@@ -441,8 +441,8 @@ public struct Commitment: Equatable, Sendable, Decodable, Identifiable {
     public let nextAction: String
     public let waitCondition: String?
     public let dueAt: String?
-    public let state: CommitmentState
-    public let evidence: [CommitmentEvidence]
+    public let state: WorkItemState
+    public let evidence: [WorkItemEvidence]
     public let revision: Int
     public let takenOverBy: String?
     /// The project the work belongs to, if any; its thread is in that project's channel.
@@ -457,8 +457,8 @@ public struct Commitment: Equatable, Sendable, Decodable, Identifiable {
         nextAction: String = "",
         waitCondition: String? = nil,
         dueAt: String? = nil,
-        state: CommitmentState = .ready,
-        evidence: [CommitmentEvidence] = [],
+        state: WorkItemState = .ready,
+        evidence: [WorkItemEvidence] = [],
         revision: Int = 1,
         takenOverBy: String? = nil,
         projectID: String? = nil,
@@ -497,7 +497,7 @@ public struct Decision: Equatable, Sendable, Decodable, Identifiable {
     public let employeeID: String
     public let capability: String
     public let input: JSONValue
-    public let commitmentID: String?
+    public let workItemID: String?
     /// pending, approved, rejected, or used (an approval that ran).
     public let status: String
     public let requestedAt: String
@@ -508,7 +508,7 @@ public struct Decision: Equatable, Sendable, Decodable, Identifiable {
         employeeID: String,
         capability: String,
         input: JSONValue,
-        commitmentID: String? = nil,
+        workItemID: String? = nil,
         status: String = "pending",
         requestedAt: String = "2026-10-19T00:00:00.000Z",
         expiresAt: String = "2026-10-20T00:00:00.000Z"
@@ -517,7 +517,7 @@ public struct Decision: Equatable, Sendable, Decodable, Identifiable {
         self.employeeID = employeeID
         self.capability = capability
         self.input = input
-        self.commitmentID = commitmentID
+        self.workItemID = workItemID
         self.status = status
         self.requestedAt = requestedAt
         self.expiresAt = expiresAt
@@ -526,7 +526,7 @@ public struct Decision: Equatable, Sendable, Decodable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case id, capability, input, status
         case employeeID = "employee_id"
-        case commitmentID = "commitment_id"
+        case workItemID = "work_item_id"
         case requestedAt = "requested_at"
         case expiresAt = "expires_at"
     }

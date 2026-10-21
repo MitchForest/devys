@@ -150,8 +150,8 @@ struct ConversationMessages: View {
         guard store.place != .home else { return [] }
         let all = store.decisions.value ?? []
         return switch key.kind {
-        case .direct: all.filter { $0.employeeID == key.ref && $0.commitmentID == nil }
-        case .work: all.filter { $0.commitmentID == key.ref }
+        case .direct: all.filter { $0.employeeID == key.ref && $0.workItemID == nil }
+        case .work: all.filter { $0.workItemID == key.ref }
         case .project: []
         }
     }

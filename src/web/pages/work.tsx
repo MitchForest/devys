@@ -10,7 +10,7 @@ import {
   Undo2,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import { api, type Commitment, type Decision } from "../app/api.ts";
+import { api, type WorkItem, type Decision } from "../app/api.ts";
 import {
   accessTitle,
   chipFor,
@@ -42,12 +42,12 @@ import {
 } from "@/components/ui/context-menu";
 
 /** The same actions an employee has, applied by the owner at the revision on screen. */
-export function WorkActions({ item, extra }: { item: Commitment; extra?: ReactNode }) {
+export function WorkActions({ item, extra }: { item: WorkItem; extra?: ReactNode }) {
   const { actions } = useWorkspace();
   if (!isOpen(item.state))
     return (
       <>
-        <ContextMenuItem onClick={() => actions.setCommitmentState(item, "ready")}>
+        <ContextMenuItem onClick={() => actions.setWorkItemState(item, "ready")}>
           <Undo2 /> Reopen
         </ContextMenuItem>
         {extra}
@@ -56,16 +56,16 @@ export function WorkActions({ item, extra }: { item: Commitment; extra?: ReactNo
   return (
     <>
       {item.state !== "ready" && (
-        <ContextMenuItem onClick={() => actions.setCommitmentState(item, "ready")}>
+        <ContextMenuItem onClick={() => actions.setWorkItemState(item, "ready")}>
           <Redo2 /> Mark ready
         </ContextMenuItem>
       )}
       {item.state !== "waiting" && (
-        <ContextMenuItem onClick={() => actions.setCommitmentState(item, "waiting")}>
+        <ContextMenuItem onClick={() => actions.setWorkItemState(item, "waiting")}>
           <Clock /> Mark waiting
         </ContextMenuItem>
       )}
-      <ContextMenuItem onClick={() => actions.setCommitmentState(item, "completed")}>
+      <ContextMenuItem onClick={() => actions.setWorkItemState(item, "completed")}>
         <CircleCheck /> Mark done
       </ContextMenuItem>
       <ContextMenuSeparator />
@@ -82,7 +82,7 @@ export function WorkActions({ item, extra }: { item: Commitment; extra?: ReactNo
       </ContextMenuItem>
       <ContextMenuItem
         variant="destructive"
-        onClick={() => actions.setCommitmentState(item, "cancelled")}
+        onClick={() => actions.setWorkItemState(item, "cancelled")}
       >
         <CircleX /> Cancel
       </ContextMenuItem>
@@ -91,13 +91,13 @@ export function WorkActions({ item, extra }: { item: Commitment; extra?: ReactNo
   );
 }
 
-/** Right-click (or long-press) a commitment to act on it. */
+/** Right-click (or long-press) a work item to act on it. */
 export function WithWorkActions({
   item,
   extra,
   children,
 }: {
-  item: Commitment;
+  item: WorkItem;
   extra?: ReactNode;
   children: ReactNode;
 }) {
@@ -119,7 +119,7 @@ export function WorkRow({
   extra,
   compact,
 }: {
-  item: Commitment;
+  item: WorkItem;
   extra?: ReactNode;
   /** In a panel: smaller, flush with the panel's edge. */
   compact?: boolean;
@@ -209,7 +209,7 @@ export function DecisionCard({ decision }: { decision: Decision }) {
   return (
     <Card>
       <div className="flex flex-col items-start gap-2.5">
-        <StatusChip tone="needsYou">Needs approval</StatusChip>
+        <StatusChip tone="needsYou">Needs you</StatusChip>
         <span className="text-heading font-semibold text-ink">{decisionTitle(decision)}</span>
         <span className="text-detail text-ink-2">
           {employeeName(decision.employee_id)} asked to run this exactly:
@@ -230,9 +230,9 @@ export function DecisionCard({ decision }: { decision: Decision }) {
             onClick={() => actions.answer(decision.id, true)}
             title="Allows this exact request once. Face ID signing arrives with signed decisions."
           >
-            <Check /> Approve once
+            <Check /> Approve
           </DevysButton>
-          <DevysButton onClick={() => actions.answer(decision.id, false)}>Reject</DevysButton>
+          <DevysButton onClick={() => actions.answer(decision.id, false)}>Decline</DevysButton>
         </div>
       </div>
     </Card>
@@ -252,7 +252,7 @@ const dateField = (due: string | null) => {
  * What's next, what it waits on and when it's due, edited as one change at the revision on
  * screen. If someone changed the item meanwhile, the latest loads and the draft stays to save again.
  */
-function WorkPlan({ item, editable }: { item: Commitment; editable: boolean }) {
+function WorkPlan({ item, editable }: { item: WorkItem; editable: boolean }) {
   const { actions } = useWorkspace();
   const [editing, setEditing] = useState(false);
   const [next, setNext] = useState("");
@@ -277,7 +277,7 @@ function WorkPlan({ item, editable }: { item: Commitment; editable: boolean }) {
     };
     if (Object.keys(change).length === 0) return setEditing(false);
     setBusy(true);
-    const saved = await actions.editCommitment(item, change);
+    const saved = await actions.editWorkItem(item, change);
     setBusy(false);
     if (saved) setEditing(false);
     else
@@ -366,7 +366,7 @@ function WorkPlan({ item, editable }: { item: Commitment; editable: boolean }) {
 }
 
 /** A work item's answered requests, reloaded when the item changes. */
-function useAnswered(item: Commitment) {
+function useAnswered(item: WorkItem) {
   const { businessId } = useWorkspace();
   const [answered, setAnswered] = useState<Decision[]>([]);
   useEffect(() => {
@@ -384,12 +384,12 @@ function useAnswered(item: Commitment) {
 
 /**
  * One work item, as its thread's work card shows it: who owns it, where it stands, what's
- * next, its evidence and decisions, with takeover and reassignment.
+ * next, its evidence and decisions, with takeover and handing it to another employee.
  */
-export function WorkDetail({ item }: { item: Commitment }) {
+export function WorkDetail({ item }: { item: WorkItem }) {
   const { employees, actions, employeeName, person, members, decisions } = useWorkspace();
   const takeover = takeoverTitle(item.taken_over_by, person?.id, members);
-  const waiting = (valueOf(decisions) ?? []).filter((d) => d.commitment_id === item.id);
+  const waiting = (valueOf(decisions) ?? []).filter((d) => d.work_item_id === item.id);
   const answered = useAnswered(item);
   const owner = employees.find((e) => e.id === item.owner_employee_id);
   const chip = chipFor(item.state);
@@ -408,7 +408,10 @@ export function WorkDetail({ item }: { item: Commitment }) {
           {owner && <EmployeePortrait employee={owner} size={26} />}
           <div className="flex min-w-0 flex-col">
             <span className="text-caption text-ink-3">Owner</span>
-            <span className="truncate text-body font-semibold text-ink" data-testid="task-owner">
+            <span
+              className="truncate text-body font-semibold text-ink"
+              data-testid="work-item-owner"
+            >
               {employeeName(item.owner_employee_id)}
             </span>
           </div>
@@ -446,11 +449,11 @@ export function WorkDetail({ item }: { item: Commitment }) {
       <div className="flex flex-wrap gap-1.5">
         {open ? (
           <>
-            <DevysButton compact onClick={() => actions.setCommitmentState(item, "completed")}>
+            <DevysButton compact onClick={() => actions.setWorkItemState(item, "completed")}>
               <CircleCheck /> Mark done
             </DevysButton>
             {item.state !== "waiting" && (
-              <DevysButton compact onClick={() => actions.setCommitmentState(item, "waiting")}>
+              <DevysButton compact onClick={() => actions.setWorkItemState(item, "waiting")}>
                 <Clock /> Waiting
               </DevysButton>
             )}
@@ -468,13 +471,13 @@ export function WorkDetail({ item }: { item: Commitment }) {
             <DevysButton
               kind="quiet"
               compact
-              onClick={() => actions.setCommitmentState(item, "cancelled")}
+              onClick={() => actions.setWorkItemState(item, "cancelled")}
             >
               <CircleX /> Cancel
             </DevysButton>
           </>
         ) : (
-          <DevysButton compact onClick={() => actions.setCommitmentState(item, "ready")}>
+          <DevysButton compact onClick={() => actions.setWorkItemState(item, "ready")}>
             <Undo2 /> Reopen
           </DevysButton>
         )}
@@ -482,7 +485,7 @@ export function WorkDetail({ item }: { item: Commitment }) {
       {waiting.length > 0 && (
         <div className="flex flex-col gap-2">
           <span className="text-label font-medium text-ink-3">
-            Waiting on your approval · {waiting.length}
+            Waiting on you · {waiting.length}
           </span>
           {waiting.map((decision) => (
             <DecisionCard key={decision.id} decision={decision} />
@@ -511,7 +514,7 @@ export function WorkDetail({ item }: { item: Commitment }) {
  * What was done: for coding work one line (check, files changed, pull request, commit) that
  * opens the full record; otherwise the evidence notes themselves.
  */
-function Evidence({ item }: { item: Commitment }) {
+function Evidence({ item }: { item: WorkItem }) {
   const { employeeName } = useWorkspace();
   const [open, setOpen] = useState(false);
   const outcome = outcomeOf(item.evidence);

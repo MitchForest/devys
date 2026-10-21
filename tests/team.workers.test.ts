@@ -8,7 +8,7 @@ import { authorize } from "../src/app/authorize.ts";
 import { capabilities } from "../src/app/capabilities.ts";
 import { grant } from "../src/authority/service.ts";
 import { markSeen, messages, postMessage } from "../src/conversations/service.ts";
-import { createCommitment } from "../src/work/service.ts";
+import { createWorkItem } from "../src/work/service.ts";
 import { business, db, sql } from "./fixtures/postgres.ts";
 
 const origin = "https://devys.test";
@@ -176,7 +176,7 @@ it("members hire from templates, edit employees and the brief, and retire with a
   const after = await json<{ employees: Employee[] }>(as(path));
   expect(after.employees.map((e) => e.id)).toEqual([acme.operations.id]);
   const moved = await sql.row<{ owner_employee_id: string }>(
-    "SELECT owner_employee_id FROM commitments WHERE id = $1",
+    "SELECT owner_employee_id FROM work_items WHERE id = $1",
     [work.id],
   );
   expect(moved?.owner_employee_id).toBe(acme.operations.id);
@@ -274,10 +274,10 @@ it("projects have a lead, members, a goal, deadline and budget, and work created
   expect((await create("nope")).status).toBe(400);
   const task = await json<{ id: string; project_id: string }>(create(project.id));
   expect(task.project_id).toBe(project.id);
-  const listed = await json<{ commitments: { id: string; project_id: string | null }[] }>(
+  const listed = await json<{ workItems: { id: string; project_id: string | null }[] }>(
     as(`${path}/work`),
   );
-  expect(listed.commitments.find((item) => item.id === task.id)?.project_id).toBe(project.id);
+  expect(listed.workItems.find((item) => item.id === task.id)?.project_id).toBe(project.id);
   // A project references records; work belongs to it rather than being one of its items.
   expect(
     (
@@ -331,14 +331,14 @@ it("Home lists what needs the owner and the work at a glance, and briefs them on
   const scope = acme.scope;
   const work = async (title: string, state: string, extra = "") => {
     const created = await Effect.runPromise(
-      createCommitment(db, scope.businessId, {
+      createWorkItem(db, scope.businessId, {
         id: crypto.randomUUID(),
         owner: ops,
         title,
         createdBy: "person:t",
       }),
     );
-    await sql.run(`UPDATE commitments SET state = $2${extra} WHERE id = $1`, [created.id, state]);
+    await sql.run(`UPDATE work_items SET state = $2${extra} WHERE id = $1`, [created.id, state]);
     return created.id;
   };
   const asked = await work("Order the domain", "in_progress");
@@ -347,15 +347,9 @@ it("Home lists what needs the owner and the work at a glance, and briefs them on
   const late = await work("Supplier quote", "waiting", ", due_at = now() - interval '1 day'");
   await work("Shipped", "completed");
   // A request for approval, asked in the work item's thread.
-  const list = capabilities(bindings).find((item) => item.name === "commitmentList")!;
+  const list = capabilities(bindings).find((item) => item.name === "workList")!;
   await Effect.runPromise(grant(db, scope, { capability: list, mode: "ask" }));
-  await authorize(
-    bindings,
-    scope,
-    list,
-    {},
-    { commitmentId: asked, conversation: `work:${asked}` },
-  );
+  await authorize(bindings, scope, list, {}, { workItemId: asked, conversation: `work:${asked}` });
   type Home = {
     needsYou: { kind: string; id: string; title: string; conversation: string | null }[];
     glance: { moving: { id: string }[]; stuck: { id: string }[]; spentCents: number | null };

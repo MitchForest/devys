@@ -323,7 +323,7 @@ struct EventCard: View {
 
     private var artifactID: String? { event.ref?.page }
 
-    private var workItem: Commitment? {
+    private var workItem: WorkItem? {
         guard case .workItem(let id) = event.ref else { return nil }
         return store.work.value?.first { $0.id == id }
     }
@@ -357,7 +357,7 @@ struct EventCard: View {
         .padding(.vertical, 6)
     }
 
-    private func handoff(_ item: Commitment) -> some View {
+    private func handoff(_ item: WorkItem) -> some View {
         let owner = store.state.employee(item.ownerEmployeeID)
         let unread = store.state.unread(.work(item.id))
         let next = item.state == .waiting ? item.waitCondition.map { "waiting on \($0)" } : item.nextAction

@@ -1,20 +1,23 @@
 import { database, type Database } from "../data/database.ts";
 import type { Scope } from "../identity/contract.ts";
-import type { Binding, Channel, ConversationContext, Inbound } from "./contract.ts";
+import type { ConversationKey } from "../conversations/contract.ts";
+import {
+  employeeChat,
+  employeeChatOf,
+  type Binding,
+  type Channel,
+  type Inbound,
+} from "./contract.ts";
 
 /**
- * App conversations are addressed `app:<business>:<employee>`, optionally followed by the
- * context they are about (`:work:<id>`, `:project:<id>` or another employee's `:direct:<id>`);
- * the sender is a person or a colleague (`employee:<id>`).
+ * App conversations reach an employee at `app:<business>:<employee>[:<conversation>]`; the
+ * sender is a person or a colleague (`employee:<id>`).
  */
-export const appChat = (scope: Scope, context?: ConversationContext) =>
-  `app:${scope.businessId}:${scope.employeeId}${context ? `:${context.kind}:${context.id}` : ""}`;
+export const appChat = (scope: Scope, conversation?: ConversationKey) =>
+  employeeChat("app", scope, conversation);
 const scopeOf = (chatId: string): Scope | undefined => {
-  const [, businessId, employeeId, ...rest] = chatId.split(":");
-  const context =
-    rest.length === 0 ||
-    (rest.length === 2 && (rest[0] === "work" || rest[0] === "project" || rest[0] === "direct"));
-  return businessId && employeeId && context ? { businessId, employeeId } : undefined;
+  const chat = employeeChatOf(chatId);
+  return chat?.channel === "app" ? chat.scope : undefined;
 };
 
 /** Toggles a reaction on one of an employee's messages. */

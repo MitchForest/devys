@@ -1,6 +1,6 @@
 public import Foundation
 
-/// One shared conversation: `direct:<employee>`, `project:<project>` or `work:<commitment>`.
+/// One shared conversation: `direct:<employee>`, `project:<project>` or `work:<workItem>`.
 public struct ConversationKey: Hashable, Sendable, CustomStringConvertible {
     public enum Kind: String, Sendable { case direct, project, work }
 
@@ -22,7 +22,7 @@ public struct ConversationKey: Hashable, Sendable, CustomStringConvertible {
 
     public static func direct(_ employeeID: String) -> Self { Self(.direct, employeeID) }
     public static func project(_ projectID: String) -> Self { Self(.project, projectID) }
-    public static func work(_ commitmentID: String) -> Self { Self(.work, commitmentID) }
+    public static func work(_ workItemID: String) -> Self { Self(.work, workItemID) }
 
     public var rawValue: String { "\(kind.rawValue):\(ref)" }
     public var description: String { rawValue }

@@ -50,16 +50,16 @@ test("Home's Needs you approves an exact request; new work opens its thread and 
       )
       .toBe("approved");
 
-    // New → New task opens the work item's thread with its card beside it.
+    // New → New work item opens the work item's thread with its card beside it.
     await sidebar(page).getByRole("button", { name: "New", exact: true }).click();
-    await page.getByRole("menuitem", { name: "New task" }).click();
-    const dialog = page.getByRole("dialog", { name: "New task" });
+    await page.getByRole("menuitem", { name: "New work item" }).click();
+    const dialog = page.getByRole("dialog", { name: "New work item" });
     await dialog.getByLabel("Title").fill("Draft the PR inquiry");
-    await dialog.getByRole("button", { name: "Create task" }).click();
+    await dialog.getByRole("button", { name: "Create work item" }).click();
     await expect(dialog).toBeHidden();
     await expect(page.getByTestId("place-title")).toHaveText("Draft the PR inquiry");
     const card = page.getByRole("region", { name: "Work item" });
-    await expect(card.getByTestId("task-owner")).toHaveText("Head of Operations");
+    await expect(card.getByTestId("work-item-owner")).toHaveText("Head of Operations");
 
     // The owner edits what's next and what it waits on at the revision on screen.
     await card.getByRole("button", { name: "Edit next, waiting on and due" }).click();
@@ -69,7 +69,7 @@ test("Home's Needs you approves an exact request; new work opens its thread and 
     await expect(card.getByText("Email three editors")).toBeVisible();
     expect(
       await sql.row<{ next_action: string; wait_condition: string | null }>(
-        "SELECT next_action, wait_condition FROM commitments WHERE business_id = $1",
+        "SELECT next_action, wait_condition FROM work_items WHERE business_id = $1",
         [owner.business],
       ),
     ).toEqual({
@@ -83,7 +83,7 @@ test("Home's Needs you approves an exact request; new work opens its thread and 
     expect(
       (
         await sql.row<{ taken_over_by: string | null }>(
-          "SELECT taken_over_by FROM commitments WHERE business_id = $1",
+          "SELECT taken_over_by FROM work_items WHERE business_id = $1",
           [owner.business],
         )
       )?.taken_over_by,

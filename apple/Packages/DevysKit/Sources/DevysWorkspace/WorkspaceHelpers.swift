@@ -64,16 +64,16 @@ extension Workspace.Action {
         Self(.model(.selected(employeeID: employeeID, model: model)))
     }
     package static func decisionAnswered(_ id: String, approve: Bool) -> Self { Self(.decisionAnswered(decisionID: id, approve: approve)) }
-    package static func commitmentStateSet(_ id: String, _ state: CommitmentState) -> Self {
-        Self(.commitmentStateSet(commitmentID: id, state))
+    package static func workItemStateSet(_ id: String, _ state: WorkItemState) -> Self {
+        Self(.workItemStateSet(workItemID: id, state))
     }
-    package static func takeoverToggled(_ id: String) -> Self { Self(.takeoverToggled(commitmentID: id)) }
-    package static func newTaskTapped(owner: String? = nil, project: String? = nil) -> Self { Self(.task(.newTaskTapped(ownerID: owner, projectID: project))) }
-    package static func taskEdited(_ draft: TaskDraft) -> Self { Self(.task(.edited(draft))) }
-    package static var taskConfirmed: Self { Self(.task(.confirmed)) }
-    package static var taskCancelled: Self { Self(.task(.cancelled)) }
-    package static func commitmentChanged(_ id: String, _ change: CommitmentChange) -> Self { Self(.task(.changed(commitmentID: id, change))) }
-    package static func reassigned(_ id: String, to owner: String) -> Self { Self(.task(.reassigned(commitmentID: id, ownerID: owner))) }
+    package static func takeoverToggled(_ id: String) -> Self { Self(.takeoverToggled(workItemID: id)) }
+    package static func newWorkItemTapped(owner: String? = nil, project: String? = nil) -> Self { Self(.workItem(.newWorkItemTapped(ownerID: owner, projectID: project))) }
+    package static func workItemEdited(_ draft: WorkItemDraft) -> Self { Self(.workItem(.edited(draft))) }
+    package static var workItemConfirmed: Self { Self(.workItem(.confirmed)) }
+    package static var workItemCancelled: Self { Self(.workItem(.cancelled)) }
+    package static func workItemChanged(_ id: String, _ change: WorkItemChange) -> Self { Self(.workItem(.changed(workItemID: id, change))) }
+    package static func reassigned(_ id: String, to owner: String) -> Self { Self(.workItem(.reassigned(workItemID: id, ownerID: owner))) }
     package static var hireTapped: Self { Self(.team(.hireTapped)) }
     package static func templateChosen(_ id: String) -> Self { Self(.team(.templateChosen(id))) }
     package static func hireEdited(_ draft: HireDraft) -> Self { Self(.team(.hireEdited(draft))) }
@@ -89,7 +89,7 @@ extension Workspace.Action {
         Self(.conversation(.responderPicked(key, employeeID: employeeID)))
     }
     package static func sendTapped(_ key: ConversationKey) -> Self { Self(.conversation(.sendTapped(key))) }
-    package static func followToggled(_ commitmentID: String) -> Self { Self(.conversation(.followToggled(commitmentID: commitmentID))) }
+    package static func followToggled(_ workItemID: String) -> Self { Self(.conversation(.followToggled(workItemID: workItemID))) }
     package static func retryTapped(_ key: ConversationKey, _ clientID: String) -> Self { Self(.conversation(.retryTapped(key, clientID: clientID))) }
     package static func replyTapped(_ key: ConversationKey, _ messageID: String) -> Self { Self(.conversation(.replyTapped(key, messageID: messageID))) }
     package static func replyCancelled(_ key: ConversationKey) -> Self { Self(.conversation(.replyCancelled(key))) }

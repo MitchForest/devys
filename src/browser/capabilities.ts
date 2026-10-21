@@ -14,7 +14,7 @@ const Page = Schema.Struct({ url: Schema.String, title: Schema.String });
 /** The work an action serves, so the owner sees the browser on that work item. */
 const driving = Effect.map(Invocation, (invocation) => ({
   businessId: invocation.businessId,
-  driver: invocation.commitmentId ?? invocation.conversation ?? `direct:${invocation.employeeId}`,
+  driver: invocation.workItemId ?? invocation.conversation ?? `direct:${invocation.employeeId}`,
 }));
 
 const page = <T>(run: () => Promise<T>) =>

@@ -31,14 +31,14 @@ struct Sidebar: View {
     }
 }
 
-/// **New**: a project, a task or a hire. A message needs nothing: the composer is always there.
+/// **New**: a project, a hire or a work item. A message needs nothing: the composer is always there.
 struct NewMenu: View {
     let store: StoreOf<Workspace>
 
     var body: some View {
         Menu {
             Button("New project", systemImage: "square.grid.2x2") { store.send(.newProjectTapped) }
-            Button("New task", systemImage: "checklist") { store.send(.newTaskTapped()) }
+            Button("New work item", systemImage: "checklist") { store.send(.newWorkItemTapped()) }
             Button("Hire", systemImage: "person.badge.plus") { store.send(.hireTapped) }
         } label: {
             Image(systemName: "plus").font(.system(size: 13, weight: .semibold)).frame(width: 28, height: 28).contentShape(Rectangle())
@@ -113,8 +113,8 @@ struct SidebarSections: View {
 
     /// Threads the owner follows or that need the owner, under their project (or under Home when
     /// they have none). Everything else stays in its channel.
-    private func nestedThreads(_ projectID: String?) -> [Commitment] {
-        let waiting = Set((store.decisions.value ?? []).compactMap(\.commitmentID))
+    private func nestedThreads(_ projectID: String?) -> [WorkItem] {
+        let waiting = Set((store.decisions.value ?? []).compactMap(\.workItemID))
         return (store.work.value ?? []).filter { item in
             item.state.isOpen && item.projectID == projectID
                 && (store.state.isFollowing(item.id) || item.state == .needsDecision || waiting.contains(item.id))
@@ -167,7 +167,7 @@ struct SidebarSections: View {
         }
     }
 
-    private func threadRow(_ item: Commitment) -> some View {
+    private func threadRow(_ item: WorkItem) -> some View {
         SidebarRow(
             title: item.title,
             unread: store.state.unread(.work(item.id)),

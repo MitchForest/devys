@@ -5,7 +5,7 @@ import {
   api,
   ApiError,
   type CodingSession,
-  type Commitment,
+  type WorkItem,
   type WorkingDiff,
   type TranscriptEntry,
 } from "../app/api.ts";
@@ -38,7 +38,7 @@ export default function SessionView({
   session,
   onChanged,
 }: {
-  item: Commitment;
+  item: WorkItem;
   session: CodingSession;
   onChanged: () => void;
 }) {

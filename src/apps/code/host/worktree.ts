@@ -1,4 +1,4 @@
-/** Git worktrees for assignments, through the owner's own `git`. */
+/** Git worktrees for coding sessions, through the owner's own `git`. */
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, realpath } from "node:fs/promises";
@@ -17,7 +17,7 @@ export async function git(cwd: string, ...args: string[]) {
 const repositoryName = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 
 /**
- * The repository an assignment works on: an existing one at an absolute path, or a new empty
+ * The repository a coding session works on: an existing one at an absolute path, or a new empty
  * one under the business folder with a first commit to branch from.
  */
 export async function repository(business: string, target: { path: string } | { create: string }) {
@@ -32,7 +32,7 @@ export async function repository(business: string, target: { path: string } | { 
   return path;
 }
 
-/** Creates the assignment's worktree on its own branch from the repository's current head. */
+/** Creates the coding session's worktree on its own branch from the repository's current head. */
 export async function createWorktree(business: string, repositoryPath: string, id: string) {
   const worktree = join(business, "worktrees", id);
   const branch = `devys/${id.slice(0, 12)}`;
@@ -156,7 +156,7 @@ export async function workingDiff(worktree: string, base: string) {
 /**
  * Stops whatever still runs inside a worktree: commands a coding agent started keep going
  * after its turn is interrupted, or after the host itself died. A worktree belongs to one
- * assignment, so its directory names exactly that work.
+ * coding session, so its directory names exactly that work.
  */
 export async function stopProcessesIn(worktree: string, spared: readonly string[] = []) {
   const { stdout } = await exec("lsof", ["-d", "cwd", "-F", "pn"], {

@@ -18,8 +18,8 @@ extension Workspace.State {
     package func unread(_ key: ConversationKey) -> Int { summaries[key.rawValue]?.unread ?? 0 }
 
     /// Work items the signed-in person follows.
-    package func isFollowing(_ commitmentID: String) -> Bool {
-        summaries[ConversationKey.work(commitmentID).rawValue]?.following ?? false
+    package func isFollowing(_ workItemID: String) -> Bool {
+        summaries[ConversationKey.work(workItemID).rawValue]?.following ?? false
     }
 
     /// Who answers when nobody has spoken yet: a direct chat's employee, a project's lead, a work item's owner.
@@ -201,17 +201,17 @@ extension Workspace {
         case .summariesLoaded(let businessID, let summaries):
             guard businessID == state.businessID else { return }
             loadedSummaries(summaries, state: &state)
-        case .followToggled(let commitmentID):
-            toggleFollowing(commitmentID, state: &state)
+        case .followToggled(let workItemID):
+            toggleFollowing(workItemID, state: &state)
         default:
             return
         }
     }
 
     /// Follows a work item's thread, or stops; the sidebar and bell update before the server answers.
-    func toggleFollowing(_ commitmentID: String, state: inout State) {
-        let key = ConversationKey.work(commitmentID)
-        let following = !state.isFollowing(commitmentID)
+    func toggleFollowing(_ workItemID: String, state: inout State) {
+        let key = ConversationKey.work(workItemID)
+        let following = !state.isFollowing(workItemID)
         let summary = state.summaries[key.rawValue]
         state.summaries[key.rawValue] = ConversationSummary(key: key.rawValue, last: summary?.last, unread: summary?.unread ?? 0, following: following)
         let businessID = state.businessID

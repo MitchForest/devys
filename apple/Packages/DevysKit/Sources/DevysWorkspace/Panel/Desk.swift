@@ -23,7 +23,7 @@ struct Desk: View {
                     header(employee, open: open.count)
                     if employee.paused { PausedBanner(store: store, employee: employee) }
                     PanelSection(title: "Now", count: open.isEmpty ? nil : open.count) {
-                        PanelAction(title: "Task") { store.send(.newTaskTapped(owner: employee.id)) }
+                        PanelAction(title: "Work item") { store.send(.newWorkItemTapped(owner: employee.id)) }
                     } content: {
                         if open.isEmpty {
                             Text("Nothing open.").font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3)
@@ -220,7 +220,7 @@ private struct RetireSheet: View {
             Text(
                 open == 0
                     ? "\(employee.name) has no open work."
-                    : "\(employee.name)'s \(open) open \(open == 1 ? "task moves" : "tasks move") to the colleague you choose."
+                    : "\(employee.name)'s \(open) open \(open == 1 ? "work item moves" : "work items move") to the colleague you choose."
             )
             .font(DevysTypography.body)
             .foregroundStyle(DevysColors.ink2)

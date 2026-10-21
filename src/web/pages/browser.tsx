@@ -1,12 +1,12 @@
 import { Globe, Hand, Undo2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { api, type BrowserStatus, type Commitment } from "../app/api.ts";
+import { api, type BrowserStatus, type WorkItem } from "../app/api.ts";
 import { takeoverTitle } from "../app/names.ts";
 import { useWorkspace, valueOf } from "../app/workspace.tsx";
 import { DevysButton } from "../design/buttons.tsx";
 
 /** The business's browser while this work item drives it: a line that opens the live view. */
-export function BrowserSection({ item }: { item: Commitment }) {
+export function BrowserSection({ item }: { item: WorkItem }) {
   const { businessId, actions } = useWorkspace();
   const [status, setStatus] = useState<BrowserStatus | null>(null);
   useEffect(() => {
@@ -47,7 +47,7 @@ export function BrowserLayer({ workId }: { workId: string }) {
   return item ? <BrowserView item={item} /> : null;
 }
 
-function BrowserView({ item }: { item: Commitment }) {
+function BrowserView({ item }: { item: WorkItem }) {
   const { businessId, person, members, actions } = useWorkspace();
   const [shot, setShot] = useState<{ jpeg: string; width: number; height: number } | null>(null);
   const [status, setStatus] = useState<BrowserStatus | null>(null);

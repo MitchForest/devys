@@ -4,14 +4,8 @@ import { stableId } from "../protocol/bytes.ts";
 import { capability, CapabilityError, Invocation } from "../protocol/capability.ts";
 import { rpc, stored } from "../protocol/rpc.ts";
 import { Ref, ref } from "../protocol/ref.ts";
-import type { Commitment, Project } from "./contract.ts";
-import {
-  commitment,
-  commitments,
-  createCommitment,
-  updateCommitment,
-  type Change,
-} from "./service.ts";
+import type { WorkItem, Project } from "./contract.ts";
+import { workItem, workItems, createWorkItem, updateWorkItem, type Change } from "./service.ts";
 import { addToProject, createProject, project, projects, updateProject } from "./projects.ts";
 
 const Id = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(64));
@@ -29,7 +23,7 @@ const Summary = Schema.Struct({
   takenOver: Schema.Boolean,
   projectId: Schema.NullOr(Schema.String),
 });
-const summary = (item: Commitment) => ({
+const summary = (item: WorkItem) => ({
   id: item.id,
   title: item.title,
   state: item.state,
@@ -80,7 +74,7 @@ export function workCapabilities(
   /** Whether a ref names a record of this business a project can show: an artifact or a file. */
   keepable: (businessId: string, ref: Ref) => Promise<boolean>,
   /** Why this work cannot be completed yet (such as a coding check that has not passed). */
-  completionBlocked: (businessId: string, work: Commitment) => Promise<string | undefined>,
+  completionBlocked: (businessId: string, work: WorkItem) => Promise<string | undefined>,
   /** Whether this employee directs others' work (the Head of Operations). */
   coordinates: (businessId: string, employeeId: string) => Promise<boolean>,
 ) {
@@ -88,7 +82,7 @@ export function workCapabilities(
   const ownWork = (id: string) =>
     Effect.gen(function* () {
       const { businessId, employeeId } = yield* Invocation;
-      const work = yield* stored(commitment(db, businessId, id));
+      const work = yield* stored(workItem(db, businessId, id));
       if (!work)
         return yield* new CapabilityError({
           code: "invalid_input",
@@ -109,7 +103,7 @@ export function workCapabilities(
       const { businessId, employeeId } = yield* Invocation;
       yield* ownWork(id);
       const updated = yield* stored(
-        updateCommitment(db, businessId, id, expectedRevision, value, {
+        updateWorkItem(db, businessId, id, expectedRevision, value, {
           kind: "employee",
           id: employeeId,
         }),
@@ -117,7 +111,7 @@ export function workCapabilities(
       if (!updated)
         return yield* new CapabilityError({
           code: "conflict",
-          message: "The commitment changed or was taken over; list it again",
+          message: "The work item changed or was taken over; list it again",
         });
       return summary(updated);
     });
@@ -132,26 +126,26 @@ export function workCapabilities(
     });
   return [
     capability({
-      name: "commitmentList",
+      name: "workList",
       description:
-        "List the business's commitments: what is owed, who is accountable, the next action and state. Read before changing one; changes need its current revision.",
+        "List the business's work items: what is owed, who is accountable, the next action and state. Read before changing one; changes need its current revision.",
       effect: "read",
       replay: "read",
       input: Schema.Struct({ openOnly: Schema.optional(Schema.Boolean) }),
-      output: Schema.Struct({ commitments: Schema.Array(Summary) }),
+      output: Schema.Struct({ workItems: Schema.Array(Summary) }),
       execute: ({ openOnly }) =>
         Effect.gen(function* () {
           const { businessId } = yield* Invocation;
-          const items = yield* stored(commitments(db, businessId));
+          const items = yield* stored(workItems(db, businessId));
           return {
-            commitments: items
+            workItems: items
               .filter((item) => !openOnly || !["completed", "cancelled"].includes(item.state))
               .map(summary),
           };
         }),
     }),
     capability({
-      name: "commitmentCreate",
+      name: "workCreate",
       description:
         "Record something the business owes: a title, objective and next action, accountable to you or another employee, optionally in a project. Use for work that outlives this conversation.",
       effect: "change",
@@ -182,7 +176,7 @@ export function workCapabilities(
           const id = yield* Effect.promise(() => stableId(`${businessId}:${operationId}`));
           const created = summary(
             yield* stored(
-              createCommitment(db, businessId, {
+              createWorkItem(db, businessId, {
                 id,
                 owner,
                 title: input.title,
@@ -198,9 +192,9 @@ export function workCapabilities(
         }),
     }),
     capability({
-      name: "commitmentUpdate",
+      name: "workUpdate",
       description:
-        "Update a commitment at its current revision: the next action, its state (ready, in_progress, waiting, needs_decision, cancelled), what it waits on, or its due date.",
+        "Update a work item at its current revision: the next action, its state (ready, in_progress, waiting, needs_decision, cancelled), what it waits on, or its due date.",
       effect: "change",
       replay: "idempotent",
       input: Schema.Struct({
@@ -225,9 +219,9 @@ export function workCapabilities(
         }),
     }),
     capability({
-      name: "commitmentComplete",
+      name: "workComplete",
       description:
-        "Mark a commitment completed, at its current revision, with evidence: what was done and where to see it. Saying 'done' in chat does not complete work.",
+        "Mark a work item completed, at its current revision, with evidence: what was done and where to see it. Saying 'done' in chat does not complete work.",
       effect: "change",
       replay: "idempotent",
       input: Schema.Struct({ id: Id, expectedRevision: Schema.Int, evidence: Line(2000) }),
@@ -247,7 +241,7 @@ export function workCapabilities(
     capability({
       name: "projectList",
       description:
-        "List the business's projects (bounded initiatives like Launch): goal, deadline, budget, lead, members and the refs of the artifacts and files each one shows. Its work items carry its id as projectId in commitmentList.",
+        "List the business's projects (bounded initiatives like Launch): goal, deadline, budget, lead, members and the refs of the artifacts and files each one shows. Its work items carry its id as projectId in workList.",
       effect: "read",
       replay: "read",
       input: Schema.Struct({}),

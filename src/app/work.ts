@@ -6,19 +6,19 @@ import { postFromPerson } from "./conversations.ts";
 import { activeEmployee } from "../identity/service.ts";
 import { answerDecision, decisionsFor, pendingDecisions } from "../authority/service.ts";
 import {
-  commitments,
-  createCommitment,
+  workItems,
+  createWorkItem,
   setTakeover,
-  updateCommitment,
+  updateWorkItem,
   type Change,
 } from "../work/service.ts";
-import type { CommitmentState } from "../work/contract.ts";
+import type { WorkItemState } from "../work/contract.ts";
 import { project } from "../work/projects.ts";
 import { capabilities } from "./capabilities.ts";
 import { handBack } from "./coding.ts";
 import { body, forbidden, label, notFound } from "./request.ts";
 
-const states: CommitmentState[] = [
+const states: WorkItemState[] = [
   "proposed",
   "ready",
   "in_progress",
@@ -32,7 +32,7 @@ const when = (value: unknown) =>
     ? new Date(value).toISOString()
     : undefined;
 
-/** The business's commitments, operated by its members through the same rules as employees. */
+/** The business's work items, operated by its members through the same rules as employees. */
 export async function workRoute(
   request: Request,
   env: Env,
@@ -42,7 +42,7 @@ export async function workRoute(
   if (path === "/work" && request.method === "GET") {
     const since = when(new URL(request.url).searchParams.get("since"));
     return Response.json({
-      commitments: await Effect.runPromise(commitments(env.HYPERDRIVE, business.id, since)),
+      workItems: await Effect.runPromise(workItems(env.HYPERDRIVE, business.id, since)),
     });
   }
   if (request.method !== "POST") return notFound();
@@ -85,7 +85,7 @@ export async function workRoute(
       }
     }
     const created = await Effect.runPromise(
-      createCommitment(env.HYPERDRIVE, business.id, {
+      createWorkItem(env.HYPERDRIVE, business.id, {
         id: crypto.randomUUID(),
         owner: input.owner!,
         title,
@@ -122,13 +122,13 @@ export async function workRoute(
     expectedRevision: number;
     title: string;
     owner: string;
-    state: CommitmentState;
+    state: WorkItemState;
     nextAction: string;
     waitCondition: string | null;
     dueAt: string | null;
   }>(request, 8_000);
   if (!Number.isSafeInteger(input.expectedRevision))
-    return new Response("Send the commitment's expectedRevision", { status: 400 });
+    return new Response("Send the work item's expectedRevision", { status: 400 });
   if (input.state !== undefined && !states.includes(input.state))
     return new Response("Unknown state", { status: 400 });
   if (input.owner !== undefined && !(await isEmployee(input.owner)))
@@ -148,14 +148,14 @@ export async function workRoute(
       : {}),
   };
   const updated = await Effect.runPromise(
-    updateCommitment(env.HYPERDRIVE, business.id, id, input.expectedRevision!, change, {
+    updateWorkItem(env.HYPERDRIVE, business.id, id, input.expectedRevision!, change, {
       kind: "person",
       id: person.id,
     }),
   );
   return updated
     ? Response.json(updated)
-    : new Response("The commitment changed; reload it", { status: 409 });
+    : new Response("The work item changed; reload it", { status: 409 });
 }
 
 /** Requests waiting on the owner. Approval allows exactly one identical retry. */
@@ -166,12 +166,12 @@ export async function decisionRoute(
 ) {
   const { person, business, trusted, path } = access;
   if (path === "/decisions" && request.method === "GET") {
-    // `?commitment=` lists one work item's requests with their answers, not only pending ones.
-    const commitmentId = new URL(request.url).searchParams.get("commitment");
+    // `?workItem=` lists one work item's requests with their answers, not only pending ones.
+    const workItemId = new URL(request.url).searchParams.get("workItem");
     return Response.json({
       decisions: await Effect.runPromise(
-        commitmentId
-          ? decisionsFor(env.HYPERDRIVE, business.id, commitmentId)
+        workItemId
+          ? decisionsFor(env.HYPERDRIVE, business.id, workItemId)
           : pendingDecisions(env.HYPERDRIVE, business.id),
       ),
     });

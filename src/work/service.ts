@@ -1,28 +1,28 @@
 import { database, type Database } from "../data/database.ts";
-import type { Commitment, CommitmentState } from "./contract.ts";
+import type { WorkItem, WorkItemState } from "./contract.ts";
 
 const columns = `id, owner_employee_id, title, objective, next_action, wait_condition, due_at, state,
   project_id, conditions, evidence, revision, taken_over_by, created_by, updated_at`;
 
-export const commitments = (db: Database, businessId: string, since?: string) =>
+export const workItems = (db: Database, businessId: string, since?: string) =>
   database(db, (sql) =>
-    sql.rows<Commitment>(
-      `SELECT ${columns} FROM commitments
+    sql.rows<WorkItem>(
+      `SELECT ${columns} FROM work_items
        WHERE business_id = $1 AND ($2::timestamptz IS NULL OR updated_at > $2)
        ORDER BY updated_at DESC LIMIT 200`,
       [businessId, since ?? null],
     ),
   );
 
-export const commitment = (db: Database, businessId: string, id: string) =>
+export const workItem = (db: Database, businessId: string, id: string) =>
   database(db, (sql) =>
-    sql.row<Commitment>(`SELECT ${columns} FROM commitments WHERE business_id = $1 AND id = $2`, [
+    sql.row<WorkItem>(`SELECT ${columns} FROM work_items WHERE business_id = $1 AND id = $2`, [
       businessId,
       id,
     ]),
   );
 
-export const createCommitment = (
+export const createWorkItem = (
   db: Database,
   businessId: string,
   input: {
@@ -33,7 +33,7 @@ export const createCommitment = (
     objective?: string;
     nextAction?: string;
     dueAt?: string;
-    conditions?: Commitment["conditions"];
+    conditions?: WorkItem["conditions"];
     /** The project it belongs to; the caller has checked it is this business's. */
     projectId?: string;
     createdBy: string;
@@ -43,7 +43,7 @@ export const createCommitment = (
 ) =>
   database(db, async (sql) => {
     await sql.run(
-      `INSERT INTO commitments (id, business_id, owner_employee_id, title, objective, next_action,
+      `INSERT INTO work_items (id, business_id, owner_employee_id, title, objective, next_action,
          due_at, conditions, created_by, taken_over_by, project_id, state)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
          CASE WHEN $10::text IS NULL THEN 'ready' ELSE 'in_progress' END)
@@ -63,8 +63,8 @@ export const createCommitment = (
       ],
     );
     // A retry finds the item its first attempt made; an id of another business finds nothing.
-    const created = await sql.row<Commitment>(
-      `SELECT ${columns} FROM commitments WHERE business_id = $1 AND id = $2`,
+    const created = await sql.row<WorkItem>(
+      `SELECT ${columns} FROM work_items WHERE business_id = $1 AND id = $2`,
       [businessId, input.id],
     );
     if (!created) throw new Error("A work item with this id belongs to another business");
@@ -74,7 +74,7 @@ export const createCommitment = (
 export interface Change {
   title?: string;
   owner?: string;
-  state?: CommitmentState;
+  state?: WorkItemState;
   nextAction?: string;
   waitCondition?: string | null;
   dueAt?: string | null;
@@ -85,7 +85,7 @@ export interface Change {
  * Applies a change at an expected revision. Nothing (undefined) means the revision was
  * stale or a person took the work over: a conflict, never an overwrite.
  */
-export const updateCommitment = (
+export const updateWorkItem = (
   db: Database,
   businessId: string,
   id: string,
@@ -94,8 +94,8 @@ export const updateCommitment = (
   actor: { kind: "person" | "employee"; id: string },
 ) =>
   database(db, async (sql) => {
-    const updated = await sql.row<Commitment>(
-      `UPDATE commitments SET
+    const updated = await sql.row<WorkItem>(
+      `UPDATE work_items SET
          title = coalesce($4, title),
          owner_employee_id = coalesce($5, owner_employee_id),
          state = coalesce($6, state),
@@ -137,11 +137,11 @@ export const addEvidence = (
   db: Database,
   businessId: string,
   id: string,
-  entry: Omit<Commitment["evidence"][number], "at">,
+  entry: Omit<WorkItem["evidence"][number], "at">,
 ) =>
   database(db, (sql) =>
     sql.run(
-      `UPDATE commitments SET
+      `UPDATE work_items SET
          evidence = evidence || jsonb_build_array($3::jsonb || jsonb_build_object('at', now())),
          revision = revision + 1, updated_at = now()
        WHERE business_id = $1 AND id = $2
@@ -151,13 +151,13 @@ export const addEvidence = (
   );
 
 /**
- * Hands every open commitment of one employee to another, as when the first retires.
+ * Hands every open work item of one employee to another, as when the first retires.
  * Work in progress goes back to ready, so the dispatcher gives it to the new owner.
  */
 export const reassignOpen = (db: Database, businessId: string, from: string, to: string) =>
   database(db, (sql) =>
     sql.run(
-      `UPDATE commitments SET owner_employee_id = $3,
+      `UPDATE work_items SET owner_employee_id = $3,
          state = CASE WHEN state = 'in_progress' THEN 'ready' ELSE state END,
          revision = revision + 1, updated_at = now()
        WHERE business_id = $1 AND owner_employee_id = $2
@@ -170,7 +170,7 @@ export const reassignOpen = (db: Database, businessId: string, from: string, to:
 export const requeue = (db: Database, businessId: string, id: string) =>
   database(db, (sql) =>
     sql.run(
-      `UPDATE commitments SET state = 'ready', revision = revision + 1, updated_at = now()
+      `UPDATE work_items SET state = 'ready', revision = revision + 1, updated_at = now()
        WHERE business_id = $1 AND id = $2 AND state = 'in_progress'`,
       [businessId, id],
     ),
@@ -179,18 +179,18 @@ export const requeue = (db: Database, businessId: string, id: string) =>
 /** A person takes the work from its employee, or hands it back. */
 export const setTakeover = (db: Database, businessId: string, id: string, person: string | null) =>
   database(db, (sql) =>
-    sql.row<Commitment>(
-      `UPDATE commitments SET taken_over_by = $3, revision = revision + 1, updated_at = now()
+    sql.row<WorkItem>(
+      `UPDATE work_items SET taken_over_by = $3, revision = revision + 1, updated_at = now()
        WHERE business_id = $1 AND id = $2 RETURNING ${columns}`,
       [businessId, id, person],
     ),
   );
 
 /** Ready, due work, skipping owners who take no work now so they cannot hold up the rest. */
-export const dueCommitments = (db: Database, skipOwners: readonly string[], limit = 20) =>
+export const dueWorkItems = (db: Database, skipOwners: readonly string[], limit = 20) =>
   database(db, (sql) =>
-    sql.rows<Commitment & { business_id: string }>(
-      `SELECT business_id, ${columns} FROM commitments
+    sql.rows<WorkItem & { business_id: string }>(
+      `SELECT business_id, ${columns} FROM work_items
        WHERE state = 'ready' AND (due_at IS NULL OR due_at <= now()) AND taken_over_by IS NULL
          AND submitted_revision IS DISTINCT FROM revision AND owner_employee_id <> ALL($2::text[])
        ORDER BY coalesce(due_at, created_at) LIMIT $1`,
@@ -206,7 +206,7 @@ export const dueCommitments = (db: Database, skipOwners: readonly string[], limi
 export const markSubmitted = (db: Database, id: string, revision: number) =>
   database(db, (sql) =>
     sql.run(
-      `UPDATE commitments
+      `UPDATE work_items
        SET state = CASE WHEN state = 'ready' THEN 'in_progress' ELSE state END,
          submitted_revision = revision
        WHERE id = $1 AND revision >= $2 AND submitted_revision IS DISTINCT FROM revision`,

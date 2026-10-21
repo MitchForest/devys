@@ -162,7 +162,7 @@ package enum ConversationIntent {
     case reactionTapped(ConversationKey, messageID: String, emoji: String)
     case errorDismissed(ConversationKey)
     /// Hear each milestone of a work item and keep it in the sidebar, or only its outcome.
-    case followToggled(commitmentID: String)
+    case followToggled(workItemID: String)
     /// Fast polling after a message ended, answered or not.
     case waitEnded(ConversationKey, after: String)
 }

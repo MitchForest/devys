@@ -63,7 +63,7 @@ export async function localStores(channel = false) {
         "messages",
         "conversations",
         "decisions",
-        "commitments",
+        "work_items",
         "project_items",
         "project_members",
         "projects",

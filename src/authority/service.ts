@@ -118,12 +118,12 @@ export const requestHash = (
   grantId: string,
   capability: string,
   input: unknown,
-  commitmentId: string | null,
-) => sha256(canonical({ capability, commitmentId, grantId, input }));
+  workItemId: string | null,
+) => sha256(canonical({ capability, workItemId, grantId, input }));
 
 const decisionLife = "24 hours";
 const decisionColumns =
-  "id, employee_id, capability, input, commitment_id, conversation, status, requested_at, expires_at";
+  "id, employee_id, capability, input, work_item_id, conversation, status, requested_at, expires_at";
 
 /**
  * Settles an `ask`: uses an approved decision for this exact request once, or makes
@@ -136,7 +136,7 @@ export const settleAsk = (
     grantId: string;
     capability: string;
     input: unknown;
-    commitmentId?: string;
+    workItemId?: string;
     conversation?: string;
   },
 ) =>
@@ -147,7 +147,7 @@ export const settleAsk = (
         ask.grantId,
         ask.capability,
         ask.input,
-        ask.commitmentId ?? null,
+        ask.workItemId ?? null,
       );
       const used = await sql.run(
         `UPDATE decisions SET status = 'used', used_at = now()
@@ -176,7 +176,7 @@ export const settleAsk = (
       );
       await sql.run(
         `INSERT INTO decisions (id, business_id, employee_id, grant_id, capability, input, input_hash,
-           commitment_id, conversation, expires_at)
+           work_item_id, conversation, expires_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now() + interval '${decisionLife}')
          ON CONFLICT (grant_id, input_hash) WHERE status IN ('pending', 'approved') DO NOTHING`,
         [
@@ -187,7 +187,7 @@ export const settleAsk = (
           ask.capability,
           JSON.stringify(ask.input),
           hash,
-          ask.commitmentId ?? null,
+          ask.workItemId ?? null,
           ask.conversation ?? null,
         ],
       );
@@ -222,13 +222,13 @@ export const pendingDecisions = (db: Database, businessId: string) =>
   );
 
 /** A work item's requests, newest first, whatever their answer: its page shows them. */
-export const decisionsFor = (db: Database, businessId: string, commitmentId: string) =>
+export const decisionsFor = (db: Database, businessId: string, workItemId: string) =>
   database(db, (sql) =>
     sql.rows<Decision>(
       `SELECT ${decisionColumns} FROM decisions
-       WHERE business_id = $1 AND commitment_id = $2
+       WHERE business_id = $1 AND work_item_id = $2
        ORDER BY requested_at DESC LIMIT 20`,
-      [businessId, commitmentId],
+      [businessId, workItemId],
     ),
   );
 

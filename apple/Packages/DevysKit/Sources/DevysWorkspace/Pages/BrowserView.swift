@@ -7,7 +7,7 @@ import SwiftUI
 /// The business's browser while this work item drives it: a line that opens the live view as a layer.
 struct BrowserLine: View {
     let store: StoreOf<Workspace>
-    let item: Commitment
+    let item: WorkItem
     @Dependency(\.browserClient) private var browser
     @State private var status: BrowserStatus?
 
@@ -48,7 +48,7 @@ struct BrowserLayer: View {
     @State private var text = ""
     @State private var problem: String?
 
-    private var current: Commitment? { store.work.value?.first { $0.id == workID } }
+    private var current: WorkItem? { store.work.value?.first { $0.id == workID } }
     private var mine: Bool { current.map(store.state.isMine) ?? false }
 
     var body: some View {

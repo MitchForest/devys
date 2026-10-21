@@ -5,8 +5,8 @@ import { expireDecisions } from "../authority/service.ts";
 import { workChat } from "../channels/work.ts";
 import { scopeName } from "../identity/contract.ts";
 import { activeEmployee, pausedEmployees } from "../identity/service.ts";
-import type { Commitment } from "../work/contract.ts";
-import { dueCommitments, markSubmitted } from "../work/service.ts";
+import type { WorkItem } from "../work/contract.ts";
+import { dueWorkItems, markSubmitted } from "../work/service.ts";
 import { postEvent } from "./conversations.ts";
 
 /** The minute tick: unanswered decisions expire, then ready work is handed over. */
@@ -18,19 +18,19 @@ export async function minuteTick(env: Env) {
 }
 
 /**
- * Hands ready work to its employee. The operation id is `<commitment>:<revision>`, so a
+ * Hands ready work to its employee. The operation id is `<workItem>:<revision>`, so a
  * lost response is simply resubmitted and Pi admits it once. Paused employees wait. One item
  * failing is logged and retried next minute without holding up the others.
  */
 export async function dispatchDue(env: Env) {
   const paused = await Effect.runPromise(pausedEmployees(env.HYPERDRIVE));
-  for (const work of await Effect.runPromise(dueCommitments(env.HYPERDRIVE, paused)))
+  for (const work of await Effect.runPromise(dueWorkItems(env.HYPERDRIVE, paused)))
     await handOver(env, work).catch((error: unknown) =>
       console.error(`Dispatching work ${work.id} failed:`, error),
     );
 }
 
-async function handOver(env: Env, work: Commitment & { business_id: string }) {
+async function handOver(env: Env, work: WorkItem & { business_id: string }) {
   const scope = { businessId: work.business_id, employeeId: work.owner_employee_id };
   const employee = await Effect.runPromise(activeEmployee(env.HYPERDRIVE, scope));
   if (!employee || employee.paused) return;
@@ -47,10 +47,10 @@ async function handOver(env: Env, work: Commitment & { business_id: string }) {
     senderId: "dispatcher",
     chatId: workChat(scope, work.id),
     text: [
-      `Work on this commitment (id ${work.id}, revision ${work.revision}): ${work.title}.`,
+      `Work on this work item (id ${work.id}, revision ${work.revision}): ${work.title}.`,
       work.objective && `Objective: ${work.objective}`,
       work.next_action && `Next action: ${work.next_action}`,
-      "When it's done, call commitmentComplete with evidence. If it's blocked, call commitmentUpdate with state waiting or needs_decision and what it waits on.",
+      "When it's done, call workComplete with evidence. If it's blocked, call workUpdate with state waiting or needs_decision and what it waits on.",
     ]
       .filter(Boolean)
       .join("\n"),

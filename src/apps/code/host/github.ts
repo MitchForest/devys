@@ -1,7 +1,7 @@
 /**
  * The business's GitHub repositories, through the owner's own `git` and `gh` logins on the trusted
  * Mac (.docs/CODING_AGENTS.md). Cloning reuses a folder only when its origin is the same
- * repository; publishing pushes an accepted commit to the assignment's branch and opens one pull
+ * repository; publishing pushes an accepted commit to the coding session's branch and opens one pull
  * request for it, finding the existing one first so a retry never opens a second.
  */
 import { execFile } from "node:child_process";

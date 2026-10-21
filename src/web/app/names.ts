@@ -1,4 +1,4 @@
-import type { Commitment, CommitmentState, Employee, RoleTemplateId } from "./api.ts";
+import type { WorkItem, WorkItemState, Employee, RoleTemplateId } from "./api.ts";
 import type { Tone } from "../design/primitives.tsx";
 import type { Mood } from "../design/face.tsx";
 import type { Place, WorkspaceState } from "./workspace.tsx";
@@ -21,10 +21,10 @@ const titles: Record<string, string> = {
   driveRead: "Read Drive files",
   driveCreate: "Create Drive files",
   driveUpdate: "Update Drive files",
-  commitmentList: "List work",
-  commitmentCreate: "Take on work",
-  commitmentUpdate: "Update work",
-  commitmentComplete: "Complete work",
+  workList: "List work",
+  workCreate: "Take on work",
+  workUpdate: "Update work",
+  workComplete: "Complete work",
   projectList: "List projects",
   projectCreate: "Create projects",
   projectUpdate: "Edit projects",
@@ -44,7 +44,7 @@ const templateTitles: Record<RoleTemplateId, string> = {
 export const templateTitle = (template: string) =>
   templateTitles[template as RoleTemplateId] ?? template;
 
-export const chipFor = (state: CommitmentState): { title: string; tone: Tone } =>
+export const chipFor = (state: WorkItemState): { title: string; tone: Tone } =>
   state === "needs_decision"
     ? { title: "Needs you", tone: "needsYou" }
     : state === "in_progress"
@@ -57,7 +57,7 @@ export const chipFor = (state: CommitmentState): { title: string; tone: Tone } =
             ? { title: "Cancelled", tone: "waiting" }
             : { title: "Ready", tone: "waiting" };
 
-export const isOpen = (state: CommitmentState) => state !== "completed" && state !== "cancelled";
+export const isOpen = (state: WorkItemState) => state !== "completed" && state !== "cancelled";
 
 /**
  * A place's title, and in a thread the place above it (its project) so the breadcrumb reads
@@ -130,7 +130,7 @@ export const takeoverTitle = (
       : `Taken over by ${members.find((member) => member.id === takenOverBy)?.display_name ?? "another person"}`;
 
 /** A coding result at a glance, from a work item's evidence; undefined when it has none. */
-export function outcomeOf(evidence: Commitment["evidence"]) {
+export function outcomeOf(evidence: WorkItem["evidence"]) {
   const coding = evidence.filter((entry) => entry.commit);
   if (!coding.length) return undefined;
   const check = coding.findLast((entry) => entry.check)?.check;

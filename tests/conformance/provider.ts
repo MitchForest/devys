@@ -31,7 +31,7 @@ export function recorded(make: (events: ProviderEvents) => ProviderAdapter): Pro
 }
 
 /**
- * What every coding delegate adapter guarantees (.docs/COMPONENTS.md#coding-delegates): a turn
+ * What every coding harness adapter guarantees (.docs/CODING_AGENTS.md): a turn
  * ends with its reply; a message during a turn steers it and one after starts the next;
  * interrupting ends the turn as interrupted; a session resumes by id in a new process; a
  * harness that dies mid-turn is reported lost; close stops its processes.

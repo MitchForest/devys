@@ -1,6 +1,6 @@
 import type { Scope } from "../../identity/contract.ts";
 
-/** The coding harnesses Devys delegates to. Each owns its own sessions and transcripts. */
+/** The coding harnesses Devys runs coding sessions in. Each owns its own sessions and transcripts. */
 export const providers = ["codex", "claude"] as const;
 export type Provider = (typeof providers)[number];
 
@@ -8,12 +8,12 @@ export type Provider = (typeof providers)[number];
 export type Purpose = "build" | "review";
 
 /**
- * One coding assignment: a native session in its own worktree, serving one work item.
+ * One coding session: a native harness session in its own worktree, serving one work item.
  * Devys records the reference and the accepted result; the provider owns the rest.
  */
-export interface Assignment {
+export interface CodingSession {
   id: string;
-  commitment_id: string;
+  work_item_id: string;
   employee_id: string;
   provider: Provider;
   purpose: Purpose;
@@ -24,11 +24,11 @@ export interface Assignment {
   branch: string;
   worktree: string;
   /** The provider's own session id, once it exists. */
-  session_id: string | null;
+  provider_session_id: string | null;
   created_at: string;
 }
 
-/** What the host needs to begin an assignment. Starting the same id twice returns the first. */
+/** What the host needs to begin a coding session. Starting the same id twice returns the first. */
 export interface StartRequest {
   id: string;
   scope: Scope;
@@ -41,12 +41,12 @@ export interface StartRequest {
   repository: { path: string } | { create: string } | { clone: string };
   objective: string;
   instructions: string;
-  /** For a review: the build assignment whose worktree it reads. */
+  /** For a review: the build session whose worktree it reads. */
   reviews?: string;
 }
 
 export interface Started {
-  sessionId: string;
+  providerSessionId: string;
   repository: string;
   baseCommit: string;
   branch: string;
@@ -54,7 +54,7 @@ export interface Started {
 }
 
 /** Read from the provider and the worktree each time; never stored. */
-export interface DelegateStatus {
+export interface CodingStatus {
   state: "working" | "idle" | "interrupted" | "failed";
   /** The provider's latest reply in the session. */
   reply: string | null;
@@ -64,10 +64,10 @@ export interface DelegateStatus {
 }
 
 /** A change in a session the supervising employee should hear about. */
-export interface DelegateEvent {
+export interface CodingEvent {
   /** Stable, so delivering it twice is harmless. */
   id: string;
-  assignmentId: string;
+  codingSessionId: string;
   kind: "started" | "finished" | "failed" | "interrupted" | "checked" | "deployed";
   /** The provider's reply, an error, or the check's or deploy's outcome. */
   text: string;
@@ -121,7 +121,7 @@ export interface Accepted {
   patch: string;
 }
 
-/** Publishes the accepted commit to the assignment's branch on GitHub with one pull request. */
+/** Publishes the accepted commit to the coding session's branch on GitHub with one pull request. */
 export interface PublishRequest {
   /** `owner/name`; the repository's origin must be this repository. */
   repository: string;
@@ -164,17 +164,17 @@ export interface TranscriptEntry {
   failed?: boolean;
 }
 
-/** The delegate runner: the trusted Mac host in local mode. */
-export interface Delegates {
-  diff(assignmentId: string): Promise<WorkingDiff>;
+/** The coding runner: the trusted Mac host in local mode. */
+export interface CodingHost {
+  diff(codingSessionId: string): Promise<WorkingDiff>;
   /** The session's latest steps, at most 200, oldest first. */
-  transcript(assignmentId: string): Promise<{ entries: TranscriptEntry[] }>;
+  transcript(codingSessionId: string): Promise<{ entries: TranscriptEntry[] }>;
   start(request: StartRequest): Promise<Started>;
-  inspect(assignmentId: string): Promise<DelegateStatus>;
-  send(assignmentId: string, text: string): Promise<{ steered: boolean }>;
-  interrupt(assignmentId: string): Promise<void>;
-  accept(assignmentId: string, request: AcceptRequest): Promise<Accepted>;
-  publish(assignmentId: string, request: PublishRequest): Promise<Published>;
+  inspect(codingSessionId: string): Promise<CodingStatus>;
+  send(codingSessionId: string, text: string): Promise<{ steered: boolean }>;
+  interrupt(codingSessionId: string): Promise<void>;
+  accept(codingSessionId: string, request: AcceptRequest): Promise<Accepted>;
+  publish(codingSessionId: string, request: PublishRequest): Promise<Published>;
   /** Starts a deploy; its outcome arrives as a `deployed` event. */
-  deploy(assignmentId: string, request: DeployRequest): Promise<{ commit: string }>;
+  deploy(codingSessionId: string, request: DeployRequest): Promise<{ commit: string }>;
 }

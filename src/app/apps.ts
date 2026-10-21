@@ -5,7 +5,7 @@ import { install, installs, setPinned, uninstall } from "../apps/service.ts";
 import { ads } from "../apps/ads/app.ts";
 import { browser } from "../apps/browser/app.ts";
 import { code } from "../apps/code/app.ts";
-import { hasAssignments } from "../apps/code/service.ts";
+import { hasCodingSessions } from "../apps/code/service.ts";
 import { computer } from "../apps/computer/app.ts";
 import { conversations } from "../apps/conversations/app.ts";
 import { customers } from "../apps/customers/app.ts";
@@ -83,7 +83,7 @@ async function hasSomething(
   if (app.appears === "always") return true;
   // Code's records are coding sessions (and the deploys and pull requests they made).
   if (app.appears === "records" && app.id === code.id)
-    return Effect.runPromise(hasAssignments(env.HYPERDRIVE, businessId));
+    return Effect.runPromise(hasCodingSessions(env.HYPERDRIVE, businessId));
   // System apps never show; no available app appears only once connected yet.
   return false;
 }

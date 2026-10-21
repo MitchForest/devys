@@ -23,7 +23,7 @@ import { grantAll } from "../authority/service.ts";
 import { hire, hireInput, roleTemplate, roleTemplates, templateGrants } from "./team.ts";
 import { capabilities } from "./capabilities.ts";
 import { businessRoute } from "./routes.ts";
-import { delegateEventsRoute } from "./delegates.ts";
+import { codingEventsRoute } from "./coding.ts";
 import { modelCatalog } from "./models.ts";
 import { modelsConfig } from "../../config/models.ts";
 
@@ -51,8 +51,8 @@ async function route(request: Request, env: Env): Promise<Response | undefined> 
     await env.AGENT.getByName(scopeName(scope)).receive(scope, input);
     return new Response(null, { status: 204 });
   }
-  if (path === "/internal/delegates/events" && request.method === "POST")
-    return delegateEventsRoute(request, env);
+  if (path === "/internal/coding/events" && request.method === "POST")
+    return codingEventsRoute(request, env);
   if (path === "/api/enroll" && request.method === "POST") return enroll(request, env);
   if (path === "/api/native/session" && request.method === "POST")
     return enrollDevice(request, env);

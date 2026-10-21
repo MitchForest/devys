@@ -6,6 +6,7 @@ import { createDatabase, databaseUrl, start } from "../scripts/db.ts";
 const name = "devys_migration_test";
 const projects = "20261023000000_projects";
 const refs = "20261024000000_refs";
+const names = "20261025000000_names";
 const migrations = readdirSync("migrations").sort();
 const apply = (client: pg.Client, only: (migration: string) => boolean) =>
   migrations
@@ -123,7 +124,7 @@ it("U8 rewrites message refs and project items as Refs, and listSkills grants as
   await q(`INSERT INTO grants (id, business_id, employee_id, capability, mode) VALUES
     ('g1', 'b1', 'ops', 'listSkills', 'auto'), ('g2', 'b1', 'ops', 'read', 'auto')`);
 
-  await apply(client, (migration) => migration >= refs);
+  await apply(client, (migration) => migration >= refs && migration < names);
 
   expect(
     (await q("SELECT id, ref FROM messages WHERE ref IS NOT NULL OR id LIKE 'e%' ORDER BY id"))
@@ -171,4 +172,39 @@ it("U8 rewrites message refs and project items as Refs, and listSkills grants as
     ),
   ).rejects.toThrow();
   await expect(q("UPDATE messages SET ref = 'artifact:a1' WHERE id = 'e2'")).rejects.toThrow();
+});
+
+it("AL2 names work items and coding sessions, and reissues the work grants under their names", async () => {
+  const q = (text: string, values: unknown[] = []) => client.query(text, values);
+  await q(`INSERT INTO grants (id, business_id, employee_id, capability, mode) VALUES
+    ('g3', 'b1', 'ops', 'commitmentList', 'auto'), ('g4', 'b1', 'ops', 'commitmentComplete', 'ask')`);
+  await q("UPDATE assignments SET session_id = 'thread-1', worktree = '/w' WHERE id = 's1'");
+
+  await apply(client, (migration) => migration >= names);
+
+  expect(
+    (await q("SELECT id, work_item_id, provider_session_id FROM coding_sessions")).rows,
+  ).toEqual([{ id: "s1", work_item_id: "w-both", provider_session_id: "thread-1" }]);
+  expect((await q("SELECT id FROM work_items ORDER BY id")).rows).toEqual([
+    { id: "w-both" },
+    { id: "w-none" },
+  ]);
+  expect(
+    (
+      await q(
+        "SELECT capability, mode, revoked_at IS NULL AS active FROM grants WHERE capability ~ '^(commitment|work)' ORDER BY capability",
+      )
+    ).rows,
+  ).toEqual([
+    { capability: "commitmentComplete", mode: "ask", active: false },
+    { capability: "commitmentList", mode: "auto", active: false },
+    { capability: "workComplete", mode: "ask", active: true },
+    { capability: "workList", mode: "auto", active: true },
+  ]);
+  // A coding session names a work item of its own business.
+  await expect(
+    q(
+      "INSERT INTO coding_sessions (id, business_id, work_item_id, employee_id, provider, purpose, objective) VALUES ('s2', 'b1', 'w-missing', 'ops', 'codex', 'build', 'Build')",
+    ),
+  ).rejects.toThrow();
 });

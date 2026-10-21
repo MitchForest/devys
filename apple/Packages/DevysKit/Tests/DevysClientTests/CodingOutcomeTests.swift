@@ -6,12 +6,12 @@ import Testing
 struct CodingOutcomeTests {
     @Test("Reads the latest check, changes, pull request and commit; nothing without a commit")
     func outcome() {
-        #expect(CodingOutcome([CommitmentEvidence(author: "employee:e1", note: "Wrote it", recordedAt: "2026-10-20")]) == nil)
+        #expect(CodingOutcome([WorkItemEvidence(author: "employee:e1", note: "Wrote it", recordedAt: "2026-10-20")]) == nil)
         let outcome = CodingOutcome([
-            CommitmentEvidence(author: "employee:e1", note: "Committed", recordedAt: "a", commit: String(repeating: "a", count: 40), changes: "2 files changed"),
-            CommitmentEvidence(author: "devys", note: "failed", recordedAt: "b", commit: String(repeating: "a", count: 40), check: .init(command: "bun test", exitCode: 1)),
-            CommitmentEvidence(author: "devys", note: "passed", recordedAt: "c", commit: String(repeating: "b", count: 40), check: .init(command: "bun test", exitCode: 0)),
-            CommitmentEvidence(author: "employee:e1", note: "Published", recordedAt: "d", commit: String(repeating: "b", count: 40), pullRequest: "https://github.com/acme/site/pull/12")
+            WorkItemEvidence(author: "employee:e1", note: "Committed", recordedAt: "a", commit: String(repeating: "a", count: 40), changes: "2 files changed"),
+            WorkItemEvidence(author: "devys", note: "failed", recordedAt: "b", commit: String(repeating: "a", count: 40), check: .init(command: "bun test", exitCode: 1)),
+            WorkItemEvidence(author: "devys", note: "passed", recordedAt: "c", commit: String(repeating: "b", count: 40), check: .init(command: "bun test", exitCode: 0)),
+            WorkItemEvidence(author: "employee:e1", note: "Published", recordedAt: "d", commit: String(repeating: "b", count: 40), pullRequest: "https://github.com/acme/site/pull/12")
         ])
         #expect(outcome?.commit == "bbbbbbb")
         #expect(outcome?.changes == "2 files changed")
@@ -19,8 +19,8 @@ struct CodingOutcomeTests {
         #expect(outcome?.pullRequestLabel == "PR #12")
         #expect(outcome?.deploys.isEmpty == true)
         let deployed = CodingOutcome([
-            CommitmentEvidence(author: "devys", note: "p", recordedAt: "a", commit: "a", deploy: .init(stage: "preview", url: "https://a.example", live: true)),
-            CommitmentEvidence(author: "devys", note: "q", recordedAt: "b", commit: "b", deploy: .init(stage: "production", url: nil, live: false))
+            WorkItemEvidence(author: "devys", note: "p", recordedAt: "a", commit: "a", deploy: .init(stage: "preview", url: "https://a.example", live: true)),
+            WorkItemEvidence(author: "devys", note: "q", recordedAt: "b", commit: "b", deploy: .init(stage: "production", url: nil, live: false))
         ])
         #expect(deployed?.deploys.map(\.stage) == ["production", "preview"])
     }

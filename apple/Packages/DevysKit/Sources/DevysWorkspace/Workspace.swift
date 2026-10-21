@@ -57,13 +57,13 @@ package struct Workspace {
         package var summaries: [String: ConversationSummary] = [:]
         /// Roles to hire into, the hire in progress.
         package var team = TeamState()
-        /// The task being written in the New task sheet.
-        package var newTask: TaskDraft?
+        /// The work item being written in the New work item sheet.
+        package var newWorkItem: WorkItemDraft?
         /// The New project sheet, while it is open.
         package var newProject: ProjectSheet?
         package var memory: Loadable<[MemoryClaim]> = .loading
-        /// The business's commitments and the requests waiting on the owner.
-        package var work: Loadable<[Commitment]> = .loading
+        /// The business's work items and the requests waiting on the owner.
+        package var work: Loadable<[WorkItem]> = .loading
         package var decisions: Loadable<[Decision]> = .loading
         package var projects: Loadable<[Project]> = .loading
         /// The app directory; installed apps with something to show are in the sidebar.
@@ -137,12 +137,12 @@ package struct Workspace {
         case model(ModelIntent)
         case team(TeamIntent)
         case conversation(ConversationIntent)
-        case task(TaskIntent)
+        case workItem(WorkItemIntent)
         case project(ProjectIntent)
         case workLoaded(businessID: String, WorkRecords)
         case decisionAnswered(decisionID: String, approve: Bool)
-        case commitmentStateSet(commitmentID: String, CommitmentState)
-        case takeoverToggled(commitmentID: String)
+        case workItemStateSet(workItemID: String, WorkItemState)
+        case takeoverToggled(workItemID: String)
         case statusLoaded(EmployeeScope, EmployeeStatus)
         case memoryLoaded([MemoryClaim])
         case loadFailed(DevysHTTPError, memory: Bool)
@@ -235,7 +235,7 @@ package struct Workspace {
             case .lookPhotosLoaded(let photos):
                 state.lookPhotos.merge(photos) { _, new in new }
 
-            case .workLoaded, .decisionAnswered, .commitmentStateSet, .takeoverToggled:
+            case .workLoaded, .decisionAnswered, .workItemStateSet, .takeoverToggled:
                 reduceWork(action.intent, state: &state)
 
             case .place(let intent): reducePlace(intent, state: &state)
@@ -246,7 +246,7 @@ package struct Workspace {
 
             case .conversation(let intent): reduceConversation(intent, state: &state)
 
-            case .task(let intent): reduceTask(intent, state: &state)
+            case .workItem(let intent): reduceWorkItem(intent, state: &state)
 
             case .accessRequested(let employeeID):
                 if state.accessEmployeeID != employeeID { state.access = .loading }
@@ -410,7 +410,7 @@ extension Workspace {
         state.main = nil
         state.summaries = [:]
         state.team.hiring = nil
-        state.newTask = nil
+        state.newWorkItem = nil
         state.newProject = nil
         state.memory = .loading
         state.access = .loading

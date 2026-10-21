@@ -13,7 +13,7 @@ private actor ConversationServer {
     var reads: [(key: String, seen: String)] = []
     var paused: Set<String> = []
     var running: Set<String> = []
-    var commitments = [Commitment(id: "c1", ownerEmployeeID: "growth", title: "Write a tagline", state: .inProgress, projectID: "p1")]
+    var workItems = [WorkItem(id: "c1", ownerEmployeeID: "growth", title: "Write a tagline", state: .inProgress, projectID: "p1")]
     var projects = [Project(id: "p1", name: "Launch", goal: "Ship Acme", leadEmployeeID: "ops")]
     private var count = 0
 
@@ -49,7 +49,7 @@ private actor ConversationServer {
         let fallback: String? = switch key.kind {
         case .direct: key.ref
         case .project: projects.first { $0.id == key.ref }?.leadEmployeeID
-        case .work: commitments.first { $0.id == key.ref }?.ownerEmployeeID
+        case .work: workItems.first { $0.id == key.ref }?.ownerEmployeeID
         }
         return ConversationPage(messages: messages, respondent: last ?? fallback)
     }
@@ -91,7 +91,7 @@ struct ConversationFeatureTests {
                 conversation: { _, key, _ in await server.page(key) },
                 postMessage: { _, key, message in try await server.post(key, message) },
                 markRead: { _, key, seen in await server.read(key, seen) },
-                work: { _ in await server.commitments },
+                work: { _ in await server.workItems },
                 projects: { _ in await server.projects }
             )
             $0.continuousClock = InstantClock()

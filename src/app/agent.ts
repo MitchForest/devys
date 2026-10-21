@@ -12,14 +12,14 @@ import { channelFor } from "./channel.ts";
 import { memoryFor } from "./memory.ts";
 import { applicationModels, modelChoice } from "./models.ts";
 import { modeOf } from "./mode.ts";
-import { interruptAssignments } from "./delegates.ts";
+import { interruptCodingSessions } from "./coding.ts";
 
 /** The only production selection of the employee runtime's adapters. */
 export function agentDependencies(env: Env): AgentDependencies {
   return {
     capabilities: capabilities(env),
     runner: modeOf(env).runner(),
-    interruptDelegates: (scope) => interruptAssignments(env, scope),
+    interruptCoding: (scope) => interruptCodingSessions(env, scope),
     workplace: modeOf(env).workplace,
     channel: channelFor(env),
     memory: (businessId, signal) => memoryFor(env, businessId, signal),

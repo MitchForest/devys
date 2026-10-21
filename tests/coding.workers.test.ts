@@ -1,26 +1,28 @@
 import { env } from "cloudflare:workers";
+import { workChat } from "../src/channels/work.ts";
 import { Effect } from "effect";
 import { expect, it } from "vitest";
 import type { Env } from "../infra/api.ts";
 import { authorize } from "../src/app/authorize.ts";
 import {
+  codingDependencies,
+  codingEventsRoute,
   codingIncomplete,
-  delegateDependencies,
-  delegateEventsRoute,
-} from "../src/app/delegates.ts";
+  codingRoute,
+  handBack,
+} from "../src/app/coding.ts";
 import { grant } from "../src/authority/service.ts";
 import type { Inbound } from "../src/channels/contract.ts";
 import { messages } from "../src/conversations/service.ts";
-import { delegateCapabilities } from "../src/apps/code/capabilities.ts";
-import type { Delegates, StartRequest } from "../src/apps/code/contract.ts";
+import { codingCapabilities } from "../src/apps/code/capabilities.ts";
+import type { CodingHost, StartRequest } from "../src/apps/code/contract.ts";
 import { Invocation } from "../src/protocol/capability.ts";
-import { addEvidence, commitment, createCommitment, setTakeover } from "../src/work/service.ts";
-import { codingRoute, handBack } from "../src/app/coding.ts";
+import { addEvidence, workItem, createWorkItem, setTakeover } from "../src/work/service.ts";
 import { business, db, sql } from "./fixtures/postgres.ts";
 
 const hostToken = "host-token";
 
-const harnessDelegates = (state: { delegates: Delegates }) => () => state.delegates;
+const harnessCoding = (state: { coding: CodingHost }) => () => state.coding;
 const ownerOf = async (businessId: string) =>
   (
     await sql.row<{ person_id: string }>(
@@ -48,11 +50,11 @@ function harness() {
   const sent: string[] = [];
   const published: { id: string; repository: string; title: string }[] = [];
   const deploys: { id: string; stage: string; commit?: string }[] = [];
-  const delegates: Delegates = {
+  const coding: CodingHost = {
     start: async (request) => {
       starts.push(request);
       return {
-        sessionId: "thread-1",
+        providerSessionId: "thread-1",
         repository: "/Users/owner/acme",
         baseCommit: "a".repeat(40),
         branch: `devys/${request.id.slice(0, 12)}`,
@@ -88,27 +90,27 @@ function harness() {
       };
     },
   };
-  const catalog = delegateCapabilities({
-    ...delegateDependencies(bindings),
-    delegates: () => delegates,
+  const catalog = codingCapabilities({
+    ...codingDependencies(bindings),
+    coding: () => coding,
   });
   const named = (name: string) => catalog.find((item) => item.name === name)!;
-  return { received, bindings, starts, sent, published, deploys, named, delegates };
+  return { received, bindings, starts, sent, published, deploys, named, coding };
 }
 
 const as = (
   bindings: Env,
   scope: { businessId: string; employeeId: string },
-  commitmentId?: string,
+  workItemId?: string,
   operationId = crypto.randomUUID(),
 ) =>
   Effect.provideService(Invocation, {
     ...scope,
-    ...(commitmentId ? { commitmentId } : {}),
+    ...(workItemId ? { workItemId } : {}),
     operationId,
     authorize: (capability, input) =>
       Effect.promise(() =>
-        authorize(bindings, scope, capability, input, commitmentId ? { commitmentId } : {}),
+        authorize(bindings, scope, capability, input, workItemId ? { workItemId } : {}),
       ).pipe(
         Effect.flatMap((outcome) =>
           outcome.outcome === "allow" ? Effect.void : Effect.fail(new Error(outcome.outcome)),
@@ -120,7 +122,7 @@ const as = (
 
 async function setup() {
   const state = harness();
-  const { scope } = await business("Delegates");
+  const { scope } = await business("CodingHost");
   for (const name of [
     "codingStart",
     "codingStatus",
@@ -134,7 +136,7 @@ async function setup() {
     grant(db, scope, { capability: state.named("deployProduction"), mode: "ask" }),
   );
   const work = await Effect.runPromise(
-    createCommitment(db, scope.businessId, {
+    createWorkItem(db, scope.businessId, {
       id: crypto.randomUUID(),
       owner: scope.employeeId,
       title: "Add a waitlist page",
@@ -145,8 +147,8 @@ async function setup() {
 }
 
 const event = (bindings: Env, events: unknown[], token = hostToken) =>
-  delegateEventsRoute(
-    new Request("http://127.0.0.1:8787/internal/delegates/events", {
+  codingEventsRoute(
+    new Request("http://127.0.0.1:8787/internal/coding/events", {
       method: "POST",
       headers: { authorization: `Bearer ${token}` },
       body: JSON.stringify({ events }),
@@ -169,14 +171,14 @@ it("coding starts only from a work item, once per call, within the grant's repos
   const operationId = crypto.randomUUID();
   const first = (await Effect.runPromise(
     start.execute(input).pipe(as(bindings, scope, work.id, operationId)),
-  )) as { assignment: string; branch: string; ref: string };
-  expect(first.ref).toBe(`devys:code/session/${first.assignment}`);
-  // The same call replayed is the same assignment; the host makes it idempotent.
+  )) as { session: string; branch: string; ref: string };
+  expect(first.ref).toBe(`devys:code/session/${first.session}`);
+  // The same call replayed is the same session; the host makes it idempotent.
   const again = (await Effect.runPromise(
     start.execute(input).pipe(as(bindings, scope, work.id, operationId)),
-  )) as { assignment: string };
-  expect(again.assignment).toBe(first.assignment);
-  expect(starts.map((request) => request.id)).toEqual([first.assignment, first.assignment]);
+  )) as { session: string };
+  expect(again.session).toBe(first.session);
+  expect(starts.map((request) => request.id)).toEqual([first.session, first.session]);
   expect(starts[0]).toMatchObject({
     provider: "codex",
     purpose: "build",
@@ -199,11 +201,11 @@ it("coding starts only from a work item, once per call, within the grant's repos
 
 it("coding clones the business's GitHub repository and publishes accepted work as a pull request", async () => {
   const { bindings, scope, work, starts, published, named } = await setup();
-  const { assignment } = (await Effect.runPromise(
+  const { session } = (await Effect.runPromise(
     named("codingStart")
       .execute({ provider: "codex", objective: "Fix the footer", cloneRepository: "acme/site" })
       .pipe(as(bindings, scope, work.id)),
-  )) as { assignment: string };
+  )) as { session: string };
   expect(starts.at(-1)!.repository).toEqual({ clone: "acme/site" });
   const two = await Effect.runPromise(
     named("codingStart")
@@ -220,16 +222,16 @@ it("coding clones the business's GitHub repository and publishes accepted work a
   const publish = named("codingPublish");
   const result = await Effect.runPromise(
     publish
-      .execute({ assignment, repository: "acme/site", title: "Fix the footer", body: "Checked." })
+      .execute({ session, repository: "acme/site", title: "Fix the footer", body: "Checked." })
       .pipe(as(bindings, scope, work.id)),
   );
   expect(result).toMatchObject({ pullRequest: "https://github.com/acme/site/pull/7" });
   expect(published).toEqual([
-    { id: assignment, repository: "acme/site", title: "Fix the footer", body: "Checked." },
+    { id: session, repository: "acme/site", title: "Fix the footer", body: "Checked." },
   ]);
-  const evidence = (await Effect.runPromise(commitment(db, scope.businessId, work.id)))!.evidence;
+  const evidence = (await Effect.runPromise(workItem(db, scope.businessId, work.id)))!.evidence;
   expect(evidence.at(-1)!.note).toContain(
-    "to devys/" + assignment.slice(0, 12) + " on github.com/acme/site (repository R_kgDOtest)",
+    "to devys/" + session.slice(0, 12) + " on github.com/acme/site (repository R_kgDOtest)",
   );
   // A grant limited to other repositories refuses this one.
   await Effect.runPromise(
@@ -241,7 +243,7 @@ it("coding clones the business's GitHub repository and publishes accepted work a
   );
   const refused = await Effect.runPromise(
     publish
-      .execute({ assignment, repository: "acme/site", title: "Again", body: "x" })
+      .execute({ session, repository: "acme/site", title: "Again", body: "x" })
       .pipe(as(bindings, scope, work.id), Effect.exit),
   );
   expect(refused._tag).toBe("Failure");
@@ -250,7 +252,7 @@ it("coding clones the business's GitHub repository and publishes accepted work a
 
 it("host events become thread cards, wake the employee under a stable id, and record checks as evidence", async () => {
   const { bindings, scope, work, received, sent, named } = await setup();
-  const { assignment } = (await Effect.runPromise(
+  const { session } = (await Effect.runPromise(
     named("codingStart")
       .execute({
         provider: "codex",
@@ -258,11 +260,11 @@ it("host events become thread cards, wake the employee under a stable id, and re
         newRepository: "waitlist",
       })
       .pipe(as(bindings, scope, work.id)),
-  )) as { assignment: string };
+  )) as { session: string };
   expect((await event(bindings, [], "wrong")).status).toBe(401);
   const finished = {
-    id: `${assignment}:turn-1:finished`,
-    assignmentId: assignment,
+    id: `${session}:turn-1:finished`,
+    codingSessionId: session,
     kind: "finished",
     text: "Built the page and its tests.",
     diffStat: " app.ts | 40 ++++\n 1 file changed, 40 insertions(+)",
@@ -270,7 +272,7 @@ it("host events become thread cards, wake the employee under a stable id, and re
   expect(
     (
       await event(bindings, [
-        { id: `${assignment}:started`, assignmentId: assignment, kind: "started", text: "x" },
+        { id: `${session}:started`, codingSessionId: session, kind: "started", text: "x" },
         finished,
       ])
     ).status,
@@ -282,31 +284,31 @@ it("host events become thread cards, wake the employee under a stable id, and re
   expect(received[0]).toMatchObject({
     employee: scope.employeeId,
     input: {
-      senderId: "delegate",
-      chatId: `work:${scope.businessId}:${scope.employeeId}:${work.id}`,
+      senderId: "coding",
+      chatId: workChat(scope, work.id),
     },
   });
   expect(received[0]!.input.text).toContain("Built the page and its tests.");
 
   await Effect.runPromise(
     named("codingSend")
-      .execute({ assignment, text: "Add an empty state" })
+      .execute({ session, text: "Add an empty state" })
       .pipe(as(bindings, scope, work.id)),
   );
   expect(sent).toEqual(["Add an empty state"]);
   await Effect.runPromise(
     named("codingAccept")
-      .execute({ assignment, message: "Add the waitlist page", check: "bun test" })
+      .execute({ session, message: "Add the waitlist page", check: "bun test" })
       .pipe(as(bindings, scope, work.id)),
   );
-  const current = async () => (await Effect.runPromise(commitment(db, scope.businessId, work.id)))!;
+  const current = async () => (await Effect.runPromise(workItem(db, scope.businessId, work.id)))!;
   // Not complete until the accepted commit's check passes.
   expect(await codingIncomplete(bindings, scope.businessId, await current())).toMatch(
     /codingAccept/,
   );
   const checked = {
-    id: `${assignment}:checked:c1`,
-    assignmentId: assignment,
+    id: `${session}:checked:c1`,
+    codingSessionId: session,
     kind: "checked",
     text: "`bun test` passed.",
     // A huge diff stat is cut to fit rather than failing the event forever.
@@ -326,7 +328,7 @@ it("host events become thread cards, wake the employee under a stable id, and re
     "→ Codex: Add an empty state",
     "`bun test` passed.",
   ]);
-  const evidence = (await Effect.runPromise(commitment(db, scope.businessId, work.id)))!.evidence;
+  const evidence = (await Effect.runPromise(workItem(db, scope.businessId, work.id)))!.evidence;
   expect(
     evidence.map((entry) => [entry.commit?.slice(0, 1), entry.check?.exitCode ?? null]),
   ).toEqual([
@@ -360,11 +362,11 @@ it("host events become thread cards, wake the employee under a stable id, and re
 it("the owner steers a session only after taking the work over; handing back wakes its employee", async () => {
   const state = await setup();
   const { bindings, scope, work, received, sent, named } = state;
-  const { assignment } = (await Effect.runPromise(
+  const { session } = (await Effect.runPromise(
     named("codingStart")
       .execute({ provider: "claude", objective: "Build it", newRepository: "site" })
       .pipe(as(bindings, scope, work.id)),
-  )) as { assignment: string };
+  )) as { session: string };
   const person = { id: (await ownerOf(scope.businessId))!, display_name: "Owner" };
   const access = (path: string) => ({
     person,
@@ -372,20 +374,20 @@ it("the owner steers a session only after taking the work over; handing back wak
     trusted: true,
     path,
   });
-  const fake = harnessDelegates(state);
+  const fake = harnessCoding(state);
   const call = (path: string, init: RequestInit = {}) =>
     codingRoute(new Request(`http://devys.test${path}`, init), bindings, access(path), fake);
 
   const listed = (await (await call(`/work/${work.id}/sessions`))!.json()) as {
     sessions: { id: string; state: string; provider: string }[];
   };
-  expect(listed.sessions).toMatchObject([{ id: assignment, state: "idle", provider: "claude" }]);
+  expect(listed.sessions).toMatchObject([{ id: session, state: "idle", provider: "claude" }]);
   // What the session did is read from the provider on request.
-  expect(await (await call(`/work/${work.id}/sessions/${assignment}/transcript`))!.json()).toEqual({
+  expect(await (await call(`/work/${work.id}/sessions/${session}/transcript`))!.json()).toEqual({
     entries: [{ kind: "command", text: "bun test" }],
   });
   const steer = (text: string) =>
-    call(`/work/${work.id}/sessions/${assignment}/send`, {
+    call(`/work/${work.id}/sessions/${session}/send`, {
       method: "POST",
       body: JSON.stringify({ text }),
     });
@@ -401,8 +403,8 @@ it("the owner steers a session only after taking the work over; handing back wak
   const woken = received.length;
   await event(bindings, [
     {
-      id: `${assignment}:owner-turn:finished`,
-      assignmentId: assignment,
+      id: `${session}:owner-turn:finished`,
+      codingSessionId: session,
       kind: "finished",
       text: "Used a grid.",
       diffStat: "",
@@ -420,9 +422,7 @@ it("the owner steers a session only after taking the work over; handing back wak
   await handBack(bindings, scope.businessId, work.id, fake);
   expect(received.length).toBe(before + 1);
   expect(received.at(-1)!.input.text).toContain("The owner handed this work item back");
-  expect(received.at(-1)!.input.chatId).toBe(
-    `work:${scope.businessId}:${scope.employeeId}:${work.id}`,
-  );
+  expect(received.at(-1)!.input.chatId).toBe(workChat(scope, work.id));
 });
 
 it("a new coding session is a work item already taken over by the owner", async () => {
@@ -449,12 +449,12 @@ it("a new coding session is a work item already taken over by the owner", async 
         trusted: true,
         path,
       },
-      harnessDelegates(state),
+      harnessCoding(state),
     );
-  const first = (await (await start())!.json()) as { work: string; assignment: string };
-  const again = (await (await start())!.json()) as { work: string; assignment: string };
-  expect(again).toMatchObject({ work: first.work, assignment: first.assignment });
-  const item = (await Effect.runPromise(commitment(db, scope.businessId, first.work)))!;
+  const first = (await (await start())!.json()) as { work: string; codingSession: string };
+  const again = (await (await start())!.json()) as { work: string; codingSession: string };
+  expect(again).toMatchObject({ work: first.work, codingSession: first.codingSession });
+  const item = (await Effect.runPromise(workItem(db, scope.businessId, first.work)))!;
   expect(item).toMatchObject({
     title: "Prototype the landing page",
     taken_over_by: person,
@@ -517,7 +517,7 @@ it("comments on a file reach the chosen employee's DM as one message with their 
   expect(received.at(-1)).toMatchObject({ employee: scope.employeeId });
   // Or to a work item's thread, addressed to its owner.
   const own = await Effect.runPromise(
-    createCommitment(db, scope.businessId, {
+    createWorkItem(db, scope.businessId, {
       id: crypto.randomUUID(),
       owner: scope.employeeId,
       title: "Fix the plan",
@@ -551,24 +551,24 @@ it("comments on a file reach the chosen employee's DM as one message with their 
 
 it("previews deploy on their own, production asks, rollbacks name a known commit, and results become evidence", async () => {
   const { bindings, scope, work, received, deploys, named } = await setup();
-  const { assignment } = (await Effect.runPromise(
+  const { session } = (await Effect.runPromise(
     named("codingStart")
       .execute({ provider: "codex", objective: "Build it", newRepository: "site" })
       .pipe(as(bindings, scope, work.id)),
-  )) as { assignment: string };
+  )) as { session: string };
   const command = "bunx wrangler deploy --env preview";
   expect(
     await Effect.runPromise(
       named("deployPreview")
-        .execute({ assignment, command })
+        .execute({ session, command })
         .pipe(as(bindings, scope, work.id)),
     ),
   ).toEqual({ deploying: "b".repeat(40) });
-  expect(deploys).toEqual([{ id: assignment, stage: "preview" }]);
+  expect(deploys).toEqual([{ id: session, stage: "preview" }]);
   // Production waits for the owner: a decision, and nothing deployed.
   const asked = await Effect.runPromiseExit(
     named("deployProduction")
-      .execute({ assignment, command: "bunx wrangler deploy" })
+      .execute({ session, command: "bunx wrangler deploy" })
       .pipe(as(bindings, scope, work.id)),
   );
   expect(asked._tag).toBe("Failure");
@@ -576,13 +576,13 @@ it("previews deploy on their own, production asks, rollbacks name a known commit
   // Rolling back only to a commit this work item knows.
   const rollback = await Effect.runPromise(
     named("deployPreview")
-      .execute({ assignment, command, commit: "c".repeat(12) })
+      .execute({ session, command, commit: "c".repeat(12) })
       .pipe(as(bindings, scope, work.id), Effect.flip),
   );
   expect(rollback).toMatchObject({ code: "invalid_input" });
   const deployed = {
-    id: `${assignment}:deployed:preview:1`,
-    assignmentId: assignment,
+    id: `${session}:deployed:preview:1`,
+    codingSessionId: session,
     kind: "deployed",
     text: "Deployed bbbbbbb to preview: https://site.example.workers.dev answers (200).",
     deploy: {
@@ -598,7 +598,7 @@ it("previews deploy on their own, production asks, rollbacks name a known commit
   };
   await event(bindings, [deployed]);
   await event(bindings, [deployed]);
-  const evidence = (await Effect.runPromise(commitment(db, scope.businessId, work.id)))!.evidence;
+  const evidence = (await Effect.runPromise(workItem(db, scope.businessId, work.id)))!.evidence;
   expect(evidence.filter((entry) => entry.deploy)).toEqual([
     expect.objectContaining({
       commit: "b".repeat(40),
@@ -610,7 +610,7 @@ it("previews deploy on their own, production asks, rollbacks name a known commit
   expect(
     await Effect.runPromise(
       named("deployPreview")
-        .execute({ assignment, command, commit: "bbbbbbbbbbbb" })
+        .execute({ session, command, commit: "bbbbbbbbbbbb" })
         .pipe(as(bindings, scope, work.id)),
     ),
   ).toEqual({ deploying: "bbbbbbbbbbbb" });

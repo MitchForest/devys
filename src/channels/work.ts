@@ -1,17 +1,24 @@
 import type { Scope } from "../identity/contract.ts";
-import { commitmentOf, type Binding, type Channel, type Inbound } from "./contract.ts";
+import {
+  employeeChat,
+  employeeChatOf,
+  type Binding,
+  type Channel,
+  type Inbound,
+} from "./contract.ts";
+import { idOf, kindOf } from "../conversations/contract.ts";
 
-/** Work handed to an employee is addressed `work:<business>:<employee>:<commitment>`. */
-export const workChat = (scope: Scope, commitmentId: string) =>
-  `work:${scope.businessId}:${scope.employeeId}:${commitmentId}`;
+/** Work handed to an employee is addressed `work:<business>:<employee>:work:<work item>`. */
+export const workChat = (scope: Scope, workItemId: string) =>
+  employeeChat("work", scope, `work:${workItemId}`);
 
 /**
- * The dispatcher handing a commitment to its employee. The input stays bound while the
- * commitment is still that employee's and not taken over or cancelled; the reply is posted
+ * The dispatcher handing a work item to its employee. The input stays bound while the
+ * work item is still that employee's and not taken over or cancelled; the reply is posted
  * in the work item's thread, so a final report after completing it still arrives.
  */
 export function workChannel(dependencies: {
-  open: (scope: Scope, commitmentId: string) => Promise<boolean>;
+  open: (scope: Scope, workItemId: string) => Promise<boolean>;
   post: (chatId: string, text: string, operationId: string) => Promise<void>;
 }): Channel {
   const text = (input: Inbound) => {
@@ -22,11 +29,11 @@ export function workChannel(dependencies: {
     id: "work",
     inputKey: (input) => `work:${input.messageId}`,
     binding: async (input): Promise<Binding | undefined> => {
-      const target = commitmentOf(input.chatId);
-      if (!target) return undefined;
-      const scope = { businessId: target.businessId, employeeId: target.employeeId };
-      return (await dependencies.open(scope, target.commitmentId))
-        ? { personId: "dispatcher", ...scope }
+      const chat = employeeChatOf(input.chatId);
+      if (chat?.channel !== "work" || !chat.conversation || kindOf(chat.conversation) !== "work")
+        return undefined;
+      return (await dependencies.open(chat.scope, idOf(chat.conversation)))
+        ? { personId: "dispatcher", ...chat.scope }
         : undefined;
     },
     readText: async (input) => text(input),

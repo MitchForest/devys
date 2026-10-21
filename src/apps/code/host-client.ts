@@ -1,21 +1,21 @@
 import type { Scope } from "../../identity/contract.ts";
-import type { Delegates } from "./contract.ts";
+import type { CodingHost } from "./contract.ts";
 
 /**
- * Coding delegates on the trusted Mac host (local mode). The host owns worktrees, sessions
+ * Coding sessions on the trusted Mac host (local mode). The host owns worktrees, sessions
  * and checks; this side only speaks to it, always naming the business it acts for.
  */
-export function hostDelegates(host: { url: string; token: string }, scope: Scope): Delegates {
+export function hostCoding(host: { url: string; token: string }, scope: Scope): CodingHost {
   async function call<T>(path: string, body: Record<string, unknown>): Promise<T> {
     let response: Response;
     try {
-      response = await fetch(`${host.url}/delegates/${path}`, {
+      response = await fetch(`${host.url}/coding/${path}`, {
         method: "POST",
         headers: { authorization: `Bearer ${host.token}`, "content-type": "application/json" },
         body: JSON.stringify({ scope, ...body }),
       });
     } catch {
-      throw new Error("The Mac host is not running, so coding delegates are unavailable.");
+      throw new Error("The Mac host is not running, so coding sessions are unavailable.");
     }
     if (!response.ok)
       throw new Error((await response.text()) || `Mac host error ${response.status}`);
@@ -36,12 +36,12 @@ export function hostDelegates(host: { url: string; token: string }, scope: Scope
   };
 }
 
-/** Cloud mode has no delegate runner yet; every call says so. */
-export function unavailableDelegates(): Delegates {
+/** Cloud mode has no coding runner yet; every call says so. */
+export function unavailableCoding(): CodingHost {
   const refuse = () =>
     Promise.reject(
       new Error(
-        "Coding delegates run in local mode only until a cloud runner with API keys exists.",
+        "Coding sessions run in local mode only until a cloud runner with API keys exists.",
       ),
     );
   return {

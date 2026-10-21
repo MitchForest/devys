@@ -9,7 +9,7 @@ import SwiftUI
 /// live browser and its evidence. The thread itself is the conversation in the middle.
 struct WorkCard: View {
     let store: StoreOf<Workspace>
-    let commitmentID: String
+    let workItemID: String
     let close: () -> Void
     @Dependency(\.runtimeClient) private var runtime
     /// This item's requests the owner already answered.
@@ -18,7 +18,7 @@ struct WorkCard: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if let item = store.work.value?.first(where: { $0.id == commitmentID }) {
+            if let item = store.work.value?.first(where: { $0.id == workItemID }) {
                 header(item)
                 ScrollView {
                     VStack(alignment: .leading, spacing: DevysSpacing.compact) {
@@ -45,7 +45,7 @@ struct WorkCard: View {
         }
     }
 
-    private func header(_ item: Commitment?) -> some View {
+    private func header(_ item: WorkItem?) -> some View {
         PanelHeader(title: item?.title ?? "Work", detail: item.flatMap(store.state.takeoverTitle), close: close) {
             if let item {
                 item.state.chip
@@ -58,7 +58,7 @@ struct WorkCard: View {
         }
     }
 
-    @ViewBuilder private func decisions(_ item: Commitment) -> some View {
+    @ViewBuilder private func decisions(_ item: WorkItem) -> some View {
         let decisions = store.state.decisions(for: item)
         if !decisions.isEmpty {
             VStack(alignment: .leading, spacing: DevysSpacing.small) {
@@ -78,13 +78,13 @@ struct WorkCard: View {
     }
 
     /// Reloads the answered requests when the item changes (its revision moves on each answer).
-    private func loadAnswered(_ item: Commitment) async {
+    private func loadAnswered(_ item: WorkItem) async {
         answered = ((try? await runtime.workDecisions(store.businessID, item.id)) ?? []).filter { $0.status != "pending" }
     }
 
     /// For coding work one line (check, changes, pull request, commit) that opens the record;
     /// otherwise the evidence notes themselves.
-    @ViewBuilder private func evidence(_ item: Commitment) -> some View {
+    @ViewBuilder private func evidence(_ item: WorkItem) -> some View {
         if let outcome = CodingOutcome(item.evidence) {
             VStack(alignment: .leading, spacing: DevysSpacing.small) {
                 HStack(spacing: 8) {
@@ -123,7 +123,7 @@ struct WorkCard: View {
         }
     }
 
-    private func notes(_ item: Commitment) -> some View {
+    private func notes(_ item: WorkItem) -> some View {
         ForEach(Array(item.evidence.enumerated()), id: \.offset) { _, entry in
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.note).font(DevysTypography.body).foregroundStyle(DevysColors.ink).textSelection(.enabled)
@@ -137,7 +137,7 @@ struct WorkCard: View {
 /// Owner, state, due date and takeover, each changed at the revision on screen.
 private struct WorkItemFields: View {
     let store: StoreOf<Workspace>
-    let item: Commitment
+    let item: WorkItem
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -162,8 +162,8 @@ private struct WorkItemFields: View {
             }
             row("State") {
                 Menu {
-                    ForEach(CommitmentState.allCases.filter { $0 != item.state }, id: \.self) { state in
-                        Button(state.title) { store.send(.commitmentChanged(item.id, CommitmentChange(expectedRevision: item.revision, state: state))) }
+                    ForEach(WorkItemState.allCases.filter { $0 != item.state }, id: \.self) { state in
+                        Button(state.title) { store.send(.workItemChanged(item.id, WorkItemChange(expectedRevision: item.revision, state: state))) }
                     }
                 } label: {
                     item.state.chip
@@ -213,8 +213,8 @@ private struct WorkItemFields: View {
         }
     }
 
-    private func change(dueAt: CommitmentChange.Value) {
-        store.send(.commitmentChanged(item.id, CommitmentChange(expectedRevision: item.revision, dueAt: dueAt)))
+    private func change(dueAt: WorkItemChange.Value) {
+        store.send(.workItemChanged(item.id, WorkItemChange(expectedRevision: item.revision, dueAt: dueAt)))
     }
 
     private func row(_ label: String, @ViewBuilder content: () -> some View) -> some View {
@@ -229,18 +229,18 @@ private struct WorkItemFields: View {
 /// The next action and what the work waits on, edited in place.
 private struct WorkItemNotes: View {
     let store: StoreOf<Workspace>
-    let item: Commitment
+    let item: WorkItem
     @State private var nextAction = ""
     @State private var waiting = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             note("Next action", text: $nextAction, prompt: "What happens next", saved: item.nextAction) {
-                store.send(.commitmentChanged(item.id, CommitmentChange(expectedRevision: item.revision, nextAction: nextAction)))
+                store.send(.workItemChanged(item.id, WorkItemChange(expectedRevision: item.revision, nextAction: nextAction)))
             }
             note("Waiting on", text: $waiting, prompt: "Nothing", saved: item.waitCondition ?? "") {
                 let text = waiting.trimmingCharacters(in: .whitespacesAndNewlines)
-                store.send(.commitmentChanged(item.id, CommitmentChange(expectedRevision: item.revision, waitCondition: text.isEmpty ? .clear : .set(text))))
+                store.send(.workItemChanged(item.id, WorkItemChange(expectedRevision: item.revision, waitCondition: text.isEmpty ? .clear : .set(text))))
             }
         }
         .devysCard()
@@ -266,7 +266,7 @@ private struct WorkItemNotes: View {
     }
 }
 
-extension CommitmentState {
+extension WorkItemState {
     var title: String {
         switch self {
         case .proposed: "Proposed"

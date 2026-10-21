@@ -55,7 +55,7 @@ function startTurn(threadId, text) {
     });
     texts.push(`home ${process.env.CODEX_HOME}`);
   }
-  // "env" reports what the harness inherited, as a delegate's shell would see it.
+  // "env" reports what the harness inherited, as a coding session's shell would see it.
   if (text === "env")
     texts.push(
       Object.keys(process.env)

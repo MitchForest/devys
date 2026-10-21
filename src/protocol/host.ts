@@ -6,7 +6,7 @@
 
 /**
  * Removes the host's own settings (its token, ports, folders: every `DEVYS_` variable) from an
- * environment in place, so the shells, coding delegates and terminals that inherit it never see
+ * environment in place, so the shells, coding sessions and terminals that inherit it never see
  * them. The launcher already leaves out everything `.env` holds.
  */
 export function forgetHostSettings(env: Record<string, string | undefined>) {
@@ -14,7 +14,7 @@ export function forgetHostSettings(env: Record<string, string | undefined>) {
   return env;
 }
 
-/** Ids the host accepts in a scope, a path segment or an assignment. */
+/** Ids the host accepts in a scope, a path segment or a coding session. */
 export const hostId = /^[A-Za-z0-9-]{1,64}$/;
 
 /** A request's business and employee, or a 400 refusal. */
@@ -37,7 +37,7 @@ export class HostRefusal extends Error {
 
 /** One component's routes on the host. */
 export interface HostRoutes {
-  /** For example `/delegates/`. */
+  /** For example `/coding/`. */
   readonly prefix: string;
   /** Answers a JSON POST to `path` (which starts with the prefix) with a JSON value. */
   handle(path: string, input: Record<string, unknown>): Promise<unknown>;

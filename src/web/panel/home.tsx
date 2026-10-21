@@ -64,7 +64,7 @@ export function DecisionRow({ decision }: { decision: Decision }) {
   const { actions, employees, work } = useWorkspace();
   const [open, setOpen] = useState(false);
   const employee = employees.find((e) => e.id === decision.employee_id);
-  const item = valueOf(work)?.find((w) => w.id === decision.commitment_id);
+  const item = valueOf(work)?.find((w) => w.id === decision.work_item_id);
   return (
     <div className="flex flex-col gap-2 rounded-card border border-hairline bg-sheet p-3 shadow-resting">
       <div className="flex items-center gap-2">
@@ -107,10 +107,10 @@ export function DecisionRow({ decision }: { decision: Decision }) {
         >
           {open ? "Hide details" : "Details"}
         </button>
-        {decision.commitment_id && (
+        {decision.work_item_id && (
           <button
             type="button"
-            onClick={() => actions.openThread(decision.commitment_id!)}
+            onClick={() => actions.openThread(decision.work_item_id!)}
             className="text-caption text-ink-3 hover:text-ink-2"
           >
             Thread

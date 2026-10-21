@@ -17,13 +17,13 @@ private func settle(_ what: String, until condition: @MainActor () async -> Bool
 /// One business's team, work and projects, as the server keeps them.
 private actor TeamServer {
     var employees = BusinessDetail.fixture("acme").employees
-    var commitments = [Commitment(id: "c1", ownerEmployeeID: "growth", title: "PR inquiry", state: .inProgress, revision: 3)]
+    var workItems = [WorkItem(id: "c1", ownerEmployeeID: "growth", title: "PR inquiry", state: .inProgress, revision: 3)]
     var projects = [Project(id: "p1", name: "Launch", goal: "Ship Acme", leadEmployeeID: "ops")]
     var hires: [Hire] = []
     var profiles: [(String, ProfileChange)] = []
     var retirements: [(String, String)] = []
-    var changes: [(String, CommitmentChange)] = []
-    var tasks: [NewTask] = []
+    var changes: [(String, WorkItemChange)] = []
+    var newItems: [NewWorkItem] = []
 
     func detail() -> BusinessDetail {
         BusinessDetail(business: Business(id: "acme", name: "Acme"), employees: employees, artifacts: [])
@@ -47,33 +47,33 @@ private actor TeamServer {
     func retire(_ id: String, _ successor: String) -> String {
         retirements.append((id, successor))
         employees.removeAll { $0.id == id }
-        commitments = commitments.map { item in
-            item.ownerEmployeeID == id ? Commitment(id: item.id, ownerEmployeeID: successor, title: item.title, state: item.state, revision: item.revision + 1) : item
+        workItems = workItems.map { item in
+            item.ownerEmployeeID == id ? WorkItem(id: item.id, ownerEmployeeID: successor, title: item.title, state: item.state, revision: item.revision + 1) : item
         }
         return successor
     }
 
-    func update(_ id: String, _ change: CommitmentChange) throws -> Commitment {
+    func update(_ id: String, _ change: WorkItemChange) throws -> WorkItem {
         changes.append((id, change))
-        guard let index = commitments.firstIndex(where: { $0.id == id }), commitments[index].revision == change.expectedRevision else {
+        guard let index = workItems.firstIndex(where: { $0.id == id }), workItems[index].revision == change.expectedRevision else {
             throw DevysHTTPError.rejected(status: 409, message: "changed")
         }
-        let item = commitments[index]
-        let updated = Commitment(
+        let item = workItems[index]
+        let updated = WorkItem(
             id: id,
             ownerEmployeeID: change.owner ?? item.ownerEmployeeID,
             title: item.title,
             state: change.state ?? item.state,
             revision: item.revision + 1
         )
-        commitments[index] = updated
+        workItems[index] = updated
         return updated
     }
 
-    func create(_ task: NewTask) -> Commitment {
-        tasks.append(task)
-        let item = Commitment(id: "c\(commitments.count + 1)", ownerEmployeeID: task.owner, title: task.title, projectID: task.projectId)
-        commitments.append(item)
+    func create(_ newItem: NewWorkItem) -> WorkItem {
+        newItems.append(newItem)
+        let item = WorkItem(id: "c\(workItems.count + 1)", ownerEmployeeID: newItem.owner, title: newItem.title, projectID: newItem.projectId)
+        workItems.append(item)
         return item
     }
 }
@@ -84,7 +84,7 @@ nonisolated private let roles = [
 ]
 
 @MainActor
-@Suite("Team, projects and tasks")
+@Suite("Team, projects and work items")
 struct TeamFeatureTests {
     private func makeStore(_ server: TeamServer) async -> StoreOf<Workspace> {
         let store: StoreOf<Workspace> = withDependencies {
@@ -100,9 +100,9 @@ struct TeamFeatureTests {
                 stop: { _ in true },
                 memory: { _ in [] },
                 models: { .fixture },
-                work: { _ in await server.commitments },
-                createCommitment: { _, task in await server.create(task) },
-                updateCommitment: { _, id, change in try await server.update(id, change) },
+                work: { _ in await server.workItems },
+                createWorkItem: { _, newItem in await server.create(newItem) },
+                updateWorkItem: { _, id, change in try await server.update(id, change) },
                 projects: { _ in await server.projects }
             )
             $0.continuousClock = ContinuousClock()
@@ -184,28 +184,28 @@ struct TeamFeatureTests {
         #expect(Mentions.recipients(in: "no mentions", team: team).isEmpty)
     }
 
-    @Test("New task from a project carries the project and opens its thread; from an employee, its owner")
+    @Test("New work item from a project carries the project and opens its thread; from an employee, its owner")
     func newTasks() async {
         let server = TeamServer()
         let store = await makeStore(server)
         store.send(.placeSelected(.project("p1")))
-        store.send(.newTaskTapped(project: "p1"))
-        guard var draft = store.newTask else { return #expect(Bool(false), "the sheet opens") }
+        store.send(.newWorkItemTapped(project: "p1"))
+        guard var draft = store.newWorkItem else { return #expect(Bool(false), "the sheet opens") }
         #expect(draft.projectID == "p1" && draft.ownerID == "ops")
         draft.title = "Book the domain"
         draft.objective = "acme.example or similar"
-        store.send(.taskEdited(draft))
-        store.send(.taskConfirmed)
-        await settle("created", until: { store.newTask == nil && store.place == .thread("c2") })
+        store.send(.workItemEdited(draft))
+        store.send(.workItemConfirmed)
+        await settle("created", until: { store.newWorkItem == nil && store.place == .thread("c2") })
         #expect(store.history == [.project("p1")])
         #expect(store.work.value?.last?.projectID == "p1")
-        let task = await server.tasks.first
-        #expect(task == NewTask(title: "Book the domain", owner: "ops", objective: "acme.example or similar", projectId: "p1"))
+        let newItem = await server.newItems.first
+        #expect(newItem == NewWorkItem(title: "Book the domain", owner: "ops", objective: "acme.example or similar", projectId: "p1"))
 
-        store.send(.newTaskTapped(owner: "engineering"))
-        #expect(store.newTask?.ownerID == "engineering" && store.newTask?.projectID == nil)
-        store.send(.taskCancelled)
-        #expect(store.newTask == nil)
+        store.send(.newWorkItemTapped(owner: "engineering"))
+        #expect(store.newWorkItem?.ownerID == "engineering" && store.newWorkItem?.projectID == nil)
+        store.send(.workItemCancelled)
+        #expect(store.newWorkItem == nil)
     }
 
     @Test("Reassigning sends the new owner, ready, at the revision on screen")
@@ -217,7 +217,7 @@ struct TeamFeatureTests {
         await settle("reassigned", until: { store.work.value?.first?.ownerEmployeeID == "engineering" })
         let changes = await server.changes
         #expect(changes.count == 1)
-        #expect(changes.first?.1 == CommitmentChange(expectedRevision: 3, owner: "engineering", state: .ready))
+        #expect(changes.first?.1 == WorkItemChange(expectedRevision: 3, owner: "engineering", state: .ready))
         #expect(store.work.value?.first?.state == .ready)
     }
 

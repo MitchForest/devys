@@ -5,7 +5,7 @@ import type { Business, Person } from "../identity/contract.ts";
 import { activeEmployee } from "../identity/service.ts";
 import { readBounded, sha256Bytes } from "../protocol/bytes.ts";
 import { revisionConflict } from "../workspace/contract.ts";
-import { commitment } from "../work/service.ts";
+import { workItem } from "../work/service.ts";
 import { postFromPerson } from "./conversations.ts";
 import { modeOf } from "./mode.ts";
 import { body } from "./request.ts";
@@ -203,7 +203,7 @@ export async function filesRoute(request: Request, env: Env, access: Access) {
     const file = inside(input.path);
     const work =
       typeof input.work === "string"
-        ? await Effect.runPromise(commitment(env.HYPERDRIVE, business.id, input.work))
+        ? await Effect.runPromise(workItem(env.HYPERDRIVE, business.id, input.work))
         : undefined;
     const employeeId = work?.owner_employee_id ?? input.employee;
     const employee =

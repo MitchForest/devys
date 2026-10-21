@@ -1,6 +1,6 @@
 import type { Ref } from "../protocol/ref.ts";
 
-export type CommitmentState =
+export type WorkItemState =
   | "proposed"
   | "ready"
   | "in_progress"
@@ -10,7 +10,7 @@ export type CommitmentState =
   | "cancelled";
 
 /** What is owed: who is accountable, what's next, and the evidence once done. */
-export interface Commitment {
+export interface WorkItem {
   id: string;
   owner_employee_id: string;
   title: string;
@@ -18,7 +18,7 @@ export interface Commitment {
   next_action: string;
   wait_condition: string | null;
   due_at: string | null;
-  state: CommitmentState;
+  state: WorkItemState;
   /** The project it belongs to, if any. */
   project_id: string | null;
   /** Values for capabilities' own constraint fields, by capability name. They only narrow. */

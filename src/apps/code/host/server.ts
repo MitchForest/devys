@@ -1,10 +1,10 @@
 /**
- * Coding delegates on the trusted Mac host (local mode; .docs/COMPONENTS.md#coding-delegates).
- * Each assignment gets its own git worktree and a native session in its provider. Jobs are an
+ * Coding sessions on the trusted Mac host (local mode; .docs/CODING_AGENTS.md).
+ * Each coding session gets its own git worktree and a native session in its provider. Jobs are an
  * append-only JSON-lines file (the last line for an id wins). Events the supervising employee
  * must hear about wait in a small outbox file until the Worker accepts them, so a lost push
- * is sent again. Delegate processes stay in the host's process group: a host restart ends
- * them, and their assignments report interrupted. Nothing is replayed.
+ * is sent again. Harness processes stay in the host's process group: a host restart ends
+ * them, and their coding sessions report interrupted. Nothing is replayed.
  */
 import { spawn } from "node:child_process";
 import {
@@ -19,8 +19,8 @@ import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import type {
   Accepted,
-  DelegateEvent,
-  DelegateStatus,
+  CodingEvent,
+  CodingStatus,
   Provider,
   Published,
   Stage,
@@ -54,7 +54,7 @@ interface Job {
   branch: string;
   worktree: string;
   sessionId: string;
-  state: DelegateStatus["state"];
+  state: CodingStatus["state"];
   reply: string | null;
   error: string | null;
   /** A check started by accept and not yet finished. */
@@ -65,14 +65,14 @@ interface Job {
   deploying?: { stage: Stage; commit: string };
 }
 
-export interface DelegatesHostOptions {
+export interface CodingHostOptions {
   /** Each business works in `<work>/<businessId>`. */
   work: string;
   data: string;
   providers: (events: ProviderEvents) => Partial<Record<Provider, ProviderAdapter>>;
   /** Hands events to the Worker; resolving means they were accepted. */
   /** Sends events to the Worker; resolves with the ids it delivered (the rest are retried). */
-  deliver(events: readonly DelegateEvent[]): Promise<readonly string[]>;
+  deliver(events: readonly CodingEvent[]): Promise<readonly string[]>;
   shell?: string;
   env?: NodeJS.ProcessEnv;
   /** The `gh` the owner is logged in with; tests pass a stand-in. */
@@ -104,10 +104,10 @@ export function signInHint(provider: Provider, error: string) {
   return `${name} isn't signed in on this Mac (${error.slice(0, 200)}). Sign in with \`${command}\` in a terminal, then send the session a follow-up to continue.`;
 }
 
-export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
+export function codingHost(options: CodingHostOptions): HostRoutes {
   mkdirSync(options.data, { recursive: true });
-  const ledger = join(options.data, "delegates.jsonl");
-  const outboxFile = join(options.data, "delegate-events.json");
+  const ledger = join(options.data, "coding-sessions.jsonl");
+  const outboxFile = join(options.data, "coding-events.json");
   const jobs = new Map<string, Job>();
   const spared = () => options.spared?.().catch(() => []) ?? Promise.resolve([] as string[]);
   if (existsSync(ledger))
@@ -115,8 +115,8 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
       const job = JSON.parse(line) as Job;
       jobs.set(job.id, job);
     }
-  let outbox: DelegateEvent[] = existsSync(outboxFile)
-    ? (JSON.parse(readFileSync(outboxFile, "utf8")) as DelegateEvent[])
+  let outbox: CodingEvent[] = existsSync(outboxFile)
+    ? (JSON.parse(readFileSync(outboxFile, "utf8")) as CodingEvent[])
     : [];
 
   const save = (job: Job) => {
@@ -152,7 +152,7 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
     });
     return flushing;
   };
-  const emit = (event: DelegateEvent) => {
+  const emit = (event: CodingEvent) => {
     if (outbox.some((queued) => queued.id === event.id)) return;
     outbox.push(event);
     saveOutbox();
@@ -168,7 +168,7 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
   ) =>
     emit({
       id: `${job.id}:${turn}:${kind}`,
-      assignmentId: job.id,
+      codingSessionId: job.id,
       kind,
       text,
       diffStat: await statOf(job),
@@ -225,7 +225,7 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
       save({ ...job, state: "interrupted", error: "The Mac host restarted mid-turn." });
       emit({
         id: `${job.id}:restart-${Date.now()}:interrupted`,
-        assignmentId: job.id,
+        codingSessionId: job.id,
         kind: "interrupted",
         text: "The Mac host restarted while the session worked. Its changes so far are in the worktree; send a follow-up to continue.",
       });
@@ -233,7 +233,7 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
     if (job.check) {
       emit({
         id: `${job.id}:checked:${job.check.id}`,
-        assignmentId: job.id,
+        codingSessionId: job.id,
         kind: "checked",
         text: "The Mac host restarted during the check; it did not finish. Accept again to rerun it.",
         check: { commit: job.check.commit, command: job.check.command, exitCode: null, output: "" },
@@ -245,7 +245,7 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
 
   const starting = new Map<string, Promise<Started>>();
   const startedOf = (job: Job): Started => ({
-    sessionId: job.sessionId,
+    providerSessionId: job.sessionId,
     repository: job.repository,
     baseCommit: job.baseCommit,
     branch: job.branch,
@@ -260,7 +260,7 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
     if (request.purpose === "review") {
       const build = request.reviews ? jobs.get(request.reviews) : undefined;
       if (!build || build.scope.businessId !== request.scope.businessId)
-        throw new HostRefusal(404, "A review needs the assignment it reviews");
+        throw new HostRefusal(404, "A review needs the coding session it reviews");
       const { repository: path, baseCommit, branch, worktree } = build;
       place = { repository: path, baseCommit, branch, worktree };
     } else {
@@ -295,7 +295,7 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
     save(job);
     emit({
       id: `${job.id}:started`,
-      assignmentId: job.id,
+      codingSessionId: job.id,
       kind: "started",
       text: request.objective,
     });
@@ -311,7 +311,7 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
     const scope = scopeOf(input.scope);
     const job = typeof input.id === "string" ? jobs.get(input.id) : undefined;
     if (!job || job.scope.businessId !== scope.businessId)
-      throw new HostRefusal(404, "No such assignment");
+      throw new HostRefusal(404, "No such coding session");
     return job;
   }
 
@@ -354,7 +354,7 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
       save({ ...latest, check: null, accepted: { commit, passed: exitCode === 0 } });
       emit({
         id: `${job.id}:checked:${check.id}`,
-        assignmentId: job.id,
+        codingSessionId: job.id,
         kind: "checked",
         text:
           exitCode === 0
@@ -443,7 +443,7 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
       save({ ...jobs.get(job.id)!, deploying: undefined });
       emit({
         id: `${job.id}:deployed:${stage}:${full}:${Date.now()}`,
-        assignmentId: job.id,
+        codingSessionId: job.id,
         kind: "deployed",
         text:
           exitCode !== 0
@@ -492,13 +492,14 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
   }
 
   return {
-    prefix: "/delegates/",
+    prefix: "/coding/",
     async handle(path, input) {
       switch (path) {
-        case "/delegates/start": {
+        case "/coding/start": {
           const request = input.request as StartRequest;
           scopeOf(request?.scope);
-          if (!hostId.test(request.id ?? "")) throw new HostRefusal(400, "Invalid assignment id");
+          if (!hostId.test(request.id ?? ""))
+            throw new HostRefusal(400, "Invalid coding session id");
           const pending = starting.get(request.id) ?? start(request);
           starting.set(request.id, pending);
           try {
@@ -507,16 +508,16 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
             starting.delete(request.id);
           }
         }
-        case "/delegates/inspect": {
+        case "/coding/inspect": {
           const job = jobOf(input);
           return {
             state: job.state,
             reply: job.reply,
             diffStat: await statOf(job),
             error: job.error,
-          } satisfies DelegateStatus;
+          } satisfies CodingStatus;
         }
-        case "/delegates/send": {
+        case "/coding/send": {
           const job = jobOf(input);
           if (typeof input.text !== "string" || !input.text.trim())
             throw new HostRefusal(400, "Say what to do");
@@ -537,7 +538,7 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
             });
           return { steered: sent.steered };
         }
-        case "/delegates/interrupt": {
+        case "/coding/interrupt": {
           const job = jobOf(input);
           if (job.state === "working") await adapter(job.provider).interrupt(job.sessionId);
           // An interrupted turn can leave its command running. A review shares its build's
@@ -549,21 +550,21 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
             ).unref();
           return { interrupted: true };
         }
-        case "/delegates/accept": {
+        case "/coding/accept": {
           const job = jobOf(input);
           if (typeof input.message !== "string" || typeof input.check !== "string")
             throw new HostRefusal(400, "Give a commit message and a check command");
           return accept(job, input.message, input.check);
         }
-        case "/delegates/publish":
+        case "/coding/publish":
           return publish(jobOf(input), input);
-        case "/delegates/deploy":
+        case "/coding/deploy":
           return deploy(jobOf(input), input);
-        case "/delegates/diff": {
+        case "/coding/diff": {
           const job = jobOf(input);
           return workingDiff(job.worktree, job.baseCommit);
         }
-        case "/delegates/transcript": {
+        case "/coding/transcript": {
           const job = jobOf(input);
           const entries = await adapter(job.provider).transcript({
             sessionId: job.sessionId,
@@ -571,7 +572,7 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
           });
           return { entries: bounded(entries) };
         }
-        case "/delegates/flush":
+        case "/coding/flush":
           await flush();
           return { pending: outbox.length };
         default:

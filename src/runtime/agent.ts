@@ -7,12 +7,8 @@ import type { ConversationId, EntryId } from "@earendil-works/pi-durable";
 import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { Effect, Schema } from "effect";
-import {
-  contextOf,
-  Inbound,
-  type Channel,
-  type ConversationContext,
-} from "../channels/contract.ts";
+import { employeeChatOf, Inbound, type Channel } from "../channels/contract.ts";
+import { conversationKey, idOf, kindOf, type ConversationKey } from "../conversations/contract.ts";
 import { scopeName, type Scope } from "../identity/contract.ts";
 import type { Memory } from "../memory/contract.ts";
 import type { Runner } from "../workspace/contract.ts";
@@ -29,16 +25,18 @@ type HarnessModels = Parameters<typeof Harness.open>[1]["models"];
 /** A harness session id as the Pi conversation it names. */
 const conversationOf = (session: string) => Number(session) as ConversationId;
 
-/** A context's key in this object's session map; direct chat has none and uses the root. */
-const contextKey = (context: ConversationContext | undefined) =>
-  context && `${context.kind}:${context.id}`;
+/**
+ * The conversation an input is in, which keys its Pi session in this object; undefined is the
+ * employee's own direct chat, the root session.
+ */
+const conversationIn = (chatId: string) => employeeChatOf(chatId)?.conversation;
 
 /** Supplied by application wiring; the runtime never selects adapters. */
 export interface AgentDependencies {
   readonly capabilities: Capability[];
   readonly runner: Runner;
   /** Interrupts the employee's coding sessions; Stop must not leave one working. */
-  readonly interruptDelegates: (scope: Scope) => Promise<void>;
+  readonly interruptCoding: (scope: Scope) => Promise<void>;
   /** Where this employee's files and commands live, for its instructions. */
   readonly workplace: string;
   readonly channel: Channel;
@@ -56,12 +54,12 @@ export interface AgentDependencies {
       }
     | undefined
   >;
-  /** Re-reads this employee's grant (and the commitment it serves) for this exact input. */
+  /** Re-reads this employee's grant (and the work item it serves) for this exact input. */
   readonly authorize: (
     scope: Scope,
     capability: Capability,
     input: unknown,
-    context: { commitmentId?: string; conversation?: string },
+    context: { workItemId?: string; conversation?: string },
   ) => Promise<Outcome>;
   /** Capability names this employee holds a grant for, for discovery. */
   readonly granted: (scope: Scope) => Promise<string[]>;
@@ -155,7 +153,7 @@ export abstract class AgentRuntime<
       ? ` About ${employee.businessName}: ${employee.brief.trim()}`
       : "";
     const team = employee.colleagues.length
-      ? ` Your colleagues: ${employee.colleagues.join("; ")}. To ask one, write @ and their name in your reply; their answer comes back to you. Hand over lasting work as a commitment they own.`
+      ? ` Your colleagues: ${employee.colleagues.join("; ")}. To ask one, write @ and their name in your reply; their answer comes back to you. Hand over lasting work as a work item they own.`
       : "";
     return `You are ${employee.name} at ${employee.businessName}, an employee operated by Devys.${about} Your responsibilities: ${employee.role}${team} Work toward the business's goals and the owner's requests. ${this.services.workplace}`;
   }
@@ -196,7 +194,7 @@ export abstract class AgentRuntime<
     if (this.stopping) throw new Error("Stopping work");
   }
 
-  /** The calling tool's session decides which input, and so which commitment, it acts for. */
+  /** The calling tool's session decides which input, and so which work item, it acts for. */
   async authority(signal: AbortSignal | undefined, session: string) {
     await this.checkAccess(signal, session);
     const pi = await this.harness.pi();
@@ -212,16 +210,15 @@ export abstract class AgentRuntime<
       : undefined;
     const evidence = observations(latest ? [latest] : [], await this.sourceNamespace());
     // Work handed over by the dispatcher, or a message in a work item's thread, names its
-    // commitment; the host, not the model, says so.
+    // work item; the host, not the model, says so.
     const input = running
       ? (await this.ctx.storage.get<ChannelMessage>(`message:${running.operationId}`))?.input
       : undefined;
-    const context = input ? contextOf(input.chatId) : undefined;
-    const commitmentId = context?.kind === "work" ? context.id : undefined;
+    const inConversation = input ? conversationIn(input.chatId) : undefined;
+    const workItemId =
+      inConversation && kindOf(inConversation) === "work" ? idOf(inConversation) : undefined;
     const conversation = input
-      ? context
-        ? `${context.kind}:${context.id}`
-        : `direct:${this.scope().employeeId}`
+      ? (inConversation ?? `direct:${this.scope().employeeId}`)
       : undefined;
     // Memory being down never stops work: a missed observation is caught up later, and only
     // observed evidence is cited.
@@ -240,13 +237,13 @@ export abstract class AgentRuntime<
     return {
       evidenceIds: observed ? evidence.map((item) => item.id) : [],
       ...scope,
-      ...(commitmentId ? { commitmentId } : {}),
+      ...(workItemId ? { workItemId } : {}),
       ...(conversation ? { conversation } : {}),
       authorize: (capability: Capability, args: unknown) =>
         Effect.tryPromise({
           try: () =>
             this.services.authorize(scope, capability, args, {
-              ...(commitmentId ? { commitmentId } : {}),
+              ...(workItemId ? { workItemId } : {}),
               ...(conversation ? { conversation } : {}),
             }),
           catch: () =>
@@ -386,26 +383,24 @@ export abstract class AgentRuntime<
 
   private creating = new Map<string, Promise<string>>();
 
-  /** Every context's Pi session, by context key. Direct chat is the root session. */
+  /** Every conversation's Pi session, by conversation key. Direct chat is the root session. */
   private async contextSessions() {
     const stored = await this.ctx.storage.list<string>({ prefix: "session:" });
     return new Map([...stored].map(([key, session]) => [key.slice("session:".length), session]));
   }
 
-  /** The session a chat's context already has, or undefined before its first input. */
+  /** The session a chat's conversation already has, or undefined before its first input. */
   private sessionIn(sessions: Map<string, string>, chatId: string) {
-    const key = contextKey(contextOf(chatId));
+    const key = conversationIn(chatId);
     return key ? sessions.get(key) : ROOT_SESSION;
   }
 
-  private async knownSession(context: ConversationContext | undefined) {
-    const key = contextKey(context);
+  private async knownSession(key: ConversationKey | undefined) {
     return key ? this.ctx.storage.get<string>(`session:${key}`) : ROOT_SESSION;
   }
 
-  /** A context's session, created on its first input; concurrent first inputs share one. */
-  private openSession(context: ConversationContext | undefined) {
-    const key = contextKey(context);
+  /** A conversation's session, created on its first input; concurrent first inputs share one. */
+  private openSession(key: ConversationKey | undefined) {
     if (!key) return Promise.resolve(ROOT_SESSION);
     const existing = this.creating.get(key);
     if (existing) return existing;
@@ -525,7 +520,7 @@ export abstract class AgentRuntime<
       await Promise.all([
         ...targets.map((target) => this.harness.abort(target)),
         ...(active ? [this.services.runner(this.scope()).cancel()] : []),
-        this.services.interruptDelegates(this.scope()).catch(() => undefined),
+        this.services.interruptCoding(this.scope()).catch(() => undefined),
       ]);
     } finally {
       this.stopping--;
@@ -625,18 +620,14 @@ export abstract class AgentRuntime<
     });
   }
 
-  /** Pi's entries for one context's conversation, newest first; direct chat by default. */
-  async history(scope: Scope, before?: number, context?: ConversationContext) {
+  /** Pi's entries for one conversation, newest first; the employee's direct chat by default. */
+  async history(scope: Scope, before?: number, conversation?: ConversationKey) {
     await this.start(scope);
     if (before !== undefined && (!Number.isSafeInteger(before) || before < 0))
       throw new Error("Invalid history cursor");
-    if (
-      context !== undefined &&
-      (!["work", "project", "direct"].includes(context.kind) ||
-        !/^[A-Za-z0-9-]{1,64}$/.test(context.id))
-    )
-      throw new Error("Invalid conversation context");
-    const session = await this.knownSession(context);
+    if (conversation !== undefined && !conversationKey(conversation))
+      throw new Error("Invalid conversation");
+    const session = await this.knownSession(conversation);
     if (session === undefined) return JSON.stringify({ entries: [], nextBefore: null });
     const pi = await this.harness.pi();
     const page = await pi.commit(
@@ -673,9 +664,9 @@ export abstract class AgentRuntime<
     if (!message) return;
     let output = await this.ctx.storage.get<Outbox>(`outbox:${message.id}`);
     if (output && output.status !== "pending") return;
-    const context = contextOf(message.input.chatId);
+    const conversation = conversationIn(message.input.chatId);
     if (!this.reaches(await this.services.channel.binding(message.input))) {
-      const session = await this.knownSession(context);
+      const session = await this.knownSession(conversation);
       if (session !== undefined) await this.harness.abort({ operationId: message.id, session });
       if (output)
         await this.ctx.storage.put(`outbox:${message.id}`, {
@@ -690,7 +681,7 @@ export abstract class AgentRuntime<
         if ("rescheduleAt" in prepared) return prepared;
         message = prepared.message;
       }
-      const answer = await this.answer(message, context);
+      const answer = await this.answer(message, conversation);
       if (typeof answer !== "string") return answer;
       const pending: Outbox = {
         id: message.id,
@@ -750,7 +741,7 @@ export abstract class AgentRuntime<
   /** The reply text for a message, or when to look again while Pi is still working. */
   private async answer(
     message: ChannelMessage,
-    context: ConversationContext | undefined,
+    conversation: ConversationKey | undefined,
   ): Promise<string | { rescheduleAt: number }> {
     if (message.control) {
       if (message.control === "stop") await this.cancelTargets(message.targets ?? []);
@@ -761,7 +752,7 @@ export abstract class AgentRuntime<
           : "There is no active run.";
     }
     if (message.cancelled || Date.now() >= message.receivedAt + defaultLimits.maxDurationMs) {
-      const session = await this.knownSession(context);
+      const session = await this.knownSession(conversation);
       const active = (await this.harness.pending()).some(
         (item) => item.operationId === message.id && item.status === "running",
       );
@@ -777,15 +768,15 @@ export abstract class AgentRuntime<
     }
     if ((await this.services.employee(this.scope()))?.paused)
       return "I'm paused by the owner, so I didn't act on that. Ask the owner to resume me.";
-    return this.run(message, context);
+    return this.run(message, conversation);
   }
 
-  /** Submits the turn to Pi in the context's session (idempotent by message id) and waits. */
+  /** Submits the turn to Pi in the conversation's session (idempotent by message id) and waits. */
   private async run(
     message: ChannelMessage,
-    context: ConversationContext | undefined,
+    conversation: ConversationKey | undefined,
   ): Promise<string | { rescheduleAt: number }> {
-    const session = await this.openSession(context);
+    const session = await this.openSession(conversation);
     // Submitted once; the polls that follow only wait (no memory search per poll).
     if (!message.submitted) {
       await this.scheduleMemory();

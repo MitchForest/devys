@@ -7,30 +7,30 @@ import { Ref, ref } from "../../protocol/ref.ts";
 import { rpc, stored } from "../../protocol/rpc.ts";
 import {
   providers,
-  type Assignment,
-  type Delegates,
+  type CodingSession,
+  type CodingHost,
   type Provider,
   type Stage,
 } from "./contract.ts";
-import { assignment, assignmentsFor, recordAssignment, recordStarted } from "./service.ts";
+import { codingSession, codingSessionsFor, recordCodingSession, recordStarted } from "./service.ts";
 
-export interface DelegateDependencies {
+export interface CodingDependencies {
   db: Database;
-  delegates: (scope: Scope) => Delegates;
+  coding: (scope: Scope) => CodingHost;
   /** Shows a line in the work item's thread without waking anyone. */
   note(
     scope: Scope,
-    commitmentId: string,
+    workItemId: string,
     note: { clientId: string; text: string; ref?: Ref },
   ): Promise<void>;
   /** Appends evidence to the work item. */
   evidence(
     scope: Scope,
-    commitmentId: string,
+    workItemId: string,
     entry: { note: string; commit: string; changes?: string; pullRequest?: string },
   ): Promise<void>;
   /** Commits this work item's evidence names (accepted, checked or deployed): rollback targets. */
-  knownCommits(scope: Scope, commitmentId: string): Promise<string[]>;
+  knownCommits(scope: Scope, workItemId: string): Promise<string[]>;
   /** Whether this employee directs others' work (the Head of Operations). */
   coordinates(scope: Scope): Promise<boolean>;
 }
@@ -39,13 +39,13 @@ export const providerName = (provider: Provider) =>
   provider === "codex" ? "Codex" : "Claude Code";
 
 const Text = (max: number) => Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(max));
-const AssignmentId = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9-]{1,64}$/));
+const CodingSessionId = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9-]{1,64}$/));
 const ProviderInput = Schema.Literals(providers);
 const GitHubName = Schema.String.check(
   Schema.isPattern(/^[A-Za-z0-9-]{1,39}\/(?!.*\.\.)[A-Za-z0-9._-]{1,100}$/),
 );
 const Status = Schema.Struct({
-  assignment: Schema.String,
+  session: Schema.String,
   provider: Schema.String,
   purpose: Schema.String,
   branch: Schema.NullOr(Schema.String),
@@ -56,10 +56,10 @@ const Status = Schema.Struct({
   error: Schema.NullOr(Schema.String),
 });
 
-/** Standing instructions for a delegated session; the objective is its first message. */
-export const delegateInstructions = (purpose: "build" | "review") =>
+/** Standing instructions for a coding session; the objective is its first message. */
+export const codingInstructions = (purpose: "build" | "review") =>
   [
-    "You are working for a business through Devys, delegated by one of its employees.",
+    "You are working for a business through Devys, on behalf of one of its employees.",
     purpose === "build"
       ? "Work only in this git worktree. Do not commit, push, merge, open pull requests or deploy: Devys commits the change it accepts, and publishing is a separate decision."
       : "Review only: read the code and its changes against the base commit and run read-only checks. Do not edit files.",
@@ -70,22 +70,22 @@ export const delegateInstructions = (purpose: "build" | "review") =>
 /** Fails unless the call acts for a work item, which is where coding sessions live. */
 const workItem = Effect.gen(function* () {
   const invocation = yield* Invocation;
-  if (!invocation.commitmentId)
+  if (!invocation.workItemId)
     return yield* new CapabilityError({
       code: "invalid_input",
       message:
         "Start and steer coding sessions from a work item, so the work has a thread and an owner.",
     });
-  return { invocation, commitmentId: invocation.commitmentId };
+  return { invocation, workItemId: invocation.workItemId };
 });
 
-export function delegateCapabilities(dependencies: DelegateDependencies) {
+export function codingCapabilities(dependencies: CodingDependencies) {
   const { db } = dependencies;
   const owned = (id: string) =>
     Effect.gen(function* () {
-      const { invocation, commitmentId } = yield* workItem;
-      const found = yield* stored(assignment(db, invocation.businessId, id));
-      if (!found || found.commitment_id !== commitmentId || !found.session_id)
+      const { invocation, workItemId } = yield* workItem;
+      const found = yield* stored(codingSession(db, invocation.businessId, id));
+      if (!found || found.work_item_id !== workItemId || !found.provider_session_id)
         return yield* new CapabilityError({
           code: "invalid_input",
           message: "No coding session with that id on this work item",
@@ -100,13 +100,13 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
           code: "forbidden",
           message: "Another employee's coding session: ask them in this thread.",
         });
-      return { invocation, commitmentId, found };
+      return { invocation, workItemId, found };
     });
-  const statusOf = (scope: Scope, item: Assignment) =>
+  const statusOf = (scope: Scope, item: CodingSession) =>
     rpc(async () => {
-      const status = await dependencies.delegates(scope).inspect(item.id);
+      const status = await dependencies.coding(scope).inspect(item.id);
       return {
-        assignment: item.id,
+        session: item.id,
         provider: item.provider,
         purpose: item.purpose,
         branch: item.branch,
@@ -119,7 +119,7 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
     capability({
       name: "codingStart",
       description:
-        "Delegate coding on this work item to Codex or Claude Code. It works in its own git worktree of the repository (an absolute path on the owner's Mac), of the business's GitHub repository (cloneRepository: owner/name, cloned into the business folder the first time), or of a new empty repository (newRepository: a folder name). Write the objective as a complete brief: what to build or change, the acceptance checks, and anything it must not do. It runs on its own; you are told when its turn ends. purpose 'review' starts a read-only session on another assignment's worktree (pass reviews).",
+        "Start a coding session on this work item with Codex or Claude Code. It works in its own git worktree of the repository (an absolute path on the owner's Mac), of the business's GitHub repository (cloneRepository: owner/name, cloned into the business folder the first time), or of a new empty repository (newRepository: a folder name). Write the objective as a complete brief: what to build or change, the acceptance checks, and anything it must not do. It runs on its own; you are told when its turn ends. purpose 'review' starts a read-only session on another coding session's worktree (pass its id as reviews).",
       effect: "change",
       replay: "idempotent",
       constraints: {
@@ -154,17 +154,17 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
         ),
         cloneRepository: Schema.optional(GitHubName),
         purpose: Schema.optional(Schema.Literals(["build", "review"])),
-        reviews: Schema.optional(AssignmentId),
+        reviews: Schema.optional(CodingSessionId),
       }),
       output: Schema.Struct({
-        assignment: Schema.String,
+        session: Schema.String,
         branch: Schema.String,
         worktree: Schema.String,
         ref: Ref,
       }),
       execute: (input) =>
         Effect.gen(function* () {
-          const { invocation, commitmentId } = yield* workItem;
+          const { invocation, workItemId } = yield* workItem;
           const purpose = input.purpose ?? "build";
           const targets = [input.repository, input.newRepository, input.cloneRepository];
           if (purpose === "build" && targets.filter(Boolean).length !== 1)
@@ -176,16 +176,16 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
           if (purpose === "review" && !input.reviews)
             return yield* new CapabilityError({
               code: "invalid_input",
-              message: "A review names the assignment it reviews.",
+              message: "A review names the coding session it reviews.",
             });
           const scope = { businessId: invocation.businessId, employeeId: invocation.employeeId };
           const id = yield* Effect.promise(() =>
             stableId(`${invocation.businessId}:${invocation.operationId}`),
           );
           yield* stored(
-            recordAssignment(db, invocation.businessId, {
+            recordCodingSession(db, invocation.businessId, {
               id,
-              commitmentId,
+              workItemId,
               employeeId: invocation.employeeId,
               provider: input.provider,
               purpose,
@@ -194,7 +194,7 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
             }),
           );
           const started = yield* rpc(() =>
-            dependencies.delegates(scope).start({
+            dependencies.coding(scope).start({
               id,
               scope,
               provider: input.provider,
@@ -205,13 +205,13 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
                   ? { clone: input.cloneRepository }
                   : { create: input.newRepository ?? "unused" },
               objective: input.objective,
-              instructions: delegateInstructions(purpose),
+              instructions: codingInstructions(purpose),
               ...(input.reviews ? { reviews: input.reviews } : {}),
             }),
           );
           yield* stored(recordStarted(db, invocation.businessId, id, started));
           return {
-            assignment: id,
+            session: id,
             branch: started.branch,
             worktree: started.worktree,
             ref: ref("code", "session", id),
@@ -224,15 +224,15 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
         "Show this work item's coding sessions, or one of them: state, its latest reply, and what changed in its worktree.",
       effect: "read",
       replay: "read",
-      input: Schema.Struct({ assignment: Schema.optional(AssignmentId) }),
+      input: Schema.Struct({ session: Schema.optional(CodingSessionId) }),
       output: Schema.Struct({ sessions: Schema.Array(Status) }),
-      execute: ({ assignment: id }) =>
+      execute: ({ session: id }) =>
         Effect.gen(function* () {
-          const { invocation, commitmentId } = yield* workItem;
+          const { invocation, workItemId } = yield* workItem;
           const scope = { businessId: invocation.businessId, employeeId: invocation.employeeId };
           const items = (yield* stored(
-            assignmentsFor(db, invocation.businessId, commitmentId),
-          )).filter((item) => item.session_id && (!id || item.id === id));
+            codingSessionsFor(db, invocation.businessId, workItemId),
+          )).filter((item) => item.provider_session_id && (!id || item.id === id));
           const sessions = [];
           for (const item of items) sessions.push(yield* statusOf(scope, item));
           return { sessions };
@@ -244,16 +244,16 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
         "Tell a coding session something: while it works this steers the running turn; otherwise it starts its next turn. Be specific about what to change and how to verify it.",
       effect: "change",
       replay: "reconcile",
-      input: Schema.Struct({ assignment: AssignmentId, text: Text(8000) }),
+      input: Schema.Struct({ session: CodingSessionId, text: Text(8000) }),
       output: Schema.Struct({ steered: Schema.Boolean }),
-      execute: ({ assignment: id, text }) =>
+      execute: ({ session: id, text }) =>
         Effect.gen(function* () {
-          const { invocation, commitmentId, found } = yield* owned(id);
+          const { invocation, workItemId, found } = yield* owned(id);
           const scope = { businessId: invocation.businessId, employeeId: invocation.employeeId };
-          const sent = yield* rpc(() => dependencies.delegates(scope).send(id, text));
+          const sent = yield* rpc(() => dependencies.coding(scope).send(id, text));
           yield* rpc(() =>
-            dependencies.note(scope, commitmentId, {
-              clientId: `delegate-send:${invocation.operationId}`,
+            dependencies.note(scope, workItemId, {
+              clientId: `coding-send:${invocation.operationId}`,
               text: `→ ${providerName(found.provider)}: ${text}`,
               ref: ref("code", "session", id),
             }),
@@ -267,13 +267,13 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
         "Interrupt a coding session's running turn. Its changes so far stay in its worktree.",
       effect: "change",
       replay: "idempotent",
-      input: Schema.Struct({ assignment: AssignmentId }),
+      input: Schema.Struct({ session: CodingSessionId }),
       output: Schema.Struct({ interrupted: Schema.Boolean }),
-      execute: ({ assignment: id }) =>
+      execute: ({ session: id }) =>
         Effect.gen(function* () {
           const { invocation } = yield* owned(id);
           const scope = { businessId: invocation.businessId, employeeId: invocation.employeeId };
-          yield* rpc(() => dependencies.delegates(scope).interrupt(id));
+          yield* rpc(() => dependencies.coding(scope).interrupt(id));
           return { interrupted: true };
         }),
     }),
@@ -284,20 +284,20 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
       effect: "change",
       replay: "reconcile",
       input: Schema.Struct({
-        assignment: AssignmentId,
+        session: CodingSessionId,
         message: Text(500),
         check: Text(2000),
       }),
       output: Schema.Struct({ commit: Schema.String, diffStat: Schema.String }),
-      execute: ({ assignment: id, message, check }) =>
+      execute: ({ session: id, message, check }) =>
         Effect.gen(function* () {
-          const { invocation, commitmentId, found } = yield* owned(id);
+          const { invocation, workItemId, found } = yield* owned(id);
           const scope = { businessId: invocation.businessId, employeeId: invocation.employeeId };
           const accepted = yield* rpc(() =>
-            dependencies.delegates(scope).accept(id, { message, check }),
+            dependencies.coding(scope).accept(id, { message, check }),
           );
           yield* rpc(() =>
-            dependencies.evidence(scope, commitmentId, {
+            dependencies.evidence(scope, workItemId, {
               commit: accepted.commit,
               changes:
                 accepted.diffStat
@@ -328,7 +328,7 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
           repositories.some((name) => name.toLowerCase() === input.repository.toLowerCase()),
       },
       input: Schema.Struct({
-        assignment: AssignmentId,
+        session: CodingSessionId,
         repository: GitHubName,
         title: Text(200),
         body: Text(8000),
@@ -338,15 +338,15 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
         branch: Schema.String,
         commit: Schema.String,
       }),
-      execute: ({ assignment: id, repository, title, body }) =>
+      execute: ({ session: id, repository, title, body }) =>
         Effect.gen(function* () {
-          const { invocation, commitmentId } = yield* owned(id);
+          const { invocation, workItemId } = yield* owned(id);
           const scope = { businessId: invocation.businessId, employeeId: invocation.employeeId };
           const published = yield* rpc(() =>
-            dependencies.delegates(scope).publish(id, { repository, title, body }),
+            dependencies.coding(scope).publish(id, { repository, title, body }),
           );
           yield* rpc(() =>
-            dependencies.evidence(scope, commitmentId, {
+            dependencies.evidence(scope, workItemId, {
               commit: published.commit,
               pullRequest: published.pullRequest,
               note: `Published ${published.commit.slice(0, 12)} to ${published.branch} on github.com/${published.repository} (repository ${published.repositoryId}), pull request into ${published.base}: ${published.pullRequest}`,
@@ -383,18 +383,18 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
         allows: ({ commands }, input) => !commands || commands.includes(input.command),
       },
       input: Schema.Struct({
-        assignment: AssignmentId,
+        session: CodingSessionId,
         command: Text(500),
         commit: Schema.optional(Schema.String.check(Schema.isPattern(/^[0-9a-f]{7,40}$/))),
         url: Schema.optional(Schema.String.check(Schema.isPattern(/^https:\/\/\S{1,500}$/))),
       }),
       output: Schema.Struct({ deploying: Schema.String }),
-      execute: ({ assignment: id, command, commit, url }) =>
+      execute: ({ session: id, command, commit, url }) =>
         Effect.gen(function* () {
-          const { invocation, commitmentId } = yield* owned(id);
+          const { invocation, workItemId } = yield* owned(id);
           const scope = { businessId: invocation.businessId, employeeId: invocation.employeeId };
           if (commit) {
-            const known = yield* rpc(() => dependencies.knownCommits(scope, commitmentId));
+            const known = yield* rpc(() => dependencies.knownCommits(scope, workItemId));
             if (!known.some((full) => full.startsWith(commit)))
               return yield* new CapabilityError({
                 code: "invalid_input",
@@ -403,7 +403,7 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
               });
           }
           const started = yield* rpc(() =>
-            dependencies.delegates(scope).deploy(id, {
+            dependencies.coding(scope).deploy(id, {
               stage,
               command,
               ...(commit ? { commit } : {}),

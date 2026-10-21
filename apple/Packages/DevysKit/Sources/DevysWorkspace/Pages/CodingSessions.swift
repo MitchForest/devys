@@ -9,7 +9,7 @@ import SwiftUI
 /// opens as a layer.
 struct CodingSessions: View {
     let store: StoreOf<Workspace>
-    let item: Commitment
+    let item: WorkItem
     @Dependency(\.codingClient) private var coding
     @Dependency(\.terminalsClient) private var terminals
     @State private var sessions: [CodingSession] = []
@@ -105,7 +105,7 @@ struct SessionLayer: View {
 /// the conversation's composer.
 private struct SessionView: View {
     let store: StoreOf<Workspace>
-    let item: Commitment
+    let item: WorkItem
     let session: CodingSession
     @Dependency(\.codingClient) private var coding
     @Dependency(\.terminalsClient) private var terminals
@@ -118,7 +118,7 @@ private struct SessionView: View {
     @State private var text = ""
     @State private var problem: String?
 
-    private var current: Commitment { store.work.value?.first { $0.id == item.id } ?? item }
+    private var current: WorkItem { store.work.value?.first { $0.id == item.id } ?? item }
     private var mine: Bool { store.state.isMine(current) }
     private var owner: String { store.state.employeeName(current.ownerEmployeeID) }
     private var count: String { "\(comments.count) comment\(comments.count == 1 ? "" : "s")" }
@@ -145,7 +145,7 @@ private struct SessionView: View {
             }
             HStack(spacing: 8) {
                 Button("Open in \(session.providerName)", systemImage: "terminal") {
-                    Task { await openTerminal(store.businessID, .resume(assignmentID: session.id), terminals, presented: $terminal, problem: $problem) }
+                    Task { await openTerminal(store.businessID, .resume(codingSessionID: session.id), terminals, presented: $terminal, problem: $problem) }
                 }
                 .buttonStyle(DevysButtonStyle(.quiet, compact: true))
                 if session.state == .working {

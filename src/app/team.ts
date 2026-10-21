@@ -35,10 +35,10 @@ export interface RoleTemplate {
 
 // Every employee can track work, use memory and projects, and read its own history.
 const collaboration = [
-  "commitmentList",
-  "commitmentCreate",
-  "commitmentUpdate",
-  "commitmentComplete",
+  "workList",
+  "workCreate",
+  "workUpdate",
+  "workComplete",
   "conversationHistory",
   "remember",
   "recall",
@@ -66,7 +66,7 @@ export const roleTemplates: readonly RoleTemplate[] = [
     name: "Head of Operations",
     summary: "Runs the business day to day and coordinates the team.",
     responsibilities:
-      "Run the business day to day. Keep the owner's priorities moving, coordinate the team by handing work to the right employee as commitments, notice what is blocked or late, and bring the owner only real decisions. Propose new hires when the work needs a role nobody holds.",
+      "Run the business day to day. Keep the owner's priorities moving, coordinate the team by handing work to the right employee as work items, notice what is blocked or late, and bring the owner only real decisions. Propose new hires when the work needs a role nobody holds.",
     capabilities: "all",
     ask: ["hireEmployee", "deployProduction"],
   },
@@ -100,7 +100,7 @@ export const roleTemplates: readonly RoleTemplate[] = [
     name: "Business Operations",
     summary: "Keeps records, documents, suppliers and admin in order.",
     responsibilities:
-      "Keep the business's records, documents and administration in order: suppliers, accounts, schedules and paperwork. Track follow-ups as commitments so nothing is dropped.",
+      "Keep the business's records, documents and administration in order: suppliers, accounts, schedules and paperwork. Track follow-ups as work items so nothing is dropped.",
     capabilities: [
       ...collaboration,
       ...files,

@@ -182,8 +182,8 @@ public struct ProfileChange: Equatable, Sendable, Encodable {
 
 // MARK: - Work
 
-/// A task the owner creates; given a project, it belongs to it.
-public struct NewTask: Equatable, Sendable, Encodable {
+/// A work item the owner creates; given a project, it belongs to it.
+public struct NewWorkItem: Equatable, Sendable, Encodable {
     public let title: String
     public let owner: String
     public let objective: String?
@@ -202,9 +202,9 @@ public struct NewTask: Equatable, Sendable, Encodable {
     }
 }
 
-/// A change to a commitment at the revision the owner saw. Absent fields stay as they are;
+/// A change to a work item at the revision the owner saw. Absent fields stay as they are;
 /// `.clear` removes a waiting condition or due date.
-public struct CommitmentChange: Equatable, Sendable, Encodable {
+public struct WorkItemChange: Equatable, Sendable, Encodable {
     public enum Value: Equatable, Sendable {
         case set(String)
         case clear
@@ -212,7 +212,7 @@ public struct CommitmentChange: Equatable, Sendable, Encodable {
 
     public let expectedRevision: Int
     public var owner: String?
-    public var state: CommitmentState?
+    public var state: WorkItemState?
     public var title: String?
     public var nextAction: String?
     public var waitCondition: Value?
@@ -221,7 +221,7 @@ public struct CommitmentChange: Equatable, Sendable, Encodable {
     public init(
         expectedRevision: Int,
         owner: String? = nil,
-        state: CommitmentState? = nil,
+        state: WorkItemState? = nil,
         title: String? = nil,
         nextAction: String? = nil,
         waitCondition: Value? = nil,
@@ -237,7 +237,7 @@ public struct CommitmentChange: Equatable, Sendable, Encodable {
     }
 
     /// Hands the work to another employee; ready, so the dispatcher hands it over.
-    public static func reassign(_ item: Commitment, to owner: String) -> Self {
+    public static func reassign(_ item: WorkItem, to owner: String) -> Self {
         Self(expectedRevision: item.revision, owner: owner, state: .ready)
     }
 

@@ -1,5 +1,5 @@
 /**
- * Pins the Codex app-server protocol types the delegate adapter uses to the installed Codex.
+ * Pins the Codex app-server protocol types the coding harness adapter uses to the installed Codex.
  * Generates the full protocol with `codex app-server generate-ts` into a temporary folder and
  * copies only the import closure of the messages Devys sends and reads, plus the version.
  *

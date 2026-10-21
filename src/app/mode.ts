@@ -1,7 +1,7 @@
 import type { Browser } from "../browser/contract.ts";
 import { hostBrowser, unavailableBrowser } from "../browser/host-client.ts";
-import type { Delegates } from "../apps/code/contract.ts";
-import { hostDelegates, unavailableDelegates } from "../apps/code/host-client.ts";
+import type { CodingHost } from "../apps/code/contract.ts";
+import { hostCoding, unavailableCoding } from "../apps/code/host-client.ts";
 import { scopeName, type Scope } from "../identity/contract.ts";
 import type { Terminals } from "../terminal/contract.ts";
 import { hostTerminals, unavailableTerminals } from "../terminal/host-client.ts";
@@ -22,7 +22,7 @@ export interface Mode {
   host: MacHost | undefined;
   /** Commands and files. `within` confines file access to a folder (the owner's file views). */
   runner(within?: string): Runner;
-  delegates: (scope: Scope) => Delegates;
+  coding: (scope: Scope) => CodingHost;
   terminals: (businessId: string) => Terminals;
   /** The business's own browser: Chrome with its profile on the Mac; none in the cloud yet. */
   browser: (businessId: string) => Browser;
@@ -53,7 +53,7 @@ export function modeOf(env: Env): Mode {
         // Checked per call so a missing host breaks only file, command and coding tools.
         runner: (within) => (scope) =>
           host ? hostRunner({ ...host, files: env.FILES, within }, scope) : notConfigured(),
-        delegates: (scope) => (host ? hostDelegates(host, scope) : notConfigured()),
+        coding: (scope) => (host ? hostCoding(host, scope) : notConfigured()),
         terminals: (businessId) =>
           host ? hostTerminals(host, { businessId, employeeId: "owner" }) : unavailableTerminals(),
         browser: (businessId) => (host ? hostBrowser(host, businessId) : unavailableBrowser()),
@@ -65,7 +65,7 @@ export function modeOf(env: Env): Mode {
       return {
         host: undefined,
         runner: () => (scope) => env.WORKSPACE.getByName(scopeName(scope)),
-        delegates: () => unavailableDelegates(),
+        coding: () => unavailableCoding(),
         terminals: () => unavailableTerminals(),
         browser: () => unavailableBrowser(),
         businessFolder: () => undefined,

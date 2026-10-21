@@ -3,11 +3,11 @@ import DevysClient
 import DevysDesignSystem
 import SwiftUI
 
-/// One commitment: what, who, what's next and its state. Click to open its thread; right-click to
+/// One work item: what, who, what's next and its state. Click to open its thread; right-click to
 /// act on it. Compact rows sit in a permanent view.
 struct WorkRow: View {
     let store: StoreOf<Workspace>
-    let item: Commitment
+    let item: WorkItem
     var compact = false
     @State private var hovering = false
 
@@ -49,7 +49,7 @@ struct WorkRow: View {
 /// The same actions an employee has, applied by the owner at the revision on screen.
 struct WorkActions: View {
     let store: StoreOf<Workspace>
-    let item: Commitment
+    let item: WorkItem
 
     var body: some View {
         Button("Open thread", systemImage: "arrow.up.right.square") { store.send(.threadOpened(item.id)) }
@@ -59,14 +59,14 @@ struct WorkActions: View {
                     Button(employee.name) { store.send(.reassigned(item.id, to: employee.id)) }
                 }
             }
-            if item.state != .ready { Button("Mark ready", systemImage: "arrow.uturn.forward") { store.send(.commitmentStateSet(item.id, .ready)) } }
-            if item.state != .waiting { Button("Mark waiting", systemImage: "clock") { store.send(.commitmentStateSet(item.id, .waiting)) } }
-            Button("Mark done", systemImage: "checkmark.circle") { store.send(.commitmentStateSet(item.id, .completed)) }
+            if item.state != .ready { Button("Mark ready", systemImage: "arrow.uturn.forward") { store.send(.workItemStateSet(item.id, .ready)) } }
+            if item.state != .waiting { Button("Mark waiting", systemImage: "clock") { store.send(.workItemStateSet(item.id, .waiting)) } }
+            Button("Mark done", systemImage: "checkmark.circle") { store.send(.workItemStateSet(item.id, .completed)) }
             Divider()
             TakeoverButton(store: store, item: item)
-            Button("Cancel", systemImage: "xmark.circle", role: .destructive) { store.send(.commitmentStateSet(item.id, .cancelled)) }
+            Button("Cancel", systemImage: "xmark.circle", role: .destructive) { store.send(.workItemStateSet(item.id, .cancelled)) }
         } else {
-            Button("Reopen", systemImage: "arrow.uturn.backward") { store.send(.commitmentStateSet(item.id, .ready)) }
+            Button("Reopen", systemImage: "arrow.uturn.backward") { store.send(.workItemStateSet(item.id, .ready)) }
         }
     }
 }
@@ -75,7 +75,7 @@ struct WorkActions: View {
 /// Nothing when someone else has taken it over.
 struct TakeoverButton: View {
     let store: StoreOf<Workspace>
-    let item: Commitment
+    let item: WorkItem
 
     var body: some View {
         if item.takenOverBy == nil {

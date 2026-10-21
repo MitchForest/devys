@@ -14,15 +14,15 @@ import {
   type AccessList,
   type Artifact,
   type Business,
-  type Commitment,
-  type CommitmentState,
+  type WorkItem,
+  type WorkItemState,
   type ConversationKey,
   type ConversationSummary,
   type Decision,
   type Employee,
   type MemoryClaim,
   type ModelCatalog,
-  type NewTask,
+  type NewWorkItem,
   type Person,
   type RoleTemplate,
   type SettableLook,
@@ -141,7 +141,7 @@ export function layerReference(layer: Layer, names: { artifact: (id: string) => 
 }
 const appTitle = (app: string) => app.charAt(0).toUpperCase() + app.slice(1);
 
-export const filterOf = (state: CommitmentState) =>
+export const filterOf = (state: WorkItemState) =>
   state === "needs_decision"
     ? "needsYou"
     : state === "waiting"
@@ -150,8 +150,8 @@ export const filterOf = (state: CommitmentState) =>
         ? "done"
         : "inProgress";
 
-/** Opening "New task" from a project or an employee fills in what it can. */
-export interface TaskDefaults {
+/** Opening "New work item" from a project or an employee fills in what it can. */
+export interface WorkItemDefaults {
   owner?: string;
   projectId?: string;
 }
@@ -177,7 +177,7 @@ function useWorkspaceState() {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [statuses, setStatuses] = useState<Record<string, Loadable<RuntimeState>>>({});
   const [summaries, setSummaries] = useState<Record<string, ConversationSummary>>({});
-  const [work, setWork] = useState<Loadable<Commitment[]>>(loading);
+  const [work, setWork] = useState<Loadable<WorkItem[]>>(loading);
   const [decisions, setDecisions] = useState<Loadable<Decision[]>>(loading);
   const [projects, setProjects] = useState<Loadable<Project[]>>(loading);
   const [apps, setApps] = useState<Loadable<AppEntry[]>>(loading);
@@ -207,7 +207,7 @@ function useWorkspaceState() {
   const [settingsSection, setSettingsSection] = useState<string>();
   const [hireOpen, setHireOpen] = useState(false);
   const [projectOpen, setProjectOpen] = useState(false);
-  const [taskDefaults, setTaskDefaults] = useState<TaskDefaults>();
+  const [workItemDefaults, setWorkItemDefaults] = useState<WorkItemDefaults>();
   /** Counts finished turns, so open layers read their records again. */
   const [turns, setTurns] = useState(0);
   const [notice, setNotice] = useState<string>();
@@ -280,7 +280,7 @@ function useWorkspaceState() {
           api.home(id),
         ]);
         if (current.current !== id) return;
-        setWork(loaded(w.commitments));
+        setWork(loaded(w.workItems));
         setDecisions(loaded(d.decisions));
         setProjects(loaded(p.projects));
         setHome(loaded(h));
@@ -686,8 +686,8 @@ function useWorkspaceState() {
     },
     setHireOpen,
     setProjectOpen,
-    newTask: (defaults: TaskDefaults = {}) => setTaskDefaults(defaults),
-    closeNewTask: () => setTaskDefaults(undefined),
+    newWorkItem: (defaults: WorkItemDefaults = {}) => setWorkItemDefaults(defaults),
+    closeNewWorkItem: () => setWorkItemDefaults(undefined),
     dismissNotice: () => setNotice(undefined),
     stop: (employeeId = operations?.id) =>
       employeeId &&
@@ -745,7 +745,7 @@ function useWorkspaceState() {
             : undefined;
       const text = message.text.replace(/\n\n_Viewing: [^\n]*_$/, "").trim();
       try {
-        const created = await api.createCommitment(businessId, {
+        const created = await api.createWorkItem(businessId, {
           title: text.split("\n")[0]!.slice(0, 80),
           owner,
           objective: text.slice(0, 4000),
@@ -791,34 +791,34 @@ function useWorkspaceState() {
         "That request was already answered or has expired.",
       );
     },
-    /** A task with an owner, objective, due date and project; opens its thread once saved. */
-    createTask: async (task: NewTask) => {
-      const created = await api.createCommitment(businessId, task);
+    /** A work item with an owner, objective, due date and project; opens its thread once saved. */
+    createWorkItem: async (workItem: NewWorkItem) => {
+      const created = await api.createWorkItem(businessId, workItem);
       await loadWork(businessId);
       void actions.setFollowing(created.id, true);
       actions.openThread(created.id);
     },
-    setCommitmentState: (item: Commitment, state: CommitmentState) =>
+    setWorkItemState: (item: WorkItem, state: WorkItemState) =>
       void refreshAfter(
-        () => api.updateCommitment(businessId, item, { state }),
-        "That commitment changed.",
+        () => api.updateWorkItem(businessId, item, { state }),
+        "That work item changed.",
       ),
     /** Edits what's next, what it waits on and when it's due, at the revision on screen. */
-    editCommitment: (
-      item: Commitment,
+    editWorkItem: (
+      item: WorkItem,
       change: { nextAction?: string; waitCondition?: string | null; dueAt?: string | null },
     ) =>
       refreshAfter(
-        () => api.updateCommitment(businessId, item, change),
+        () => api.updateWorkItem(businessId, item, change),
         "That work couldn't be saved.",
       ),
     /** Hands the work to another employee; it starts ready so the dispatcher hands it over. */
-    reassign: (item: Commitment, owner: string) =>
+    reassign: (item: WorkItem, owner: string) =>
       void refreshAfter(
-        () => api.updateCommitment(businessId, item, { owner, state: "ready" }),
+        () => api.updateWorkItem(businessId, item, { owner, state: "ready" }),
         "That work couldn't be reassigned.",
       ),
-    toggleTakeover: (item: Commitment) =>
+    toggleTakeover: (item: WorkItem) =>
       void refreshAfter(
         () => api.setTakeover(businessId, item.id, item.taken_over_by === null),
         "Couldn't change who handles that work.",
@@ -1105,7 +1105,7 @@ function useWorkspaceState() {
     settingsSection,
     hireOpen,
     projectOpen,
-    taskDefaults,
+    workItemDefaults,
     notice,
     signedOut,
     ownerPhoto,

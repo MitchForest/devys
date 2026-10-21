@@ -43,9 +43,9 @@ also verified live. No public product has launched.
   request is not asked again. Every call re-reads the grant and the employee, so revoke,
   pause and takeover apply to the next action. Hiring, creating a business and retiring
   are single transactions.
-- **Projects and work.** Commitments (work items) with an owner, next action, wait
+- **Projects and work.** Work items with an owner, next action, wait
   condition, conditions and evidence. A one-minute dispatcher hands ready work to its
-  employee under `<commitment>:<revision>`. A project has an optional goal, deadline,
+  employee under `<work item>:<revision>`. A project has an optional goal, deadline,
   budget (a limit; spending arrives with P1), lead and team; its work items belong to it
   (`project_id`) and kept pages and files are references to them.
 - **Apps.** `src/apps` lists Devys apps as literal manifests: Documents and Code are
@@ -57,7 +57,7 @@ also verified live. No public product has launched.
   eight hours, Operations' briefing (done, moving, stuck) is posted in their direct chat
   from records, without starting any turn.
 - **Conversations.** One shared record (Postgres) per direct chat (`direct:<employee>`),
-  project channel (`project:<project>`) and work item thread (`work:<commitment>`). Who answers: an owner message
+  project channel (`project:<project>`) and work item thread (`work:<work item>`). Who answers: an owner message
   goes to those it @mentions, else to the employee it replies to, else to whoever last
   spoke, else to the default (the DM's employee, the project's lead, the work item's
   owner). An employee's message wakes only colleagues it @mentions, and the asker when
@@ -86,7 +86,7 @@ also verified live. No public product has launched.
   server, ⌘K and Settings (with Apps & connections).
 - **Memory and files.** Business memory with evidence and forgetting; saved artifacts in
   R2; selected-file Google Drive access.
-- **Coding delegates (local mode).** From a work item, an employee starts Codex (through
+- **Coding sessions (local mode).** From a work item, an employee starts Codex (through
   `codex app-server`) or Claude Code (through the installed CLI) in its own git worktree
   and branch, on the owner's own logins (`DEVYS_CODEX_HOME`, `DEVYS_CLAUDE_CONFIG_DIR`).
   Each turn's end, failure, interruption and check is a card in the work item's thread and
@@ -112,7 +112,7 @@ also verified live. No public product has launched.
   from its output. Diff line comments are always
   sendable: to the session while you have taken it over, otherwise as one review message in
   the work item's thread. A work item's panel shows its pending and decided requests. Stop
-  interrupts sessions and stops what they left running. Cloud mode reports delegates as
+  interrupts sessions and stops what they left running. Cloud mode reports coding as
   unavailable.
 - **Terminals (local mode).** A terminal on the owner's Mac (the business folder, a work item's
   worktree, or Codex/Claude Code's own CLI resumed on a coding session) opens in its own window on
@@ -140,8 +140,8 @@ also verified live. No public product has launched.
   signed decisions, the event stream and push, connections for launch providers, mail,
   purchases, desktop control, the voice and ambient additions, cloud mode's coding runners,
   files, terminals and browser, community and custom apps, and distribution. First comes an
-  alignment pass: the code still says commitment and assignment where the product says work
-  item and coding session, and some capabilities are still defined in wiring.
+  alignment pass: some capabilities are still defined in wiring, and the web and native
+  clients copy the server's types by hand.
 
 The prior Pi/Effect refinement and
 iMessage acceptance guide retain foundation
@@ -389,10 +389,10 @@ bun run local uninstall  # stops it; data is kept
 `install` reads secrets from `.env` like development does. Re-run it after pulling
 changes. The launcher (`scripts/local.ts`) supervises two processes: the Worker on
 127.0.0.1:8787 and the Mac host (`src/host.ts`) on 127.0.0.1:8788, which runs employees'
-commands, file access, coding delegates and terminals behind a token. The token is written
+commands, file access, coding sessions and terminals behind a token. The token is written
 to the Worker's vars file, not its command line. The host's environment excludes what
 `.env` supplies (the model gateway key and other secrets) and its own `DEVYS_*` settings,
-so employees' shells, coding delegates and terminals see neither. The launcher calls the
+so employees' shells, coding sessions and terminals see neither. The launcher calls the
 scheduled handler every minute so ready work is dispatched and unanswered decisions expire.
 
 Because employees work as the Mac's owner, only that person (the earliest active person,
@@ -470,7 +470,7 @@ Everything under `/api/` needs a web session or a device bearer token; business 
 - `/api/businesses/:id`: `GET` (the business, its employees, `members` and artifacts)/`PUT`
   (name, brief), `/look`, `POST /employees` (hire), `/export`, `/memory`, `/work` (create,
   update at a revision, `takeover`, `release`), `GET /decisions` (pending;
-  `?commitment=<id>` lists one work item's requests with their answers),
+  `?workItem=<id>` lists one work item's requests with their answers),
   `/decisions/:id/approve|reject`, `/projects` (and `/projects/:id/items`), `/apps` (and
   `install`, `uninstall`, `pin`), `/home`, `GET /coding` (work with coding sessions),
   `/artifacts/:id`,

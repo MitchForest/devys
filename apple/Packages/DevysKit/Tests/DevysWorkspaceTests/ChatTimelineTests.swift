@@ -94,14 +94,14 @@ struct ChatTimelineTests {
     func takeoverAndWorkDecisions() {
         var state = Workspace.State(server: URL(string: "http://127.0.0.1:5173")!)
         state.account = .fixture
-        let free = Commitment(id: "c1", ownerEmployeeID: "growth", title: "PR")
-        let mine = Commitment(id: "c2", ownerEmployeeID: "growth", title: "PR", takenOverBy: "person-preview")
-        let theirs = Commitment(id: "c3", ownerEmployeeID: "growth", title: "PR", takenOverBy: "person-other")
+        let free = WorkItem(id: "c1", ownerEmployeeID: "growth", title: "PR")
+        let mine = WorkItem(id: "c2", ownerEmployeeID: "growth", title: "PR", takenOverBy: "person-preview")
+        let theirs = WorkItem(id: "c3", ownerEmployeeID: "growth", title: "PR", takenOverBy: "person-other")
         #expect(!state.isMine(free) && state.takeoverTitle(free) == nil)
         #expect(state.isMine(mine) && state.takeoverTitle(mine) == "You have it")
         #expect(!state.isMine(theirs) && state.takeoverTitle(theirs) == "Taken over by another person")
         state.decisions = .loaded([
-            Decision(id: "d1", employeeID: "growth", capability: "email.send", input: .object([:]), commitmentID: "c1"),
+            Decision(id: "d1", employeeID: "growth", capability: "email.send", input: .object([:]), workItemID: "c1"),
             Decision(id: "d2", employeeID: "growth", capability: "email.send", input: .object([:]))
         ])
         #expect(state.decisions(for: free).map(\.id) == ["d1"])

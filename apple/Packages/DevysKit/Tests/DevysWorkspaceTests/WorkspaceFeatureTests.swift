@@ -316,15 +316,15 @@ private let localServer = URL(string: "http://127.0.0.1:5173")!
 private struct StateChange: Equatable {
     let id: String
     let revision: Int
-    let state: CommitmentState
+    let state: WorkItemState
 }
 
 private actor WorkServer {
-    var commitments = [Commitment(id: "c1", ownerEmployeeID: "ops", title: "Launch Acme", state: .inProgress, revision: 3)]
+    var workItems = [WorkItem(id: "c1", ownerEmployeeID: "ops", title: "Launch Acme", state: .inProgress, revision: 3)]
     var decisions = [Decision(id: "d1", employeeID: "growth", capability: "driveCreate", input: .object(["name": .string("inquiry.txt")]))]
     var answers: [(String, Bool)] = []
     var stateChanges: [StateChange] = []
-    var created: [NewTask] = []
+    var created: [NewWorkItem] = []
     var projects = [Project(id: "p1", name: "Launch")]
     var home = Home(needsYou: [NeedsYouItem(kind: .decision, id: "d1", title: "Create inquiry.txt", employeeID: "growth")])
     var added: [String] = []
@@ -340,12 +340,12 @@ private actor WorkServer {
         answers.append((id, approve))
         decisions.removeAll { $0.id == id }
     }
-    func update(_ id: String, _ change: CommitmentChange) throws -> Commitment {
-        guard let index = commitments.firstIndex(where: { $0.id == id }) else { throw DevysHTTPError.rejected(status: 404, message: "") }
-        let item = commitments[index]
+    func update(_ id: String, _ change: WorkItemChange) throws -> WorkItem {
+        guard let index = workItems.firstIndex(where: { $0.id == id }) else { throw DevysHTTPError.rejected(status: 404, message: "") }
+        let item = workItems[index]
         if let state = change.state { stateChanges.append(StateChange(id: id, revision: change.expectedRevision, state: state)) }
         guard item.revision == change.expectedRevision else { throw DevysHTTPError.rejected(status: 409, message: "changed") }
-        let updated = Commitment(
+        let updated = WorkItem(
             id: item.id,
             ownerEmployeeID: change.owner ?? item.ownerEmployeeID,
             title: item.title,
@@ -353,13 +353,13 @@ private actor WorkServer {
             state: change.state ?? item.state,
             revision: item.revision + 1
         )
-        commitments[index] = updated
+        workItems[index] = updated
         return updated
     }
-    func create(_ task: NewTask) -> Commitment {
-        created.append(task)
-        let item = Commitment(id: "c\(commitments.count + 1)", ownerEmployeeID: task.owner, title: task.title, projectID: task.projectId)
-        commitments.append(item)
+    func create(_ newItem: NewWorkItem) -> WorkItem {
+        created.append(newItem)
+        let item = WorkItem(id: "c\(workItems.count + 1)", ownerEmployeeID: newItem.owner, title: newItem.title, projectID: newItem.projectId)
+        workItems.append(item)
         return item
     }
 }
@@ -376,9 +376,9 @@ struct WorkFeatureTests {
                 status: { _ in .fixture },
                 stop: { _ in true },
                 memory: { _ in [] },
-                work: { _ in await server.commitments },
-                createCommitment: { _, task in await server.create(task) },
-                updateCommitment: { _, id, change in try await server.update(id, change) },
+                work: { _ in await server.workItems },
+                createWorkItem: { _, newItem in await server.create(newItem) },
+                updateWorkItem: { _, id, change in try await server.update(id, change) },
                 decisions: { _ in await server.decisions },
                 answer: { _, id, approve in await server.answer(id, approve) },
                 projects: { _ in await server.projects },
@@ -423,21 +423,21 @@ struct WorkFeatureTests {
         #expect(await server.added == ["p1:devys:documents/artifact/a1"])
     }
 
-    @Test("A new task defaults to the Head of Operations and opens its thread; state changes carry the revision on screen")
+    @Test("A new work item defaults to the Head of Operations and opens its thread; state changes carry the revision on screen")
     func changes() async {
         let server = WorkServer()
         let store = makeStore(server)
         await settle("work", until: { store.work.value != nil && store.operationsScope != nil })
-        store.send(.newTaskTapped())
-        guard var draft = store.newTask else { return #expect(Bool(false), "the sheet opens") }
+        store.send(.newWorkItemTapped())
+        guard var draft = store.newWorkItem else { return #expect(Bool(false), "the sheet opens") }
         #expect(draft.ownerID == "ops" && draft.projectID == nil)
         draft.title = "  Draft the PR inquiry  "
-        store.send(.taskEdited(draft))
-        store.send(.taskConfirmed)
-        await settle("created", until: { store.work.value?.count == 2 && store.newTask == nil && store.place == .thread("c2") })
+        store.send(.workItemEdited(draft))
+        store.send(.workItemConfirmed)
+        await settle("created", until: { store.work.value?.count == 2 && store.newWorkItem == nil && store.place == .thread("c2") })
         let created = await server.created
         #expect(created.first?.title == "Draft the PR inquiry" && created.first?.owner == "ops")
-        store.send(.commitmentStateSet("c1", .waiting))
+        store.send(.workItemStateSet("c1", .waiting))
         for _ in 0..<2_000 where await server.stateChanges.isEmpty { await Task.yield() }
         let change = await server.stateChanges.first
         #expect(change == StateChange(id: "c1", revision: 3, state: .waiting))

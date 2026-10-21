@@ -248,32 +248,48 @@ struct TeamAPITests {
     @Test("Work: create in a project, reassign at a revision, clear a due date")
     func work() async throws {
         let recorder = Recorder()
-        let commitment = """
+        let workItem = """
         {"id":"c1","owner_employee_id":"growth","title":"PR inquiry","objective":"","next_action":"","wait_condition":null,
          "due_at":null,"state":"ready","evidence":[],"revision":4,"taken_over_by":null,"project_id":"p1","updated_at":"2026-10-19T15:00:00.000Z"}
         """
-        let created = try await api(status: 201, body: commitment, recorder: recorder).createCommitment(
+        let created = try await api(status: 201, body: workItem, recorder: recorder).createWorkItem(
             Self.session,
             businessID: "b1",
-            NewTask(title: "PR inquiry", owner: "growth", objective: "Ten units", dueAt: "2026-10-20T15:00:00Z", projectId: "p1")
+            NewWorkItem(title: "PR inquiry", owner: "growth", objective: "Ten units", dueAt: "2026-10-20T15:00:00Z", projectId: "p1")
         )
         #expect(created.revision == 4 && created.projectID == "p1")
         var (request, body) = try await sent(recorder)
         #expect(request.url?.path() == "/api/businesses/b1/work" && request.httpMethod == "POST")
         #expect(body["projectId"] as? String == "p1" && body["dueAt"] as? String == "2026-10-20T15:00:00Z" && body["objective"] as? String == "Ten units")
 
-        _ = try await api(body: commitment, recorder: recorder)
-            .updateCommitment(Self.session, businessID: "b1", id: "c1", .reassign(created, to: "ops"))
+        _ = try await api(body: workItem, recorder: recorder)
+            .updateWorkItem(Self.session, businessID: "b1", id: "c1", .reassign(created, to: "ops"))
         (request, body) = try await sent(recorder)
         #expect(request.url?.path() == "/api/businesses/b1/work/c1")
         #expect(body["expectedRevision"] as? Int == 4 && body["owner"] as? String == "ops" && body["state"] as? String == "ready")
         #expect(body.keys.sorted() == ["expectedRevision", "owner", "state"])
 
-        _ = try await api(body: commitment, recorder: recorder)
-            .updateCommitment(Self.session, businessID: "b1", id: "c1", CommitmentChange(expectedRevision: 4, waitCondition: .set("Supplier"), dueAt: .clear))
+        _ = try await api(body: workItem, recorder: recorder)
+            .updateWorkItem(Self.session, businessID: "b1", id: "c1", WorkItemChange(expectedRevision: 4, waitCondition: .set("Supplier"), dueAt: .clear))
         (_, body) = try await sent(recorder)
         #expect(body["waitCondition"] as? String == "Supplier")
         #expect(body["dueAt"] is NSNull)
+
+        let listed = try await api(body: #"{"workItems":[\#(workItem)]}"#, recorder: recorder).work(Self.session, businessID: "b1")
+        #expect(listed.map(\.id) == ["c1"])
+    }
+
+    @Test("A work item's decisions are asked for by workItem and name it")
+    func workDecisions() async throws {
+        let recorder = Recorder()
+        let page = """
+        {"decisions":[{"id":"d1","employee_id":"growth","capability":"email.send","input":{},"work_item_id":"c1","status":"approved",
+         "requested_at":"2026-10-19T15:00:00.000Z","expires_at":"2026-10-20T15:00:00.000Z"}]}
+        """
+        let decisions = try await api(body: page, recorder: recorder).decisions(Self.session, businessID: "b1", workItemID: "c1")
+        #expect(decisions.first?.workItemID == "c1")
+        let url = try #require(await recorder.requests.last?.url)
+        #expect(url.path() == "/api/businesses/b1/decisions" && url.query() == "workItem=c1")
     }
 
     @Test("Google Drive's connection state decodes and ignores the file list")
