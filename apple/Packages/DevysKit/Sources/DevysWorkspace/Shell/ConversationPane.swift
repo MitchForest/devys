@@ -4,30 +4,61 @@ import DevysClient
 import DevysDesignSystem
 import SwiftUI
 
-/// A conversation filling its pane: the messages, who is working, and the composer.
-/// The main pane's conversation also takes dictation and hands-free voice.
+/// The middle of the screen, always a conversation: Home's chat with Operations, a direct
+/// chat, a project's channel or a work item's thread. It also takes dictation and hands-free voice.
 struct ConversationPane: View {
     let store: StoreOf<Workspace>
-    let key: ConversationKey
-    var voice = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                ConversationMessages(store: store, key: key)
-                    .padding(.horizontal, DevysSpacing.regular)
-                    .padding(.vertical, 14)
-                    .frame(maxWidth: 760)
-                    .frame(maxWidth: .infinity)
+        ZStack(alignment: .top) {
+            if let key = store.main?.key {
+                VStack(spacing: 0) {
+                    ScrollView {
+                        ConversationMessages(store: store, key: key)
+                            .padding(.horizontal, DevysSpacing.regular)
+                            .padding(.vertical, 14)
+                            .frame(maxWidth: 760)
+                            .frame(maxWidth: .infinity)
+                    }
+                    // Opens at the newest message and follows new ones; a short conversation starts at the top.
+                    .defaultScrollAnchor(.bottom, for: .initialOffset)
+                    .defaultScrollAnchor(.bottom, for: .sizeChanges)
+                    ConversationComposer(store: store, key: key)
+                        .frame(maxWidth: 780)
+                        .padding(.horizontal, 10)
+                        .padding(.bottom, 10)
+                        .frame(maxWidth: .infinity)
+                }
+                .id(key)
+            } else {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .defaultScrollAnchor(.bottom)
-            .defaultScrollAnchor(.bottom, for: .sizeChanges)
-            ConversationComposer(store: store, key: key, voice: voice)
-                .frame(maxWidth: 760)
-                .padding(.horizontal, 10)
-                .padding(.bottom, 10)
-                .frame(maxWidth: .infinity)
+            if let notice = store.notice {
+                NoticeBanner(text: notice) { store.send(.noticeDismissed) }
+                    .padding(.top, DevysSpacing.compact)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
         }
+        .animation(DevysMotion.quick, value: store.notice)
+    }
+}
+
+private struct NoticeBanner: View {
+    let text: String
+    let dismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(text).font(DevysTypography.body).foregroundStyle(DevysColors.ink)
+            Button("Dismiss", systemImage: "xmark", action: dismiss)
+                .labelStyle(.iconOnly)
+                .buttonStyle(.plain)
+                .foregroundStyle(DevysColors.ink3)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .background(DevysColors.sheet, in: Capsule())
+        .devysElevation(.raised)
     }
 }
 
@@ -90,72 +121,83 @@ struct ConversationMessages: View {
 
     private var empty: some View {
         VStack(spacing: 10) {
-            if key.kind == .direct, let employee = store.snapshot.employees.first(where: { $0.id == key.ref }) {
+            if key.kind == .direct, let employee = store.state.employee(key.ref) {
                 Portrait(store.state.portrait(for: employee), size: 48)
             }
             Text(emptyText)
                 .font(DevysTypography.body)
                 .foregroundStyle(DevysColors.ink3)
                 .multilineTextAlignment(.center)
+                .frame(maxWidth: 360)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 60)
     }
 
     private var emptyText: String {
-        let responder = store.state.defaultResponder(for: key).map(store.state.employeeName)
-        return switch key.kind {
-        case .direct: "No messages yet. Say hello to \(responder ?? "them")."
-        case .space: "No messages yet. \(responder ?? "The lead") answers here; mention someone to ask them."
-        case .work: "No messages about this work yet. \(responder ?? "Its owner") answers here."
+        let name = store.state.employee(key.ref)?.name
+        return switch store.place {
+        case .home: "Tell \(name ?? "Operations") what you need. @mention anyone to bring them in."
+        case .direct: "Message \(name ?? "them"). @mention a colleague to bring them in."
+        case .project(let id): "Tell the team what \(store.state.project(id)?.name ?? "the project") needs. Each piece of work gets its own thread."
+        case .thread: "Nothing said about this yet."
         }
     }
 
-    /// Requests waiting on the owner stay inline at the bottom: a DM's employee's, or the work item's.
+    /// Requests waiting on the owner stay inline at the bottom where they were asked: a work item's
+    /// in its thread, others in the employee's direct chat. Home's are in Needs you beside it.
     private var decisions: [Decision] {
+        guard store.place != .home else { return [] }
         let all = store.decisions.value ?? []
         return switch key.kind {
-        case .direct: all.filter { $0.employeeID == key.ref }
+        case .direct: all.filter { $0.employeeID == key.ref && $0.commitmentID == nil }
         case .work: all.filter { $0.commitmentID == key.ref }
-        case .space: []
+        case .project: []
         }
     }
 }
 
-/// The composer: who answers (the To chip), "@" suggestions, the message being replied to,
-/// the server's refusal when everyone who'd answer is paused, and voice in the main pane.
+/// The composer: who answers (the To chip), what's on screen going with the message (the
+/// reference chip), "@" suggestions, the message being replied to, the server's refusal when
+/// everyone who'd answer is paused, and voice.
 struct ConversationComposer: View {
     let store: StoreOf<Workspace>
     let key: ConversationKey
-    var voice = false
 
     var body: some View {
         if let open = store.state.conversation(key) {
+            let recipients = store.state.recipients(in: key)
             VStack(alignment: .leading, spacing: 8) {
-                if voice, let error = store.voiceError {
+                if let error = store.voiceError {
                     InlineNotice(text: error, tone: DevysColors.amber) { store.send(.voiceErrorDismissed) }
                 }
                 if let error = open.error {
                     InlineNotice(text: error, tone: DevysColors.red) { store.send(.conversationErrorDismissed(key)) }
                 }
-                if let replying = open.replyingTo.flatMap(open.message), !(voice && store.isConversationMode) {
+                if let replying = open.replyingTo.flatMap(open.message), !store.isConversationMode {
                     ReplyBanner(author: replying.employeeID.map(store.state.employeeName) ?? "yourself", text: replying.text) {
                         store.send(.replyCancelled(key))
                     }
                 }
                 MentionSuggestions(store: store, key: key, draft: open.draft)
-                ToChip(store: store, key: key)
-                if voice, store.isConversationMode {
+                HStack(spacing: 8) {
+                    ToChip(store: store, key: key)
+                    if let reference = store.state.reference { ReferenceChip(store: store, reference: reference) }
+                }
+                if recipients.count == 1, let answerer = store.state.employee(recipients.first), answerer.paused {
+                    PausedBanner(store: store, employee: answerer)
+                }
+                if store.isConversationMode {
                     ConversationStrip(store: store)
                 } else {
                     Composer(
                         placeholder,
                         text: Binding(get: { store.state.conversation(key)?.draft ?? "" }, set: { store.send(.draftChanged(key, $0)) }),
-                        volatileText: voice ? store.volatileText : "",
-                        isListening: voice && store.voice.isCapturing,
-                        level: voice ? store.level : 0,
-                        onMicTap: voice ? { store.send(.micTapped) } : nil,
-                        onHandsFree: voice ? { store.send(.conversationToggled) } : nil,
+                        volatileText: store.volatileText,
+                        isListening: store.voice.isCapturing,
+                        level: store.level,
+                        onMicTap: { store.send(.micTapped) },
+                        onHandsFree: { store.send(.conversationToggled) },
                         onSend: { store.send(.sendTapped(key)) }
                     )
                 }
@@ -167,10 +209,34 @@ struct ConversationComposer: View {
 
     private var placeholder: String {
         switch key.kind {
-        case .direct: "Message \(store.state.employeeName(key.ref))…"
-        case .space: "Message \(store.spaces.value?.first { $0.id == key.ref }?.name ?? "the space")…"
-        case .work: "Reply…"
+        case .direct: "Message \(store.state.employeeName(key.ref))"
+        case .project: "Message \(store.state.project(key.ref)?.name ?? "the team")"
+        case .work: "Reply"
         }
+    }
+}
+
+/// "Viewing launch-plan": the open layer goes with the next message as a reference, not a grant.
+private struct ReferenceChip: View {
+    let store: StoreOf<Workspace>
+    let reference: LayerReference
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "eye").imageScale(.small).foregroundStyle(DevysColors.ink3).accessibilityHidden(true)
+            Text("Viewing \(reference.title)").lineLimit(1)
+            Button("Don't send what you're viewing", systemImage: "xmark") { store.send(.referencingSet(false)) }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.plain)
+                .foregroundStyle(DevysColors.ink3)
+        }
+        .font(DevysTypography.caption)
+        .foregroundStyle(DevysColors.ink2)
+        .padding(.leading, 8)
+        .padding(.trailing, 6)
+        .padding(.vertical, 4)
+        .background(DevysColors.sheetTint, in: Capsule())
+        .help("What you're looking at goes with your message")
     }
 }
 

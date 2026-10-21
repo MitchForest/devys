@@ -1,6 +1,6 @@
 import Foundation
 
-/// Devices, businesses and their teams, and spaces.
+/// Devices, businesses and their teams, and connections.
 extension DevysHTTPClient {
     public func devices(_ session: DeviceSession) async throws -> [Device] {
         struct Page: Decodable { let devices: [Device] }
@@ -50,10 +50,6 @@ extension DevysHTTPClient {
         struct Retired: Decodable { let reassignedTo: String }
         let retired: Retired = try await send(json(session, path: "\(scope.path)/retire", method: "POST", body: Body(reassignTo: reassignTo)))
         return retired.reassignedTo
-    }
-
-    public func updateSpace(_ session: DeviceSession, businessID: String, spaceID: String, _ change: SpaceChange) async throws {
-        _ = try await raw(json(session, path: "api/businesses/\(businessID)/spaces/\(spaceID)", method: "PUT", body: change))
     }
 
     public func googleConnection(_ session: DeviceSession, businessID: String) async throws -> GoogleConnection {

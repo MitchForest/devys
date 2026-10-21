@@ -3,7 +3,7 @@ import DevysClient
 import DevysDesignSystem
 import SwiftUI
 
-/// Shown on a paused employee's page, with the way back.
+/// Shown on a paused employee's desk and above a composer they'd answer, with the way back.
 struct PausedBanner: View {
     let store: StoreOf<Workspace>
     let employee: Employee
@@ -127,9 +127,10 @@ enum AccessNames {
         "commitmentCreate": "Take on work",
         "commitmentUpdate": "Update work",
         "commitmentComplete": "Complete work",
-        "spaceList": "List spaces",
-        "spaceCreate": "Create spaces",
-        "spaceAdd": "Add to spaces",
+        "projectList": "List projects",
+        "projectCreate": "Create projects",
+        "projectUpdate": "Update projects",
+        "projectAdd": "Add to projects",
         "hireEmployee": "Propose hires"
     ]
 

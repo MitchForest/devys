@@ -266,9 +266,10 @@ Settings (⌘, on macOS; the account or business menu on iPhone and iPad):
 The design system (`DevysDesignSystem`) follows
 the design direction. Debug builds open a Design
 Gallery from the Debug menu (⌥⌘G), or as the whole window with `DEVYS_GALLERY=1`.
-`DEVYS_PAGE` (`space`, `memory`, `board`, `inbox`, `palette`, `conversation`, …)
-opens a page at launch, and `DEVYS_SETTINGS` (`account`, `team`, `businesses`,
-`appearance`) opens Settings, both for screenshots.
+`DEVYS_PLACE` (`direct:<id>`, `project:<id>`, `thread:<id>` or `palette`), `DEVYS_LAYER`
+(`app:<id>`, `artifact:<id>`, `file:<path>`), `DEVYS_PANEL=open` and `DEVYS_SIDEBAR=hidden`
+open a screen at launch, and `DEVYS_SETTINGS` (`account`, `apps`, `team`, `businesses`,
+`appearance`) opens Settings, all for screenshots in debug builds.
 
 ```sh
 bun run dev:local                     # development server on 127.0.0.1:5173

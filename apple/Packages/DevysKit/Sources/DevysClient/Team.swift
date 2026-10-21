@@ -180,36 +180,9 @@ public struct ProfileChange: Equatable, Sendable, Encodable {
     }
 }
 
-// MARK: - Spaces
-
-/// A new space; the lead defaults to the Head of Operations on the server.
-public struct NewSpace: Equatable, Sendable, Encodable {
-    public let name: String
-    public let purpose: String?
-    public let lead: String?
-
-    public init(name: String, purpose: String? = nil, lead: String? = nil) {
-        self.name = name
-        self.purpose = purpose
-        self.lead = lead
-    }
-}
-
-public struct SpaceChange: Equatable, Sendable, Encodable {
-    public let name: String?
-    public let purpose: String?
-    public let lead: String?
-
-    public init(name: String? = nil, purpose: String? = nil, lead: String? = nil) {
-        self.name = name
-        self.purpose = purpose
-        self.lead = lead
-    }
-}
-
 // MARK: - Work
 
-/// A task the owner creates; given a space, it also shows there.
+/// A task the owner creates; given a project, it belongs to it.
 public struct NewTask: Equatable, Sendable, Encodable {
     public let title: String
     public let owner: String
@@ -217,15 +190,15 @@ public struct NewTask: Equatable, Sendable, Encodable {
     public let nextAction: String?
     /// ISO 8601.
     public let dueAt: String?
-    public let spaceId: String?
+    public let projectId: String?
 
-    public init(title: String, owner: String, objective: String? = nil, nextAction: String? = nil, dueAt: String? = nil, spaceId: String? = nil) {
+    public init(title: String, owner: String, objective: String? = nil, nextAction: String? = nil, dueAt: String? = nil, projectId: String? = nil) {
         self.title = title
         self.owner = owner
         self.objective = objective
         self.nextAction = nextAction
         self.dueAt = dueAt
-        self.spaceId = spaceId
+        self.projectId = projectId
     }
 }
 

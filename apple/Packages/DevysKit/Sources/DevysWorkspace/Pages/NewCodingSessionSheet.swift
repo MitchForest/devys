@@ -88,7 +88,7 @@ struct NewCodingSessionSheet: View {
             ))
             isPresented = false
             store.send(.refreshTapped)
-            store.send(.workOpened(work))
+            store.send(.threadOpened(work))
         } catch {
             problem = "The session didn't start. \(error.localizedDescription)"
         }

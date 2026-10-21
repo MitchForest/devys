@@ -15,6 +15,9 @@ struct WorkspaceSheets: ViewModifier {
             .sheet(isPresented: Binding(get: { store.newTask != nil }, set: { if !$0 { store.send(.taskCancelled) } })) {
                 NewTaskSheet(store: store)
             }
+            .sheet(isPresented: Binding(get: { store.newProject != nil }, set: { if !$0 { store.send(.newProjectDismissed) } })) {
+                NewProjectSheet(store: store)
+            }
     }
 }
 
@@ -116,11 +119,11 @@ struct HireSheet: View {
         VStack(alignment: .leading, spacing: 4) {
             let capabilities = role?.capabilities ?? []
             if capabilities.isEmpty {
-                Text("Starts with no access. Grant some on the Access tab after hiring.").font(DevysTypography.body).foregroundStyle(DevysColors.ink2)
+                Text("Starts with no access. Grant some on its desk after hiring.").font(DevysTypography.body).foregroundStyle(DevysColors.ink2)
             } else {
                 Text(capabilities.map(AccessNames.title).joined(separator: " · "))
                     .font(DevysTypography.body).foregroundStyle(DevysColors.ink2)
-                Text("From the role. Change it on the Access tab after hiring.").font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3)
+                Text("From the role. Change it on its desk after hiring.").font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3)
             }
         }
     }
@@ -140,7 +143,7 @@ struct HireSheet: View {
     }
 }
 
-/// New task: a title, its owner, what it's for, when it's due, and optionally a space.
+/// New task: a title, its owner, what it's for, when it's due, and optionally a project.
 struct NewTaskSheet: View {
     let store: StoreOf<Workspace>
 
@@ -164,11 +167,11 @@ struct NewTaskSheet: View {
                     }
                 }
                 HStack(spacing: 8) {
-                    Text("Space").font(DevysTypography.label).foregroundStyle(DevysColors.ink3)
+                    Text("Project").font(DevysTypography.label).foregroundStyle(DevysColors.ink3)
                     Spacer(minLength: 8)
-                    Picker("Space", selection: Binding(get: { draft.spaceID ?? "" }, set: { value in edit { $0.spaceID = value.isEmpty ? nil : value } })) {
+                    Picker("Project", selection: Binding(get: { draft.projectID ?? "" }, set: { value in edit { $0.projectID = value.isEmpty ? nil : value } })) {
                         Text("None").tag("")
-                        ForEach(store.spaces.value ?? []) { space in Text(space.name).tag(space.id) }
+                        ForEach(store.projects.value ?? []) { project in Text(project.name).tag(project.id) }
                     }
                     .labelsHidden()
                     .fixedSize()
@@ -212,5 +215,40 @@ extension View {
         #else
             self
         #endif
+    }
+}
+
+/// A labelled menu of the team, each with its portrait.
+struct EmployeePicker: View {
+    let title: String
+    let employees: [Employee]
+    @Binding var selection: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(title).font(DevysTypography.label).foregroundStyle(DevysColors.ink3)
+            Spacer(minLength: 8)
+            Picker(title, selection: $selection) {
+                ForEach(employees) { employee in
+                    Text(employee.name).tag(employee.id)
+                }
+            }
+            .labelsHidden()
+            .fixedSize()
+        }
+    }
+}
+
+/// A rounded well around a text field, as the design system draws inputs.
+struct FieldBox<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        content
+            .textFieldStyle(.plain)
+            .font(DevysTypography.body)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(DevysColors.well, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }

@@ -69,11 +69,17 @@ public struct RuntimeClient: Sendable {
     /// One work item's requests, answered ones included.
     public var workDecisions: @Sendable (_ businessID: String, _ commitmentID: String) async throws -> [Decision]
     public var answer: @Sendable (_ businessID: String, _ decisionID: String, _ approve: Bool) async throws -> Void
-    public var spaces: @Sendable (_ businessID: String) async throws -> [Space]
-    public var createSpace: @Sendable (_ businessID: String, NewSpace) async throws -> Void
-    public var updateSpace: @Sendable (_ businessID: String, _ spaceID: String, SpaceChange) async throws -> Void
-    public var addToSpace: @Sendable (_ businessID: String, _ spaceID: String, SpaceItem.Kind, _ ref: String) async throws -> Void
-    public var removeFromSpace: @Sendable (_ businessID: String, _ spaceID: String, _ itemID: String) async throws -> Void
+    public var projects: @Sendable (_ businessID: String) async throws -> [Project]
+    public var createProject: @Sendable (_ businessID: String, ProjectChange) async throws -> Project
+    public var updateProject: @Sendable (_ businessID: String, _ projectID: String, ProjectChange) async throws -> Void
+    public var addToProject: @Sendable (_ businessID: String, _ projectID: String, ProjectItem.Kind, _ ref: String) async throws -> Void
+    public var removeFromProject: @Sendable (_ businessID: String, _ projectID: String, _ itemID: String) async throws -> Void
+    /// The app directory, and what this business has installed and pinned.
+    public var apps: @Sendable (_ businessID: String) async throws -> [AppEntry]
+    public var installApp: @Sendable (_ businessID: String, _ appID: String, _ install: Bool) async throws -> Void
+    public var pinApp: @Sendable (_ businessID: String, _ appID: String, _ pinned: Bool) async throws -> Void
+    /// What needs the owner, and work at a glance.
+    public var home: @Sendable (_ businessID: String) async throws -> Home
     public var artifactText: @Sendable (_ businessID: String, _ artifactID: String) async throws -> String
     public var googleConnection: @Sendable (_ businessID: String) async throws -> GoogleConnection
 
@@ -124,11 +130,17 @@ public struct RuntimeClient: Sendable {
         decisions: @escaping @Sendable (String) async throws -> [Decision] = { _ in [] },
         workDecisions: @escaping @Sendable (String, String) async throws -> [Decision] = { _, _ in [] },
         answer: @escaping @Sendable (String, String, Bool) async throws -> Void = { _, _, _ in },
-        spaces: @escaping @Sendable (String) async throws -> [Space] = { _ in [] },
-        createSpace: @escaping @Sendable (String, NewSpace) async throws -> Void = { _, _ in },
-        updateSpace: @escaping @Sendable (String, String, SpaceChange) async throws -> Void = { _, _, _ in },
-        addToSpace: @escaping @Sendable (String, String, SpaceItem.Kind, String) async throws -> Void = { _, _, _, _ in },
-        removeFromSpace: @escaping @Sendable (String, String, String) async throws -> Void = { _, _, _ in },
+        projects: @escaping @Sendable (String) async throws -> [Project] = { _ in [] },
+        createProject: @escaping @Sendable (String, ProjectChange) async throws -> Project = { _, project in
+            Project(id: UUID().uuidString, name: project.name, leadEmployeeID: project.lead, memberIDs: project.members)
+        },
+        updateProject: @escaping @Sendable (String, String, ProjectChange) async throws -> Void = { _, _, _ in },
+        addToProject: @escaping @Sendable (String, String, ProjectItem.Kind, String) async throws -> Void = { _, _, _, _ in },
+        removeFromProject: @escaping @Sendable (String, String, String) async throws -> Void = { _, _, _ in },
+        apps: @escaping @Sendable (String) async throws -> [AppEntry] = { _ in [] },
+        installApp: @escaping @Sendable (String, String, Bool) async throws -> Void = { _, _, _ in },
+        pinApp: @escaping @Sendable (String, String, Bool) async throws -> Void = { _, _, _ in },
+        home: @escaping @Sendable (String) async throws -> Home = { _ in Home() },
         artifactText: @escaping @Sendable (String, String) async throws -> String = { _, _ in "" },
         googleConnection: @escaping @Sendable (String) async throws -> GoogleConnection = { _ in GoogleConnection(configured: false, connected: false) }
     ) {
@@ -165,11 +177,15 @@ public struct RuntimeClient: Sendable {
         self.decisions = decisions
         self.workDecisions = workDecisions
         self.answer = answer
-        self.spaces = spaces
-        self.createSpace = createSpace
-        self.updateSpace = updateSpace
-        self.addToSpace = addToSpace
-        self.removeFromSpace = removeFromSpace
+        self.projects = projects
+        self.createProject = createProject
+        self.updateProject = updateProject
+        self.addToProject = addToProject
+        self.removeFromProject = removeFromProject
+        self.apps = apps
+        self.installApp = installApp
+        self.pinApp = pinApp
+        self.home = home
         self.artifactText = artifactText
         self.googleConnection = googleConnection
     }
@@ -332,17 +348,23 @@ extension RuntimeClient {
             answer: { id, decision, approve in
                 try await hub.call { api, session in try await api.answer(session, businessID: id, decisionID: decision, approve: approve) }
             },
-            spaces: { id in try await hub.call { api, session in try await api.spaces(session, businessID: id) } },
-            createSpace: { id, space in try await hub.call { api, session in try await api.createSpace(session, businessID: id, space) } },
-            updateSpace: { id, space, change in
-                try await hub.call { api, session in try await api.updateSpace(session, businessID: id, spaceID: space, change) }
+            projects: { id in try await hub.call { api, session in try await api.projects(session, businessID: id) } },
+            createProject: { id, project in try await hub.call { api, session in try await api.createProject(session, businessID: id, project) } },
+            updateProject: { id, project, change in
+                try await hub.call { api, session in try await api.updateProject(session, businessID: id, projectID: project, change) }
             },
-            addToSpace: { id, space, kind, ref in
-                try await hub.call { api, session in try await api.addToSpace(session, businessID: id, spaceID: space, kind: kind, ref: ref) }
+            addToProject: { id, project, kind, ref in
+                try await hub.call { api, session in try await api.addToProject(session, businessID: id, projectID: project, kind: kind, ref: ref) }
             },
-            removeFromSpace: { id, space, item in
-                try await hub.call { api, session in try await api.removeFromSpace(session, businessID: id, spaceID: space, itemID: item) }
+            removeFromProject: { id, project, item in
+                try await hub.call { api, session in try await api.removeFromProject(session, businessID: id, projectID: project, itemID: item) }
             },
+            apps: { id in try await hub.call { api, session in try await api.apps(session, businessID: id) } },
+            installApp: { id, app, install in
+                try await hub.call { api, session in try await api.installApp(session, businessID: id, appID: app, install: install) }
+            },
+            pinApp: { id, app, pinned in try await hub.call { api, session in try await api.pinApp(session, businessID: id, appID: app, pinned: pinned) } },
+            home: { id in try await hub.call { api, session in try await api.home(session, businessID: id) } },
             artifactText: { id, artifact in
                 try await hub.call { api, session in try await api.artifactText(session, businessID: id, artifactID: artifact) }
             },

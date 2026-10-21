@@ -195,14 +195,15 @@ struct WorkspaceFeatureTests {
         #expect(store.notice?.contains("cannot be unsent") == true)
     }
 
-    @Test("Switching business loads that business's team and returns to Today")
+    @Test("Switching business loads that business's team and returns to Home")
     func switchesBusiness() async {
         let store = makeStore(calls: Calls())
         await settle("team") { store.operationsScope != nil }
-        store.send(.pageSelected(.approvals))
+        store.send(.placeSelected(.project("launch")))
+        store.send(.layerOpened(.app("documents")))
         store.send(.businessSelected("globex"))
         #expect(store.snapshot.businessName == "Globex")
-        #expect(store.page == .today)
+        #expect(store.place == .home && store.layers.isEmpty && store.history.isEmpty)
         await settle("Globex's team") { store.operationsScope?.businessID == "globex" }
         // A status answer for the business just left is ignored.
         store.send(Workspace.Action(.statusLoaded(EmployeeScope(businessID: "acme", employeeID: "ops"), .fixture)))
@@ -211,35 +212,12 @@ struct WorkspaceFeatureTests {
         #expect(store.snapshot.businessName == "Acme")
     }
 
-    @Test("Each rail destination opens its default page")
-    func destinationsOpenDefaults() {
+    @Test("Sidebar and palette toggle independently")
+    func toggles() {
         let store = makeStore(calls: Calls())
-        store.send(.destinationSelected(.team))
-        #expect(store.page == .employee(WorkspaceSnapshot.acmeLaunch.employees.first?.id))
-        store.send(.destinationSelected(.inbox))
-        #expect(store.page == .inbox)
-        store.send(.destinationSelected(.work))
-        #expect(store.page == .work(.all))
-        #expect(store.destination == .work)
-    }
-
-    @Test("Opening a different space starts on its conversation")
-    func spaceTabsReset() {
-        let store = makeStore(calls: Calls())
-        store.send(.pageSelected(.space("space-launch")))
-        store.send(.spaceTabSelected(.files))
-        store.send(.pageSelected(.space("space-growth")))
-        #expect(store.spaceTab == .conversation)
-        #expect(store.main?.key == .space("space-growth"))
-    }
-
-    @Test("Sidebar, inspector and palette toggle independently")
-    func panels() {
-        let store = makeStore(calls: Calls())
-        store.send(.inspectorToggled)
+        store.send(.sidebarToggled)
         store.send(.paletteToggled(true))
-        #expect(!store.isInspectorVisible)
-        #expect(store.isSidebarVisible)
+        #expect(!store.isSidebarVisible)
         #expect(store.isPaletteOpen)
     }
 }
@@ -301,7 +279,7 @@ struct AccessFeatureTests {
         }
     }
 
-    @Test("The Access tab shows real grants; granting and revoking come back from the server")
+    @Test("The desk's Access shows real grants; granting and revoking come back from the server")
     func grants() async {
         let server = AccessServer()
         let store = makeStore(server)
@@ -317,14 +295,14 @@ struct AccessFeatureTests {
         await settle("revoked", until: { store.access.value?.grants.map(\.capability) == ["driveCreate"] })
     }
 
-    @Test("Pausing shows at once, reaches the server, and presence shows the employee paused")
+    @Test("Pausing shows at once and reaches the server; resuming too")
     func pause() async {
         let server = AccessServer()
         let store = makeStore(server)
         await settle("team", until: { store.operationsScope != nil })
         store.send(.pauseToggled("growth"))
         #expect(store.snapshot.employees.first { $0.id == "growth" }?.paused == true)
-        await settle("server", until: { store.state.presence.first { $0.id == "growth" }?.signal == .paused })
+        for _ in 0..<2_000 where await server.pauses.isEmpty { await Task.yield() }
         #expect(await server.pauses == [true])
         store.send(.pauseToggled("growth"))
         await settle("resumed", until: { store.snapshot.employees.first { $0.id == "growth" }?.paused == false })
@@ -347,13 +325,14 @@ private actor WorkServer {
     var answers: [(String, Bool)] = []
     var stateChanges: [StateChange] = []
     var created: [NewTask] = []
-    var spaces = [Space(id: "s1", name: "Launch", items: [SpaceItem(id: "i1", kind: .commitment, ref: "c1")])]
+    var projects = [Project(id: "p1", name: "Launch")]
+    var home = Home(needsYou: [NeedsYouItem(kind: .decision, id: "d1", title: "Create inquiry.txt", employeeID: "growth")])
     var added: [String] = []
 
-    func add(_ space: String, _ ref: String) {
-        added.append("\(space):\(ref)")
-        spaces = spaces.map { item in
-            item.id == space ? Space(id: item.id, name: item.name, items: item.items + [SpaceItem(id: "i\(added.count + 1)", kind: .commitment, ref: ref)]) : item
+    func add(_ project: String, _ kind: ProjectItem.Kind, _ ref: String) {
+        added.append("\(project):\(kind.rawValue):\(ref)")
+        projects = projects.map { item in
+            item.id == project ? Project(id: item.id, name: item.name, items: item.items + [ProjectItem(id: "i\(added.count)", kind: kind, ref: ref)]) : item
         }
     }
 
@@ -379,9 +358,8 @@ private actor WorkServer {
     }
     func create(_ task: NewTask) -> Commitment {
         created.append(task)
-        let item = Commitment(id: "c\(commitments.count + 1)", ownerEmployeeID: task.owner, title: task.title)
+        let item = Commitment(id: "c\(commitments.count + 1)", ownerEmployeeID: task.owner, title: task.title, projectID: task.projectId)
         commitments.append(item)
-        if let space = task.spaceId { add(space, item.id) }
         return item
     }
 }
@@ -403,8 +381,9 @@ struct WorkFeatureTests {
                 updateCommitment: { _, id, change in try await server.update(id, change) },
                 decisions: { _ in await server.decisions },
                 answer: { _, id, approve in await server.answer(id, approve) },
-                spaces: { _ in await server.spaces },
-                addToSpace: { _, space, _, ref in await server.add(space, ref) }
+                projects: { _ in await server.projects },
+                addToProject: { _, project, kind, ref in await server.add(project, kind, ref) },
+                home: { _ in await server.home }
             )
             $0.continuousClock = ContinuousClock()
         } operation: {
@@ -412,13 +391,14 @@ struct WorkFeatureTests {
         }
     }
 
-    @Test("Real work and requests load with the team; needs-you counts the requests")
+    @Test("Real work, requests, projects and Home load with the team; Home's panel shows what needs the owner")
     func loads() async {
         let store = makeStore(WorkServer())
-        await settle("work", until: { store.work.value != nil && store.decisions.value != nil })
-        #expect(store.state.work(.inProgress).map(\.title) == ["Launch Acme"])
-        #expect(store.state.needsYouCount == 1)
-        #expect(store.state.presence.first { $0.id == "growth" }?.signal == .needsYou(1))
+        await settle("work", until: { store.work.value != nil && store.decisions.value != nil && store.home.value != nil })
+        #expect(store.work.value?.filter { $0.state.group == .inProgress }.map(\.title) == ["Launch Acme"])
+        #expect(store.projects.value?.map(\.name) == ["Launch"])
+        #expect(store.home.value?.needsYou.map(\.id) == ["d1"])
+        #expect(store.state.hasPermanent && store.state.isPanelOpen)
     }
 
     @Test("Answering a request removes it at once and tells the server exactly once")
@@ -433,29 +413,28 @@ struct WorkFeatureTests {
         #expect(answers.count == 1 && answers.first?.0 == "d1" && answers.first?.1 == true)
     }
 
-    @Test("Spaces load with work and show references; adding one comes back from the server")
-    func spaces() async {
+    @Test("Keeping a page on a project comes back from the server as a reference")
+    func keeps() async {
         let server = WorkServer()
         let store = makeStore(server)
-        await settle("spaces", until: { store.spaces.value?.first?.name == "Launch" })
-        #expect(store.spaces.value?.first?.refs(.commitment) == ["c1"])
-        store.send(.spaceItemAdded("s1", .commitment, "c9"))
-        await settle("added", until: { store.spaces.value?.first?.refs(.commitment) == ["c1", "c9"] })
-        #expect(await server.added == ["s1:c9"])
+        await settle("projects", until: { store.projects.value?.first?.name == "Launch" })
+        store.send(.projectItemAdded("p1", .artifact, "a1"))
+        await settle("kept", until: { store.projects.value?.first?.keeps(.artifact, "a1") != nil })
+        #expect(await server.added == ["p1:artifact:a1"])
     }
 
-    @Test("A new task from Work defaults to the Head of Operations; state changes carry the revision on screen")
+    @Test("A new task defaults to the Head of Operations and opens its thread; state changes carry the revision on screen")
     func changes() async {
         let server = WorkServer()
         let store = makeStore(server)
         await settle("work", until: { store.work.value != nil && store.operationsScope != nil })
         store.send(.newTaskTapped())
         guard var draft = store.newTask else { return #expect(Bool(false), "the sheet opens") }
-        #expect(draft.ownerID == "ops" && draft.spaceID == nil)
+        #expect(draft.ownerID == "ops" && draft.projectID == nil)
         draft.title = "  Draft the PR inquiry  "
         store.send(.taskEdited(draft))
         store.send(.taskConfirmed)
-        await settle("created", until: { store.work.value?.count == 2 && store.newTask == nil })
+        await settle("created", until: { store.work.value?.count == 2 && store.newTask == nil && store.place == .thread("c2") })
         let created = await server.created
         #expect(created.first?.title == "Draft the PR inquiry" && created.first?.owner == "ops")
         store.send(.commitmentStateSet("c1", .waiting))
@@ -504,7 +483,7 @@ struct ModelFeatureTests {
         store.snapshot.employees.first { $0.id == id }?.model
     }
 
-    @Test("Opening an employee loads the catalog and that employee's spend")
+    @Test("Opening an employee's desk loads the catalog and that employee's spend")
     func loadsCatalogAndUsage() async {
         let store = makeStore(ModelServer())
         await settle("team", until: { store.operationsScope != nil })

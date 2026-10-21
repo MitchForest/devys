@@ -69,8 +69,32 @@ import Foundation
             stop: { _ in true },
             memory: { _ in MemoryClaim.fixtures },
             conversation: { _, key, _ in .fixture(key) },
-            models: { .fixture }
+            models: { .fixture },
+            projects: { id in id == WorkspaceSnapshot.acmeLaunch.business.id ? Project.fixtures : [] },
+            apps: { _ in AppEntry.fixtures }
         )
+    }
+
+    extension Project {
+        public static let fixtures = [
+            Project(
+                id: "launch",
+                name: "Launch",
+                goal: "Acme open to its first customers",
+                deadline: "2026-11-30",
+                budget: Budget(cents: 50_000),
+                leadEmployeeID: "ops",
+                memberIDs: ["engineering", "growth"]
+            )
+        ]
+    }
+
+    extension AppEntry {
+        /// The two apps every business has.
+        public static let fixtures = [
+            AppEntry(id: "documents", name: "Documents", icon: "file-text", summary: "Documents, pages, sheets and uploads"),
+            AppEntry(id: "code", name: "Code", icon: "code", summary: "Repositories, coding sessions and deploys")
+        ]
     }
 
     extension Account {

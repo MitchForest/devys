@@ -126,6 +126,13 @@ extension DevysHTTPClient {
         return started.work
     }
 
+    /// Work items that have coding sessions, newest first.
+    public func codingWork(_ session: DeviceSession, businessID: String) async throws -> [String] {
+        struct Page: Decodable { let work: [String] }
+        let page: Page = try await send(authorized(session, path: "api/businesses/\(businessID)/coding"))
+        return page.work
+    }
+
     public func sessionDiff(_ session: DeviceSession, businessID: String, workID: String, sessionID: String) async throws -> WorkingDiff {
         try await send(authorized(session, path: "api/businesses/\(businessID)/work/\(workID)/sessions/\(sessionID)/diff"))
     }
@@ -150,6 +157,8 @@ public struct CodingClient: Sendable {
     public var transcript: @Sendable (_ businessID: String, _ workID: String, _ sessionID: String) async throws -> [TranscriptEntry]
     /// Returns the new work item's id.
     public var start: @Sendable (_ businessID: String, NewCodingSession) async throws -> String
+    /// Work items that have coding sessions, newest first.
+    public var work: @Sendable (_ businessID: String) async throws -> [String]
 
     public init(
         sessions: @escaping @Sendable (String, String) async throws -> [CodingSession],
@@ -157,7 +166,8 @@ public struct CodingClient: Sendable {
         steer: @escaping @Sendable (String, String, String, String) async throws -> Void,
         stop: @escaping @Sendable (String, String, String) async throws -> Void,
         transcript: @escaping @Sendable (String, String, String) async throws -> [TranscriptEntry] = { _, _, _ in [] },
-        start: @escaping @Sendable (String, NewCodingSession) async throws -> String = { _, _ in "" }
+        start: @escaping @Sendable (String, NewCodingSession) async throws -> String = { _, _ in "" },
+        work: @escaping @Sendable (String) async throws -> [String] = { _ in [] }
     ) {
         self.sessions = sessions
         self.diff = diff
@@ -165,6 +175,7 @@ public struct CodingClient: Sendable {
         self.stop = stop
         self.transcript = transcript
         self.start = start
+        self.work = work
     }
 
     public static func live(_ hub: SessionHub) -> Self {
@@ -184,7 +195,8 @@ public struct CodingClient: Sendable {
             },
             start: { business, start in
                 try await hub.call { api, session in try await api.startCoding(session, businessID: business, start) }
-            }
+            },
+            work: { business in try await hub.call { api, session in try await api.codingWork(session, businessID: business) } }
         )
     }
 

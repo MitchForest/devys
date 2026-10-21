@@ -1,4 +1,3 @@
-import ComposableArchitecture2
 import Dependencies
 import DevysClient
 import DevysDesignSystem
@@ -73,66 +72,6 @@ struct PublishedPage: View {
             } catch {
                 problem = "This page couldn't be opened. \(error.localizedDescription)"
             }
-        }
-    }
-}
-
-/// A published page over the workspace: dashed until it is kept in a space.
-struct PublishedPageSheet: View {
-    let store: StoreOf<Workspace>
-    let artifactID: String
-    @Environment(\.dismiss) private var dismiss
-    @Dependency(\.runtimeClient) private var runtime
-    @State private var spaceID = ""
-    @State private var saving = false
-    @State private var problem: String?
-
-    private var spaces: [Space] { store.spaces.value ?? [] }
-    private var keptIn: [Space] { spaces.filter { $0.refs(.artifact).contains(artifactID) } }
-    private var title: String {
-        store.state.artifacts.first { $0.id == artifactID }?.filename.replacingOccurrences(of: ".html", with: "") ?? "Page"
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Text(title).font(DevysTypography.heading).foregroundStyle(DevysColors.ink).lineLimit(1)
-                if keptIn.isEmpty {
-                    DashedTag("Not kept")
-                } else {
-                    Text("In \(keptIn.map(\.name).joined(separator: ", "))").font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
-                }
-                Spacer(minLength: 8)
-                if !spaces.isEmpty {
-                    Picker("Space", selection: $spaceID) {
-                        ForEach(spaces) { Text($0.name).tag($0.id) }
-                    }
-                    .labelsHidden()
-                    .fixedSize()
-                    Button(saving ? "Saving…" : "Save to space") { Task { await save() } }
-                        .buttonStyle(DevysButtonStyle(.raised, compact: true))
-                        .disabled(saving || spaceID.isEmpty)
-                }
-                ToolbarIconButton("Close", symbol: "xmark") { dismiss() }
-            }
-            .padding(12)
-            if let problem { Text(problem).font(DevysTypography.caption).foregroundStyle(DevysColors.ink2).padding(.bottom, 8) }
-            Divider()
-            PublishedPage(businessID: store.businessID, artifactID: artifactID)
-        }
-        .frame(minWidth: 640, minHeight: 520)
-        .onAppear { spaceID = spaces.first?.id ?? "" }
-    }
-
-    private func save() async {
-        saving = true
-        defer { saving = false }
-        do {
-            try await runtime.addToSpace(store.businessID, spaceID, .artifact, artifactID)
-            problem = nil
-            store.send(.refreshTapped)
-        } catch {
-            problem = "It wasn't saved. \(error.localizedDescription)"
         }
     }
 }

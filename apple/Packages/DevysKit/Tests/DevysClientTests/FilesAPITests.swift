@@ -20,6 +20,19 @@ struct FilesAPITests {
         }
     }
 
+    @Test("A listing marks repositories, which belong to Code; coding work lists newest first")
+    func repositories() async throws {
+        let recorder = Recorder()
+        let listing = try await api(
+            body: #"{"root":"/b","path":"/b","entries":[{"name":"site","path":"/b/site","kind":"repository","size":0},{"name":"plan.md","path":"/b/plan.md","kind":"file","size":12}]}"#,
+            recorder: recorder
+        ).files(Self.session, businessID: "b", path: nil)
+        #expect(listing.entries.map(\.kind) == [.repository, .file])
+        let work = try await api(body: #"{"work":["c2","c1"]}"#, recorder: recorder).codingWork(Self.session, businessID: "b")
+        #expect(work == ["c2", "c1"])
+        #expect(await recorder.requests.last?.url?.path() == "/api/businesses/b/coding")
+    }
+
     @Test("A stale save comes back as a conflict with the newer text")
     func staleSave() async throws {
         let recorder = Recorder()

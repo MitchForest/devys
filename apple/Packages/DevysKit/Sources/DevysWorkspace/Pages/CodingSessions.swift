@@ -6,14 +6,13 @@ import DevysSurfaces
 import SwiftUI
 
 /// A work item's Codex and Claude Code sessions, read from the provider while shown; each
-/// opens its session view.
+/// opens as a layer.
 struct CodingSessions: View {
     let store: StoreOf<Workspace>
     let item: Commitment
     @Dependency(\.codingClient) private var coding
     @Dependency(\.terminalsClient) private var terminals
     @State private var sessions: [CodingSession] = []
-    @State private var open: CodingSession?
     @State private var terminal: TerminalRef?
     @State private var problem: String?
 
@@ -33,7 +32,7 @@ struct CodingSessions: View {
                     }
                     if let problem { Text(problem).font(DevysTypography.caption).foregroundStyle(DevysColors.ink2) }
                     ForEach(sessions) { session in
-                        Button { open = session } label: { row(session) }
+                        Button { store.send(.layerOpened(.session(workID: item.id, sessionID: session.id))) } label: { row(session) }
                             .buttonStyle(.plain)
                     }
                 }
@@ -41,9 +40,6 @@ struct CodingSessions: View {
         }
         .task(id: item.id) { await poll() }
         .modifier(TerminalOpener(presented: $terminal))
-        .sheet(item: $open) { session in
-            SessionScreen(store: store, item: item, session: sessions.first { $0.id == session.id } ?? session)
-        }
     }
 
     private func row(_ session: CodingSession) -> some View {
@@ -69,18 +65,51 @@ struct CodingSessions: View {
     }
 }
 
+/// A coding session as a layer, read from the provider while it shows.
+struct SessionLayer: View {
+    let store: StoreOf<Workspace>
+    let workID: String
+    let sessionID: String
+    @Dependency(\.codingClient) private var coding
+    @State private var session: CodingSession?
+    @State private var problem: String?
+
+    var body: some View {
+        Group {
+            if let session, let item = store.work.value?.first(where: { $0.id == workID }) {
+                SessionView(store: store, item: item, session: session)
+            } else if let problem {
+                EmptyNote(text: problem).padding(14)
+            } else {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .task(id: sessionID) {
+            while !Task.isCancelled {
+                do {
+                    session = try await coding.sessions(store.businessID, workID).first { $0.id == sessionID }
+                    problem = session == nil ? "This coding session no longer exists." : nil
+                } catch {
+                    problem = failure("The coding session couldn't be read.", error)
+                }
+                try? await Task.sleep(for: .seconds(5))
+            }
+        }
+    }
+}
+
 /// One coding session: its objective and latest reply, the running diff with line comments (the
 /// web diff surface), and a composer that talks to the session once the owner has taken the work
 /// over. Comments are always sendable: with the owner's message while they drive, otherwise as
-/// one message in the work item's thread for its employee.
-struct SessionScreen: View {
+/// one message in the work item's thread for its employee. Ask quotes the selected lines into
+/// the conversation's composer.
+private struct SessionView: View {
     let store: StoreOf<Workspace>
     let item: Commitment
     let session: CodingSession
     @Dependency(\.codingClient) private var coding
     @Dependency(\.terminalsClient) private var terminals
     @Dependency(\.runtimeClient) private var runtime
-    @Environment(\.dismiss) private var dismiss
     @State private var terminal: TerminalRef?
     @State private var patch = ""
     @State private var selection: DiffSelection?
@@ -103,9 +132,6 @@ struct SessionScreen: View {
             Divider()
             footer.padding(12)
         }
-        #if os(macOS)
-        .frame(minWidth: 820, idealWidth: 1100, minHeight: 600, idealHeight: 800)
-        #endif
         .task(id: session.state) { await loadDiff() }
         .modifier(TerminalOpener(presented: $terminal))
     }
@@ -116,6 +142,8 @@ struct SessionScreen: View {
                 Text(session.providerName + (session.purpose == "review" ? " · review" : "")).font(DevysTypography.heading)
                 session.state.chip
                 Spacer(minLength: 4)
+            }
+            HStack(spacing: 8) {
                 Button("Open in \(session.providerName)", systemImage: "terminal") {
                     Task { await openTerminal(store.businessID, .resume(assignmentID: session.id), terminals, presented: $terminal, problem: $problem) }
                 }
@@ -126,7 +154,6 @@ struct SessionScreen: View {
                 }
                 TakeoverButton(store: store, item: current)
                     .buttonStyle(DevysButtonStyle(.quiet, compact: true))
-                ToolbarIconButton("Close", symbol: "xmark") { dismiss() }
             }
             Text(session.branch ?? "").font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3).lineLimit(1)
                 .help(session.worktree ?? "")
@@ -157,6 +184,12 @@ struct SessionScreen: View {
                         .font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
                     FieldBox { TextField("Comment on these lines", text: $draftComment).onSubmit(addComment) }
                     Button("Add", action: addComment).buttonStyle(DevysButtonStyle(.raised, compact: true))
+                    Button("Ask", systemImage: "quote.bubble") {
+                        let lines = selection.start == selection.end ? "line \(selection.start)" : "lines \(selection.start)–\(selection.end)"
+                        store.send(.askTapped("\(selection.path) \(lines)\n\(DiffComment.hunkText(patch, selection))"))
+                        self.selection = nil
+                    }
+                    .buttonStyle(DevysButtonStyle(.quiet, compact: true))
                 }
             }
             if !comments.isEmpty {

@@ -1,0 +1,275 @@
+import Foundation
+
+// MARK: - Projects
+
+/// A record a project shows: a reference, never a copy.
+public struct ProjectItem: Equatable, Sendable, Decodable, Identifiable {
+    public enum Kind: String, Equatable, Sendable, Codable { case artifact, file }
+
+    public let id: String
+    public let kind: Kind
+    public let ref: String
+
+    public init(id: String, kind: Kind, ref: String) {
+        self.id = id
+        self.kind = kind
+        self.ref = ref
+    }
+}
+
+/// A spending limit in whole cents; it narrows, it never grants.
+public struct Budget: Equatable, Sendable, Codable {
+    public let cents: Int
+    public let currency: String
+
+    public init(cents: Int, currency: String = "USD") {
+        self.cents = cents
+        self.currency = currency
+    }
+}
+
+/// A bounded initiative: a channel, its work and the records it touches.
+public struct Project: Equatable, Sendable, Decodable, Identifiable {
+    public let id: String
+    public let name: String
+    public let goal: String?
+    /// `YYYY-MM-DD`.
+    public let deadline: String?
+    public let budget: Budget?
+    /// Answers in the channel unless the owner mentions someone.
+    public let leadEmployeeID: String?
+    public let memberIDs: [String]
+    public let items: [ProjectItem]
+
+    public init(
+        id: String,
+        name: String,
+        goal: String? = nil,
+        deadline: String? = nil,
+        budget: Budget? = nil,
+        leadEmployeeID: String? = nil,
+        memberIDs: [String] = [],
+        items: [ProjectItem] = []
+    ) {
+        self.id = id
+        self.name = name
+        self.goal = goal
+        self.deadline = deadline
+        self.budget = budget
+        self.leadEmployeeID = leadEmployeeID
+        self.memberIDs = memberIDs
+        self.items = items
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, goal, deadline, budget, items
+        case leadEmployeeID = "lead_employee_id"
+        case memberIDs = "member_ids"
+    }
+
+    /// Whether the project keeps this record on its overview.
+    public func keeps(_ kind: ProjectItem.Kind, _ ref: String) -> ProjectItem? {
+        items.first { $0.kind == kind && $0.ref == ref }
+    }
+}
+
+/// A project's name, goal, deadline, budget, lead and team, saved as one change. A nil goal,
+/// deadline or budget clears it; a nil lead leaves it (the server picks Operations on create).
+public struct ProjectChange: Equatable, Sendable, Encodable {
+    public var name: String
+    public var goal: String?
+    public var deadline: String?
+    public var budget: Budget?
+    public var lead: String?
+    public var members: [String]
+
+    public init(name: String, goal: String? = nil, deadline: String? = nil, budget: Budget? = nil, lead: String? = nil, members: [String] = []) {
+        self.name = name
+        self.goal = goal
+        self.deadline = deadline
+        self.budget = budget
+        self.lead = lead
+        self.members = members
+    }
+
+    enum CodingKeys: String, CodingKey { case name, goal, deadline, budget, lead, members }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encode(goal, forKey: .goal)
+        try container.encode(deadline, forKey: .deadline)
+        try container.encode(budget, forKey: .budget)
+        try container.encodeIfPresent(lead, forKey: .lead)
+        try container.encode(members, forKey: .members)
+    }
+}
+
+// MARK: - Apps
+
+/// An app in the directory, and whether this business has it.
+public struct AppEntry: Equatable, Sendable, Decodable, Identifiable {
+    public enum Status: String, Equatable, Sendable, Decodable { case available, coming }
+
+    public let id: String
+    public let name: String
+    public let icon: String
+    public let summary: String
+    public let status: Status
+    public var installed: Bool
+    public var pinned: Bool
+    /// Installed and has something to show, so the sidebar lists it.
+    public let visible: Bool
+
+    public init(id: String, name: String, icon: String = "", summary: String = "", status: Status = .available, installed: Bool = true, pinned: Bool = true, visible: Bool = true) {
+        self.id = id
+        self.name = name
+        self.icon = icon
+        self.summary = summary
+        self.status = status
+        self.installed = installed
+        self.pinned = pinned
+        self.visible = visible
+    }
+}
+
+// MARK: - Home
+
+/// One thing waiting on the owner: a decision, or work that needs one.
+public struct NeedsYouItem: Equatable, Sendable, Decodable, Identifiable {
+    public enum Kind: String, Equatable, Sendable, Decodable { case decision, work }
+
+    public let kind: Kind
+    public let id: String
+    public let title: String
+    public let employeeID: String?
+    public let workID: String?
+    public let projectID: String?
+
+    public init(kind: Kind, id: String, title: String, employeeID: String? = nil, workID: String? = nil, projectID: String? = nil) {
+        self.kind = kind
+        self.id = id
+        self.title = title
+        self.employeeID = employeeID
+        self.workID = workID
+        self.projectID = projectID
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case kind, id, title
+        case employeeID = "employeeId"
+        case workID = "workId"
+        case projectID = "projectId"
+    }
+}
+
+/// Work that moves, or is stuck.
+public struct GlanceItem: Equatable, Sendable, Decodable, Identifiable {
+    public let id: String
+    public let title: String
+    public let employeeID: String
+    public let projectID: String?
+    public let state: CommitmentState
+    public let waitCondition: String?
+    public let dueAt: String?
+    public let updatedAt: String
+
+    public init(
+        id: String,
+        title: String,
+        employeeID: String,
+        projectID: String? = nil,
+        state: CommitmentState = .inProgress,
+        waitCondition: String? = nil,
+        dueAt: String? = nil,
+        updatedAt: String = "2026-10-19T00:00:00.000Z"
+    ) {
+        self.id = id
+        self.title = title
+        self.employeeID = employeeID
+        self.projectID = projectID
+        self.state = state
+        self.waitCondition = waitCondition
+        self.dueAt = dueAt
+        self.updatedAt = updatedAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, state, waitCondition, dueAt, updatedAt
+        case employeeID = "employeeId"
+        case projectID = "projectId"
+    }
+}
+
+/// What waits on the owner, and work at a glance.
+public struct Home: Equatable, Sendable, Decodable {
+    public struct Glance: Equatable, Sendable, Decodable {
+        public let moving: [GlanceItem]
+        public let stuck: [GlanceItem]
+        /// Spent since the owner last looked, when the server knows.
+        public let spentCents: Int?
+
+        public init(moving: [GlanceItem] = [], stuck: [GlanceItem] = [], spentCents: Int? = nil) {
+            self.moving = moving
+            self.stuck = stuck
+            self.spentCents = spentCents
+        }
+    }
+
+    public let needsYou: [NeedsYouItem]
+    public let glance: Glance
+
+    public init(needsYou: [NeedsYouItem] = [], glance: Glance = Glance()) {
+        self.needsYou = needsYou
+        self.glance = glance
+    }
+
+    /// Whether Home's panel has anything to show; an empty one is never shown.
+    public var isEmpty: Bool { needsYou.isEmpty && glance.moving.isEmpty && glance.stuck.isEmpty }
+}
+
+extension DevysHTTPClient {
+    public func projects(_ session: DeviceSession, businessID: String) async throws -> [Project] {
+        struct Page: Decodable { let projects: [Project] }
+        let page: Page = try await send(authorized(session, path: "api/businesses/\(businessID)/projects"))
+        return page.projects
+    }
+
+    public func createProject(_ session: DeviceSession, businessID: String, _ project: ProjectChange) async throws -> Project {
+        try await send(json(session, path: "api/businesses/\(businessID)/projects", method: "POST", body: project))
+    }
+
+    public func updateProject(_ session: DeviceSession, businessID: String, projectID: String, _ change: ProjectChange) async throws {
+        _ = try await raw(json(session, path: "api/businesses/\(businessID)/projects/\(projectID)", method: "PUT", body: change))
+    }
+
+    /// Keeps a record on a project's overview. Keeping it twice is harmless.
+    public func addToProject(_ session: DeviceSession, businessID: String, projectID: String, kind: ProjectItem.Kind, ref: String) async throws {
+        struct Body: Encodable { let kind: ProjectItem.Kind; let ref: String }
+        _ = try await raw(json(session, path: "api/businesses/\(businessID)/projects/\(projectID)/items", method: "POST", body: Body(kind: kind, ref: ref)))
+    }
+
+    /// Takes a record off a project; the record itself stays in its app.
+    public func removeFromProject(_ session: DeviceSession, businessID: String, projectID: String, itemID: String) async throws {
+        _ = try await raw(authorized(session, path: "api/businesses/\(businessID)/projects/\(projectID)/items/\(itemID)/remove", method: "POST"))
+    }
+
+    public func apps(_ session: DeviceSession, businessID: String) async throws -> [AppEntry] {
+        struct Page: Decodable { let apps: [AppEntry] }
+        let page: Page = try await send(authorized(session, path: "api/businesses/\(businessID)/apps"))
+        return page.apps
+    }
+
+    public func installApp(_ session: DeviceSession, businessID: String, appID: String, install: Bool) async throws {
+        _ = try await raw(authorized(session, path: "api/businesses/\(businessID)/apps/\(appID)/\(install ? "install" : "uninstall")", method: "POST"))
+    }
+
+    public func pinApp(_ session: DeviceSession, businessID: String, appID: String, pinned: Bool) async throws {
+        struct Body: Encodable { let pinned: Bool }
+        _ = try await raw(json(session, path: "api/businesses/\(businessID)/apps/\(appID)/pin", method: "POST", body: Body(pinned: pinned)))
+    }
+
+    public func home(_ session: DeviceSession, businessID: String) async throws -> Home {
+        try await send(authorized(session, path: "api/businesses/\(businessID)/home"))
+    }
+}

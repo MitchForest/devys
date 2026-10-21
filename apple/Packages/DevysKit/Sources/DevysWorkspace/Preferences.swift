@@ -6,6 +6,7 @@ package import Foundation
 
 package enum PreferencesSection: String, CaseIterable, Hashable, Sendable {
     case account = "Account"
+    case apps = "Apps"
     case team = "Team"
     case businesses = "Businesses"
     case devices = "Devices"
@@ -17,6 +18,7 @@ package enum PreferencesSection: String, CaseIterable, Hashable, Sendable {
         case .account: "person.crop.circle"
         case .team: "person.2"
         case .businesses: "building.2"
+        case .apps: "square.grid.2x2"
         case .devices: "laptopcomputer.and.iphone"
         case .voice: "waveform"
         case .appearance: "circle.lefthalf.filled"
@@ -25,7 +27,7 @@ package enum PreferencesSection: String, CaseIterable, Hashable, Sendable {
 }
 
 /// Settings: the owner's photo, their businesses and teams, how employees and
-/// businesses look, voice and appearance. Businesses, teams, looks and the profile
+/// businesses look, each business's apps and connections, voice and appearance. Businesses, teams, looks and the profile
 /// photo are on the server, so every client shows the same.
 @Feature
 public struct Preferences {
@@ -52,6 +54,9 @@ public struct Preferences {
         /// A code for adding a device, shown as a QR code until it expires.
         package var deviceCode: DeviceCode?
         package var isIssuingCode = false
+        /// The selected business's app directory and its Google Drive connection, loaded when Apps opens.
+        package var apps: Loadable<[AppEntry]> = .loading
+        package var google: Loadable<GoogleConnection>?
 
         public init() {}
 
@@ -86,6 +91,7 @@ public struct Preferences {
         case directoryLoaded(Account, teams: [String: [Employee]])
         case business(BusinessIntent)
         case device(DeviceIntent)
+        case app(AppIntent)
         case uploadFinished(Data?)
         case failed(String)
         case signOutTapped
@@ -113,7 +119,10 @@ public struct Preferences {
                 state.selectedEmployeeID = id
 
             case .businessSelected(let id):
+                guard id != state.selectedBusinessID else { return }
                 state.selectedBusinessID = id
+                state.apps = .loading
+                state.google = nil
 
             case .lookSet(let target, let look):
                 // Shows at once; the server copy replaces it when the directory reloads.
@@ -191,6 +200,9 @@ public struct Preferences {
 
             case .device(let intent):
                 reduceDevice(intent, state: &state)
+
+            case .app(let intent):
+                reduceApps(intent, state: &state)
 
             case .uploadFinished(let photo):
                 state.isUploading = false
@@ -280,4 +292,7 @@ extension Preferences.Action {
     package static func deviceRevoked(_ id: String) -> Self { Self(.device(.revokeTapped(id))) }
     package static var addDeviceTapped: Self { Self(.device(.addTapped)) }
     package static var deviceCodeDismissed: Self { Self(.device(.codeDismissed)) }
+    package static var appsRequested: Self { Self(.app(.requested)) }
+    package static func appInstallToggled(_ id: String, _ install: Bool) -> Self { Self(.app(.installToggled(appID: id, install))) }
+    package static func appPinToggled(_ id: String, _ pinned: Bool) -> Self { Self(.app(.pinToggled(appID: id, pinned))) }
 }

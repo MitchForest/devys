@@ -29,7 +29,8 @@ test("Home's Needs you approves an exact request; new work opens its thread and 
     const needsYou = page.getByRole("region", { name: "Needs you" });
     await expect(needsYou.getByTestId("panel-title")).toHaveText("Needs you");
     await expect(needsYou.getByText("Head of Operations asks")).toBeVisible();
-    await expect(page.getByRole("main").getByText("https://example.com")).toHaveCount(1);
+    // Home lists it once, in Needs you; the conversation beside it doesn't repeat it.
+    await expect(page.getByRole("main").getByText("https://example.com")).toHaveCount(0);
 
     // Its exact input unfolds on demand, and Approve answers it in place.
     await needsYou.getByRole("button", { name: "Details" }).click();

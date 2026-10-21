@@ -10,117 +10,6 @@ import SwiftUI
 import Quartz
 #endif
 
-/// The business's files on the owner's Mac. Documents, decks, spreadsheets and whiteboards edit
-/// in place through the web surfaces and save over the revision they were opened at; PDFs open in
-/// PDFKit, Office and iWork files in QuickLook. Comments on a text range or a PDF selection go to
-/// an employee.
-struct FilesPage: View {
-    let store: StoreOf<Workspace>
-    @Dependency(\.filesClient) private var files
-    @State private var root: String?
-    @State private var problem: String?
-    @State private var open: FileEntry?
-
-    init(store: StoreOf<Workspace>, path: String? = nil) {
-        self.store = store
-        _open = State(initialValue: path.map { FileEntry(name: ($0 as NSString).lastPathComponent, path: $0, kind: .file) })
-    }
-
-    var body: some View {
-        Group {
-            if let problem {
-                EmptyNote(text: problem).padding(20)
-            } else if let root {
-                #if os(iOS)
-                if UIDevice.current.userInterfaceIdiom == .phone {
-                    // Already inside the tab's navigation stack: a file pushes on top of the list.
-                    List { FolderRows(businessID: store.businessID, path: root, onOpen: { open = $0 }) }
-                        .navigationDestination(item: $open) { file in FileView(store: store, file: file) }
-                } else {
-                    split(root)
-                }
-                #else
-                split(root)
-                #endif
-            } else {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-        .task(id: store.businessID) {
-            do {
-                root = try await files.list(store.businessID, nil).root
-            } catch {
-                problem = "Files are on the owner's Mac (local mode)."
-            }
-        }
-    }
-
-    private func split(_ root: String) -> some View {
-        HStack(spacing: 0) {
-            List { FolderRows(businessID: store.businessID, path: root, onOpen: { open = $0 }) }
-                .listStyle(.sidebar)
-                .frame(width: 260)
-            Divider()
-            if let open {
-                FileView(store: store, file: open).id(open.path)
-            } else {
-                EmptyNote(text: "Choose a file. Documents your employees write appear here.")
-                    .padding(20)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            }
-        }
-    }
-}
-
-/// Folders that are never worth opening in a file browser.
-private let hiddenNames: Set<String> = [".git", "node_modules", ".DS_Store", ".wrangler", "dist", ".build", "DerivedData"]
-
-/// One folder's entries; a folder loads its own when it opens.
-private struct FolderRows: View {
-    let businessID: String
-    let path: String
-    let onOpen: (FileEntry) -> Void
-    @Dependency(\.filesClient) private var files
-    @State private var entries: [FileEntry]?
-
-    var body: some View {
-        Group {
-            if let entries {
-                ForEach(entries) { entry in
-                    if entry.kind == .directory {
-                        DisclosureGroup {
-                            FolderRows(businessID: businessID, path: entry.path, onOpen: onOpen)
-                        } label: {
-                            Label(entry.name, systemImage: "folder")
-                        }
-                    } else {
-                        Button { onOpen(entry) } label: { Label(entry.name, systemImage: symbol(entry.name)) }
-                            .buttonStyle(.plain)
-                    }
-                }
-            } else {
-                ProgressView().controlSize(.small)
-            }
-        }
-        .task(id: path) {
-            entries = ((try? await files.list(businessID, path).entries) ?? []).filter { !hiddenNames.contains($0.name) }
-        }
-    }
-
-    private func symbol(_ name: String) -> String {
-        switch FileKind(name) {
-        case .markdown: "doc.richtext"
-        case .pdf: "doc.text"
-        case .image: "photo"
-        case .office: "doc"
-        case .sheet: "tablecells"
-        case .whiteboard: "scribble"
-        case .text: "chevron.left.forwardslash.chevron.right"
-        case .other: "doc"
-        }
-    }
-}
-
 /// Which viewer a file opens in, from its name.
 enum FileKind {
     case markdown, pdf, office, sheet, whiteboard, image, text, other
@@ -159,8 +48,11 @@ func pptxPath(_ path: String) -> String {
     path.replacingOccurrences(of: #"(\.slides)?\.(md|markdown)$"#, with: "", options: [.regularExpression, .caseInsensitive]) + ".pptx"
 }
 
-/// One open file and its comments.
-private struct FileView: View {
+/// A file in the business's folder on the owner's Mac, as a layer. Documents, decks, spreadsheets
+/// and whiteboards edit in place through the web surfaces and save over the revision they were
+/// opened at; PDFs open in PDFKit, Office and iWork files in QuickLook. Comments on a text range
+/// or a PDF selection go to an employee.
+struct FileView: View {
     let store: StoreOf<Workspace>
     let file: FileEntry
     @Dependency(\.filesClient) private var files
@@ -185,27 +77,28 @@ private struct FileView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                Text(file.name).font(DevysTypography.heading).lineLimit(1)
-                if editable {
-                    Text(edited ? "Edited" : saved.map { "Saved \($0)" } ?? "Saved on the Mac")
-                        .font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
+            // What can be done to the file; the layer's header already names it.
+            if editable || deck {
+                HStack(spacing: 8) {
+                    if editable {
+                        Text(edited ? "Edited" : saved.map { "Saved \($0)" } ?? "Saved on the Mac")
+                            .font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
+                    }
+                    Spacer(minLength: 4)
+                    if deck {
+                        Button("Export .pptx", systemImage: "rectangle.on.rectangle") { Task { await exportDeck() } }
+                            .buttonStyle(DevysButtonStyle(.quiet, compact: true))
+                    }
+                    if editable {
+                        Button("Save", systemImage: "square.and.arrow.down") { Task { await save() } }
+                            .buttonStyle(DevysButtonStyle(.raised, compact: true))
+                            .disabled(!edited)
+                            .keyboardShortcut("s", modifiers: .command)
+                    }
                 }
-                Spacer(minLength: 4)
-                SaveToSpace(store: store, path: file.path)
-                if deck {
-                    Button("Export .pptx", systemImage: "rectangle.on.rectangle") { Task { await exportDeck() } }
-                        .buttonStyle(DevysButtonStyle(.quiet, compact: true))
-                }
-                if editable {
-                    Button("Save", systemImage: "square.and.arrow.down") { Task { await save() } }
-                        .buttonStyle(DevysButtonStyle(.raised, compact: true))
-                        .disabled(!edited)
-                        .keyboardShortcut("s", modifiers: .command)
-                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
             if let actionError {
                 Text(actionError)
                     .font(DevysTypography.caption).foregroundStyle(DevysColors.ink2)
@@ -280,7 +173,7 @@ private struct FileView: View {
         do {
             loaded = try await read()
         } catch {
-            problem = "This file couldn't be opened."
+            problem = failure("This file couldn't be opened.", error)
         }
     }
 
@@ -345,32 +238,6 @@ private struct FileView: View {
     }
 }
 
-/// Shows the file in a space; it stays where it is on the Mac.
-private struct SaveToSpace: View {
-    let store: StoreOf<Workspace>
-    let path: String
-
-    var body: some View {
-        let spaces = store.spaces.value ?? []
-        let holding = spaces.filter { $0.items.contains { $0.kind == .file && $0.ref == path } }
-        if !spaces.isEmpty {
-            Menu {
-                ForEach(spaces) { space in
-                    if let entry = space.items.first(where: { $0.kind == .file && $0.ref == path }) {
-                        Button("Remove from \(space.name)") { store.send(.spaceItemRemoved(space.id, entry.id)) }
-                    } else {
-                        Button(space.name) { store.send(.spaceItemAdded(space.id, .file, path)) }
-                    }
-                }
-            } label: {
-                Label(holding.isEmpty ? "Save to space" : "In \(holding.map(\.name).joined(separator: ", "))", systemImage: "folder.badge.plus")
-            }
-            .buttonStyle(DevysButtonStyle(.quiet, compact: true))
-            .fixedSize()
-        }
-    }
-}
-
 /// Comments in progress on a file and who they go to.
 private struct CommentBar: View {
     let store: StoreOf<Workspace>
@@ -390,6 +257,14 @@ private struct CommentBar: View {
                     Text(describe(selection)).font(DevysTypography.caption).foregroundStyle(DevysColors.ink3).lineLimit(1)
                     FieldBox { TextField("Comment on this", text: $text).onSubmit(add) }
                     Button("Add", action: add).buttonStyle(DevysButtonStyle(.raised, compact: true))
+                    // The owner edits by asking: the passage goes into the conversation's composer.
+                    if case .text(_, _, let quote) = selection {
+                        Button("Ask", systemImage: "quote.bubble") {
+                            store.send(.askTapped(quote))
+                            self.selection = nil
+                        }
+                        .buttonStyle(DevysButtonStyle(.quiet, compact: true))
+                    }
                 }
             }
             if !comments.isEmpty {

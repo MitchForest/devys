@@ -13,7 +13,8 @@ package enum Loadable<Value> {
     }
 }
 
-/// The signed-in workspace: the business, its team, work, spaces and conversations.
+/// The signed-in workspace: the business, its team, projects, work and conversations. The
+/// conversation on screen is always the middle; the right panel shows what it is about.
 @Feature
 package struct Workspace {
     package init() {}
@@ -26,43 +27,54 @@ package struct Workspace {
         package var businessID = ""
         /// The open business and its team.
         package var snapshot = WorkspaceSnapshot.empty
-        package var page: Page = .today
-        /// Chosen in the rail; it decides the sidebar. Pages never change it implicitly.
-        package var destination: Destination = .home
+        package var place: Place = .home
+        /// Places the owner came from, for Back (a thread opened from a channel).
+        package var history: [Place] = []
+        /// Temporary views over the right panel's permanent view, the top one last.
+        package var layers: [OpenLayer] = []
+        /// Whether each kind of place shows its permanent view, as the owner left it.
+        package var panels: [Place.Kind: Bool] = [:]
+        /// ⤢: the panel takes everything but the conversation's minimum while a layer is open.
+        package var isWide = false
+        /// Too narrow for the conversation and the panel side by side: the panel lies over the
+        /// conversation, so its permanent view opens only when asked for, never by itself.
+        package var isNarrow = false
+        /// Asked for while narrow (⌥⌘0); going to another place clears it.
+        package var isOverlayOpen = false
+        /// Whether the open layer goes with the next message as a reference.
+        package var isReferencing = true
+        /// Counts answered turns in the conversation, so open layers read their records again.
+        package var turns = 0
         package var isSidebarVisible = true
-        package var isInspectorVisible = true
         package var isPaletteOpen = false
-        package var spaceTab: SpaceTab = .conversation
-        package var employeeTab: EmployeeTab = .activity
-        package var workLayout: WorkLayout = .list
         /// The Head of Operations' runtime state.
         package var status: Loadable<EmployeeStatus> = .loading
-        /// Each employee's latest runtime status, refreshed every tick; presence derives from it.
+        /// Each employee's latest runtime status, refreshed every tick; the sidebar's status dots derive from it.
         package var statuses: [String: EmployeeStatus] = [:]
-        /// The DM or space conversation in the main pane.
+        /// The conversation in the middle: Home's, a direct chat, a channel or a thread.
         package var main: OpenConversation?
-        /// The work item in the right panel, with its thread.
-        package var panel: OpenConversation?
         /// Started conversations' newest message and unread count, by key.
         package var summaries: [String: ConversationSummary] = [:]
         /// Roles to hire into, the hire in progress.
         package var team = TeamState()
         /// The task being written in the New task sheet.
         package var newTask: TaskDraft?
-        /// The business's Google Drive connection, loaded when Connections opens.
-        package var google: Loadable<GoogleConnection>?
+        /// The New project sheet, while it is open.
+        package var newProject: ProjectSheet?
         package var memory: Loadable<[MemoryClaim]> = .loading
         /// The business's commitments and the requests waiting on the owner.
         package var work: Loadable<[Commitment]> = .loading
         package var decisions: Loadable<[Decision]> = .loading
-        package var spaces: Loadable<[Space]> = .loading
+        package var projects: Loadable<[Project]> = .loading
+        /// The app directory; installed apps with something to show are in the sidebar.
+        package var apps: Loadable<[AppEntry]> = .loading
+        /// What needs the owner, and work at a glance: Home's permanent view.
+        package var home: Loadable<Home> = .loading
         /// The business's saved files, newest first.
         package var artifacts: [Artifact] = []
         /// The business's members, to name who took work over.
         package var members: [Person] = []
-        /// Text of Markdown files opened inline in a space.
-        package var artifactTexts: [String: Loadable<String>] = [:]
-        /// The open employee's grants, loaded when its Access tab shows.
+        /// The open employee's grants, loaded when its desk's Access shows.
         package var access: Loadable<AccessList> = .loading
         package var accessEmployeeID: String?
         /// The model catalog, each employee's spend, and failed model changes.
@@ -110,14 +122,9 @@ package struct Workspace {
 
     package enum Intent {
         case businessSelected(String)
-        case destinationSelected(Destination)
-        case pageSelected(Page)
+        case place(PlaceIntent)
         case sidebarToggled
-        case inspectorToggled
         case paletteToggled(Bool)
-        case spaceTabSelected(SpaceTab)
-        case employeeTabSelected(EmployeeTab)
-        case workLayoutSelected(WorkLayout)
         case refreshTapped
         case accountLoaded(Account)
         case detailLoaded(BusinessDetail)
@@ -131,15 +138,8 @@ package struct Workspace {
         case team(TeamIntent)
         case conversation(ConversationIntent)
         case task(TaskIntent)
-        case connectionsRequested
-        case googleLoaded(Loadable<GoogleConnection>)
-        case workLoaded(businessID: String, [Commitment], [Decision], [Space])
-        case spaceCreateTapped(NewSpace)
-        case spaceLeadChanged(spaceID: String, leadID: String)
-        case spaceItemAdded(spaceID: String, kind: SpaceItem.Kind, ref: String)
-        case spaceItemRemoved(spaceID: String, itemID: String)
-        case artifactOpened(artifactID: String)
-        case artifactTextLoaded(artifactID: String, Loadable<String>)
+        case project(ProjectIntent)
+        case workLoaded(businessID: String, WorkRecords)
         case decisionAnswered(decisionID: String, approve: Bool)
         case commitmentStateSet(commitmentID: String, CommitmentState)
         case takeoverToggled(commitmentID: String)
@@ -154,7 +154,8 @@ package struct Workspace {
         case lookPhotosLoaded([String: Data])
         case ownerPhotoLoaded(Data?)
         case preferencesToggled(Bool)
-        case presenceTapped(String)
+        /// Settings opened at one section, as "Apps & connections…".
+        case settingsOpened(PreferencesSection)
         case micTapped
         case conversationToggled
         case speechEvent(UUID, SpeechCaptureEvent)
@@ -179,6 +180,7 @@ package struct Workspace {
     @Dependency(\.voiceSettingsClient) var voiceSettings: VoiceSettingsClient
     @Dependency(\.uuid) var uuid
     @Dependency(\.profileClient) var profileClient: ProfileClient
+    @Dependency(\.panelsClient) var panelsClient: PanelsClient
 
     package var body: some Feature {
         Update { state, action in
@@ -192,7 +194,12 @@ package struct Workspace {
                 state.businesses = account.businesses
                 loadLookPhotos(state)
                 if !account.businesses.contains(where: { $0.id == state.businessID }) {
+                    let first = state.businessID.isEmpty
                     select(account.businesses.first?.id ?? "", state: &state)
+                    #if DEBUG
+                        // The launch place belongs to the first business, which only now is chosen.
+                        if first { Self.applyQAPlace(to: &state) }
+                    #endif
                 }
 
             case .detailLoaded(let detail):
@@ -206,7 +213,8 @@ package struct Workspace {
                 loadMemory(state)
                 loadWork(state)
                 loadSummaries(state)
-                openConversation(for: state.page, state: &state)
+                // Home's conversation is Operations', known once the team has loaded.
+                openConversation(&state)
 
             case .tick:
                 loadStatus(state)
@@ -227,9 +235,12 @@ package struct Workspace {
             case .lookPhotosLoaded(let photos):
                 state.lookPhotos.merge(photos) { _, new in new }
 
-            case .workLoaded, .decisionAnswered, .commitmentStateSet, .takeoverToggled, .spaceCreateTapped, .spaceLeadChanged,
-                 .spaceItemAdded, .spaceItemRemoved, .artifactOpened, .artifactTextLoaded, .connectionsRequested, .googleLoaded:
+            case .workLoaded, .decisionAnswered, .commitmentStateSet, .takeoverToggled:
                 reduceWork(action.intent, state: &state)
+
+            case .place(let intent): reducePlace(intent, state: &state)
+
+            case .project(let intent): reduceProject(intent, state: &state)
 
             case .team(let intent): reduceTeam(intent, state: &state)
 
@@ -261,33 +272,25 @@ package struct Workspace {
 
             case .model(let intent): reduceModel(intent, state: &state)
 
-            case .destinationSelected(let destination):
-                guard destination != state.destination else { return }
-                state.destination = destination
-                open(Self.defaultPage(for: destination, snapshot: state.snapshot), state: &state)
+            case .sidebarToggled:
+                state.isSidebarVisible.toggle()
 
-            case .pageSelected(let page):
-                open(page, state: &state)
-
-            case .sidebarToggled, .inspectorToggled, .paletteToggled, .spaceTabSelected, .employeeTabSelected, .workLayoutSelected:
-                reduceLayout(action.intent, state: &state)
+            case .paletteToggled(let open):
+                state.isPaletteOpen = open
 
             case .refreshTapped:
+                loadAccount()
+                refreshTeam(state)
                 loadStatus(state)
                 loadMemory(state)
+                loadWork(state)
+                refreshConversations(state)
 
             case .statusLoaded(let scope, let snapshot):
                 guard scope.businessID == state.businessID else { return }
                 state.statuses[scope.employeeID] = snapshot
                 if scope == state.operationsScope { state.status = .loaded(snapshot) }
                 settleAwaiting(&state)
-
-            case .presenceTapped(let employeeID):
-                // Needs-you opens the decisions; anyone else opens their DM.
-                let needsYou = state.presence.contains { item in
-                    if item.id == employeeID, case .needsYou = item.signal { true } else { false }
-                }
-                open(needsYou ? .approvals : .direct(employeeID), state: &state)
 
             case .memoryLoaded(let claims):
                 state.memory = .loaded(claims)
@@ -326,10 +329,20 @@ package struct Workspace {
             case .ownerPhotoLoaded(let photo):
                 state.ownerPhoto = photo
 
+            case .settingsOpened(let section):
+                Self.openSettings(at: section, state: &state)
+
             case .preferencesToggled(let open):
-                state.preferences = open ? Spawn(Preferences.State()) : nil
-                // A business created in Settings joins the rail when Settings closes.
-                if !open { loadAccount() }
+                if open {
+                    Self.openSettings(at: .account, state: &state)
+                } else {
+                    state.preferences = nil
+                }
+                // A business created, or an app installed or pinned, in Settings shows when it closes.
+                if !open {
+                    loadAccount()
+                    loadWork(state)
+                }
 
             case .micTapped, .conversationToggled, .speechEvent, .speechFinished, .speechFailed, .speakingFinished,
                  .stopSpeakingTapped, .voiceErrorDismissed:
@@ -340,9 +353,7 @@ package struct Workspace {
             Preferences()
         }
         .onMount { state in
-            #if DEBUG
-                Self.applyQAPage(to: &state)
-            #endif
+            state.panels = Self.panels(from: panelsClient.load())
             loadAccount()
             let clock = clock
             store.addTask {
@@ -364,6 +375,14 @@ package struct Workspace {
 // MARK: - Businesses, teams and runtime status
 
 extension Workspace {
+    /// Settings for the business on screen, at a section.
+    static func openSettings(at section: PreferencesSection, state: inout State) {
+        var preferences = Preferences.State()
+        preferences.section = section
+        preferences.selectedBusinessID = state.businessID.isEmpty ? nil : state.businessID
+        state.preferences = Spawn(preferences)
+    }
+
     func loadFailed(_ error: DevysHTTPError, memory: Bool, state: inout State) {
         if error == .unauthorized {
             let session = session
@@ -381,15 +400,6 @@ extension Workspace {
         }
     }
 
-    /// Opens a page; a DM or space opens its conversation, and the right panel follows the page.
-    func open(_ page: Page, state: inout State) {
-        if case .space = page, page != state.page { state.spaceTab = .conversation }
-        if !state.destination.lists(page) { state.destination = page.destination }
-        if page != state.page { state.panel = nil }
-        state.page = page
-        openConversation(for: page, state: &state)
-    }
-
     /// Switches to a business; its team, work and conversations load from the server.
     func select(_ id: String, state: inout State) {
         state.businessID = id
@@ -398,11 +408,10 @@ extension Workspace {
         state.statuses = [:]
         if state.isConversationMode { endConversation(&state) } else if state.voice.isCapturing { cancelCapture(&state) }
         state.main = nil
-        state.panel = nil
         state.summaries = [:]
         state.team.hiring = nil
         state.newTask = nil
-        state.google = nil
+        state.newProject = nil
         state.memory = .loading
         state.access = .loading
         state.accessEmployeeID = nil
@@ -410,12 +419,15 @@ extension Workspace {
         state.models.errors = [:]
         state.work = .loading
         state.decisions = .loading
-        state.spaces = .loading
+        state.projects = .loading
+        state.apps = .loading
+        state.home = .loading
         state.artifacts = []
-        state.artifactTexts = [:]
         state.repliesToSpeak = []
-        state.page = .today
-        state.destination = .home
+        state.place = .home
+        state.history = []
+        state.layers = []
+        state.isWide = false
         guard !id.isEmpty else { return }
         let runtime = runtime
         store.addTask {
@@ -464,7 +476,7 @@ extension Workspace {
         }
     }
 
-    /// Operations first, whose failures show; then everyone else, whose presence derives from it.
+    /// Operations first, whose failures show; then everyone else, whose status dot derives from it.
     func loadStatus(_ state: State) {
         guard let scope = state.operationsScope else { return }
         let others = state.snapshot.employees.dropFirst().map { EmployeeScope(businessID: state.businessID, employeeID: $0.id) }

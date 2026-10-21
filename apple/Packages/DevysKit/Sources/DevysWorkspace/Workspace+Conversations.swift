@@ -3,7 +3,7 @@ import Dependencies
 package import DevysClient
 import Foundation
 
-// MARK: - Shared conversations: DMs and spaces in the main pane, work threads in the right panel
+// MARK: - The conversation in the middle: Home's, a direct chat, a project's channel or a thread
 
 extension EmployeeStatus {
     /// Pi is running something for the employee right now.
@@ -11,22 +11,8 @@ extension EmployeeStatus {
 }
 
 extension Workspace.State {
-    /// The conversation a page shows in the main pane: a DM or a space.
-    package static func conversationKey(for page: Page) -> ConversationKey? {
-        switch page {
-        case .direct(let id): .direct(id)
-        case .space(let id): .space(id)
-        default: nil
-        }
-    }
-
-    /// The work item open in the right panel (pushed on iPhone).
-    package var selectedWorkID: String? { panel?.key.ref }
-
     package func conversation(_ key: ConversationKey) -> OpenConversation? {
-        if main?.key == key { return main }
-        if panel?.key == key { return panel }
-        return nil
+        main?.key == key ? main : nil
     }
 
     package func unread(_ key: ConversationKey) -> Int { summaries[key.rawValue]?.unread ?? 0 }
@@ -36,11 +22,11 @@ extension Workspace.State {
         summaries[ConversationKey.work(commitmentID).rawValue]?.following ?? false
     }
 
-    /// Who answers when nobody has spoken yet: a DM's employee, a space's lead, a work item's owner.
+    /// Who answers when nobody has spoken yet: a direct chat's employee, a project's lead, a work item's owner.
     package func defaultResponder(for key: ConversationKey) -> String? {
         switch key.kind {
         case .direct: key.ref
-        case .space: spaces.value?.first { $0.id == key.ref }?.leadEmployeeID
+        case .project: projects.value?.first { $0.id == key.ref }?.leadEmployeeID
         case .work: work.value?.first { $0.id == key.ref }?.ownerEmployeeID
         }
     }
@@ -55,21 +41,8 @@ extension Workspace.State {
     package func isWorking(_ employeeID: String) -> Bool {
         let status = statuses[employeeID]
         let unfinished = status?.state.inbox.contains { $0.status != "done" && $0.status != "failed" } ?? false
-        let answering = [main, panel].contains { $0?.awaiting.contains(employeeID) == true }
+        let answering = main?.awaiting.contains(employeeID) == true
         return status?.isRunning == true || answering || unfinished
-    }
-
-    /// The main pane's conversation is on screen (a space shows it on its Conversation tab).
-    var isMainVisible: Bool {
-        switch page {
-        case .direct: true
-        case .space: spaceTab == .conversation
-        default: false
-        }
-    }
-
-    func isVisible(_ key: ConversationKey) -> Bool {
-        key == main?.key ? isMainVisible : key == panel?.key
     }
 }
 
@@ -79,10 +52,16 @@ extension Workspace {
         case .summariesLoaded, .followToggled:
             reduceSummaries(intent, state: &state)
         case .pageLoaded(let key, let page, let older):
+            guard let open = state.conversation(key) else { return }
+            // Messages that arrived since the last look; nothing counts as arriving on first load.
+            let known = open.messages.value.map { Set($0.map(\.id)) }
             update(key, &state) { $0.merge(page, older: older) }
             settleAwaiting(&state)
-            if key == state.main?.key { speakReplies(&state) }
+            speakReplies(&state)
             markRead(key, state: &state)
+            if let known, !older, let page = state.main?.messages.value?.last(where: { !known.contains($0.id) && $0.isEvent && $0.ref?.hasPrefix("artifact:") == true }) {
+                pageArrived(page, state: &state)
+            }
         case .pageFailed(let key, let message):
             update(key, &state) { conversation in
                 conversation.isLoadingOlder = false
@@ -95,9 +74,12 @@ extension Workspace {
         case .draftChanged, .mentionPicked, .responderPicked, .replyTapped, .replyCancelled, .errorDismissed:
             reduceDraft(intent, state: &state)
         case .sendTapped(let key):
-            guard let open = state.conversation(key) else { return }
-            if key == state.main?.key, state.voice.mode == .dictation { cancelCapture(&state) }
-            send(open.draft, viaVoice: open.draftUsedVoice, in: key, state: &state)
+            guard let open = state.conversation(key), !open.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+            if state.voice.mode == .dictation { cancelCapture(&state) }
+            // The layer the owner is looking at goes with the message, so "this" means what is on screen.
+            let text = state.reference.map { open.draft.trimmingCharacters(in: .whitespacesAndNewlines) + $0.line } ?? open.draft
+            send(text, viaVoice: open.draftUsedVoice, in: key, state: &state)
+            state.isReferencing = false
         case .posted(let key, let clientID, let message):
             posted(message, clientID: clientID, in: key, state: &state)
         case .sendFailed(let key, let clientID, let refusal):
@@ -111,28 +93,14 @@ extension Workspace {
                 if conversation.awaitingAfter == messageID { conversation.stoppedPolling = true }
             }
             settleAwaiting(&state)
-        case .workOpened(let id):
-            openWork(id, state: &state)
-        case .workClosed:
-            state.panel = nil
         }
-    }
-
-    /// The work item opens in the right panel with its thread; on iPhone it pushes.
-    func openWork(_ id: String, state: inout State) {
-        state.isInspectorVisible = true
-        guard state.panel?.key != .work(id) else { return }
-        state.panel = OpenConversation(key: .work(id))
-        loadPage(.work(id), state: state)
     }
 
     /// What's open and already seen stays read, whatever an older count says.
     func loadedSummaries(_ summaries: [ConversationSummary], state: inout State) {
         state.summaries = Dictionary(summaries.map { ($0.key, $0) }) { first, _ in first }
-        for open in [state.main, state.panel].compactMap(\.self) where state.isVisible(open.key) {
-            guard let seen = state.summaries[open.key.rawValue], seen.last?.createdAt == open.readAt else { continue }
-            state.summaries[open.key.rawValue] = ConversationSummary(key: seen.key, last: seen.last, unread: 0, following: seen.following)
-        }
+        guard let open = state.main, let seen = state.summaries[open.key.rawValue], seen.last?.createdAt == open.readAt else { return }
+        state.summaries[open.key.rawValue] = ConversationSummary(key: seen.key, last: seen.last, unread: 0, following: seen.following)
     }
 
     /// Posts a failed message again with the same client id.
@@ -178,9 +146,9 @@ extension Workspace {
         }
     }
 
-    /// Opening a DM or a space opens its conversation in the main pane; other pages close it.
-    func openConversation(for page: Page, state: inout State) {
-        let key = State.conversationKey(for: page)
+    /// The place's conversation opens in the middle; Home's waits for Operations to load.
+    func openConversation(_ state: inout State) {
+        let key = state.mainKey
         guard key != state.main?.key else {
             if let key { markRead(key, state: &state) }
             return
@@ -194,10 +162,6 @@ extension Workspace {
         if var open = state.main, open.key == key {
             change(&open)
             state.main = open
-        }
-        if var open = state.panel, open.key == key {
-            change(&open)
-            state.panel = open
         }
     }
 
@@ -225,10 +189,10 @@ extension Workspace {
         }
     }
 
-    /// Every few seconds: unread counts, the open conversations, and whoever is being waited on.
+    /// Every few seconds: unread counts, the open conversation, and whoever is being waited on.
     func refreshConversations(_ state: State) {
         loadSummaries(state)
-        for key in [state.main?.key, state.panel?.key].compactMap(\.self) { loadPage(key, state: state) }
+        if let key = state.main?.key { loadPage(key, state: state) }
     }
 
     /// The conversation list: loaded from the server, or a work thread followed or not.
@@ -257,7 +221,7 @@ extension Workspace {
 
     /// While a conversation is on screen, everything in it up to the newest message is read.
     func markRead(_ key: ConversationKey, state: inout State) {
-        guard state.isVisible(key), let open = state.conversation(key), let newest = open.messages.value?.last, newest.createdAt != open.readAt else { return }
+        guard let open = state.conversation(key), let newest = open.messages.value?.last, newest.createdAt != open.readAt else { return }
         update(key, &state) { $0.readAt = newest.createdAt }
         if let summary = state.summaries[key.rawValue] {
             state.summaries[key.rawValue] = ConversationSummary(key: summary.key, last: summary.last, unread: 0, following: summary.following)
@@ -271,14 +235,15 @@ extension Workspace {
     /// stopped working after fast polling gave up.
     func settleAwaiting(_ state: inout State) {
         let statuses = state.statuses
-        for key in [state.main?.key, state.panel?.key].compactMap(\.self) {
-            update(key, &state) { conversation in
-                let open = conversation
-                conversation.awaiting.removeAll { id in
-                    statuses[id]?.isRunning != true && (open.hasAnswered(id) || open.stoppedPolling)
-                }
+        guard let key = state.main?.key else { return }
+        let waiting = state.main?.awaiting.isEmpty == false
+        update(key, &state) { conversation in
+            let open = conversation
+            conversation.awaiting.removeAll { id in
+                statuses[id]?.isRunning != true && (open.hasAnswered(id) || open.stoppedPolling)
             }
         }
+        if waiting, state.main?.awaiting.isEmpty == true { state.turns += 1 }
     }
 
     /// Shows the message at once and posts it; returns its client id.
@@ -302,7 +267,7 @@ extension Workspace {
             conversation.responderOverride = nil
             conversation.error = nil
         }
-        if key == state.main?.key, state.isConversationMode || voiceSettings.load().speaksReplies {
+        if state.isConversationMode || voiceSettings.load().speaksReplies {
             state.repliesToSpeak.insert(message.id)
         }
         deliver(message, in: key, state: state)

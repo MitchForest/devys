@@ -2,7 +2,7 @@ import DevysClient
 import Foundation
 import Testing
 
-@Suite("Devices, team, spaces and work API")
+@Suite("Devices, team, projects and work API")
 struct TeamAPITests {
     private actor Recorder {
         var requests: [URLRequest] = []
@@ -149,44 +149,113 @@ struct TeamAPITests {
         }
     }
 
-    @Test("Spaces carry a lead; creating and changing one send only what was given")
-    func spaces() async throws {
+    @Test("Projects decode their goal, deadline, budget, lead, team and kept records")
+    func projects() async throws {
         let recorder = Recorder()
-        let spaces = try await api(
-            body: #"{"spaces":[{"id":"s1","name":"Launch","purpose":"Ship it","lead_employee_id":"ops","items":[]}]}"#,
+        let projects = try await api(
+            body: """
+            {"projects":[{"id":"p1","name":"Launch","goal":"First customers","deadline":"2026-11-30",
+             "budget":{"cents":50000,"currency":"USD"},"lead_employee_id":"ops","member_ids":["growth"],
+             "items":[{"id":"i1","kind":"artifact","ref":"a1"},{"id":"i2","kind":"file","ref":"/b/plan.md"}]},
+             {"id":"p2","name":"Hiring","goal":null,"deadline":null,"budget":null,"lead_employee_id":null,"member_ids":[],"items":[]}]}
+            """,
             recorder: recorder
-        ).spaces(Self.session, businessID: "b1")
-        #expect(spaces.first?.leadEmployeeID == "ops")
-
-        try await api(status: 201, body: "{}", recorder: recorder)
-            .createSpace(Self.session, businessID: "b1", NewSpace(name: "Launch", purpose: "Ship it", lead: "growth"))
-        var (request, body) = try await sent(recorder)
-        #expect(request.url?.path() == "/api/businesses/b1/spaces")
-        #expect(body["purpose"] as? String == "Ship it" && body["lead"] as? String == "growth")
-
-        try await api(body: #"{"updated":true}"#, recorder: recorder)
-            .updateSpace(Self.session, businessID: "b1", spaceID: "s1", SpaceChange(lead: "growth"))
-        (request, body) = try await sent(recorder)
-        #expect(request.httpMethod == "PUT" && request.url?.path() == "/api/businesses/b1/spaces/s1")
-        #expect(body["lead"] as? String == "growth" && body["name"] == nil)
+        ).projects(Self.session, businessID: "b1")
+        #expect(projects.first == Project(
+            id: "p1",
+            name: "Launch",
+            goal: "First customers",
+            deadline: "2026-11-30",
+            budget: Budget(cents: 50_000),
+            leadEmployeeID: "ops",
+            memberIDs: ["growth"],
+            items: [ProjectItem(id: "i1", kind: .artifact, ref: "a1"), ProjectItem(id: "i2", kind: .file, ref: "/b/plan.md")]
+        ))
+        #expect(projects.first?.keeps(.file, "/b/plan.md")?.id == "i2")
+        #expect(projects.last?.budget == nil && projects.last?.goal == nil)
+        #expect(await recorder.requests.last?.url?.path() == "/api/businesses/b1/projects")
     }
 
-    @Test("Work: create with space, reassign at a revision, clear a due date")
+    @Test("Creating and editing a project send every field; nil clears a goal, deadline or budget")
+    func projectChanges() async throws {
+        let recorder = Recorder()
+        let created = try await api(status: 201, body: #"{"id":"p3","name":"Launch","goal":null,"deadline":null,"budget":null,"lead_employee_id":"ops","member_ids":[],"items":[]}"#, recorder: recorder)
+            .createProject(Self.session, businessID: "b1", ProjectChange(name: "Launch", deadline: "2026-11-30", budget: Budget(cents: 1_200), members: ["growth"]))
+        #expect(created.id == "p3")
+        var (request, body) = try await sent(recorder)
+        #expect(request.httpMethod == "POST" && request.url?.path() == "/api/businesses/b1/projects")
+        #expect(body["goal"] is NSNull && body["deadline"] as? String == "2026-11-30" && body["lead"] == nil)
+        #expect((body["budget"] as? [String: Any])?["cents"] as? Int == 1_200 && body["members"] as? [String] == ["growth"])
+
+        try await api(body: "{}", recorder: recorder)
+            .updateProject(Self.session, businessID: "b1", projectID: "p3", ProjectChange(name: "Launch", goal: "Ship", lead: "growth"))
+        (request, body) = try await sent(recorder)
+        #expect(request.httpMethod == "PUT" && request.url?.path() == "/api/businesses/b1/projects/p3")
+        #expect(body["goal"] as? String == "Ship" && body["lead"] as? String == "growth" && body["budget"] is NSNull)
+
+        try await api(body: "{}", recorder: recorder).addToProject(Self.session, businessID: "b1", projectID: "p3", kind: .artifact, ref: "a1")
+        (request, body) = try await sent(recorder)
+        #expect(request.url?.path() == "/api/businesses/b1/projects/p3/items" && body["kind"] as? String == "artifact" && body["ref"] as? String == "a1")
+
+        try await api(body: #"{"removed":true}"#, recorder: recorder).removeFromProject(Self.session, businessID: "b1", projectID: "p3", itemID: "i1")
+        #expect(await recorder.requests.last?.url?.path() == "/api/businesses/b1/projects/p3/items/i1/remove")
+    }
+
+    @Test("Apps list with install and pin state; installing, removing and pinning post to the app")
+    func apps() async throws {
+        let recorder = Recorder()
+        let apps = try await api(
+            body: """
+            {"apps":[{"id":"documents","name":"Documents","icon":"file-text","summary":"Pages and files","status":"available","installed":true,"pinned":true,"visible":true},
+             {"id":"mail","name":"Mail","icon":"mail","summary":"Mailboxes","status":"coming","installed":false,"pinned":false,"visible":false}]}
+            """,
+            recorder: recorder
+        ).apps(Self.session, businessID: "b1")
+        #expect(apps.map(\.id) == ["documents", "mail"] && apps.last?.status == .coming && apps.first?.visible == true)
+
+        try await api(body: "{}", recorder: recorder).installApp(Self.session, businessID: "b1", appID: "code", install: false)
+        #expect(await recorder.requests.last?.url?.path() == "/api/businesses/b1/apps/code/uninstall")
+        try await api(body: "{}", recorder: recorder).pinApp(Self.session, businessID: "b1", appID: "code", pinned: false)
+        let (request, body) = try await sent(recorder)
+        #expect(request.url?.path() == "/api/businesses/b1/apps/code/pin" && body["pinned"] as? Bool == false)
+    }
+
+    @Test("Home decodes what needs the owner and work at a glance")
+    func home() async throws {
+        let recorder = Recorder()
+        let home = try await api(
+            body: """
+            {"needsYou":[{"kind":"decision","id":"d1","title":"Buy domain","employeeId":"growth","workId":"c1","projectId":"p1"},
+             {"kind":"work","id":"c2","title":"Decide pricing","employeeId":null,"workId":"c2","projectId":null}],
+             "glance":{"moving":[{"id":"c3","title":"Fix sitemap","employeeId":"engineering","projectId":"p1","state":"in_progress",
+              "waitCondition":null,"dueAt":null,"updatedAt":"2026-10-20T10:00:00.000Z"}],"stuck":[],"spentCents":3800}}
+            """,
+            recorder: recorder
+        ).home(Self.session, businessID: "b1")
+        #expect(home.needsYou.first == NeedsYouItem(kind: .decision, id: "d1", title: "Buy domain", employeeID: "growth", workID: "c1", projectID: "p1"))
+        #expect(home.needsYou.last?.employeeID == nil && home.needsYou.last?.kind == .work)
+        #expect(home.glance.moving.first?.state == .inProgress && home.glance.moving.first?.projectID == "p1")
+        #expect(home.glance.spentCents == 3_800 && !home.isEmpty)
+        #expect(Home().isEmpty)
+        #expect(await recorder.requests.last?.url?.path() == "/api/businesses/b1/home")
+    }
+
+    @Test("Work: create in a project, reassign at a revision, clear a due date")
     func work() async throws {
         let recorder = Recorder()
         let commitment = """
         {"id":"c1","owner_employee_id":"growth","title":"PR inquiry","objective":"","next_action":"","wait_condition":null,
-         "due_at":null,"state":"ready","evidence":[],"revision":4,"taken_over_by":null,"updated_at":"2026-10-19T15:00:00.000Z"}
+         "due_at":null,"state":"ready","evidence":[],"revision":4,"taken_over_by":null,"project_id":"p1","updated_at":"2026-10-19T15:00:00.000Z"}
         """
         let created = try await api(status: 201, body: commitment, recorder: recorder).createCommitment(
             Self.session,
             businessID: "b1",
-            NewTask(title: "PR inquiry", owner: "growth", objective: "Ten units", dueAt: "2026-10-20T15:00:00Z", spaceId: "s1")
+            NewTask(title: "PR inquiry", owner: "growth", objective: "Ten units", dueAt: "2026-10-20T15:00:00Z", projectId: "p1")
         )
-        #expect(created.revision == 4)
+        #expect(created.revision == 4 && created.projectID == "p1")
         var (request, body) = try await sent(recorder)
         #expect(request.url?.path() == "/api/businesses/b1/work" && request.httpMethod == "POST")
-        #expect(body["spaceId"] as? String == "s1" && body["dueAt"] as? String == "2026-10-20T15:00:00Z" && body["objective"] as? String == "Ten units")
+        #expect(body["projectId"] as? String == "p1" && body["dueAt"] as? String == "2026-10-20T15:00:00Z" && body["objective"] as? String == "Ten units")
 
         _ = try await api(body: commitment, recorder: recorder)
             .updateCommitment(Self.session, businessID: "b1", id: "c1", .reassign(created, to: "ops"))

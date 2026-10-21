@@ -67,8 +67,8 @@ extension Workspace {
         case .hired(let employee):
             state.team.hiring = nil
             if !state.snapshot.employees.contains(where: { $0.id == employee.id }) { state.snapshot.employees.append(employee) }
-            state.page = .employee(employee.id)
-            if !state.destination.lists(state.page) { state.destination = .team }
+            // A new hire opens in its direct chat.
+            reducePlace(.selected(.direct(employee.id)), state: &state)
             refreshTeam(state)
             loadLookPhotos(state)
         case .hireFailed(let message):
@@ -81,9 +81,9 @@ extension Workspace {
         case .retireConfirmed(let employeeID, let successorID):
             retire(employeeID, successorID: successorID, state: state)
         case .retired(let employeeID, let successorID):
+            // Their open work moved to the successor, whose direct chat opens.
             state.snapshot.employees.removeAll { $0.id == employeeID }
-            if state.page == .direct(employeeID) { open(.today, state: &state) }
-            if state.page == .employee(employeeID) { state.page = .employee(successorID) }
+            reducePlace(.selected(.direct(successorID)), state: &state)
             refreshTeam(state)
             loadWork(state)
         }

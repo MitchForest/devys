@@ -7,7 +7,7 @@ import Foundation
 
 /// The models employees can use and what each has spent.
 package struct EmployeeModels {
-    /// Loaded when an employee page first shows.
+    /// Loaded when an employee's desk first shows.
     package var catalog: ModelCatalog?
     /// Spend by employee id for employees other than Operations, whose spend comes with its status.
     package var usage: [String: RuntimeUsage] = [:]
@@ -19,8 +19,6 @@ package struct EmployeeModels {
 
 package enum ModelIntent {
     case requested(employeeID: String)
-    /// Money: every employee's spend.
-    case allUsageRequested
     case catalogLoaded(ModelCatalog)
     case usageLoaded(employeeID: String, RuntimeUsage?)
     case selected(employeeID: String, model: String)
@@ -41,9 +39,6 @@ extension Workspace {
         case .requested(let employeeID):
             if state.models.catalog == nil { loadCatalog() }
             loadUsage(employeeID, state: state)
-        case .allUsageRequested:
-            if state.models.catalog == nil { loadCatalog() }
-            for employee in state.snapshot.employees { loadUsage(employee.id, state: state) }
         case .catalogLoaded(let catalog):
             state.models.catalog = catalog
         case .usageLoaded(let employeeID, let usage):
@@ -65,7 +60,7 @@ extension Workspace {
         }
     }
 
-    /// Operations' spend arrives with its status; anyone else's is read when their page opens.
+    /// Operations' spend arrives with its status; anyone else's is read when their desk opens.
     func loadUsage(_ employeeID: String, state: State) {
         guard employeeID != state.operations?.id, let scope = scope(of: employeeID, in: state) else { return }
         let runtime = runtime

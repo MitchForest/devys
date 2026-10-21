@@ -4,7 +4,7 @@ public import Foundation
 
 /// One entry of a folder in the business's files on the Mac.
 public struct FileEntry: Equatable, Sendable, Decodable, Identifiable, Hashable {
-    public enum Kind: String, Sendable, Decodable { case file, directory, other }
+    public enum Kind: String, Sendable, Decodable { case file, directory, repository, other }
     public let name: String
     public let path: String
     public let kind: Kind

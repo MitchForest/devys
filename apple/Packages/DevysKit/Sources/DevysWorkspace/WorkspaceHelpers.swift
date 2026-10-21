@@ -3,44 +3,6 @@ import Foundation
 
 /// Pure helpers for the workspace feature; nothing here sends actions or runs effects.
 extension Workspace {
-    /// Panels, tabs and layouts: view state only.
-    func reduceLayout(_ intent: Intent, state: inout State) {
-        switch intent {
-        case .sidebarToggled:
-            state.isSidebarVisible.toggle()
-
-        case .inspectorToggled:
-            state.isInspectorVisible.toggle()
-
-        case .paletteToggled(let open):
-            state.isPaletteOpen = open
-
-        case .spaceTabSelected(let tab):
-            state.spaceTab = tab
-            if let key = state.main?.key { markRead(key, state: &state) }
-
-        case .employeeTabSelected(let tab):
-            state.employeeTab = tab
-
-        case .workLayoutSelected(let layout):
-            state.workLayout = layout
-
-        default:
-            break
-        }
-    }
-
-    static func defaultPage(for destination: Destination, snapshot: WorkspaceSnapshot) -> Page {
-        switch destination {
-        case .home: .today
-        case .inbox: .inbox
-        case .work: .work(.all)
-        case .team: .employee(snapshot.employees.first?.id)
-        case .money: .money
-        case .apps: .apps(.installed)
-        }
-    }
-
     static func message(for error: DevysHTTPError) -> String {
         switch error {
         case .unreachable: "The server isn't reachable."
@@ -54,26 +16,34 @@ extension Workspace {
 
 extension Workspace {
     #if DEBUG
-        /// QA only: DEVYS_PAGE opens a page at launch for screenshots.
-        static func applyQAPage(to state: inout State) {
-            switch ProcessInfo.processInfo.environment["DEVYS_PAGE"] {
-            case "approvals": state.page = .approvals
-            case "files": state.page = .files(nil)
-            case "space": state.page = state.spaces.value?.first.map { .space($0.id) } ?? .today
-            case "team": state.page = .employee(state.snapshot.employees.first?.id)
-            case "memory":
-                state.page = .employee(state.snapshot.employees.first?.id)
-                state.employeeTab = .memory
-            case "work": state.page = .work(.all)
-            case "board":
-                state.page = .work(.all)
-                state.workLayout = .board
-            case "inbox": state.page = .inbox
-            case "money": state.page = .money
-            case "connections": state.page = .apps(.connections)
-            case "palette": state.isPaletteOpen = true
-            case "conversation": state.page = state.operations.map { .direct($0.id) } ?? .today
+        /// QA only, for screenshots: DEVYS_PLACE=direct:<id>|project:<id>|thread:<id> opens there
+        /// at launch (or `palette` opens ⌘K); DEVYS_LAYER=app:<id>|artifact:<id>|file:<path>
+        /// stacks a layer; DEVYS_PANEL=open asks for the panel; DEVYS_SIDEBAR=hidden hides it;
+        /// DEVYS_SETTINGS=<section> opens Settings.
+        static func applyQAPlace(to state: inout State) {
+            let environment = ProcessInfo.processInfo.environment
+            func parts(_ name: String) -> (String, String)? {
+                guard let raw = environment[name], let colon = raw.firstIndex(of: ":") else { return nil }
+                return (String(raw[..<colon]), String(raw[raw.index(after: colon)...]))
+            }
+            if environment["DEVYS_PLACE"] == "palette" { state.isPaletteOpen = true }
+            switch parts("DEVYS_PLACE") {
+            case ("direct", let id)?: state.place = .direct(id)
+            case ("project", let id)?: state.place = .project(id)
+            case ("thread", let id)?: state.place = .thread(id)
             default: break
+            }
+            switch parts("DEVYS_LAYER") {
+            case ("app", let id)?: state.layers = [OpenLayer(.app(id))]
+            case ("artifact", let id)?: state.layers = [OpenLayer(.artifact(id))]
+            case ("file", let path)?: state.layers = [OpenLayer(.file(path))]
+            default: break
+            }
+            if environment["DEVYS_PANEL"] == "open" { state.isOverlayOpen = true }
+            if environment["DEVYS_SIDEBAR"] == "hidden" { state.isSidebarVisible = false }
+            // DEVYS_SETTINGS=<section> opens Settings there, as the Mac's Settings window does.
+            if let section = PreferencesSection.allCases.first(where: { $0.rawValue.lowercased() == environment["DEVYS_SETTINGS"] }) {
+                openSettings(at: section, state: &state)
             }
         }
     #endif
@@ -98,7 +68,7 @@ extension Workspace.Action {
         Self(.commitmentStateSet(commitmentID: id, state))
     }
     package static func takeoverToggled(_ id: String) -> Self { Self(.takeoverToggled(commitmentID: id)) }
-    package static func newTaskTapped(owner: String? = nil, space: String? = nil) -> Self { Self(.task(.newTaskTapped(ownerID: owner, spaceID: space))) }
+    package static func newTaskTapped(owner: String? = nil, project: String? = nil) -> Self { Self(.task(.newTaskTapped(ownerID: owner, projectID: project))) }
     package static func taskEdited(_ draft: TaskDraft) -> Self { Self(.task(.edited(draft))) }
     package static var taskConfirmed: Self { Self(.task(.confirmed)) }
     package static var taskCancelled: Self { Self(.task(.cancelled)) }
@@ -128,35 +98,40 @@ extension Workspace.Action {
     }
     package static func loadOlderTapped(_ key: ConversationKey) -> Self { Self(.conversation(.loadOlderTapped(key))) }
     package static func conversationErrorDismissed(_ key: ConversationKey) -> Self { Self(.conversation(.errorDismissed(key))) }
-    package static func workOpened(_ id: String) -> Self { Self(.conversation(.workOpened(id))) }
-    package static var workClosed: Self { Self(.conversation(.workClosed)) }
-    package static func spaceLeadChanged(_ spaceID: String, _ leadID: String) -> Self { Self(.spaceLeadChanged(spaceID: spaceID, leadID: leadID)) }
-    package static var allUsageRequested: Self { Self(.model(.allUsageRequested)) }
-    package static var connectionsRequested: Self { Self(.connectionsRequested) }
-    package static func destinationSelected(_ destination: Destination) -> Self { Self(.destinationSelected(destination)) }
-    package static func pageSelected(_ page: Page) -> Self { Self(.pageSelected(page)) }
+    package static func placeSelected(_ place: Place) -> Self { Self(.place(.selected(place))) }
+    package static func message(_ employeeID: String) -> Self { placeSelected(.direct(employeeID)) }
+    package static func threadOpened(_ id: String) -> Self { Self(.place(.threadOpened(id))) }
+    package static var backTapped: Self { Self(.place(.backTapped)) }
+    package static func layerOpened(_ layer: Layer) -> Self { Self(.place(.layerOpened(layer))) }
+    package static func layerReplaced(_ layer: Layer) -> Self { Self(.place(.layerReplaced(layer))) }
+    package static var layerPopped: Self { Self(.place(.layerPopped)) }
+    package static var layersClosed: Self { Self(.place(.layersClosed)) }
+    package static var panelToggled: Self { Self(.place(.panelToggled)) }
+    package static var wideToggled: Self { Self(.place(.wideToggled)) }
+    package static func narrowChanged(_ isNarrow: Bool) -> Self { Self(.place(.narrowChanged(isNarrow))) }
+    package static func referencingSet(_ isOn: Bool) -> Self { Self(.place(.referencingSet(isOn))) }
+    package static func askTapped(_ quote: String) -> Self { Self(.place(.askTapped(quote))) }
+    package static func startThreadTapped(_ messageID: String) -> Self { Self(.place(.startThreadTapped(messageID: messageID))) }
+    package static var newProjectTapped: Self { Self(.project(.newTapped)) }
+    package static var newProjectDismissed: Self { Self(.project(.sheetDismissed)) }
+    package static func projectCreateTapped(_ project: ProjectChange) -> Self { Self(.project(.createTapped(project))) }
+    package static func projectUpdated(_ id: String, _ change: ProjectChange) -> Self { Self(.project(.updated(projectID: id, change))) }
+    package static func projectItemAdded(_ projectID: String, _ kind: ProjectItem.Kind, _ ref: String) -> Self {
+        Self(.project(.itemAdded(projectID: projectID, kind, ref: ref)))
+    }
+    package static func projectItemRemoved(_ projectID: String, _ itemID: String) -> Self {
+        Self(.project(.itemRemoved(projectID: projectID, itemID: itemID)))
+    }
     package static var sidebarToggled: Self { Self(.sidebarToggled) }
-    package static var inspectorToggled: Self { Self(.inspectorToggled) }
     package static func paletteToggled(_ open: Bool) -> Self { Self(.paletteToggled(open)) }
-    package static func spaceTabSelected(_ tab: SpaceTab) -> Self { Self(.spaceTabSelected(tab)) }
-    package static func spaceCreateTapped(_ space: NewSpace) -> Self { Self(.spaceCreateTapped(space)) }
-    package static func spaceItemAdded(_ spaceID: String, _ kind: SpaceItem.Kind, _ ref: String) -> Self {
-        Self(.spaceItemAdded(spaceID: spaceID, kind: kind, ref: ref))
-    }
-    package static func spaceItemRemoved(_ spaceID: String, _ itemID: String) -> Self {
-        Self(.spaceItemRemoved(spaceID: spaceID, itemID: itemID))
-    }
-    package static func artifactOpened(_ id: String) -> Self { Self(.artifactOpened(artifactID: id)) }
-    package static func employeeTabSelected(_ tab: EmployeeTab) -> Self { Self(.employeeTabSelected(tab)) }
-    package static func workLayoutSelected(_ layout: WorkLayout) -> Self { Self(.workLayoutSelected(layout)) }
     package static var refreshTapped: Self { Self(.refreshTapped) }
     package static var stopTapped: Self { Self(.stopTapped) }
     package static var noticeDismissed: Self { Self(.noticeDismissed) }
     package static var signOutTapped: Self { Self(.signOutTapped) }
     package static func preferencesToggled(_ open: Bool) -> Self { Self(.preferencesToggled(open)) }
+    package static func settingsOpened(_ section: PreferencesSection) -> Self { Self(.settingsOpened(section)) }
     package static var micTapped: Self { Self(.micTapped) }
     package static var conversationToggled: Self { Self(.conversationToggled) }
     package static var stopSpeakingTapped: Self { Self(.stopSpeakingTapped) }
     package static var voiceErrorDismissed: Self { Self(.voiceErrorDismissed) }
-    package static func presenceTapped(_ id: String) -> Self { Self(.presenceTapped(id)) }
 }

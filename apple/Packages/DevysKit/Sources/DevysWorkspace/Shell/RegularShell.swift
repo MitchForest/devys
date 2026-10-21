@@ -4,8 +4,9 @@ import DevysClient
 import DevysDesignSystem
 import SwiftUI
 
-/// One gray frame (toolbar and rail) around one rounded workspace holding the
-/// sidebar, the page and the inspector, divided by hairlines.
+/// One gray frame (toolbar and business strip) around one rounded workspace: the sidebar, the
+/// conversation in the middle, and the right panel showing what the conversation is about,
+/// divided by hairlines.
 struct RegularShell: View {
     #if os(macOS)
         static let sidebarWidth: CGFloat = 236
@@ -15,7 +16,7 @@ struct RegularShell: View {
 
     let store: StoreOf<Workspace>
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage("inspectorWidth") private var inspectorWidth = 320.0
+    @AppStorage("panelWidth") private var panelWidth = Double(WorkspaceLayout.defaultPanel)
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,7 +24,7 @@ struct RegularShell: View {
                 ShellToolbar(store: store)
             #endif
             HStack(spacing: 0) {
-                Rail(store: store)
+                BusinessStrip(store: store)
                 workspace
             }
         }
@@ -41,8 +42,8 @@ struct RegularShell: View {
             }
         }
         .animation(reduceMotion ? .easeInOut(duration: 0.15) : DevysMotion.panel, value: store.isSidebarVisible)
-        .animation(reduceMotion ? .easeInOut(duration: 0.15) : DevysMotion.panel, value: store.isInspectorVisible)
-        .animation(reduceMotion ? .easeInOut(duration: 0.15) : DevysMotion.panel, value: store.state.hasInspectorContent)
+        .animation(reduceMotion ? .easeInOut(duration: 0.15) : DevysMotion.panel, value: store.state.isPanelOpen)
+        .animation(reduceMotion ? .easeInOut(duration: 0.15) : DevysMotion.panel, value: store.state.isWideShown)
         .animation(DevysMotion.quick, value: store.isPaletteOpen)
         .background { Shortcuts(store: store) }
         #if os(iOS)
@@ -60,11 +61,22 @@ struct RegularShell: View {
                 width: proxy.size.width,
                 sidebarWidth: Self.sidebarWidth,
                 sidebarVisible: store.isSidebarVisible,
-                inspectorVisible: store.isInspectorVisible && store.state.hasInspectorContent,
-                preferredInspector: inspectorWidth
+                panelOpen: store.state.isPanelOpen,
+                wide: store.state.isWideShown,
+                preferredPanel: panelWidth
             )
-            // Every column is always present at an explicit width; showing,
-            // hiding and expanding animate widths, so motion stays continuous.
+            // Whether an open panel would lie over the conversation, whatever is open now.
+            let narrow = WorkspaceLayout(
+                width: proxy.size.width,
+                sidebarWidth: Self.sidebarWidth,
+                sidebarVisible: store.isSidebarVisible,
+                panelOpen: true,
+                wide: false,
+                preferredPanel: panelWidth
+            ).overlay
+            // Every column is always present at an explicit width; showing, hiding and widening
+            // animate widths, so motion stays continuous. Too narrow for both, the panel lies
+            // over the conversation.
             HStack(spacing: 0) {
                 Sidebar(store: store)
                     .frame(width: Self.sidebarWidth)
@@ -72,23 +84,29 @@ struct RegularShell: View {
                     .clipped()
                     .background(DevysColors.sheetTint)
                 Hairline().opacity(layout.sidebar > 0 ? 1 : 0).frame(width: layout.sidebar > 0 ? 1 : 0)
-                MainPane(store: store)
-                    .frame(width: max(layout.page, WorkspaceLayout.minimumPage))
-                    .frame(width: layout.page, alignment: .leading)
+                ConversationPane(store: store)
+                    .frame(width: max(layout.conversation, WorkspaceLayout.minimumConversation))
+                    .frame(width: layout.conversation, alignment: .leading)
                     .clipped()
-                    .opacity(layout.page > 0 ? 1 : 0)
                     .background(DevysColors.sheet)
-                ResizeHandle(width: $inspectorWidth)
+                ResizeHandle(width: $panelWidth)
                     .frame(width: layout.showsHandle ? WorkspaceLayout.handle : 0)
                     .opacity(layout.showsHandle ? 1 : 0)
                     .allowsHitTesting(layout.showsHandle)
-                Inspector(store: store)
-                    .frame(width: max(layout.inspector, WorkspaceLayout.inspectorRange.lowerBound))
-                    .frame(width: layout.inspector, alignment: .leading)
-                    .clipped()
-                    .background(DevysColors.sheet)
+                if !layout.overlay { panel(layout) }
             }
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .leading)
+            .onChange(of: narrow, initial: true) { _, now in
+                if now != store.isNarrow { store.send(.narrowChanged(now)) }
+            }
+            .overlay(alignment: .trailing) {
+                if layout.overlay {
+                    panel(layout)
+                        .overlay(alignment: .leading) { Hairline() }
+                        .devysElevation(.raised)
+                        .transition(.move(edge: .trailing))
+                }
+            }
         }
         .background(DevysColors.sheet)
         .clipShape(RoundedRectangle(cornerRadius: DevysRadius.workspace, style: .continuous))
@@ -99,6 +117,14 @@ struct RegularShell: View {
         .devysElevation(.resting)
         .padding(.trailing, DevysSpacing.small)
         .padding(.bottom, DevysSpacing.small)
+    }
+
+    private func panel(_ layout: WorkspaceLayout) -> some View {
+        Group { if store.state.isPanelOpen { RightPanel(store: store) } }
+            .frame(width: max(layout.panel, WorkspaceLayout.panelRange.lowerBound))
+            .frame(width: layout.panel, alignment: .leading)
+            .clipped()
+            .background(DevysColors.sheet)
     }
 }
 
@@ -114,7 +140,7 @@ private struct ResizeHandle: View {
     @State private var start: Double?
     @State private var hovering = false
 
-    static let range = 280.0...640.0
+    static let range = Double(WorkspaceLayout.panelRange.lowerBound)...Double(WorkspaceLayout.panelRange.upperBound)
 
     var body: some View {
         // A 9pt sheet-colored strip with the visible hairline in its centre.
@@ -138,7 +164,7 @@ private struct ResizeHandle: View {
                     }
                     .onEnded { _ in start = nil }
             )
-            .onTapGesture(count: 2) { width = 320 }
+            .onTapGesture(count: 2) { width = Double(WorkspaceLayout.defaultPanel) }
             .animation(DevysMotion.quick, value: hovering)
             .accessibilityHidden(true)
     }
@@ -152,17 +178,14 @@ private struct ResizeHandle: View {
             ToolbarItem(placement: .navigation) {
                 HStack(spacing: 6) {
                     SidebarToggle(store: store)
+                    BackButton(store: store)
                     Breadcrumb(store: store).padding(.leading, 6)
                 }
             }
             .sharedBackgroundVisibility(.hidden)
             ToolbarSpacer(.flexible)
             ToolbarItem(placement: .primaryAction) {
-                HStack(spacing: 6) {
-                    PresenceStrip(store: store)
-                    SearchPill { store.send(.paletteToggled(true)) }
-                    InspectorToggle(store: store)
-                }
+                PanelToggle(store: store)
             }
             .sharedBackgroundVisibility(.hidden)
         }
@@ -176,11 +199,10 @@ private struct ShellToolbar: View {
     var body: some View {
         HStack(spacing: 6) {
             SidebarToggle(store: store)
+            BackButton(store: store)
             Breadcrumb(store: store).padding(.leading, 6)
             Spacer(minLength: DevysSpacing.regular)
-            PresenceStrip(store: store)
-            SearchPill { store.send(.paletteToggled(true)) }
-            InspectorToggle(store: store)
+            PanelToggle(store: store)
         }
         .padding(.leading, 12)
         .padding(.trailing, 10)
@@ -198,27 +220,46 @@ private struct SidebarToggle: View {
     }
 }
 
-private struct InspectorToggle: View {
+/// Back returns from a thread to where it was opened.
+private struct BackButton: View {
     let store: StoreOf<Workspace>
 
     var body: some View {
-        // The right panel only holds a work item, so its toggle shows only then.
-        if store.state.hasInspectorContent {
-            ToolbarIconButton(store.isInspectorVisible ? "Hide inspector (⌥⌘0)" : "Show inspector (⌥⌘0)", symbol: "sidebar.right") {
-                store.send(.inspectorToggled)
+        if !store.history.isEmpty {
+            ToolbarIconButton("Back (⌘[)", symbol: "chevron.left") { store.send(.backTapped) }
+        }
+    }
+}
+
+/// Shows or hides the right panel; only when there is something to show.
+private struct PanelToggle: View {
+    let store: StoreOf<Workspace>
+
+    var body: some View {
+        if store.state.hasPermanent || !store.layers.isEmpty {
+            ToolbarIconButton(store.state.isPanelOpen ? "Hide side panel (⌥⌘0)" : "Show side panel (⌥⌘0)", symbol: "sidebar.right") {
+                store.send(.panelToggled)
             }
         }
     }
 }
 
+/// The business, the place and, in a thread, its project: "Acme / Launch › Fix sitemap".
 private struct Breadcrumb: View {
     let store: StoreOf<Workspace>
 
     var body: some View {
+        let trail = store.state.title(of: store.place)
         HStack(spacing: 6) {
             Text(store.snapshot.businessName).foregroundStyle(DevysColors.ink3)
             Text("/").foregroundStyle(DevysColors.ink3)
-            Text(store.pageTitle).foregroundStyle(DevysColors.ink).fontWeight(.semibold)
+            if let parent = trail.parent {
+                Button(parent.title) { store.send(.placeSelected(parent.place)) }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(DevysColors.ink2)
+                Text("›").foregroundStyle(DevysColors.ink3)
+            }
+            Text(trail.title).foregroundStyle(DevysColors.ink).fontWeight(.semibold).lineLimit(1)
                 .contentTransition(.opacity)
         }
         .font(DevysTypography.control)
@@ -226,143 +267,8 @@ private struct Breadcrumb: View {
     }
 }
 
-/// Who is working and who is waiting on you, as overlapping Faces.
-/// Teammates worth a glance: working, waiting on you, failed or stopped.
-/// Click to act, hover to read, right-click for more.
-private struct PresenceStrip: View {
-    let store: StoreOf<Workspace>
-
-    var body: some View {
-        let presence = store.state.presence
-        HStack(spacing: 4) {
-            ForEach(presence.prefix(4)) { item in
-                PresenceFace(store: store, presence: item)
-                    .transition(.scale(scale: 0.6).combined(with: .opacity))
-            }
-        }
-        .animation(DevysMotion.select, value: presence)
-    }
-}
-
-private struct PresenceFace: View {
-    let store: StoreOf<Workspace>
-    let presence: Presence
-    @State private var hovering = false
-    @ScaledMetric(relativeTo: .caption2) private var countSize = 9.0
-
-    private var isOperations: Bool { presence.employee.id == store.operations?.id }
-
-    var body: some View {
-        Button {
-            store.send(.presenceTapped(presence.employee.id))
-        } label: {
-            Portrait(store.state.portrait(for: presence.employee), size: 22, mood: mood, isAnimated: false)
-                .overlay { if presence.signal == .working { WorkingRing() } }
-                .overlay(alignment: .topTrailing) { badge.offset(x: 5, y: -4) }
-                .padding(4)
-                .background(hovering ? DevysColors.track : .clear, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .help(presence.summary)
-        .accessibilityLabel(presence.summary)
-        .contextMenu {
-            Button("Message", systemImage: "bubble.left") { store.send(.pageSelected(.direct(presence.employee.id))) }
-            if case .needsYou = presence.signal {
-                Button("Review decisions", systemImage: "checkmark.seal") { store.send(.pageSelected(.approvals)) }
-            }
-            Button("Open profile", systemImage: "person.crop.circle") { store.send(.pageSelected(.employee(presence.employee.id))) }
-            Divider()
-            if presence.employee.paused {
-                Button("Resume", systemImage: "play.circle") { store.send(.pauseToggled(presence.employee.id)) }
-            } else {
-                Button("Pause", systemImage: "pause.circle") { store.send(.pauseToggled(presence.employee.id)) }
-            }
-            if isOperations, presence.signal == .working {
-                Button("Stop", systemImage: "stop.circle", role: .destructive) { store.send(.stopTapped) }
-            }
-        }
-    }
-
-    private var mood: BotMood {
-        switch presence.signal {
-        case .working: .working
-        case .needsYou: .waiting
-        case .failed: .oops
-        case .paused: .off
-        }
-    }
-
-    @ViewBuilder private var badge: some View {
-        switch presence.signal {
-        case .working:
-            EmptyView()
-        case .needsYou(let count):
-            Text("\(count)")
-                .font(.system(size: countSize, weight: .bold).monospacedDigit())
-                .foregroundStyle(.white)
-                .frame(minWidth: 14, minHeight: 14)
-                .background(DevysColors.amber, in: Capsule())
-                .overlay { Capsule().strokeBorder(DevysColors.frame, lineWidth: 1.5) }
-        case .failed:
-            Image(systemName: "exclamationmark")
-                .font(.system(size: 8, weight: .heavy))
-                .foregroundStyle(.white)
-                .frame(width: 14, height: 14)
-                .background(DevysColors.red, in: Circle())
-                .overlay { Circle().strokeBorder(DevysColors.frame, lineWidth: 1.5) }
-        case .paused:
-            Capsule()
-                .fill(DevysColors.gray)
-                .frame(width: 8, height: 3)
-                .padding(3.5)
-                .background(DevysColors.frame, in: Circle())
-        }
-    }
-}
-
-/// A slow indigo arc around a working teammate.
-private struct WorkingRing: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { context in
-            let angle = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.6) / 1.6 * 360
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .inset(by: -2.5)
-                .stroke(
-                    AngularGradient(colors: [DevysColors.indigo, DevysColors.indigo.opacity(0)], center: .center, angle: .degrees(angle)),
-                    lineWidth: 1.75
-                )
-        }
-        .accessibilityHidden(true)
-    }
-}
-
-private struct SearchPill: View {
-    let action: () -> Void
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass").font(.system(size: 12, weight: .medium))
-                Text("⌘K").font(DevysTypography.caption)
-            }
-            .foregroundStyle(DevysColors.ink3)
-            .padding(.horizontal, 12)
-            .frame(height: 30)
-            .background(hovering ? DevysColors.track.opacity(0.8) : DevysColors.track, in: Capsule())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .help("Search (⌘K)")
-        .accessibilityLabel("Search")
-    }
-}
-
-private struct Rail: View {
+/// Tiles that switch businesses, and the account at the bottom.
+private struct BusinessStrip: View {
     let store: StoreOf<Workspace>
 
     var body: some View {
@@ -386,16 +292,6 @@ private struct Rail: View {
                 .accessibilityLabel("Switch to \(business.name)")
                 .accessibilityAddTraits(selected ? .isSelected : [])
             }
-            Rectangle().fill(DevysColors.hairline).frame(width: 24, height: 1).padding(.vertical, 8)
-            ForEach(Destination.allCases) { destination in
-                RailButton(
-                    destination: destination,
-                    selected: store.destination == destination,
-                    badge: destination == .home ? (store.decisions.value?.count ?? 0) + store.state.unreadConversations : 0
-                ) {
-                    store.send(.destinationSelected(destination))
-                }
-            }
             Spacer()
             Menu {
                 if let name = store.account?.person.displayName { Text(name) }
@@ -404,7 +300,8 @@ private struct Rail: View {
                 #if os(macOS)
                     SettingsLink { Text("Settings…") }
                 #else
-                    Button("Settings") { store.send(.preferencesToggled(true)) }
+                    Button("Settings…") { store.send(.preferencesToggled(true)) }
+                    Button("Apps & connections…") { store.send(.settingsOpened(.apps)) }
                 #endif
                 Button("Sign out of this device") { store.send(.signOutTapped) }
             } label: {
@@ -423,62 +320,18 @@ private struct Rail: View {
     }
 }
 
-private struct RailButton: View {
-    let destination: Destination
-    let selected: Bool
-    let badge: Int
-    let action: () -> Void
-    @State private var hovering = false
-    @ScaledMetric(relativeTo: .caption2) private var badgeSize = 9.5
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: destination.symbol)
-                .font(.system(size: 15, weight: .medium))
-                .symbolVariant(selected ? .fill : .none)
-                .foregroundStyle(selected || hovering ? DevysColors.ink : DevysColors.ink2)
-                .frame(width: 38, height: 38)
-                .background {
-                    if selected {
-                        RoundedRectangle(cornerRadius: 11, style: .continuous).fill(DevysColors.sheet).devysElevation(.resting)
-                    } else if hovering {
-                        RoundedRectangle(cornerRadius: 11, style: .continuous).fill(DevysColors.track)
-                    }
-                }
-                .overlay(alignment: .topTrailing) {
-                    if badge > 0 {
-                        Text("\(badge)")
-                            .font(.system(size: badgeSize, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(minWidth: 15, minHeight: 15)
-                            .background(DevysColors.auroraRose, in: Capsule())
-                            .offset(x: -3, y: 3)
-                    }
-                }
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .animation(DevysMotion.quick, value: hovering)
-        .help(destination.title)
-        .accessibilityLabel(badge > 0 ? "\(destination.title), \(badge)" : destination.title)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-}
-
 /// Hardware-keyboard shortcuts for macOS and iPad.
 private struct Shortcuts: View {
     let store: StoreOf<Workspace>
 
     var body: some View {
         ZStack {
-            ForEach(Array(Destination.allCases.enumerated()), id: \.element) { index, destination in
-                Button(destination.title) { store.send(.destinationSelected(destination)) }
-                    .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
-            }
             Button("Search") { store.send(.paletteToggled(!store.isPaletteOpen)) }.keyboardShortcut("k", modifiers: .command)
+            Button("Back") { store.send(.backTapped) }.keyboardShortcut("[", modifiers: .command).disabled(store.history.isEmpty)
             Button("Sidebar") { store.send(.sidebarToggled) }.keyboardShortcut("s", modifiers: [.command, .control])
-            Button("Inspector") { store.send(.inspectorToggled) }.keyboardShortcut("0", modifiers: [.command, .option])
+            Button("Side panel") { store.send(.panelToggled) }.keyboardShortcut("0", modifiers: [.command, .option])
+            // Esc goes back one layer, unless the palette has it.
+            Button("Back one layer") { store.send(.layerPopped) }.keyboardShortcut(.escape, modifiers: []).disabled(store.layers.isEmpty || store.isPaletteOpen)
             Button("Refresh") { store.send(.refreshTapped) }.keyboardShortcut("r", modifiers: .command)
             Button("Stop") { store.send(.stopTapped) }.keyboardShortcut(".", modifiers: .command).disabled(!store.isRunning)
         }

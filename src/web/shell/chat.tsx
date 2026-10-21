@@ -99,7 +99,7 @@ export function ConversationView({
   empty: ReactNode;
   className?: string;
 }) {
-  const { person, decisions, employees } = useWorkspace();
+  const { person, decisions, employees, place } = useWorkspace();
   const [loadingOlder, setLoadingOlder] = useState(false);
   const { messages, pending, key } = conversation;
   const history = valueOf(messages);
@@ -107,13 +107,15 @@ export function ConversationView({
   // Requests waiting on the owner: from this DM's employee, or about this work item.
   const ref = key?.slice(key.indexOf(":") + 1);
   // Requests wait where they were asked: a work item's in its thread, others in the DM. A
-  // channel shows none; its threads' cards say they need the owner.
+  // channel shows none; its threads' cards say they need the owner. Home's are in Needs you.
   const waiting = (valueOf(decisions) ?? []).filter((d) =>
-    key?.startsWith("direct:")
-      ? d.employee_id === ref && !d.commitment_id
-      : key?.startsWith("work:")
-        ? d.commitment_id === ref
-        : false,
+    place.kind === "home"
+      ? false
+      : key?.startsWith("direct:")
+        ? d.employee_id === ref && !d.commitment_id
+        : key?.startsWith("work:")
+          ? d.commitment_id === ref
+          : false,
   );
   const lastMine = items.findLastIndex((item) => item.kind !== "heading" && item.bubble.mine);
   return (

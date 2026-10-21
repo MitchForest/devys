@@ -3,7 +3,7 @@ import DevysClient
 import DevysDesignSystem
 import SwiftUI
 
-/// ⌘K: jump to any page in the current business by typing.
+/// ⌘K: jump to Home, a project, an employee, a thread or an app in the current business by typing.
 struct CommandPalette: View {
     let store: StoreOf<Workspace>
     @State private var query = ""
@@ -25,7 +25,7 @@ struct CommandPalette: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 10) {
                     Image(systemName: "magnifyingglass").foregroundStyle(DevysColors.ink3).accessibilityHidden(true)
-                    TextField("Jump to a conversation, page, space or work", text: $query)
+                    TextField("Jump to a project, an employee, a thread or an app", text: $query)
                         .textFieldStyle(.plain)
                         .font(DevysTypography.heading.weight(.regular))
                         .focused($focused)
@@ -72,20 +72,11 @@ struct CommandPalette: View {
     }
 
     private var targets: [Target] {
-        let snapshot = store.snapshot
-        var all = [
-            Target(id: "today", title: "Today", detail: "Home", symbol: "sun.max", action: .pageSelected(.today)),
-            Target(id: "approvals", title: "Approvals", detail: "Home", symbol: "faceid", action: .pageSelected(.approvals)),
-            Target(id: "inbox", title: "Inbox", detail: "Mail", symbol: "tray", action: .pageSelected(.inbox)),
-            Target(id: "work", title: "Work", detail: "All commitments", symbol: "checklist", action: .pageSelected(.work(.all))),
-            Target(id: "money", title: "Money", detail: "Spend", symbol: "dollarsign.circle", action: .pageSelected(.money)),
-            Target(id: "apps", title: "Apps", detail: "Installed", symbol: "square.grid.2x2", action: .pageSelected(.apps(.installed))),
-            Target(id: "connections", title: "Connections", detail: "Accounts", symbol: "link", action: .pageSelected(.apps(.connections)))
-        ]
-        all += (store.spaces.value ?? []).map { Target(id: $0.id, title: $0.name, detail: "Space", symbol: "square.grid.2x2", action: .pageSelected(.space($0.id))) }
-        all += snapshot.employees.map { Target(id: "dm-\($0.id)", title: $0.name, detail: "Direct message", symbol: "bubble.left", action: .pageSelected(.direct($0.id))) }
-        all += snapshot.employees.map { Target(id: $0.id, title: $0.name, detail: "Team", symbol: "person", action: .pageSelected(.employee($0.id))) }
-        all += (store.work.value ?? []).map { Target(id: $0.id, title: $0.title, detail: "Work", symbol: "checklist", action: .workOpened($0.id)) }
+        var all = [Target(id: "home", title: "Home", detail: store.operations?.name ?? "Operations", symbol: "house", action: .placeSelected(.home))]
+        all += (store.projects.value ?? []).map { Target(id: $0.id, title: $0.name, detail: "Project", symbol: "square.grid.2x2", action: .placeSelected(.project($0.id))) }
+        all += store.snapshot.employees.map { Target(id: "dm-\($0.id)", title: $0.name, detail: "Team", symbol: "bubble.left", action: .message($0.id)) }
+        all += (store.work.value ?? []).filter(\.state.isOpen).map { Target(id: $0.id, title: $0.title, detail: "Thread", symbol: "checklist", action: .threadOpened($0.id)) }
+        all += (store.apps.value ?? []).filter(\.visible).map { Target(id: "app-\($0.id)", title: $0.name, detail: "App", symbol: "square.grid.2x2", action: .layerOpened(.app($0.id))) }
         return all
     }
 

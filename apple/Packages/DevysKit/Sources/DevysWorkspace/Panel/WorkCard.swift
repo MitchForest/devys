@@ -4,19 +4,17 @@ import DevysClient
 import DevysDesignSystem
 import SwiftUI
 
-/// One commitment in the right panel (pushed on iPhone): who owns it, its state, what's
-/// next, what it waits on, when it's due, its decisions and evidence, then its own thread.
-struct WorkPanel: View {
+/// A thread's permanent view: the work item itself. Who owns it, where it stands, what's next,
+/// what it waits on, when it's due, the decision waiting on the owner, its coding sessions, the
+/// live browser and its evidence. The thread itself is the conversation in the middle.
+struct WorkCard: View {
     let store: StoreOf<Workspace>
     let commitmentID: String
-    /// In the right panel it closes; on iPhone navigation pops it instead.
-    var closable = false
+    let close: () -> Void
     @Dependency(\.runtimeClient) private var runtime
     /// This item's requests the owner already answered.
     @State private var answered: [Decision] = []
     @State private var showsEvidence = false
-
-    private var key: ConversationKey { .work(commitmentID) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -35,47 +33,29 @@ struct WorkPanel: View {
                         CodingSessions(store: store, item: item)
                         BrowserLine(store: store, item: item)
                         evidence(item)
-                        SectionHeader("Conversation").padding(.top, 6)
-                        ConversationMessages(store: store, key: key)
                     }
                     .padding(14)
                 }
-                ConversationComposer(store: store, key: key).padding(10)
             } else {
                 header(nil)
                 Spacer()
-                if case .loading = store.work { ProgressView() } else { EmptyNote(text: "This work no longer exists.").padding(14) }
+                if case .loading = store.work { ProgressView() } else { EmptyNote(text: "This work item no longer exists.").padding(14) }
                 Spacer()
             }
         }
     }
 
     private func header(_ item: Commitment?) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item?.title ?? "Work").font(DevysTypography.heading).foregroundStyle(DevysColors.ink).lineLimit(3)
-                HStack(spacing: 6) {
-                    item?.state.chip
-                    if let takeover = item.flatMap(store.state.takeoverTitle) {
-                        Text(takeover).font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
-                    }
-                }
-            }
-            Spacer(minLength: 4)
+        PanelHeader(title: item?.title ?? "Work", detail: item.flatMap(store.state.takeoverTitle), close: close) {
             if let item {
+                item.state.chip
                 let following = store.state.isFollowing(item.id)
                 ToolbarIconButton(
                     following ? "Following: told at each step. Stop following" : "Follow each step",
                     symbol: following ? "bell.fill" : "bell"
                 ) { store.send(.followToggled(item.id)) }
             }
-            if closable {
-                ToolbarIconButton("Close", symbol: "xmark") { store.send(.workClosed) }
-            }
         }
-        .padding(.horizontal, 14)
-        .padding(.top, 14)
-        .padding(.bottom, 8)
     }
 
     @ViewBuilder private func decisions(_ item: Commitment) -> some View {

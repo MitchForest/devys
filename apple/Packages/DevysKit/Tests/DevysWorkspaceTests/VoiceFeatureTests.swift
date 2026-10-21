@@ -118,7 +118,7 @@ struct VoiceFeatureTests {
             Store(initialState: Workspace.State(server: URL(string: "http://127.0.0.1:5173")!)) { Workspace() }
         }
         await settle("team") { store.operationsScope != nil }
-        store.send(.pageSelected(.direct("ops")))
+        store.send(.message("ops"))
         await settle("Operations' DM") { store.main?.messages.value != nil }
         return store
     }
@@ -217,10 +217,10 @@ struct VoiceFeatureTests {
         let store = await makeStore(microphone: microphone, conversation: Conversation())
         store.send(.conversationToggled)
         await settle("first turn") { await microphone.starts.count == 1 }
-        store.send(.pageSelected(.today))
+        store.send(.message("growth"))
         #expect(!store.isConversationMode)
         #expect(store.voice == .idle)
-        #expect(store.main == nil)
+        #expect(store.main?.key == .direct("growth"))
     }
 
     @Test("Reactions replace each other and go to the message's author")

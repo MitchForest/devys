@@ -13,8 +13,8 @@ private actor ConversationServer {
     var reads: [(key: String, seen: String)] = []
     var paused: Set<String> = []
     var running: Set<String> = []
-    var commitments = [Commitment(id: "c1", ownerEmployeeID: "growth", title: "Write a tagline", state: .inProgress)]
-    var spaces = [Space(id: "s1", name: "Launch", purpose: "Ship Acme", leadEmployeeID: "ops", items: [SpaceItem(id: "i1", kind: .commitment, ref: "c1")])]
+    var commitments = [Commitment(id: "c1", ownerEmployeeID: "growth", title: "Write a tagline", state: .inProgress, projectID: "p1")]
+    var projects = [Project(id: "p1", name: "Launch", goal: "Ship Acme", leadEmployeeID: "ops")]
     private var count = 0
 
     @discardableResult
@@ -48,7 +48,7 @@ private actor ConversationServer {
         let last = messages.last { $0.employeeID != nil && !$0.isEvent }?.employeeID
         let fallback: String? = switch key.kind {
         case .direct: key.ref
-        case .space: spaces.first { $0.id == key.ref }?.leadEmployeeID
+        case .project: projects.first { $0.id == key.ref }?.leadEmployeeID
         case .work: commitments.first { $0.id == key.ref }?.ownerEmployeeID
         }
         return ConversationPage(messages: messages, respondent: last ?? fallback)
@@ -92,14 +92,14 @@ struct ConversationFeatureTests {
                 postMessage: { _, key, message in try await server.post(key, message) },
                 markRead: { _, key, seen in await server.read(key, seen) },
                 work: { _ in await server.commitments },
-                spaces: { _ in await server.spaces }
+                projects: { _ in await server.projects }
             )
             $0.continuousClock = InstantClock()
             $0.uuid = .incrementing
         } operation: {
             Store(initialState: Workspace.State(server: URL(string: "http://127.0.0.1:5173")!)) { Workspace() }
         }
-        await settle("team and spaces") { store.operationsScope != nil && store.spaces.value != nil && store.work.value != nil }
+        await settle("team and projects") { store.operationsScope != nil && store.projects.value != nil && store.work.value != nil }
         return store
     }
 
@@ -111,19 +111,19 @@ struct ConversationFeatureTests {
         Issue.record("Timed out waiting for \(what)")
     }
 
-    private func open(_ page: Page, in store: StoreOf<Workspace>) async {
-        store.send(.pageSelected(page))
+    private func open(_ place: Place, in store: StoreOf<Workspace>) async {
+        store.send(.placeSelected(place))
         await settle("conversation") { store.main?.messages.value != nil }
     }
 
     @Test("The To chip shows who spoke last, a reply's author, the mentioned, and the picked responder")
     func toChip() async {
         let server = ConversationServer()
-        let key = ConversationKey.space("s1")
+        let key = ConversationKey.project("p1")
         let ops = await server.add(key, "employee:ops", "Launch is Tuesday.")
         await server.add(key, "employee:growth", "The tagline is drafted.")
         let store = await makeStore(server)
-        await open(.space("s1"), in: store)
+        await open(.project("p1"), in: store)
         #expect(store.state.recipients(in: key) == ["growth"])
         store.send(.replyTapped(key, ops.id))
         #expect(store.state.recipients(in: key) == ["ops"])
@@ -136,7 +136,7 @@ struct ConversationFeatureTests {
         #expect(store.state.recipients(in: key) == ["engineering"])
     }
 
-    @Test("Before anyone speaks, the conversation's default answers: the DM's employee, the space's lead")
+    @Test("Before anyone speaks, the conversation's default answers: the direct chat's employee, the project's lead")
     func defaults() {
         let team = BusinessDetail.fixture("acme").employees
         var conversation = OpenConversation(key: .direct("growth"))
@@ -151,8 +151,8 @@ struct ConversationFeatureTests {
     func pickerSends() async {
         let server = ConversationServer()
         let store = await makeStore(server)
-        let key = ConversationKey.space("s1")
-        await open(.space("s1"), in: store)
+        let key = ConversationKey.project("p1")
+        await open(.project("p1"), in: store)
         store.send(.draftChanged(key, "Who owns the domain?"))
         store.send(.responderPicked(key, "engineering"))
         store.send(.sendTapped(key))
@@ -166,8 +166,8 @@ struct ConversationFeatureTests {
     func mentionInsertion() async {
         let server = ConversationServer()
         let store = await makeStore(server)
-        let key = ConversationKey.space("s1")
-        await open(.space("s1"), in: store)
+        let key = ConversationKey.project("p1")
+        await open(.project("p1"), in: store)
         let team = store.snapshot.employees
         store.send(.draftChanged(key, "Ask @gro"))
         let typing = store.main?.draft ?? ""
@@ -223,11 +223,11 @@ struct ConversationFeatureTests {
     @Test("Replying quotes the message and goes to its author")
     func replyTo() async {
         let server = ConversationServer()
-        let key = ConversationKey.space("s1")
+        let key = ConversationKey.project("p1")
         let growth = await server.add(key, "employee:growth", "Draft ready.")
         await server.add(key, "employee:ops", "Domain is booked.")
         let store = await makeStore(server)
-        await open(.space("s1"), in: store)
+        await open(.project("p1"), in: store)
         store.send(.replyTapped(key, growth.id))
         #expect(store.main?.replyingTo == growth.id)
         store.send(.draftChanged(key, "Shorter please"))
@@ -238,39 +238,39 @@ struct ConversationFeatureTests {
         await settle("waiting on the author") { store.main?.awaiting == ["growth"] }
     }
 
-    @Test("A hand-off card opens its work item in the right panel, with its own thread and composer")
+    @Test("A hand-off card moves the middle into its thread under the project; Back returns to the channel")
     func handOffCard() async throws {
         let server = ConversationServer()
-        await server.add(.space("s1"), "system", "Growth took on \"Write a tagline\".", kind: .event, ref: "c1")
+        await server.add(.project("p1"), "system", "Growth took on \"Write a tagline\".", kind: .event, ref: "c1")
         await server.add(.work("c1"), "employee:growth", "Starting with three options.")
         let store = await makeStore(server)
-        await open(.space("s1"), in: store)
-        store.send(.inspectorToggled)
+        await open(.project("p1"), in: store)
         let timeline = ChatTimeline(messages: store.main?.messages.value ?? [], pending: [], now: .now)
         let card = try #require(timeline.items.compactMap { if case .event(let event) = $0 { event } else { nil } }.first)
         let ref = try #require(card.ref)
         #expect(ref == "c1")
-        store.send(.workOpened(ref))
-        #expect(store.state.selectedWorkID == "c1")
-        #expect(store.isInspectorVisible)
-        await settle("work thread") { store.panel?.messages.value?.count == 1 }
-        #expect(store.main?.key == .space("s1"))
+        store.send(.threadOpened(ref))
+        #expect(store.place == .thread("c1"))
+        #expect(store.history == [.project("p1")])
+        #expect(store.state.title(of: store.place).title == "Write a tagline")
+        #expect(store.state.title(of: store.place).parent?.place == .project("p1"))
+        await settle("work thread") { store.main?.key == .work("c1") && store.main?.messages.value?.count == 1 }
+        #expect(store.state.isPanelOpen)
         store.send(.draftChanged(.work("c1"), "Make them shorter"))
         store.send(.sendTapped(.work("c1")))
         await settle("posted to the work thread") { await server.posts.count == 1 }
         #expect(await server.posts.first?.key == "work:c1")
         #expect(store.main?.draft.isEmpty == true)
-        store.send(.workClosed)
-        #expect(store.state.selectedWorkID == nil)
-        store.send(.workOpened("c1"))
-        store.send(.pageSelected(.today))
-        #expect(store.panel == nil)
+        store.send(.backTapped)
+        #expect(store.place == .project("p1"))
+        #expect(store.history.isEmpty)
+        #expect(store.main?.key == .project("p1"))
     }
 
     @Test("Unread counts come from the server and clear while the conversation is on screen")
     func unread() async {
         let server = ConversationServer()
-        let key = ConversationKey.space("s1")
+        let key = ConversationKey.project("p1")
         await server.add(key, "employee:ops", "One")
         let newest = await server.add(key, "employee:growth", "Two")
         await server.setUnread(key, 2)
@@ -278,17 +278,12 @@ struct ConversationFeatureTests {
         await server.setUnread(.direct("growth"), 1)
         let store = await makeStore(server)
         await settle("unread") { store.state.unread(key) == 2 && store.state.unread(.direct("growth")) == 1 }
-        #expect(store.state.unreadConversations == 2)
-        store.send(.pageSelected(.space("s1")))
-        store.send(.spaceTabSelected(.overview))
+        store.send(.placeSelected(.project("p1")))
         await settle("loaded") { store.main?.messages.value != nil }
-        #expect(await server.reads.isEmpty)
-        #expect(store.state.unread(key) == 2)
-        store.send(.spaceTabSelected(.conversation))
         #expect(store.state.unread(key) == 0)
-        await settle("read") { await server.reads.count == 1 }
-        #expect(await server.reads.first?.key == "space:s1")
-        #expect(await server.reads.first?.seen == newest.createdAt)
+        await settle("read") { await server.reads.contains { $0.key == "project:p1" } }
+        #expect(await server.reads.first { $0.key == "project:p1" }?.key == "project:p1")
+        #expect(await server.reads.first { $0.key == "project:p1" }?.seen == newest.createdAt)
         #expect(store.state.unread(.direct("growth")) == 1)
     }
 
@@ -312,7 +307,7 @@ struct ConversationFeatureTests {
 }
 
 /// Sleeps return at once, so polling and the refresh loop run without real delays.
-private struct InstantClock: Clock {
+struct InstantClock: Clock {
     typealias Duration = Swift.Duration
     struct Instant: InstantProtocol {
         var offset: Duration = .zero

@@ -1,49 +1,118 @@
 import ComposableArchitecture2
 import Dependencies
-import DevysClient
+package import DevysClient
 import Foundation
 
-// MARK: - Work and decisions
+// MARK: - Work, decisions, projects, apps and Home
+
+/// Everything the sidebar and the permanent views read, loaded together every tick.
+package struct WorkRecords: Sendable {
+    package var work: [Commitment]
+    package var decisions: [Decision]
+    package var projects: [Project]
+    package var home: Home
+    package var apps: [AppEntry]
+
+    package init(work: [Commitment], decisions: [Decision], projects: [Project], home: Home, apps: [AppEntry]) {
+        self.work = work
+        self.decisions = decisions
+        self.projects = projects
+        self.home = home
+        self.apps = apps
+    }
+}
+
+/// The New project sheet: the fields live in the sheet; this is what the server said.
+package struct ProjectSheet: Equatable {
+    package var isSubmitting = false
+    package var error: String?
+
+    package init() {}
+}
+
+package enum ProjectIntent {
+    case newTapped
+    case sheetDismissed
+    case createTapped(ProjectChange)
+    case created(Project)
+    case createFailed
+    /// The overview's edit form, saved as one change.
+    case updated(projectID: String, ProjectChange)
+    /// Keeps a page or file on the project's overview; the record stays in its app.
+    case itemAdded(projectID: String, ProjectItem.Kind, ref: String)
+    case itemRemoved(projectID: String, itemID: String)
+}
 
 extension Workspace {
-    /// Work, decisions, spaces and their files.
     func reduceWork(_ intent: Intent, state: inout State) {
         switch intent {
-        case .workLoaded(let businessID, let work, let decisions, let spaces):
+        case .workLoaded(let businessID, let records):
             guard businessID == state.businessID else { return }
-            state.work = .loaded(work)
-            state.decisions = .loaded(decisions)
-            state.spaces = .loaded(spaces)
+            state.work = .loaded(records.work)
+            state.decisions = .loaded(records.decisions)
+            state.projects = .loaded(records.projects)
+            state.home = .loaded(records.home)
+            state.apps = .loaded(records.apps)
         case .decisionAnswered(let decisionID, let approve):
             answer(decisionID, approve: approve, state: &state)
         case .commitmentStateSet(let commitmentID, let target):
             setState(commitmentID, target, state: state)
         case .takeoverToggled(let commitmentID):
             toggleTakeover(commitmentID, state: state)
-        case .spaceCreateTapped(let space):
-            createSpace(space, state: state)
-        case .spaceLeadChanged(let spaceID, let leadID):
-            changeWork(state, failure: "The lead didn't change. Try again.") { runtime, businessID in
-                try await runtime.updateSpace(businessID, spaceID, SpaceChange(lead: leadID))
-            }
-        case .connectionsRequested:
-            loadGoogle(state)
-        case .googleLoaded(let connection):
-            state.google = connection
-        case .spaceItemAdded(let spaceID, let kind, let ref):
-            changeWork(state, failure: "That couldn't be added to the space.") { runtime, businessID in
-                try await runtime.addToSpace(businessID, spaceID, kind, ref)
-            }
-        case .spaceItemRemoved(let spaceID, let itemID):
-            changeWork(state, failure: "That couldn't be removed from the space.") { runtime, businessID in
-                try await runtime.removeFromSpace(businessID, spaceID, itemID)
-            }
-        case .artifactOpened(let artifactID):
-            openArtifact(artifactID, state: &state)
-        case .artifactTextLoaded(let artifactID, let text):
-            state.artifactTexts[artifactID] = text
         default:
             break
+        }
+    }
+
+    func reduceProject(_ intent: ProjectIntent, state: inout State) {
+        switch intent {
+        case .newTapped:
+            state.newProject = ProjectSheet()
+        case .sheetDismissed:
+            state.newProject = nil
+        case .createTapped(let project):
+            createProject(project, state: &state)
+        case .created(let project):
+            state.newProject = nil
+            reducePlace(.selected(.project(project.id)), state: &state)
+        case .createFailed:
+            state.newProject?.isSubmitting = false
+            state.newProject?.error = "The project couldn't be created."
+        case .updated(let projectID, let change):
+            changeWork(state, failure: "The project couldn't be saved.") { runtime, businessID in
+                try await runtime.updateProject(businessID, projectID, change)
+            }
+        case .itemAdded(let projectID, let kind, let ref):
+            changeWork(state, failure: "That couldn't be added to the project.") { runtime, businessID in
+                try await runtime.addToProject(businessID, projectID, kind, ref)
+            }
+        case .itemRemoved(let projectID, let itemID):
+            changeWork(state, failure: "That couldn't be removed.") { runtime, businessID in
+                try await runtime.removeFromProject(businessID, projectID, itemID)
+            }
+        }
+    }
+
+    /// A project needs a name; it opens once the server has it.
+    func createProject(_ project: ProjectChange, state: inout State) {
+        var project = project
+        project.name = String(project.name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(80))
+        guard !project.name.isEmpty, !state.businessID.isEmpty, state.newProject?.isSubmitting != true else { return }
+        state.newProject = ProjectSheet()
+        state.newProject?.isSubmitting = true
+        let request = project
+        let businessID = state.businessID
+        let runtime = runtime
+        store.addTask {
+            let created: Project
+            do {
+                created = try await runtime.createProject(businessID, request)
+            } catch {
+                try store.send(Action(.project(.createFailed)))
+                return
+            }
+            try await reloadWork(runtime, businessID)
+            try store.send(Action(.project(.created(created))))
         }
     }
 
@@ -51,13 +120,7 @@ extension Workspace {
         let businessID = state.businessID
         guard !businessID.isEmpty else { return }
         let runtime = runtime
-        store.addTask {
-            guard let work = try? await runtime.work(businessID),
-                  let decisions = try? await runtime.decisions(businessID),
-                  let spaces = try? await runtime.spaces(businessID)
-            else { return }
-            try store.send(Action(.workLoaded(businessID: businessID, work, decisions, spaces)))
-        }
+        store.addTask { try await reloadWork(runtime, businessID) }
     }
 
     func answer(_ decisionID: String, approve: Bool, state: inout State) {
@@ -83,48 +146,7 @@ extension Workspace {
         }
     }
 
-    /// A space has a name, an optional purpose and a lead (the Head of Operations unless chosen).
-    func createSpace(_ space: NewSpace, state: State) {
-        let name = space.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else { return }
-        let purpose = space.purpose?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let request = NewSpace(name: String(name.prefix(80)), purpose: purpose.isEmpty ? nil : String(purpose.prefix(500)), lead: space.lead)
-        changeWork(state, failure: "The space couldn't be created.") { runtime, businessID in
-            try await runtime.createSpace(businessID, request)
-        }
-    }
-
-    /// Google Drive is the one real connection today.
-    func loadGoogle(_ state: State) {
-        let businessID = state.businessID
-        guard !businessID.isEmpty else { return }
-        let runtime = runtime
-        store.addTask {
-            do {
-                try store.send(Action(.googleLoaded(.loaded(try await runtime.googleConnection(businessID)))))
-            } catch let error as DevysHTTPError {
-                try store.send(Action(.googleLoaded(.failed(Self.message(for: error)))))
-            }
-        }
-    }
-
-    /// Loads a Markdown file's text once, to show it inline.
-    func openArtifact(_ artifactID: String, state: inout State) {
-        guard state.artifactTexts[artifactID] == nil else { return }
-        state.artifactTexts[artifactID] = .loading
-        let businessID = state.businessID
-        let runtime = runtime
-        store.addTask {
-            do {
-                let text = try await runtime.artifactText(businessID, artifactID)
-                try store.send(Action(.artifactTextLoaded(artifactID: artifactID, .loaded(text))))
-            } catch {
-                try store.send(Action(.artifactTextLoaded(artifactID: artifactID, .failed("This file couldn't be opened."))))
-            }
-        }
-    }
-
-    /// Applies one change to work, a decision or a space, then shows the server's records again.
+    /// Applies one change to work, a decision or a project, then shows the server's records again.
     func changeWork(
         _ state: State,
         failure: String,
@@ -145,10 +167,12 @@ extension Workspace {
 
     func reloadWork(_ runtime: RuntimeClient, _ businessID: String) async throws {
         // A failed reload keeps what's on screen; the next tick tries again.
-        guard let work = try? await runtime.work(businessID),
-              let decisions = try? await runtime.decisions(businessID),
-              let spaces = try? await runtime.spaces(businessID)
-        else { return }
-        try store.send(Action(.workLoaded(businessID: businessID, work, decisions, spaces)))
+        async let work = runtime.work(businessID)
+        async let decisions = runtime.decisions(businessID)
+        async let projects = runtime.projects(businessID)
+        async let home = runtime.home(businessID)
+        async let apps = runtime.apps(businessID)
+        guard let records = try? await WorkRecords(work: work, decisions: decisions, projects: projects, home: home, apps: apps) else { return }
+        try store.send(Action(.workLoaded(businessID: businessID, records)))
     }
 }

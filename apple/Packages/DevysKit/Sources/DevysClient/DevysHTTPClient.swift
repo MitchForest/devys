@@ -102,7 +102,7 @@ public struct DevysHTTPClient: Sendable {
         return page.commitments
     }
 
-    /// Creates a task for an employee; given a space, it also shows there.
+    /// Creates a task for an employee, in a project when one is given.
     public func createCommitment(_ session: DeviceSession, businessID: String, _ task: NewTask) async throws -> Commitment {
         try await send(json(session, path: "api/businesses/\(businessID)/work", method: "POST", body: task))
     }
@@ -134,34 +134,6 @@ public struct DevysHTTPClient: Sendable {
         _ = try await raw(authorized(
             session,
             path: "api/businesses/\(businessID)/decisions/\(decisionID)/\(approve ? "approve" : "reject")",
-            method: "POST"
-        ))
-    }
-
-    public func spaces(_ session: DeviceSession, businessID: String) async throws -> [Space] {
-        struct Page: Decodable { let spaces: [Space] }
-        let page: Page = try await send(authorized(session, path: "api/businesses/\(businessID)/spaces"))
-        return page.spaces
-    }
-
-    public func createSpace(_ session: DeviceSession, businessID: String, _ space: NewSpace) async throws {
-        _ = try await raw(json(session, path: "api/businesses/\(businessID)/spaces", method: "POST", body: space))
-    }
-
-    /// Shows a record in a space. Adding it twice is harmless.
-    public func addToSpace(_ session: DeviceSession, businessID: String, spaceID: String, kind: SpaceItem.Kind, ref: String) async throws {
-        struct Body: Encodable { let kind: SpaceItem.Kind; let ref: String }
-        var request = authorized(session, path: "api/businesses/\(businessID)/spaces/\(spaceID)/items", method: "POST")
-        request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.httpBody = try JSONEncoder().encode(Body(kind: kind, ref: ref))
-        _ = try await raw(request)
-    }
-
-    /// Takes a record out of a space; the record itself stays.
-    public func removeFromSpace(_ session: DeviceSession, businessID: String, spaceID: String, itemID: String) async throws {
-        _ = try await raw(authorized(
-            session,
-            path: "api/businesses/\(businessID)/spaces/\(spaceID)/items/\(itemID)/remove",
             method: "POST"
         ))
     }

@@ -1,101 +1,74 @@
-/// Rail destinations (.docs/design/direction). The sidebar changes with them.
-package enum Destination: String, CaseIterable, Identifiable, Hashable, Sendable {
-    case home, inbox, work, team, money, apps
+package import DevysClient
 
-    package var id: Self { self }
-
-    package var title: String {
-        switch self {
-        case .home: "Home"
-        case .inbox: "Inbox"
-        case .work: "Work"
-        case .team: "Team"
-        case .money: "Money"
-        case .apps: "Apps"
-        }
-    }
-
-    package var symbol: String {
-        switch self {
-        case .home: "house"
-        case .inbox: "tray"
-        case .work: "checklist"
-        case .team: "person.2"
-        case .money: "dollarsign.circle"
-        case .apps: "square.grid.2x2"
-        }
-    }
-
-    /// Whether this destination's sidebar lists the page, so opening it keeps
-    /// the owner where they are instead of switching sidebars.
-    package func lists(_ page: Page) -> Bool {
-        switch (self, page) {
-        case (.home, .today), (.home, .approvals), (.home, .direct), (.home, .space), (.home, .employee): true
-        default: page.destination == self
-        }
-    }
-
-    /// iPhone tabs; Money and Apps open from Home there.
-    package static let compact: [Destination] = [.home, .inbox, .work, .team]
-}
-
-/// What the main pane shows.
-package enum Page: Hashable, Sendable {
-    case today
-    case approvals
-    /// The business's files on the owner's Mac, opened at a file when one is given.
-    case files(String?)
-    /// A direct-message conversation with one employee.
+/// Where the owner is: always a conversation. Home is the direct chat with Operations; a
+/// project is its channel; a thread is a work item's conversation.
+package enum Place: Hashable, Sendable {
+    case home
     case direct(String)
-    /// A space: its conversation, overview, work and files.
-    case space(String)
-    case employee(String?)
-    case inbox
-    case work(WorkFilter)
-    case money
-    case apps(AppsSection)
+    case project(String)
+    case thread(String)
 
-    package var destination: Destination {
+    package enum Kind: String, CaseIterable, Hashable, Sendable {
+        case home, direct, project, thread
+
+        /// Whether the right panel shows by default; the owner's choice is remembered.
+        package var panelByDefault: Bool { self != .direct }
+    }
+
+    package var kind: Kind {
         switch self {
-        case .today, .approvals, .files, .direct, .space: .home
-        case .employee: .team
-        case .inbox: .inbox
-        case .work: .work
-        case .money: .money
-        case .apps: .apps
+        case .home: .home
+        case .direct: .direct
+        case .project: .project
+        case .thread: .thread
+        }
+    }
+
+    /// The conversation this place shows: Home's is the direct chat with Operations.
+    package func conversation(operations: String?) -> ConversationKey? {
+        switch self {
+        case .home: operations.map(ConversationKey.direct)
+        case .direct(let id): .direct(id)
+        case .project(let id): .project(id)
+        case .thread(let id): .work(id)
         }
     }
 }
 
-package enum WorkFilter: String, CaseIterable, Hashable, Sendable {
-    case all = "All work"
+/// A temporary view stacked over the right panel's permanent view.
+package enum Layer: Hashable, Sendable {
+    /// A page an employee published; `updatedBy` names who replaced it while it was open.
+    case artifact(String, updatedBy: String? = nil)
+    case file(String)
+    case app(String)
+    case session(workID: String, sessionID: String)
+    case browser(workID: String)
+}
+
+/// A layer on the stack; `auto` when it opened on its own, so the next one may replace it.
+package struct OpenLayer: Hashable, Sendable {
+    package var layer: Layer
+    package var auto = false
+
+    package init(_ layer: Layer, auto: Bool = false) {
+        self.layer = layer
+        self.auto = auto
+    }
+}
+
+/// What a layer is, in words: its header, and the reference sent with a message.
+package struct LayerReference: Equatable, Sendable {
+    package let title: String
+    package let ref: String
+
+    /// The line appended to a message sent while the layer is open.
+    package var line: String { "\n\n_Viewing: \(title) (\(ref))_" }
+}
+
+/// Work by where it stands, as a project's overview groups it.
+package enum WorkGroup: String, CaseIterable, Hashable, Sendable {
     case needsYou = "Needs you"
     case inProgress = "In progress"
     case waiting = "Waiting"
     case done = "Done"
-}
-
-package enum AppsSection: String, CaseIterable, Hashable, Sendable {
-    case installed = "Installed"
-    case connections = "Connections"
-}
-
-package enum EmployeeTab: String, CaseIterable, Hashable, Sendable {
-    case activity = "Activity"
-    case responsibilities = "Responsibilities"
-    case memory = "Memory"
-    case access = "Access"
-}
-
-/// A space's header tabs: its conversation first, then metrics, its work, and its files.
-package enum SpaceTab: String, CaseIterable, Hashable, Sendable {
-    case conversation = "Conversation"
-    case overview = "Overview"
-    case work = "Work"
-    case files = "Files"
-}
-
-package enum WorkLayout: String, CaseIterable, Hashable, Sendable {
-    case list = "List"
-    case board = "Board"
 }

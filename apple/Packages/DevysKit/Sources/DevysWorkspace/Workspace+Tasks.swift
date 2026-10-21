@@ -12,15 +12,15 @@ package struct TaskDraft: Equatable {
     package var objective = ""
     package var hasDue = false
     package var due: Date
-    /// Created from a space, the task also shows there.
-    package var spaceID: String?
+    /// Created from a project, the task belongs to it.
+    package var projectID: String?
     package var isSubmitting = false
     package var error: String?
 
-    package init(ownerID: String, due: Date, spaceID: String? = nil) {
+    package init(ownerID: String, due: Date, projectID: String? = nil) {
         self.ownerID = ownerID
         self.due = due
-        self.spaceID = spaceID
+        self.projectID = projectID
     }
 
     package var canCreate: Bool {
@@ -34,14 +34,14 @@ package struct TaskDraft: Equatable {
             owner: ownerID,
             objective: objective.isEmpty ? nil : String(objective.prefix(4000)),
             dueAt: hasDue ? due.formatted(.iso8601) : nil,
-            spaceId: spaceID
+            projectId: projectID
         )
     }
 }
 
 package enum TaskIntent {
-    /// From Work (no presets), an employee (its owner) or a space (its space).
-    case newTaskTapped(ownerID: String?, spaceID: String?)
+    /// From New (no presets), an employee's desk (its owner) or a project's overview (its project).
+    case newTaskTapped(ownerID: String?, projectID: String?)
     case edited(TaskDraft)
     case confirmed
     case created(Commitment)
@@ -56,16 +56,18 @@ package enum TaskIntent {
 extension Workspace {
     func reduceTask(_ intent: TaskIntent, state: inout State) {
         switch intent {
-        case .newTaskTapped(let ownerID, let spaceID):
+        case .newTaskTapped(let ownerID, let projectID):
             guard let owner = ownerID ?? state.operations?.id else { return }
-            state.newTask = TaskDraft(ownerID: owner, due: Date.now.addingTimeInterval(86_400), spaceID: spaceID)
+            state.newTask = TaskDraft(ownerID: owner, due: Date.now.addingTimeInterval(86_400), projectID: projectID)
         case .edited(let draft):
             guard state.newTask != nil else { return }
             state.newTask = draft
         case .confirmed:
             createTask(state: &state)
-        case .created:
+        case .created(let item):
+            // A task opens its thread once saved.
             state.newTask = nil
+            reducePlace(.threadOpened(item.id), state: &state)
         case .failed(let message):
             state.newTask?.isSubmitting = false
             state.newTask?.error = message
@@ -95,8 +97,8 @@ extension Workspace {
                 try store.send(Action(.task(.failed("The task couldn't be saved. Try again."))))
                 return
             }
-            try store.send(Action(.task(.created(created))))
             try await reloadWork(runtime, businessID)
+            try store.send(Action(.task(.created(created))))
         }
     }
 

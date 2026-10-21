@@ -3,50 +3,39 @@ import DevysClient
 import DevysDesignSystem
 import SwiftUI
 
-struct Metric: View {
-    let label: String
-    let value: String
-    let note: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label).font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3)
-            Text(value).font(DevysTypography.title).monospacedDigit().foregroundStyle(DevysColors.ink)
-            Text(note).font(DevysTypography.secondary).foregroundStyle(DevysColors.ink2).lineLimit(1)
-        }
-        .devysCard()
-    }
-}
-
-/// One commitment: what, who, what's next and its state. Click to open it in the right panel; right-click to act on it.
+/// One commitment: what, who, what's next and its state. Click to open its thread; right-click to
+/// act on it. Compact rows sit in a permanent view.
 struct WorkRow: View {
     let store: StoreOf<Workspace>
     let item: Commitment
+    var compact = false
     @State private var hovering = false
 
     var body: some View {
         HStack(spacing: DevysSpacing.compact) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.title).font(DevysTypography.body.weight(.semibold)).foregroundStyle(DevysColors.ink)
-                Text(detail).font(DevysTypography.secondary).foregroundStyle(DevysColors.ink2).lineLimit(2)
+                Text(item.title).font(compact ? DevysTypography.secondary.weight(.medium) : DevysTypography.body.weight(.semibold)).foregroundStyle(DevysColors.ink)
+                    .lineLimit(compact ? 1 : nil)
+                Text(detail).font(compact ? DevysTypography.caption : DevysTypography.secondary).foregroundStyle(DevysColors.ink2).lineLimit(compact ? 1 : 2)
             }
             Spacer(minLength: DevysSpacing.compact)
             if item.state.isOpen, let takeover = store.state.takeoverTitle(item) {
                 Text(takeover).font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
             }
-            item.state.chip
+            item.state.chip(size: compact ? .small : .regular)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, compact ? 8 : 12)
+        .padding(.vertical, compact ? 6 : 10)
         .background(hovering ? DevysColors.sheetTint : .clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .contentShape(Rectangle())
-        .onTapGesture { store.send(.workOpened(item.id)) }
+        .padding(.horizontal, compact ? -8 : 0)
+        .onTapGesture { store.send(.threadOpened(item.id)) }
         .onHover { hovering = $0 }
         .animation(DevysMotion.quick, value: hovering)
         .contextMenu { WorkActions(store: store, item: item) }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
-        .accessibilityAction { store.send(.workOpened(item.id)) }
+        .accessibilityAction { store.send(.threadOpened(item.id)) }
     }
 
     private var detail: String {
@@ -63,7 +52,7 @@ struct WorkActions: View {
     let item: Commitment
 
     var body: some View {
-        Button("Open", systemImage: "arrow.up.right.square") { store.send(.workOpened(item.id)) }
+        Button("Open thread", systemImage: "arrow.up.right.square") { store.send(.threadOpened(item.id)) }
         if item.state.isOpen {
             Menu("Reassign to") {
                 ForEach(store.snapshot.employees.filter { $0.id != item.ownerEmployeeID }) { employee in
@@ -76,13 +65,6 @@ struct WorkActions: View {
             Divider()
             TakeoverButton(store: store, item: item)
             Button("Cancel", systemImage: "xmark.circle", role: .destructive) { store.send(.commitmentStateSet(item.id, .cancelled)) }
-            if let spaces = store.spaces.value, !spaces.isEmpty {
-                Menu("Add to space") {
-                    ForEach(spaces) { space in
-                        Button(space.name) { store.send(.spaceItemAdded(space.id, .commitment, item.id)) }
-                    }
-                }
-            }
         } else {
             Button("Reopen", systemImage: "arrow.uturn.backward") { store.send(.commitmentStateSet(item.id, .ready)) }
         }

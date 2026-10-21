@@ -4,109 +4,120 @@ import DevysClient
 import DevysDesignSystem
 import SwiftUI
 
-/// Contextual navigation for the selected rail destination. The selection is
+/// One sidebar: Home, Projects, Team and the business's apps. Each row but an app opens a
+/// conversation; an app opens as a layer beside the conversation on screen. The selection is
 /// one white pill that springs between rows.
 struct Sidebar: View {
     let store: StoreOf<Workspace>
-    @Namespace private var pill
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 2) {
-                header
-                    .padding(.horizontal, 10)
-                    .padding(.top, 14)
-                    .padding(.bottom, 12)
-                rows
+                HStack(spacing: 4) {
+                    Text(store.snapshot.businessName).font(DevysTypography.heading).foregroundStyle(DevysColors.ink).lineLimit(1)
+                    Spacer(minLength: 4)
+                    SidebarIconButton(title: "Search (⌘K)", symbol: "magnifyingglass") { store.send(.paletteToggled(true)) }
+                    NewMenu(store: store)
+                }
+                .padding(.leading, 10)
+                .padding(.top, 10)
+                .padding(.bottom, 8)
+                SidebarSections(store: store)
             }
             .padding(.horizontal, 10)
             .padding(.bottom, 16)
         }
         .scrollIndicators(.never)
     }
+}
 
-    @ViewBuilder private var header: some View {
-        if store.destination == .home {
-            Text(store.snapshot.businessName).font(DevysTypography.heading).foregroundStyle(DevysColors.ink)
-        } else {
-            Text(store.destination.title).font(DevysTypography.heading).foregroundStyle(DevysColors.ink)
+/// **New**: a project, a task or a hire. A message needs nothing: the composer is always there.
+struct NewMenu: View {
+    let store: StoreOf<Workspace>
+
+    var body: some View {
+        Menu {
+            Button("New project", systemImage: "square.grid.2x2") { store.send(.newProjectTapped) }
+            Button("New task", systemImage: "checklist") { store.send(.newTaskTapped()) }
+            Button("Hire", systemImage: "person.badge.plus") { store.send(.hireTapped) }
+        } label: {
+            Image(systemName: "plus").font(.system(size: 13, weight: .semibold)).frame(width: 28, height: 28).contentShape(Rectangle())
+        }
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .foregroundStyle(DevysColors.ink2)
+        .fixedSize()
+        .help("New")
+        .accessibilityLabel("New")
+    }
+}
+
+/// The sidebar's sections, also the phone's lists. Headings appear only when they have rows.
+struct SidebarSections: View {
+    enum Part { case projects, team, apps }
+
+    let store: StoreOf<Workspace>
+    /// The phone's tabs each show one section; the sidebar shows them all.
+    var only: Part?
+    /// Called after a row opens something, so the phone can leave its list.
+    var opened: () -> Void = {}
+    @Namespace private var pill
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if only == nil {
+                placeRow(.home, "Home", unread: store.operations.map { store.state.unread(.direct($0.id)) } ?? 0, needsYou: store.home.value?.needsYou.count ?? 0) {
+                    Image(systemName: "house").font(.system(size: 13, weight: .medium)).frame(width: 20).accessibilityHidden(true)
+                }
+                ForEach(nestedThreads(nil)) { threadRow($0) }
+            }
+            if only == nil || only == .projects { projects }
+            if only == nil || only == .team { team }
+            if only == nil || only == .apps { apps }
         }
     }
 
-    @ViewBuilder private var rows: some View {
-        let snapshot = store.snapshot
-        switch store.destination {
-        case .home:
-            row(.today, "Today", symbol: "sun.max")
-            row(.approvals, "Approvals", symbol: "faceid", count: store.decisions.value?.count ?? 0)
-            row(.files(nil), "Files", symbol: "folder")
-            if !snapshot.employees.isEmpty {
-                HStack {
-                    label("Direct messages")
-                    Spacer()
-                    SidebarAddButton(title: "Hire") { store.send(.hireTapped) }
-                }
-                ForEach(snapshot.employees) { employee in
-                    row(.direct(employee.id), employee.name, unread: store.state.unread(.direct(employee.id)), trailing: trailing(for: employee)) {
-                        Portrait(store.state.portrait(for: employee), size: 20, mood: store.state.mood(for: employee), isAnimated: false)
-                    }
-                }
+    @ViewBuilder private var projects: some View {
+        let projects = store.projects.value ?? []
+        if !projects.isEmpty {
+            label("Projects", add: ("New project", { store.send(.newProjectTapped) }))
+        }
+        ForEach(Array(projects.enumerated()), id: \.element.id) { index, project in
+            placeRow(.project(project.id), project.name, unread: store.state.unread(.project(project.id))) {
+                BusinessTile(String(project.name.prefix(1)), tint: Self.tint(index), size: 20)
             }
-            // Work the owner follows; the section is absent until they follow something.
-            let followed = (store.work.value ?? []).filter { store.state.isFollowing($0.id) }
-            if !followed.isEmpty {
-                label("Following")
-                ForEach(followed) { item in
-                    Button { store.send(.workOpened(item.id)) } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: "checklist").frame(width: 20).foregroundStyle(DevysColors.ink3).accessibilityHidden(true)
-                            Text(item.title).lineLimit(1)
-                            Spacer(minLength: 4)
-                            let unread = store.state.unread(.work(item.id))
-                            if unread > 0 { UnreadBadge(count: unread) }
-                        }
-                        .font(DevysTypography.control).foregroundStyle(DevysColors.ink2)
-                        .padding(.horizontal, 10).padding(.vertical, 7)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
+            ForEach(nestedThreads(project.id)) { threadRow($0) }
+        }
+    }
+
+    @ViewBuilder private var team: some View {
+        label("Team", add: ("Hire", { store.send(.hireTapped) }))
+        ForEach(store.snapshot.employees) { employee in
+            placeRow(.direct(employee.id), employee.name, unread: store.state.unread(.direct(employee.id)), trailing: trailing(for: employee)) {
+                Portrait(store.state.portrait(for: employee), size: 20, mood: store.state.mood(for: employee), isAnimated: false)
             }
-            HStack {
-                label("Spaces")
-                Spacer()
-                NewSpaceButton(store: store).padding(.trailing, 10)
+        }
+    }
+
+    @ViewBuilder private var apps: some View {
+        let shown = (store.apps.value ?? []).filter { $0.visible && $0.pinned }
+        if !shown.isEmpty, only == nil { label("Apps") }
+        ForEach(shown) { app in
+            let selected = store.state.topLayer == .app(app.id)
+            SidebarRow(title: app.name, selected: selected, pill: pill, leading: AppIcon(app: app)) {
+                store.send(selected ? .layersClosed : .layerOpened(.app(app.id)))
+                opened()
             }
-            ForEach(Array((store.spaces.value ?? []).enumerated()), id: \.element.id) { index, space in
-                row(.space(space.id), space.name, unread: store.state.unread(.space(space.id))) {
-                    SpaceDot(name: space.name, tint: BusinessTile.Tint.allCases[(index + 1) % BusinessTile.Tint.allCases.count])
-                }
-            }
-        case .inbox:
-            quiet("No mailbox is connected yet. The business's mail appears here once one is.")
-        case .work:
-            ForEach(WorkFilter.allCases, id: \.self) { filter in
-                row(.work(filter), filter.rawValue, symbol: symbol(for: filter), count: store.state.work(filter).count)
-            }
-        case .team:
-            ForEach(snapshot.employees) { employee in
-                row(.employee(employee.id), employee.name, detail: employee.summary, trailing: trailing(for: employee)) {
-                    Portrait(store.state.portrait(for: employee), size: 26, mood: store.state.mood(for: employee), isAnimated: false)
-                }
-            }
-            Button { store.send(.hireTapped) } label: {
-                Label("Hire", systemImage: "plus").font(DevysTypography.control).foregroundStyle(DevysColors.ink2)
-                    .padding(.horizontal, 10).padding(.vertical, 7)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        case .money:
-            row(.money, "Overview", symbol: "chart.bar")
-        case .apps:
-            ForEach(AppsSection.allCases, id: \.self) { section in
-                row(.apps(section), section.rawValue, symbol: section == .installed ? "square.grid.2x2" : "link")
-            }
+        }
+    }
+
+    /// Threads the owner follows or that need the owner, under their project (or under Home when
+    /// they have none). Everything else stays in its channel.
+    private func nestedThreads(_ projectID: String?) -> [Commitment] {
+        let waiting = Set((store.decisions.value ?? []).compactMap(\.commitmentID))
+        return (store.work.value ?? []).filter { item in
+            item.state.isOpen && item.projectID == projectID
+                && (store.state.isFollowing(item.id) || item.state == .needsDecision || waiting.contains(item.id))
         }
     }
 
@@ -116,67 +127,58 @@ struct Sidebar: View {
         return store.decisions.value?.contains { $0.employeeID == employee.id } == true ? .needsYou : .none
     }
 
-    private func symbol(for filter: WorkFilter) -> String {
-        switch filter {
-        case .all: "tray.full"
-        case .needsYou: "exclamationmark.circle"
-        case .inProgress: "circle.dashed"
-        case .waiting: "clock"
-        case .done: "checkmark.circle"
-        }
+    /// A project's tile color, from its place in the list, the same everywhere it shows.
+    static func tint(_ index: Int) -> BusinessTile.Tint {
+        let tints: [BusinessTile.Tint] = [.blue, .orange, .green, .purple, .pink]
+        return tints[(index + 1) % tints.count]
     }
 
-    private func label(_ text: String) -> some View {
-        Text(text)
-            .font(DevysTypography.label)
-            .foregroundStyle(DevysColors.ink3)
-            .padding(.horizontal, 10)
-            .padding(.top, 14)
-            .padding(.bottom, 4)
-            .accessibilityAddTraits(.isHeader)
-    }
-
-    private func quiet(_ text: String) -> some View {
-        Text(text).font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3).padding(.horizontal, 10)
-    }
-
-    private func row(
-        _ page: Page,
-        _ title: String,
-        detail: String? = nil,
-        symbol: String? = nil,
-        count: Int? = nil,
-        unread: Int = 0,
-        trailing: SidebarTrailing = .none
-    ) -> some View {
-        row(page, title, detail: detail, count: count, unread: unread, trailing: trailing) {
-            if let symbol {
-                Image(systemName: symbol).font(.system(size: 13, weight: .medium)).frame(width: 20).accessibilityHidden(true)
+    private func label(_ text: String, add: (title: String, action: () -> Void)? = nil) -> some View {
+        HStack {
+            Text(text)
+                .font(DevysTypography.label)
+                .foregroundStyle(DevysColors.ink3)
+                .accessibilityAddTraits(.isHeader)
+            Spacer()
+            if let add {
+                Button(add.title, systemImage: "plus", action: add.action)
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(DevysColors.ink3)
+                    .help(add.title)
             }
         }
+        .padding(.horizontal, 10)
+        .padding(.top, 14)
+        .padding(.bottom, 4)
     }
 
-    private func row(
-        _ page: Page,
+    private func placeRow(
+        _ place: Place,
         _ title: String,
-        detail: String? = nil,
-        count: Int? = nil,
         unread: Int = 0,
+        needsYou: Int = 0,
         trailing: SidebarTrailing = .none,
         @ViewBuilder leading: () -> some View
     ) -> some View {
+        SidebarRow(title: title, needsYou: needsYou, unread: unread, trailing: trailing, selected: store.place == place, pill: pill, leading: leading()) {
+            store.send(.placeSelected(place))
+            opened()
+        }
+    }
+
+    private func threadRow(_ item: Commitment) -> some View {
         SidebarRow(
-            title: title,
-            detail: detail,
-            count: count,
-            unread: unread,
-            trailing: trailing,
-            // Files is one page whichever file it opened at.
-            selected: store.page == page || (page == .files(nil) && { if case .files = store.page { true } else { false } }()),
+            title: item.title,
+            unread: store.state.unread(.work(item.id)),
+            trailing: item.state == .needsDecision ? .needsYou : .none,
+            selected: store.place == .thread(item.id),
+            isNested: true,
             pill: pill,
-            leading: leading()
+            leading: EmptyView()
         ) {
-            store.send(.pageSelected(page))
+            store.send(.threadOpened(item.id))
+            opened()
         }
     }
 }
@@ -188,14 +190,30 @@ enum SidebarTrailing: Equatable {
     case paused
 }
 
+/// The symbol an app names in its manifest.
+private struct AppIcon: View {
+    let app: AppEntry
+
+    var body: some View {
+        Image(systemName: Self.symbols[app.id] ?? "square.grid.2x2")
+            .font(.system(size: 13, weight: .medium))
+            .frame(width: 20)
+            .accessibilityHidden(true)
+    }
+
+    static let symbols = ["documents": "doc.text", "code": "chevron.left.forwardslash.chevron.right"]
+}
+
 private struct SidebarRow<Leading: View>: View {
     let title: String
-    let detail: String?
-    let count: Int?
+    /// Things waiting on the owner: an amber count.
+    var needsYou = 0
     /// Unread messages in the row's conversation.
-    let unread: Int
-    let trailing: SidebarTrailing
+    var unread = 0
+    var trailing = SidebarTrailing.none
     let selected: Bool
+    /// A thread under its project: indented, smaller.
+    var isNested = false
     let pill: Namespace.ID
     let leading: Leading
     let action: () -> Void
@@ -208,31 +226,26 @@ private struct SidebarRow<Leading: View>: View {
         } label: {
             HStack(spacing: 10) {
                 leading
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title).fontWeight(unread > 0 ? .semibold : nil).lineLimit(1)
-                    if let detail {
-                        Text(detail).font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3).lineLimit(1)
-                    }
-                }
+                Text(title).fontWeight(unread > 0 ? .semibold : nil).lineLimit(1)
+                    .font(isNested ? DevysTypography.secondary : DevysTypography.control)
                 Spacer(minLength: 6)
                 switch trailing {
                 case .none: EmptyView()
                 case .working:
                     Circle().fill(DevysColors.indigo).frame(width: 6, height: 6).accessibilityLabel("working")
                 case .needsYou:
-                    StatusChip("Needs you", tone: .needsYou, size: .small)
+                    Circle().fill(DevysColors.amber).frame(width: 6, height: 6).accessibilityLabel("needs you")
                 case .paused:
                     Text("Paused").font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
                 }
-                if let count, count > 0 {
-                    Text("\(count)").font(DevysTypography.secondary).monospacedDigit().foregroundStyle(DevysColors.ink3)
-                }
+                if needsYou > 0 { CountBadge(count: needsYou, color: DevysColors.amber) }
                 if unread > 0 { UnreadBadge(count: unread) }
             }
             .font(DevysTypography.control)
-            .foregroundStyle(selected || hovering ? DevysColors.ink : DevysColors.ink2)
-            .padding(.horizontal, 10)
-            .padding(.vertical, detail == nil ? 7 : 6)
+            .foregroundStyle(selected || hovering || unread > 0 ? DevysColors.ink : DevysColors.ink2)
+            .padding(.leading, isNested ? 38 : 10)
+            .padding(.trailing, 10)
+            .padding(.vertical, isNested ? 5 : 7)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 if selected {
@@ -246,6 +259,7 @@ private struct SidebarRow<Leading: View>: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
+        .accessibilityLabel(unread > 0 ? "\(title), \(unread) unread" : needsYou > 0 ? "\(title), \(needsYou)" : title)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
@@ -253,6 +267,15 @@ private struct SidebarRow<Leading: View>: View {
 /// The number of unread messages in a conversation.
 struct UnreadBadge: View {
     let count: Int
+
+    var body: some View {
+        CountBadge(count: count, color: DevysColors.indigo).accessibilityLabel("\(count) unread")
+    }
+}
+
+private struct CountBadge: View {
+    let count: Int
+    let color: Color
     @ScaledMetric(relativeTo: .caption2) private var size = 10.5
 
     var body: some View {
@@ -260,32 +283,25 @@ struct UnreadBadge: View {
             .font(.system(size: size, weight: .bold).monospacedDigit())
             .foregroundStyle(.white)
             .padding(.horizontal, 5)
-            .frame(minWidth: 18, minHeight: 18)
-            .background(DevysColors.indigo, in: Capsule())
-            .accessibilityLabel("\(count) unread")
+            .frame(minWidth: 17, minHeight: 17)
+            .background(color, in: Capsule())
     }
 }
 
-private struct SpaceDot: View {
-    let name: String
-    let tint: BusinessTile.Tint
-
-    var body: some View {
-        BusinessTile(String(name.prefix(1)), tint: tint, size: 20)
-    }
-}
-
-/// A small "+" beside a sidebar heading.
-struct SidebarAddButton: View {
+/// A small icon button in the sidebar's header.
+private struct SidebarIconButton: View {
     let title: String
+    let symbol: String
     let action: () -> Void
 
     var body: some View {
-        Button(title, systemImage: "plus", action: action)
+        Button(title, systemImage: symbol, action: action)
             .labelStyle(.iconOnly)
             .buttonStyle(.plain)
-            .foregroundStyle(DevysColors.ink3)
-            .padding(.trailing, 10)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(DevysColors.ink2)
+            .frame(width: 28, height: 28)
+            .contentShape(Rectangle())
             .help(title)
     }
 }

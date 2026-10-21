@@ -1,5 +1,5 @@
 import DevysCharacter
-package import DevysClient
+import DevysClient
 import DevysDesignSystem
 import SwiftUI
 
@@ -8,18 +8,20 @@ extension Business {
 }
 
 extension CommitmentState {
-    var chip: StatusChip {
+    var chip: StatusChip { chip(size: .regular) }
+
+    func chip(size: StatusChip.Size) -> StatusChip {
         switch self {
-        case .needsDecision: StatusChip("Needs you", tone: .needsYou)
-        case .inProgress: StatusChip("In progress", tone: .inProgress)
-        case .waiting: StatusChip("Waiting", tone: .waiting)
-        case .ready, .proposed: StatusChip("Ready", tone: .waiting)
-        case .completed: StatusChip("Done", tone: .done)
-        case .cancelled: StatusChip("Cancelled", tone: .waiting)
+        case .needsDecision: StatusChip("Needs you", tone: .needsYou, size: size)
+        case .inProgress: StatusChip("In progress", tone: .inProgress, size: size)
+        case .waiting: StatusChip("Waiting", tone: .waiting, size: size)
+        case .ready, .proposed: StatusChip("Ready", tone: .waiting, size: size)
+        case .completed: StatusChip("Done", tone: .done, size: size)
+        case .cancelled: StatusChip("Cancelled", tone: .waiting, size: size)
         }
     }
 
-    var filter: WorkFilter {
+    var group: WorkGroup {
         switch self {
         case .needsDecision: .needsYou
         case .inProgress, .ready, .proposed: .inProgress
@@ -30,20 +32,23 @@ extension CommitmentState {
 }
 
 extension Workspace.State {
-    var pageTitle: String {
-        switch page {
-        case .today: "Today"
-        case .approvals: "Approvals"
-        case .files: "Files"
-        case .direct(let id): employeeName(id)
-        case .space(let id): spaces.value?.first { $0.id == id }?.name ?? "Space"
-        case .employee(let id): snapshot.employees.first { $0.id == id }?.name ?? "Team"
-        case .inbox: "Inbox"
-        case .work(let filter): filter == .all ? "Work" : filter.rawValue
-        case .money: "Money"
-        case .apps(let section): section.rawValue
+    /// A place's title, and in a thread the project above it, so the breadcrumb reads
+    /// "Launch › Fix sitemap".
+    package func title(of place: Place) -> (title: String, parent: (title: String, place: Place)?) {
+        switch place {
+        case .home: return ("Home", nil)
+        case .direct(let id): return (snapshot.employees.first { $0.id == id }?.name ?? "Message", nil)
+        case .project(let id): return (projects.value?.first { $0.id == id }?.name ?? "Project", nil)
+        case .thread(let id):
+            let item = work.value?.first { $0.id == id }
+            let project = item?.projectID.flatMap { projectID in projects.value?.first { $0.id == projectID } }
+            return (item?.title ?? "Thread", project.map { ($0.name, Place.project($0.id)) })
         }
     }
+
+    func project(_ id: String) -> Project? { projects.value?.first { $0.id == id } }
+
+    func employee(_ id: String?) -> Employee? { snapshot.employees.first { $0.id == id } }
 
     /// While talking by voice, Operations' face follows the conversation.
     var voiceMood: BotMood? {
@@ -87,66 +92,8 @@ extension Workspace.State {
         decisions.value?.filter { $0.commitmentID == item.id } ?? []
     }
 
-    func work(_ filter: WorkFilter) -> [Commitment] {
-        let items = work.value ?? []
-        return filter == .all ? items : items.filter { $0.state.filter == filter }
-    }
-
-    /// Requests waiting on the owner. A "needs decision" commitment is also waiting on them.
-    var needsYouCount: Int {
-        (decisions.value?.count ?? 0) + (work.value?.filter { $0.state == .needsDecision }.count ?? 0)
-    }
-
     func employeeName(_ id: String) -> String {
         snapshot.employees.first { $0.id == id }?.name ?? "A former employee"
-    }
-}
-
-/// The pane-level page scaffold: title row with optional trailing controls.
-struct PageHeader<Trailing: View>: View {
-    let title: String
-    var subtitle: String?
-    @ViewBuilder var trailing: Trailing
-
-    var body: some View {
-        HStack(alignment: .center, spacing: DevysSpacing.compact) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(DevysTypography.title).foregroundStyle(DevysColors.ink)
-                if let subtitle {
-                    Text(subtitle).font(DevysTypography.body).foregroundStyle(DevysColors.ink2)
-                }
-            }
-            Spacer(minLength: DevysSpacing.compact)
-            trailing
-        }
-    }
-}
-
-extension PageHeader where Trailing == EmptyView {
-    init(title: String, subtitle: String? = nil) {
-        self.title = title
-        self.subtitle = subtitle
-        trailing = EmptyView()
-    }
-}
-
-/// Scrollable page body with the design's measure and arrival motion.
-struct PageBody<Content: View>: View {
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: DevysSpacing.section) {
-                content
-            }
-            .frame(maxWidth: 760, alignment: .leading)
-            .padding(.horizontal, DevysSpacing.page)
-            .padding(.top, DevysSpacing.section)
-            .padding(.bottom, DevysSpacing.page)
-            .frame(maxWidth: .infinity)
-        }
-        .scrollIndicators(.automatic)
-        .transition(.opacity.combined(with: .offset(y: 6)))
     }
 }
 
@@ -203,54 +150,6 @@ extension Workspace.State {
         case .emoji(let emoji, let tint): .emoji(emoji, tint: BusinessTile.Tint(rawValue: tint) ?? .blue)
         case .photo: photo.map(PortraitSource.photo) ?? fallback
         case nil: fallback
-        }
-    }
-}
-
-/// What one teammate is doing, when it's worth a glance. Idle teammates aren't shown.
-package struct Presence: Equatable, Identifiable {
-    package enum Signal: Equatable {
-        case working
-        case needsYou(Int)
-        case failed
-        case paused
-    }
-
-    package let employee: Employee
-    package let signal: Signal
-    package var id: String { employee.id }
-
-    package var summary: String {
-        switch signal {
-        case .working: "\(employee.name) is working"
-        case .needsYou(let count): "\(employee.name) needs you · \(count) decision\(count == 1 ? "" : "s")"
-        case .failed: "\(employee.name) couldn't finish the last request"
-        case .paused: "\(employee.name) is paused"
-        }
-    }
-}
-
-extension Workspace.State {
-    /// Teammates worth a glance: working, waiting on you, failed or paused. The same rule as the
-    /// web's `presence`, from each employee's runtime status and the decisions they're waiting on.
-    package var presence: [Presence] {
-        snapshot.employees.compactMap { employee in
-            let decisions = decisions.value?.filter { $0.employeeID == employee.id }.count ?? 0
-            let status = employee.id == operations?.id ? status.value : statuses[employee.id]
-            let latest = status?.state.inbox.max { $0.receivedAt < $1.receivedAt }
-            let signal: Presence.Signal?
-            if employee.paused || status?.state.run?.stopped == true {
-                signal = .paused
-            } else if isWorking(employee.id) {
-                signal = .working
-            } else if decisions > 0 {
-                signal = .needsYou(decisions)
-            } else if latest?.status == "failed" {
-                signal = .failed
-            } else {
-                signal = nil
-            }
-            return signal.map { Presence(employee: employee, signal: $0) }
         }
     }
 }

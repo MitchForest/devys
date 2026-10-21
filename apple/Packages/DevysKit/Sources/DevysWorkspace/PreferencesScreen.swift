@@ -10,6 +10,9 @@ import UniformTypeIdentifiers
 public struct PreferencesScreen: View {
     let store: StoreOf<Preferences>
     var onDone: (() -> Void)?
+    #if os(iOS)
+        @State private var path: [PreferencesSection] = []
+    #endif
 
     public init(store: StoreOf<Preferences>) {
         self.store = store
@@ -31,18 +34,21 @@ public struct PreferencesScreen: View {
             }
             .scenePadding()
         #else
-            NavigationStack {
+            NavigationStack(path: $path) {
                 List {
                     ForEach(PreferencesSection.allCases, id: \.self) { section in
-                        NavigationLink {
-                            ScrollView { pane(section).padding(DevysSpacing.roomy) }
-                                .background(DevysColors.sheet)
-                                .navigationTitle(section.rawValue)
-                        } label: {
+                        NavigationLink(value: section) {
                             Label(section.rawValue, systemImage: section.symbol)
                         }
                     }
                 }
+                .navigationDestination(for: PreferencesSection.self) { section in
+                    ScrollView { pane(section).padding(DevysSpacing.roomy) }
+                        .background(DevysColors.sheet)
+                        .navigationTitle(section.rawValue)
+                }
+                // Opened at a section ("Apps & connections…"), it starts there.
+                .onAppear { if path.isEmpty, store.section != .account { path = [store.section] } }
                 .navigationTitle("Settings")
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) { Button("Done") { onDone?() } }
@@ -56,6 +62,7 @@ public struct PreferencesScreen: View {
         case .account: AccountPane(store: store)
         case .team: TeamPane(store: store)
         case .businesses: BusinessesPane(store: store)
+        case .apps: AppsPane(store: store)
         case .devices: DevicesPane(store: store)
         case .voice: VoicePane(store: store)
         case .appearance: AppearancePane()

@@ -16,6 +16,8 @@ struct MessageRow: View {
 
     private var isOwner: Bool { bubble.isOwner }
     private var canAct: Bool { bubble.delivery == nil }
+    /// A thread starts from a message anywhere but inside a thread.
+    private var startsThreads: Bool { canAct && key.kind != .work }
     static let avatarSize: CGFloat = 26
 
     var body: some View {
@@ -92,6 +94,9 @@ struct MessageRow: View {
                 ChatActionButton("React", symbol: "face.smiling") { isPickingReaction = true }
             }
             ChatActionButton("Reply", symbol: "arrowshape.turn.up.left") { store.send(.replyTapped(key, bubble.id)) }
+            if startsThreads {
+                ChatActionButton("Start a thread", symbol: "bubble.left.and.text.bubble.right") { store.send(.startThreadTapped(bubble.id)) }
+            }
         }
         .transition(.opacity)
     }
@@ -107,6 +112,9 @@ struct MessageRow: View {
         }
         if canAct {
             Button("Reply", systemImage: "arrowshape.turn.up.left") { store.send(.replyTapped(key, bubble.id)) }
+        }
+        if startsThreads {
+            Button("Start a thread", systemImage: "bubble.left.and.text.bubble.right") { store.send(.startThreadTapped(bubble.id)) }
         }
         Button("Copy", systemImage: "doc.on.doc") { DevysPasteboard.copy(bubble.text) }
     }
@@ -307,57 +315,102 @@ private struct ChatActionButton: View {
     }
 }
 
-/// A hand-off or other event: a compact centred card. A hand-off opens its work item; a
-/// published page opens the page.
+/// A hand-off or other event. A hand-off is the work item's card: its owner, live status and
+/// whether it has unread replies; it opens the thread. A published page opens as a layer.
 struct EventCard: View {
     let store: StoreOf<Workspace>
     let event: ChatTimeline.Event
-    @State private var hovering = false
-    @State private var page: String?
 
     private var artifactID: String? {
         event.ref.flatMap { $0.hasPrefix("artifact:") ? String($0.dropFirst("artifact:".count)) : nil }
     }
 
     var body: some View {
-        Button {
+        Group {
             if let artifactID {
-                page = artifactID
-            } else if let ref = event.ref {
-                store.send(.workOpened(ref))
-            }
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: event.ref == nil ? "info.circle" : "arrow.triangle.branch")
-                    .foregroundStyle(DevysColors.indigo)
-                    .accessibilityHidden(true)
-                Text(event.text)
-                    .font(DevysTypography.secondary)
-                    .foregroundStyle(DevysColors.ink2)
-                    .multilineTextAlignment(.leading)
-                if event.ref != nil {
-                    Text("Open").font(DevysTypography.caption.weight(.semibold)).foregroundStyle(DevysColors.indigo)
+                ConversationCard(help: "Open the page") { store.send(.layerOpened(.artifact(artifactID))) } label: {
+                    Image(systemName: "doc.richtext")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(DevysColors.indigo)
+                        .frame(width: 22, height: 22)
+                        .background(DevysColors.indigo.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        .accessibilityHidden(true)
+                    lines(store.artifacts.contains { $0.id == artifactID } ? store.state.artifactName(artifactID) : event.text, pageDetail(artifactID))
                 }
+            } else if let item = store.work.value?.first(where: { $0.id == event.ref }) {
+                handoff(item)
+            } else {
+                HStack(spacing: 8) {
+                    Image(systemName: "checklist").foregroundStyle(DevysColors.indigo).accessibilityHidden(true)
+                    Text(event.text).font(DevysTypography.secondary).foregroundStyle(DevysColors.ink2).lineLimit(1)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(DevysColors.sheetTint, in: Capsule())
+                .overlay { Capsule().strokeBorder(DevysColors.hairline, lineWidth: 1) }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(hovering ? DevysColors.track : DevysColors.sheetTint, in: Capsule())
-            .overlay { Capsule().strokeBorder(DevysColors.hairline, lineWidth: 1) }
-            .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
-        .disabled(event.ref == nil)
-        .onHover { hovering = $0 }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 6)
-        .accessibilityHint(event.ref == nil ? "" : artifactID == nil ? "Opens the work item" : "Opens the page")
-        .sheet(item: Binding(get: { page.map(PageID.init) }, set: { page = $0?.id })) { opened in
-            PublishedPageSheet(store: store, artifactID: opened.id)
+    }
+
+    private func handoff(_ item: Commitment) -> some View {
+        let owner = store.state.employee(item.ownerEmployeeID)
+        let unread = store.state.unread(.work(item.id))
+        let next = item.state == .waiting ? item.waitCondition.map { "waiting on \($0)" } : item.nextAction
+        return ConversationCard(help: "Open the thread") { store.send(.threadOpened(item.id)) } label: {
+            if let owner {
+                Portrait(store.state.portrait(for: owner), size: 22, isAnimated: false)
+            } else {
+                Image(systemName: "checklist").foregroundStyle(DevysColors.indigo).accessibilityHidden(true)
+            }
+            lines(item.title, [owner?.name, next].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: " · "))
+            Spacer(minLength: 4)
+            if unread > 0 {
+                Text("\(unread) new").font(DevysTypography.caption.weight(.semibold)).foregroundStyle(DevysColors.indigo)
+            }
+            item.state.chip(size: .small)
         }
     }
 
-    private struct PageID: Identifiable {
-        let id: String
+    /// "Page", or "Page · v2" for a later version of the same page.
+    private func pageDetail(_ id: String) -> String {
+        guard let page = store.artifacts.first(where: { $0.id == id }) else { return "Page" }
+        let version = store.artifacts.filter { $0.filename == page.filename && $0.createdAt <= page.createdAt }.count
+        return version > 1 ? "Page · v\(version)" : "Page"
+    }
+
+    private func lines(_ title: String, _ detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(title).font(DevysTypography.control.weight(.semibold)).foregroundStyle(DevysColors.ink)
+            if !detail.isEmpty { Text(detail).font(DevysTypography.caption).foregroundStyle(DevysColors.ink3) }
+        }
+        .lineLimit(1)
+    }
+}
+
+/// A card in the conversation that opens what it is about.
+private struct ConversationCard<Label: View>: View {
+    let help: String
+    let action: () -> Void
+    @ViewBuilder let label: Label
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) { label }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .frame(maxWidth: 520, alignment: .leading)
+                .background(hovering ? DevysColors.sheetTint : DevysColors.sheet, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay { RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(DevysColors.hairline, lineWidth: 1) }
+                .devysElevation(.resting)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(help)
+        .accessibilityHint(help)
     }
 }
 

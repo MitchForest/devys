@@ -445,6 +445,8 @@ public struct Commitment: Equatable, Sendable, Decodable, Identifiable {
     public let evidence: [CommitmentEvidence]
     public let revision: Int
     public let takenOverBy: String?
+    /// The project the work belongs to, if any; its thread is in that project's channel.
+    public let projectID: String?
     public let updatedAt: String
 
     public init(
@@ -459,6 +461,7 @@ public struct Commitment: Equatable, Sendable, Decodable, Identifiable {
         evidence: [CommitmentEvidence] = [],
         revision: Int = 1,
         takenOverBy: String? = nil,
+        projectID: String? = nil,
         updatedAt: String = "2026-10-19T00:00:00.000Z"
     ) {
         self.id = id
@@ -472,6 +475,7 @@ public struct Commitment: Equatable, Sendable, Decodable, Identifiable {
         self.evidence = evidence
         self.revision = revision
         self.takenOverBy = takenOverBy
+        self.projectID = projectID
         self.updatedAt = updatedAt
     }
 
@@ -482,6 +486,7 @@ public struct Commitment: Equatable, Sendable, Decodable, Identifiable {
         case waitCondition = "wait_condition"
         case dueAt = "due_at"
         case takenOverBy = "taken_over_by"
+        case projectID = "project_id"
         case updatedAt = "updated_at"
     }
 }
@@ -524,58 +529,5 @@ public struct Decision: Equatable, Sendable, Decodable, Identifiable {
         case commitmentID = "commitment_id"
         case requestedAt = "requested_at"
         case expiresAt = "expires_at"
-    }
-}
-
-/// A record shown in a space: a reference to a commitment or a saved file, never a copy.
-public struct SpaceItem: Equatable, Sendable, Decodable, Identifiable {
-    public enum Kind: String, Equatable, Sendable, Codable { case commitment, artifact, file }
-
-    public let id: String
-    public let kind: Kind
-    public let ref: String
-
-    public init(id: String, kind: Kind, ref: String) {
-        self.id = id
-        self.kind = kind
-        self.ref = ref
-    }
-}
-
-/// A persistent place for an area of the business. It shows records; it owns none.
-public struct Space: Equatable, Sendable, Decodable, Identifiable {
-    public let id: String
-    public let name: String
-    public let purpose: String
-    /// Answers the space's conversation until someone else speaks or is mentioned.
-    public let leadEmployeeID: String?
-    public let items: [SpaceItem]
-
-    public init(id: String, name: String, purpose: String = "", leadEmployeeID: String? = nil, items: [SpaceItem] = []) {
-        self.id = id
-        self.name = name
-        self.purpose = purpose
-        self.leadEmployeeID = leadEmployeeID
-        self.items = items
-    }
-
-    public init(from decoder: any Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.init(
-            id: try container.decode(String.self, forKey: .id),
-            name: try container.decode(String.self, forKey: .name),
-            purpose: try container.decodeIfPresent(String.self, forKey: .purpose) ?? "",
-            leadEmployeeID: try container.decodeIfPresent(String.self, forKey: .leadEmployeeID),
-            items: try container.decodeIfPresent([SpaceItem].self, forKey: .items) ?? []
-        )
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case id, name, purpose, items
-        case leadEmployeeID = "lead_employee_id"
-    }
-
-    public func refs(_ kind: SpaceItem.Kind) -> [String] {
-        items.filter { $0.kind == kind }.map(\.ref)
     }
 }

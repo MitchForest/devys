@@ -14,11 +14,11 @@ private func settle(_ what: String, until condition: @MainActor () async -> Bool
     Issue.record("Timed out waiting for \(what)")
 }
 
-/// One business's team, work, spaces and conversations, as the server keeps them.
+/// One business's team, work and projects, as the server keeps them.
 private actor TeamServer {
     var employees = BusinessDetail.fixture("acme").employees
     var commitments = [Commitment(id: "c1", ownerEmployeeID: "growth", title: "PR inquiry", state: .inProgress, revision: 3)]
-    var spaces = [Space(id: "s1", name: "Launch", purpose: "Ship Acme", leadEmployeeID: "ops")]
+    var projects = [Project(id: "p1", name: "Launch", goal: "Ship Acme", leadEmployeeID: "ops")]
     var hires: [Hire] = []
     var profiles: [(String, ProfileChange)] = []
     var retirements: [(String, String)] = []
@@ -72,12 +72,8 @@ private actor TeamServer {
 
     func create(_ task: NewTask) -> Commitment {
         tasks.append(task)
-        let item = Commitment(id: "c\(commitments.count + 1)", ownerEmployeeID: task.owner, title: task.title)
+        let item = Commitment(id: "c\(commitments.count + 1)", ownerEmployeeID: task.owner, title: task.title, projectID: task.projectId)
         commitments.append(item)
-        if let space = task.spaceId, let index = spaces.firstIndex(where: { $0.id == space }) {
-            let old = spaces[index]
-            spaces[index] = Space(id: old.id, name: old.name, purpose: old.purpose, leadEmployeeID: old.leadEmployeeID, items: old.items + [SpaceItem(id: "i\(tasks.count)", kind: .commitment, ref: item.id)])
-        }
         return item
     }
 }
@@ -88,7 +84,7 @@ nonisolated private let roles = [
 ]
 
 @MainActor
-@Suite("Team, spaces and tasks")
+@Suite("Team, projects and tasks")
 struct TeamFeatureTests {
     private func makeStore(_ server: TeamServer) async -> StoreOf<Workspace> {
         let store: StoreOf<Workspace> = withDependencies {
@@ -107,7 +103,7 @@ struct TeamFeatureTests {
                 work: { _ in await server.commitments },
                 createCommitment: { _, task in await server.create(task) },
                 updateCommitment: { _, id, change in try await server.update(id, change) },
-                spaces: { _ in await server.spaces }
+                projects: { _ in await server.projects }
             )
             $0.continuousClock = ContinuousClock()
             $0.uuid = .incrementing
@@ -136,7 +132,7 @@ struct TeamFeatureTests {
         await settle("hired", until: { store.team.hiring == nil })
         #expect(await server.hires == [Hire(template: "engineering", name: "Ada", responsibilities: "Owns the code and releases.", model: "gpt-6.1-sol")])
         #expect(store.snapshot.employees.last?.name == "Ada")
-        #expect(store.page == .employee("e1"))
+        #expect(store.place == .direct("e1"))
     }
 
     @Test("A custom hire starts blank and can't be sent without a name")
@@ -162,17 +158,17 @@ struct TeamFeatureTests {
         #expect(change == ProfileChange(responsibilities: "PR and paid social"))
     }
 
-    @Test("Retiring hands open work to the successor and opens their page; Operations can't be retired")
+    @Test("Retiring hands open work to the successor and opens their direct chat; Operations can't be retired")
     func retires() async {
         let server = TeamServer()
         let store = await makeStore(server)
-        store.send(.pageSelected(.employee("growth")))
+        store.send(.message("growth"))
         store.send(.retireConfirmed("ops", successor: "growth"))
         store.send(.retireConfirmed("growth", successor: "engineering"))
         await settle("retired", until: { !store.snapshot.employees.contains { $0.id == "growth" } })
         let retirements = await server.retirements
         #expect(retirements.count == 1 && retirements.first?.0 == "growth" && retirements.first?.1 == "engineering")
-        #expect(store.page == .employee("engineering"))
+        #expect(store.place == .direct("engineering"))
         await settle("work reassigned", until: { store.work.value?.first?.ownerEmployeeID == "engineering" })
     }
 
@@ -188,23 +184,26 @@ struct TeamFeatureTests {
         #expect(Mentions.recipients(in: "no mentions", team: team).isEmpty)
     }
 
-    @Test("New task from a space carries the space; from an employee, its owner")
+    @Test("New task from a project carries the project and opens its thread; from an employee, its owner")
     func newTasks() async {
         let server = TeamServer()
         let store = await makeStore(server)
-        store.send(.newTaskTapped(space: "s1"))
+        store.send(.placeSelected(.project("p1")))
+        store.send(.newTaskTapped(project: "p1"))
         guard var draft = store.newTask else { return #expect(Bool(false), "the sheet opens") }
-        #expect(draft.spaceID == "s1" && draft.ownerID == "ops")
+        #expect(draft.projectID == "p1" && draft.ownerID == "ops")
         draft.title = "Book the domain"
         draft.objective = "acme.example or similar"
         store.send(.taskEdited(draft))
         store.send(.taskConfirmed)
-        await settle("created", until: { store.newTask == nil && store.spaces.value?.first?.refs(.commitment) == ["c2"] })
+        await settle("created", until: { store.newTask == nil && store.place == .thread("c2") })
+        #expect(store.history == [.project("p1")])
+        #expect(store.work.value?.last?.projectID == "p1")
         let task = await server.tasks.first
-        #expect(task == NewTask(title: "Book the domain", owner: "ops", objective: "acme.example or similar", spaceId: "s1"))
+        #expect(task == NewTask(title: "Book the domain", owner: "ops", objective: "acme.example or similar", projectId: "p1"))
 
         store.send(.newTaskTapped(owner: "engineering"))
-        #expect(store.newTask?.ownerID == "engineering" && store.newTask?.spaceID == nil)
+        #expect(store.newTask?.ownerID == "engineering" && store.newTask?.projectID == nil)
         store.send(.taskCancelled)
         #expect(store.newTask == nil)
     }

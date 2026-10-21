@@ -4,14 +4,14 @@ import Foundation
 import Testing
 @testable import DevysWorkspace
 
-@Suite("Chat timeline and presence")
+@Suite("Chat timeline and who is working")
 struct ChatTimelineTests {
     private let start = Date(timeIntervalSince1970: 1_792_400_000)
 
     private func message(_ id: Int, _ author: String, after seconds: TimeInterval, kind: ConversationMessage.Kind = .message, replyTo: String? = nil) -> ConversationMessage {
         ConversationMessage(
             id: "m\(id)",
-            conversation: "space:s1",
+            conversation: "project:p1",
             author: author,
             kind: kind,
             text: "m\(id)",
@@ -73,40 +73,21 @@ struct ChatTimelineTests {
         #expect(bubbles(timeline).last?.quote?.employeeID == "ops")
     }
 
-    @Test("Presence derives every teammate's signal from their runtime status and decisions, like the web")
-    func presence() {
+    @Test("Working and faces derive from each teammate's runtime status, like the web's workingOf")
+    func working() {
         var state = Workspace.State(server: URL(string: "http://127.0.0.1:5173")!)
         state.snapshot = .acmeLaunch
         let idle = EmployeeStatus(state: RuntimeState(run: nil, inbox: [], outbox: []))
         let running = EmployeeStatus(state: RuntimeState(run: .init(id: "r", stopped: false, deadline: nil), inbox: [], outbox: []))
-        let stopped = EmployeeStatus(state: RuntimeState(run: .init(id: "r", stopped: true, deadline: nil), inbox: [], outbox: []))
         let unfinished = EmployeeStatus(state: RuntimeState(run: nil, inbox: [InboxEntry(id: "m", text: "Go", receivedAt: 1, status: "queued")], outbox: []))
         let failed = EmployeeStatus(state: RuntimeState(run: nil, inbox: [InboxEntry(id: "m", text: "Go", receivedAt: 1, status: "failed")], outbox: []))
-        func signal(_ id: String) -> Presence.Signal? { state.presence.first { $0.employee.id == id }?.signal }
-
-        state.status = .loaded(idle)
-        state.statuses = ["ops": idle, "engineering": idle, "growth": idle, "business-ops": idle]
-        #expect(state.presence.isEmpty)
-
-        state.status = .loaded(running)
-        state.statuses["ops"] = running
-        state.statuses["engineering"] = running
-        state.statuses["growth"] = unfinished
-        state.statuses["business-ops"] = failed
-        #expect(signal("ops") == .working)
-        #expect(signal("engineering") == .working)
-        #expect(signal("growth") == .working)
-        #expect(signal("business-ops") == .failed)
-
-        state.statuses["engineering"] = stopped
-        state.statuses["growth"] = idle
-        state.decisions = .loaded([Decision(id: "d1", employeeID: "growth", capability: "email.send", input: .object([:]))])
-        #expect(signal("engineering") == .paused)
-        #expect(signal("growth") == .needsYou(1))
-        #expect(state.mood(for: state.snapshot.employees[1]) == .idle)
+        state.statuses = ["engineering": running, "growth": unfinished, "business-ops": failed]
+        #expect(state.isWorking("engineering") && state.isWorking("growth"))
+        #expect(!state.isWorking("business-ops"))
+        #expect(state.mood(for: state.snapshot.employees[1]) == .working)
         #expect(state.mood(for: state.snapshot.employees[3]) == .idle)
-        state.statuses["business-ops"] = running
-        #expect(state.mood(for: state.snapshot.employees[3]) == .working)
+        state.statuses["engineering"] = idle
+        #expect(state.mood(for: state.snapshot.employees[1]) == .idle)
     }
 
     @Test("Take-over is mine only when the signed-in person has it; a work item shows its own decisions")

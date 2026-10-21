@@ -19,7 +19,7 @@ package struct PendingMessage: Equatable, Sendable, Identifiable {
     }
 }
 
-/// One open conversation: the main pane's DM or space, or the right panel's work thread.
+/// The open conversation in the middle: Home's, a direct chat, a project's channel or a thread.
 package struct OpenConversation {
     package let key: ConversationKey
     /// Oldest first.
@@ -165,7 +165,4 @@ package enum ConversationIntent {
     case followToggled(commitmentID: String)
     /// Fast polling after a message ended, answered or not.
     case waitEnded(ConversationKey, after: String)
-    /// A hand-off card, a Work row or a space's Work tab: the work item opens in the right panel.
-    case workOpened(String)
-    case workClosed
 }
