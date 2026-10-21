@@ -30,6 +30,8 @@ export interface Commitment {
     changes?: string;
     /** The pull request the work was published as. */
     pullRequest?: string;
+    /** A deploy of `commit`: where, the URL checked, and whether it answered. */
+    deploy?: { stage: "preview" | "production"; url: string | null; live: boolean };
     /** The event this was recorded from; evidence from one source is recorded once. */
     source?: string;
   }[];

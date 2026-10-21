@@ -76,7 +76,13 @@ also verified live. No public product has launched.
   a session's **Details** show what the agent did (prompts, replies, plan, commands, edits), read
   from Codex or Claude Code when opened and never stored. **Follow** a work item to keep it in
   the sidebar and see each step; a signed-out CLI says how to sign in, and approvals Codex asks
-  for are declined and reported. Diff line comments are always
+  for are declined and reported. Employees deploy accepted, checked work with the repository's
+  own deploy command: previews on their own (`deployPreview`), production only with the owner's
+  approval (`deployProduction`). Each deploy runs at exactly one commit in a fresh worktree, then
+  Devys checks the URL answers and records stage, commit and URL; rolling back deploys an
+  earlier commit of the same work item. Stage secrets live in a private host-side file per
+  business (`bun run local deploy-env <business>`) and reach only that deploy process, redacted
+  from its output. Diff line comments are always
   sendable: to the session while you have taken it over, otherwise as one review message in
   the work item's thread. A work item's panel shows its pending and decided requests. Stop
   interrupts sessions and stops what they left running. Cloud mode reports delegates as

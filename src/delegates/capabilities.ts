@@ -4,7 +4,13 @@ import type { Scope } from "../identity/contract.ts";
 import { sha256 } from "../protocol/bytes.ts";
 import { capability, CapabilityError, Invocation } from "../protocol/capability.ts";
 import { rpc } from "../protocol/rpc.ts";
-import { providers, type Assignment, type Delegates, type Provider } from "./contract.ts";
+import {
+  providers,
+  type Assignment,
+  type Delegates,
+  type Provider,
+  type Stage,
+} from "./contract.ts";
 import { assignment, assignmentsFor, recordAssignment, recordStarted } from "./service.ts";
 
 export interface DelegateDependencies {
@@ -22,6 +28,8 @@ export interface DelegateDependencies {
     commitmentId: string,
     entry: { note: string; commit: string; changes?: string; pullRequest?: string },
   ): Promise<void>;
+  /** Commits this work item's evidence names (accepted, checked or deployed): rollback targets. */
+  knownCommits(scope: Scope, commitmentId: string): Promise<string[]>;
 }
 
 export const providerName = (provider: Provider) =>
@@ -337,5 +345,59 @@ export function delegateCapabilities(dependencies: DelegateDependencies) {
           };
         }),
     }),
+    deployTo("preview"),
+    deployTo("production"),
   ];
+
+  /**
+   * One stage's deploy. Two capabilities rather than one because a grant has one mode:
+   * Engineering deploys previews on its own and asks for production.
+   */
+  function deployTo(stage: Stage) {
+    return capability({
+      name: stage === "preview" ? "deployPreview" : "deployProduction",
+      description:
+        stage === "preview"
+          ? "Deploy a coding session's accepted, checked commit to a preview with the repository's own deploy command (for example `bunx wrangler deploy --env preview`), then check the URL it prints (or the one you give) answers. The result arrives in this work item. To roll back, name an earlier commit this work item accepted or deployed."
+          : "Deploy a coding session's accepted, checked commit to production with the repository's own production deploy command, then check its URL answers. The owner approves each production deploy. To roll back, name an earlier commit this work item accepted or deployed.",
+      effect: "external",
+      replay: "reconcile",
+      constraints: {
+        schema: Schema.Struct({
+          commands: Schema.optional(Schema.Array(Text(500)).check(Schema.isMaxLength(20))),
+        }),
+        allows: ({ commands }, input) => !commands || commands.includes(input.command),
+      },
+      input: Schema.Struct({
+        assignment: AssignmentId,
+        command: Text(500),
+        commit: Schema.optional(Schema.String.check(Schema.isPattern(/^[0-9a-f]{7,40}$/))),
+        url: Schema.optional(Schema.String.check(Schema.isPattern(/^https:\/\/\S{1,500}$/))),
+      }),
+      output: Schema.Struct({ deploying: Schema.String }),
+      execute: ({ assignment: id, command, commit, url }) =>
+        Effect.gen(function* () {
+          const { invocation, commitmentId } = yield* owned(id);
+          const scope = { businessId: invocation.businessId, employeeId: invocation.employeeId };
+          if (commit) {
+            const known = yield* rpc(() => dependencies.knownCommits(scope, commitmentId));
+            if (!known.some((full) => full.startsWith(commit)))
+              return yield* new CapabilityError({
+                code: "invalid_input",
+                message:
+                  "Roll back only to a commit this work item accepted or deployed (see its evidence).",
+              });
+          }
+          const started = yield* rpc(() =>
+            dependencies.delegates(scope).deploy(id, {
+              stage,
+              command,
+              ...(commit ? { commit } : {}),
+              ...(url ? { url } : {}),
+            }),
+          );
+          return { deploying: started.commit };
+        }),
+    });
+  }
 }

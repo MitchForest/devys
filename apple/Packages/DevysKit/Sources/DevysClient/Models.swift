@@ -354,6 +354,19 @@ public struct CommitmentEvidence: Equatable, Sendable, Decodable {
         }
     }
 
+    /// A deploy of the commit: its stage, the URL checked, and whether it answered.
+    public struct Deploy: Equatable, Sendable, Decodable {
+        public let stage: String
+        public let url: String?
+        public let live: Bool
+
+        public init(stage: String, url: String?, live: Bool) {
+            self.stage = stage
+            self.url = url
+            self.live = live
+        }
+    }
+
     public let author: String
     public let note: String
     public let recordedAt: String
@@ -362,6 +375,7 @@ public struct CommitmentEvidence: Equatable, Sendable, Decodable {
     public let check: Check?
     public let changes: String?
     public let pullRequest: String?
+    public let deploy: Deploy?
 
     public init(
         author: String,
@@ -370,7 +384,8 @@ public struct CommitmentEvidence: Equatable, Sendable, Decodable {
         commit: String? = nil,
         check: Check? = nil,
         changes: String? = nil,
-        pullRequest: String? = nil
+        pullRequest: String? = nil,
+        deploy: Deploy? = nil
     ) {
         self.author = author
         self.note = note
@@ -379,10 +394,11 @@ public struct CommitmentEvidence: Equatable, Sendable, Decodable {
         self.check = check
         self.changes = changes
         self.pullRequest = pullRequest
+        self.deploy = deploy
     }
 
     enum CodingKeys: String, CodingKey {
-        case note, commit, check, changes, pullRequest
+        case note, commit, check, changes, pullRequest, deploy
         case author = "by"
         case recordedAt = "at"
     }
@@ -394,6 +410,8 @@ public struct CodingOutcome: Equatable, Sendable {
     public let changes: String?
     public let checkPassed: Bool?
     public let pullRequest: URL?
+    /// The latest deploy to each stage, production first.
+    public let deploys: [CommitmentEvidence.Deploy]
 
     /// The pull request's "PR #12", or nil without one.
     public var pullRequestLabel: String? {
@@ -410,6 +428,7 @@ public struct CodingOutcome: Equatable, Sendable {
         changes = coding.last { $0.changes?.isEmpty == false }?.changes
         checkPassed = coding.last { $0.check != nil }?.check.map { $0.exitCode == 0 }
         pullRequest = coding.last { $0.pullRequest != nil }?.pullRequest.flatMap(URL.init(string:))
+        deploys = ["production", "preview"].compactMap { stage in coding.last { $0.deploy?.stage == stage }?.deploy }
     }
 }
 

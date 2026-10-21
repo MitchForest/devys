@@ -47,6 +47,7 @@ function harness() {
   const starts: StartRequest[] = [];
   const sent: string[] = [];
   const published: { id: string; repository: string; title: string }[] = [];
+  const deploys: { id: string; stage: string; commit?: string }[] = [];
   const delegates: Delegates = {
     start: async (request) => {
       starts.push(request);
@@ -67,6 +68,14 @@ function harness() {
     },
     interrupt: async () => {},
     accept: async () => ({ commit: "b".repeat(40), diffStat: " 1 file changed", patch: "+x" }),
+    deploy: async (id, request) => {
+      deploys.push({
+        id,
+        stage: request.stage,
+        ...(request.commit ? { commit: request.commit } : {}),
+      });
+      return { commit: request.commit ?? "b".repeat(40) };
+    },
     publish: async (id, request) => {
       published.push({ id, ...request });
       return {
@@ -84,7 +93,7 @@ function harness() {
     delegates: () => delegates,
   });
   const named = (name: string) => catalog.find((item) => item.name === name)!;
-  return { received, bindings, starts, sent, published, named, delegates };
+  return { received, bindings, starts, sent, published, deploys, named, delegates };
 }
 
 const as = (
@@ -112,8 +121,18 @@ const as = (
 async function setup() {
   const state = harness();
   const { scope } = await business("Delegates");
-  for (const name of ["codingStart", "codingStatus", "codingSend", "codingAccept", "codingPublish"])
+  for (const name of [
+    "codingStart",
+    "codingStatus",
+    "codingSend",
+    "codingAccept",
+    "codingPublish",
+    "deployPreview",
+  ])
     await Effect.runPromise(grant(db, scope, { capability: state.named(name), mode: "auto" }));
+  await Effect.runPromise(
+    grant(db, scope, { capability: state.named("deployProduction"), mode: "ask" }),
+  );
   const work = await Effect.runPromise(
     createCommitment(db, scope.businessId, {
       owner: scope.employeeId,
@@ -504,4 +523,71 @@ it("comments on a file reach the chosen employee's DM as one message with their 
     messages(db, scope.businessId, `work:${own.id}`, { limit: 5 }),
   );
   expect(thread.at(-1)?.text).toContain("Shorter");
+});
+
+it("previews deploy on their own, production asks, rollbacks name a known commit, and results become evidence", async () => {
+  const { bindings, scope, work, received, deploys, named } = await setup();
+  const { assignment } = (await Effect.runPromise(
+    named("codingStart")
+      .execute({ provider: "codex", objective: "Build it", newRepository: "site" })
+      .pipe(as(bindings, scope, work.id)),
+  )) as { assignment: string };
+  const command = "bunx wrangler deploy --env preview";
+  expect(
+    await Effect.runPromise(
+      named("deployPreview")
+        .execute({ assignment, command })
+        .pipe(as(bindings, scope, work.id)),
+    ),
+  ).toEqual({ deploying: "b".repeat(40) });
+  expect(deploys).toEqual([{ id: assignment, stage: "preview" }]);
+  // Production waits for the owner: a decision, and nothing deployed.
+  const asked = await Effect.runPromiseExit(
+    named("deployProduction")
+      .execute({ assignment, command: "bunx wrangler deploy" })
+      .pipe(as(bindings, scope, work.id)),
+  );
+  expect(asked._tag).toBe("Failure");
+  expect(deploys).toHaveLength(1);
+  // Rolling back only to a commit this work item knows.
+  const rollback = await Effect.runPromise(
+    named("deployPreview")
+      .execute({ assignment, command, commit: "c".repeat(12) })
+      .pipe(as(bindings, scope, work.id), Effect.flip),
+  );
+  expect(rollback).toMatchObject({ code: "invalid_input" });
+  const deployed = {
+    id: `${assignment}:deployed:preview:1`,
+    assignmentId: assignment,
+    kind: "deployed",
+    text: "Deployed bbbbbbb to preview: https://site.example.workers.dev answers (200).",
+    deploy: {
+      stage: "preview",
+      commit: "b".repeat(40),
+      command,
+      exitCode: 0,
+      url: "https://site.example.workers.dev",
+      status: 200,
+      live: true,
+      output: "Deployed",
+    },
+  };
+  await event(bindings, [deployed]);
+  await event(bindings, [deployed]);
+  const evidence = (await Effect.runPromise(commitment(db, scope.businessId, work.id)))!.evidence;
+  expect(evidence.filter((entry) => entry.deploy)).toEqual([
+    expect.objectContaining({
+      commit: "b".repeat(40),
+      deploy: { stage: "preview", url: "https://site.example.workers.dev", live: true },
+    }),
+  ]);
+  expect(received.at(-1)!.input.text).toContain("It is live");
+  // Now that commit is a rollback target.
+  expect(
+    await Effect.runPromise(
+      named("deployPreview")
+        .execute({ assignment, command, commit: "bbbbbbbbbbbb" })
+        .pipe(as(bindings, scope, work.id)),
+    ),
+  ).toEqual({ deploying: "bbbbbbbbbbbb" });
 });

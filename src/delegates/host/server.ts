@@ -15,6 +15,7 @@ import {
   renameSync,
   writeFileSync,
 } from "node:fs";
+import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import type {
   Accepted,
@@ -22,15 +23,18 @@ import type {
   DelegateStatus,
   Provider,
   Published,
+  Stage,
   StartRequest,
   Started,
 } from "../contract.ts";
+import { deploySecrets, redact, smoke, urlIn } from "./deploy.ts";
 import { cloneRepository, githubName, publishBranch } from "./github.ts";
 import { HostRefusal, hostId, scopeOf, type HostRoutes } from "../../protocol/host.ts";
 import { bounded, type ProviderAdapter, type ProviderEvents } from "./provider.ts";
 import {
   commitAll,
   createWorktree,
+  git,
   diffStat,
   patch,
   repository,
@@ -57,6 +61,8 @@ interface Job {
   check: { id: string; commit: string; command: string } | null;
   /** The last accepted commit and whether its check passed (null while it runs). */
   accepted?: { commit: string; passed: boolean | null };
+  /** A deploy running now: its stage and commit. */
+  deploying?: { stage: Stage; commit: string };
 }
 
 export interface DelegatesHostOptions {
@@ -72,6 +78,10 @@ export interface DelegatesHostOptions {
   /** The `gh` the owner is logged in with; tests pass a stand-in. */
   gh?: string;
   checkTimeoutMs?: number;
+  /** How long a deploy may run; 20 minutes unless set (tests). */
+  deployTimeoutMs?: number;
+  /** Checks a deployed URL: its HTTP status or null (tests stand in for the network). */
+  smoke?: (url: string) => Promise<number | null>;
   retryMs?: number;
   /** The ttys of the owner's terminals; cleanup never stops what runs in them. */
   spared?: () => Promise<string[]>;
@@ -362,6 +372,104 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
     };
   }
 
+  /**
+   * Deploys one commit (the accepted, checked one unless an earlier one is named) in its own
+   * detached worktree, so uncommitted edits never ship; the outcome arrives as an event.
+   */
+  async function deploy(job: Job, input: Record<string, unknown>) {
+    const { stage, command, url } = input;
+    if (job.readOnly) throw new HostRefusal(409, "A review session has nothing to deploy");
+    if (stage !== "preview" && stage !== "production")
+      throw new HostRefusal(400, "Deploy to preview or production");
+    if (typeof command !== "string" || !command.trim())
+      throw new HostRefusal(400, "Give the repository's deploy command");
+    if (url !== undefined && (typeof url !== "string" || !url.startsWith("https://")))
+      throw new HostRefusal(400, "The URL to check must be https");
+    if (job.deploying) throw new HostRefusal(409, "A deploy is already running");
+    const commit =
+      typeof input.commit === "string"
+        ? input.commit
+        : job.accepted?.passed
+          ? job.accepted.commit
+          : undefined;
+    if (!commit)
+      throw new HostRefusal(409, "Nothing accepted with a passing check yet: accept it first");
+    const full = await git(job.repository, "rev-parse", "--verify", `${commit}^{commit}`).catch(
+      () => {
+        throw new HostRefusal(400, "That commit isn't in this repository");
+      },
+    );
+    const place = join(
+      options.work,
+      job.scope.businessId,
+      "deploys",
+      `${job.id}-${full.slice(0, 12)}`,
+    );
+    await rm(place, { recursive: true, force: true });
+    await git(job.repository, "worktree", "prune");
+    await git(job.repository, "worktree", "add", "--detach", place, full);
+    const secrets = await deploySecrets(options.data, job.scope.businessId, stage);
+    save({ ...job, deploying: { stage, commit: full } });
+    const child = spawn(options.shell ?? "/bin/zsh", ["-lc", command], {
+      cwd: place,
+      env: { ...(options.env ?? process.env), ...secrets },
+      detached: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const stop = () => {
+      try {
+        process.kill(-child.pid!, "SIGKILL");
+      } catch {}
+    };
+    let output = "";
+    const decoder = new TextDecoder();
+    const keep = (chunk: Uint8Array) => {
+      output = (output + decoder.decode(chunk, { stream: true })).slice(-checkOutputBytes);
+    };
+    child.stdout.on("data", keep);
+    child.stderr.on("data", keep);
+    const deadline = setTimeout(stop, options.deployTimeoutMs ?? 20 * 60_000);
+    let finished = false;
+    const done = async (exitCode: number | null) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(deadline);
+      stop();
+      const shown = redact(output, secrets);
+      const checked = exitCode === 0 ? ((url as string | undefined) ?? urlIn(shown)) : null;
+      const status = checked ? await (options.smoke ?? smoke)(checked) : null;
+      const live = exitCode === 0 && status !== null && status < 400;
+      await git(job.repository, "worktree", "remove", "--force", place).catch(() => undefined);
+      save({ ...jobs.get(job.id)!, deploying: undefined });
+      emit({
+        id: `${job.id}:deployed:${stage}:${full}:${Date.now()}`,
+        assignmentId: job.id,
+        kind: "deployed",
+        text:
+          exitCode !== 0
+            ? `Deploy to ${stage} failed (exit ${exitCode ?? "killed"}).`
+            : live
+              ? `Deployed ${full.slice(0, 7)} to ${stage}: ${checked} answers (${status}).`
+              : checked
+                ? `Deployed ${full.slice(0, 7)} to ${stage}, but ${checked} ${status === null ? "didn't answer" : `answered ${status}`}.`
+                : `Deployed ${full.slice(0, 7)} to ${stage}; no URL to check was given or printed.`,
+        deploy: {
+          stage,
+          commit: full,
+          command,
+          exitCode,
+          url: checked,
+          status,
+          live,
+          output: shown,
+        },
+      });
+    };
+    child.on("error", () => void done(null));
+    child.on("close", (code) => void done(code));
+    return { commit: full };
+  }
+
   async function publish(job: Job, input: Record<string, unknown>): Promise<Published> {
     if (job.readOnly) throw new HostRefusal(409, "A review session has nothing to publish");
     if (job.state === "working") throw new HostRefusal(409, "The session is still working");
@@ -449,6 +557,8 @@ export function delegatesHost(options: DelegatesHostOptions): HostRoutes {
         }
         case "/delegates/publish":
           return publish(jobOf(input), input);
+        case "/delegates/deploy":
+          return deploy(jobOf(input), input);
         case "/delegates/diff": {
           const job = jobOf(input);
           return workingDiff(job.worktree, job.baseCommit);

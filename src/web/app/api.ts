@@ -156,6 +156,7 @@ export interface Commitment {
     check?: { command: string; exitCode: number | null };
     changes?: string;
     pullRequest?: string;
+    deploy?: { stage: "preview" | "production"; url: string | null; live: boolean };
   }[];
   revision: number;
   taken_over_by: string | null;

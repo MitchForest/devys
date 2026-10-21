@@ -68,12 +68,44 @@ export interface DelegateEvent {
   /** Stable, so delivering it twice is harmless. */
   id: string;
   assignmentId: string;
-  kind: "started" | "finished" | "failed" | "interrupted" | "checked";
-  /** The provider's reply, an error, or the check's outcome. */
+  kind: "started" | "finished" | "failed" | "interrupted" | "checked" | "deployed";
+  /** The provider's reply, an error, or the check's or deploy's outcome. */
   text: string;
   diffStat?: string;
   /** For `checked`: the commit that was checked and how the check ended. */
   check?: { commit: string; command: string; exitCode: number | null; output: string };
+  /** For `deployed`: what was deployed where, and whether it answered. */
+  deploy?: Deployed;
+}
+
+/** Where a deploy goes: previews on Engineering's own authority, production by decision. */
+export type Stage = "preview" | "production";
+
+/**
+ * Deploys a commit with the repository's own deploy command: the accepted, checked commit, or
+ * (to roll back) an earlier one. `url` is checked afterwards; without it, the last https URL
+ * the command printed is.
+ */
+export interface DeployRequest {
+  stage: Stage;
+  command: string;
+  commit?: string;
+  url?: string;
+}
+
+/** A finished deploy: its exit, the URL checked, and that URL's answer. */
+export interface Deployed {
+  stage: Stage;
+  commit: string;
+  command: string;
+  exitCode: number | null;
+  url: string | null;
+  /** The HTTP status of a GET of `url` after deploying; null when it couldn't be reached. */
+  status: number | null;
+  /** Deployed and answering below 400. */
+  live: boolean;
+  /** The end of the command's output, with stage secrets redacted. */
+  output: string;
 }
 
 /** Commits the worktree and starts the repository's check against that commit. */
@@ -143,4 +175,6 @@ export interface Delegates {
   interrupt(assignmentId: string): Promise<void>;
   accept(assignmentId: string, request: AcceptRequest): Promise<Accepted>;
   publish(assignmentId: string, request: PublishRequest): Promise<Published>;
+  /** Starts a deploy; its outcome arrives as a `deployed` event. */
+  deploy(assignmentId: string, request: DeployRequest): Promise<{ commit: string }>;
 }

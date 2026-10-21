@@ -201,10 +201,45 @@ describe("a coding outcome at a glance", () => {
         },
       ]),
     ).toEqual({
+      deploys: [],
       commit: "bbbbbbb",
       changes: "2 files changed",
       check: { passed: true, command: "bun test" },
       pullRequest: { url: "https://github.com/acme/site/pull/12", label: "PR #12" },
     });
+  });
+});
+
+describe("where coding work is live", () => {
+  it("shows the latest deploy to each stage, production first", async () => {
+    const { outcomeOf } = await import("../src/web/app/names.ts");
+    const at = "2026-10-20T10:00:00Z";
+    const outcome = outcomeOf([
+      {
+        by: "devys",
+        note: "p1",
+        at,
+        commit: "a".repeat(40),
+        deploy: { stage: "preview", url: "https://a.example", live: true },
+      },
+      {
+        by: "devys",
+        note: "p2",
+        at,
+        commit: "b".repeat(40),
+        deploy: { stage: "preview", url: "https://b.example", live: false },
+      },
+      {
+        by: "devys",
+        note: "prod",
+        at,
+        commit: "a".repeat(40),
+        deploy: { stage: "production", url: "https://acme.example", live: true },
+      },
+    ]);
+    expect(outcome?.deploys).toEqual([
+      { stage: "production", url: "https://acme.example", live: true, commit: "aaaaaaa" },
+      { stage: "preview", url: "https://b.example", live: false, commit: "bbbbbbb" },
+    ]);
   });
 });

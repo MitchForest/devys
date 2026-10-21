@@ -27,6 +27,11 @@ export function delegateDependencies(env: Env): DelegateDependencies {
         }),
       );
     },
+    knownCommits: async (scope, commitmentId) =>
+      (
+        (await Effect.runPromise(commitment(env.HYPERDRIVE, scope.businessId, commitmentId)))
+          ?.evidence ?? []
+      ).flatMap((entry) => (entry.commit ? [entry.commit] : [])),
   };
 }
 
@@ -100,6 +105,7 @@ async function deliverEvent(env: Env, event: DelegateEvent) {
     failed: `${who} failed: ${event.text.slice(0, 600)}`,
     interrupted: `${who} was interrupted: ${event.text.slice(0, 600)}`,
     checked: event.text.slice(0, 2000),
+    deployed: event.text.slice(0, 2000),
   }[event.kind];
   await postEvent(env, item.business_id, `work:${item.commitment_id}`, {
     clientId: `delegate:${event.id}`,
@@ -116,6 +122,16 @@ async function deliverEvent(env: Env, event: DelegateEvent) {
         source: `delegate:${event.id}`,
       }),
     );
+  if (event.kind === "deployed" && event.deploy)
+    await Effect.runPromise(
+      addEvidence(env.HYPERDRIVE, item.business_id, item.commitment_id, {
+        by: "devys",
+        note: event.text,
+        commit: event.deploy.commit,
+        deploy: { stage: event.deploy.stage, url: event.deploy.url, live: event.deploy.live },
+        source: `delegate:${event.id}`,
+      }),
+    );
   if (event.kind === "started") return;
   // While a person holds the work they drive the session; its employee is briefed once, on
   // hand-back, rather than woken by every turn it may not act on.
@@ -128,11 +144,17 @@ async function deliverEvent(env: Env, event: DelegateEvent) {
     event.diffStat &&
       `Changes in its worktree ${item.worktree}:\n${event.diffStat.length > 8000 ? `${event.diffStat.slice(0, 8000)}\n… (run git diff --stat in the worktree for the rest)` : event.diffStat}`,
     event.check?.output && `Check output (end):\n${event.check.output.slice(-6000)}`,
-    event.kind === "checked"
-      ? event.check?.exitCode === 0
-        ? "The check passed and is recorded as evidence. Decide whether the work item is done; publishing and deploying are separate."
-        : "Fix it: tell the session what failed with codingSend, then accept again."
-      : "Review the result (codingStatus, or read and run things in the worktree). Iterate with codingSend, or accept with codingAccept and the repository's check command.",
+    event.deploy?.output &&
+      `Deploy output (end, secrets redacted):\n${event.deploy.output.slice(-6000)}`,
+    event.kind === "deployed"
+      ? event.deploy?.live
+        ? "It is live and recorded as evidence. If the work item is done, complete it; production needs its own deploy."
+        : "It isn't working: read the output, fix it in the session, accept again and redeploy, or roll back by deploying the last good commit."
+      : event.kind === "checked"
+        ? event.check?.exitCode === 0
+          ? "The check passed and is recorded as evidence. Decide whether the work item is done; publishing and deploying are separate."
+          : "Fix it: tell the session what failed with codingSend, then accept again."
+        : "Review the result (codingStatus, or read and run things in the worktree). Iterate with codingSend, or accept with codingAccept and the repository's check command.",
   ]
     .filter(Boolean)
     .join("\n\n");

@@ -17,5 +17,11 @@ struct CodingOutcomeTests {
         #expect(outcome?.changes == "2 files changed")
         #expect(outcome?.checkPassed == true)
         #expect(outcome?.pullRequestLabel == "PR #12")
+        #expect(outcome?.deploys.isEmpty == true)
+        let deployed = CodingOutcome([
+            CommitmentEvidence(author: "devys", note: "p", recordedAt: "a", commit: "a", deploy: .init(stage: "preview", url: "https://a.example", live: true)),
+            CommitmentEvidence(author: "devys", note: "q", recordedAt: "b", commit: "b", deploy: .init(stage: "production", url: nil, live: false))
+        ])
+        #expect(deployed?.deploys.map(\.stage) == ["production", "preview"])
     }
 }

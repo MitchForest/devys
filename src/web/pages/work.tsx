@@ -684,6 +684,24 @@ function Evidence({ item }: { item: Commitment }) {
             {outcome.pullRequest.label}
           </a>
         )}
+        {outcome.deploys.map((deploy) =>
+          deploy.live && deploy.url ? (
+            <a
+              key={deploy.stage}
+              href={deploy.url}
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-ink hover:underline"
+              title={`${deploy.commit} is live`}
+            >
+              {deploy.stage === "production" ? "Live" : "Preview"} ↗
+            </a>
+          ) : (
+            <span key={deploy.stage} className="text-red">
+              {deploy.stage === "production" ? "Production" : "Preview"} deploy failed
+            </span>
+          ),
+        )}
         <span className="font-mono text-caption text-ink-3">{outcome.commit}</span>
         <button
           type="button"

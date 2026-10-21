@@ -145,6 +145,8 @@ esac
           env,
           gh,
           retryMs: 20,
+          // Stands in for the network: example.com previews answer, others don't.
+          smoke: async (url) => (url.includes("example.com") ? 200 : null),
           deliver: async (events) => {
             if (refuse) throw new Error("Worker down");
             const accepted = events.filter((event) => !poison.has(event.kind));
@@ -264,6 +266,65 @@ it("a turn that ends before its start or follow-up returns is not lost", async (
   await state.client().send("a-fast", "Try again");
   expect(await state.client().inspect("a-fast")).toMatchObject({ state: "failed" });
   expect(state.delivered.filter((event) => event.kind === "failed")).toHaveLength(2);
+});
+
+it("deploys run the accepted commit with the business's secrets, check the URL, and roll back", async () => {
+  const state = await host();
+  const started = await state.client().start(request("a-d", { path: state.repository }));
+  const deploy = (command: string, extra: { commit?: string } = {}) =>
+    state.client().deploy("a-d", { stage: "preview", command, ...extra });
+  await expect(deploy("true")).rejects.toThrow(/still working|accept it first/);
+  state.provider.finish(started.sessionId, "Done.");
+  await until(
+    () => state.delivered,
+    (events) => events.some((event) => event.kind === "finished"),
+  );
+  await expect(deploy("true")).rejects.toThrow(/accept it first/);
+  const accepted = await state.client().accept("a-d", { message: "Add it", check: "true" });
+  await until(
+    () => state.delivered,
+    (events) => events.some((event) => event.kind === "checked"),
+  );
+  // The business's secrets reach the deploy and nothing else; output never shows them.
+  mkdirSync(join(state.data, "deploy"), { recursive: true });
+  writeFileSync(
+    join(state.data, "deploy", `${scope.businessId}.env`),
+    "TOKEN=hunter2222\nproduction.ONLY_PROD=nope\n",
+  );
+  // An uncommitted edit in the session's worktree is not what ships.
+  writeFileSync(join(started.worktree, "uncommitted.txt"), "draft\n");
+  const deployed = () => state.delivered.filter((event) => event.kind === "deployed");
+  expect(
+    await deploy(
+      'test ! -f uncommitted.txt && echo "token $TOKEN prod ${ONLY_PROD:-none} at $(git rev-parse HEAD)" && echo https://acme-preview.example.com',
+    ),
+  ).toEqual({ commit: accepted.commit });
+  const first = (await until(deployed, (events) => events.length === 1))[0]!;
+  expect(first.deploy).toMatchObject({
+    stage: "preview",
+    commit: accepted.commit,
+    exitCode: 0,
+    url: "https://acme-preview.example.com",
+    status: 200,
+    live: true,
+  });
+  expect(first.deploy!.output).toContain(`token [redacted] prod none at ${accepted.commit}`);
+  expect(first.deploy!.output).not.toContain("hunter2222");
+  // A deploy that fails, or whose URL doesn't answer, is not live.
+  await deploy("echo https://broken.invalid");
+  const second = (await until(deployed, (events) => events.length === 2))[1]!;
+  expect(second.deploy).toMatchObject({ exitCode: 0, live: false, status: null });
+  // Rolling back deploys exactly the earlier commit.
+  const base = started.baseCommit;
+  await deploy('echo "at $(git rev-parse HEAD)" && echo https://acme-preview.example.com', {
+    commit: base.slice(0, 12),
+  });
+  const third = (await until(deployed, (events) => events.length === 3))[2]!;
+  expect(third.deploy).toMatchObject({ commit: base, live: true });
+  expect(third.deploy!.output).toContain(`at ${base}`);
+  await expect(deploy("true", { commit: "0".repeat(40) })).rejects.toThrow(
+    /isn't in this repository/,
+  );
 });
 
 it("an event the Worker cannot deliver is retried without holding up later events", async () => {

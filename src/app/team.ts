@@ -58,6 +58,8 @@ const coding = [
   "codingStop",
   "codingAccept",
   "codingPublish",
+  "deployPreview",
+  "deployProduction",
 ] as const;
 
 export const roleTemplates: readonly RoleTemplate[] = [
@@ -68,7 +70,7 @@ export const roleTemplates: readonly RoleTemplate[] = [
     responsibilities:
       "Run the business day to day. Keep the owner's priorities moving, coordinate the team by handing work to the right employee as commitments, notice what is blocked or late, and bring the owner only real decisions. Propose new hires when the work needs a role nobody holds.",
     capabilities: "all",
-    ask: ["hireEmployee"],
+    ask: ["hireEmployee", "deployProduction"],
   },
   {
     id: "engineering",
@@ -77,6 +79,8 @@ export const roleTemplates: readonly RoleTemplate[] = [
     responsibilities:
       "Build, fix and ship the business's software. Work in the repositories on the owner's computer, run tests before calling work done, keep changes small and reviewable, and report what changed with evidence.",
     capabilities: [...collaboration, ...files, ...coding, "run", "readPublicUrl"],
+    // Previews ship on Engineering's own authority; production is the owner's decision.
+    ask: ["deployProduction"],
   },
   {
     id: "growth",

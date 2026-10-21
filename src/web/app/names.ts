@@ -191,7 +191,13 @@ export function outcomeOf(evidence: Commitment["evidence"]) {
   if (!coding.length) return undefined;
   const check = coding.findLast((entry) => entry.check)?.check;
   const pullRequest = coding.findLast((entry) => entry.pullRequest)?.pullRequest;
+  // The latest deploy to each stage: production shown before preview.
+  const deploys = (["production", "preview"] as const).flatMap((stage) => {
+    const entry = coding.findLast((each) => each.deploy?.stage === stage);
+    return entry?.deploy ? [{ ...entry.deploy, commit: entry.commit!.slice(0, 7) }] : [];
+  });
   return {
+    deploys,
     commit: coding.at(-1)!.commit!.slice(0, 7),
     changes: coding.findLast((entry) => entry.changes)?.changes,
     check: check && { passed: check.exitCode === 0, command: check.command },

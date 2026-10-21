@@ -116,6 +116,15 @@ struct WorkPanel: View {
                     if let url = outcome.pullRequest, let label = outcome.pullRequestLabel {
                         Link(label, destination: url).font(DevysTypography.secondary.weight(.medium))
                     }
+                    ForEach(outcome.deploys, id: \.stage) { deploy in
+                        if deploy.live, let url = deploy.url.flatMap(URL.init(string:)) {
+                            Link(deploy.stage == "production" ? "Live ↗" : "Preview ↗", destination: url)
+                                .font(DevysTypography.secondary.weight(.medium))
+                        } else {
+                            Text("\(deploy.stage == "production" ? "Production" : "Preview") deploy failed")
+                                .font(DevysTypography.secondary).foregroundStyle(DevysColors.red)
+                        }
+                    }
                     Text(outcome.commit).font(DevysTypography.caption.monospaced()).foregroundStyle(DevysColors.ink3)
                     Spacer(minLength: 4)
                     Button(showsEvidence ? "Hide" : "Details") { showsEvidence.toggle() }
