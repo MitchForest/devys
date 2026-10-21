@@ -61,6 +61,7 @@ async function handOver(env: Env, work: WorkItem & { business_id: string }) {
       `Work on this work item (${ref("work", "item", work.id)}, revision ${work.revision}): ${work.title}.`,
       work.objective && `Objective: ${work.objective}`,
       work.next_action && `Next action: ${work.next_action}`,
+      work.woken_at && `This is the follow-up you set; it came due ${work.woken_at}.`,
       work.wait_condition && `It was waiting on: ${work.wait_condition}`,
       "When it's done, call workComplete with evidence. If it's blocked, call workUpdate with state waiting or needs_decision and what it waits on.",
     ]

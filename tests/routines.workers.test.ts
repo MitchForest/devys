@@ -419,6 +419,7 @@ it("a follow-up wakes waiting work once, and any other state clears it", async (
   const handed = received.filter((input) => input.chatId.endsWith(work.id));
   expect(handed.map((input) => input.messageId)).toEqual([`${work.id}:3`]);
   expect(handed[0]!.text).toContain("It was waiting on: The supplier's price");
+  expect(handed[0]!.text).toContain("This is the follow-up you set; it came due");
   const woken = (await Effect.runPromise(workItem(db, scope.businessId, work.id)))!;
   expect(woken).toMatchObject({ state: "in_progress", wake_at: null });
 
@@ -445,7 +446,7 @@ it("a follow-up wakes waiting work once, and any other state clears it", async (
   expect(moved).toMatchObject({ state: "in_progress", wakeAt: null });
 });
 
-it("work is changed only in its own thread; Operations, coordinating, anywhere", async () => {
+it("work is updated from any conversation but completed only in its thread; Operations anywhere", async () => {
   const { scope } = await business();
   const engineer = await Effect.runPromise(
     createEmployee(db, scope.businessId, {
@@ -473,10 +474,20 @@ it("work is changed only in its own thread; Operations, coordinating, anywhere",
     expectedRevision: 1,
     nextAction: "Draft",
   });
-  const refused = await Effect.runPromise(Effect.flip(update.pipe(as(mine, elsewhere))));
+  // What the owner asks for in a chat is recorded there: its plan changes from anywhere.
+  expect(await Effect.runPromise(update.pipe(as(mine, elsewhere)))).toMatchObject({
+    nextAction: "Draft",
+  });
+  // It is completed only in its own thread, where it is worked; another item's thread is
+  // elsewhere too.
+  const complete = named("workComplete").execute({
+    item: ref("work", "item", work.id),
+    expectedRevision: 2,
+    evidence: "Shipped",
+  });
+  const refused = await Effect.runPromise(Effect.flip(complete.pipe(as(mine, elsewhere))));
   expect(refused).toMatchObject({ code: "conflict" });
   expect(refused.message).toContain(`devys:work/item/${work.id}`);
-  // Another work item's thread is elsewhere too.
   const other = await Effect.runPromise(
     createWorkItem(db, scope.businessId, {
       id: crypto.randomUUID(),
@@ -488,20 +499,12 @@ it("work is changed only in its own thread; Operations, coordinating, anywhere",
   expect(
     await Effect.runPromise(
       Effect.flip(
-        update.pipe(as(mine, { workItemId: other.id, conversation: `work:${other.id}` })),
+        complete.pipe(as(mine, { workItemId: other.id, conversation: `work:${other.id}` })),
       ),
     ),
   ).toMatchObject({ code: "conflict" });
-  const complete = named("workComplete").execute({
-    item: ref("work", "item", work.id),
-    expectedRevision: 1,
-    evidence: "Shipped",
-  });
-  expect(await Effect.runPromise(Effect.flip(complete.pipe(as(mine, elsewhere))))).toMatchObject({
-    code: "conflict",
-  });
-  expect(await Effect.runPromise(update.pipe(as(mine, thread)))).toMatchObject({
-    nextAction: "Draft",
+  expect(await Effect.runPromise(complete.pipe(as(mine, thread)))).toMatchObject({
+    state: "completed",
   });
   // Creating work is allowed anywhere.
   expect(
@@ -514,7 +517,7 @@ it("work is changed only in its own thread; Operations, coordinating, anywhere",
   expect(
     await Effect.runPromise(
       named("workUpdate")
-        .execute({ item: ref("work", "item", work.id), expectedRevision: 2, nextAction: "Ship" })
+        .execute({ item: ref("work", "item", other.id), expectedRevision: 1, nextAction: "Ship" })
         .pipe(as(scope, { conversation: `direct:${scope.employeeId}` })),
     ),
   ).toMatchObject({ nextAction: "Ship" });

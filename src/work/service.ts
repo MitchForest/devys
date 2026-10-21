@@ -1,7 +1,7 @@
 import { database, isoText, type Database } from "../data/database.ts";
 import type { WorkItem, WorkItemState } from "./contract.ts";
 
-const columns = `id, owner_employee_id, title, objective, next_action, wait_condition, due_at, wake_at, state,
+const columns = `id, owner_employee_id, title, objective, next_action, wait_condition, due_at, wake_at, woken_at, state,
   project_id, conditions, evidence, revision, taken_over_by, created_by, updated_at`;
 
 export const workItems = (db: Database, businessId: string, since?: string) =>
@@ -106,6 +106,7 @@ export const updateWorkItem = (
          due_at = CASE WHEN $10::boolean THEN $11::timestamptz ELSE due_at END,
          wake_at = CASE WHEN coalesce($6, state) <> 'waiting' THEN NULL
            WHEN $14::boolean THEN $15::timestamptz ELSE wake_at END,
+         woken_at = NULL,
          evidence = CASE WHEN $12::jsonb IS NULL THEN evidence
            ELSE evidence || jsonb_build_array($12::jsonb || jsonb_build_object('at', ${isoText("now()")})) END,
          revision = revision + 1,
@@ -179,8 +180,8 @@ export const reassignOpen = (db: Database, businessId: string, from: string, to:
 export const wakeFollowUps = (db: Database) =>
   database(db, (sql) =>
     sql.run(
-      `UPDATE work_items SET state = 'ready', wake_at = NULL, revision = revision + 1,
-         updated_at = now()
+      `UPDATE work_items SET state = 'ready', woken_at = wake_at, wake_at = NULL,
+         revision = revision + 1, updated_at = now()
        WHERE state = 'waiting' AND wake_at <= now() AND taken_over_by IS NULL`,
     ),
   );

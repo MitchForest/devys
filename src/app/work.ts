@@ -163,7 +163,7 @@ export async function decisionRoute(
       id: `decision:${answered.id}`,
       text:
         answered.status === "approved"
-          ? `Approved: ${answered.capability}. Go ahead; it runs once, with exactly the input you asked for.`
+          ? `Approved: ${answered.capability}. Go ahead: call it once more with exactly the input you asked for.`
           : `Declined: ${answered.capability}. Don't run it; find another way or ask me.`,
       mentions: [answered.employee_id],
     });

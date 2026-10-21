@@ -138,6 +138,8 @@ export const WorkItem = Schema.Struct({
   due_at: Schema.NullOr(Timestamp),
   /** A follow-up: when this waiting work becomes ready again. Only waiting work has one. */
   wake_at: Schema.NullOr(Timestamp),
+  /** When a follow-up woke this work, until it next changes. */
+  woken_at: Schema.NullOr(Timestamp),
   state: WorkItemState,
   /** The project it belongs to, if any; its thread is in that project's channel. */
   project_id: Schema.NullOr(Schema.String),

@@ -425,7 +425,7 @@
       "constraints": {},
       "responsibility": null,
       "created_at": "2026-01-01T00:00:00.000Z",
-      "description": "Update a work item (its ref) at its current revision, in its own thread: the next action, its state (ready, in_progress, waiting, needs_decision, cancelled), what it waits on, or its due date (a deadline only). To follow up later (\"look again Thursday\"), set state waiting with wakeAt: at that time it becomes ready and is handed back to you in its thread, once. A routine (routinePropose) is for work that recurs.",
+      "description": "Update a work item (its ref) at its current revision, from any conversation: the next action, its state (ready, in_progress, waiting, needs_decision, cancelled), what it waits on, or its due date (a deadline only). To follow up later (\"look again Thursday\"), set state waiting with wakeAt: at that time it becomes ready and is handed back to you in its thread, once. A routine (routinePropose) is for work that recurs.",
       "effect": "change",
       "limits": false
     },

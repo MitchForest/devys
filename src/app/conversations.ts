@@ -161,7 +161,12 @@ async function post(
     messages(env.HYPERDRIVE, businessId, key, { before: message.id, limit: 50 }),
   );
   const resolved = await resolve(env, businessId, key);
-  const to = responders({ message, history, defaultResponder: resolved?.defaultResponder });
+  const to = responders({
+    message,
+    history,
+    defaultResponder: resolved?.defaultResponder,
+    now: new Date(message.created_at),
+  });
   // Delivered on a repeat too, to whoever it has not reached: a retry after a failed delivery
   // must still wake them.
   await deliver(env, businessId, key, message, to, resolved?.place ?? "");
@@ -195,6 +200,7 @@ export async function postFromPerson(
     message: { author: `person:${personId}`, mentions, reply_to: input.replyTo ?? null },
     history: await Effect.runPromise(messages(env.HYPERDRIVE, businessId, key, { limit: 50 })),
     defaultResponder: await defaultResponder(env, businessId, key),
+    now: new Date(),
   });
   const answering = employees.filter((employee) => targets.includes(employee.id));
   if (targets.length && answering.every((employee) => employee.paused))
@@ -320,6 +326,7 @@ export async function conversationPage(
     : page;
   return {
     messages: page,
-    respondent: nextResponder(recent, await defaultResponder(env, businessId, key)) ?? null,
+    respondent:
+      nextResponder(recent, await defaultResponder(env, businessId, key), new Date()) ?? null,
   };
 }

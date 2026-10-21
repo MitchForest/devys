@@ -80,8 +80,9 @@ export const namer = (employees: readonly { id: string; name: string }[]) => (au
  * Who answers a new message, by the conversation's rules:
  *
  * 1. An owner's message is always answered: by the employees it mentions; otherwise by
- *    the employee it replies to; otherwise by whoever last spoke here; otherwise by the
- *    conversation's default (a DM's employee, a project's lead, a work item's owner).
+ *    the employee it replies to; otherwise by whoever is talking (the last employee who spoke,
+ *    within the last hour); otherwise by the conversation's default (a DM's employee, a
+ *    project's lead, a work item's owner).
  * 2. An employee's message wakes the employees it mentions, and the asker when it answers
  *    a message that mentioned it. Nothing else an employee writes wakes anyone.
  * 3. At most `limit` employee turns in a row between two owner messages.
@@ -89,11 +90,13 @@ export const namer = (employees: readonly { id: string; name: string }[]) => (au
 export function responders(input: {
   message: Pick<Message, "author" | "mentions" | "reply_to">;
   /** The conversation before this message, oldest first. */
-  history: readonly Pick<Message, "id" | "author" | "mentions" | "kind">[];
+  history: readonly Pick<Message, "id" | "author" | "mentions" | "kind" | "created_at">[];
   defaultResponder: string | undefined;
+  /** The time the new message is sent, to tell who is still talking. */
+  now: Date;
   limit?: number;
 }): string[] {
-  const { message, history, defaultResponder } = input;
+  const { message, history, defaultResponder, now } = input;
   const author = employeeOf(message.author);
   const replied = message.reply_to
     ? history.find((earlier) => earlier.id === message.reply_to)
@@ -103,13 +106,8 @@ export function responders(input: {
   ];
   if (!author) {
     if (message.mentions.length) return unique(message.mentions);
-    const lastSpeaker = [...history]
-      .reverse()
-      .find((earlier) => earlier.kind === "message" && employeeOf(earlier.author));
     return unique([
-      (replied && employeeOf(replied.author)) ??
-        (lastSpeaker && employeeOf(lastSpeaker.author)) ??
-        defaultResponder,
+      (replied && employeeOf(replied.author)) ?? talking(history, now) ?? defaultResponder,
     ]);
   }
   let streak = 0;
@@ -123,13 +121,25 @@ export function responders(input: {
   return unique([...message.mentions, asker]);
 }
 
-/** Who answers the owner's next message if they neither reply to nor mention anyone. */
-export function nextResponder(
-  history: readonly Pick<Message, "author" | "kind">[],
-  defaultResponder: string | undefined,
-) {
-  const lastSpeaker = [...history]
+/** How long after speaking an employee still holds the floor without an @. */
+const talkingFor = 60 * 60_000;
+
+/**
+ * Whoever is talking: the employee who spoke last, if within the last hour. One who spoke
+ * yesterday does not take the owner's next message.
+ */
+function talking(history: readonly Pick<Message, "author" | "kind" | "created_at">[], now: Date) {
+  const last = [...history]
     .reverse()
     .find((earlier) => earlier.kind === "message" && employeeOf(earlier.author));
-  return (lastSpeaker && employeeOf(lastSpeaker.author)) ?? defaultResponder;
+  return last && now.getTime() - Date.parse(last.created_at) <= talkingFor
+    ? employeeOf(last.author)
+    : undefined;
 }
+
+/** Who answers the owner's next message if they neither reply to nor mention anyone. */
+export const nextResponder = (
+  history: readonly Pick<Message, "author" | "kind" | "created_at">[],
+  defaultResponder: string | undefined,
+  now: Date,
+) => talking(history, now) ?? defaultResponder;

@@ -137,10 +137,12 @@ export function workCapabilities(
   coordinates: (businessId: string, employeeId: string) => Promise<boolean>,
 ) {
   /**
-   * A work item is changed by its owner, in its own thread, so it is worked in one place;
-   * colleagues ask there. Operations, coordinating, changes anyone's from anywhere.
+   * A work item is changed by its owner (colleagues ask there); Operations, coordinating,
+   * changes anyone's. Its plan and state change from any conversation, so what the owner asks
+   * for in a chat is recorded there; it is completed only in its own thread, where it is
+   * worked, so it is never finished twice from two places.
    */
-  const ownWork = (id: string) =>
+  const ownWork = (id: string, where: "anywhere" | "thread") =>
     Effect.gen(function* () {
       const { businessId, employeeId, workItemId } = yield* Invocation;
       const work = yield* stored(workItem(db, businessId, id));
@@ -155,17 +157,16 @@ export function workCapabilities(
           code: "forbidden",
           message: "Another employee's work item: ask its owner in its thread.",
         });
-      if (workItemId !== id)
+      if (where === "thread" && workItemId !== id)
         return yield* new CapabilityError({
           code: "conflict",
-          message: `This work item changes only in its own thread (${ref("work", "item", id)}): continue it there, where it was handed to you. Here, say what you found or create new work.`,
+          message: `This work item is completed only in its own thread (${ref("work", "item", id)}), where it is worked. Here, update its plan or say what you found.`,
         });
       return work;
     });
   const change = (id: string, expectedRevision: number, value: Change) =>
     Effect.gen(function* () {
       const { businessId, employeeId } = yield* Invocation;
-      yield* ownWork(id);
       const updated = yield* stored(
         updateWorkItem(db, businessId, id, expectedRevision, value, {
           kind: "employee",
@@ -277,7 +278,7 @@ export function workCapabilities(
     capability({
       name: "workUpdate",
       description:
-        'Update a work item (its ref) at its current revision, in its own thread: the next action, its state (ready, in_progress, waiting, needs_decision, cancelled), what it waits on, or its due date (a deadline only). To follow up later ("look again Thursday"), set state waiting with wakeAt: at that time it becomes ready and is handed back to you in its thread, once. A routine (routinePropose) is for work that recurs.',
+        'Update a work item (its ref) at its current revision, from any conversation: the next action, its state (ready, in_progress, waiting, needs_decision, cancelled), what it waits on, or its due date (a deadline only). To follow up later ("look again Thursday"), set state waiting with wakeAt: at that time it becomes ready and is handed back to you in its thread, once. A routine (routinePropose) is for work that recurs.',
       effect: "change",
       replay: "idempotent",
       input: Schema.Struct({
@@ -293,6 +294,7 @@ export function workCapabilities(
       output: Summary,
       execute: ({ item, expectedRevision, state, nextAction, waitCondition, dueAt, wakeAt }) =>
         Effect.gen(function* () {
+          yield* ownWork(item, "anywhere");
           if (wakeAt && state !== "waiting")
             return yield* new CapabilityError({
               code: "invalid_input",
@@ -327,7 +329,7 @@ export function workCapabilities(
       execute: ({ item, expectedRevision, evidence }) =>
         Effect.gen(function* () {
           const { businessId, employeeId } = yield* Invocation;
-          const work = yield* ownWork(item);
+          const work = yield* ownWork(item, "thread");
           const blocked = yield* rpc(() => completionBlocked(businessId, work));
           if (blocked) return yield* new CapabilityError({ code: "conflict", message: blocked });
           return yield* change(item, expectedRevision, {
