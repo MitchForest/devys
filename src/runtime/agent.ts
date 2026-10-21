@@ -93,9 +93,10 @@ export abstract class AgentRuntime<
         {
           models,
           registry,
+          // Granted core tools are added before the session's first turn (configureIdle).
           conversationCreated: (tx, conversation) =>
             configure(tx, conversation.id, {
-              tools: initialTools(extension, this.services.capabilities),
+              tools: initialTools(extension, this.services.capabilities, new Set()),
             }),
           settings: {
             toolExecution: "sequential",
@@ -171,7 +172,11 @@ export abstract class AgentRuntime<
       {
         model: { provider: model.provider, modelId: model.id },
         thinkingLevel: model.thinkingLevel,
-        tools: initialTools(this.extension, this.services.capabilities),
+        tools: initialTools(
+          this.extension,
+          this.services.capabilities,
+          new Set(await this.services.granted(this.scope)),
+        ),
       },
       BACKGROUND_CONTEXT,
     );

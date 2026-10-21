@@ -148,7 +148,13 @@ export class PiRecoveryProbe extends DurableObject<ProbeEnv> {
           models,
           registry,
           conversationCreated: (tx, conversation) =>
-            configure(tx, conversation.id, { tools: initialTools(extension, capabilities(env)) }),
+            configure(tx, conversation.id, {
+              tools: initialTools(
+                extension,
+                capabilities(env),
+                new Set(capabilities(env).map((contract) => contract.name)),
+              ),
+            }),
           settings: { compaction: { enabled: false, keepRecentTokens: 128 } },
         },
         context,

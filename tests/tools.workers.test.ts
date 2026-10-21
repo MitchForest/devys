@@ -20,10 +20,16 @@ it("keeps initial schemas smaller and returns only requested integration interfa
         tools?.map(({ name, description, parameters }) => ({ name, description, parameters })),
       ),
     ).byteLength;
-  const initial = schemaBytes(initialTools(extension, contracts));
-  // The core capabilities and the two harness controls, from `core` on each capability.
+  const everything = new Set(contracts.map((contract) => contract.name));
+  const initial = schemaBytes(initialTools(extension, contracts, everything));
+  // The granted core capabilities and the two harness controls, from `core` on each capability.
   expect(
-    initialTools(extension, contracts)
+    initialTools(extension, contracts, new Set(["run", "remember"]))
+      .map((tool) => tool.name)
+      .sort(),
+  ).toEqual(["describe_capabilities", "execute", "remember", "run"].sort());
+  expect(
+    initialTools(extension, contracts, everything)
       .map((tool) => tool.name)
       .sort(),
   ).toEqual(

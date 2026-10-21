@@ -34,11 +34,20 @@ export interface ToolHost {
 /** Harness controls, not capabilities: offered beside the core capabilities. */
 const controls = ["describe_capabilities", "execute"];
 
-/** All implementations stay registered for recovery; only core ones are offered initially. */
-export const initialTools = (extension: Extension, contracts: readonly Capability[]) => {
+/**
+ * All implementations stay registered for recovery; offered directly are the harness controls
+ * and the core capabilities this employee is granted (the rest through describe_capabilities).
+ */
+export const initialTools = (
+  extension: Extension,
+  contracts: readonly Capability[],
+  granted: ReadonlySet<string>,
+) => {
   const offered = new Set([
     ...controls,
-    ...contracts.filter((contract) => contract.core).map((contract) => contract.name),
+    ...contracts
+      .filter((contract) => contract.core && granted.has(contract.name))
+      .map((contract) => contract.name),
   ]);
   return (extension.tools ?? []).filter((tool) => offered.has(tool.name));
 };
