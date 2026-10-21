@@ -49,8 +49,17 @@ const files = [
   "printPdf",
   "importAttachment",
   "publishArtifact",
+  "artifactPage",
+  "artifactEdit",
 ] as const;
 const drive = ["driveList", "driveRead", "driveCreate", "driveUpdate"] as const;
+const browser = [
+  "browserOpen",
+  "browserRead",
+  "browserClick",
+  "browserType",
+  "browserPress",
+] as const;
 const coding = [
   "codingStart",
   "codingStatus",
@@ -78,7 +87,7 @@ export const roleTemplates: readonly RoleTemplate[] = [
     summary: "Builds, fixes and ships the business's software.",
     responsibilities:
       "Build, fix and ship the business's software. Work in the repositories on the owner's computer, run tests before calling work done, keep changes small and reviewable, and report what changed with evidence.",
-    capabilities: [...collaboration, ...files, ...coding, "run", "readPublicUrl"],
+    capabilities: [...collaboration, ...files, ...coding, ...browser, "run", "readPublicUrl"],
     // Previews ship on Engineering's own authority; production is the owner's decision.
     ask: ["deployProduction"],
   },
@@ -88,7 +97,7 @@ export const roleTemplates: readonly RoleTemplate[] = [
     summary: "Finds customers: research, positioning, campaigns and outreach.",
     responsibilities:
       "Grow the business. Research the market and competitors, sharpen positioning, plan and measure campaigns, and prepare outreach for the owner's approval. Ground claims in sources.",
-    capabilities: [...collaboration, ...files, "readPublicUrl"],
+    capabilities: [...collaboration, ...files, ...browser, "readPublicUrl"],
   },
   {
     id: "business-operations",
@@ -96,7 +105,7 @@ export const roleTemplates: readonly RoleTemplate[] = [
     summary: "Keeps records, documents, suppliers and admin in order.",
     responsibilities:
       "Keep the business's records, documents and administration in order: suppliers, accounts, schedules and paperwork. Track follow-ups as commitments so nothing is dropped.",
-    capabilities: [...collaboration, ...files, ...drive, "readPublicUrl"],
+    capabilities: [...collaboration, ...files, ...drive, ...browser, "readPublicUrl"],
   },
   {
     id: "custom",

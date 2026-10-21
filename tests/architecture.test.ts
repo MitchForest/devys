@@ -44,6 +44,7 @@ const components = [
   "app",
   "artifacts",
   "authority",
+  "browser",
   "channels",
   "connections",
   "conversations",

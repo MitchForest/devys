@@ -1,4 +1,5 @@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ArtifactFrame } from "./artifact.tsx";
 import {
   ChevronDown,
   FileText,
@@ -45,7 +46,7 @@ const refs = (space: Space, kind: SpaceItem["kind"]) =>
  * and its files under the header's tabs.
  */
 export function SpacePage({ id }: { id: string }) {
-  const { spaces, work, spaceTab, actions, main, employees } = useWorkspace();
+  const { spaces, work, spaceTab, actions, main, employees, artifacts } = useWorkspace();
   const space = valueOf(spaces)?.find((s) => s.id === id);
   if (!space)
     return (
@@ -61,6 +62,8 @@ export function SpacePage({ id }: { id: string }) {
   const items = (valueOf(work) ?? []).filter((item) => ids.has(item.id));
   const lead = employees.find((e) => e.id === space.lead_employee_id);
   const tint = spaceTint((valueOf(spaces) ?? []).indexOf(space));
+  const kept = new Set(refs(space, "artifact"));
+  const pages = artifacts.filter((each) => kept.has(each.id) && each.content_type === "text/html");
   return (
     <div className="flex h-full flex-col">
       <div className="flex flex-col gap-3 border-b border-hairline px-5 pt-4 pb-3">
@@ -90,6 +93,11 @@ export function SpacePage({ id }: { id: string }) {
             { value: "overview", title: "Overview" },
             { value: "work", title: "Work" },
             { value: "files", title: "Files" },
+            // Pages kept in the space, each its own tab.
+            ...pages.map((page) => ({
+              value: `artifact:${page.id}` as const,
+              title: page.filename.replace(/\.html$/, ""),
+            })),
           ]}
           onChange={actions.setSpaceTab}
         />
@@ -119,6 +127,8 @@ export function SpacePage({ id }: { id: string }) {
               className="max-w-[780px]"
             />
           </div>
+        ) : spaceTab.startsWith("artifact:") ? (
+          <ArtifactFrame id={spaceTab.slice("artifact:".length)} />
         ) : (
           <PageBody>
             {spaceTab === "overview" ? (

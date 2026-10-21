@@ -8,6 +8,14 @@ import SwiftUI
 struct SpacePage: View {
     let store: StoreOf<Workspace>
     let spaceID: String
+    /// A page kept in the space, open as its own tab.
+    @State private var openPage: String?
+
+    /// The space's views, then each page kept in it.
+    private enum Tab: Hashable {
+        case view(SpaceTab)
+        case page(String)
+    }
 
     var body: some View {
         if let space = store.spaces.value?.first(where: { $0.id == spaceID }) {
@@ -17,6 +25,9 @@ struct SpacePage: View {
                 header(space)
                 Rectangle().fill(DevysColors.hairline).frame(height: 1)
                 Group {
+                    if let openPage {
+                        PublishedPage(businessID: store.businessID, artifactID: openPage)
+                    } else {
                     switch store.spaceTab {
                     case .conversation:
                         ConversationPane(store: store, key: .space(space.id), voice: true)
@@ -27,6 +38,7 @@ struct SpacePage: View {
                     case .files:
                         PageBody { SpaceFiles(store: store, space: space) }
                     }
+                    }
                 }
                 .transaction { $0.animation = nil }
             }
@@ -35,6 +47,14 @@ struct SpacePage: View {
         } else {
             PageBody { EmptyNote(text: "This space no longer exists.") }
         }
+    }
+
+    /// Pages kept in the space, as tabs after its views.
+    private func pages(in space: Space) -> [(value: Tab, title: String)] {
+        let kept = Set(space.refs(.artifact))
+        return store.state.artifacts
+            .filter { kept.contains($0.id) && $0.contentType == "text/html" }
+            .map { (value: Tab.page($0.id), title: $0.filename.replacingOccurrences(of: ".html", with: "")) }
     }
 
     private func header(_ space: Space) -> some View {
@@ -54,8 +74,19 @@ struct SpacePage: View {
                     .fixedSize()
             }
             SegmentedTabs(
-                selection: Binding(get: { store.spaceTab }, set: { store.send(.spaceTabSelected($0)) }),
-                options: SpaceTab.allCases.map { (value: $0, title: $0.rawValue) }
+                selection: Binding<Tab>(
+                    get: { openPage.map(Tab.page) ?? .view(store.spaceTab) },
+                    set: { tab in
+                        switch tab {
+                        case .view(let view):
+                            openPage = nil
+                            store.send(.spaceTabSelected(view))
+                        case .page(let id):
+                            openPage = id
+                        }
+                    }
+                ),
+                options: SpaceTab.allCases.map { (value: Tab.view($0), title: $0.rawValue) } + pages(in: space)
             )
         }
         .padding(.horizontal, DevysSpacing.regular)

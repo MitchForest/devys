@@ -189,6 +189,9 @@ async function install() {
     "build",
     "src/host.ts",
     "--target=bun",
+    // Playwright's optional WebDriver BiDi support isn't used (Chrome is driven over CDP).
+    "--external=chromium-bidi",
+    "--external=chromium-bidi/*",
     `--outfile=${join(paths.app, "host.js")}`,
   ]);
   must(process.execPath, ["scripts/db.ts", "migrate"], postgresEnv);

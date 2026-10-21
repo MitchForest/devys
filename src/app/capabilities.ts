@@ -2,12 +2,14 @@ import type { Env } from "./env.ts";
 import type { MemoryFactory } from "../memory/contract.ts";
 import { memoryFor } from "./memory.ts";
 import { modeOf } from "./mode.ts";
+import { browserCapabilities } from "../browser/capabilities.ts";
 import { teamCapabilities } from "./team.ts";
 import { memoryCapabilities } from "../memory/capabilities.ts";
 import { driveCapabilities } from "../connections/capabilities.ts";
 import { workspaceCapabilities } from "../workspace/capabilities.ts";
 import { artifactCapabilities } from "../artifacts/capabilities.ts";
-import { conversationCapabilities } from "./conversations.ts";
+import { conversationCapabilities, postEvent } from "./conversations.ts";
+import { conversationKey } from "../conversations/contract.ts";
 import { publicCapabilities } from "../egress/capabilities.ts";
 import { workCapabilities } from "../work/capabilities.ts";
 import { activeEmployee } from "../identity/service.ts";
@@ -28,8 +30,13 @@ export function capabilities(
     ...memoryCapabilities(memory),
     ...conversationCapabilities(env),
     ...workspaceCapabilities(runner),
-    ...artifactCapabilities(env, runner),
+    ...artifactCapabilities(env, runner, async (invocation, card) => {
+      // The card goes where the employee is answering; a page made elsewhere goes to its DM.
+      const key = conversationKey(invocation.conversation ?? `direct:${invocation.employeeId}`);
+      if (key) await postEvent(env, invocation.businessId, key, card);
+    }),
     ...delegateCapabilities(delegateDependencies(env)),
+    ...browserCapabilities(modeOf(env).browser),
     ...workCapabilities(
       env.HYPERDRIVE,
       async (businessId, employeeId) =>

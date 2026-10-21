@@ -188,9 +188,16 @@ export function ConversationView({
   );
 }
 
-/** A hand-off or other event: a compact centered card; a hand-off opens its work item. */
+/**
+ * A hand-off or other event: a compact centered card. A hand-off opens its work item; a
+ * published page opens the page.
+ */
 function EventCard({ bubble }: { bubble: TimelineBubble }) {
-  const { actions } = useWorkspace();
+  const { actions, work } = useWorkspace();
+  const artifact = bubble.ref?.startsWith("artifact:")
+    ? bubble.ref.slice("artifact:".length)
+    : undefined;
+  const opensWork = !artifact && (valueOf(work) ?? []).some((item) => item.id === bubble.ref);
   const body = (
     <>
       <ListChecks className="size-3.5 shrink-0 text-indigo" />
@@ -199,12 +206,12 @@ function EventCard({ bubble }: { bubble: TimelineBubble }) {
   );
   const style =
     "mx-auto flex max-w-[90%] items-center gap-2 rounded-full border border-hairline bg-sheet-tint px-3 py-1.5 text-detail text-ink-2";
-  return bubble.ref ? (
+  return artifact || opensWork ? (
     <button
       type="button"
-      data-testid="handoff"
-      title="Open the work item"
-      onClick={() => actions.openWork(bubble.ref!)}
+      data-testid={artifact ? "page-card" : "handoff"}
+      title={artifact ? "Open the page" : "Open the work item"}
+      onClick={() => (artifact ? actions.viewArtifact(artifact) : actions.openWork(bubble.ref!))}
       className={cn(style, "transition-colors hover:bg-sheet hover:text-ink hover:shadow-resting")}
     >
       {body}

@@ -37,6 +37,7 @@ import { TodayGreeting, TodayPage, TodayWork } from "../pages/today.tsx";
 import { SpacePage } from "../pages/space.tsx";
 import { EmployeePage } from "../pages/employee.tsx";
 import { DirectPage } from "../pages/direct.tsx";
+import { ArtifactViewer } from "../pages/artifact.tsx";
 import { AppsPage, InboxPage, MoneyPage } from "../pages/other.tsx";
 import { Composer, ConversationView } from "./chat.tsx";
 import { inspectorRange, layout, minimumPage, sidebarWidth } from "./layout.ts";
@@ -113,6 +114,7 @@ export function Shell() {
     <>
       {compact ? <CompactShell /> : <RegularShell />}
       <CommandPalette />
+      <ArtifactViewer />
       <Settings />
       <HireSheet />
       <NewTaskDialog />

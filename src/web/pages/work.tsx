@@ -37,6 +37,7 @@ import {
 import { Field, fieldClass } from "../design/fields.tsx";
 import { SegmentedTabs } from "../design/tabs.tsx";
 import { endOfDay } from "../shell/dialogs.tsx";
+import { BrowserSection } from "./browser.tsx";
 import { CodingSessions, NewCodingSession, Terminals } from "./coding.tsx";
 import { Spinner } from "../design/spinner.tsx";
 import {
@@ -623,6 +624,7 @@ export function WorkDetail({ item }: { item: Commitment }) {
         </div>
       )}
       <CodingSessions item={item} />
+      <BrowserSection item={item} />
       <Evidence item={item} />
     </div>
   );

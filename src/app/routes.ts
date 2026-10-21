@@ -13,6 +13,7 @@ import {
 import { memoryRoute } from "../memory/http.ts";
 import { modeOf } from "./mode.ts";
 import { capabilities } from "./capabilities.ts";
+import { browserRoute } from "./browser-route.ts";
 import { codingRoute } from "./coding.ts";
 import { terminalRoute } from "./terminals.ts";
 import { filesRoute } from "./files.ts";
@@ -99,13 +100,15 @@ export async function businessRoute(
       trusted,
     );
   if (path.startsWith("/connections/google")) return googleRoute(request, env, access);
-  // Coding, terminals and files run on the Mac as its owner.
+  // Coding, terminals, files and the browser run on the Mac as its owner.
   if (
-    /^\/(coding|terminals|files)(\/|$)|^\/work\/[^/]+\/sessions/.test(path) &&
+    /^\/(coding|terminals|files|browser)(\/|$)|^\/work\/[^/]+\/sessions/.test(path) &&
     modeOf(env).host &&
     !(await Effect.runPromise(isMachineOwner(env.HYPERDRIVE, person.id)))
   )
     return forbidden();
+  const browsing = await browserRoute(request, env, access);
+  if (browsing) return browsing;
   const coding = await codingRoute(request, env, access);
   if (coding) return coding;
   const terminal = await terminalRoute(request, env, access);

@@ -307,15 +307,25 @@ private struct ChatActionButton: View {
     }
 }
 
-/// A hand-off or other event: a compact centred card; a hand-off opens its work item.
+/// A hand-off or other event: a compact centred card. A hand-off opens its work item; a
+/// published page opens the page.
 struct EventCard: View {
     let store: StoreOf<Workspace>
     let event: ChatTimeline.Event
     @State private var hovering = false
+    @State private var page: String?
+
+    private var artifactID: String? {
+        event.ref.flatMap { $0.hasPrefix("artifact:") ? String($0.dropFirst("artifact:".count)) : nil }
+    }
 
     var body: some View {
         Button {
-            if let ref = event.ref { store.send(.workOpened(ref)) }
+            if let artifactID {
+                page = artifactID
+            } else if let ref = event.ref {
+                store.send(.workOpened(ref))
+            }
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: event.ref == nil ? "info.circle" : "arrow.triangle.branch")
@@ -340,7 +350,14 @@ struct EventCard: View {
         .onHover { hovering = $0 }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 6)
-        .accessibilityHint(event.ref == nil ? "" : "Opens the work item")
+        .accessibilityHint(event.ref == nil ? "" : artifactID == nil ? "Opens the work item" : "Opens the page")
+        .sheet(item: Binding(get: { page.map(PageID.init) }, set: { page = $0?.id })) { opened in
+            PublishedPageSheet(store: store, artifactID: opened.id)
+        }
+    }
+
+    private struct PageID: Identifiable {
+        let id: String
     }
 }
 

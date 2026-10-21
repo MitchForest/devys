@@ -33,6 +33,7 @@ struct WorkPanel: View {
                             .task(id: item.revision) { await loadAnswered(item) }
                         WorkItemNotes(store: store, item: item)
                         CodingSessions(store: store, item: item)
+                        BrowserLine(store: store, item: item)
                         evidence(item)
                         SectionHeader("Conversation").padding(.top, 6)
                         ConversationMessages(store: store, key: key)

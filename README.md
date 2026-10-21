@@ -100,8 +100,17 @@ also verified live. No public product has launched.
   viewers (PDFKit and QuickLook on Apple). Any file can be shown in a space; comments on a text
   range or a PDF region go to an employee or a work item's thread as one message. Employees print HTML to PDF with the
   Mac's Chrome (`printPdf`).
-- **Not built:** browser and desktop control, the broker and vault, signed decisions, the tool
-  registry, purchases, mail and launch connectors.
+- **Browser (local mode).** Each business has its own visible Chrome on the Mac with its own
+  profile, so a site the owner signs in to once stays signed in for that business only. Employees
+  open pages, read their accessibility tree, click, type and press keys (`browserOpen`,
+  `browserRead`, `browserClick`, `browserType`, `browserPress`); a work item driving the browser
+  shows it on its panel with a live picture on every client, where Take over stops the employee
+  and lets the owner click and type (not recorded) until Hand back.
+- **Pages.** Employees publish self-contained HTML pages (`artifactPage`, `artifactEdit`):
+  reports, comparisons, dashboards. A card in the conversation opens the page in an
+  opaque-origin sandbox that fetches nothing; **Save to space** keeps it as one of the space's tabs.
+- **Not built:** desktop control, the broker and vault, signed decisions, the tool registry,
+  purchases, mail and launch connectors.
 
 The prior Pi/Effect refinement and
 iMessage acceptance guide retain foundation

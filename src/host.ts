@@ -3,6 +3,7 @@
  * loopback server and one token. The local launcher bundles and supervises it.
  */
 import { join } from "node:path";
+import { browsersHost } from "./browser/host/server.ts";
 import { claudeAdapter } from "./delegates/host/claude.ts";
 import { codexAdapter } from "./delegates/host/codex.ts";
 import { delegatesHost } from "./delegates/host/server.ts";
@@ -75,7 +76,7 @@ const host = await startHost({
   work,
   skills: join(work, "skills"),
   port,
-  routes: [delegates, terminals],
+  routes: [delegates, terminals, browsersHost({ data })],
 });
 console.log(`Devys Mac host on 127.0.0.1:${host.port}`);
 const stop = () => void host.close().then(() => process.exit(0));

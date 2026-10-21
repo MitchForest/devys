@@ -188,6 +188,20 @@ export interface TranscriptEntry {
   detail?: string;
   failed?: boolean;
 }
+/** The business's browser at a glance. */
+export interface BrowserStatus {
+  open: boolean;
+  url: string | null;
+  title: string | null;
+  /** The work item (or conversation) the last employee action served. */
+  driver: string | null;
+}
+/** The owner acting on the business's browser directly. */
+export type OwnerInput =
+  | { kind: "click"; x: number; y: number }
+  | { kind: "type"; text: string }
+  | { kind: "key"; key: string }
+  | { kind: "open"; url: string };
 export interface WorkingDiff {
   files: { path: string; status: string; added: number; removed: number }[];
   patch: string;
@@ -503,6 +517,12 @@ export const api = {
     return response.text();
   },
   artifactUrl: (b: string, id: string) => `${business(b)}/artifacts/${id}`,
+  /** The business's browser: where it is and which work drives it. */
+  browserStatus: (b: string) => get<BrowserStatus>(`${business(b)}/browser`),
+  browserScreenshot: (b: string) =>
+    get<{ jpeg: string; width: number; height: number }>(`${business(b)}/browser/screenshot`),
+  browserInput: (b: string, action: OwnerInput) =>
+    post<{ url: string; title: string }>(`${business(b)}/browser/input`, action),
   exportUrl: (b: string) => `${business(b)}/export`,
   setBusinessLook: (b: string, look: SettableLook) =>
     post<{ look: Look | null }>(`${business(b)}/look`, { look }),

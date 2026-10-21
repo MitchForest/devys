@@ -1,3 +1,5 @@
+import type { Browser } from "../browser/contract.ts";
+import { hostBrowser, unavailableBrowser } from "../browser/host-client.ts";
 import type { Delegates } from "../delegates/contract.ts";
 import { hostDelegates, unavailableDelegates } from "../delegates/host-client.ts";
 import { scopeName, type Scope } from "../identity/contract.ts";
@@ -22,6 +24,8 @@ export interface Mode {
   runner(within?: string): Runner;
   delegates: (scope: Scope) => Delegates;
   terminals: (businessId: string) => Terminals;
+  /** The business's own browser: Chrome with its profile on the Mac; none in the cloud yet. */
+  browser: (businessId: string) => Browser;
   /** The business's folder that owner files, terminals and space files live in, if any. */
   businessFolder(businessId: string): string | undefined;
   /** Where an employee's files and commands live, stated in its instructions. */
@@ -52,6 +56,7 @@ export function modeOf(env: Env): Mode {
         delegates: (scope) => (host ? hostDelegates(host, scope) : notConfigured()),
         terminals: (businessId) =>
           host ? hostTerminals(host, { businessId, employeeId: "owner" }) : unavailableTerminals(),
+        browser: (businessId) => (host ? hostBrowser(host, businessId) : unavailableBrowser()),
         businessFolder: folder,
         workplace: `You work on the owner's Mac, as the owner: run executes zsh with the owner's tools and logins, starting in this business's folder under ${home ?? "the owner's home folder"}/Devys. The owner's files are under ${home ?? "the owner's home folder"}; use absolute paths. Your skills folder is ${home ?? "the owner's home folder"}/Devys/skills. Changes apply to the owner's real files immediately.`,
       };
@@ -62,6 +67,7 @@ export function modeOf(env: Env): Mode {
         runner: () => (scope) => env.WORKSPACE.getByName(scopeName(scope)),
         delegates: () => unavailableDelegates(),
         terminals: () => unavailableTerminals(),
+        browser: () => unavailableBrowser(),
         businessFolder: () => undefined,
         workplace:
           "You work in a private Linux workspace: run executes bash starting in /workspace, files live under /workspace, and your skills folder is /workspace/skills. Files persist at workspace checkpoints; snapshots preserve files, not processes.",

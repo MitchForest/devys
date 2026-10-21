@@ -60,7 +60,8 @@ export type Page =
   | { kind: "money" }
   | { kind: "apps"; section: "installed" | "connections" };
 export type EmployeeTab = "activity" | "responsibilities" | "memory" | "access";
-export type SpaceTab = "conversation" | "overview" | "work" | "files";
+/** A space's tabs: its views, then each page saved to it (`artifact:<id>`). */
+export type SpaceTab = "conversation" | "overview" | "work" | "files" | `artifact:${string}`;
 
 /** The conversation a page shows in the main pane: a DM or a space's. */
 export const conversationOf = (page: Page): ConversationKey | undefined =>
@@ -149,6 +150,8 @@ function useWorkspaceState() {
   const [taskDefaults, setTaskDefaults] = useState<TaskDefaults>();
   const [employeeTab, setEmployeeTab] = useState<EmployeeTab>("activity");
   const [spaceTab, setSpaceTab] = useState<SpaceTab>("conversation");
+  /** A page an employee published, open over the workspace. */
+  const [viewing, setViewing] = useState<string>();
   const [workLayout, setWorkLayout] = useState<"list" | "board">("list");
   const [notice, setNotice] = useState<string>();
   const [signedOut, setSignedOut] = useState(false);
@@ -505,6 +508,8 @@ function useWorkspaceState() {
     },
     /** Opens the DM with an employee in the main pane. */
     message: (employeeId: string) => actions.selectPage({ kind: "direct", employeeId }),
+    /** Opens a page an employee published, or closes it. */
+    viewArtifact: (id: string | undefined) => setViewing(id),
     /** Opens a work item, with its thread, in the right panel. */
     openWork: (id: string) => {
       setSelectedWork(id);
@@ -848,6 +853,7 @@ function useWorkspaceState() {
     businesses,
     business,
     businessId,
+    viewing,
     employees,
     members,
     operations,
