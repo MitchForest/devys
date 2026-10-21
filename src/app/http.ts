@@ -14,6 +14,8 @@ import {
   memberBusiness,
 } from "../identity/service.ts";
 import { atomically } from "../data/database.ts";
+import { defaultApps } from "../apps/catalog.ts";
+import { install } from "../apps/service.ts";
 import { modeOf } from "./mode.ts";
 import { readBounded } from "../protocol/bytes.ts";
 import { sameOrigin } from "../protocol/http.ts";
@@ -118,6 +120,7 @@ export async function apiRoute(request: Request, env: Env): Promise<Response | u
           templateGrants(operations, catalog),
         ),
       );
+      await Effect.runPromise(install(db, created.business.id, defaultApps));
       const hired = [];
       for (const template of team) {
         const input = hireInput({ template: template!.id });

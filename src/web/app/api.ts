@@ -95,8 +95,8 @@ export interface RuntimeState {
   /** Spend by "provider/modelId" and by tool. */
   usage?: { models: Record<string, Usage>; tools: Record<string, Usage> };
 }
-/** `direct:<employee>`, `space:<space>` or `work:<commitment>`. */
-export type ConversationKey = `${"direct" | "space" | "work"}:${string}`;
+/** `direct:<employee>`, `project:<project>` or `work:<commitment>`. */
+export type ConversationKey = `${"direct" | "project" | "work"}:${string}`;
 /** One entry in a conversation: something someone said, or an event such as a hand-off. */
 export interface Message {
   id: string;
@@ -160,6 +160,8 @@ export interface Commitment {
   }[];
   revision: number;
   taken_over_by: string | null;
+  /** The project the work belongs to, if any; its thread is in that project's channel. */
+  project_id: string | null;
   updated_at: string;
 }
 /** A Codex or Claude Code session on a work item, with its live state from the provider. */
@@ -221,7 +223,7 @@ export interface TerminalSession {
 export interface FileEntry {
   name: string;
   path: string;
-  kind: "file" | "directory" | "other";
+  kind: "file" | "directory" | "repository" | "other";
   size: number;
 }
 export interface FileText {
@@ -252,25 +254,74 @@ export interface Decision {
   requested_at: string;
   expires_at: string;
 }
-export interface SpaceItem {
+/** A record a project shows: a reference, never a copy. */
+export interface ProjectItem {
   id: string;
-  kind: "commitment" | "artifact" | "file";
+  kind: "artifact" | "file";
   ref: string;
 }
-export interface Space {
+/** A bounded initiative: a channel, its work and the records it touches. */
+export interface Project {
   id: string;
   name: string;
-  purpose: string;
-  /** The employee who answers in the space's thread unless the owner mentions someone. */
+  goal: string | null;
+  deadline: string | null;
+  budget: { cents: number; currency: string } | null;
+  /** The employee who answers in the channel unless the owner mentions someone. */
   lead_employee_id: string | null;
-  items: SpaceItem[];
+  member_ids: string[];
+  items: ProjectItem[];
+}
+export interface ProjectChange {
+  name?: string;
+  goal?: string | null;
+  deadline?: string | null;
+  budget?: { cents: number; currency: string } | null;
+  lead?: string;
+  members?: string[];
+}
+/** An app in the directory, and whether this business has it. */
+export interface AppEntry {
+  id: string;
+  name: string;
+  icon: string;
+  summary: string;
+  status: "available" | "coming";
+  installed: boolean;
+  pinned: boolean;
+  /** Installed and has something to show, so the sidebar lists it. */
+  visible: boolean;
+}
+/** One thing waiting on the owner: a decision, or work that needs one. */
+export interface NeedsYouItem {
+  kind: "decision" | "work";
+  id: string;
+  title: string;
+  employeeId: string | null;
+  workId: string | null;
+  projectId: string | null;
+}
+/** Work at a glance: what moves, what is stuck. */
+export interface GlanceItem {
+  id: string;
+  title: string;
+  employeeId: string;
+  projectId: string | null;
+  state: CommitmentState;
+  waitCondition: string | null;
+  dueAt: string | null;
+  updatedAt: string;
+}
+export interface Home {
+  needsYou: NeedsYouItem[];
+  glance: { moving: GlanceItem[]; stuck: GlanceItem[]; spentCents: number | null };
 }
 export interface NewTask {
   title: string;
   owner: string;
   objective?: string;
   dueAt?: string;
-  spaceId?: string;
+  projectId?: string;
 }
 export interface Grant {
   id: string;
@@ -413,6 +464,8 @@ export const api = {
     post<{ steered: boolean }>(`${business(b)}/work/${work}/sessions/${session}/send`, { text }),
   stopSession: (b: string, work: string, session: string) =>
     post(`${business(b)}/work/${work}/sessions/${session}/interrupt`),
+  /** Work items that have coding sessions, newest first. */
+  codingWork: (b: string) => get<{ work: string[] }>(`${business(b)}/coding`),
   startCoding: (b: string, session: NewCodingSession) =>
     post<{ work: string; assignment: string }>(`${business(b)}/coding`, session),
   files: (b: string, path?: string) =>
@@ -499,18 +552,21 @@ export const api = {
     ),
   answer: (b: string, id: string, approve: boolean) =>
     post(`${business(b)}/decisions/${id}/${approve ? "approve" : "reject"}`),
-  spaces: (b: string) => get<{ spaces: Space[] }>(`${business(b)}/spaces`),
-  createSpace: (b: string, space: { name: string; purpose?: string; lead?: string }) =>
-    post<Space>(`${business(b)}/spaces`, space),
-  updateSpace: (
-    b: string,
-    id: string,
-    change: { name?: string; purpose?: string; lead?: string },
-  ) => put(`${business(b)}/spaces/${id}`, change),
-  addToSpace: (b: string, space: string, kind: SpaceItem["kind"], ref: string) =>
-    post(`${business(b)}/spaces/${space}/items`, { kind, ref }),
-  removeFromSpace: (b: string, space: string, item: string) =>
-    post(`${business(b)}/spaces/${space}/items/${item}/remove`),
+  projects: (b: string) => get<{ projects: Project[] }>(`${business(b)}/projects`),
+  createProject: (b: string, project: ProjectChange & { name: string }) =>
+    post<Project>(`${business(b)}/projects`, project),
+  updateProject: (b: string, id: string, change: ProjectChange) =>
+    put(`${business(b)}/projects/${id}`, change),
+  addToProject: (b: string, project: string, kind: ProjectItem["kind"], ref: string) =>
+    post(`${business(b)}/projects/${project}/items`, { kind, ref }),
+  removeFromProject: (b: string, project: string, item: string) =>
+    post(`${business(b)}/projects/${project}/items/${item}/remove`),
+  apps: (b: string) => get<{ apps: AppEntry[] }>(`${business(b)}/apps`),
+  installApp: (b: string, app: string, on: boolean) =>
+    post(`${business(b)}/apps/${app}/${on ? "install" : "uninstall"}`),
+  pinApp: (b: string, app: string, pinned: boolean) =>
+    post(`${business(b)}/apps/${app}/pin`, { pinned }),
+  home: (b: string) => get<Home>(`${business(b)}/home`),
   artifactText: async (b: string, id: string) => {
     const response = await fetch(`${business(b)}/artifacts/${id}`);
     if (!response.ok) throw new ApiError(response.status, "This file couldn't be opened.");

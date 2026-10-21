@@ -48,7 +48,7 @@ export function artifactCapabilities(
     capability({
       name: "artifactPage",
       description:
-        "Publish a self-contained HTML page (a report, dashboard, comparison or plan) the owner sees in this conversation and can keep in a space. It renders offline and alone: inline CSS and scripts and data: images only; no forms, frames or network. Each call makes a new page; change one with artifactEdit.",
+        "Publish a self-contained HTML page (a report, dashboard, comparison or plan) the owner sees in this conversation and can keep in a project. It renders offline and alone: inline CSS and scripts and data: images only; no forms, frames or network. Each call makes a new page; change one with artifactEdit.",
       effect: "change",
       replay: "idempotent",
       input: Schema.Struct({

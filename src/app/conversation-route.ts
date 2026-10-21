@@ -8,8 +8,9 @@ import { conversationExists, conversationPage, postFromPerson } from "./conversa
 import { body, forbidden, notFound } from "./request.ts";
 
 /**
- * The business's shared conversations: DMs (`direct:<employee>`), spaces (`space:<id>`) and
- * work threads (`work:<id>`). Posting wakes whoever the conversation's rules say answers.
+ * The business's shared conversations: DMs (`direct:<employee>`), project channels
+ * (`project:<id>`) and work threads (`work:<id>`). Posting wakes whoever the conversation's rules
+ * say answers.
  */
 export async function conversationRoute(
   request: Request,

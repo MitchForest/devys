@@ -1,7 +1,7 @@
 import { Effect, Schema } from "effect";
 import type { Database } from "../data/database.ts";
 import { capability, CapabilityError, Invocation } from "../protocol/capability.ts";
-import type { Commitment } from "./contract.ts";
+import type { Commitment, Project } from "./contract.ts";
 import {
   commitment,
   commitments,
@@ -9,7 +9,7 @@ import {
   updateCommitment,
   type Change,
 } from "./service.ts";
-import { addToSpace, createSpace, spaces } from "./spaces.ts";
+import { addToProject, createProject, project, projects, updateProject } from "./projects.ts";
 
 const Id = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(64));
 const Line = (max: number) => Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(max));
@@ -24,6 +24,7 @@ const Summary = Schema.Struct({
   dueAt: Schema.NullOr(Schema.String),
   revision: Schema.Number,
   takenOver: Schema.Boolean,
+  projectId: Schema.NullOr(Schema.String),
 });
 const summary = (item: Commitment) => ({
   id: item.id,
@@ -35,6 +36,40 @@ const summary = (item: Commitment) => ({
   dueAt: item.due_at,
   revision: item.revision,
   takenOver: item.taken_over_by !== null,
+  projectId: item.project_id,
+});
+const Day = Schema.String.check(
+  Schema.makeFilter(
+    (value) => /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)),
+  ),
+);
+const Budget = Schema.Struct({
+  cents: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  currency: Schema.String.check(Schema.isPattern(/^[A-Z]{3}$/)),
+});
+const Members = Schema.Array(Id).check(Schema.isMaxLength(50));
+
+const ProjectView = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  goal: Schema.NullOr(Schema.String),
+  deadline: Schema.NullOr(Schema.String),
+  budget: Schema.NullOr(Schema.Struct({ cents: Schema.Number, currency: Schema.String })),
+  lead: Schema.NullOr(Schema.String),
+  members: Schema.Array(Schema.String),
+  items: Schema.Array(
+    Schema.Struct({ id: Schema.String, kind: Schema.String, ref: Schema.String }),
+  ),
+});
+const view = (item: Project) => ({
+  id: item.id,
+  name: item.name,
+  goal: item.goal,
+  deadline: item.deadline,
+  budget: item.budget,
+  lead: item.lead_employee_id,
+  members: item.member_ids,
+  items: item.items,
 });
 
 const run = <A>(effect: Effect.Effect<A, unknown>) =>
@@ -49,6 +84,8 @@ export function workCapabilities(
   db: Database,
   employeeIn: (businessId: string, employeeId: string) => Promise<boolean>,
   artifactIn: (businessId: string, artifactId: string) => Promise<boolean>,
+  /** Whether a path names a file in the business folder. */
+  fileIn: (businessId: string, path: string) => boolean,
   /** Why this work cannot be completed yet (such as a coding check that has not passed). */
   completionBlocked: (businessId: string, work: Commitment) => Promise<string | undefined>,
 ) {
@@ -67,6 +104,15 @@ export function workCapabilities(
           message: "The commitment changed or was taken over; list it again",
         });
       return summary(updated);
+    });
+  const checkEmployees = (businessId: string, ids: readonly string[]) =>
+    Effect.gen(function* () {
+      for (const id of ids)
+        if (!(yield* Effect.promise(() => employeeIn(businessId, id))))
+          return yield* new CapabilityError({
+            code: "invalid_input",
+            message: "Leads and members must be employees of this business",
+          });
     });
   return [
     capability({
@@ -91,7 +137,7 @@ export function workCapabilities(
     capability({
       name: "commitmentCreate",
       description:
-        "Record something the business owes: a title, objective and next action, accountable to you or another employee. Use for work that outlives this conversation.",
+        "Record something the business owes: a title, objective and next action, accountable to you or another employee, optionally in a project. Use for work that outlives this conversation.",
       effect: "change",
       replay: "idempotent",
       input: Schema.Struct({
@@ -100,6 +146,7 @@ export function workCapabilities(
         nextAction: Schema.optional(Schema.String.check(Schema.isMaxLength(1000))),
         owner: Schema.optional(Id),
         dueAt: Schema.optional(When),
+        projectId: Schema.optional(Id),
       }),
       output: Summary,
       execute: (input) =>
@@ -111,6 +158,11 @@ export function workCapabilities(
               code: "invalid_input",
               message: "The accountable employee isn't part of this business",
             });
+          if (input.projectId && !(yield* run(project(db, businessId, input.projectId))))
+            return yield* new CapabilityError({
+              code: "invalid_input",
+              message: "No such project in this business",
+            });
           return summary(
             yield* run(
               createCommitment(db, businessId, {
@@ -119,6 +171,7 @@ export function workCapabilities(
                 ...(input.objective ? { objective: input.objective } : {}),
                 ...(input.nextAction ? { nextAction: input.nextAction } : {}),
                 ...(input.dueAt ? { dueAt: new Date(input.dueAt).toISOString() } : {}),
+                ...(input.projectId ? { projectId: input.projectId } : {}),
                 createdBy: `employee:${employeeId}`,
               }),
             ),
@@ -174,79 +227,115 @@ export function workCapabilities(
         }),
     }),
     capability({
-      name: "spaceList",
+      name: "projectList",
       description:
-        "List the business's spaces (persistent places like Launch or Growth) and the commitments and files each one shows.",
+        "List the business's projects (bounded initiatives like Launch): goal, deadline, budget, lead, members and the artifacts and files each one references. Its work items carry its id as projectId in commitmentList.",
       effect: "read",
       replay: "read",
       input: Schema.Struct({}),
-      output: Schema.Struct({
-        spaces: Schema.Array(
-          Schema.Struct({
-            id: Schema.String,
-            name: Schema.String,
-            purpose: Schema.String,
-            items: Schema.Array(
-              Schema.Struct({ id: Schema.String, kind: Schema.String, ref: Schema.String }),
-            ),
-          }),
-        ),
-      }),
+      output: Schema.Struct({ projects: Schema.Array(ProjectView) }),
       execute: () =>
         Effect.gen(function* () {
           const { businessId } = yield* Invocation;
-          return { spaces: yield* run(spaces(db, businessId)) };
+          return { projects: (yield* run(projects(db, businessId))).map(view) };
         }),
     }),
     capability({
-      name: "spaceCreate",
+      name: "projectCreate",
       description:
-        "Create a space: a persistent place for an area of the business, with a purpose.",
+        "Create a project: a bounded initiative with a name and optionally a goal, a deadline (YYYY-MM-DD), a budget in cents and a currency, and assigned employees. You lead it.",
       effect: "change",
       replay: "idempotent",
       input: Schema.Struct({
         name: Line(80),
-        purpose: Schema.optional(Schema.String.check(Schema.isMaxLength(500))),
+        goal: Schema.optional(Schema.String.check(Schema.isMaxLength(500))),
+        deadline: Schema.optional(Day),
+        budget: Schema.optional(Budget),
+        members: Schema.optional(Members),
       }),
-      output: Schema.Struct({ id: Schema.String, name: Schema.String }),
-      execute: ({ name, purpose }) =>
+      output: ProjectView,
+      execute: ({ name, goal, deadline, budget, members }) =>
         Effect.gen(function* () {
           const { businessId, employeeId } = yield* Invocation;
-          const space = yield* run(
-            createSpace(db, businessId, {
-              name,
-              ...(purpose ? { purpose } : {}),
-              lead: employeeId,
-            }),
+          yield* checkEmployees(businessId, members ?? []);
+          return view(
+            yield* run(
+              createProject(db, businessId, {
+                name,
+                ...(goal ? { goal } : {}),
+                ...(deadline ? { deadline } : {}),
+                ...(budget ? { budget } : {}),
+                lead: employeeId,
+                ...(members ? { members } : {}),
+              }),
+            ),
           );
-          return { id: space.id, name: space.name };
         }),
     }),
     capability({
-      name: "spaceAdd",
+      name: "projectUpdate",
       description:
-        "Show a commitment or a saved file in a space. It's a reference: the record keeps one home and can appear in several spaces.",
+        "Change a project: its name, goal, deadline or budget (null clears one), its lead, or its members (the whole list).",
       effect: "change",
       replay: "idempotent",
       input: Schema.Struct({
-        spaceId: Id,
-        kind: Schema.Literals(["commitment", "artifact"]),
-        ref: Id,
+        id: Id,
+        name: Schema.optional(Line(80)),
+        goal: Schema.optional(Schema.NullOr(Schema.String.check(Schema.isMaxLength(500)))),
+        deadline: Schema.optional(Schema.NullOr(Day)),
+        budget: Schema.optional(Schema.NullOr(Budget)),
+        lead: Schema.optional(Id),
+        members: Schema.optional(Members),
       }),
-      output: Schema.Struct({ id: Schema.String }),
-      execute: ({ spaceId, kind, ref }) =>
+      output: ProjectView,
+      execute: ({ id, lead, members, ...rest }) =>
         Effect.gen(function* () {
           const { businessId } = yield* Invocation;
-          if (kind === "artifact" && !(yield* Effect.promise(() => artifactIn(businessId, ref))))
+          yield* checkEmployees(businessId, [...(lead ? [lead] : []), ...(members ?? [])]);
+          const updated = yield* run(
+            updateProject(db, businessId, id, {
+              ...rest,
+              ...(lead ? { lead } : {}),
+              ...(members ? { members } : {}),
+            }),
+          );
+          if (!updated)
             return yield* new CapabilityError({
               code: "invalid_input",
-              message: "No such file in this business",
+              message: "No such project in this business",
             });
-          const item = yield* run(addToSpace(db, businessId, spaceId, { kind, ref }));
+          return view(updated);
+        }),
+    }),
+    capability({
+      name: "projectAdd",
+      description:
+        "Show a saved artifact (by id) or a file in the business folder (by path) on a project. It's a reference: the record keeps one home and can appear in several projects. Work items join a project when created with its projectId.",
+      effect: "change",
+      replay: "idempotent",
+      input: Schema.Struct({
+        projectId: Id,
+        kind: Schema.Literals(["artifact", "file"]),
+        ref: Line(1024),
+      }),
+      output: Schema.Struct({ id: Schema.String }),
+      execute: ({ projectId, kind, ref }) =>
+        Effect.gen(function* () {
+          const { businessId } = yield* Invocation;
+          const exists =
+            kind === "file"
+              ? fileIn(businessId, ref)
+              : yield* Effect.promise(() => artifactIn(businessId, ref));
+          if (!exists)
+            return yield* new CapabilityError({
+              code: "invalid_input",
+              message: "No such artifact or file in this business",
+            });
+          const item = yield* run(addToProject(db, businessId, projectId, { kind, ref }));
           if (!item)
             return yield* new CapabilityError({
               code: "invalid_input",
-              message: "No such space or commitment in this business",
+              message: "No such project in this business",
             });
           return { id: item.id };
         }),

@@ -7,6 +7,7 @@ import {
   Download,
   Image,
   Laptop,
+  LayoutGrid,
   Play,
   Plus,
   Rabbit,
@@ -26,7 +27,8 @@ import {
   type SettableLook,
   type StartingRole,
 } from "../app/api.ts";
-import { useWorkspace } from "../app/workspace.tsx";
+import { useWorkspace, valueOf } from "../app/workspace.tsx";
+import { DriveConnection } from "../pages/drive.tsx";
 import { useTheme, type Theme } from "../app/theme.ts";
 import {
   availableVoices,
@@ -53,9 +55,10 @@ import { Spinner } from "../design/spinner.tsx";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
-type Section = "account" | "team" | "businesses" | "devices" | "voice" | "appearance";
+type Section = "account" | "apps" | "team" | "businesses" | "devices" | "voice" | "appearance";
 const sections: { value: Section; title: string; icon: LucideIcon }[] = [
   { value: "account", title: "Account", icon: CircleUserRound },
+  { value: "apps", title: "Apps", icon: LayoutGrid },
   { value: "team", title: "Team", icon: Users },
   { value: "businesses", title: "Businesses", icon: Building2 },
   { value: "devices", title: "Devices", icon: Laptop },
@@ -65,13 +68,16 @@ const sections: { value: Section; title: string; icon: LucideIcon }[] = [
 
 /** Settings, as the native Settings window: a section bar over one 640×480 pane. */
 export function Settings() {
-  const { settingsOpen, actions } = useWorkspace();
+  const { settingsOpen, settingsSection, actions } = useWorkspace();
   const [section, setSection] = useState<Section>("account");
+  useEffect(() => {
+    if (settingsOpen) setSection((settingsSection as Section | undefined) ?? "account");
+  }, [settingsOpen, settingsSection]);
   return (
-    <Dialog open={settingsOpen} onOpenChange={actions.setSettingsOpen}>
+    <Dialog open={settingsOpen} onOpenChange={(open) => actions.setSettingsOpen(open)}>
       <DialogContent className="w-[640px] max-w-[calc(100%-2rem)] gap-0 overflow-hidden rounded-card! bg-sheet p-0 shadow-raised sm:max-w-[640px]">
         <DialogTitle className="sr-only">Settings</DialogTitle>
-        <div className="flex justify-center gap-1 overflow-x-auto border-b border-hairline px-4 pt-3 pb-2">
+        <div className="flex justify-center gap-1 overflow-x-auto border-b border-hairline pt-3 pr-12 pb-2 pl-4">
           {sections.map((s) => (
             <button
               key={s.value}
@@ -79,7 +85,7 @@ export function Settings() {
               aria-pressed={section === s.value}
               onClick={() => setSection(s.value)}
               className={cn(
-                "flex w-[84px] shrink-0 flex-col items-center gap-1 rounded-control py-1.5 text-caption transition-colors",
+                "flex w-[72px] shrink-0 flex-col items-center gap-1 rounded-control py-1.5 text-caption transition-colors",
                 section === s.value ? "bg-track text-ink" : "text-ink-2 hover:text-ink",
               )}
             >
@@ -91,6 +97,8 @@ export function Settings() {
         <div className="h-[480px] max-h-[70dvh] overflow-y-auto">
           {section === "account" ? (
             <AccountPane />
+          ) : section === "apps" ? (
+            <AppsPane />
           ) : section === "team" ? (
             <TeamPane />
           ) : section === "businesses" ? (
@@ -203,6 +211,64 @@ function ListRow({
     >
       {children}
     </button>
+  );
+}
+
+/**
+ * The app directory for the current business: Devys apps to install, pin to the sidebar or
+ * remove, those coming later, and the accounts apps use.
+ */
+function AppsPane() {
+  const { apps, businessId, actions } = useWorkspace();
+  const list = valueOf(apps) ?? [];
+  const available = list.filter((app) => app.status === "available");
+  const coming = list.filter((app) => app.status === "coming");
+  return (
+    <div className="flex flex-col gap-5 p-5">
+      <div className="flex flex-col gap-1">
+        <span className="text-label font-medium text-ink-3">Devys apps</span>
+        {available.map((app) => (
+          <div key={app.id} className="flex items-center gap-3 py-1.5">
+            <div className="flex min-w-0 flex-col">
+              <span className="text-control font-semibold text-ink">{app.name}</span>
+              <span className="text-detail text-ink-2">{app.summary}</span>
+            </div>
+            <span className="ml-auto" />
+            {app.installed && (
+              <Switch checked={app.pinned} onChange={(on) => void actions.pinApp(app.id, on)}>
+                <span className="text-caption text-ink-3">Sidebar</span>
+              </Switch>
+            )}
+            {app.id === "documents" ? (
+              <span className="text-caption text-ink-3">Always installed</span>
+            ) : (
+              <DevysButton
+                compact
+                kind={app.installed ? "quiet" : "raised"}
+                onClick={() => void actions.installApp(app.id, !app.installed)}
+              >
+                {app.installed ? "Remove" : "Install"}
+              </DevysButton>
+            )}
+          </div>
+        ))}
+      </div>
+      {coming.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <span className="text-label font-medium text-ink-3">Coming</span>
+          {coming.map((app) => (
+            <div key={app.id} className="flex flex-col py-1 opacity-70">
+              <span className="text-control text-ink">{app.name}</span>
+              <span className="text-detail text-ink-3">{app.summary}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex flex-col gap-2">
+        <span className="text-label font-medium text-ink-3">Connections</span>
+        {businessId && <DriveConnection businessId={businessId} />}
+      </div>
+    </div>
   );
 }
 

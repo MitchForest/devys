@@ -58,13 +58,16 @@ export async function localStores(channel = false) {
       ])
         await run(`DELETE FROM ${table} WHERE scope_id = ANY($1)`, [businesses]);
       for (const table of [
+        "follows",
         "conversation_reads",
         "messages",
         "conversations",
         "decisions",
         "commitments",
-        "space_items",
-        "spaces",
+        "project_items",
+        "project_members",
+        "projects",
+        "app_installs",
         "artifacts",
         "app_reactions",
         "channel_bindings",

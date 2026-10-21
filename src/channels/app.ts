@@ -4,7 +4,7 @@ import type { Binding, Channel, ConversationContext, Inbound } from "./contract.
 
 /**
  * App conversations are addressed `app:<business>:<employee>`, optionally followed by the
- * context they are about (`:work:<id>`, `:space:<id>` or another employee's `:direct:<id>`);
+ * context they are about (`:work:<id>`, `:project:<id>` or another employee's `:direct:<id>`);
  * the sender is a person or a colleague (`employee:<id>`).
  */
 export const appChat = (scope: Scope, context?: ConversationContext) =>
@@ -13,7 +13,7 @@ const scopeOf = (chatId: string): Scope | undefined => {
   const [, businessId, employeeId, ...rest] = chatId.split(":");
   const context =
     rest.length === 0 ||
-    (rest.length === 2 && (rest[0] === "work" || rest[0] === "space" || rest[0] === "direct"));
+    (rest.length === 2 && (rest[0] === "work" || rest[0] === "project" || rest[0] === "direct"));
   return businessId && employeeId && context ? { businessId, employeeId } : undefined;
 };
 
@@ -70,7 +70,7 @@ export const composeAppMessage = (
     text: string;
     replyToText?: string;
     viaVoice?: boolean;
-    /** What the message is about, such as the space or work item it was sent in. */
+    /** What the message is about, such as the project or work item it was sent in. */
     about?: string;
   },
 ) =>

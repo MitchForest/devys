@@ -42,6 +42,7 @@ const sqlStatement =
 // Adding a component is an explicit decision: extend this list and the component map.
 const components = [
   "app",
+  "apps",
   "artifacts",
   "authority",
   "browser",
@@ -86,6 +87,12 @@ function tableOwners() {
         throw new Error(
           `${migration} alters ${owners.get(altered)}'s table ${altered} under ${owner}`,
         );
+      // A renamed table keeps its owner under its new name; the old name is gone.
+      const [, from, to] = /^ALTER TABLE (\w+) RENAME TO (\w+)/.exec(line) ?? [];
+      if (from && to && owner) {
+        owners.set(to, owner);
+        owners.delete(from);
+      }
     }
   }
   return owners;

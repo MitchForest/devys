@@ -152,6 +152,27 @@ export const markSeen = (
     );
   });
 
+/** When the last message a participant has read was stored; undefined if they have read none. */
+export const readAt = (
+  db: Database,
+  businessId: string,
+  key: ConversationKey,
+  participant: string,
+) =>
+  database(
+    db,
+    async (sql) =>
+      (
+        await sql.row<{ created_at: string }>(
+          `SELECT m.created_at FROM conversation_reads r
+         JOIN messages m ON m.business_id = r.business_id AND m.conversation = r.conversation
+           AND m.seq = r.seen_seq
+         WHERE r.business_id = $1 AND r.conversation = $2 AND r.participant = $3`,
+          [businessId, key, participant],
+        )
+      )?.created_at,
+  );
+
 /** Starts or stops a person following a conversation. */
 export const setFollowing = (
   db: Database,

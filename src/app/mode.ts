@@ -26,7 +26,7 @@ export interface Mode {
   terminals: (businessId: string) => Terminals;
   /** The business's own browser: Chrome with its profile on the Mac; none in the cloud yet. */
   browser: (businessId: string) => Browser;
-  /** The business's folder that owner files, terminals and space files live in, if any. */
+  /** The business's folder that owner files, terminals and project files live in, if any. */
   businessFolder(businessId: string): string | undefined;
   /** Where an employee's files and commands live, stated in its instructions. */
   workplace: string;

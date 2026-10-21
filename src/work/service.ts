@@ -2,7 +2,7 @@ import { database, type Database } from "../data/database.ts";
 import type { Commitment, CommitmentState } from "./contract.ts";
 
 const columns = `id, owner_employee_id, title, objective, next_action, wait_condition, due_at, state,
-  conditions, evidence, revision, taken_over_by, created_by, updated_at`;
+  project_id, conditions, evidence, revision, taken_over_by, created_by, updated_at`;
 
 export const commitments = (db: Database, businessId: string, since?: string) =>
   database(db, (sql) =>
@@ -32,6 +32,8 @@ export const createCommitment = (
     nextAction?: string;
     dueAt?: string;
     conditions?: Commitment["conditions"];
+    /** The project it belongs to; the caller has checked it is this business's. */
+    projectId?: string;
     createdBy: string;
     /** A person who drives it from the start: in progress and never dispatched until handed back. */
     takenOverBy?: string;
@@ -40,8 +42,8 @@ export const createCommitment = (
   database(db, async (sql) => {
     const created = await sql.row<Commitment>(
       `INSERT INTO commitments (id, business_id, owner_employee_id, title, objective, next_action,
-         due_at, conditions, created_by, taken_over_by, state)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+         due_at, conditions, created_by, taken_over_by, project_id, state)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
          CASE WHEN $10::text IS NULL THEN 'ready' ELSE 'in_progress' END) RETURNING ${columns}`,
       [
         crypto.randomUUID(),
@@ -54,6 +56,7 @@ export const createCommitment = (
         JSON.stringify(input.conditions ?? {}),
         input.createdBy,
         input.takenOverBy ?? null,
+        input.projectId ?? null,
       ],
     );
     return created!;

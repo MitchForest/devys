@@ -126,28 +126,32 @@ describe("@-mentions in a draft, as the server reads them", () => {
 });
 
 describe("workspace columns, as native WorkspaceLayout", () => {
-  it("fits sidebar, page and inspector, clamping the inspector to its range", () => {
-    expect(layout(1300, true, true, false, 320)).toEqual({
+  it("keeps the conversation at its minimum and clamps the right panel to its range", () => {
+    expect(layout(1300, true, true, false, 440)).toEqual({
       sidebar: 236,
-      page: 734,
-      inspector: 320,
-      showsHandle: true,
+      conversation: 614,
+      panel: 440,
+      overlay: false,
+      handle: true,
     });
-    expect(layout(1300, true, true, false, 900).inspector).toBe(634);
+    expect(layout(1300, true, true, false, 900).panel).toBe(634);
+    expect(layout(1300, true, false, false, 440)).toMatchObject({ conversation: 1063, panel: 0 });
   });
 
-  it("lets the page win when too narrow, and expands the conversation over the page", () => {
-    expect(layout(900, true, true, false, 320)).toEqual({
+  it("widens the panel to all but the conversation's minimum, and overlays it when narrow", () => {
+    expect(layout(1300, true, true, true, 440)).toEqual({
       sidebar: 236,
-      page: 663,
-      inspector: 0,
-      showsHandle: false,
+      conversation: 420,
+      panel: 634,
+      overlay: false,
+      handle: false,
     });
-    expect(layout(900, false, true, true, 320)).toEqual({
-      sidebar: 0,
-      page: 0,
-      inspector: 900,
-      showsHandle: false,
+    expect(layout(900, true, true, false, 440)).toEqual({
+      sidebar: 236,
+      conversation: 663,
+      panel: 440,
+      overlay: true,
+      handle: false,
     });
   });
 });

@@ -2,6 +2,7 @@ import { Effect } from "effect";
 import type { Env } from "./env.ts";
 import { grantsFor } from "../authority/service.ts";
 import { authorize } from "./authorize.ts";
+import { usableIn } from "./apps.ts";
 import { activeEmployee, businessBrief, businessName, employeesOf } from "../identity/service.ts";
 import { roleTemplate } from "./team.ts";
 import { AgentRuntime, type AgentDependencies } from "../runtime/agent.ts";
@@ -46,8 +47,13 @@ export function agentDependencies(env: Env): AgentDependencies {
     },
     authorize: (scope, capability, input, context) =>
       authorize(env, scope, capability, input, context),
-    granted: async (scope) =>
-      (await Effect.runPromise(grantsFor(env.HYPERDRIVE, scope))).map((grant) => grant.capability),
+    // An uninstalled app's capabilities are not discovered, whatever is granted.
+    granted: async (scope) => {
+      const usable = await usableIn(env.HYPERDRIVE, scope.businessId);
+      return (await Effect.runPromise(grantsFor(env.HYPERDRIVE, scope)))
+        .map((grant) => grant.capability)
+        .filter(usable);
+    },
     models: (beforeDispatch) => applicationModels(env, beforeDispatch),
     // Resolved at admission so a configuration typo cannot disable stop/status.
     foregroundModel: async (scope) => {

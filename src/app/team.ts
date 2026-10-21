@@ -1,6 +1,7 @@
 import { Effect, Schema } from "effect";
 import type { Env } from "./env.ts";
 import { modelsConfig } from "../../config/models.ts";
+import { appCatalog } from "../apps/catalog.ts";
 import { grantAll } from "../authority/service.ts";
 import { atomically, type Database } from "../data/database.ts";
 import type { RoleTemplateId, Scope } from "../identity/contract.ts";
@@ -28,7 +29,7 @@ export interface RoleTemplate {
   ask?: readonly string[];
 }
 
-// Every employee can track work, use memory and spaces, and read its own history.
+// Every employee can track work, use memory and projects, and read its own history.
 const collaboration = [
   "commitmentList",
   "commitmentCreate",
@@ -38,21 +39,12 @@ const collaboration = [
   "remember",
   "recall",
   "forget",
-  "spaceList",
-  "spaceCreate",
-  "spaceAdd",
+  "projectList",
+  "projectCreate",
+  "projectUpdate",
+  "projectAdd",
 ] as const;
-const files = [
-  "listSkills",
-  "read",
-  "write",
-  "printPdf",
-  "importAttachment",
-  "publishArtifact",
-  "artifactPage",
-  "artifactEdit",
-] as const;
-const drive = ["driveList", "driveRead", "driveCreate", "driveUpdate"] as const;
+const files = ["listSkills", "read", "write", "printPdf", "importAttachment"] as const;
 const browser = [
   "browserOpen",
   "browserRead",
@@ -60,16 +52,9 @@ const browser = [
   "browserType",
   "browserPress",
 ] as const;
-const coding = [
-  "codingStart",
-  "codingStatus",
-  "codingSend",
-  "codingStop",
-  "codingAccept",
-  "codingPublish",
-  "deployPreview",
-  "deployProduction",
-] as const;
+/** What the apps' manifests propose to a role at hire. */
+const proposed = (role: RoleTemplateId) =>
+  appCatalog.flatMap((app) => app.defaultGrants?.[role] ?? []);
 
 export const roleTemplates: readonly RoleTemplate[] = [
   {
@@ -87,7 +72,14 @@ export const roleTemplates: readonly RoleTemplate[] = [
     summary: "Builds, fixes and ships the business's software.",
     responsibilities:
       "Build, fix and ship the business's software. Work in the repositories on the owner's computer, run tests before calling work done, keep changes small and reviewable, and report what changed with evidence.",
-    capabilities: [...collaboration, ...files, ...coding, ...browser, "run", "readPublicUrl"],
+    capabilities: [
+      ...collaboration,
+      ...files,
+      ...proposed("engineering"),
+      ...browser,
+      "run",
+      "readPublicUrl",
+    ],
     // Previews ship on Engineering's own authority; production is the owner's decision.
     ask: ["deployProduction"],
   },
@@ -97,7 +89,7 @@ export const roleTemplates: readonly RoleTemplate[] = [
     summary: "Finds customers: research, positioning, campaigns and outreach.",
     responsibilities:
       "Grow the business. Research the market and competitors, sharpen positioning, plan and measure campaigns, and prepare outreach for the owner's approval. Ground claims in sources.",
-    capabilities: [...collaboration, ...files, ...browser, "readPublicUrl"],
+    capabilities: [...collaboration, ...files, ...proposed("growth"), ...browser, "readPublicUrl"],
   },
   {
     id: "business-operations",
@@ -105,7 +97,13 @@ export const roleTemplates: readonly RoleTemplate[] = [
     summary: "Keeps records, documents, suppliers and admin in order.",
     responsibilities:
       "Keep the business's records, documents and administration in order: suppliers, accounts, schedules and paperwork. Track follow-ups as commitments so nothing is dropped.",
-    capabilities: [...collaboration, ...files, ...drive, ...browser, "readPublicUrl"],
+    capabilities: [
+      ...collaboration,
+      ...files,
+      ...proposed("business-operations"),
+      ...browser,
+      "readPublicUrl",
+    ],
   },
   {
     id: "custom",

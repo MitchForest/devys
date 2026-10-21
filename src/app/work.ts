@@ -13,7 +13,7 @@ import {
   type Change,
 } from "../work/service.ts";
 import type { CommitmentState } from "../work/contract.ts";
-import { addToSpace } from "../work/spaces.ts";
+import { project } from "../work/projects.ts";
 import { capabilities } from "./capabilities.ts";
 import { handBack } from "./coding.ts";
 import { body, forbidden, label, notFound } from "./request.ts";
@@ -62,11 +62,17 @@ export async function workRoute(
       nextAction: string;
       dueAt: string;
       conditions: Record<string, Record<string, unknown>>;
-      spaceId: string;
+      projectId: string;
     }>(request, 16_000);
     const title = label(input.title, 200);
     if (!title || !(await isEmployee(input.owner)))
       return new Response("Send a title and an employee of this business", { status: 400 });
+    if (
+      input.projectId !== undefined &&
+      (typeof input.projectId !== "string" ||
+        !(await Effect.runPromise(project(env.HYPERDRIVE, business.id, input.projectId))))
+    )
+      return new Response("No such project in this business", { status: 400 });
     const conditions = input.conditions ?? {};
     const catalog = capabilities(env);
     for (const [name, values] of Object.entries(conditions)) {
@@ -90,17 +96,10 @@ export async function workRoute(
           : {}),
         ...(when(input.dueAt) ? { dueAt: when(input.dueAt) } : {}),
         conditions,
+        ...(input.projectId ? { projectId: input.projectId } : {}),
         createdBy: `person:${person.id}`,
       }),
     );
-    // Created from a space, the task is also shown there.
-    if (typeof input.spaceId === "string")
-      await Effect.runPromise(
-        addToSpace(env.HYPERDRIVE, business.id, input.spaceId, {
-          kind: "commitment",
-          ref: created.id,
-        }),
-      );
     return Response.json(created, { status: 201 });
   }
   const takeover = /^\/work\/([A-Za-z0-9-]{1,64})\/(takeover|release)$/.exec(path);

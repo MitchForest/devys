@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 export interface TreeEntry {
   name: string;
   path: string;
-  kind: "file" | "directory" | "other";
+  kind: "file" | "directory" | "repository" | "other";
   size: number;
 }
 
@@ -77,12 +77,16 @@ function Folder({
         <div
           key={entry.path}
           role="treeitem"
-          aria-expanded={entry.kind === "directory" ? Boolean(open[entry.path]) : undefined}
+          aria-expanded={
+            entry.kind === "directory" || entry.kind === "repository"
+              ? Boolean(open[entry.path])
+              : undefined
+          }
         >
           <button
             type="button"
             onClick={() =>
-              entry.kind === "directory"
+              entry.kind === "directory" || entry.kind === "repository"
                 ? setOpen((state) => ({ ...state, [entry.path]: !state[entry.path] }))
                 : onOpen(entry)
             }
@@ -92,11 +96,15 @@ function Folder({
             style={{ paddingLeft: 8 + depth * 14 }}
           >
             <span className="w-3 shrink-0 text-ink-3">
-              {entry.kind === "directory" ? (open[entry.path] ? "▾" : "▸") : ""}
+              {entry.kind === "directory" || entry.kind === "repository"
+                ? open[entry.path]
+                  ? "▾"
+                  : "▸"
+                : ""}
             </span>
             <span className="truncate">{entry.name}</span>
           </button>
-          {entry.kind === "directory" && open[entry.path] && (
+          {(entry.kind === "directory" || entry.kind === "repository") && open[entry.path] && (
             <Folder
               path={entry.path}
               depth={depth + 1}

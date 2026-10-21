@@ -1,16 +1,14 @@
 import {
-  CircleDollarSign,
+  Code2,
+  FileText,
+  House,
   LayoutGrid,
-  Link,
   ListChecks,
   MessageCircle,
-  ScanFace,
   Search,
-  Sun,
-  UserRound,
   type LucideIcon,
 } from "lucide-react";
-import { useWorkspace, valueOf, type Page } from "../app/workspace.tsx";
+import { useWorkspace, valueOf, type Layer, type Place } from "../app/workspace.tsx";
 import { Command, CommandEmpty, CommandItem, CommandList } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Command as CommandPrimitive } from "cmdk";
@@ -20,82 +18,56 @@ interface Target {
   title: string;
   detail: string;
   icon: LucideIcon;
-  /** A page to open, or a work item for the right panel. */
-  page: Page | { work: string };
+  /** A conversation to go to, a thread to open, or an app to open beside the conversation. */
+  go: { place: Place } | { thread: string } | { layer: Layer };
 }
 
-/** ⌘K: jump to any page in the current business by typing. */
+/** ⌘K: jump to any conversation, thread or app in the current business by typing. */
 export function CommandPalette() {
-  const { paletteOpen, actions, spaces, employees, work } = useWorkspace();
+  const { paletteOpen, actions, projects, employees, work, apps } = useWorkspace();
   const targets: Target[] = [
-    { id: "today", title: "Today", detail: "Home", icon: Sun, page: { kind: "today" } },
     {
-      id: "approvals",
-      title: "Approvals",
-      detail: "Home",
-      icon: ScanFace,
-      page: { kind: "approvals" },
+      id: "home",
+      title: "Home",
+      detail: "Operations",
+      icon: House,
+      go: { place: { kind: "home" } },
     },
-    {
-      id: "work",
-      title: "Work",
-      detail: "All commitments",
-      icon: ListChecks,
-      page: { kind: "work", filter: "all" },
-    },
-    {
-      id: "money",
-      title: "Money",
-      detail: "Spend",
-      icon: CircleDollarSign,
-      page: { kind: "money" },
-    },
-    {
-      id: "apps",
-      title: "Apps",
-      detail: "Installed",
+    ...(valueOf(projects) ?? []).map((p) => ({
+      id: p.id,
+      title: p.name,
+      detail: "Project",
       icon: LayoutGrid,
-      page: { kind: "apps", section: "installed" },
-    },
-    {
-      id: "connections",
-      title: "Connections",
-      detail: "Accounts",
-      icon: Link,
-      page: { kind: "apps", section: "connections" },
-    },
-    ...(valueOf(spaces) ?? []).map((s) => ({
-      id: s.id,
-      title: s.name,
-      detail: "Space",
-      icon: LayoutGrid,
-      page: { kind: "space", id: s.id } as Page,
+      go: { place: { kind: "project", id: p.id } as Place },
     })),
     ...employees.map((e) => ({
       id: `direct-${e.id}`,
       title: e.name,
-      detail: "Direct message",
-      icon: MessageCircle,
-      page: { kind: "direct", employeeId: e.id } as Page,
-    })),
-    ...employees.map((e) => ({
-      id: e.id,
-      title: e.name,
       detail: "Team",
-      icon: UserRound,
-      page: { kind: "employee", id: e.id } as Page,
+      icon: MessageCircle,
+      go: { place: { kind: "direct", employeeId: e.id } as Place },
     })),
+    ...(valueOf(apps) ?? [])
+      .filter((app) => app.installed)
+      .map((app) => ({
+        id: `app-${app.id}`,
+        title: app.name,
+        detail: "App",
+        icon: app.id === "code" ? Code2 : FileText,
+        go: { layer: { kind: "app", app: app.id } as Layer },
+      })),
     ...(valueOf(work) ?? []).map((item) => ({
       id: item.id,
       title: item.title,
-      detail: "Task",
+      detail: "Thread",
       icon: ListChecks,
-      page: { work: item.id },
+      go: { thread: item.id },
     })),
   ];
-  const go = (page: Target["page"]) => {
-    if ("work" in page) actions.openWork(page.work);
-    else actions.selectPage(page);
+  const go = (target: Target["go"]) => {
+    if ("place" in target) actions.selectPlace(target.place);
+    else if ("thread" in target) actions.openThread(target.thread);
+    else actions.openLayer(target.layer);
     actions.setPaletteOpen(false);
   };
   return (
@@ -110,7 +82,7 @@ export function CommandPalette() {
             <Search className="size-4 text-ink-3" />
             <CommandPrimitive.Input
               autoFocus
-              placeholder="Jump to a page, space or employee"
+              placeholder="Jump to a project, person, thread or app"
               className="flex-1 bg-transparent text-heading text-ink outline-none placeholder:text-ink-3"
             />
           </div>
@@ -120,7 +92,7 @@ export function CommandPalette() {
               <CommandItem
                 key={target.id}
                 value={`${target.title} ${target.detail} ${target.id}`}
-                onSelect={() => go(target.page)}
+                onSelect={() => go(target.go)}
                 className="gap-3 rounded-[9px] px-3 py-2 text-control text-ink data-[selected=true]:bg-sheet-tint [&>svg:last-child]:hidden"
               >
                 <target.icon className="size-4 w-5 text-ink-2" />

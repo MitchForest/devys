@@ -1,22 +1,23 @@
 import { test, expect } from "@playwright/test";
-import { createHash, randomBytes } from "node:crypto";
 import { localStores } from "../fixtures/local.ts";
+import { sidebar, signIn } from "./helpers.ts";
 
-test("the owner sees and changes an employee's model on the employee page", async ({ page }) => {
+test("the owner sees and changes an employee's model on its desk", async ({ page }) => {
   const stores = await localStores();
   const { sql } = stores;
   const owner = await stores.owner("Casey", "Acme");
-  const token = Array.from(randomBytes(32), (byte) => byte.toString(16).padStart(2, "0")).join("");
-  await sql.run(
-    "INSERT INTO enrollment_tokens (token_hash, person_id, expires_at) VALUES ($1, $2, now() + interval '1 hour')",
-    [createHash("sha256").update(token).digest("hex"), owner.person],
-  );
   const model = async () =>
     (await sql.row<{ model: string }>("SELECT model FROM employees WHERE id = $1", [
       owner.operations,
     ]))!.model;
   // Spend comes from the runtime; a fixed status keeps it deterministic without model calls.
-  const usage = { input: 1_000, output: 400, cacheRead: 3_000, cacheWrite: 0, totalTokens: 4_400 };
+  const usage = {
+    input: 1_000,
+    output: 400,
+    cacheRead: 3_000,
+    cacheWrite: 0,
+    totalTokens: 4_400,
+  };
   await page.route("**/status", (route) =>
     route.fulfill({
       json: {
@@ -28,7 +29,13 @@ test("the owner sees and changes an employee's model on the employee page", asyn
             models: {
               "gateway/claude-opus-5-5": {
                 ...usage,
-                cost: { input: 0.1, output: 0.3, cacheRead: 0.02, cacheWrite: 0, total: 0.42 },
+                cost: {
+                  input: 0.1,
+                  output: 0.3,
+                  cacheRead: 0.02,
+                  cacheWrite: 0,
+                  total: 0.42,
+                },
               },
             },
             tools: {},
@@ -38,19 +45,21 @@ test("the owner sees and changes an employee's model on the employee page", asyn
     }),
   );
   try {
-    await page.goto("/");
-    await page.getByLabel("Enrollment code").fill(token);
-    await page.getByRole("button", { name: "Sign in" }).click();
-    await expect(page.getByRole("heading", { name: /, Casey\.$/ })).toBeVisible();
-    await page.getByRole("button", { name: "Team", exact: true }).click();
+    await signIn(page, sql, owner.person);
+    await sidebar(page).getByRole("button", { name: "Head of Operations" }).click();
+    await page.getByRole("button", { name: /^Show side panel/ }).click();
+    const desk = page.getByRole("region", {
+      name: "Head of Operations's desk",
+    });
+    await desk.getByText("Model", { exact: true }).first().click();
 
     // New employees start on the deployment's default model.
-    const current = page.getByTestId("employee-model");
+    const current = desk.getByTestId("employee-model");
     await expect(current).toHaveText("Claude Opus 5.5");
-    await expect(page.getByText("Spent $0.42 · 75% of input from cache")).toBeVisible();
+    await expect(desk.getByText("Spent $0.42 · 75% of input from cache")).toBeVisible();
 
     // The picker groups models by vendor and changes the model on the server.
-    await page.getByRole("button", { name: /^Change model for / }).click();
+    await desk.getByRole("button", { name: /^Change model for / }).click();
     await expect(page.getByRole("group", { name: "OpenAI" })).toBeVisible();
     await expect(page.getByRole("menuitemradio", { name: "Claude Opus 5.5" })).toBeChecked();
     const saved = page.waitForResponse(
@@ -66,12 +75,13 @@ test("the owner sees and changes an employee's model on the employee page", asyn
     await page.route("**/model", (route) =>
       route.fulfill({ status: 400, body: "Choose a configured model" }),
     );
-    await page.getByRole("button", { name: /^Change model for / }).click();
+    await desk.getByRole("button", { name: /^Change model for / }).click();
     await page.getByRole("menuitemradio", { name: "GPT-6 Luna" }).click();
-    await expect(page.getByRole("alert")).toContainText("couldn't be saved");
+    await expect(desk.getByRole("alert")).toContainText("couldn't be saved");
     await expect(current).toHaveText("GPT-6.1 Sol");
     expect(await model()).toBe("gpt-6.1-sol");
   } finally {
+    await page.close();
     await stores.remove([owner]);
     await stores.dispose();
   }

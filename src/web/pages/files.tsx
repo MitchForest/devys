@@ -1,4 +1,4 @@
-import { FolderInput, MessageSquarePlus, Presentation, Save, Send } from "lucide-react";
+import { MessageSquarePlus, Presentation, Save, Send } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { api, type FileAnchor, type FileEntry } from "../app/api.ts";
 import { useDark } from "../app/theme.ts";
@@ -6,14 +6,7 @@ import { isOpen } from "../app/names.ts";
 import { useWorkspace, valueOf } from "../app/workspace.tsx";
 import { DevysButton } from "../design/buttons.tsx";
 import { EmptyNote } from "../design/primitives.tsx";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { fileKind } from "../../surfaces/files/kind.ts";
-import { FolderTree } from "../../surfaces/files/tree.tsx";
 import type { TextSelection } from "../../surfaces/files/markdown.tsx";
 import type { PdfRegion } from "../../surfaces/files/pdf.tsx";
 
@@ -49,62 +42,8 @@ interface Comment {
 /** A file as it was read: its text or bytes, and the revision a save goes over. */
 type Loaded = { text: string; revision: string } | { bytes: ArrayBuffer; revision: string };
 
-const fileAt = (path: string): FileEntry => ({
-  name: path.split("/").at(-1)!,
-  path,
-  kind: "file",
-  size: 0,
-});
-
-/**
- * The business's files on the owner's Mac: its folder, repositories and worktrees. Documents,
- * decks, spreadsheets and whiteboards edit in place and save over the revision they were opened
- * at; everything else opens in a viewer. Comments on a text range or a PDF region go to an
- * employee as one message.
- */
-export function FilesPage({ path }: { path?: string }) {
-  const { businessId } = useWorkspace();
-  const [root, setRoot] = useState<string | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
-  const [file, setFile] = useState<FileEntry | null>(path ? fileAt(path) : null);
-  useEffect(() => {
-    api.files(businessId).then(
-      (result) => setRoot(result.root),
-      (error: unknown) =>
-        setProblem(error instanceof Error ? error.message : "Files are unavailable."),
-    );
-  }, [businessId]);
-  const list = useCallback(
-    (folder: string) => api.files(businessId, folder).then((result) => result.entries),
-    [businessId],
-  );
-  if (problem)
-    return (
-      <div className="p-6">
-        <EmptyNote>{problem}</EmptyNote>
-      </div>
-    );
-  return (
-    <div className="grid h-full grid-cols-[minmax(200px,28%)_1fr]">
-      <div className="min-h-0 overflow-y-auto border-r border-hairline px-1.5">
-        {root && (
-          <FolderTree root={root} list={list} selected={file?.path ?? null} onOpen={setFile} />
-        )}
-      </div>
-      <div className="min-h-0">
-        {file ? (
-          <FileView key={file.path} businessId={businessId} file={file} />
-        ) : (
-          <div className="p-6">
-            <EmptyNote>Choose a file. Documents your employees write appear here.</EmptyNote>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function FileView({ businessId, file }: { businessId: string; file: FileEntry }) {
+/** One file from the business's folder: edited in place where an editor exists, else viewed. */
+export function FileView({ businessId, file }: { businessId: string; file: FileEntry }) {
   const kind = fileKind(file.name);
   const binary = kind === "pdf" || kind === "word" || kind === "sheet";
   const readable = binary || kind === "markdown" || kind === "text" || kind === "whiteboard";
@@ -291,7 +230,6 @@ function FileView({ businessId, file }: { businessId: string; file: FileEntry })
           </span>
         )}
         <span className="ml-auto" />
-        <SaveToSpace path={file.path} />
         {deck && (
           <DevysButton compact kind="quiet" onClick={() => void exportDeck()}>
             <Presentation /> Export .pptx
@@ -336,45 +274,6 @@ function FileView({ businessId, file }: { businessId: string; file: FileEntry })
         />
       )}
     </div>
-  );
-}
-
-/** Shows the file in a space; it stays where it is on the Mac. */
-function SaveToSpace({ path }: { path: string }) {
-  const { spaces, actions } = useWorkspace();
-  const all = valueOf(spaces) ?? [];
-  const inSpaces = all.filter((space) =>
-    space.items.some((item) => item.kind === "file" && item.ref === path),
-  );
-  if (!all.length) return null;
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <DevysButton compact kind="quiet">
-            <FolderInput />{" "}
-            {inSpaces.length ? `In ${inSpaces.map((s) => s.name).join(", ")}` : "Save to space"}
-          </DevysButton>
-        }
-      />
-      <DropdownMenuContent align="end" className="w-auto">
-        {all.map((space) => {
-          const entry = space.items.find((item) => item.kind === "file" && item.ref === path);
-          return (
-            <DropdownMenuItem
-              key={space.id}
-              onClick={() =>
-                entry
-                  ? actions.removeFromSpace(space.id, entry.id)
-                  : actions.addToSpace(space.id, "file", path)
-              }
-            >
-              {entry ? `Remove from ${space.name}` : space.name}
-            </DropdownMenuItem>
-          );
-        })}
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }
 

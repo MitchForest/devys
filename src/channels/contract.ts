@@ -46,19 +46,19 @@ export const addressOf = (chatId: string) => chatId.slice(chatId.indexOf(":") + 
 
 /**
  * The context a conversation belongs to, beyond the employee's own direct chat: a work
- * item, a space, or another employee's direct chat it was brought into.
+ * item, a project's channel, or another employee's direct chat it was brought into.
  */
-export type ConversationContext = { kind: "work" | "space" | "direct"; id: string };
+export type ConversationContext = { kind: "work" | "project" | "direct"; id: string };
 
 /**
  * Which context a chat is about: a dispatched `work:<business>:<employee>:<commitment>`,
- * or a channel address ending `:work:<id>`, `:space:<id>` or `:direct:<id>`. Undefined is
+ * or a channel address ending `:work:<id>`, `:project:<id>` or `:direct:<id>`. Undefined is
  * the employee's own direct chat.
  */
 export const contextOf = (chatId: string): ConversationContext | undefined => {
   const dispatched = commitmentOf(chatId);
   if (dispatched) return { kind: "work", id: dispatched.commitmentId };
-  const match = /:(work|space|direct):([A-Za-z0-9-]{1,64})$/.exec(chatId);
+  const match = /:(work|project|direct):([A-Za-z0-9-]{1,64})$/.exec(chatId);
   return match ? { kind: match[1] as ConversationContext["kind"], id: match[2]! } : undefined;
 };
 

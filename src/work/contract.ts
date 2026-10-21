@@ -17,6 +17,8 @@ export interface Commitment {
   wait_condition: string | null;
   due_at: string | null;
   state: CommitmentState;
+  /** The project it belongs to, if any. */
+  project_id: string | null;
   /** Values for capabilities' own constraint fields, by capability name. They only narrow. */
   conditions: Record<string, Record<string, unknown>>;
   /** What was done; a coding result names its commit and the check that ran against it. */
@@ -42,20 +44,26 @@ export interface Commitment {
   updated_at: string;
 }
 
-/** A record shown in a space: a reference, never a copy. */
-export interface SpaceItem {
+/** A record a project shows: a reference, never a copy. */
+export interface ProjectItem {
   id: string;
   /** A file's reference is its path in the business folder. */
-  kind: "commitment" | "artifact" | "file";
+  kind: "artifact" | "file";
   ref: string;
 }
 
-/** A persistent place for an area of the business. It confers no access. */
-export interface Space {
+/** A bounded initiative. Its work items belong to it; it confers no access. */
+export interface Project {
   id: string;
   name: string;
-  purpose: string;
-  /** The employee who answers in the space's thread; null until one is chosen. */
+  goal: string | null;
+  /** A calendar date, `YYYY-MM-DD`. */
+  deadline: string | null;
+  /** A spending limit in the currency's smallest unit; it narrows, never grants. */
+  budget: { cents: number; currency: string } | null;
+  /** The employee who answers in the project's channel; null until one is chosen. */
   lead_employee_id: string | null;
-  items: SpaceItem[];
+  /** The employees assigned to it, besides the lead. */
+  member_ids: string[];
+  items: ProjectItem[];
 }

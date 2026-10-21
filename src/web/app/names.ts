@@ -1,7 +1,7 @@
 import type { Commitment, CommitmentState, Employee, RoleTemplateId } from "./api.ts";
 import type { Tone } from "../design/primitives.tsx";
 import type { Mood } from "../design/face.tsx";
-import type { Page, WorkFilter, WorkspaceState } from "./workspace.tsx";
+import type { Place, WorkspaceState } from "./workspace.tsx";
 import { valueOf } from "./workspace.tsx";
 
 /** Plain names for capabilities, as native `AccessNames`; the description carries the detail. */
@@ -43,16 +43,6 @@ const templateTitles: Record<RoleTemplateId, string> = {
 export const templateTitle = (template: string) =>
   templateTitles[template as RoleTemplateId] ?? template;
 
-export const workFilters: { value: WorkFilter; title: string }[] = [
-  { value: "all", title: "All work" },
-  { value: "needsYou", title: "Needs you" },
-  { value: "inProgress", title: "In progress" },
-  { value: "waiting", title: "Waiting" },
-  { value: "done", title: "Done" },
-];
-export const filterTitle = (filter: WorkFilter) =>
-  workFilters.find((f) => f.value === filter)!.title;
-
 export const chipFor = (state: CommitmentState): { title: string; tone: Tone } =>
   state === "needs_decision"
     ? { title: "Needs you", tone: "needsYou" }
@@ -68,30 +58,32 @@ export const chipFor = (state: CommitmentState): { title: string; tone: Tone } =
 
 export const isOpen = (state: CommitmentState) => state !== "completed" && state !== "cancelled";
 
-export function pageTitle(state: WorkspaceState, page: Page = state.page): string {
-  if (state.expanded && state.selectedWork)
-    return valueOf(state.work)?.find((w) => w.id === state.selectedWork)?.title ?? "Task";
-  switch (page.kind) {
-    case "today":
-      return "Today";
-    case "approvals":
-      return "Approvals";
-    case "files":
-      return "Files";
+/**
+ * A place's title, and in a thread the place above it (its project) so the breadcrumb reads
+ * "Launch › Fix sitemap".
+ */
+export function placeTitle(
+  state: WorkspaceState,
+  place: Place,
+): { title: string; parent?: { title: string; place: Place } } {
+  switch (place.kind) {
+    case "home":
+      return { title: "Home" };
     case "direct":
-      return state.employees.find((e) => e.id === page.employeeId)?.name ?? "Message";
-    case "space":
-      return valueOf(state.spaces)?.find((s) => s.id === page.id)?.name ?? "Space";
-    case "employee":
-      return state.employees.find((e) => e.id === page.id)?.name ?? "Team";
-    case "inbox":
-      return "Inbox";
-    case "work":
-      return page.filter === "all" ? "Work" : filterTitle(page.filter);
-    case "money":
-      return "Money";
-    case "apps":
-      return page.section === "installed" ? "Installed" : "Connections";
+      return { title: state.employees.find((e) => e.id === place.employeeId)?.name ?? "Message" };
+    case "project":
+      return { title: valueOf(state.projects)?.find((p) => p.id === place.id)?.name ?? "Project" };
+    case "thread": {
+      const item = valueOf(state.work)?.find((w) => w.id === place.workId);
+      const project =
+        item?.project_id && valueOf(state.projects)?.find((p) => p.id === item.project_id);
+      return {
+        title: item?.title ?? "Thread",
+        ...(project
+          ? { parent: { title: project.name, place: { kind: "project", id: project.id } as Place } }
+          : {}),
+      };
+    }
   }
 }
 
@@ -114,51 +106,6 @@ export function operationsMood(state: WorkspaceState): Mood {
   return state.isRunning ? "working" : "idle";
 }
 
-export type Signal =
-  | { kind: "working" }
-  | { kind: "needsYou"; count: number }
-  | { kind: "failed" }
-  | { kind: "paused" };
-export interface Presence {
-  employee: Employee;
-  signal: Signal;
-  summary: string;
-}
-
-/** Teammates worth a glance: working, waiting on you, failed or paused. Idle ones aren't shown. */
-export function presence(state: WorkspaceState): Presence[] {
-  return state.employees.flatMap((employee) => {
-    const status = valueOf(state.statusOf(employee.id));
-    const decisions =
-      valueOf(state.decisions)?.filter((d) => d.employee_id === employee.id).length ?? 0;
-    const latest = [...(status?.inbox ?? [])].sort((a, b) => b.receivedAt - a.receivedAt)[0];
-    let signal: Signal | undefined;
-    if (employee.paused || status?.run?.stopped) signal = { kind: "paused" };
-    else if (state.workingOf(employee.id)) signal = { kind: "working" };
-    else if (decisions > 0) signal = { kind: "needsYou", count: decisions };
-    else if (latest?.status === "failed") signal = { kind: "failed" };
-    if (!signal) return [];
-    const summary =
-      signal.kind === "working"
-        ? `${employee.name} is working`
-        : signal.kind === "needsYou"
-          ? `${employee.name} needs you · ${signal.count} decision${signal.count === 1 ? "" : "s"}`
-          : signal.kind === "failed"
-            ? `${employee.name} couldn't finish the last request`
-            : `${employee.name} is paused`;
-    return [{ employee, signal, summary }];
-  });
-}
-
-export const moodFor = (signal: Signal): Mood =>
-  signal.kind === "working"
-    ? "working"
-    : signal.kind === "needsYou"
-      ? "waiting"
-      : signal.kind === "failed"
-        ? "oops"
-        : "off";
-
 export const formatBytes = (bytes: number) =>
   bytes < 1024
     ? `${bytes} bytes`
@@ -180,10 +127,6 @@ export const takeoverTitle = (
     : takenOverBy === me
       ? "You have it"
       : `Taken over by ${members.find((member) => member.id === takenOverBy)?.display_name ?? "another person"}`;
-
-/** Inbox until a mailbox is connected, said the same on every client. */
-export const inboxEmpty =
-  "No mailbox is connected yet. The business's mail appears here once one is.";
 
 /** A coding result at a glance, from a work item's evidence; undefined when it has none. */
 export function outcomeOf(evidence: Commitment["evidence"]) {

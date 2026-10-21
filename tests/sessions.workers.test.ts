@@ -44,7 +44,7 @@ const answered = (target: ReturnType<typeof employee>, messageId: string) =>
 /** One context's said turns, oldest first, read from Pi's entries. */
 const turns = async (
   { scope, agent }: ReturnType<typeof employee>,
-  context?: { kind: "work" | "space"; id: string },
+  context?: { kind: "work" | "project"; id: string },
 ) =>
   (JSON.parse(await agent.history(scope, undefined, context)) as { entries: Entry[] }).entries
     .flatMap((entry) => {
@@ -72,16 +72,16 @@ const turns = async (
 it("each context keeps its own conversation and the direct chat is unchanged", async () => {
   const target = employee();
   await send(target, "m-direct", target.app, "Hello there");
-  await send(target, "m-space", `${target.app}:space:launch`, "Plan the launch");
+  await send(target, "m-project", `${target.app}:project:launch`, "Plan the launch");
   await send(target, "m-work", target.work("c-1"), "Draft the brochure");
   await send(target, "m-app-work", `${target.app}:work:c-1`, "Make it shorter");
-  for (const id of ["m-direct", "m-space", "m-work", "m-app-work"]) await answered(target, id);
+  for (const id of ["m-direct", "m-project", "m-work", "m-app-work"]) await answered(target, id);
 
   expect(await turns(target)).toEqual([
     { role: "owner", text: "Hello there" },
     { role: "agent", text: "Re: Hello there" },
   ]);
-  expect((await turns(target, { kind: "space", id: "launch" })).map((t) => t.text)).toEqual([
+  expect((await turns(target, { kind: "project", id: "launch" })).map((t) => t.text)).toEqual([
     "Plan the launch",
     "Re: Plan the launch",
   ]);
@@ -116,11 +116,11 @@ it("each context keeps its own conversation and the direct chat is unchanged", a
 
 it("a repeated message id is admitted once in its context", async () => {
   const target = employee();
-  const chat = `${target.app}:space:ops`;
+  const chat = `${target.app}:project:ops`;
   expect(await send(target, "m-once", chat, "Check the stock")).toEqual({ accepted: true });
   expect(await send(target, "m-once", chat, "Check the stock")).toEqual({ accepted: false });
   await answered(target, "m-once");
-  expect((await turns(target, { kind: "space", id: "ops" })).map((t) => t.text)).toEqual([
+  expect((await turns(target, { kind: "project", id: "ops" })).map((t) => t.text)).toEqual([
     "Check the stock",
     "Re: Check the stock",
   ]);
@@ -171,9 +171,9 @@ it("a message in a work item's thread acts for that commitment", async () => {
 it("memory observes what the owner said in every session", async () => {
   const target = employee();
   await send(target, "m-root", target.app, "Our office opens at nine");
-  await send(target, "m-space-fact", `${target.app}:space:sales`, "Our launch is on Friday");
+  await send(target, "m-project-fact", `${target.app}:project:sales`, "Our launch is on Friday");
   await send(target, "m-work-fact", target.work("c-2"), "The supplier is Acme");
-  for (const id of ["m-root", "m-space-fact", "m-work-fact"]) await answered(target, id);
+  for (const id of ["m-root", "m-project-fact", "m-work-fact"]) await answered(target, id);
 
   let observed: { id: string; content: string }[] = [];
   for (let pass = 0; pass < 3; pass++) observed = await target.agent.catchUp();

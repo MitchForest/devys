@@ -1,18 +1,14 @@
 import { test, expect } from "@playwright/test";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { localStores } from "../fixtures/local.ts";
+import { sidebar, signIn } from "./helpers.ts";
 
-test("the web workspace adds work and approves an exact request through the same API", async ({
+test("Home's Needs you approves an exact request; new work opens its thread and is edited there", async ({
   page,
 }) => {
   const stores = await localStores();
   const { sql } = stores;
   const owner = await stores.owner("Jordan", "Acme");
-  const token = Array.from(randomBytes(32), (byte) => byte.toString(16).padStart(2, "0")).join("");
-  await sql.run(
-    "INSERT INTO enrollment_tokens (token_hash, person_id, expires_at) VALUES ($1, $2, now() + interval '1 hour')",
-    [createHash("sha256").update(token).digest("hex"), owner.person],
-  );
   const grant = await sql.row<{ id: string }>(
     "SELECT id FROM grants WHERE employee_id = $1 AND capability = 'readPublicUrl' AND revoked_at IS NULL",
     [owner.operations],
@@ -24,74 +20,138 @@ test("the web workspace adds work and approves an exact request through the same
     [decision, owner.business, owner.operations, grant!.id],
   );
   try {
-    await page.goto("/");
-    await page.getByLabel("Enrollment code").fill(token);
-    await page.getByRole("button", { name: "Sign in" }).click();
-    await expect(page.getByRole("heading", { name: /, Jordan\.$/ })).toBeVisible();
-    // The request waits on Today and inline in the DM with Operations.
-    await expect(page.getByText("https://example.com")).toHaveCount(1);
-    await page
-      .getByRole("group", { name: "Direct messages" })
-      .getByRole("button", { name: "Head of Operations" })
-      .click();
-    await expect(page.getByLabel("Message Head of Operations")).toBeVisible();
-    await expect(page.getByText("https://example.com")).toHaveCount(1);
-    await page.getByRole("button", { name: "Approve once" }).click();
-    await page.getByRole("button", { name: /^Approvals/ }).click();
-    await expect(page.getByText("Nothing needs your approval.")).toBeVisible();
-    expect(
-      (await sql.row<{ status: string }>("SELECT status FROM decisions WHERE id = $1", [decision]))
-        ?.status,
-    ).toBe("approved");
-    await page.getByRole("button", { name: "Work", exact: true }).click();
-    await expect(page.getByLabel("New commitment")).toHaveCount(0);
-    await page.getByRole("main").getByRole("button", { name: "New task" }).click();
+    await signIn(page, sql, owner.person);
+
+    // The request waits on Home: counted on its row, in Needs you, and inline in the chat.
+    await expect(sidebar(page).getByRole("button", { name: /^Home/ })).toHaveAccessibleName(
+      "Home, 1",
+    );
+    const needsYou = page.getByRole("region", { name: "Needs you" });
+    await expect(needsYou.getByTestId("panel-title")).toHaveText("Needs you");
+    await expect(needsYou.getByText("Head of Operations asks")).toBeVisible();
+    await expect(page.getByRole("main").getByText("https://example.com")).toHaveCount(1);
+
+    // Its exact input unfolds on demand, and Approve answers it in place.
+    await needsYou.getByRole("button", { name: "Details" }).click();
+    await expect(needsYou.getByText("https://example.com")).toBeVisible();
+    await needsYou.getByRole("button", { name: "Approve" }).click();
+    await expect(needsYou).toBeHidden();
+    await expect(page.getByRole("main").getByText("https://example.com")).toHaveCount(0);
+    await expect(sidebar(page).getByRole("button", { name: /^Home/ })).toHaveAccessibleName("Home");
+    await expect
+      .poll(
+        async () =>
+          (
+            await sql.row<{ status: string }>("SELECT status FROM decisions WHERE id = $1", [
+              decision,
+            ])
+          )?.status,
+      )
+      .toBe("approved");
+
+    // New → New task opens the work item's thread with its card beside it.
+    await sidebar(page).getByRole("button", { name: "New", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New task" }).click();
     const dialog = page.getByRole("dialog", { name: "New task" });
     await dialog.getByLabel("Title").fill("Draft the PR inquiry");
     await dialog.getByRole("button", { name: "Create task" }).click();
-    await expect(page.getByText("Draft the PR inquiry")).toBeVisible();
-    await page.getByText("Draft the PR inquiry").click({ button: "right" });
-    await expect(page.getByRole("menuitem", { name: "Take over" })).toBeVisible();
-    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(page.getByTestId("place-title")).toHaveText("Draft the PR inquiry");
+    const card = page.getByRole("region", { name: "Work item" });
+    await expect(card.getByTestId("task-owner")).toHaveText("Head of Operations");
+
     // The owner edits what's next and what it waits on at the revision on screen.
-    await page.getByText("Draft the PR inquiry").click();
-    const panel = page.getByRole("region", { name: "Work item" });
-    await panel.getByRole("button", { name: /^Edit/ }).click();
-    await panel.getByLabel("Next").fill("Email three editors");
-    await panel.getByLabel("Waiting on").fill("The press kit");
-    await panel.getByRole("button", { name: "Save" }).click();
-    await expect(panel.getByText("Email three editors")).toBeVisible();
+    await card.getByRole("button", { name: "Edit next, waiting on and due" }).click();
+    await card.getByLabel("Next").fill("Email three editors");
+    await card.getByLabel("Waiting on").fill("The press kit");
+    await card.getByRole("button", { name: "Save" }).click();
+    await expect(card.getByText("Email three editors")).toBeVisible();
     expect(
       await sql.row<{ next_action: string; wait_condition: string | null }>(
         "SELECT next_action, wait_condition FROM commitments WHERE business_id = $1",
         [owner.business],
       ),
-    ).toEqual({ next_action: "Email three editors", wait_condition: "The press kit" });
-    // On a phone, the business menu reaches what the rail and sidebar hold on a desktop.
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.getByLabel("Close work item").click();
-    await page.getByRole("button", { name: "Home", exact: true }).click();
-    await page.getByRole("button", { name: /^Switch business/ }).click();
-    for (const name of ["New task", "Hire", "Files", "Approvals", "Money", "Settings"])
-      await expect(page.getByRole("menuitem", { name, exact: true })).toBeVisible();
-    await page.getByRole("menuitem", { name: "Apps and connections" }).click();
-    await page.getByRole("tab", { name: "Connections" }).click();
-    await expect(page.getByRole("region", { name: "Google Drive" })).toBeVisible();
+    ).toEqual({
+      next_action: "Email three editors",
+      wait_condition: "The press kit",
+    });
+
+    // Taking over pauses the employee on it; Hand back gives it back.
+    await card.getByRole("button", { name: "Take over" }).click();
+    await expect(card.getByRole("button", { name: "Hand back" })).toBeVisible();
     expect(
       (
-        await sql.row<{ owner_employee_id: string }>(
-          "SELECT owner_employee_id FROM commitments WHERE business_id = $1",
+        await sql.row<{ taken_over_by: string | null }>(
+          "SELECT taken_over_by FROM commitments WHERE business_id = $1",
           [owner.business],
         )
-      )?.owner_employee_id,
-    ).toBe(owner.operations);
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-    ).toBe(true);
+      )?.taken_over_by,
+    ).toBe(owner.person);
+    await card.getByRole("button", { name: "Hand back" }).click();
+    await expect(card.getByRole("button", { name: "Take over" })).toBeVisible();
   } finally {
-    await sql.run("DELETE FROM decisions WHERE business_id = $1", [owner.business]);
-    await sql.run("DELETE FROM commitments WHERE business_id = $1", [owner.business]);
+    await page.close();
     await stores.remove([owner]);
+    await stores.dispose();
+  }
+});
+
+test("Settings → Businesses creates a business with its starting team and switches to it", async ({
+  page,
+}) => {
+  const stores = await localStores();
+  const { sql } = stores;
+  const owner = await stores.owner("Harper", "Acme");
+  const created = async () =>
+    (
+      await sql.row<{ business_id: string }>(
+        "SELECT business_id FROM memberships WHERE person_id = $1 AND business_id <> $2",
+        [owner.person, owner.business],
+      )
+    )?.business_id;
+  try {
+    await signIn(page, sql, owner.person);
+    await page.getByRole("button", { name: "Account" }).click();
+    await page.getByRole("menuitem", { name: "Settings…" }).click();
+    const settings = page.getByRole("dialog", { name: "Settings" });
+    await settings.getByRole("button", { name: "Businesses", exact: true }).click();
+    await settings.getByRole("button", { name: "New business" }).click();
+    const form = settings.getByRole("form", { name: "New business" });
+    await form.getByLabel("Name").fill("Globex");
+    await form.getByLabel("Brief").fill("Sells widgets online.");
+    // A Head of Operations always; Growth is left out of this starting team.
+    await form.getByRole("switch", { name: /^Growth/ }).uncheck({ force: true });
+    await form.getByRole("button", { name: "Create business" }).click();
+    await expect.poll(created).toBeTruthy();
+    await page.keyboard.press("Escape");
+    await expect(settings).toBeHidden();
+
+    // The new business is selected: its own Home, sidebar and team.
+    await expect(page.getByRole("button", { name: "Switch to Globex" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(page.getByTestId("place-title")).toHaveText("Home");
+    await expect(sidebar(page).getByRole("heading", { name: "Globex" })).toBeVisible();
+    for (const name of ["Head of Operations", "Engineering", "Business Operations"])
+      await expect(sidebar(page).getByRole("button", { name, exact: true })).toBeVisible();
+    await expect(sidebar(page).getByRole("button", { name: "Growth", exact: true })).toHaveCount(0);
+    expect(
+      (await sql.row<{ brief: string }>("SELECT brief FROM businesses WHERE id = $1", [
+        await created(),
+      ]))!.brief,
+    ).toBe("Sells widgets online.");
+
+    // Switching back shows Acme's own team, nothing shared.
+    await page.getByRole("button", { name: "Switch to Acme" }).click();
+    await expect(sidebar(page).getByRole("heading", { name: "Acme" })).toBeVisible();
+    await expect(
+      sidebar(page).getByRole("button", { name: "Engineering", exact: true }),
+    ).toHaveCount(0);
+  } finally {
+    await page.close();
+    const other = await created();
+    await stores.remove(other ? [owner, { person: owner.person, business: other }] : [owner]);
     await stores.dispose();
   }
 });

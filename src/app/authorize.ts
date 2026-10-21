@@ -5,9 +5,10 @@ import { activeGrant, decide, settleAsk } from "../authority/service.ts";
 import type { Scope } from "../identity/contract.ts";
 import type { Capability } from "../protocol/capability.ts";
 import { commitment } from "../work/service.ts";
+import { usableIn } from "./apps.ts";
 
 /**
- * The one authorization path: the commitment's fence and conditions, then the grant.
+ * The one authorization path: the app gate, the commitment's fence and conditions, then the grant.
  * An `ask` uses an approved decision for this exact request once, or opens one.
  */
 export async function authorize(
@@ -18,6 +19,11 @@ export async function authorize(
   context: { commitmentId?: string; conversation?: string } = {},
 ): Promise<Outcome> {
   const { commitmentId, conversation } = context;
+  if (!(await usableIn(env.HYPERDRIVE, scope.businessId))(capability.name))
+    return {
+      outcome: "deny",
+      reason: `${capability.name} belongs to an app this business hasn't installed`,
+    };
   if (commitmentId) {
     const work = await Effect.runPromise(
       commitment(env.HYPERDRIVE, scope.businessId, commitmentId),

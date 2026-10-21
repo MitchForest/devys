@@ -1,14 +1,14 @@
 /**
- * The shared record of what was said in a DM, a space or a work item's thread. Pi keeps
+ * The shared record of what was said in a DM, a project's channel or a work item's thread. Pi keeps
  * each employee's own reasoning; a conversation is what everyone in it reads.
  */
-export type ConversationKind = "direct" | "space" | "work";
+export type ConversationKind = "direct" | "project" | "work";
 
-/** `direct:<employee>`, `space:<space>` or `work:<commitment>`. */
+/** `direct:<employee>`, `project:<project>` or `work:<commitment>`. */
 export type ConversationKey = `${ConversationKind}:${string}`;
 
 export const conversationKey = (value: unknown): ConversationKey | undefined =>
-  typeof value === "string" && /^(direct|space|work):[A-Za-z0-9-]{1,64}$/.test(value)
+  typeof value === "string" && /^(direct|project|work):[A-Za-z0-9-]{1,64}$/.test(value)
     ? (value as ConversationKey)
     : undefined;
 
@@ -39,7 +39,7 @@ export const employeeOf = (author: string) =>
  *
  * 1. An owner's message is always answered: by the employees it mentions; otherwise by
  *    the employee it replies to; otherwise by whoever last spoke here; otherwise by the
- *    conversation's default (a DM's employee, a space's lead, a work item's owner).
+ *    conversation's default (a DM's employee, a project's lead, a work item's owner).
  * 2. An employee's message wakes the employees it mentions, and the asker when it answers
  *    a message that mentioned it. Nothing else an employee writes wakes anyone.
  * 3. At most `limit` employee turns in a row between two owner messages.

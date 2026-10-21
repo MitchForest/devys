@@ -13,7 +13,9 @@ today; target design and historical evidence must remain distinguishable.
 - Product model (2026-10-20): a business is its Team (employees), Projects (bounded
   initiatives), Apps (records, capabilities, connections) and Home (the owner's needs-you
   list, briefing and conversation with Operations). Use the canonical words and meanings
-  in `.docs/DEVYS.md`.
+  in `.docs/DEVYS.md`. The owner delegates by talking and reviews by glancing: the
+  conversation is always the middle of the screen; the right panel shows its permanent
+  view and temporary layers (records, diffs, pages, app views) that agents update in place.
 - The delivery plan owns launch sequencing and business-specific work. Do not encode
   one business's tasks into core rules. Field-service parity and wearables remain
   deferred vertical references.

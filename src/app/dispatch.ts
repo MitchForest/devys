@@ -6,7 +6,6 @@ import { scopeName } from "../identity/contract.ts";
 import { activeEmployee, unavailableEmployees } from "../identity/service.ts";
 import type { Commitment } from "../work/contract.ts";
 import { dueCommitments, markSubmitted } from "../work/service.ts";
-import { spaces } from "../work/spaces.ts";
 import { postEvent } from "./conversations.ts";
 
 /** The minute tick: unanswered decisions expire, then ready work is handed over. */
@@ -34,19 +33,14 @@ async function handOver(env: Env, work: Commitment & { business_id: string }) {
   const scope = { businessId: work.business_id, employeeId: work.owner_employee_id };
   const employee = await Effect.runPromise(activeEmployee(env.HYPERDRIVE, scope));
   if (!employee || employee.paused) return;
-  // A hand-off card in the work item's thread and in every space that shows it, once per owner.
+  // A hand-off card in the work item's thread and in its project's channel, once per owner.
   const card = {
     clientId: `handoff:${work.id}:${employee.id}`,
     text: `${employee.name} took on "${work.title}".`,
     ref: work.id,
   };
   await postEvent(env, work.business_id, `work:${work.id}`, card);
-  for (const space of await Effect.runPromise(spaces(env.HYPERDRIVE, work.business_id)))
-    if (space.items.some((item) => item.kind === "commitment" && item.ref === work.id))
-      await postEvent(env, work.business_id, `space:${space.id}`, {
-        ...card,
-        clientId: `${card.clientId}:${space.id}`,
-      });
+  if (work.project_id) await postEvent(env, work.business_id, `project:${work.project_id}`, card);
   await env.AGENT.getByName(scopeName(scope)).receive(scope, {
     messageId: `${work.id}:${work.revision}`,
     senderId: "dispatcher",

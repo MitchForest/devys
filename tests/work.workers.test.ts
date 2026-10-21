@@ -10,6 +10,8 @@ import { answerDecision, grant, pendingDecisions } from "../src/authority/servic
 import { sha256 } from "../src/protocol/bytes.ts";
 import { Invocation } from "../src/protocol/capability.ts";
 import { createCommitment, commitment } from "../src/work/service.ts";
+import { createProject } from "../src/work/projects.ts";
+import { messages } from "../src/conversations/service.ts";
 import { business, db, sql } from "./fixtures/postgres.ts";
 
 const bindings = env as unknown as Env;
@@ -260,6 +262,29 @@ it("due work reaches its employee once per revision, and a lost hand-off is resu
   expect(received.some((item) => item.chatId.endsWith(later.id))).toBe(false);
 });
 
+it("work in a project is handed over with a card in its thread and in the project's channel", async () => {
+  const { scope } = await business();
+  const agentEnv = {
+    ...bindings,
+    AGENT: { getByName: () => ({ receive: async () => ({ accepted: true }) }) },
+  } as unknown as Env;
+  const launch = await Effect.runPromise(createProject(db, scope.businessId, { name: "Launch" }));
+  const work = await Effect.runPromise(
+    createCommitment(db, scope.businessId, {
+      owner: scope.employeeId,
+      title: "Started from a message",
+      projectId: launch.id,
+      createdBy: "person:test",
+    }),
+  );
+  await dispatchDue(agentEnv);
+  await dispatchDue(agentEnv);
+  for (const key of [`work:${work.id}`, `project:${launch.id}`] as const)
+    expect(
+      (await Effect.runPromise(messages(db, scope.businessId, key))).map((m) => [m.kind, m.ref]),
+    ).toEqual([["event", work.id]]);
+});
+
 it("paused employees' work and a failing hand-off never hold up other work", async () => {
   const paused = await business();
   for (let index = 0; index < 21; index++)
@@ -385,7 +410,7 @@ it("members manage work and answer requests over HTTP; stale revisions conflict"
   expect(detail.members.map((member) => member.id)).toEqual([person]);
 });
 
-it("spaces reference records without copying them, refuse other businesses' records, and grant nothing", async () => {
+it("projects reference records without copying them, refuse other businesses' records, and grant nothing", async () => {
   const acme = await business("Acme");
   const globex = await business("Globex");
   const signIn = async (person: string, use: Env = bindings) => {
@@ -408,42 +433,44 @@ it("spaces reference records without copying them, refuse other businesses' reco
   };
   const owner = await signIn(acme.person);
   const launch = (await (
-    await owner(acme.business.id, "/spaces", { name: "Launch", purpose: "Ship it" })
+    await owner(acme.business.id, "/projects", { name: "Launch", goal: "Ship it" })
   ).json()) as { id: string };
-  const growth = (await (await owner(acme.business.id, "/spaces", { name: "Growth" })).json()) as {
+  const growth = (await (
+    await owner(acme.business.id, "/projects", { name: "Growth" })
+  ).json()) as {
     id: string;
   };
-  const work = await Effect.runPromise(
-    createCommitment(db, acme.business.id, {
-      owner: acme.scope.employeeId,
-      title: "PR inquiry",
-      createdBy: "person:t",
-    }),
-  );
-  const theirs = await Effect.runPromise(
-    createCommitment(db, globex.business.id, {
-      owner: globex.scope.employeeId,
-      title: "Theirs",
-      createdBy: "person:t",
-    }),
-  );
-  const add = (space: string, ref: string, kind = "commitment") =>
-    owner(acme.business.id, `/spaces/${space}/items`, { kind, ref });
-  const item = (await (await add(launch.id, work.id)).json()) as { id: string };
-  expect((await add(growth.id, work.id)).status).toBe(201);
-  expect((await add(launch.id, theirs.id)).status).toBe(400);
-  expect((await add(launch.id, crypto.randomUUID(), "artifact")).status).toBe(400);
-  const listed = (await (await owner(acme.business.id, "/spaces")).json()) as {
-    spaces: { name: string; items: { ref: string }[] }[];
+  const artifact = async (businessId: string) => {
+    const id = crypto.randomUUID();
+    await sql.run(
+      `INSERT INTO artifacts (id, business_id, operation_id, object_key, filename, content_type, byte_length)
+       VALUES ($1, $2, $1, $1, 'plan.html', 'text/html', 1)`,
+      [id, businessId],
+    );
+    return id;
   };
-  expect(listed.spaces.map((s) => [s.name, s.items.map((i) => i.ref)])).toEqual([
-    ["Launch", [work.id]],
-    ["Growth", [work.id]],
+  const page = await artifact(acme.business.id);
+  const theirs = await artifact(globex.business.id);
+  const add = (project: string, ref: string, kind = "artifact") =>
+    owner(acme.business.id, `/projects/${project}/items`, { kind, ref });
+  const item = (await (await add(launch.id, page)).json()) as { id: string };
+  expect((await add(growth.id, page)).status).toBe(201);
+  expect((await add(launch.id, theirs)).status).toBe(400);
+  expect((await add(launch.id, crypto.randomUUID())).status).toBe(400);
+  const listed = (await (await owner(acme.business.id, "/projects")).json()) as {
+    projects: { name: string; items: { ref: string }[] }[];
+  };
+  expect(listed.projects.map((p) => [p.name, p.items.map((i) => i.ref)])).toEqual([
+    ["Launch", [page]],
+    ["Growth", [page]],
   ]);
+  // Removing goes through the project it is in.
   expect(
-    (await owner(acme.business.id, `/spaces/${launch.id}/items/${item.id}/remove`, {})).status,
+    (await owner(acme.business.id, `/projects/${growth.id}/items/${item.id}/remove`, {})).status,
+  ).toBe(404);
+  expect(
+    (await owner(acme.business.id, `/projects/${launch.id}/items/${item.id}/remove`, {})).status,
   ).toBe(200);
-  expect(await Effect.runPromise(commitment(db, acme.business.id, work.id))).toBeDefined();
   // A file is a path in the business's folder on the Mac, so only in local mode.
   const folder = `/Users/owner/Devys/${acme.business.id}`;
   expect((await add(launch.id, `${folder}/plan.xlsx`, "file")).status).toBe(400);
@@ -453,27 +480,27 @@ it("spaces reference records without copying them, refuse other businesses' reco
     DEVYS_HOST_HOME: "/Users/owner",
   } as unknown as Env);
   const addFile = (ref: string) =>
-    local(acme.business.id, `/spaces/${growth.id}/items`, { kind: "file", ref });
+    local(acme.business.id, `/projects/${growth.id}/items`, { kind: "file", ref });
   expect((await addFile(`${folder}/plan.xlsx`)).status).toBe(201);
   expect((await addFile(`${folder}/../other/plan.xlsx`)).status).toBe(400);
   expect((await addFile(`/Users/owner/Devys/${globex.business.id}/x.md`)).status).toBe(400);
-  const withFile = (await (await local(acme.business.id, "/spaces")).json()) as {
-    spaces: { name: string; items: { kind: string; ref: string }[] }[];
+  const withFile = (await (await local(acme.business.id, "/projects")).json()) as {
+    projects: { name: string; items: { kind: string; ref: string }[] }[];
   };
-  expect(withFile.spaces.find((s) => s.name === "Growth")?.items).toContainEqual(
+  expect(withFile.projects.find((p) => p.name === "Growth")?.items).toContainEqual(
     expect.objectContaining({ kind: "file", ref: `${folder}/plan.xlsx` }),
   );
-  // Globex's owner can't see Acme's spaces, and can't add into them through Globex.
+  // Globex's owner can't see Acme's projects, and can't add into them through Globex.
   const other = await signIn(globex.person);
-  expect((await other(acme.business.id, "/spaces")).status).toBe(404);
+  expect((await other(acme.business.id, "/projects")).status).toBe(404);
   expect(
     (
-      await other(globex.business.id, `/spaces/${launch.id}/items`, {
-        kind: "commitment",
-        ref: theirs.id,
+      await other(globex.business.id, `/projects/${launch.id}/items`, {
+        kind: "artifact",
+        ref: theirs,
       })
     ).status,
-  ).toBe(400);
+  ).toBe(404);
 });
 
 it("handing back work with no coding sessions puts it back in the dispatcher's hands", async () => {

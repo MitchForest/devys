@@ -7,7 +7,10 @@ import {
   Copy,
   CornerUpLeft,
   Hand,
+  Eye,
+  FileText,
   ListChecks,
+  MessageSquarePlus,
   Mic,
   Reply,
   Smile,
@@ -25,14 +28,15 @@ import {
   type Bubble as TimelineBubble,
 } from "../app/timeline.ts";
 import { useWorkspace, valueOf } from "../app/workspace.tsx";
-import { templateTitle } from "../app/names.ts";
+import { chipFor, templateTitle } from "../app/names.ts";
 import { DevysButton } from "../design/buttons.tsx";
+import { StatusChip } from "../design/primitives.tsx";
 import { PersonPortrait } from "../design/face.tsx";
 import { InlineMarkdown } from "../design/markdown.tsx";
 import { EmployeePortrait } from "../design/portrait.tsx";
 import { Spinner } from "../design/spinner.tsx";
 import { DecisionCard } from "../pages/work.tsx";
-import { PausedBanner } from "../pages/employee.tsx";
+import { PausedBanner } from "../panel/desk.tsx";
 import { Bubble, BubbleContent, BubbleReactions } from "@/components/ui/bubble";
 import {
   ContextMenu,
@@ -102,15 +106,20 @@ export function ConversationView({
   const items = history ? timeline(history, pending, `person:${person?.id}`, new Date()) : [];
   // Requests waiting on the owner: from this DM's employee, or about this work item.
   const ref = key?.slice(key.indexOf(":") + 1);
+  // Requests wait where they were asked: a work item's in its thread, others in the DM. A
+  // channel shows none; its threads' cards say they need the owner.
   const waiting = (valueOf(decisions) ?? []).filter((d) =>
     key?.startsWith("direct:")
-      ? d.employee_id === ref
+      ? d.employee_id === ref && !d.commitment_id
       : key?.startsWith("work:")
         ? d.commitment_id === ref
         : false,
   );
+  const lastMine = items.findLastIndex((item) => item.kind !== "heading" && item.bubble.mine);
   return (
-    <MessageScrollerProvider>
+    // Opens at the newest message; a message the owner sends moves to the top, with the
+    // answer arriving beneath it.
+    <MessageScrollerProvider defaultScrollPosition="end" autoScroll>
       <MessageScroller>
         <MessageScrollerViewport>
           <MessageScrollerContent className={cn("mx-auto w-full gap-0 p-3.5", className)}>
@@ -152,7 +161,7 @@ export function ConversationView({
                   ) : (
                     <MessageScrollerItem
                       key={item.id}
-                      scrollAnchor={index === items.length - 1}
+                      scrollAnchor={item.bubble.mine && index === lastMine}
                       className={startsGroup(item.bubble) ? "pt-2.5" : "pt-0.5"}
                     >
                       {item.bubble.kind === "event" ? (
@@ -189,35 +198,90 @@ export function ConversationView({
 }
 
 /**
- * A hand-off or other event: a compact centered card. A hand-off opens its work item; a
- * published page opens the page.
+ * A hand-off or other event. A hand-off is the work item's card: its owner, live status and
+ * whether it has unread replies; it opens the thread. A published page opens as a layer.
  */
 function EventCard({ bubble }: { bubble: TimelineBubble }) {
-  const { actions, work } = useWorkspace();
+  const { actions, work, employees, unreadOf, artifacts } = useWorkspace();
   const artifact = bubble.ref?.startsWith("artifact:")
     ? bubble.ref.slice("artifact:".length)
     : undefined;
-  const opensWork = !artifact && (valueOf(work) ?? []).some((item) => item.id === bubble.ref);
-  const body = (
-    <>
+  const item = artifact ? undefined : (valueOf(work) ?? []).find((w) => w.id === bubble.ref);
+  if (item) {
+    const owner = employees.find((e) => e.id === item.owner_employee_id);
+    const chip = chipFor(item.state);
+    const unread = unreadOf(`work:${item.id}`);
+    return (
+      <button
+        type="button"
+        data-testid="handoff"
+        title="Open the thread"
+        onClick={() => actions.openThread(item.id)}
+        className="mx-auto flex w-full max-w-[520px] items-center gap-2.5 rounded-[14px] border border-hairline bg-sheet px-3 py-2 text-left shadow-resting transition-colors hover:bg-sheet-tint"
+      >
+        {owner ? (
+          <EmployeePortrait employee={owner} size={22} />
+        ) : (
+          <ListChecks className="size-4 shrink-0 text-indigo" />
+        )}
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate text-control font-semibold text-ink">{item.title}</span>
+          <span className="truncate text-caption text-ink-3">
+            {[
+              owner?.name,
+              item.state === "waiting" && item.wait_condition
+                ? `waiting on ${item.wait_condition}`
+                : item.next_action,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
+        </span>
+        <span className="ml-auto" />
+        {unread > 0 && (
+          <span className="shrink-0 text-caption font-semibold text-indigo">{unread} new</span>
+        )}
+        <StatusChip tone={chip.tone} small>
+          {chip.title}
+        </StatusChip>
+      </button>
+    );
+  }
+  if (artifact) {
+    const page = artifacts.find((a) => a.id === artifact);
+    const title = page?.filename.replace(/\.html$/, "");
+    // Its version among pages of the same name: a new version says so.
+    const version = page
+      ? artifacts.filter((a) => a.filename === page.filename && a.created_at <= page.created_at)
+          .length
+      : 1;
+    return (
+      <button
+        type="button"
+        data-testid="page-card"
+        title="Open the page"
+        onClick={() => actions.openLayer({ kind: "artifact", id: artifact })}
+        className="mx-auto flex w-full max-w-[520px] items-center gap-2.5 rounded-[14px] border border-hairline bg-sheet px-3 py-2 text-left shadow-resting transition-colors hover:bg-sheet-tint"
+      >
+        <span className="grid size-[22px] shrink-0 place-items-center rounded-[7px] bg-indigo/12">
+          <FileText className="size-3.5 text-indigo" />
+        </span>
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate text-control font-semibold text-ink">
+            {title ?? bubble.text}
+          </span>
+          <span className="truncate text-caption text-ink-3">
+            {version > 1 ? `Page · v${version}` : "Page"}
+          </span>
+        </span>
+      </button>
+    );
+  }
+  return (
+    <div className="mx-auto flex max-w-[90%] items-center gap-2 rounded-full border border-hairline bg-sheet-tint px-3 py-1.5 text-detail text-ink-2">
       <ListChecks className="size-3.5 shrink-0 text-indigo" />
       <span className="min-w-0 truncate">{bubble.text}</span>
-    </>
-  );
-  const style =
-    "mx-auto flex max-w-[90%] items-center gap-2 rounded-full border border-hairline bg-sheet-tint px-3 py-1.5 text-detail text-ink-2";
-  return artifact || opensWork ? (
-    <button
-      type="button"
-      data-testid={artifact ? "page-card" : "handoff"}
-      title={artifact ? "Open the page" : "Open the work item"}
-      onClick={() => (artifact ? actions.viewArtifact(artifact) : actions.openWork(bubble.ref!))}
-      className={cn(style, "transition-colors hover:bg-sheet hover:text-ink hover:shadow-resting")}
-    >
-      {body}
-    </button>
-  ) : (
-    <div className={style}>{body}</div>
+    </div>
   );
 }
 
@@ -235,9 +299,17 @@ function MessageRow({
   bubble: TimelineBubble;
   conversation: Conversation;
 }) {
-  const { employees } = useWorkspace();
+  const { employees, actions, place } = useWorkspace();
   const nameOf = useAuthorName();
   const [picking, setPicking] = useState(false);
+  // A thread starts from a message anywhere but inside a thread.
+  const threads = place.kind !== "thread" && !bubble.delivery;
+  const startThread = () =>
+    void actions.startThread({
+      text: bubble.text,
+      author: bubble.author,
+      mentions: valueOf(conversation.messages)?.find((m) => m.id === bubble.id)?.mentions ?? [],
+    });
   const mine = bubble.mine;
   const speaker = employees.find((e) => e.id === employeeOf(bubble.author));
   const reacts = Boolean(speaker) && !bubble.delivery;
@@ -335,6 +407,11 @@ function MessageRow({
                     <Reply /> Reply
                   </ContextMenuItem>
                 )}
+                {threads && (
+                  <ContextMenuItem onClick={startThread}>
+                    <MessageSquarePlus /> Start a thread
+                  </ContextMenuItem>
+                )}
                 <ContextMenuItem
                   onClick={() =>
                     void navigator.clipboard.writeText(bubble.text).catch(() => undefined)
@@ -355,6 +432,11 @@ function MessageRow({
                 <ChatActionButton label="Reply" onClick={() => conversation.reply(bubble.id)}>
                   <Reply />
                 </ChatActionButton>
+                {threads && (
+                  <ChatActionButton label="Start a thread" onClick={startThread}>
+                    <MessageSquarePlus />
+                  </ChatActionButton>
+                )}
               </div>
             )}
             <PopoverContent side="top" className="w-auto flex-row gap-1 rounded-full p-2">
@@ -473,26 +555,24 @@ function ReplyBanner({ name, text, cancel }: { name: string; text: string; cance
  */
 export function Composer({
   conversation,
-  which,
   label,
   className,
 }: {
   conversation: Conversation;
-  /** Which conversation voice serves when started here. */
-  which: "main" | "panel";
   /** "Message <name>", for the field. */
   label: string;
   className?: string;
 }) {
   const state = useWorkspace();
   const { actions, employees, voice, conversationMode, volatileText, level, voiceError } = state;
+  const { reference } = state;
   const nameOf = useAuthorName();
   const field = useRef<HTMLTextAreaElement>(null);
   const { draft, replyingTo } = conversation;
   useEffect(() => {
     if (replyingTo) field.current?.focus();
   }, [replyingTo]);
-  const served = state.voiceTarget === conversation.key;
+  const served = true;
   const listening = served && modeOf(voice) === "dictation";
   // Typing "@name" at the end of the draft offers matching employees, as in Slack.
   const typed = /(?:^|\s)@([^\s@]*)$/.exec(draft)?.[1];
@@ -551,10 +631,32 @@ export function Composer({
       {matches.length > 0 && (
         <MentionPicker id={pickerId} matches={matches} active={highlighted?.id} choose={choose} />
       )}
-      {conversation.messages.status === "loaded" && <ToChip conversation={conversation} />}
+      {conversation.messages.status === "loaded" && (
+        <div className="flex items-center gap-2">
+          <ToChip conversation={conversation} />
+          {reference && (
+            <span
+              className="flex min-w-0 items-center gap-1 rounded-full bg-sheet-tint py-0.5 pr-1 pl-2 text-caption text-ink-2"
+              data-testid="reference-chip"
+              title="What you're looking at goes with your message"
+            >
+              <Eye className="size-3 shrink-0 text-ink-3" />
+              <span className="truncate">Viewing {reference.title}</span>
+              <button
+                type="button"
+                aria-label="Don't send what you're viewing"
+                onClick={() => actions.setReferencing(false)}
+                className="grid size-4 place-items-center rounded-full text-ink-3 hover:text-ink-2"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          )}
+        </div>
+      )}
       {answerer?.paused && <PausedBanner employee={answerer} />}
       {served && conversationMode ? (
-        <ConversationStrip which={which} />
+        <ConversationStrip />
       ) : (
         <div className="flex flex-col gap-1.5">
           {listening && volatileText && (
@@ -575,7 +677,7 @@ export function Composer({
               ref={field}
               aria-label={label}
               // The work thread's field names no title: the panel already shows it.
-              placeholder={listening ? "Listening…" : which === "panel" ? "Reply" : label}
+              placeholder={listening ? "Listening…" : label}
               rows={1}
               value={draft}
               onChange={(event) => conversation.setDraft(event.target.value)}
@@ -585,7 +687,7 @@ export function Composer({
                 if (event.nativeEvent.isComposing || pickWithKeys(event)) return;
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
-                  actions.sendDraft(conversation);
+                  actions.sendDraft();
                 }
               }}
               className="max-h-[132px] min-h-7 resize-none p-0 py-[5px] text-body leading-[1.35] text-ink placeholder:text-ink-3"
@@ -603,11 +705,11 @@ export function Composer({
               >
                 <AtSign className="size-[15px]" strokeWidth={2.2} />
               </button>
-              <MicButton which={which} listening={listening} level={served ? level : 0} />
+              <MicButton listening={listening} level={served ? level : 0} />
               <InputGroupButton
                 aria-label="Send"
                 disabled={!draft.trim()}
-                onClick={() => actions.sendDraft(conversation)}
+                onClick={() => actions.sendDraft()}
                 className="aurora size-7 rounded-full p-0 text-white disabled:opacity-40 [&_svg]:size-3.5"
               >
                 <ArrowUp strokeWidth={3} />
@@ -730,15 +832,7 @@ function MentionPicker({
 }
 
 /** Tap to dictate; the menu also starts a hands-free conversation, as native `MicButton`. */
-function MicButton({
-  which,
-  listening,
-  level,
-}: {
-  which: "main" | "panel";
-  listening: boolean;
-  level: number;
-}) {
+function MicButton({ listening, level }: { listening: boolean; level: number }) {
   const { actions } = useWorkspace();
   return (
     <span className="flex items-center">
@@ -746,7 +840,7 @@ function MicButton({
         type="button"
         aria-label={listening ? "Stop dictating" : "Dictate"}
         title={listening ? "Stop dictating" : "Dictate"}
-        onClick={() => actions.micTapped(which)}
+        onClick={() => actions.micTapped()}
         className={cn(
           "relative grid size-7 place-items-center rounded-full",
           listening ? "text-indigo" : "text-ink-2 hover:text-ink",
@@ -772,10 +866,10 @@ function MicButton({
           <ChevronDown className="size-3" strokeWidth={2.5} />
         </DropdownMenuTrigger>
         <DropdownMenuContent side="top" align="end" className="w-auto min-w-44">
-          <DropdownMenuItem onClick={() => actions.micTapped(which)}>
+          <DropdownMenuItem onClick={() => actions.micTapped()}>
             <Mic /> {listening ? "Stop dictating" : "Dictate"}
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => actions.conversationToggled(which)}>
+          <DropdownMenuItem onClick={() => actions.conversationToggled()}>
             <AudioLines /> Talk hands-free
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -785,7 +879,7 @@ function MicButton({
 }
 
 /** Hands-free conversation: what's happening, a live level, and a way out. */
-function ConversationStrip({ which }: { which: "main" | "panel" }) {
+function ConversationStrip() {
   const { voice, level, volatileText, actions } = useWorkspace();
   const active = capturing(voice);
   const phase =
@@ -833,7 +927,7 @@ function ConversationStrip({ which }: { which: "main" | "panel" }) {
           <Hand /> Interrupt
         </DevysButton>
       )}
-      <DevysButton kind="quiet" compact onClick={() => actions.conversationToggled(which)}>
+      <DevysButton kind="quiet" compact onClick={() => actions.conversationToggled()}>
         <X /> End
       </DevysButton>
     </div>

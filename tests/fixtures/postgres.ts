@@ -2,6 +2,8 @@ import { env } from "cloudflare:workers";
 import { Effect } from "effect";
 import { query, type Database } from "../../src/data/database.ts";
 import { createBusiness } from "../../src/identity/service.ts";
+import { defaultApps } from "../../src/apps/catalog.ts";
+import { install } from "../../src/apps/service.ts";
 /** The test database behind the Workers pool's Hyperdrive binding. */
 export const db = (env as unknown as { HYPERDRIVE: Database }).HYPERDRIVE;
 export const sql = {
@@ -10,7 +12,7 @@ export const sql = {
   rows: <T>(text: string, values: unknown[] = []) => query(db, (s) => s.rows<T>(text, values)),
 };
 
-/** A person who owns a fresh business staffed with a Head of Operations. */
+/** A person who owns a fresh business staffed with a Head of Operations, with its default apps. */
 export async function business(name = "Test business") {
   const person = crypto.randomUUID();
   await sql.run("INSERT INTO people (id, display_name) VALUES ($1, 'Owner')", [person]);
@@ -22,6 +24,7 @@ export async function business(name = "Test business") {
       operations: { name: "Head of Operations", role: "Runs the business day to day." },
     }),
   );
+  await Effect.runPromise(install(db, created.business.id, defaultApps));
   return {
     person,
     business: created.business,

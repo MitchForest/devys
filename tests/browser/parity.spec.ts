@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
-import { createHash, randomBytes } from "node:crypto";
 import { localStores } from "../fixtures/local.ts";
+import { sidebar, signIn } from "./helpers.ts";
 
 /** A recognizer that hears one sentence, so dictation runs without a microphone. */
 const fakeSpeech = () => {
@@ -15,7 +15,9 @@ const fakeSpeech = () => {
     start() {
       setTimeout(() => this.onaudiostart?.(), 10);
       setTimeout(() => {
-        const result = Object.assign([{ transcript: "What is due today?" }], { isFinal: true });
+        const result = Object.assign([{ transcript: "What is due today?" }], {
+          isFinal: true,
+        });
         this.onresult?.({ resultIndex: 0, results: [result] });
         if (!this.continuous) this.onend?.();
       }, 50);
@@ -36,23 +38,23 @@ test("looks, the owner's photo, voice and settings work on the web as on native"
   const stores = await localStores();
   const { sql } = stores;
   const owner = await stores.owner("Riley", "Acme");
-  const token = Array.from(randomBytes(32), (byte) => byte.toString(16).padStart(2, "0")).join("");
-  await sql.run(
-    "INSERT INTO enrollment_tokens (token_hash, person_id, expires_at) VALUES ($1, $2, now() + interval '1 hour')",
-    [createHash("sha256").update(token).digest("hex"), owner.person],
-  );
   await page.addInitScript(fakeSpeech);
   try {
-    await page.goto("/");
-    await page.getByLabel("Enrollment code").fill(token);
-    await page.getByRole("button", { name: "Sign in" }).click();
-    await expect(page.getByRole("heading", { name: /, Riley\.$/ })).toBeVisible();
+    await signIn(page, sql, owner.person);
 
-    // Settings has the same five panes as the native Settings window.
+    // Settings has the same panes as the native Settings window.
     await page.getByRole("button", { name: "Account" }).click();
     await page.getByRole("menuitem", { name: "Settings…" }).click();
     const settings = page.getByRole("dialog", { name: "Settings" });
-    for (const section of ["Account", "Team", "Businesses", "Voice", "Appearance"])
+    for (const section of [
+      "Account",
+      "Apps",
+      "Team",
+      "Businesses",
+      "Devices",
+      "Voice",
+      "Appearance",
+    ])
       await expect(settings.getByRole("button", { name: section, exact: true })).toBeVisible();
 
     // The owner's photo uploads to the server.
@@ -108,11 +110,8 @@ test("looks, the owner's photo, voice and settings work on the web as on native"
     ).toBe(true);
     await page.keyboard.press("Escape");
 
-    // Dictation fills the DM's draft; sending marks the message as dictated.
-    await page
-      .getByRole("group", { name: "Direct messages" })
-      .getByRole("button", { name: "Head of Operations" })
-      .click();
+    // Dictation fills the direct chat's draft; sending marks the message as dictated.
+    await sidebar(page).getByRole("button", { name: "Head of Operations" }).click();
     await page.getByRole("button", { name: "Dictate" }).click();
     await expect(page.getByLabel("Message Head of Operations")).toHaveValue("What is due today?");
     const sent = page.waitForResponse(
@@ -134,11 +133,17 @@ test("looks, the owner's photo, voice and settings work on the web as on native"
     });
     await expect(page.getByText("What is due today?")).toBeVisible();
 
-    // ⌘K jumps to any page.
+    // ⌘K jumps to any conversation, or opens an app beside the one on screen.
     await page.keyboard.press("Meta+k");
-    await page.keyboard.type("Approvals");
+    await page.keyboard.type("Home");
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("heading", { name: "Approvals" })).toBeVisible();
+    await expect(page.getByTestId("place-title")).toHaveText("Home");
+    await expect(page.getByRole("dialog", { name: "Jump to" })).toBeHidden();
+    await page.keyboard.press("Meta+k");
+    await page.keyboard.type("Documents");
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("region", { name: "Documents" })).toBeVisible();
+    await expect(page.getByTestId("place-title")).toHaveText("Home");
   } finally {
     // Stop the page's polling and read receipts before its business is removed.
     await page.close();

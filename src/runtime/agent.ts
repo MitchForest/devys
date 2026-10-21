@@ -613,7 +613,7 @@ export abstract class AgentRuntime<
       throw new Error("Invalid history cursor");
     if (
       context !== undefined &&
-      (!["work", "space", "direct"].includes(context.kind) ||
+      (!["work", "project", "direct"].includes(context.kind) ||
         !/^[A-Za-z0-9-]{1,64}$/.test(context.id))
     )
       throw new Error("Invalid conversation context");

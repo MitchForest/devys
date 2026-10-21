@@ -102,16 +102,22 @@ it("a DM continues with its employee; a reply from the employee lands in the sam
   expect(page.respondent).toBe(ops);
 });
 
-it("in a space the lead answers first, then whoever spoke last, and a mention brings someone in", async () => {
+it("in a project the lead answers first, then whoever spoke last, and a mention brings someone in", async () => {
   const { acme, growth, received, bindings, as, say } = await owner();
   const ops = acme.operations.id;
-  const space = (await (
-    await as("/spaces", { method: "POST", body: JSON.stringify({ name: "Launch" }) })
+  const project = (await (
+    await as("/projects", {
+      method: "POST",
+      body: JSON.stringify({ name: "Launch", goal: "Go live", deadline: "2026-12-01" }),
+    })
   ).json()) as { id: string };
-  const key = `space:${space.id}`;
-  expect((await say(key, { id: "space-message-01", text: "Plan?" })).to).toEqual([ops]);
+  const key = `project:${project.id}`;
+  expect((await say(key, { id: "project-message-01", text: "Plan?" })).to).toEqual([ops]);
   const opsChat = received.at(-1)!.input.chatId;
-  expect(opsChat).toBe(`app:${acme.business.id}:${ops}:space:${space.id}`);
+  expect(opsChat).toBe(`app:${acme.business.id}:${ops}:project:${project.id}`);
+  expect(received.at(-1)!.input.text).toContain(
+    'In the project "Launch" (goal: Go live; deadline 2026-12-01). This is its channel: say results, hand-offs and questions here; post progress in the work item\'s own thread.',
+  );
   await postFromEmployee(
     bindings,
     opsChat,
@@ -120,9 +126,9 @@ it("in a space the lead answers first, then whoever spoke last, and a mention br
     received.at(-1)!.input.messageId,
   );
   // No mention: Operations spoke last, so Operations continues.
-  expect((await say(key, { id: "space-message-02", text: "Go on." })).to).toEqual([ops]);
+  expect((await say(key, { id: "project-message-02", text: "Go on." })).to).toEqual([ops]);
   // Mentioning Growth by name brings Growth in, with what it missed.
-  const asked = await say(key, { id: "space-message-03", text: "@Growth which channel?" });
+  const asked = await say(key, { id: "project-message-03", text: "@Growth which channel?" });
   expect(asked.to).toEqual([growth.id]);
   const delivered = received.at(-1)!;
   expect(delivered.employee).toBe(growth.id);
@@ -220,16 +226,16 @@ it("client ids are per conversation, and read positions follow insertion order",
   const { postMessage, markSeen, unseenBy } = await import("../src/conversations/service.ts");
   const { db } = await import("./fixtures/postgres.ts");
   const { scope } = await business("Reads");
-  const post = (key: `direct:${string}` | `space:${string}`, text: string) =>
+  const post = (key: `direct:${string}` | `project:${string}`, text: string) =>
     Effect.runPromise(
       postMessage(db, scope.businessId, key, { author: "system", text, clientId: "same-id" }),
     );
   const a = await post(`direct:${scope.employeeId}`, "In the DM");
-  const b = await post("space:s1", "In a space");
+  const b = await post("project:s1", "In a project");
   expect(b.created).toBe(true);
   expect(b.message.id).not.toBe(a.message.id);
   // Two messages stored in the same millisecond: reading the first leaves the second unread.
-  const key = "space:s2" as const;
+  const key = "project:s2" as const;
   const [first, second] = ["one", "two"].map(() => crypto.randomUUID());
   await sql.run("INSERT INTO conversations (business_id, key) VALUES ($1, $2)", [
     scope.businessId,

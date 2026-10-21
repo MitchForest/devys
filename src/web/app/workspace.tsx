@@ -27,8 +27,12 @@ import {
   type RoleTemplate,
   type SettableLook,
   type RuntimeState,
-  type Space,
-  type SpaceItem,
+  type AppEntry,
+  type Home,
+  type Message,
+  type Project,
+  type ProjectChange,
+  type ProjectItem,
   type StartingRole,
 } from "./api.ts";
 import { useConversation } from "./conversation.ts";
@@ -45,55 +49,80 @@ import {
   type VoicePhase,
 } from "./voice.ts";
 
-/** Rail destinations; each has its own sidebar, as on native. */
-export type Destination = "home" | "inbox" | "work" | "team" | "money" | "apps";
-export type WorkFilter = "all" | "needsYou" | "inProgress" | "waiting" | "done";
-export type Page =
-  | { kind: "today" }
-  | { kind: "approvals" }
-  | { kind: "files"; path?: string }
+/**
+ * Where the owner is: always a conversation. Home is the direct chat with Operations; a
+ * project is its channel; a thread is a work item's conversation.
+ */
+export type Place =
+  | { kind: "home" }
   | { kind: "direct"; employeeId: string }
-  | { kind: "space"; id: string }
-  | { kind: "employee"; id?: string }
-  | { kind: "inbox" }
-  | { kind: "work"; filter: WorkFilter }
-  | { kind: "money" }
-  | { kind: "apps"; section: "installed" | "connections" };
-export type EmployeeTab = "activity" | "responsibilities" | "memory" | "access";
-/** A space's tabs: its views, then each page saved to it (`artifact:<id>`). */
-export type SpaceTab = "conversation" | "overview" | "work" | "files" | `artifact:${string}`;
+  | { kind: "project"; id: string }
+  | { kind: "thread"; workId: string };
+export type PlaceKind = Place["kind"];
 
-/** The conversation a page shows in the main pane: a DM or a space's. */
-export const conversationOf = (page: Page): ConversationKey | undefined =>
-  page.kind === "direct"
-    ? `direct:${page.employeeId}`
-    : page.kind === "space"
-      ? `space:${page.id}`
-      : undefined;
+/** A temporary view stacked over the right panel's permanent view. */
+export type Layer =
+  | { kind: "artifact"; id: string; updatedBy?: string }
+  | { kind: "file"; path: string }
+  | { kind: "app"; app: string }
+  | { kind: "session"; workId: string; sessionId: string }
+  | { kind: "browser"; workId: string };
+/** `auto`: it opened on its own, so the next one may replace it. */
+export type OpenLayer = Layer & { auto?: boolean };
 
-export const destinationOf = (page: Page): Destination =>
-  page.kind === "today" ||
-  page.kind === "approvals" ||
-  page.kind === "files" ||
-  page.kind === "space" ||
-  page.kind === "direct"
-    ? "home"
-    : page.kind === "employee"
-      ? "team"
-      : page.kind === "inbox"
-        ? "inbox"
-        : page.kind === "work"
-          ? "work"
-          : page.kind === "money"
-            ? "money"
-            : "apps";
+export const samePlace = (a: Place, b: Place) => JSON.stringify(a) === JSON.stringify(b);
 
-/** Whether a destination's sidebar lists the page, so opening it keeps the owner there. */
-const lists = (destination: Destination, page: Page) =>
-  (destination === "home" && ["today", "approvals", "space", "direct"].includes(page.kind)) ||
-  destinationOf(page) === destination;
+/** The conversation a place shows: Home's is the direct chat with Operations. */
+export const conversationOf = (
+  place: Place,
+  operations: string | undefined,
+): ConversationKey | undefined =>
+  place.kind === "home"
+    ? operations
+      ? `direct:${operations}`
+      : undefined
+    : place.kind === "direct"
+      ? `direct:${place.employeeId}`
+      : place.kind === "project"
+        ? `project:${place.id}`
+        : `work:${place.workId}`;
 
-export const filterOf = (state: CommitmentState): WorkFilter =>
+/** Whether each kind of place shows its permanent view; the owner's choice is remembered. */
+const panelDefaults: Record<PlaceKind, boolean> = {
+  home: true,
+  direct: false,
+  project: true,
+  thread: true,
+};
+const savedPanels = (): Record<PlaceKind, boolean> => {
+  try {
+    return { ...panelDefaults, ...JSON.parse(localStorage.getItem("panels") ?? "{}") };
+  } catch {
+    return panelDefaults;
+  }
+};
+
+/** What a layer is, in words, for its header and the reference sent with a message. */
+export function layerReference(layer: Layer, names: { artifact: (id: string) => string }) {
+  switch (layer.kind) {
+    case "artifact":
+      return { title: names.artifact(layer.id), ref: `page artifact:${layer.id}` };
+    case "file":
+      return { title: layer.path.split("/").at(-1)!, ref: `file ${layer.path}` };
+    case "app":
+      return { title: appTitle(layer.app), ref: `the ${appTitle(layer.app)} app` };
+    case "session":
+      return {
+        title: "Coding session",
+        ref: `coding session ${layer.sessionId} on work:${layer.workId}`,
+      };
+    case "browser":
+      return { title: "Browser", ref: "the business's browser" };
+  }
+}
+const appTitle = (app: string) => app.charAt(0).toUpperCase() + app.slice(1);
+
+export const filterOf = (state: CommitmentState) =>
   state === "needs_decision"
     ? "needsYou"
     : state === "waiting"
@@ -102,10 +131,10 @@ export const filterOf = (state: CommitmentState): WorkFilter =>
         ? "done"
         : "inProgress";
 
-/** Opening "New task" from a space or an employee fills in what it can. */
+/** Opening "New task" from a project or an employee fills in what it can. */
 export interface TaskDefaults {
   owner?: string;
-  spaceId?: string;
+  projectId?: string;
 }
 
 export type Loadable<T> =
@@ -131,28 +160,31 @@ function useWorkspaceState() {
   const [summaries, setSummaries] = useState<Record<string, ConversationSummary>>({});
   const [work, setWork] = useState<Loadable<Commitment[]>>(loading);
   const [decisions, setDecisions] = useState<Loadable<Decision[]>>(loading);
-  const [spaces, setSpaces] = useState<Loadable<Space[]>>(loading);
+  const [projects, setProjects] = useState<Loadable<Project[]>>(loading);
+  const [apps, setApps] = useState<Loadable<AppEntry[]>>(loading);
+  const [home, setHome] = useState<Loadable<Home>>(loading);
   const [memory, setMemory] = useState<Loadable<MemoryClaim[]>>(loading);
   const [models, setModels] = useState<Loadable<ModelCatalog>>(loading);
   const [roles, setRoles] = useState<Loadable<RoleTemplate[]>>(loading);
   const [access, setAccess] = useState<{ employeeId: string; list: Loadable<AccessList> }>();
   const [artifactTexts, setArtifactTexts] = useState<Record<string, Loadable<string>>>({});
-  const [page, setPage] = useState<Page>({ kind: "today" });
-  const [destination, setDestination] = useState<Destination>("home");
+  const [place, setPlace] = useState<Place>({ kind: "home" });
+  /** Places the owner came from, for Back (a thread opened from a channel). */
+  const [history, setHistory] = useState<Place[]>([]);
+  const [layers, setLayers] = useState<OpenLayer[]>([]);
+  const [panels, setPanels] = useState(savedPanels);
+  const [wide, setWide] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(true);
-  const [inspectorVisible, setInspectorVisible] = useState(true);
-  const [expanded, setExpanded] = useState(false);
-  /** The work item open in the right panel, with its own thread. */
-  const [selectedWork, setSelectedWork] = useState<string>();
+  /** Whether the open layer goes with the next message as a reference. */
+  const [referencing, setReferencing] = useState(true);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<string>();
   const [hireOpen, setHireOpen] = useState(false);
+  const [projectOpen, setProjectOpen] = useState(false);
   const [taskDefaults, setTaskDefaults] = useState<TaskDefaults>();
-  const [employeeTab, setEmployeeTab] = useState<EmployeeTab>("activity");
-  const [spaceTab, setSpaceTab] = useState<SpaceTab>("conversation");
-  /** A page an employee published, open over the workspace. */
-  const [viewing, setViewing] = useState<string>();
-  const [workLayout, setWorkLayout] = useState<"list" | "board">("list");
+  /** Counts finished turns, so open layers read their records again. */
+  const [turns, setTurns] = useState(0);
   const [notice, setNotice] = useState<string>();
   const [signedOut, setSignedOut] = useState(false);
   const [ownerPhoto, setOwnerPhoto] = useState<string>();
@@ -170,8 +202,6 @@ function useWorkspaceState() {
     conversationRef.current = on;
     setConversationModeState(on);
   };
-  /** Which composer voice serves: the main pane's conversation or the work panel's. */
-  const [voiceTarget, setVoiceTarget] = useState<"main" | "panel">("main");
   const draftUsedVoice = useRef(false);
   const [volatileText, setVolatileText] = useState("");
   const [level, setLevel] = useState(0);
@@ -218,11 +248,17 @@ function useWorkspaceState() {
     async (id: string) => {
       if (!id) return;
       try {
-        const [w, d, s] = await Promise.all([api.work(id), api.decisions(id), api.spaces(id)]);
+        const [w, d, p, h] = await Promise.all([
+          api.work(id),
+          api.decisions(id),
+          api.projects(id),
+          api.home(id),
+        ]);
         if (current.current !== id) return;
         setWork(loaded(w.commitments));
         setDecisions(loaded(d.decisions));
-        setSpaces(loaded(s.spaces));
+        setProjects(loaded(p.projects));
+        setHome(loaded(h));
       } catch (error) {
         failed(error);
       }
@@ -230,7 +266,20 @@ function useWorkspaceState() {
     [failed],
   );
 
-  /** Last messages and unread counts for the sidebar's DMs and spaces. */
+  const loadApps = useCallback(
+    async (id: string) => {
+      if (!id) return;
+      try {
+        const result = await api.apps(id);
+        if (current.current === id) setApps(loaded(result.apps));
+      } catch (error) {
+        failed(error);
+      }
+    },
+    [failed],
+  );
+
+  /** Last messages and unread counts for the sidebar's chats, channels and threads. */
   const loadSummaries = useCallback(
     async (id: string) => {
       if (!id) return;
@@ -301,20 +350,23 @@ function useWorkspaceState() {
     setSummaries({});
     setWork(loading);
     setDecisions(loading);
-    setSpaces(loading);
+    setProjects(loading);
+    setApps(loading);
+    setHome(loading);
     setMemory(loading);
     setAccess(undefined);
     setArtifactTexts({});
-    setSelectedWork(undefined);
+    setLayers([]);
     if (!businessId) return;
     void loadBusiness(businessId);
     void loadWork(businessId);
+    void loadApps(businessId);
     void loadSummaries(businessId);
     api
       .memory(businessId)
       .then((m) => current.current === businessId && setMemory(loaded(m.items)))
       .catch(() => setMemory({ status: "failed", message: "Memory is unavailable." }));
-  }, [businessId, loadBusiness, loadWork, loadSummaries]);
+  }, [businessId, loadBusiness, loadWork, loadSummaries, loadApps]);
 
   // Every employee's runtime, so presence and spend are real for the whole team.
   const team = employees.map((e) => e.id).join(",");
@@ -358,8 +410,8 @@ function useWorkspaceState() {
       if (conversationRef.current) beginCapture("handsFree");
     });
   };
-  const mainKey = conversationOf(page);
-  const conversationDeps = {
+  const mainKey = conversationOf(place, operations?.id);
+  const main = useConversation(mainKey, {
     businessId,
     employees,
     running: runningOf,
@@ -368,23 +420,59 @@ function useWorkspaceState() {
     read: (key: ConversationKey) =>
       setSummaries((all) => (all[key] ? { ...all, [key]: { ...all[key]!, unread: 0 } } : all)),
     answered,
-  };
-  const main = useConversation(mainKey, {
-    ...conversationDeps,
-    visible: page.kind === "direct" || (page.kind === "space" && spaceTab === "conversation"),
+    visible: true,
   });
-  const panel = useConversation(selectedWork ? `work:${selectedWork}` : undefined, {
-    ...conversationDeps,
-    visible: inspectorVisible,
-  });
-  const target = voiceTarget === "panel" && panel.key ? panel : main;
-  const targetRef = useRef(target);
-  targetRef.current = target;
-  /** Voice serves the composer it was started from. */
-  const serve = (which: "main" | "panel") => {
-    setVoiceTarget(which);
-    targetRef.current = which === "panel" ? panel : main;
-  };
+  const targetRef = useRef(main);
+  targetRef.current = main;
+
+  // A turn finished: open layers read their records again.
+  const answering = main.working.length > 0;
+  const wasAnswering = useRef(false);
+  useEffect(() => {
+    if (wasAnswering.current && !answering) setTurns((n) => n + 1);
+    wasAnswering.current = answering;
+  }, [answering]);
+
+  // A page published in the conversation on screen opens on its own unless the owner opened
+  // a layer themselves; a new version of the open page replaces it in place.
+  const artifactsRef = useRef(artifacts);
+  artifactsRef.current = artifacts;
+  const seen = useRef<{ key?: string; ids: Set<string> }>({ ids: new Set() });
+  const history_ = valueOf(main.messages);
+  useEffect(() => {
+    if (!history_) return;
+    const known = seen.current;
+    const fresh = known.key === mainKey;
+    const arrived = fresh ? history_.filter((m) => !known.ids.has(m.id)) : [];
+    seen.current = { key: mainKey, ids: new Set(history_.map((m) => m.id)) };
+    const page = arrived.filter((m) => m.kind === "event" && m.ref?.startsWith("artifact:")).at(-1);
+    if (page) void pageArrived(page);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [history_, mainKey]);
+  async function pageArrived(message: Message) {
+    const id = message.ref!.slice("artifact:".length);
+    const author = message.author.startsWith("employee:")
+      ? employees.find((e) => `employee:${e.id}` === message.author)?.name
+      : undefined;
+    // A version is recognised by its page's name, so the list must already hold the new page.
+    let known = artifactsRef.current;
+    if (!known.some((a) => a.id === id)) {
+      known = await api.business(businessId).then(
+        (detail) => detail.artifacts,
+        () => known,
+      );
+      setArtifacts(known);
+    }
+    const name = (artifactId: string) => known.find((a) => a.id === artifactId)?.filename;
+    setLayers((open) => {
+      const top = open.at(-1);
+      if (top?.kind === "artifact" && name(top.id) !== undefined && name(top.id) === name(id))
+        return [...open.slice(0, -1), { ...top, id, ...(author ? { updatedBy: author } : {}) }];
+      if (top && !top.auto) return open;
+      return [{ kind: "artifact", id, auto: true }];
+    });
+    setReferencing(true);
+  }
 
   const refreshAfter = useCallback(
     async (change: () => Promise<unknown>, failure: string) => {
@@ -406,7 +494,7 @@ function useWorkspaceState() {
     [businessId, failed, loadBusiness, loadWork],
   );
 
-  /** Sends in the conversation voice serves; replies are read aloud when asked for. */
+  /** Sends in the conversation on screen; replies are read aloud when asked for. */
   const sendText = (text: string, viaVoice: boolean) =>
     targetRef.current.send(text, {
       viaVoice,
@@ -470,55 +558,77 @@ function useWorkspaceState() {
     setVoice({ kind: "idle" });
   };
   const business = businesses.find((b) => b.id === businessId);
-  const answering = (employeeId: string) =>
-    main.working.includes(employeeId) || panel.working.includes(employeeId);
+  const artifactName = (id: string) =>
+    artifacts.find((a) => a.id === id)?.filename.replace(/\.html$/, "") ?? "Page";
+  const topLayer = layers.at(-1);
+  /** The open layer, in words, sent with the next message unless the owner removed it. */
+  const reference =
+    topLayer && topLayer.kind !== "app" && referencing
+      ? layerReference(topLayer, { artifact: artifactName })
+      : undefined;
   const actions = {
     selectBusiness: (id: string) => {
       if (id === businessId) return;
       setBusinessId(id);
-      setPage({ kind: "today" });
-      setDestination("home");
+      setPlace({ kind: "home" });
+      setHistory([]);
     },
-    selectDestination: (next: Destination) => {
-      if (next === destination) return;
-      setDestination(next);
-      setPage(
-        next === "home"
-          ? { kind: "today" }
-          : next === "inbox"
-            ? { kind: "inbox" }
-            : next === "work"
-              ? { kind: "work", filter: "all" }
-              : next === "team"
-                ? { kind: "employee", id: operations?.id }
-                : next === "money"
-                  ? { kind: "money" }
-                  : { kind: "apps", section: "installed" },
+    /** Goes to a place from the sidebar: the layers close, Back starts over. */
+    selectPlace: (next: Place) => {
+      setHistory([]);
+      setLayers([]);
+      setWide(false);
+      setPlace(next);
+    },
+    /** Opens the DM with an employee. */
+    message: (employeeId: string) => actions.selectPlace({ kind: "direct", employeeId }),
+    /** Moves into a work item's thread; Back returns to where the owner was. */
+    openThread: (workId: string) => {
+      if (place.kind === "thread" && place.workId === workId) return;
+      setHistory((h) => [...h, place]);
+      setLayers([]);
+      setPlace({ kind: "thread", workId });
+    },
+    back: () => {
+      const previous = history.at(-1);
+      if (!previous) return;
+      setHistory((h) => h.slice(0, -1));
+      setLayers([]);
+      setPlace(previous);
+    },
+    /** Stacks a layer over the right panel; opening what is already on top does nothing. */
+    openLayer: (layer: Layer) => {
+      setReferencing(true);
+      setLayers((open) =>
+        open.length && JSON.stringify({ ...open.at(-1), auto: undefined }) === JSON.stringify(layer)
+          ? open
+          : [...open, layer],
       );
     },
-    selectPage: (next: Page) => {
-      setExpanded(false);
-      // A space opens on its conversation.
-      if (next.kind === "space" && !(page.kind === "space" && page.id === next.id))
-        setSpaceTab("conversation");
-      if (!lists(destination, next)) setDestination(destinationOf(next));
-      // Files are a full-width editor; an open work item would only crowd it.
-      if (next.kind === "files") setSelectedWork(undefined);
-      setPage(next);
+    /** Replaces the top layer (a file opened from the Documents app keeps one level). */
+    replaceLayer: (layer: Layer) => setLayers((open) => [...open.slice(0, -1), layer]),
+    /** Back one layer. */
+    popLayer: () => setLayers((open) => open.slice(0, -1)),
+    /** Back to the permanent view. */
+    closeLayers: () => {
+      setLayers([]);
+      setWide(false);
     },
-    /** Opens the DM with an employee in the main pane. */
-    message: (employeeId: string) => actions.selectPage({ kind: "direct", employeeId }),
-    /** Opens a page an employee published, or closes it. */
-    viewArtifact: (id: string | undefined) => setViewing(id),
-    /** Opens a work item, with its thread, in the right panel. */
-    openWork: (id: string) => {
-      setSelectedWork(id);
-      setInspectorVisible(true);
+    /** Shows or hides the right panel for this kind of place, remembered across visits. */
+    togglePanel: () => {
+      if (layers.length) return actions.closeLayers();
+      setPanels((all) => {
+        const next = { ...all, [place.kind]: !all[place.kind] };
+        try {
+          localStorage.setItem("panels", JSON.stringify(next));
+        } catch {
+          // A remembered panel is a convenience only.
+        }
+        return next;
+      });
     },
-    closeWork: () => {
-      setSelectedWork(undefined);
-      setExpanded(false);
-    },
+    toggleWide: () => setWide((v) => !v),
+    setReferencing,
     /** Hear each milestone of a work item (and keep it in the sidebar), or only its outcome. */
     setFollowing: async (workId: string, on: boolean) => {
       const key = `work:${workId}` as ConversationKey;
@@ -533,20 +643,15 @@ function useWorkspaceState() {
       }
     },
     toggleSidebar: () => setSidebarVisible((v) => !v),
-    toggleInspector: () => (expanded ? setExpanded(false) : setInspectorVisible((v) => !v)),
-    /** The work item's thread over the page, or back beside it. */
-    toggleExpanded: () => {
-      setExpanded((v) => !v);
-      setInspectorVisible(true);
-    },
     setPaletteOpen,
-    setSettingsOpen,
+    setSettingsOpen: (open: boolean, section?: string) => {
+      setSettingsSection(section);
+      setSettingsOpen(open);
+    },
     setHireOpen,
+    setProjectOpen,
     newTask: (defaults: TaskDefaults = {}) => setTaskDefaults(defaults),
     closeNewTask: () => setTaskDefaults(undefined),
-    setEmployeeTab,
-    setSpaceTab,
-    setWorkLayout,
     dismissNotice: () => setNotice(undefined),
     stop: (employeeId = operations?.id) =>
       employeeId &&
@@ -554,35 +659,82 @@ function useWorkspaceState() {
         .stop(businessId, employeeId)
         .then(() => setNotice("Stop requested. Work already sent cannot be unsent."))
         .then(() => loadStatus(businessId, employeeId)),
-    /** Sends the draft of the conversation voice serves, marking it dictated if it was. */
-    sendDraft: (conversation: typeof main) => {
+    /**
+     * Sends the draft, marking it dictated if it was. The layer the owner is looking at goes
+     * with it as a reference line, so "this" means what is on screen.
+     */
+    sendDraft: () => {
+      const conversation = main;
       if (!conversation.draft.trim()) return;
       if (modeOf(voice) === "dictation") {
         capture.current?.cancel();
         capture.current = undefined;
         setVoice({ kind: "idle" });
       }
-      const dictated = draftUsedVoice.current && conversation.key === targetRef.current.key;
-      conversation.send(conversation.draft, {
-        viaVoice: dictated,
+      const text = reference
+        ? `${conversation.draft.trim()}\n\n_Viewing: ${reference.title} (${reference.ref})_`
+        : conversation.draft;
+      conversation.send(text, {
+        viaVoice: draftUsedVoice.current,
         speak: loadVoiceSettings().speaksReplies,
       });
       draftUsedVoice.current = false;
       conversation.setDraft("");
+      setReferencing(false);
     },
-    /** The mic of the main pane's composer or the work panel's; voice then serves that one. */
-    micTapped: (which: "main" | "panel") => {
+    /** Quotes a selection from a layer into the draft: the owner edits by asking. */
+    ask: (quote: string) => {
+      const lines = quote
+        .trim()
+        .split("\n")
+        .slice(0, 12)
+        .map((line) => `> ${line}`);
+      main.setDraft(`${lines.join("\n")}\n\n${main.draft}`);
+    },
+    /**
+     * Starts a thread on a message: a work item owned by whoever it addressed, in the
+     * project it was said in, titled from the message.
+     */
+    startThread: async (message: { text: string; author: string; mentions: string[] }) => {
+      const author = message.author.startsWith("employee:")
+        ? message.author.slice("employee:".length)
+        : undefined;
+      const owner = author ?? message.mentions[0] ?? main.to[0] ?? operations?.id;
+      if (!owner) return;
+      const projectId =
+        place.kind === "project"
+          ? place.id
+          : place.kind === "thread"
+            ? (valueOf(work)?.find((w) => w.id === place.workId)?.project_id ?? undefined)
+            : undefined;
+      const text = message.text.replace(/\n\n_Viewing: [^\n]*_$/, "").trim();
+      try {
+        const created = await api.createCommitment(businessId, {
+          title: text.split("\n")[0]!.slice(0, 80),
+          owner,
+          objective: text.slice(0, 4000),
+          ...(projectId ? { projectId } : {}),
+        });
+        await loadWork(businessId);
+        // The owner started it, so they follow it: it stays in the sidebar under its project.
+        void actions.setFollowing(created.id, true);
+        actions.openThread(created.id);
+      } catch (error) {
+        failed(error);
+        setNotice("That thread couldn't be started.");
+      }
+    },
+    /** The composer's mic; voice serves the conversation on screen. */
+    micTapped: () => {
       if (voice.kind === "idle") {
-        serve(which);
         beginCapture("dictation");
       } else if (modeOf(voice) === "dictation" && voice.kind !== "finishing") {
         setVoice({ kind: "finishing", mode: "dictation" });
         capture.current?.finish();
       }
     },
-    conversationToggled: (which: "main" | "panel") => {
+    conversationToggled: () => {
       if (conversationRef.current) return endConversation();
-      serve(which);
       setConversationMode(true);
       if (voiceRef.current.kind === "idle") beginCapture("handsFree");
     },
@@ -603,10 +755,12 @@ function useWorkspaceState() {
         "That request was already answered or has expired.",
       );
     },
-    /** A task with an owner, objective, due date and space; resolves once it is saved. */
+    /** A task with an owner, objective, due date and project; opens its thread once saved. */
     createTask: async (task: NewTask) => {
-      await api.createCommitment(businessId, task);
+      const created = await api.createCommitment(businessId, task);
       await loadWork(businessId);
+      void actions.setFollowing(created.id, true);
+      actions.openThread(created.id);
     },
     setCommitmentState: (item: Commitment, state: CommitmentState) =>
       void refreshAfter(
@@ -633,34 +787,53 @@ function useWorkspaceState() {
         () => api.setTakeover(businessId, item.id, item.taken_over_by === null),
         "Couldn't change who handles that work.",
       ),
-    createSpace: async (space: { name: string; purpose?: string; lead?: string }) => {
-      const name = space.name.trim().slice(0, 80);
-      if (!name) return;
+    createProject: async (project: ProjectChange & { name: string }) => {
+      const name = project.name.trim().slice(0, 80);
+      if (!name) return false;
       try {
-        const created = await api.createSpace(businessId, {
-          name,
-          ...(space.purpose?.trim() ? { purpose: space.purpose.trim().slice(0, 500) } : {}),
-          ...(space.lead ? { lead: space.lead } : {}),
-        });
+        const created = await api.createProject(businessId, { ...project, name });
         await loadWork(businessId);
-        actions.selectPage({ kind: "space", id: created.id });
+        actions.selectPlace({ kind: "project", id: created.id });
+        return true;
       } catch (error) {
         failed(error);
-        setNotice("The space couldn't be created.");
+        setNotice("The project couldn't be created.");
+        return false;
       }
     },
-    updateSpace: (id: string, change: { name?: string; purpose?: string; lead?: string }) =>
-      refreshAfter(() => api.updateSpace(businessId, id, change), "The space couldn't be saved."),
-    addToSpace: (spaceId: string, kind: SpaceItem["kind"], ref: string) =>
-      void refreshAfter(
-        () => api.addToSpace(businessId, spaceId, kind, ref),
-        "That couldn't be added to the space.",
+    updateProject: (id: string, change: ProjectChange) =>
+      refreshAfter(
+        () => api.updateProject(businessId, id, change),
+        "The project couldn't be saved.",
       ),
-    removeFromSpace: (spaceId: string, itemId: string) =>
+    addToProject: (projectId: string, kind: ProjectItem["kind"], ref: string) =>
       void refreshAfter(
-        () => api.removeFromSpace(businessId, spaceId, itemId),
+        () => api.addToProject(businessId, projectId, kind, ref),
+        "That couldn't be added to the project.",
+      ),
+    removeFromProject: (projectId: string, itemId: string) =>
+      void refreshAfter(
+        () => api.removeFromProject(businessId, projectId, itemId),
         "That couldn't be removed.",
       ),
+    installApp: async (app: string, on: boolean) => {
+      try {
+        await api.installApp(businessId, app, on);
+      } catch (error) {
+        failed(error);
+        setNotice(on ? "That app couldn't be installed." : "That app couldn't be removed.");
+      }
+      await loadApps(businessId);
+    },
+    pinApp: async (app: string, pinned: boolean) => {
+      setApps((all) =>
+        all.status === "loaded"
+          ? loaded(all.value.map((a) => (a.id === app ? { ...a, pinned } : a)))
+          : all,
+      );
+      await api.pinApp(businessId, app, pinned).catch(failed);
+      await loadApps(businessId);
+    },
     openArtifact: (id: string) => {
       if (artifactTexts[id]) return;
       setArtifactTexts((texts) => ({ ...texts, [id]: loading }));
@@ -711,7 +884,7 @@ function useWorkspaceState() {
     }) => {
       const hired = await api.hire(businessId, input);
       await loadBusiness(businessId);
-      actions.selectPage({ kind: "employee", id: hired.id });
+      actions.message(hired.id);
       return hired;
     },
     /** Renames an employee or rewrites their responsibilities; false if the server refused. */
@@ -755,7 +928,7 @@ function useWorkspaceState() {
         return false;
       }
       await Promise.all([loadBusiness(businessId), loadWork(businessId)]);
-      actions.selectPage({ kind: "employee", id: successor });
+      actions.message(successor);
       return true;
     },
     /** Shows the new model at once and puts the old one back if the server refuses. */
@@ -816,9 +989,9 @@ function useWorkspaceState() {
       void loadBusiness(businessId);
       void loadWork(businessId);
       void loadSummaries(businessId);
+      void loadApps(businessId);
       for (const id of teamRef.current) void loadStatus(businessId, id);
       main.refresh();
-      panel.refresh();
     },
     /** Creates a business with its brief and starting team, then switches to it. */
     createBusiness: async (input: { name: string; brief: string; team: StartingRole[] }) => {
@@ -829,8 +1002,8 @@ function useWorkspaceState() {
       });
       await loadAccount();
       setBusinessId(created.business.id);
-      setPage({ kind: "today" });
-      setDestination("home");
+      setPlace({ kind: "home" });
+      setHistory([]);
     },
     signIn: async (token: string) => {
       await api.enroll(token);
@@ -848,12 +1021,22 @@ function useWorkspaceState() {
 
   const status = statusOf(operations?.id);
   const isRunning = runningOf(operations?.id);
+  const homeValue = valueOf(home);
+  /** Whether the place's permanent view has anything: an empty one is never shown. */
+  const hasPermanent =
+    place.kind !== "home" ||
+    Boolean(
+      homeValue &&
+      (homeValue.needsYou.length ||
+        homeValue.glance.moving.length ||
+        homeValue.glance.stuck.length),
+    );
+  const panelOpen = layers.length > 0 || (panels[place.kind] && hasPermanent);
   return {
     person,
     businesses,
     business,
     businessId,
-    viewing,
     employees,
     members,
     operations,
@@ -862,33 +1045,35 @@ function useWorkspaceState() {
     statuses,
     summaries,
     main,
-    panel,
-    selectedWork,
     work,
     decisions,
-    spaces,
+    projects,
+    apps,
+    home,
     memory,
     models,
     roles,
     access,
     artifactTexts,
-    page,
-    destination,
+    place,
+    history,
+    layers,
+    panelOpen,
+    hasPermanent,
+    wide: wide && layers.length > 0,
+    reference,
+    turns,
     sidebarVisible,
-    inspectorVisible,
-    expanded,
     paletteOpen,
     settingsOpen,
+    settingsSection,
     hireOpen,
+    projectOpen,
     taskDefaults,
-    employeeTab,
-    spaceTab,
-    workLayout,
     notice,
     signedOut,
     ownerPhoto,
     voice,
-    voiceTarget: target.key,
     conversationMode,
     volatileText,
     level,
@@ -898,7 +1083,9 @@ function useWorkspaceState() {
     runningOf,
     /** Whether an employee is working or about to answer something sent from here. */
     workingOf: (employeeId: string) =>
-      runningOf(employeeId) || answering(employeeId) || unfinished(valueOf(statusOf(employeeId))),
+      runningOf(employeeId) ||
+      main.working.includes(employeeId) ||
+      unfinished(valueOf(statusOf(employeeId))),
     unreadOf: (key: ConversationKey) => summaries[key]?.unread ?? 0,
     /** Work items the signed-in person follows, by id. */
     followed: Object.values(summaries)
@@ -906,6 +1093,7 @@ function useWorkspaceState() {
       .map((summary) => summary.key.slice("work:".length)),
     modelOf: (id: string) => valueOf(models)?.models.find((m) => m.id === id),
     employeeName: (id: string) => employees.find((e) => e.id === id)?.name ?? "A former employee",
+    artifactName,
     actions,
   };
 }

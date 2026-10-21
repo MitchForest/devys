@@ -92,3 +92,24 @@ export const employeeAssignments = (db: Database, businessId: string, employeeId
       [businessId, employeeId],
     ),
   );
+
+/** Work items with coding sessions, most recently started first: the Code app's work. */
+export const codedWork = (db: Database, businessId: string) =>
+  database(db, async (sql) =>
+    (
+      await sql.rows<{ commitment_id: string }>(
+        `SELECT commitment_id FROM assignments
+         WHERE business_id = $1 AND session_id IS NOT NULL
+         GROUP BY commitment_id ORDER BY max(created_at) DESC`,
+        [businessId],
+      )
+    ).map((row) => row.commitment_id),
+  );
+
+/** Whether the business has any coding assignment: the Code app has records to show. */
+export const hasAssignments = (db: Database, businessId: string) =>
+  database(db, async (sql) =>
+    Boolean(
+      await sql.row("SELECT 1 FROM assignments WHERE business_id = $1 LIMIT 1", [businessId]),
+    ),
+  );

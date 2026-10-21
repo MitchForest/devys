@@ -10,6 +10,7 @@ import { Spinner } from "../design/spinner.tsx";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { ProjectFields } from "../panel/overview.tsx";
 
 /**
  * Hiring: choose a role template, adjust its name, responsibilities and model, see the
@@ -202,14 +203,14 @@ export function HireSheet() {
 /** The end of the chosen day, in the owner's time zone. */
 export const endOfDay = (date: string) => new Date(`${date}T23:59:00`).toISOString();
 
-/** A new task: what, who owns it, why, by when and where it is shown. */
+/** A new task: what, who owns it, why, by when and which project it is in. Its thread opens. */
 export function NewTaskDialog() {
-  const { taskDefaults, actions, employees, spaces, operations } = useWorkspace();
+  const { taskDefaults, actions, employees, projects, operations } = useWorkspace();
   const [title, setTitle] = useState("");
   const [owner, setOwner] = useState("");
   const [objective, setObjective] = useState("");
   const [due, setDue] = useState("");
-  const [spaceId, setSpaceId] = useState("");
+  const [projectId, setProjectId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   useEffect(() => {
@@ -218,7 +219,7 @@ export function NewTaskDialog() {
     setObjective("");
     setDue("");
     setOwner(taskDefaults.owner ?? operations?.id ?? "");
-    setSpaceId(taskDefaults.spaceId ?? "");
+    setProjectId(taskDefaults.projectId ?? "");
     setError(undefined);
     setBusy(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -233,7 +234,7 @@ export function NewTaskDialog() {
         owner,
         ...(objective.trim() ? { objective: objective.trim() } : {}),
         ...(due ? { dueAt: endOfDay(due) } : {}),
-        ...(spaceId ? { spaceId } : {}),
+        ...(projectId ? { projectId } : {}),
       })
       .then(() => actions.closeNewTask())
       .catch(() => setError("The task couldn't be saved. Try again."))
@@ -292,16 +293,16 @@ export function NewTaskDialog() {
               onChange={(event) => setObjective(event.target.value)}
             />
           </Field>
-          <Field label="Space">
+          <Field label="Project">
             <select
               className={fieldClass}
-              value={spaceId}
-              onChange={(event) => setSpaceId(event.target.value)}
+              value={projectId}
+              onChange={(event) => setProjectId(event.target.value)}
             >
-              <option value="">No space</option>
-              {(valueOf(spaces) ?? []).map((space) => (
-                <option key={space.id} value={space.id}>
-                  {space.name}
+              <option value="">No project</option>
+              {(valueOf(projects) ?? []).map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
                 </option>
               ))}
             </select>
@@ -320,6 +321,26 @@ export function NewTaskDialog() {
             </DevysButton>
           </div>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** A new project: a name and, optionally, its goal, deadline, budget, lead and team. */
+export function NewProjectDialog() {
+  const { projectOpen, actions } = useWorkspace();
+  return (
+    <Dialog open={projectOpen} onOpenChange={actions.setProjectOpen}>
+      <DialogContent className="w-[480px] max-w-[calc(100%-2rem)] gap-4 rounded-card! bg-sheet p-6 shadow-raised sm:max-w-[480px]">
+        <DialogTitle className="text-heading font-semibold text-ink">New project</DialogTitle>
+        {projectOpen && (
+          <ProjectFields
+            initial={{}}
+            submitLabel="Create project"
+            cancel={() => actions.setProjectOpen(false)}
+            submit={(project) => actions.createProject(project)}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

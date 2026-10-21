@@ -37,12 +37,22 @@ test("enrollment is single-use; downloads and sessions enforce business isolatio
     await page.getByLabel("Enrollment code").fill(token);
     await page.getByRole("button", { name: "Sign in" }).click();
     await expect(
-      page.getByRole("heading", { name: /^Good (morning|afternoon|evening), Alex\.$/ }),
+      page.getByRole("navigation", { name: "Sidebar" }).getByRole("button", { name: /^Home/ }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Apps", exact: true }).click();
-    await page.getByRole("button", { name: "Connections", exact: true }).click();
-    await expect(page.getByRole("region", { name: "Google Drive" })).toBeVisible();
-    await expect(page.getByText("Google Drive setup is pending.")).toBeVisible();
+    await expect(page.getByLabel("Message Head of Operations")).toBeVisible();
+    await page.getByRole("button", { name: "Account" }).click();
+    await page.getByRole("menuitem", { name: "Apps & connections…" }).click();
+    const settings = page.getByRole("dialog", { name: "Settings" });
+    await expect(settings.getByRole("region", { name: "Google Drive" })).toBeVisible();
+    await expect(settings.getByText("Google Drive setup is pending.")).toBeVisible();
+    await expect(page.getByText("private.txt")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    // Another business's records never show, in its Documents app either.
+    await page
+      .getByRole("navigation", { name: "Sidebar" })
+      .getByRole("button", { name: "Documents" })
+      .click();
+    await expect(page.getByRole("region", { name: "Documents" })).toBeVisible();
     await expect(page.getByText("private.txt")).toHaveCount(0);
     const status = (path: string) =>
       page.evaluate(async (target) => (await fetch(target)).status, path);
@@ -79,9 +89,15 @@ test("enrollment is single-use; downloads and sessions enforce business isolatio
     });
     expect(consumed.status()).toBe(401);
     await other.close();
-    await page.screenshot({ path: "test-results/private-workspace-desktop.png", fullPage: true });
+    await page.screenshot({
+      path: "test-results/private-workspace-desktop.png",
+      fullPage: true,
+    });
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.screenshot({ path: "test-results/private-workspace-mobile.png", fullPage: true });
+    await page.screenshot({
+      path: "test-results/private-workspace-mobile.png",
+      fullPage: true,
+    });
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true);

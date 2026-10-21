@@ -419,7 +419,14 @@ export async function startHost(options: HostOptions) {
         const listed = await Promise.all(
           entries.map(async (entry) => {
             const child = join(path, entry.name);
-            const kind = entry.isDirectory() ? "directory" : entry.isFile() ? "file" : "other";
+            // A folder holding a Git repository is the Code app's, not a document folder.
+            const kind = entry.isDirectory()
+              ? (await stat(join(child, ".git")).catch(() => undefined))
+                ? "repository"
+                : "directory"
+              : entry.isFile()
+                ? "file"
+                : "other";
             const size =
               kind === "file" ? ((await stat(child).catch(() => undefined))?.size ?? 0) : 0;
             return { name: entry.name, path: child, kind, size };

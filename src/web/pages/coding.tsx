@@ -2,7 +2,7 @@ import { Code2, SquareTerminal } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { api, type CodingSession, type Commitment, type TerminalSession } from "../app/api.ts";
 import { openTerminalWindow } from "./terminal-window.tsx";
-import { useWorkspace } from "../app/workspace.tsx";
+import { useWorkspace, valueOf } from "../app/workspace.tsx";
 import { DevysButton } from "../design/buttons.tsx";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -50,11 +50,9 @@ function useSessions(businessId: string, workId: string) {
 
 /** The coding sessions on a work item, each opening its session view. */
 export function CodingSessions({ item }: { item: Commitment }) {
-  const { businessId } = useWorkspace();
-  const { sessions, reload } = useSessions(businessId, item.id);
-  const [open, setOpen] = useState<string | null>(null);
+  const { businessId, actions } = useWorkspace();
+  const { sessions } = useSessions(businessId, item.id);
   if (!sessions.length) return null;
-  const selected = sessions.find((session) => session.id === open);
   return (
     <div className="flex flex-col gap-1" data-testid="coding-sessions">
       <div className="flex items-center gap-2">
@@ -75,7 +73,9 @@ export function CodingSessions({ item }: { item: Commitment }) {
           <button
             key={session.id}
             type="button"
-            onClick={() => setOpen(session.id)}
+            onClick={() =>
+              actions.openLayer({ kind: "session", workId: item.id, sessionId: session.id })
+            }
             className="flex items-center gap-2 rounded-[8px] px-2 py-1.5 text-left hover:bg-sheet-tint"
           >
             <Code2 className="size-4 shrink-0 text-ink-3" />
@@ -96,17 +96,21 @@ export function CodingSessions({ item }: { item: Commitment }) {
           </button>
         );
       })}
-      {selected && (
-        <Suspense fallback={null}>
-          <SessionView
-            item={item}
-            session={selected}
-            onClose={() => setOpen(null)}
-            onChanged={() => void reload()}
-          />
-        </Suspense>
-      )}
     </div>
+  );
+}
+
+/** One coding session as a layer, read live from its work item's sessions. */
+export function SessionLayer({ workId, sessionId }: { workId: string; sessionId: string }) {
+  const { businessId, work } = useWorkspace();
+  const { sessions, reload } = useSessions(businessId, workId);
+  const item = valueOf(work)?.find((w) => w.id === workId);
+  const session = sessions.find((each) => each.id === sessionId);
+  if (!item || !session) return <p className="p-4 text-body text-ink-3">Loading…</p>;
+  return (
+    <Suspense fallback={null}>
+      <SessionView item={item} session={session} onChanged={() => void reload()} />
+    </Suspense>
   );
 }
 
@@ -137,7 +141,7 @@ export function NewCodingSession({ open, onClose }: { open: boolean; onClose: ()
           : { newRepository: repository.trim() }),
       });
       actions.refresh();
-      actions.openWork(started.work);
+      actions.openThread(started.work);
       onClose();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The session couldn't start.");

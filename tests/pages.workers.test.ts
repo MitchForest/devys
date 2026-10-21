@@ -36,11 +36,11 @@ it("an employee publishes a page, sees it announced where it is answering, and e
   const published = (await Effect.runPromise(
     named("artifactPage")
       .execute({ title: "Signups by week", html: "<h1>Signups</h1><p>12</p>" })
-      .pipe(as(scope, { conversation: "space:launch" })),
+      .pipe(as(scope, { conversation: "project:launch" })),
   )) as { id: string };
   expect(cards).toEqual([
     {
-      conversation: "space:launch",
+      conversation: "project:launch",
       text: "Published a page: Signups by week",
       ref: `artifact:${published.id}`,
     },

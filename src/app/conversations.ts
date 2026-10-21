@@ -18,14 +18,14 @@ import { activePerson, employeesOf } from "../identity/service.ts";
 import { capability, CapabilityError, Invocation } from "../protocol/capability.ts";
 import { rpc } from "../protocol/rpc.ts";
 import { commitment } from "../work/service.ts";
-import { spaces } from "../work/spaces.ts";
+import { project } from "../work/projects.ts";
 
 /** How much of a conversation an addressed employee is shown before the new message. */
 const catchUp = 20;
 
 /**
  * What a conversation key names in this business: its default responder (a DM's employee,
- * a space's lead, a work item's owner) and the line that tells an employee where a delivery
+ * a project's lead, a work item's owner) and the line that tells an employee where a delivery
  * comes from. Undefined when it names nothing that can be talked in.
  */
 async function resolve(env: Env, businessId: string, key: ConversationKey) {
@@ -37,16 +37,18 @@ async function resolve(env: Env, businessId: string, key: ConversationKey) {
         ? { defaultResponder: ref as string | undefined, place: "" }
         : undefined;
     }
-    case "space": {
-      const space = (await Effect.runPromise(spaces(env.HYPERDRIVE, businessId))).find(
-        (candidate) => candidate.id === ref,
-      );
-      return space
-        ? {
-            defaultResponder: space.lead_employee_id ?? undefined,
-            place: `In the space "${space.name}"${space.purpose ? ` (${space.purpose})` : ""}.`,
-          }
-        : undefined;
+    case "project": {
+      const found = await Effect.runPromise(project(env.HYPERDRIVE, businessId, ref));
+      if (!found) return undefined;
+      const about = [
+        found.goal && `goal: ${found.goal}`,
+        found.deadline && `deadline ${found.deadline}`,
+      ].filter(Boolean);
+      return {
+        defaultResponder: found.lead_employee_id ?? undefined,
+        // A channel stays readable: progress goes in each work item's thread.
+        place: `In the project "${found.name}"${about.length ? ` (${about.join("; ")})` : ""}. This is its channel: say results, hand-offs and questions here; post progress in the work item's own thread.`,
+      };
     }
     case "work": {
       const item = await Effect.runPromise(commitment(env.HYPERDRIVE, businessId, ref));

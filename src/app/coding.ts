@@ -11,6 +11,7 @@ import {
 import {
   assignment,
   assignmentsFor,
+  codedWork,
   recordAssignment,
   recordStarted,
 } from "../delegates/service.ts";
@@ -39,6 +40,8 @@ export async function codingRoute(
   delegates: (scope: Scope) => Delegates = modeOf(env).delegates,
 ) {
   const { person, business, trusted, path } = access;
+  if (path === "/coding" && request.method === "GET")
+    return Response.json({ work: await Effect.runPromise(codedWork(env.HYPERDRIVE, business.id)) });
   if (path === "/coding" && request.method === "POST")
     return trusted ? startOwned(request, env, access, delegates) : forbidden();
   const match =

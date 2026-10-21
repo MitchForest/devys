@@ -141,7 +141,7 @@ export async function employeeRoute(
     );
     if (
       typeof input.targetId !== "string" ||
-      !/^pi-\d{1,15}$/.test(input.targetId) ||
+      !/^[0-9a-f-]{36}$/.test(input.targetId) ||
       typeof input.targetText !== "string" ||
       typeof input.emoji !== "string" ||
       !input.emoji ||

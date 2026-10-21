@@ -18,6 +18,7 @@ import { Effect } from "effect";
 import { delegateCapabilities } from "../delegates/capabilities.ts";
 import { codingIncomplete, delegateDependencies } from "./delegates.ts";
 import type { Capability } from "../protocol/capability.ts";
+import { businessFile } from "./files.ts";
 /** Composition only: implementations and SQL belong to their domains. */
 export function capabilities(
   env: Env,
@@ -45,6 +46,7 @@ export function capabilities(
         ),
       async (businessId, artifactId) =>
         Boolean(await Effect.runPromise(artifactLocation(env.HYPERDRIVE, businessId, artifactId))),
+      (businessId, path) => businessFile(env, businessId, path) !== undefined,
       (businessId, work) => codingIncomplete(env, businessId, work),
     ),
   ];

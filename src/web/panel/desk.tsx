@@ -10,18 +10,18 @@ import {
   UserMinus,
 } from "lucide-react";
 import { EmployeePortrait } from "../design/portrait.tsx";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { api, type Employee, type Grant, type RuntimeState } from "../app/api.ts";
 import { accessTitle, isOpen, moodOf, templateTitle } from "../app/names.ts";
 import { useWorkspace, valueOf } from "../app/workspace.tsx";
 import { Field, fieldClass } from "../design/fields.tsx";
-import { WorkRow } from "./work.tsx";
+import { WorkRow } from "../pages/work.tsx";
+import { PanelBody, PanelHeader, PanelSection } from "./panel.tsx";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { dollars, ModelPicker, perTurn, spend } from "../design/model-picker.tsx";
 import { DevysButton } from "../design/buttons.tsx";
-import { Card, EmptyNote, LiveTag, PageBody, SectionHeader } from "../design/primitives.tsx";
+import { Card, EmptyNote, LiveTag } from "../design/primitives.tsx";
 import { Spinner } from "../design/spinner.tsx";
-import { SegmentedTabs } from "../design/tabs.tsx";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,79 +44,125 @@ export function PausedBanner({ employee }: { employee: Employee }) {
   );
 }
 
-export function EmployeePage({ id }: { id?: string }) {
+/**
+ * A direct chat's permanent view: the employee's desk. What it is on now and what it just
+ * finished stay open; who it is, its model, access and memory unfold on demand.
+ */
+export function Desk({ employeeId, close }: { employeeId: string; close: () => void }) {
   const state = useWorkspace();
-  const { employees, employeeTab, actions } = state;
-  const employee = employees.find((e) => e.id === id) ?? employees[0];
+  const { employees, actions } = state;
+  const employee = employees.find((e) => e.id === employeeId);
   if (!employee)
     return (
-      <PageBody>
-        <EmptyNote>No employees yet.</EmptyNote>
-      </PageBody>
+      <section className="flex h-full flex-col">
+        <PanelHeader title="Desk" close={close} />
+        <PanelBody>
+          <EmptyNote>This employee no longer works here.</EmptyNote>
+        </PanelBody>
+      </section>
     );
   const isOperations = employee.id === state.operations?.id;
   const owned = (valueOf(state.work) ?? []).filter(
     (item) => item.owner_employee_id === employee.id,
   );
+  const open = owned.filter((item) => isOpen(item.state));
+  const done = owned
+    .filter((item) => item.state === "completed")
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+    .slice(0, 5);
   return (
-    <PageBody>
-      <div className="flex flex-wrap items-center gap-4">
-        <EmployeePortrait
-          employee={employee}
-          size={56}
-          mood={moodOf(state, employee)}
-          label={employee.name}
-        />
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <EditableName key={employee.id} employee={employee} />
-          {templateTitle(employee.template) !== employee.name && (
-            <span className="text-body text-ink-2">{templateTitle(employee.template)}</span>
-          )}
-        </div>
-        <span className="ml-auto" />
-        <div className="flex items-center gap-2">
-          <DevysButton compact onClick={() => actions.message(employee.id)}>
-            Message
+    <section aria-label={`${employee.name}'s desk`} className="flex h-full flex-col">
+      <PanelHeader title={<EditableName key={employee.id} employee={employee} />} close={close} />
+      <PanelBody>
+        <div className="flex items-center gap-3">
+          <EmployeePortrait
+            employee={employee}
+            size={44}
+            mood={moodOf(state, employee)}
+            label={employee.name}
+          />
+          <div className="flex min-w-0 flex-col gap-0.5">
+            {templateTitle(employee.template) !== employee.name && (
+              <span className="text-control text-ink">{templateTitle(employee.template)}</span>
+            )}
+            <span className="text-detail text-ink-3">
+              {employee.paused
+                ? "Paused"
+                : state.workingOf(employee.id)
+                  ? "Working"
+                  : open.length
+                    ? `${open.length} open`
+                    : "Free"}
+            </span>
+          </div>
+          <span className="ml-auto" />
+          <DevysButton compact kind="quiet" onClick={() => actions.togglePause(employee)}>
+            {employee.paused ? "Resume" : "Pause"}
           </DevysButton>
-          <DevysButton compact onClick={() => actions.newTask({ owner: employee.id })}>
-            <Plus /> New task
-          </DevysButton>
-          {employee.template !== "operations" && <RetireButton employee={employee} />}
         </div>
-      </div>
-      <ModelRow employee={employee} />
-      <SegmentedTabs
-        label="Employee"
-        value={employeeTab}
-        options={[
-          { value: "activity", title: "Activity" },
-          { value: "responsibilities", title: "Responsibilities" },
-          { value: "memory", title: "Memory" },
-          { value: "access", title: "Access" },
-        ]}
-        onChange={actions.setEmployeeTab}
-      />
-      {employee.paused && <PausedBanner employee={employee} />}
-      {employeeTab === "activity" ? (
-        <div className="flex flex-col gap-2">
-          <SectionHeader title="Open work" count={owned.filter((i) => isOpen(i.state)).length} />
-          {owned.filter((i) => isOpen(i.state)).length === 0 && (
-            <EmptyNote>Nothing open. Give {employee.name} a task.</EmptyNote>
+        {employee.paused && <PausedBanner employee={employee} />}
+        <PanelSection
+          title="Now"
+          count={open.length}
+          action={
+            <button
+              type="button"
+              onClick={() => actions.newTask({ owner: employee.id })}
+              className="text-caption text-ink-3 hover:text-ink-2"
+            >
+              <Plus className="inline size-3" /> Task
+            </button>
+          }
+        >
+          {open.length === 0 ? (
+            <span className="text-detail text-ink-3">Nothing open.</span>
+          ) : (
+            open.map((item) => <WorkRow key={item.id} item={item} compact />)
           )}
-          {owned
-            .filter((i) => isOpen(i.state))
-            .map((item) => (
-              <WorkRow key={item.id} item={item} />
+        </PanelSection>
+        {done.length > 0 && (
+          <PanelSection title="Recently done">
+            {done.map((item) => (
+              <WorkRow key={item.id} item={item} compact />
             ))}
+          </PanelSection>
+        )}
+        <div className="flex flex-col border-t border-hairline">
+          <Disclosure title="Responsibilities">
+            <ResponsibilitiesPane key={employee.id} employee={employee} />
+          </Disclosure>
+          <Disclosure title="Model">
+            <ModelRow employee={employee} />
+          </Disclosure>
+          <Disclosure title="Access">
+            <AccessPane employee={employee} />
+          </Disclosure>
+          {isOperations && (
+            <Disclosure title="Memory">
+              <MemoryPane isOperations={isOperations} />
+            </Disclosure>
+          )}
         </div>
-      ) : employeeTab === "responsibilities" ? (
-        <ResponsibilitiesPane key={employee.id} employee={employee} />
-      ) : employeeTab === "memory" ? (
-        <MemoryPane isOperations={isOperations} />
-      ) : (
-        <AccessPane employee={employee} />
-      )}
-    </PageBody>
+        {employee.template !== "operations" && (
+          <div>
+            <RetireButton employee={employee} />
+          </div>
+        )}
+      </PanelBody>
+    </section>
+  );
+}
+
+/** A section that unfolds on demand, so the desk shows only what is moving. */
+function Disclosure({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <details className="group border-b border-hairline py-2.5">
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 text-control text-ink-2 hover:text-ink [&::-webkit-details-marker]:hidden">
+        <ChevronDown className="size-3.5 -rotate-90 text-ink-3 transition-transform group-open:rotate-0" />
+        {title}
+      </summary>
+      <div className="pt-3">{children}</div>
+    </details>
   );
 }
 
@@ -152,13 +198,13 @@ function EditableName({ employee }: { employee: Employee }) {
               setEditing(false);
             }
           }}
-          className={cn(fieldClass, "py-0.5 text-title font-semibold")}
+          className={cn(fieldClass, "py-0.5 text-control font-semibold")}
         />
       </form>
     );
   return (
     <div className="group/name flex items-center gap-1.5">
-      <h1 className="text-title font-semibold text-ink">{employee.name}</h1>
+      <span className="truncate text-control font-semibold text-ink">{employee.name}</span>
       <button
         type="button"
         aria-label={`Rename ${employee.name}`}

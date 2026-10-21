@@ -23,7 +23,7 @@ export interface SkillCatalog {
 export interface FileEntry {
   name: string;
   path: string;
-  kind: "file" | "directory" | "other";
+  kind: "file" | "directory" | "repository" | "other";
   size: number;
 }
 

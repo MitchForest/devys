@@ -23,7 +23,9 @@ import { hire, hireInput } from "./team.ts";
 import { body, forbidden, label, notFound } from "./request.ts";
 import { employeeRoute, lookRoute } from "./employees.ts";
 import { decisionRoute, workRoute } from "./work.ts";
-import { spaceRoute } from "./spaces.ts";
+import { projectRoute } from "./projects.ts";
+import { appsRoute } from "./apps.ts";
+import { homeRoute } from "./home.ts";
 import { googleRoute } from "./google-route.ts";
 import { conversationRoute } from "./conversation-route.ts";
 
@@ -118,7 +120,10 @@ export async function businessRoute(
   if (path === "/work" || path.startsWith("/work/")) return workRoute(request, env, access);
   if (path === "/decisions" || path.startsWith("/decisions/"))
     return decisionRoute(request, env, access);
-  if (path === "/spaces" || path.startsWith("/spaces/")) return spaceRoute(request, env, access);
+  if (path === "/projects" || path.startsWith("/projects/"))
+    return projectRoute(request, env, access);
+  if (path === "/apps" || path.startsWith("/apps/")) return appsRoute(request, env, access);
+  if (path === "/home" && method === "GET") return homeRoute(env, access);
   if (path === "/conversations" || path.startsWith("/conversations/"))
     return conversationRoute(request, env, access);
   const artifactId = /^\/artifacts\/([a-f0-9-]{36})$/.exec(path)?.[1];
