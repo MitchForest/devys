@@ -5,7 +5,6 @@ import { type Business, type Person } from "../identity/contract.ts";
 import {
   activeEmployee,
   employeesOf,
-  isMachineOwner,
   membersOf,
   setBusinessLook,
   updateBusiness,
@@ -19,7 +18,8 @@ import { terminalRoute } from "./terminals.ts";
 import { filesRoute } from "./files.ts";
 import { exportBusiness } from "./export.ts";
 import { memoryFor } from "./memory.ts";
-import { hire, hireInput } from "./team.ts";
+import { hire, hireInput } from "../identity/team.ts";
+import { hiring } from "./team.ts";
 import { body, forbidden, label, notFound } from "./request.ts";
 import { employeeRoute, lookRoute } from "./employees.ts";
 import { decisionRoute, workRoute } from "./work.ts";
@@ -81,9 +81,10 @@ export async function businessRoute(
       responsibilities: string;
       model: string;
     }>(request, 8_000);
-    const hireable = hireInput(input);
+    const team = hiring(() => capabilities(env));
+    const hireable = hireInput(input, team);
     if (typeof hireable === "string") return new Response(hireable, { status: 400 });
-    return Response.json(await hire(env.HYPERDRIVE, business.id, hireable, capabilities(env)), {
+    return Response.json(await hire(env.HYPERDRIVE, business.id, hireable, team), {
       status: 201,
     });
   }
@@ -105,8 +106,7 @@ export async function businessRoute(
   // Coding, terminals, files and the browser run on the Mac as its owner.
   if (
     /^\/(coding|terminals|files|browser)(\/|$)|^\/work\/[^/]+\/sessions/.test(path) &&
-    modeOf(env).host &&
-    !(await Effect.runPromise(isMachineOwner(env.HYPERDRIVE, person.id)))
+    !(await modeOf(env).mayUseMachine(person.id))
   )
     return forbidden();
   const browsing = await browserRoute(request, env, access);

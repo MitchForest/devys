@@ -10,7 +10,6 @@ import {
   businessesFor,
   channelBinding,
   createBusiness,
-  isMachineOwner,
   memberBusiness,
 } from "../identity/service.ts";
 import { atomically } from "../data/database.ts";
@@ -18,9 +17,11 @@ import { defaultApps } from "./apps.ts";
 import { install } from "../apps/service.ts";
 import { modeOf } from "./mode.ts";
 import { body, RequestError } from "./request.ts";
+import { Unavailable } from "../protocol/host.ts";
 import { sameOrigin } from "../protocol/http.ts";
 import { grantAll } from "../authority/service.ts";
-import { hire, hireInput, roleTemplate, roleTemplates, templateGrants } from "./team.ts";
+import { hire, hireInput, roleTemplate, roleTemplates } from "../identity/team.ts";
+import { hiring, templateGrants } from "./team.ts";
 import { capabilities } from "./capabilities.ts";
 import { businessRoute } from "./routes.ts";
 import { codingEventsRoute } from "./coding.ts";
@@ -33,6 +34,7 @@ export async function apiRoute(request: Request, env: Env): Promise<Response | u
     return await route(request, env);
   } catch (error) {
     if (error instanceof RequestError) return new Response(error.message, { status: error.status });
+    if (error instanceof Unavailable) return new Response(error.message, { status: 503 });
     throw error;
   }
 }
@@ -67,13 +69,14 @@ async function route(request: Request, env: Env): Promise<Response | undefined> 
     return Response.json({
       roles: roleTemplates
         .filter((template) => template.id !== "operations")
-        .map(({ id, name, summary, responsibilities, capabilities: granted }) => ({
+        .map(({ id, name, summary, responsibilities }) => ({
           id,
           name,
           summary,
           responsibilities,
-          capabilities:
-            granted === "all" ? capabilities(env).map((contract) => contract.name) : granted,
+          capabilities: templateGrants(id, capabilities(env)).map(
+            (granted) => granted.capability.name,
+          ),
         })),
     });
   if (path === "/api/devices" || path.startsWith("/api/devices/"))
@@ -90,7 +93,7 @@ async function route(request: Request, env: Env): Promise<Response | undefined> 
     });
   if (path === "/api/businesses" && request.method === "POST") {
     if (!trusted) return new Response("Forbidden", { status: 403 });
-    if (modeOf(env).host && !(await Effect.runPromise(isMachineOwner(env.HYPERDRIVE, person.id))))
+    if (!(await modeOf(env).mayUseMachine(person.id)))
       return new Response("On a Mac in local mode only its owner creates businesses", {
         status: 403,
       });
@@ -108,6 +111,7 @@ async function route(request: Request, env: Env): Promise<Response | undefined> 
       });
     const operations = roleTemplate("operations")!;
     const catalog = capabilities(env);
+    const hirer = hiring(() => catalog);
     // The business, its Head of Operations, their grants and the starting team, or nothing.
     const { created, hired } = await atomically(env.HYPERDRIVE, async (db) => {
       const created = await Effect.runPromise(
@@ -122,15 +126,15 @@ async function route(request: Request, env: Env): Promise<Response | undefined> 
         grantAll(
           db,
           { businessId: created.business.id, employeeId: created.operations.id },
-          templateGrants(operations, catalog),
+          templateGrants(operations.id, catalog),
         ),
       );
       await Effect.runPromise(install(db, created.business.id, defaultApps));
       const hired = [];
       for (const template of team) {
-        const input = hireInput({ template: template!.id });
+        const input = hireInput({ template: template!.id }, hirer);
         if (typeof input !== "string")
-          hired.push(await hire(db, created.business.id, input, catalog));
+          hired.push(await hire(db, created.business.id, input, hirer));
       }
       return { created, hired };
     });

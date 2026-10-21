@@ -3,7 +3,7 @@ import type { Database } from "../../data/database.ts";
 import type { Scope } from "../../identity/contract.ts";
 import { stableId } from "../../protocol/bytes.ts";
 import { capability, CapabilityError, Invocation } from "../../protocol/capability.ts";
-import { Ref, ref } from "../../protocol/ref.ts";
+import { Ref, RefOf, ref } from "../../protocol/ref.ts";
 import { rpc, stored } from "../../protocol/rpc.ts";
 import {
   providers,
@@ -39,13 +39,13 @@ export const providerName = (provider: Provider) =>
   provider === "codex" ? "Codex" : "Claude Code";
 
 const Text = (max: number) => Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(max));
-const CodingSessionId = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9-]{1,64}$/));
+const CodingSessionRef = RefOf("code", "session");
 const ProviderInput = Schema.Literals(providers);
 const GitHubName = Schema.String.check(
   Schema.isPattern(/^[A-Za-z0-9-]{1,39}\/(?!.*\.\.)[A-Za-z0-9._-]{1,100}$/),
 );
 const Status = Schema.Struct({
-  session: Schema.String,
+  ref: Ref,
   provider: Schema.String,
   purpose: Schema.String,
   branch: Schema.NullOr(Schema.String),
@@ -88,7 +88,7 @@ export function codingCapabilities(dependencies: CodingDependencies) {
       if (!found || found.work_item_id !== workItemId || !found.provider_session_id)
         return yield* new CapabilityError({
           code: "invalid_input",
-          message: "No coding session with that id on this work item",
+          message: "No such coding session on this work item",
         });
       // A session is steered by the employee who started it, or by Operations.
       const scope = { businessId: invocation.businessId, employeeId: invocation.employeeId };
@@ -106,7 +106,7 @@ export function codingCapabilities(dependencies: CodingDependencies) {
     rpc(async () => {
       const status = await dependencies.coding(scope).inspect(item.id);
       return {
-        session: item.id,
+        ref: ref("code", "session", item.id),
         provider: item.provider,
         purpose: item.purpose,
         branch: item.branch,
@@ -119,7 +119,7 @@ export function codingCapabilities(dependencies: CodingDependencies) {
     capability({
       name: "codingStart",
       description:
-        "Start a coding session on this work item with Codex or Claude Code. It works in its own git worktree of the repository (an absolute path on the owner's Mac), of the business's GitHub repository (cloneRepository: owner/name, cloned into the business folder the first time), or of a new empty repository (newRepository: a folder name). Write the objective as a complete brief: what to build or change, the acceptance checks, and anything it must not do. It runs on its own; you are told when its turn ends. purpose 'review' starts a read-only session on another coding session's worktree (pass its id as reviews).",
+        "Start a coding session on this work item with Codex or Claude Code. It works in its own git worktree of the repository (an absolute path on the owner's Mac), of the business's GitHub repository (cloneRepository: owner/name, cloned into the business folder the first time), or of a new empty repository (newRepository: a folder name). Write the objective as a complete brief: what to build or change, the acceptance checks, and anything it must not do. It runs on its own; you are told when its turn ends. purpose 'review' starts a read-only session on another coding session's worktree (pass its ref as reviews). Steer, accept, publish and deploy a session by the ref this returns.",
       effect: "change",
       replay: "idempotent",
       constraints: {
@@ -154,14 +154,9 @@ export function codingCapabilities(dependencies: CodingDependencies) {
         ),
         cloneRepository: Schema.optional(GitHubName),
         purpose: Schema.optional(Schema.Literals(["build", "review"])),
-        reviews: Schema.optional(CodingSessionId),
+        reviews: Schema.optional(CodingSessionRef),
       }),
-      output: Schema.Struct({
-        session: Schema.String,
-        branch: Schema.String,
-        worktree: Schema.String,
-        ref: Ref,
-      }),
+      output: Schema.Struct({ ref: Ref, branch: Schema.String, worktree: Schema.String }),
       execute: (input) =>
         Effect.gen(function* () {
           const { invocation, workItemId } = yield* workItem;
@@ -211,20 +206,19 @@ export function codingCapabilities(dependencies: CodingDependencies) {
           );
           yield* stored(recordStarted(db, invocation.businessId, id, started));
           return {
-            session: id,
+            ref: ref("code", "session", id),
             branch: started.branch,
             worktree: started.worktree,
-            ref: ref("code", "session", id),
           };
         }),
     }),
     capability({
       name: "codingStatus",
       description:
-        "Show this work item's coding sessions, or one of them: state, its latest reply, and what changed in its worktree.",
+        "Show this work item's coding sessions, or one of them (its ref): each one's ref, state, latest reply, and what changed in its worktree.",
       effect: "read",
       replay: "read",
-      input: Schema.Struct({ session: Schema.optional(CodingSessionId) }),
+      input: Schema.Struct({ session: Schema.optional(CodingSessionRef) }),
       output: Schema.Struct({ sessions: Schema.Array(Status) }),
       execute: ({ session: id }) =>
         Effect.gen(function* () {
@@ -241,10 +235,10 @@ export function codingCapabilities(dependencies: CodingDependencies) {
     capability({
       name: "codingSend",
       description:
-        "Tell a coding session something: while it works this steers the running turn; otherwise it starts its next turn. Be specific about what to change and how to verify it.",
+        "Tell a coding session (its ref) something: while it works this steers the running turn; otherwise it starts its next turn. Be specific about what to change and how to verify it.",
       effect: "change",
       replay: "reconcile",
-      input: Schema.Struct({ session: CodingSessionId, text: Text(8000) }),
+      input: Schema.Struct({ session: CodingSessionRef, text: Text(8000) }),
       output: Schema.Struct({ steered: Schema.Boolean }),
       execute: ({ session: id, text }) =>
         Effect.gen(function* () {
@@ -264,10 +258,10 @@ export function codingCapabilities(dependencies: CodingDependencies) {
     capability({
       name: "codingStop",
       description:
-        "Interrupt a coding session's running turn. Its changes so far stay in its worktree.",
+        "Interrupt a coding session's running turn (name the session by its ref). Its changes so far stay in its worktree.",
       effect: "change",
       replay: "idempotent",
-      input: Schema.Struct({ session: CodingSessionId }),
+      input: Schema.Struct({ session: CodingSessionRef }),
       output: Schema.Struct({ interrupted: Schema.Boolean }),
       execute: ({ session: id }) =>
         Effect.gen(function* () {
@@ -280,11 +274,11 @@ export function codingCapabilities(dependencies: CodingDependencies) {
     capability({
       name: "codingAccept",
       description:
-        "Accept a coding session's work: Devys commits its worktree on its branch and runs the repository's check command (for example `bun run verify`) against that commit. You are told how the check ended, and the commit and result are recorded as evidence. Publishing (codingPublish), merging and deploying are separate.",
+        "Accept a coding session's work (by its ref): Devys commits its worktree on its branch and runs the repository's check command (for example `bun run verify`) against that commit. You are told how the check ended, and the commit and result are recorded as evidence. Publishing (codingPublish), merging and deploying are separate.",
       effect: "change",
       replay: "reconcile",
       input: Schema.Struct({
-        session: CodingSessionId,
+        session: CodingSessionRef,
         message: Text(500),
         check: Text(2000),
       }),
@@ -316,7 +310,7 @@ export function codingCapabilities(dependencies: CodingDependencies) {
     capability({
       name: "codingPublish",
       description:
-        "Publish a coding session's accepted work for review: Devys pushes the accepted commit to the session's branch on the business's GitHub repository (owner/name, which must be the repository's origin) and opens a pull request into the default branch, or returns the one already open. Accept the work and let its check pass first. Merging and deploying are separate decisions.",
+        "Publish a coding session's accepted work (by its ref) for review: Devys pushes the accepted commit to the session's branch on the business's GitHub repository (owner/name, which must be the repository's origin) and opens a pull request into the default branch, or returns the one already open. Accept the work and let its check pass first. Merging and deploying are separate decisions.",
       effect: "external",
       replay: "reconcile",
       constraints: {
@@ -328,7 +322,7 @@ export function codingCapabilities(dependencies: CodingDependencies) {
           repositories.some((name) => name.toLowerCase() === input.repository.toLowerCase()),
       },
       input: Schema.Struct({
-        session: CodingSessionId,
+        session: CodingSessionRef,
         repository: GitHubName,
         title: Text(200),
         body: Text(8000),
@@ -372,8 +366,8 @@ export function codingCapabilities(dependencies: CodingDependencies) {
       name: stage === "preview" ? "deployPreview" : "deployProduction",
       description:
         stage === "preview"
-          ? "Deploy a coding session's accepted, checked commit to a preview with the repository's own deploy command (for example `bunx wrangler deploy --env preview`), then check the URL it prints (or the one you give) answers. The result arrives in this work item. To roll back, name an earlier commit this work item accepted or deployed."
-          : "Deploy a coding session's accepted, checked commit to production with the repository's own production deploy command, then check its URL answers. The owner approves each production deploy. To roll back, name an earlier commit this work item accepted or deployed.",
+          ? "Deploy a coding session's accepted, checked commit (name the session by its ref) to a preview with the repository's own deploy command (for example `bunx wrangler deploy --env preview`), then check the URL it prints (or the one you give) answers. The result arrives in this work item. To roll back, name an earlier commit this work item accepted or deployed."
+          : "Deploy a coding session's accepted, checked commit (name the session by its ref) to production with the repository's own production deploy command, then check its URL answers. The owner approves each production deploy. To roll back, name an earlier commit this work item accepted or deployed.",
       effect: "external",
       replay: "reconcile",
       constraints: {
@@ -383,7 +377,7 @@ export function codingCapabilities(dependencies: CodingDependencies) {
         allows: ({ commands }, input) => !commands || commands.includes(input.command),
       },
       input: Schema.Struct({
-        session: CodingSessionId,
+        session: CodingSessionRef,
         command: Text(500),
         commit: Schema.optional(Schema.String.check(Schema.isPattern(/^[0-9a-f]{7,40}$/))),
         url: Schema.optional(Schema.String.check(Schema.isPattern(/^https:\/\/\S{1,500}$/))),

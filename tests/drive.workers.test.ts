@@ -8,8 +8,9 @@ import {
   disconnectGoogle,
   protect,
   driveScope,
+  googleConnection,
 } from "../src/connections/google.ts";
-import { listDrive, readDrive, selectDrive, writeDrive } from "../src/connections/drive.ts";
+import { listDrive, readDrive, selectDrive, writeDrive } from "../src/apps/documents/drive.ts";
 import { sha256 } from "../src/protocol/bytes.ts";
 const config = {
   HYPERDRIVE: db,
@@ -18,6 +19,7 @@ const config = {
   CONNECTIONS_KEY: "12".repeat(32),
   PUBLIC_URL: "https://devys.example",
 } as Env;
+const drive = { db, connection: googleConnection(config) };
 // `owner` is the business that holds the connection; `person` is the member who connected it.
 let owner: string, person: string, grant: string;
 const session = "ab".repeat(32);
@@ -108,13 +110,13 @@ it("selection checks provider permission, isolates businesses, and disconnect re
       return response({ id: "allowed", name: "Chosen", mimeType: "text/plain" });
     return new Response(null, { status: 403 });
   });
-  await expect(selectDrive(config, owner, ["denied"])).rejects.toThrow();
-  await selectDrive(config, owner, ["allowed"]);
-  expect(await listDrive(config, owner)).toHaveLength(1);
-  expect(await listDrive(config, "other-owner")).toEqual([]);
-  await expect(readDrive(config, owner, "unselected")).rejects.toThrow("Choose this file");
+  await expect(selectDrive(drive, owner, ["denied"])).rejects.toThrow();
+  await selectDrive(drive, owner, ["allowed"]);
+  expect(await listDrive(db, owner)).toHaveLength(1);
+  expect(await listDrive(db, "other-owner")).toEqual([]);
+  await expect(readDrive(drive, owner, "unselected")).rejects.toThrow("Choose this file");
   expect(await disconnectGoogle(config, owner)).toEqual({ disconnected: true, revoked: true });
-  expect(await listDrive(config, owner)).toEqual([]);
+  expect(await listDrive(db, owner)).toEqual([]);
 });
 it("an uncertain create is inspected without uploading twice and changed inputs cannot reuse its receipt", async () => {
   let uploads = 0;
@@ -135,18 +137,18 @@ it("an uncertain create is inspected without uploading twice and changed inputs 
     throw new Error("Unexpected request");
   });
   const input = { name: "Result", content: "saved text" };
-  expect((await writeDrive(config, owner, "create", input, async () => {})).status).toBe(
+  expect((await writeDrive(drive, owner, "create", input, async () => {})).status).toBe(
     "uncertain",
   );
-  expect((await readDrive(config, owner, "created-file")).content).toBe("saved text");
-  expect((await writeDrive(config, owner, "create", input, async () => {})).status).toBe(
+  expect((await readDrive(drive, owner, "created-file")).content).toBe("saved text");
+  expect((await writeDrive(drive, owner, "create", input, async () => {})).status).toBe(
     "completed",
   );
   expect(uploads).toBe(1);
   await expect(
-    writeDrive(config, owner, "create", { ...input, content: "changed" }, async () => {}),
+    writeDrive(drive, owner, "create", { ...input, content: "changed" }, async () => {}),
   ).rejects.toThrow("different inputs");
-  expect(await listDrive(config, owner)).toHaveLength(1);
+  expect(await listDrive(db, owner)).toHaveLength(1);
 });
 it("stale revisions and cancelled operations cannot issue an update", async () => {
   let writes = 0;
@@ -159,10 +161,10 @@ it("stale revisions and cancelled operations cannot issue an update", async () =
       { etag: '"v2"' },
     );
   });
-  await selectDrive(config, owner, ["selected"]);
+  await selectDrive(drive, owner, ["selected"]);
   await expect(
     writeDrive(
-      config,
+      drive,
       owner,
       "stale",
       { id: "selected", content: "update", etag: '"v1"' },
@@ -171,7 +173,7 @@ it("stale revisions and cancelled operations cannot issue an update", async () =
   ).rejects.toThrow("File changed");
   await expect(
     writeDrive(
-      config,
+      drive,
       owner,
       "cancelled",
       { id: "selected", content: "update", etag: '"v2"' },
@@ -196,7 +198,7 @@ it("a second connected business cannot read another business's selected file", a
     fileReads++;
     return response({ id: "private", name: "Private text", mimeType: "text/plain" });
   });
-  await selectDrive(config, owner, ["private"]);
-  await expect(readDrive(config, other, "private")).rejects.toThrow("Choose this file");
+  await selectDrive(drive, owner, ["private"]);
+  await expect(readDrive(drive, other, "private")).rejects.toThrow("Choose this file");
   expect(fileReads).toBe(1);
 });

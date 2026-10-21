@@ -14,7 +14,7 @@ const exec = promisify(execFile);
 const keptBytes = 2_000_000;
 
 /** The PTY the host runs a session in; Bun's built-in terminal in production. */
-export interface Pty {
+interface Pty {
   readonly pid: number;
   write(data: Uint8Array): void;
   resize(cols: number, rows: number): void;
@@ -22,7 +22,7 @@ export interface Pty {
   readonly exited: Promise<number | null>;
 }
 
-export type SpawnPty = (input: {
+type SpawnPty = (input: {
   argv: string[];
   cwd: string;
   env: Record<string, string | undefined>;
@@ -31,7 +31,7 @@ export type SpawnPty = (input: {
   data: (bytes: Uint8Array) => void;
 }) => Pty;
 
-export interface TerminalsHostOptions {
+interface TerminalsHostOptions {
   spawn: SpawnPty;
   env: Record<string, string | undefined>;
   shell: string;

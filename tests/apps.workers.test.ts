@@ -5,12 +5,14 @@ import type { Env } from "../infra/api.ts";
 import { agentDependencies } from "../src/app/agent.ts";
 import { authorize } from "../src/app/authorize.ts";
 import { capabilities } from "../src/app/capabilities.ts";
-import { appCatalog, directory } from "../src/app/apps.ts";
+import { appCatalog, directory, recordsChecks } from "../src/app/apps.ts";
+import { templateGrants } from "../src/app/team.ts";
+import { roleTemplateIds } from "../src/protocol/roles.ts";
 import { install, uninstall } from "../src/apps/service.ts";
 import { grant } from "../src/authority/service.ts";
 import { driveScope } from "../src/connections/google.ts";
 import { refKinds } from "../src/protocol/ref.ts";
-import { business, db } from "./fixtures/postgres.ts";
+import { business, db, sql } from "./fixtures/postgres.ts";
 
 const bindings = env as unknown as Env;
 const catalog = capabilities(bindings);
@@ -119,4 +121,133 @@ it("employees see the skills of their business's installed apps", async () => {
   expect(await skills()).toContain("writing-pages");
   await Effect.runPromise(uninstall(db, scope.businessId, "documents"));
   expect(await skills()).not.toContain("writing-pages");
+});
+
+// Before AL3 role templates listed their capabilities; the manifests now propose them. These
+// are the grants each role had then, written out, plus the core capabilities the rule "a core
+// capability is granted to every employee it is offered to" added.
+const collaboration = [
+  "workList",
+  "workCreate",
+  "workUpdate",
+  "workComplete",
+  "conversationHistory",
+  "remember",
+  "recall",
+  "forget",
+  "projectList",
+  "projectCreate",
+  "projectUpdate",
+  "projectAdd",
+];
+const files = ["readSkill", "read", "write", "printPdf", "importAttachment"];
+const browsing = ["browserOpen", "browserRead", "browserClick", "browserType", "browserPress"];
+const artifacts = ["artifactPage", "artifactEdit", "publishArtifact"];
+const drive = ["driveList", "driveRead", "driveCreate", "driveUpdate"];
+const coding = [
+  "codingStart",
+  "codingStatus",
+  "codingSend",
+  "codingStop",
+  "codingAccept",
+  "codingPublish",
+  "deployPreview",
+  "deployProduction",
+];
+const before: Record<string, string[]> = {
+  // "all": every capability.
+  operations: [
+    ...collaboration,
+    ...files,
+    "run",
+    ...browsing,
+    "readPublicUrl",
+    ...artifacts,
+    ...drive,
+    ...coding,
+    "hireEmployee",
+  ],
+  engineering: [
+    ...collaboration,
+    ...files,
+    ...coding,
+    ...artifacts,
+    ...browsing,
+    "run",
+    "readPublicUrl",
+  ],
+  growth: [...collaboration, ...files, ...artifacts, ...browsing, "readPublicUrl"],
+  "business-operations": [
+    ...collaboration,
+    ...files,
+    ...artifacts,
+    ...drive,
+    ...browsing,
+    "readPublicUrl",
+  ],
+  custom: [...collaboration],
+};
+const coreAdded: Record<string, string[]> = {
+  operations: [],
+  engineering: [],
+  growth: ["run"],
+  "business-operations": ["run"],
+  custom: ["run", "read", "write", "readSkill"],
+};
+const asked: Record<string, string[]> = {
+  operations: ["deployProduction", "hireEmployee"],
+  engineering: ["deployProduction"],
+  growth: [],
+  "business-operations": [],
+  custom: [],
+};
+
+it("each role's grants come from the manifests and equal what its template granted before", () => {
+  for (const role of roleTemplateIds) {
+    const grants = templateGrants(role, catalog);
+    expect(grants.map((grant) => grant.capability.name).sort(), role).toEqual(
+      [...before[role]!, ...coreAdded[role]!].sort(),
+    );
+    expect(
+      grants
+        .filter((grant) => grant.mode === "ask")
+        .map((grant) => grant.capability.name)
+        .sort(),
+      role,
+    ).toEqual(asked[role]);
+  }
+});
+
+it("every role is granted every core capability", () => {
+  const core = catalog.filter((item) => item.core).map((item) => item.name);
+  for (const role of roleTemplateIds) {
+    const granted = templateGrants(role, catalog).map((grant) => grant.capability.name);
+    expect(
+      core.filter((name) => !granted.includes(name)),
+      role,
+    ).toEqual([]);
+  }
+});
+
+it("every app that appears once it has records has a records check, and only those", () => {
+  expect(
+    appCatalog
+      .filter((app) => app.appears === "records")
+      .map((app) => app.id)
+      .sort(),
+  ).toEqual(Object.keys(recordsChecks).sort());
+});
+
+it("an app that appears once connected shows when the business connects one of its providers", async () => {
+  const { business: created, person } = await business("Connected");
+  // Coming apps cannot be installed through the directory yet; the rule is the same for any app.
+  await Effect.runPromise(install(db, created.id, ["mail"]));
+  const mail = async () =>
+    (await directory(bindings, created.id)).find((app) => app.id === "mail")!;
+  expect(await mail()).toMatchObject({ installed: true, visible: false });
+  await sql.run(
+    "INSERT INTO google_connections (business_id, id, refresh_token, connected_by) VALUES ($1, $2, 'sealed', $3)",
+    [created.id, crypto.randomUUID(), person],
+  );
+  expect(await mail()).toMatchObject({ installed: true, visible: true });
 });

@@ -1,3 +1,5 @@
+import type { RoleTemplateId } from "../protocol/roles.ts";
+
 /** Public identity facts other components may rely on. Storage stays internal. */
 export interface Person {
   id: string;
@@ -51,13 +53,6 @@ export interface Business {
   /** What the business does, its goals and constraints; every employee reads it. */
   brief: string;
 }
-
-export type RoleTemplateId =
-  | "operations"
-  | "engineering"
-  | "growth"
-  | "business-operations"
-  | "custom";
 
 /** An agent principal. It belongs to exactly one business. */
 export interface Employee {

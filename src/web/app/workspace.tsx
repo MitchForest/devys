@@ -58,7 +58,7 @@ export type Place =
   | { kind: "direct"; employeeId: string }
   | { kind: "project"; id: string }
   | { kind: "thread"; workId: string };
-export type PlaceKind = Place["kind"];
+type PlaceKind = Place["kind"];
 
 /** A temporary view stacked over the right panel's permanent view. */
 export type Layer =
@@ -68,7 +68,7 @@ export type Layer =
   | { kind: "session"; workId: string; sessionId: string }
   | { kind: "browser"; workId: string };
 /** `auto`: it opened on its own, so the next one may replace it. */
-export type OpenLayer = Layer & { auto?: boolean };
+type OpenLayer = Layer & { auto?: boolean };
 
 export const samePlace = (a: Place, b: Place) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -103,7 +103,7 @@ const savedPanels = (): Record<PlaceKind, boolean> => {
 };
 
 /** The record a layer shows, as a ref; an app or the browser is not a record. */
-export function refOfLayer(layer: Layer): Ref | undefined {
+function refOfLayer(layer: Layer): Ref | undefined {
   switch (layer.kind) {
     case "artifact":
       return ref("documents", "artifact", layer.id);
@@ -151,7 +151,7 @@ export const filterOf = (state: WorkItemState) =>
         : "inProgress";
 
 /** Opening "New work item" from a project or an employee fills in what it can. */
-export interface WorkItemDefaults {
+interface WorkItemDefaults {
   owner?: string;
   projectId?: string;
 }

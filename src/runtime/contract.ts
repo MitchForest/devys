@@ -3,7 +3,7 @@ import type { ConversationKey } from "../conversations/contract.ts";
 import type { Scope } from "../identity/contract.ts";
 
 /** Agent runtime port, one per business employee. Pi owns execution behind it. */
-export interface AgentPort extends Rpc.DurableObjectBranded {
+export interface AgentPort {
   receive(scope: Scope, input: Inbound): Promise<{ accepted: boolean }>;
   stop(scope: Scope): Promise<{ stopped: boolean }>;
   inspect(scope: Scope): Promise<string>;

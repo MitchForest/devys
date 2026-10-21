@@ -47,7 +47,7 @@ async function handOver(env: Env, work: WorkItem & { business_id: string }) {
     senderId: "dispatcher",
     chatId: workChat(scope, work.id),
     text: [
-      `Work on this work item (id ${work.id}, revision ${work.revision}): ${work.title}.`,
+      `Work on this work item (${ref("work", "item", work.id)}, revision ${work.revision}): ${work.title}.`,
       work.objective && `Objective: ${work.objective}`,
       work.next_action && `Next action: ${work.next_action}`,
       "When it's done, call workComplete with evidence. If it's blocked, call workUpdate with state waiting or needs_decision and what it waits on.",

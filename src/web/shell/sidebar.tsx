@@ -25,9 +25,9 @@ import { cn } from "@/lib/utils";
 
 const tints = ["blue", "orange", "green", "purple", "pink"];
 /** A project's tile color, from its place in the list, the same everywhere it shows. */
-export const projectTint = (index: number) => tints[(index + 1) % tints.length]!;
+const projectTint = (index: number) => tints[(index + 1) % tints.length]!;
 /** The icon an app names in its manifest. */
-export const appIcons: Record<string, LucideIcon> = {
+const appIcons: Record<string, LucideIcon> = {
   documents: FileText,
   code: Code2,
 };

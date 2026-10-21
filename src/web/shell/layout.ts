@@ -1,5 +1,5 @@
 /** Column widths from the space actually available, exactly as native `WorkspaceLayout`. */
-export const minimumConversation = 420;
+const minimumConversation = 420;
 export const panelRange = [360, 720] as const;
 export const defaultPanel = 440;
 export const handle = 9;

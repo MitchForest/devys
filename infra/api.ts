@@ -47,7 +47,8 @@ export const Api = Cloudflare.Worker(
       crons: ["* * * * *"],
       observability: { enabled: true, traces: { enabled: true } },
       env: {
-        AGENT: Cloudflare.DurableObject<AgentPort>("DevysAgent"),
+        // The runtime contract is vendor-free; the Durable Object brand belongs to deployment.
+        AGENT: Cloudflare.DurableObject<AgentPort & Rpc.DurableObjectBranded>("DevysAgent"),
         WORKSPACE: Cloudflare.Container<WorkspacePort>("Workspace", {
           className: "Workspace",
           context: "./src/workspace/image",

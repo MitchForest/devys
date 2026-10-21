@@ -1,4 +1,5 @@
 import type { Scope } from "../../identity/contract.ts";
+import { Unavailable } from "../../protocol/host.ts";
 import type { CodingHost } from "./contract.ts";
 
 /**
@@ -40,7 +41,7 @@ export function hostCoding(host: { url: string; token: string }, scope: Scope): 
 export function unavailableCoding(): CodingHost {
   const refuse = () =>
     Promise.reject(
-      new Error(
+      new Unavailable(
         "Coding sessions run in local mode only until a cloud runner with API keys exists.",
       ),
     );

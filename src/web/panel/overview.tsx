@@ -16,7 +16,7 @@ const groups = [
   { value: "waiting", title: "Waiting" },
 ] as const;
 
-export const formatMoney = (budget: { cents: number; currency: string }) =>
+const formatMoney = (budget: { cents: number; currency: string }) =>
   (budget.cents / 100).toLocaleString(undefined, {
     style: "currency",
     currency: budget.currency,

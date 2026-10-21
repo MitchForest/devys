@@ -17,10 +17,13 @@ import { messages } from "../src/conversations/service.ts";
 import { codingCapabilities } from "../src/apps/code/capabilities.ts";
 import type { CodingHost, StartRequest } from "../src/apps/code/contract.ts";
 import { Invocation } from "../src/protocol/capability.ts";
+import { parseRef } from "../src/protocol/ref.ts";
 import { addEvidence, workItem, createWorkItem, setTakeover } from "../src/work/service.ts";
 import { business, db, sql } from "./fixtures/postgres.ts";
 
 const hostToken = "host-token";
+/** The id a coding session's ref names (what the host is asked about). */
+const idOf = (value: string) => parseRef(value)?.id ?? "";
 
 const harnessCoding = (state: { coding: CodingHost }) => () => state.coding;
 const ownerOf = async (businessId: string) =>
@@ -36,7 +39,11 @@ function harness() {
   const received: { employee: string; input: Inbound }[] = [];
   const bindings = {
     ...env,
+    // Host events are local mode's: the token is read through the mode.
+    DEVYS_MODE: "local",
+    DEVYS_HOST_URL: "http://127.0.0.1:1",
     DEVYS_HOST_TOKEN: hostToken,
+    DEVYS_HOST_HOME: "/Users/owner",
     AGENT: {
       getByName: (name: string) => ({
         receive: async (_scope: unknown, input: Inbound) => {
@@ -171,14 +178,15 @@ it("coding starts only from a work item, once per call, within the grant's repos
   const operationId = crypto.randomUUID();
   const first = (await Effect.runPromise(
     start.execute(input).pipe(as(bindings, scope, work.id, operationId)),
-  )) as { session: string; branch: string; ref: string };
-  expect(first.ref).toBe(`devys:code/session/${first.session}`);
+  )) as { ref: string; branch: string };
+  expect(first.ref).toMatch(/^devys:code\/session\/[0-9a-f-]+$/);
+  expect(first).not.toHaveProperty("session");
   // The same call replayed is the same session; the host makes it idempotent.
   const again = (await Effect.runPromise(
     start.execute(input).pipe(as(bindings, scope, work.id, operationId)),
-  )) as { session: string };
-  expect(again.session).toBe(first.session);
-  expect(starts.map((request) => request.id)).toEqual([first.session, first.session]);
+  )) as { ref: string };
+  expect(again.ref).toBe(first.ref);
+  expect(starts.map((request) => request.id)).toEqual([idOf(first.ref), idOf(first.ref)]);
   expect(starts[0]).toMatchObject({
     provider: "codex",
     purpose: "build",
@@ -201,11 +209,12 @@ it("coding starts only from a work item, once per call, within the grant's repos
 
 it("coding clones the business's GitHub repository and publishes accepted work as a pull request", async () => {
   const { bindings, scope, work, starts, published, named } = await setup();
-  const { session } = (await Effect.runPromise(
+  const { ref: sessionRef } = (await Effect.runPromise(
     named("codingStart")
       .execute({ provider: "codex", objective: "Fix the footer", cloneRepository: "acme/site" })
       .pipe(as(bindings, scope, work.id)),
-  )) as { session: string };
+  )) as { ref: string };
+  const session = idOf(sessionRef);
   expect(starts.at(-1)!.repository).toEqual({ clone: "acme/site" });
   const two = await Effect.runPromise(
     named("codingStart")
@@ -222,7 +231,12 @@ it("coding clones the business's GitHub repository and publishes accepted work a
   const publish = named("codingPublish");
   const result = await Effect.runPromise(
     publish
-      .execute({ session, repository: "acme/site", title: "Fix the footer", body: "Checked." })
+      .execute({
+        session: sessionRef,
+        repository: "acme/site",
+        title: "Fix the footer",
+        body: "Checked.",
+      })
       .pipe(as(bindings, scope, work.id)),
   );
   expect(result).toMatchObject({ pullRequest: "https://github.com/acme/site/pull/7" });
@@ -243,7 +257,7 @@ it("coding clones the business's GitHub repository and publishes accepted work a
   );
   const refused = await Effect.runPromise(
     publish
-      .execute({ session, repository: "acme/site", title: "Again", body: "x" })
+      .execute({ session: sessionRef, repository: "acme/site", title: "Again", body: "x" })
       .pipe(as(bindings, scope, work.id), Effect.exit),
   );
   expect(refused._tag).toBe("Failure");
@@ -252,7 +266,7 @@ it("coding clones the business's GitHub repository and publishes accepted work a
 
 it("host events become thread cards, wake the employee under a stable id, and record checks as evidence", async () => {
   const { bindings, scope, work, received, sent, named } = await setup();
-  const { session } = (await Effect.runPromise(
+  const { ref: sessionRef } = (await Effect.runPromise(
     named("codingStart")
       .execute({
         provider: "codex",
@@ -260,7 +274,8 @@ it("host events become thread cards, wake the employee under a stable id, and re
         newRepository: "waitlist",
       })
       .pipe(as(bindings, scope, work.id)),
-  )) as { session: string };
+  )) as { ref: string };
+  const session = idOf(sessionRef);
   expect((await event(bindings, [], "wrong")).status).toBe(401);
   const finished = {
     id: `${session}:turn-1:finished`,
@@ -292,13 +307,20 @@ it("host events become thread cards, wake the employee under a stable id, and re
 
   await Effect.runPromise(
     named("codingSend")
-      .execute({ session, text: "Add an empty state" })
+      .execute({ session: sessionRef, text: "Add an empty state" })
       .pipe(as(bindings, scope, work.id)),
   );
   expect(sent).toEqual(["Add an empty state"]);
+  // Sessions are listed and named by their refs.
+  const status = (await Effect.runPromise(
+    named("codingStatus")
+      .execute({ session: sessionRef })
+      .pipe(as(bindings, scope, work.id)),
+  )) as { sessions: { ref: string; state: string }[] };
+  expect(status.sessions).toMatchObject([{ ref: sessionRef, state: "idle" }]);
   await Effect.runPromise(
     named("codingAccept")
-      .execute({ session, message: "Add the waitlist page", check: "bun test" })
+      .execute({ session: sessionRef, message: "Add the waitlist page", check: "bun test" })
       .pipe(as(bindings, scope, work.id)),
   );
   const current = async () => (await Effect.runPromise(workItem(db, scope.businessId, work.id)))!;
@@ -362,11 +384,12 @@ it("host events become thread cards, wake the employee under a stable id, and re
 it("the owner steers a session only after taking the work over; handing back wakes its employee", async () => {
   const state = await setup();
   const { bindings, scope, work, received, sent, named } = state;
-  const { session } = (await Effect.runPromise(
+  const { ref: sessionRef } = (await Effect.runPromise(
     named("codingStart")
       .execute({ provider: "claude", objective: "Build it", newRepository: "site" })
       .pipe(as(bindings, scope, work.id)),
-  )) as { session: string };
+  )) as { ref: string };
+  const session = idOf(sessionRef);
   const person = { id: (await ownerOf(scope.businessId))!, display_name: "Owner" };
   const access = (path: string) => ({
     person,
@@ -551,16 +574,17 @@ it("comments on a file reach the chosen employee's DM as one message with their 
 
 it("previews deploy on their own, production asks, rollbacks name a known commit, and results become evidence", async () => {
   const { bindings, scope, work, received, deploys, named } = await setup();
-  const { session } = (await Effect.runPromise(
+  const { ref: sessionRef } = (await Effect.runPromise(
     named("codingStart")
       .execute({ provider: "codex", objective: "Build it", newRepository: "site" })
       .pipe(as(bindings, scope, work.id)),
-  )) as { session: string };
+  )) as { ref: string };
+  const session = idOf(sessionRef);
   const command = "bunx wrangler deploy --env preview";
   expect(
     await Effect.runPromise(
       named("deployPreview")
-        .execute({ session, command })
+        .execute({ session: sessionRef, command })
         .pipe(as(bindings, scope, work.id)),
     ),
   ).toEqual({ deploying: "b".repeat(40) });
@@ -568,7 +592,7 @@ it("previews deploy on their own, production asks, rollbacks name a known commit
   // Production waits for the owner: a decision, and nothing deployed.
   const asked = await Effect.runPromiseExit(
     named("deployProduction")
-      .execute({ session, command: "bunx wrangler deploy" })
+      .execute({ session: sessionRef, command: "bunx wrangler deploy" })
       .pipe(as(bindings, scope, work.id)),
   );
   expect(asked._tag).toBe("Failure");
@@ -576,7 +600,7 @@ it("previews deploy on their own, production asks, rollbacks name a known commit
   // Rolling back only to a commit this work item knows.
   const rollback = await Effect.runPromise(
     named("deployPreview")
-      .execute({ session, command, commit: "c".repeat(12) })
+      .execute({ session: sessionRef, command, commit: "c".repeat(12) })
       .pipe(as(bindings, scope, work.id), Effect.flip),
   );
   expect(rollback).toMatchObject({ code: "invalid_input" });
@@ -610,7 +634,7 @@ it("previews deploy on their own, production asks, rollbacks name a known commit
   expect(
     await Effect.runPromise(
       named("deployPreview")
-        .execute({ session, command, commit: "bbbbbbbbbbbb" })
+        .execute({ session: sessionRef, command, commit: "bbbbbbbbbbbb" })
         .pipe(as(bindings, scope, work.id)),
     ),
   ).toEqual({ deploying: "bbbbbbbbbbbb" });

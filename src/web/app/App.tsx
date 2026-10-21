@@ -4,15 +4,12 @@ import { WorkspaceProvider, useWorkspace } from "./workspace.tsx";
 import { DevysButton } from "../design/buttons.tsx";
 import { Face } from "../design/face.tsx";
 import { Shell } from "../shell/shell.tsx";
-import { TooltipProvider } from "@/components/ui/tooltip";
 
 export function App() {
   return (
-    <TooltipProvider>
-      <WorkspaceProvider>
-        <Root />
-      </WorkspaceProvider>
-    </TooltipProvider>
+    <WorkspaceProvider>
+      <Root />
+    </WorkspaceProvider>
   );
 }
 

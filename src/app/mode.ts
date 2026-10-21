@@ -3,23 +3,26 @@ import { hostBrowser, unavailableBrowser } from "../browser/host-client.ts";
 import type { CodingHost } from "../apps/code/contract.ts";
 import { hostCoding, unavailableCoding } from "../apps/code/host-client.ts";
 import { scopeName, type Scope } from "../identity/contract.ts";
+import { isMachineOwner } from "../identity/service.ts";
+import { sha256 } from "../protocol/bytes.ts";
+import { Unavailable } from "../protocol/host.ts";
 import type { Terminals } from "../terminal/contract.ts";
 import { hostTerminals, unavailableTerminals } from "../terminal/host-client.ts";
 import type { Runner } from "../workspace/contract.ts";
 import { hostRunner } from "../workspace/host.ts";
+import { Effect } from "effect";
 import type { Env } from "./env.ts";
-
-/** Where the Mac host listens, its token, and the owner's home folder (local mode). */
-export interface MacHost {
-  url: string;
-  token: string;
-  home: string;
-}
 
 /** Everything that differs between the deployment modes. */
 export interface Mode {
-  /** The Mac host when local mode has one configured; employees and owner surfaces run there. */
-  host: MacHost | undefined;
+  /**
+   * Whether this person may act on the machine Devys runs on (coding, terminals, files, the
+   * browser) and create businesses: where the Mac host is configured only the Mac's owner; in
+   * cloud mode nothing runs as a person, so any member.
+   */
+  mayUseMachine(personId: string): Promise<boolean>;
+  /** Whether a request carries the Mac host's token (the host's own reports); never in cloud. */
+  fromHost(request: Request): Promise<boolean>;
   /** Commands and files. `within` confines file access to a folder (the owner's file views). */
   runner(within?: string): Runner;
   coding: (scope: Scope) => CodingHost;
@@ -33,7 +36,7 @@ export interface Mode {
 }
 
 const notConfigured = () => {
-  throw new Error("The Mac host is not configured; run `bun run local install`.");
+  throw new Unavailable("The Mac host is not configured; run `bun run local install`.");
 };
 
 /**
@@ -49,7 +52,13 @@ export function modeOf(env: Env): Mode {
       // The host keeps each business in ~/Devys/<business>; see src/host.ts.
       const folder = (businessId: string) => (home ? `${home}/Devys/${businessId}` : undefined);
       return {
-        host,
+        // Without a configured host nothing acts on the Mac, so no one is refused.
+        mayUseMachine: async (personId) =>
+          !host || (await Effect.runPromise(isMachineOwner(env.HYPERDRIVE, personId))),
+        fromHost: async (request) =>
+          Boolean(token) &&
+          (await sha256(request.headers.get("authorization") ?? "")) ===
+            (await sha256(`Bearer ${token}`)),
         // Checked per call so a missing host breaks only file, command and coding tools.
         runner: (within) => (scope) =>
           host ? hostRunner({ ...host, files: env.FILES, within }, scope) : notConfigured(),
@@ -63,7 +72,8 @@ export function modeOf(env: Env): Mode {
     }
     case "cloud":
       return {
-        host: undefined,
+        mayUseMachine: async () => true,
+        fromHost: async () => false,
         runner: () => (scope) => env.WORKSPACE.getByName(scopeName(scope)),
         coding: () => unavailableCoding(),
         terminals: () => unavailableTerminals(),

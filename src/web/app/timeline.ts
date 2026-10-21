@@ -2,7 +2,7 @@ import type { Ref } from "../../protocol/ref.ts";
 import type { ShownMessage } from "./api.ts";
 
 /** A conversation as Messages lays it out: grouped bubbles, with a heading when time passes. */
-export type Position = "single" | "first" | "middle" | "last";
+type Position = "single" | "first" | "middle" | "last";
 export interface Bubble {
   id: string;
   /** `person:<id>`, `employee:<id>` or `system`. */
@@ -24,7 +24,7 @@ export interface Bubble {
   /** Why a send failed, in the server's words. */
   error?: string;
 }
-export type TimelineItem =
+type TimelineItem =
   | { kind: "heading"; id: string; date: Date }
   | { kind: "bubble"; id: string; bubble: Bubble };
 

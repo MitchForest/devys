@@ -74,7 +74,7 @@ export function claudeEntries(jsonl: string): TranscriptEntry[] {
   return entries;
 }
 
-export interface ClaudeOptions {
+interface ClaudeOptions {
   /** The Claude config directory holding the owner's login and sessions. */
   configDir: string;
   env: NodeJS.ProcessEnv;

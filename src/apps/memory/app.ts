@@ -1,5 +1,8 @@
 import { defineApp } from "../../protocol/app.ts";
 
+// Core capabilities: every role is granted them.
+const capabilities = ["recall", "remember", "forget"] as const;
+
 export const memory = defineApp({
   id: "memory",
   name: "Memory",
@@ -8,8 +11,15 @@ export const memory = defineApp({
   kind: "system",
   status: "available",
   records: [],
-  capabilities: ["recall", "remember", "forget"],
+  capabilities,
   skills: [],
   connections: [],
   appears: "never",
+  defaultGrants: {
+    operations: capabilities,
+    engineering: capabilities,
+    growth: capabilities,
+    "business-operations": capabilities,
+    custom: capabilities,
+  },
 });

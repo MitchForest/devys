@@ -237,9 +237,7 @@ private struct AppRow: View {
             .fixedSize()
             .help("Shows in the sidebar once it has something")
         }
-        if app.id == "documents" {
-            Text("Always installed").font(DevysTypography.caption).foregroundStyle(DevysColors.ink3).fixedSize()
-        } else if app.installed {
+        if app.installed {
             Button("Remove") { store.send(.appInstallToggled(app.id, false)) }
                 .buttonStyle(DevysButtonStyle(.quiet, compact: true))
                 .fixedSize()

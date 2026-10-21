@@ -2,7 +2,7 @@
  * HTML pages employees publish (U3): one self-contained page, rendered in an opaque-origin
  * sandbox with no network. Anything that would leave the page or reach Devys is refused here.
  */
-export const pageBytes = 512_000;
+const pageBytes = 512_000;
 
 const refused: [RegExp, string][] = [
   [/<\s*form\b/i, "forms"],

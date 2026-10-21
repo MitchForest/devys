@@ -11,7 +11,7 @@ export type Mood =
   | "oops"
   | "asleep"
   | "off";
-export interface FaceSpec {
+interface FaceSpec {
   palette: string;
   shape: string;
   seed: number;

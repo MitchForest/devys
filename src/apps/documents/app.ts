@@ -21,6 +21,7 @@ export const documents = defineApp({
   connections: [{ provider: "google", scopes: ["https://www.googleapis.com/auth/drive.file"] }],
   appears: "always",
   defaultGrants: {
+    operations: [...artifacts, ...drive],
     engineering: artifacts,
     growth: artifacts,
     "business-operations": [...artifacts, ...drive],

@@ -251,17 +251,13 @@ function AppsPane() {
                 <span className="text-caption text-ink-3">Sidebar</span>
               </Switch>
             )}
-            {app.id === "documents" ? (
-              <span className="text-caption text-ink-3">Always installed</span>
-            ) : (
-              <DevysButton
-                compact
-                kind={app.installed ? "quiet" : "raised"}
-                onClick={() => void actions.installApp(app.id, !app.installed)}
-              >
-                {app.installed ? "Remove" : "Install"}
-              </DevysButton>
-            )}
+            <DevysButton
+              compact
+              kind={app.installed ? "quiet" : "raised"}
+              onClick={() => void actions.installApp(app.id, !app.installed)}
+            >
+              {app.installed ? "Remove" : "Install"}
+            </DevysButton>
           </div>
         ))}
       </div>

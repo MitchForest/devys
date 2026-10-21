@@ -25,14 +25,14 @@ import {
 } from "../apps/code/service.ts";
 import { scopeName, type Business, type Person, type Scope } from "../identity/contract.ts";
 import { activeEmployee } from "../identity/service.ts";
-import { sha256, stableId } from "../protocol/bytes.ts";
+import { stableId } from "../protocol/bytes.ts";
 import { setFollowing } from "../conversations/service.ts";
 import type { WorkItem } from "../work/contract.ts";
 import { addEvidence, createWorkItem, requeue, workItem } from "../work/service.ts";
 import { modeOf } from "./mode.ts";
 import { postEvent } from "./conversations.ts";
 import { body } from "./request.ts";
-import { coordinates } from "./team.ts";
+import { coordinates } from "../identity/team.ts";
 
 type Access = { person: Person; business: Business; trusted: boolean; path: string };
 
@@ -228,7 +228,7 @@ export async function handBack(
     "The owner handed this work item back to you after driving its coding sessions. Read what changed, then carry on: review, iterate with codingSend, accept with codingAccept and the repository's check.",
     ...sessions.map(
       (session) =>
-        `${providerName(session.provider)} session ${session.id} (${session.purpose}, ${session.state}) in ${session.worktree}:\n${session.diffStat || "no changes"}${session.reply ? `\nIts latest reply: ${session.reply.slice(0, 2000)}` : ""}`,
+        `${providerName(session.provider)} session ${ref("code", "session", session.id)} (${session.purpose}, ${session.state}) in ${session.worktree}:\n${session.diffStat || "no changes"}${session.reply ? `\nIts latest reply: ${session.reply.slice(0, 2000)}` : ""}`,
     ),
   ].join("\n\n");
   await env.AGENT.getByName(scopeName(scope)).receive(scope, {
@@ -254,7 +254,7 @@ export function codingDependencies(env: Env): CodingDependencies {
         }),
       );
     },
-    coordinates: (scope) => coordinates(env, scope),
+    coordinates: (scope) => coordinates(env.HYPERDRIVE, scope),
     knownCommits: async (scope, workItemId) =>
       (
         (await Effect.runPromise(workItem(env.HYPERDRIVE, scope.businessId, workItemId)))
@@ -309,10 +309,7 @@ const changeSummary = (diffStat: string) => {
  * Both are keyed by the event id, so a repeated delivery changes nothing.
  */
 export async function codingEventsRoute(request: Request, env: Env) {
-  const token = env.DEVYS_HOST_TOKEN;
-  const offered = await sha256(request.headers.get("authorization") ?? "");
-  if (!token || offered !== (await sha256(`Bearer ${token}`)))
-    return new Response("Unauthorized", { status: 401 });
+  if (!(await modeOf(env).fromHost(request))) return new Response("Unauthorized", { status: 401 });
   const { events } = await body<{ events: CodingEvent[] }>(request, 8_000_000);
   // Each event is answered on its own, so one that keeps failing never holds up the rest.
   const delivered: string[] = [];
@@ -372,7 +369,7 @@ async function deliverEvent(env: Env, event: CodingEvent) {
   );
   if (work?.taken_over_by) return;
   const text = [
-    `Your ${who} session ${item.id} (${item.purpose}) on this work item: ${card}`,
+    `Your ${who} session ${ref("code", "session", item.id)} (${item.purpose}) on this work item: ${card}`,
     event.diffStat &&
       `Changes in its worktree ${item.worktree}:\n${event.diffStat.length > 8000 ? `${event.diffStat.slice(0, 8000)}\n… (run git diff --stat in the worktree for the rest)` : event.diffStat}`,
     event.check?.output && `Check output (end):\n${event.check.output.slice(-6000)}`,

@@ -1,5 +1,13 @@
 import { defineApp } from "../../protocol/app.ts";
 
+const capabilities = [
+  "browserOpen",
+  "browserRead",
+  "browserClick",
+  "browserType",
+  "browserPress",
+] as const;
+
 export const browser = defineApp({
   id: "browser",
   name: "Browser",
@@ -8,8 +16,14 @@ export const browser = defineApp({
   kind: "system",
   status: "available",
   records: [],
-  capabilities: ["browserOpen", "browserRead", "browserClick", "browserType", "browserPress"],
+  capabilities,
   skills: [],
   connections: [],
   appears: "never",
+  defaultGrants: {
+    operations: capabilities,
+    engineering: capabilities,
+    growth: capabilities,
+    "business-operations": capabilities,
+  },
 });

@@ -36,13 +36,16 @@ const terminals = terminalsHost({
   spawn: bunPty,
   env: process.env,
   shell: process.env.SHELL ?? "/bin/zsh",
-  resume: ({ provider, session }) =>
-    provider === "codex"
-      ? { argv: ["codex", "resume", session], env: { ...process.env, CODEX_HOME: codexHome } }
-      : {
-          argv: ["claude", "--resume", session],
-          env: { ...ownLogin, CLAUDE_CONFIG_DIR: claudeConfig },
-        },
+  resume: ({ provider, session }) => {
+    if (provider === "codex")
+      return { argv: ["codex", "resume", session], env: { ...process.env, CODEX_HOME: codexHome } };
+    if (provider === "claude")
+      return {
+        argv: ["claude", "--resume", session],
+        env: { ...ownLogin, CLAUDE_CONFIG_DIR: claudeConfig },
+      };
+    throw new Error(`No coding provider ${provider}`);
+  },
 });
 
 const coding = codingHost({

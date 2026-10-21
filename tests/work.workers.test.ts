@@ -8,6 +8,7 @@ import { dispatchDue } from "../src/app/dispatch.ts";
 import { apiRoute } from "../src/app/http.ts";
 import { answerDecision, grant, pendingDecisions } from "../src/authority/service.ts";
 import { sha256 } from "../src/protocol/bytes.ts";
+import { ref } from "../src/protocol/ref.ts";
 import { Invocation } from "../src/protocol/capability.ts";
 import { createWorkItem, workItem } from "../src/work/service.ts";
 import { createProject } from "../src/work/projects.ts";
@@ -206,7 +207,11 @@ it("work's conditions only narrow, and taking it over stops the employee acting 
   await Effect.runPromise(grant(db, scope, { capability: update, mode: "auto" }));
   const result = await Effect.runPromise(
     update
-      .execute({ id: work.id, expectedRevision: work.revision, nextAction: "Mine now" })
+      .execute({
+        item: ref("work", "item", work.id),
+        expectedRevision: work.revision,
+        nextAction: "Mine now",
+      })
       .pipe(as(scope), Effect.flip),
   );
   expect(result).toMatchObject({ code: "conflict" });
@@ -214,14 +219,17 @@ it("work's conditions only narrow, and taking it over stops the employee acting 
 
 it("due work reaches its employee once per revision, and a lost hand-off is resubmitted under the same id", async () => {
   const { scope } = await business();
-  const received: { scope: unknown; messageId: string; chatId: string }[] = [];
+  const received: { scope: unknown; messageId: string; chatId: string; text: string }[] = [];
   let failMark = true;
   const agentEnv = {
     ...bindings,
     AGENT: {
       getByName: () => ({
-        receive: async (target: unknown, input: { messageId: string; chatId: string }) => {
-          received.push({ scope: target, messageId: input.messageId, chatId: input.chatId });
+        receive: async (
+          target: unknown,
+          input: { messageId: string; chatId: string; text: string },
+        ) => {
+          received.push({ scope: target, ...input });
           return { accepted: true };
         },
       }),
@@ -250,6 +258,10 @@ it("due work reaches its employee once per revision, and a lost hand-off is resu
   await dispatchDue(agentEnv);
   const mine = received.filter((item) => item.chatId.endsWith(work.id));
   expect(mine.map((item) => item.messageId)).toEqual([`${work.id}:1`, `${work.id}:1`]);
+  // The hand-off names the work item by its ref.
+  expect(mine[0]!.text).toContain(
+    `Work on this work item (devys:work/item/${work.id}, revision 1)`,
+  );
   expect((await Effect.runPromise(workItem(db, scope.businessId, work.id)))?.state).toBe(
     "in_progress",
   );
@@ -374,6 +386,15 @@ it("members manage work and answer requests over HTTP; stale revisions conflict"
     id: string;
     revision: number;
   };
+  // Routes decode with the work contract's schemas, as capabilities do, and say what is wrong.
+  const unknownState = await call(`/work/${created.id}`, {
+    expectedRevision: created.revision,
+    state: "done",
+  });
+  expect(unknownState.status).toBe(400);
+  expect(await unknownState.text()).toContain('["state"]');
+  expect((await call("/work", { title: "  ", owner: scope.employeeId })).status).toBe(400);
+  expect((await call(`/work/${created.id}`, { state: "waiting" })).status).toBe(400);
   const moved = await call(`/work/${created.id}`, {
     expectedRevision: created.revision,
     state: "waiting",
@@ -444,6 +465,13 @@ it("projects reference records without copying them, refuse other businesses' re
   const launch = (await (
     await owner(acme.business.id, "/projects", { name: "Launch", goal: "Ship it" })
   ).json()) as { id: string };
+  // The same limits as projectCreate: a long goal is refused, not cut.
+  const long = await owner(acme.business.id, "/projects", { name: "Long", goal: "x".repeat(501) });
+  expect(long.status).toBe(400);
+  expect(await long.text()).toContain('["goal"]');
+  expect(
+    (await owner(acme.business.id, "/projects", { name: "Late", deadline: "next week" })).status,
+  ).toBe(400);
   const growth = (await (
     await owner(acme.business.id, "/projects", { name: "Growth" })
   ).json()) as {
@@ -550,11 +578,13 @@ it("a create rerun under the same operation id makes one work item and one proje
       ),
     );
   const work = named("workCreate").execute({ title: "Draft the inquiry" });
-  const first = (await rerun(work)) as { id: string };
-  expect(((await rerun(work)) as { id: string }).id).toBe(first.id);
+  const first = (await rerun(work)) as { ref: string };
+  expect(first.ref).toMatch(/^devys:work\/item\//);
+  expect(((await rerun(work)) as { ref: string }).ref).toBe(first.ref);
   const project = named("projectCreate").execute({ name: "Launch" });
-  const made = (await rerun(project)) as { id: string };
-  expect(((await rerun(project)) as { id: string }).id).toBe(made.id);
+  const made = (await rerun(project)) as { ref: string };
+  expect(made.ref).toMatch(/^devys:work\/project\//);
+  expect(((await rerun(project)) as { ref: string }).ref).toBe(made.ref);
   const counted = await sql.row<{ items: number; projects: number }>(
     `SELECT (SELECT count(*)::int FROM work_items WHERE business_id = $1) AS items,
             (SELECT count(*)::int FROM projects WHERE business_id = $1) AS projects`,
@@ -590,7 +620,11 @@ it("an employee changes only its own work items; Operations changes anyone's", a
     }),
   );
   const update = (id: string, revision: number) =>
-    named("workUpdate").execute({ id, expectedRevision: revision, nextAction: "Draft" });
+    named("workUpdate").execute({
+      item: ref("work", "item", id),
+      expectedRevision: revision,
+      nextAction: "Draft",
+    });
   const refused = await Effect.runPromise(
     Effect.flip(update(mine.id, mine.revision).pipe(acting(engineer.id))),
   );

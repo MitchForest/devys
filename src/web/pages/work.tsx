@@ -42,7 +42,7 @@ import {
 } from "@/components/ui/context-menu";
 
 /** The same actions an employee has, applied by the owner at the revision on screen. */
-export function WorkActions({ item, extra }: { item: WorkItem; extra?: ReactNode }) {
+function WorkActions({ item, extra }: { item: WorkItem; extra?: ReactNode }) {
   const { actions } = useWorkspace();
   if (!isOpen(item.state))
     return (
@@ -92,7 +92,7 @@ export function WorkActions({ item, extra }: { item: WorkItem; extra?: ReactNode
 }
 
 /** Right-click (or long-press) a work item to act on it. */
-export function WithWorkActions({
+function WithWorkActions({
   item,
   extra,
   children,

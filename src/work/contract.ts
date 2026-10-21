@@ -1,13 +1,66 @@
+import { Schema } from "effect";
 import type { Ref } from "../protocol/ref.ts";
 
-export type WorkItemState =
-  | "proposed"
-  | "ready"
-  | "in_progress"
-  | "waiting"
-  | "needs_decision"
-  | "completed"
-  | "cancelled";
+/** Every state a work item can be in: the one list. */
+const workItemStates = [
+  "proposed",
+  "ready",
+  "in_progress",
+  "waiting",
+  "needs_decision",
+  "completed",
+  "cancelled",
+] as const;
+export type WorkItemState = (typeof workItemStates)[number];
+export const WorkItemState = Schema.Literals(workItemStates);
+
+/** Text that says something: not blank, at most `max` characters. */
+const Line = (max: number) =>
+  Schema.String.check(
+    Schema.isMaxLength(max),
+    Schema.makeFilter((value) => value.trim().length > 0 || "Expected some text"),
+  );
+const Text = (max: number) => Schema.String.check(Schema.isMaxLength(max));
+/** An employee's id. */
+const EmployeeId = Line(64);
+/** A moment, in any form `Date.parse` reads; stored as an ISO timestamp. */
+const Instant = Schema.String.check(
+  Schema.makeFilter((value) => Number.isFinite(Date.parse(value)) || "Expected a date and time"),
+);
+
+/** A work item's fields as people and employees write them: one rule for HTTP and capabilities. */
+export const WorkItemFields = {
+  title: Line(200),
+  objective: Text(4000),
+  nextAction: Text(1000),
+  waitCondition: Schema.NullOr(Text(1000)),
+  dueAt: Instant,
+  owner: EmployeeId,
+  state: WorkItemState,
+  expectedRevision: Schema.Int,
+};
+
+/** A project's fields as people and employees write them. Null clears an optional one. */
+export const ProjectFields = {
+  name: Line(80),
+  goal: Text(500),
+  /** A calendar date, `YYYY-MM-DD`. */
+  deadline: Schema.String.check(
+    Schema.makeFilter(
+      (value) =>
+        (/^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value))) ||
+        "Expected a date as YYYY-MM-DD",
+    ),
+  ),
+  budget: Schema.Struct({
+    cents: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+    currency: Schema.String.check(
+      Schema.makeFilter((value) => /^[A-Z]{3}$/.test(value) || "Expected a currency like USD"),
+    ),
+  }),
+  lead: EmployeeId,
+  members: Schema.Array(EmployeeId).check(Schema.isMaxLength(50)),
+};
 
 /** What is owed: who is accountable, what's next, and the evidence once done. */
 export interface WorkItem {

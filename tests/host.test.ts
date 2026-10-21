@@ -201,21 +201,27 @@ describe("deployment mode", () => {
     DEVYS_HOST_TOKEN: token,
     DEVYS_HOST_HOME: "/Users/owner",
   };
-  it("uses the sandbox in cloud mode, with no Mac and no business folder", () => {
+  const bearer = (value: string) =>
+    new Request("http://devys.test/internal/coding/events", {
+      headers: { authorization: `Bearer ${value}` },
+    });
+  it("uses the sandbox in cloud mode, with no Mac and no business folder", async () => {
     const mode = modeOf({ ...base, DEVYS_MODE: "cloud" } as unknown as Env);
     expect(mode.runner()(scope)).toEqual({
       name: JSON.stringify([scope.businessId, scope.employeeId]),
     });
-    expect(mode.host).toBeUndefined();
+    expect(await mode.fromHost(bearer(token))).toBe(false);
+    expect(await mode.mayUseMachine("anyone")).toBe(true);
     expect(mode.businessFolder("b")).toBeUndefined();
   });
-  it("uses the Mac host in local mode and says so when it is not configured", () => {
+  it("uses the Mac host in local mode and says so when it is not configured", async () => {
     const configured = modeOf(local as unknown as Env);
     expect(configured.runner()(scope).checkpoint).toBeTypeOf("function");
     expect(configured.businessFolder("b")).toBe("/Users/owner/Devys/b");
-    expect(configured.host).toEqual({ url: local.DEVYS_HOST_URL, token, home: "/Users/owner" });
+    expect(await configured.fromHost(bearer(token))).toBe(true);
+    expect(await configured.fromHost(bearer(`${token}x`))).toBe(false);
     const missing = modeOf({ ...base, DEVYS_MODE: "local" } as unknown as Env);
-    expect(missing.host).toBeUndefined();
+    expect(await missing.fromHost(bearer(token))).toBe(false);
     expect(() => missing.runner()(scope)).toThrow("not configured");
     expect(() => missing.coding(scope)).toThrow("not configured");
   });

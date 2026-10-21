@@ -1,4 +1,5 @@
 import type { Scope } from "../identity/contract.ts";
+import { Unavailable } from "../protocol/host.ts";
 import type { ClientMessage, Terminals } from "./contract.ts";
 
 type Host = { url: string; token: string };
@@ -26,20 +27,21 @@ export function hostTerminals(host: Host, scope: Scope): Terminals {
     close: async (_scope, id) => {
       await call(host, "close", { scope, id });
     },
+    relay: (_scope, socket, input) => relayTerminal(host, scope, socket, input),
   };
 }
 
 /** Cloud mode has no terminals yet. */
 export function unavailableTerminals(): Terminals {
-  const refuse = () => Promise.reject(new Error("Terminals run in local mode only."));
-  return { open: refuse, list: refuse, close: refuse };
+  const refuse = () => Promise.reject(new Unavailable("Terminals run in local mode only."));
+  return { open: refuse, list: refuse, close: refuse, relay: refuse };
 }
 
 /**
  * Carries one client between a WebSocket and a host terminal: host frames out (output as
  * binary, events as text), keystrokes and control messages in. Closing either side ends it.
  */
-export async function relayTerminal(
+async function relayTerminal(
   host: Host,
   scope: Scope,
   socket: WebSocket,

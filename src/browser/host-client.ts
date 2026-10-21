@@ -1,3 +1,4 @@
+import { Unavailable } from "../protocol/host.ts";
 import type { Browser } from "./contract.ts";
 
 /** The business's browser on the trusted Mac host (local mode). */
@@ -32,7 +33,9 @@ export function hostBrowser(host: { url: string; token: string }, businessId: st
 /** Cloud mode has no browser yet (Browser Use arrives with cloud mode); every call says so. */
 export function unavailableBrowser(): Browser {
   const refuse = () =>
-    Promise.reject(new Error("The browser runs in local mode only until cloud mode adds one."));
+    Promise.reject(
+      new Unavailable("The browser runs in local mode only until cloud mode adds one."),
+    );
   return {
     open: refuse,
     read: refuse,

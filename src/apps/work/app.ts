@@ -1,5 +1,16 @@
 import { defineApp } from "../../protocol/app.ts";
 
+const capabilities = [
+  "workList",
+  "workCreate",
+  "workUpdate",
+  "workComplete",
+  "projectList",
+  "projectCreate",
+  "projectUpdate",
+  "projectAdd",
+] as const;
+
 export const work = defineApp({
   id: "work",
   name: "Work",
@@ -11,17 +22,16 @@ export const work = defineApp({
     { kind: "item", title: "Work item" },
     { kind: "project", title: "Project" },
   ],
-  capabilities: [
-    "workList",
-    "workCreate",
-    "workUpdate",
-    "workComplete",
-    "projectList",
-    "projectCreate",
-    "projectUpdate",
-    "projectAdd",
-  ],
+  capabilities,
   skills: [],
   connections: [],
   appears: "never",
+  // Every employee tracks its work and takes part in projects.
+  defaultGrants: {
+    operations: capabilities,
+    engineering: capabilities,
+    growth: capabilities,
+    "business-operations": capabilities,
+    custom: capabilities,
+  },
 });

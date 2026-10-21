@@ -5,7 +5,7 @@ import { authorize } from "./authorize.ts";
 import { appSkills, usableIn } from "./apps.ts";
 import { availableSkills } from "../workspace/skills.ts";
 import { activeEmployee, businessBrief, businessName, employeesOf } from "../identity/service.ts";
-import { roleTemplate } from "./team.ts";
+import { roleTemplate } from "../identity/team.ts";
 import { AgentRuntime, type AgentDependencies } from "../runtime/agent.ts";
 import { capabilities } from "./capabilities.ts";
 import { channelFor } from "./channel.ts";

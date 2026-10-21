@@ -15,7 +15,7 @@ export class CapabilityError extends Schema.TaggedError<CapabilityError>()("Capa
 }) {}
 
 /** What a capability does to the world. It suggests a default mode; grants decide. */
-export type EffectClass = "read" | "change" | "external";
+type EffectClass = "read" | "change" | "external";
 
 /** Supplied by the trusted host. Never decoded from model arguments. */
 export class Invocation extends Context.Service<

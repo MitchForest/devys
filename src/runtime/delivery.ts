@@ -21,3 +21,9 @@ export interface Outbox {
   attempts: number;
   status: "pending" | "sent" | "uncertain" | "cancelled";
 }
+
+export const messageKey = (id: string) => `message:${id}`;
+export const outboxKey = (id: string) => `outbox:${id}`;
+/** Receipts by arrival, so the oldest can be forgotten and status shows the latest. */
+export const recentKey = (message: ChannelMessage) =>
+  `recent:${String(message.receivedAt).padStart(16, "0")}:${message.id}`;

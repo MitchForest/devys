@@ -43,7 +43,7 @@ interface Waiting {
   speak: boolean;
 }
 
-export interface ConversationDeps {
+interface ConversationDeps {
   businessId: string;
   employees: Employee[];
   /** Whether the owner can see this conversation, so it counts as read. */

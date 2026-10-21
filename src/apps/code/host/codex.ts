@@ -77,7 +77,7 @@ type Message = {
   error?: { message?: string };
 };
 
-export interface CodexOptions {
+interface CodexOptions {
   /** The Codex home holding the owner's login and sessions. */
   home: string;
   env: NodeJS.ProcessEnv;

@@ -2,9 +2,10 @@ import * as oauth from "oauth4webapi";
 import { query, transaction, type Database } from "../data/database.ts";
 import { sha256 } from "../protocol/bytes.ts";
 import { sessionCookie } from "../identity/contract.ts";
+import type { Connection, ConnectionAccess } from "./contract.ts";
 
 /** What the Google connection needs from the deployment: its OAuth client and storage key. */
-export interface GoogleBindings {
+interface GoogleBindings {
   HYPERDRIVE: Database;
   PUBLIC_URL: string;
   GOOGLE_CLIENT_ID: string;
@@ -169,11 +170,10 @@ export async function finishGoogle(
   return new Response(null, { status: 303, headers: { location: "/" } });
 }
 
-export interface GoogleAccess {
-  id: string;
-  token: string;
-}
-export async function googleAccess(env: GoogleBindings, business: string): Promise<GoogleAccess> {
+export async function googleAccess(
+  env: GoogleBindings,
+  business: string,
+): Promise<ConnectionAccess> {
   const row = await query(env.HYPERDRIVE, (sql) =>
     sql.row<{ id: string; refresh_token: string }>(
       "SELECT id, refresh_token FROM google_connections WHERE business_id = $1",
@@ -206,7 +206,7 @@ export async function googleAccess(env: GoogleBindings, business: string): Promi
   return { id: row.id, token: tokens.access_token };
 }
 
-export async function assertGoogle(env: GoogleBindings, business: string, access: GoogleAccess) {
+async function assertGoogle(env: GoogleBindings, business: string, access: ConnectionAccess) {
   const current = await query(env.HYPERDRIVE, (sql) =>
     sql.row("SELECT id FROM google_connections WHERE business_id = $1 AND id = $2", [
       business,
@@ -250,4 +250,15 @@ export async function googleConnectionStatus(db: Database, business: string) {
       [business],
     ),
   );
+}
+
+/** The Google connection as the apps that use it see it (Documents, for Drive). */
+export const googleConnection = (env: GoogleBindings): Connection => ({
+  access: (business) => googleAccess(env, business),
+  assertCurrent: (business, access) => assertGoogle(env, business, access),
+});
+
+/** The providers a business has connected; Google is the only one today. */
+export async function connectedProviders(db: Database, business: string) {
+  return (await googleConnectionStatus(db, business)) ? ["google"] : [];
 }

@@ -1,28 +1,27 @@
 // Ported from T3 Code (https://github.com/pingdotgg/t3code, MIT; see T3-LICENSE).
-import { isMacPlatform } from "./platform";
 
-export type TerminalLinkKind = "url" | "path";
+type TerminalLinkKind = "url" | "path";
 
-export interface TerminalLinkMatch {
+interface TerminalLinkMatch {
   kind: TerminalLinkKind;
   text: string;
   start: number;
   end: number;
 }
 
-export interface TerminalBufferLineLike {
+interface TerminalBufferLineLike {
   readonly isWrapped?: boolean;
   translateToString(trimRight?: boolean): string;
 }
 
-export interface WrappedTerminalLinkLineSegment {
+interface WrappedTerminalLinkLineSegment {
   bufferLineNumber: number;
   text: string;
   startIndex: number;
   endIndex: number;
 }
 
-export interface WrappedTerminalLinkLine {
+interface WrappedTerminalLinkLine {
   text: string;
   segments: ReadonlyArray<WrappedTerminalLinkLineSegment>;
 }
@@ -122,7 +121,7 @@ export function extractTerminalLinks(line: string): TerminalLinkMatch[] {
     .toSorted((a, b) => a.start - b.start);
 }
 
-export function isTerminalUrl(value: string): boolean {
+function isTerminalUrl(value: string): boolean {
   return /^https?:\/\//iu.test(value);
 }
 
@@ -171,14 +170,4 @@ export function collectWrappedTerminalLinkLine(
     text: segments.map((segment) => segment.text).join(""),
     segments,
   };
-}
-
-export function isTerminalLinkActivation(
-  event: Pick<MouseEvent, "metaKey" | "ctrlKey">,
-  platform = typeof navigator === "undefined" ? "" : navigator.platform,
-): boolean {
-  if (platform.length === 0) return false;
-  return isMacPlatform(platform)
-    ? event.metaKey && !event.ctrlKey
-    : event.ctrlKey && !event.metaKey;
 }

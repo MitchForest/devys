@@ -14,6 +14,12 @@ export function forgetHostSettings(env: Record<string, string | undefined>) {
   return env;
 }
 
+/**
+ * What this deployment does not have, such as terminals in cloud mode or a Mac host that is
+ * not configured. The API answers it as 503 with its message.
+ */
+export class Unavailable extends Error {}
+
 /** Ids the host accepts in a scope, a path segment or a coding session. */
 export const hostId = /^[A-Za-z0-9-]{1,64}$/;
 

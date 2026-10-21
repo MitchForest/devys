@@ -101,7 +101,7 @@ export interface GhosttyCell {
   readonly selected: boolean;
 }
 
-export interface GhosttyRow {
+interface GhosttyRow {
   readonly cells: readonly GhosttyCell[];
   readonly text: string;
   readonly isWrapContinuation: boolean;
@@ -123,7 +123,7 @@ export interface GhosttySnapshot {
   readonly rowData: readonly GhosttyRow[];
 }
 
-export interface GhosttySelectionRange {
+interface GhosttySelectionRange {
   readonly viewport: {
     readonly start: { readonly x: number; readonly y: number };
     readonly end: { readonly x: number; readonly y: number };
@@ -140,13 +140,13 @@ export interface GhosttyScrollbar {
   readonly len: number;
 }
 
-export interface GhosttyPointInput {
+interface GhosttyPointInput {
   readonly x: number;
   readonly y: number;
   readonly tag?: 1 | 2;
 }
 
-export interface GhosttyMouseInput {
+interface GhosttyMouseInput {
   readonly action: "press" | "release" | "motion";
   readonly button: number | null;
   readonly mods: number;
@@ -186,7 +186,7 @@ function sameColor(left: GhosttyColor, right: GhosttyColor): boolean {
  * arguments far below that, so convert in bounded chunks instead of spreading
  * every codepoint into String.fromCodePoint at once.
  */
-export function ghosttyCellText(codepointView: DataView, graphemeLength: number): string {
+function ghosttyCellText(codepointView: DataView, graphemeLength: number): string {
   if (graphemeLength === 1) return String.fromCodePoint(codepointView.getUint32(0, true));
   const CHUNK_SIZE = 4_096;
   let text = "";

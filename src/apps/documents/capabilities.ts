@@ -1,12 +1,19 @@
 import { artifactText, publishArtifact, saveArtifact, type ArtifactBindings } from "./service.ts";
 import { Effect, Schema } from "effect";
 import type { Runner } from "../../workspace/contract.ts";
-import { capability, CapabilityError, Invocation, FilePath } from "../../protocol/capability.ts";
-import { Ref, ref } from "../../protocol/ref.ts";
+import {
+  capability,
+  CapabilityError,
+  Invocation,
+  FilePath,
+  Text,
+} from "../../protocol/capability.ts";
+import { Ref, RefOf, ref } from "../../protocol/ref.ts";
+import { listDrive, readDrive, writeDrive, type Drive } from "./drive.ts";
 import { pageProblem } from "./page.ts";
 
 /** Says in the conversation an employee is answering that it published a page. */
-export type Announce = (
+type Announce = (
   invocation: { businessId: string; employeeId: string; conversation?: string },
   card: { clientId: string; text: string; ref: Ref },
 ) => Promise<void>;
@@ -36,41 +43,43 @@ export function artifactCapabilities(
         contentType: "text/html",
         bytes: new TextEncoder().encode(html),
       });
+      const published = ref("documents", "artifact", saved.id);
+      // One card per page: the ref is the message's client id.
       yield* Effect.promise(() =>
         announce(invocation, {
-          clientId: `artifact:${saved.id}`,
+          clientId: published,
           text: `Published a page: ${title}`,
-          ref: ref("documents", "artifact", saved.id),
+          ref: published,
         }),
       );
-      return { id: saved.id, ref: ref("documents", "artifact", saved.id) };
+      return { ref: published };
     });
   return [
     capability({
       name: "artifactPage",
       description:
-        "Publish a self-contained HTML page (a report, dashboard, comparison or plan) the owner sees in this conversation and can keep in a project. It renders offline and alone: inline CSS and scripts and data: images only; no forms, frames or network. Each call makes a new page; change one with artifactEdit.",
+        "Publish a self-contained HTML page (a report, dashboard, comparison or plan) the owner sees in this conversation and can keep in a project. It renders offline and alone: inline CSS and scripts and data: images only; no forms, frames or network. Each call makes a new page and returns its ref; change one with artifactEdit.",
       effect: "change",
       replay: "idempotent",
       input: Schema.Struct({
         title: Title,
         html: Schema.String.check(Schema.isMaxLength(600_000)),
       }),
-      output: Schema.Struct({ id: Schema.String, ref: Ref }),
+      output: Schema.Struct({ ref: Ref }),
       execute: ({ title, html }) => publishPage(title, html),
     }),
     capability({
       name: "artifactEdit",
       description:
-        "Change one of the business's pages by replacing one exact piece of its HTML (it must appear once), publishing the result as the next version.",
+        "Change one of the business's pages (its ref, devys:documents/artifact/<id>) by replacing one exact piece of its HTML (it must appear once), publishing the result as the next version with a new ref.",
       effect: "change",
       replay: "idempotent",
       input: Schema.Struct({
-        page: Schema.String.check(Schema.isPattern(/^[0-9a-f-]{36}$/)),
+        page: RefOf("documents", "artifact"),
         find: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(100_000)),
         replace: Schema.String.check(Schema.isMaxLength(100_000)),
       }),
-      output: Schema.Struct({ id: Schema.String, ref: Ref }),
+      output: Schema.Struct({ ref: Ref }),
       execute: ({ page, find, replace }) =>
         Effect.gen(function* () {
           const { businessId } = yield* Invocation;
@@ -98,12 +107,7 @@ export function artifactCapabilities(
         filename: Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_. -]{1,200}$/)),
         contentType: Schema.String.check(Schema.isPattern(/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/)),
       }),
-      output: Schema.Struct({
-        id: Schema.String,
-        url: Schema.String,
-        bytes: Schema.Int,
-        ref: Ref,
-      }),
+      output: Schema.Struct({ ref: Ref, url: Schema.String, bytes: Schema.Int }),
       execute: ({ path, filename, contentType }) =>
         Effect.gen(function* () {
           const { businessId, employeeId, operationId } = yield* Invocation;
@@ -114,7 +118,117 @@ export function artifactCapabilities(
             operationId,
             { path, filename, contentType },
           );
-          return { ...saved, ref: ref("documents", "artifact", saved.id) };
+          return {
+            ref: ref("documents", "artifact", saved.id),
+            url: saved.url,
+            bytes: saved.bytes,
+          };
+        }),
+    }),
+  ];
+}
+
+/** Documents' Google Drive capabilities, through the business's Google connection. */
+export function driveCapabilities(drive: Drive) {
+  const google = <A>(operation: () => Promise<A>) =>
+    Effect.tryPromise({
+      try: operation,
+      catch: (cause) =>
+        new CapabilityError({
+          code: "unavailable",
+          message:
+            cause instanceof Error &&
+            /^(Connect |Choose |File |This capability |Updates support |Operation belongs|Google Drive |Connection changed)/.test(
+              cause.message,
+            )
+              ? cause.message
+              : "Google Drive unavailable; reconnect or inspect the file before repeating a write.",
+        }),
+    });
+  const driveId = Schema.String.check(Schema.isPattern(/^[a-zA-Z0-9_-]{1,200}$/));
+  const driveResult = Schema.Struct({
+    id: driveId,
+    status: Schema.Literals(["prepared", "uncertain", "completed"]),
+    url: Schema.String,
+  });
+  return [
+    capability({
+      name: "driveList",
+      description: "List Google Drive files selected for this business or created by Devys.",
+      effect: "read",
+      replay: "read",
+      input: Schema.Struct({}),
+      output: Schema.Array(
+        Schema.Struct({ id: driveId, name: Schema.String, mimeType: Schema.String }),
+      ),
+      execute: () =>
+        Effect.gen(function* () {
+          const { businessId } = yield* Invocation;
+          return yield* google(() => listDrive(drive.db, businessId));
+        }),
+    }),
+    capability({
+      name: "driveRead",
+      description:
+        "Read a selected text file or export a selected Google Doc as plain text, up to 64 KB. Retain etag when proposing a text-file update.",
+      effect: "read",
+      replay: "read",
+      input: Schema.Struct({ id: driveId }),
+      output: Schema.Struct({
+        id: driveId,
+        name: Schema.String,
+        mimeType: Schema.String,
+        content: Text,
+        etag: Schema.String,
+        url: Schema.String,
+      }),
+      execute: ({ id }) =>
+        Effect.gen(function* () {
+          const { businessId } = yield* Invocation;
+          return yield* google(() => readDrive(drive, businessId, id));
+        }),
+    }),
+    capability({
+      name: "driveCreate",
+      description:
+        "Create a plain-text file in the connected Drive. If uncertain, inspect the returned file id; do not blindly create another copy.",
+      effect: "external",
+      replay: "reconcile",
+      input: Schema.Struct({
+        name: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(200)),
+        content: Text,
+      }),
+      output: driveResult,
+      execute: (input) =>
+        Effect.gen(function* () {
+          const invocation = yield* Invocation;
+          return yield* google(() =>
+            writeDrive(drive, invocation.businessId, invocation.operationId, input, () =>
+              Effect.runPromise(invocation.assertActive()),
+            ),
+          );
+        }),
+    }),
+    capability({
+      name: "driveUpdate",
+      description:
+        "Replace the contents of a selected text file using the etag from driveRead. Native Google Docs updates are not supported. Inspect an uncertain outcome before another write.",
+      effect: "external",
+      replay: "reconcile",
+      input: Schema.Struct({
+        id: driveId,
+        content: Text,
+        etag: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(500)),
+      }),
+      output: driveResult,
+      execute: (input) =>
+        Effect.gen(function* () {
+          const invocation = yield* Invocation;
+          return yield* google(() =>
+            writeDrive(drive, invocation.businessId, invocation.operationId, input, () =>
+              Effect.runPromise(invocation.assertActive()),
+            ),
+          );
         }),
     }),
   ];

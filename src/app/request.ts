@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import { readBounded } from "../protocol/bytes.ts";
 
 export const notFound = () => new Response("Not found", { status: 404 });
@@ -29,6 +30,22 @@ export async function body<T>(request: Request, limit: number): Promise<Partial<
   if (typeof value !== "object" || value === null || Array.isArray(value))
     throw new RequestError(400, "Send a JSON object");
   return value as Partial<T>;
+}
+/**
+ * A JSON object body decoded with the schema that owns its rule (the same one a capability
+ * uses). A mismatch is 400 with what was wrong, thrown as `RequestError`.
+ */
+export async function decodedBody<T>(
+  request: Request,
+  limit: number,
+  schema: Schema.Codec<T, unknown>,
+): Promise<T> {
+  const value = await body(request, limit);
+  try {
+    return Schema.decodeUnknownSync(schema)(value);
+  } catch (error) {
+    throw new RequestError(400, error instanceof Error ? error.message : "Invalid request");
+  }
 }
 export const label = (value: unknown, max: number) =>
   typeof value === "string" && value.trim().length > 0 && value.trim().length <= max

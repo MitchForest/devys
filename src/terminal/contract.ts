@@ -21,7 +21,8 @@ export interface TerminalSession {
 }
 
 /** A coding agent's own interactive CLI, resumed on its session id. */
-export type ResumeCommand = { provider: "codex" | "claude"; session: string };
+/** The provider is the Code app's (`codex`, `claude`); the host that composes both checks it. */
+export type ResumeCommand = { provider: string; session: string };
 
 export interface OpenRequest {
   scope: Scope;
@@ -49,4 +50,6 @@ export interface Terminals {
   open(request: OpenRequest): Promise<TerminalSession>;
   list(scope: Scope): Promise<TerminalSession[]>;
   close(scope: Scope, id: string): Promise<void>;
+  /** Carries one client between a WebSocket and a terminal until either side ends. */
+  relay(scope: Scope, socket: WebSocket, input: { id: string; offset: number }): Promise<void>;
 }

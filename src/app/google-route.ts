@@ -4,9 +4,10 @@ import {
   disconnectGoogle,
   googleAccess,
   googleConfigured,
+  googleConnection,
   googleConnectionStatus,
 } from "../connections/google.ts";
-import { listDrive, selectDrive } from "../connections/drive.ts";
+import { listDrive, selectDrive } from "../apps/documents/drive.ts";
 import { type Business, type Person } from "../identity/contract.ts";
 import { body, forbidden, notFound } from "./request.ts";
 
@@ -21,7 +22,7 @@ export async function googleRoute(
     return Response.json({
       configured: googleConfigured(env),
       connected: Boolean(connection),
-      files: await listDrive(env, business.id),
+      files: await listDrive(env.HYPERDRIVE, business.id),
     });
   }
   if (request.method !== "POST") return notFound();
@@ -44,7 +45,13 @@ export async function googleRoute(
     const input = await body<{ ids: unknown }>(request, 8_000);
     if (!Array.isArray(input.ids) || !input.ids.every((id) => typeof id === "string"))
       return new Response("Invalid file selection", { status: 400 });
-    return Response.json(await selectDrive(env, business.id, input.ids));
+    return Response.json(
+      await selectDrive(
+        { db: env.HYPERDRIVE, connection: googleConnection(env) },
+        business.id,
+        input.ids,
+      ),
+    );
   }
   return notFound();
 }

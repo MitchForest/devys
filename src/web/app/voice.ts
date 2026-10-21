@@ -14,7 +14,7 @@ export const capturing = (phase: VoicePhase) =>
 export const modeOf = (phase: VoicePhase) =>
   capturing(phase) ? (phase as { mode: SpeechMode }).mode : undefined;
 
-export type CaptureError =
+type CaptureError =
   | "microphoneDenied"
   | "unsupportedLocale"
   | "noSpeech"
@@ -89,7 +89,7 @@ const recognitionClass = () =>
       ).SpeechRecognition ??
       (window as unknown as { webkitSpeechRecognition?: RecognitionClass })
         .webkitSpeechRecognition);
-export interface CaptureHandlers {
+interface CaptureHandlers {
   listening: () => void;
   transcript: (finalized: string, volatile: string) => void;
   level: (level: number) => void;

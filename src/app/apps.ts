@@ -17,6 +17,7 @@ import { team } from "../apps/team/app.ts";
 import { web } from "../apps/web/app.ts";
 import { website } from "../apps/website/app.ts";
 import { work } from "../apps/work/app.ts";
+import { connectedProviders } from "../connections/google.ts";
 import type { Database } from "../data/database.ts";
 import { type Business, type Person } from "../identity/contract.ts";
 import type { AppManifest } from "../protocol/app.ts";
@@ -40,14 +41,14 @@ export const appCatalog: readonly AppManifest[] = [
   customers,
 ];
 
-export const appById = (id: string) => appCatalog.find((app) => app.id === id);
+const appById = (id: string) => appCatalog.find((app) => app.id === id);
 
 /** The app a capability belongs to. Every capability belongs to exactly one. */
-export const appOf = (capability: string) =>
+const appOf = (capability: string) =>
   appCatalog.find((app) => app.capabilities.includes(capability));
 
 /** The business apps every new business has installed. */
-export const defaultApps = ["documents", "code"] as const;
+export const defaultApps = [documents.id, code.id];
 
 /** The apps a business has: every system app and the business apps it installed. */
 async function installedApps(db: Database, businessId: string) {
@@ -74,18 +75,38 @@ export async function appSkills(db: Database, businessId: string) {
   return (await installedApps(db, businessId)).flatMap((app) => app.skills);
 }
 
+/**
+ * How wiring tells an app with `appears: "records"` has records yet, by app id: each such
+ * app's own records check. Code's records are coding sessions (and their deploys and pull
+ * requests).
+ */
+export const recordsChecks: Readonly<
+  Record<string, (db: Database, businessId: string) => Promise<boolean>>
+> = {
+  [code.id]: (db, businessId) => Effect.runPromise(hasCodingSessions(db, businessId)),
+};
+
 /** Whether an installed app has something to show, by its `appears` rule. */
 async function hasSomething(
   env: Env,
   businessId: string,
-  app: Pick<AppManifest, "id" | "appears">,
+  app: Pick<AppManifest, "id" | "appears" | "connections">,
 ) {
-  if (app.appears === "always") return true;
-  // Code's records are coding sessions (and the deploys and pull requests they made).
-  if (app.appears === "records" && app.id === code.id)
-    return Effect.runPromise(hasCodingSessions(env.HYPERDRIVE, businessId));
-  // System apps never show; no available app appears only once connected yet.
-  return false;
+  switch (app.appears) {
+    case "always":
+      return true;
+    case "never":
+      return false;
+    case "records": {
+      const check = recordsChecks[app.id];
+      if (!check) throw new Error(`${app.id} appears once it has records but has no records check`);
+      return check(env.HYPERDRIVE, businessId);
+    }
+    case "connected": {
+      const connected = await connectedProviders(env.HYPERDRIVE, businessId);
+      return app.connections.some((connection) => connected.includes(connection.provider));
+    }
+  }
 }
 
 /** The app directory for one business: every Devys app, with whether it is installed. */
@@ -126,8 +147,7 @@ export async function appsRoute(
       return new Response(`${app.name} is coming soon`, { status: 409 });
     await Effect.runPromise(install(env.HYPERDRIVE, business.id, [app.id]));
   } else if (action === "uninstall") {
-    if (app.id === documents.id)
-      return new Response("Documents is part of every business", { status: 409 });
+    // Its records stay: owners still read them; only its capabilities and skills go.
     await Effect.runPromise(uninstall(env.HYPERDRIVE, business.id, app.id));
   } else {
     const { pinned } = await body<{ pinned: boolean }>(request, 1_000);

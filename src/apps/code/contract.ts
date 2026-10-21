@@ -86,7 +86,7 @@ export type Stage = "preview" | "production";
  * (to roll back) an earlier one. `url` is checked afterwards; without it, the last https URL
  * the command printed is.
  */
-export interface DeployRequest {
+interface DeployRequest {
   stage: Stage;
   command: string;
   commit?: string;
@@ -109,7 +109,7 @@ export interface Deployed {
 }
 
 /** Commits the worktree and starts the repository's check against that commit. */
-export interface AcceptRequest {
+interface AcceptRequest {
   message: string;
   check: string;
 }

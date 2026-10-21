@@ -77,7 +77,7 @@ export async function patch(worktree: string, base: string) {
 }
 
 /** One changed file of a worktree against its base. */
-export interface ChangedFile {
+interface ChangedFile {
   path: string;
   status: "added" | "modified" | "deleted" | "renamed";
   added: number;

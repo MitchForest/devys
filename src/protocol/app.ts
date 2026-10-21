@@ -1,4 +1,4 @@
-import type { RoleTemplateId } from "../identity/contract.ts";
+import type { RoleTemplateId } from "./roles.ts";
 import type { Skill } from "./skill.ts";
 
 /**

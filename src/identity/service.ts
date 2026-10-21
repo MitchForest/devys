@@ -1,5 +1,6 @@
 import { database, type Database } from "../data/database.ts";
-import type { Business, Employee, Look, Person, RoleTemplateId, Scope } from "./contract.ts";
+import type { RoleTemplateId } from "../protocol/roles.ts";
+import type { Business, Employee, Look, Person, Scope } from "./contract.ts";
 
 export const activePerson = (db: Database, personId: string) =>
   database(db, (sql) =>

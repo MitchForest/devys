@@ -65,7 +65,7 @@ interface Job {
   deploying?: { stage: Stage; commit: string };
 }
 
-export interface CodingHostOptions {
+interface CodingHostOptions {
   /** Each business works in `<work>/<businessId>`. */
   work: string;
   data: string;
@@ -92,7 +92,7 @@ const checkOutputBytes = 16_000;
  * A failure that reads like a missing or expired login, with how to fix it: the owner signs
  * the CLI in on the Mac (in a Devys terminal or their own); Devys never holds the login.
  */
-export function signInHint(provider: Provider, error: string) {
+function signInHint(provider: Provider, error: string) {
   if (
     !/not logged in|log ?in|logged out|unauthori[sz]ed|\b401\b|authenticat|api key|credential/i.test(
       error,

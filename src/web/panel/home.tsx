@@ -60,7 +60,7 @@ export function NeedsYou({ close }: { close: () => void }) {
 }
 
 /** One request, answered in place; its input unfolds on demand. */
-export function DecisionRow({ decision }: { decision: Decision }) {
+function DecisionRow({ decision }: { decision: Decision }) {
   const { actions, employees, work } = useWorkspace();
   const [open, setOpen] = useState(false);
   const employee = employees.find((e) => e.id === decision.employee_id);

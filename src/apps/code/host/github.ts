@@ -18,7 +18,7 @@ const exec = promisify(execFile);
 export const githubName = /^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/;
 
 /** The `owner/name` an origin URL points at on github.com, if it does. */
-export function githubRepository(url: string) {
+function githubRepository(url: string) {
   return /github\.com[:/]([A-Za-z0-9-]+\/[A-Za-z0-9._-]+?)(?:\.git)?\/?$/i.exec(url)?.[1];
 }
 

@@ -19,7 +19,7 @@ import { withinCommandLimits } from "../../protocol/limits.ts";
 import type { CommandResult } from "../contract.ts";
 import { listWorkspaceSkills } from "../skills.ts";
 
-export interface HostOptions {
+interface HostOptions {
   token: string;
   /** Where receipts live. */
   data: string;

@@ -124,7 +124,7 @@ export interface ConversationSummary {
   /** The signed-in person follows it: a work thread they hear each milestone of. */
   following: boolean;
 }
-export interface OutgoingMessage {
+interface OutgoingMessage {
   /** The sender's own id, so a retried post is stored once. */
   id: string;
   text: string;

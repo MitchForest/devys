@@ -1,5 +1,5 @@
 /** Which viewer a file opens in, from its name. */
-export type FileKind =
+type FileKind =
   | "markdown"
   | "pdf"
   | "word"

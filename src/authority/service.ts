@@ -114,7 +114,7 @@ function canonical(value: unknown): string {
  * Binds a request to the capability, the grant (its revision), the exact input and the work
  * it is for: approving it for one work item does not approve it for another.
  */
-export const requestHash = (
+const requestHash = (
   grantId: string,
   capability: string,
   input: unknown,

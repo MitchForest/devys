@@ -10,7 +10,8 @@ import { authorize } from "../src/app/authorize.ts";
 import { apiRoute } from "../src/app/http.ts";
 import { grant } from "../src/authority/service.ts";
 import { Effect } from "effect";
-import { hire, hireInput } from "../src/app/team.ts";
+import { hire, hireInput } from "../src/identity/team.ts";
+import { hiring } from "../src/app/team.ts";
 import { capabilities } from "../src/app/capabilities.ts";
 import type { Inbound } from "../src/channels/contract.ts";
 import { sha256 } from "../src/protocol/bytes.ts";
@@ -36,11 +37,12 @@ function recording() {
 async function owner() {
   const acme = await business("Conversations");
   const { received, bindings } = recording();
+  const team = hiring(() => capabilities(bindings));
   const growth = await hire(
     bindings.HYPERDRIVE,
     acme.business.id,
-    hireInput({ template: "growth" }) as Exclude<ReturnType<typeof hireInput>, string>,
-    capabilities(bindings),
+    hireInput({ template: "growth" }, team) as Exclude<ReturnType<typeof hireInput>, string>,
+    team,
   );
   const token = Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) =>
     b.toString(16).padStart(2, "0"),
@@ -116,7 +118,7 @@ it("in a project the lead answers first, then whoever spoke last, and a mention 
   const opsChat = received.at(-1)!.input.chatId;
   expect(opsChat).toBe(`app:${acme.business.id}:${ops}:project:${project.id}`);
   expect(received.at(-1)!.input.text).toContain(
-    'In the project "Launch" (goal: Go live; deadline 2026-12-01). This is its channel: say results, hand-offs and questions here; post progress in the work item\'s own thread.',
+    `In the project "Launch" (devys:work/project/${project.id}; goal: Go live; deadline 2026-12-01). This is its channel: say results, hand-offs and questions here; post progress in the work item's own thread.`,
   );
   await postFromEmployee(
     bindings,

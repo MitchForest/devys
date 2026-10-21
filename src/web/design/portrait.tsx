@@ -3,7 +3,7 @@ import { BusinessTile, Face, faceFor, tileGradients, tintFor, type Mood } from "
 import { cn } from "@/lib/utils";
 
 /** Any look an employee or business can wear, as native `PortraitSource`. */
-export type Source =
+type Source =
   | { kind: "face"; spec: ReturnType<typeof faceFor> }
   | { kind: "emoji"; emoji: string; tint: string }
   | { kind: "photo"; url: string }
@@ -12,7 +12,7 @@ export type Source =
 const photoUrl = (path: string, look: Extract<Look, { kind: "photo" }>) =>
   `${path}/look/photo?v=${look.version}`;
 
-export function employeeSource(employee: Employee): Source {
+function employeeSource(employee: Employee): Source {
   const look = employee.look;
   if (look?.kind === "face") return { kind: "face", spec: look };
   if (look?.kind === "emoji") return look;
@@ -24,7 +24,7 @@ export function employeeSource(employee: Employee): Source {
   return { kind: "face", spec: faceFor(employee.id) };
 }
 
-export function businessSource(business: Business): Source {
+function businessSource(business: Business): Source {
   const look = business.look;
   if (look?.kind === "emoji") return look;
   if (look?.kind === "photo")
@@ -40,7 +40,7 @@ export function businessSource(business: Business): Source {
  * Renders a look at any size. The Face shows mood with its eyes; emoji, photos and
  * initials show it with a turning ring (working) or a dot (waiting, oops).
  */
-export function Portrait({
+function Portrait({
   source,
   size,
   mood = "idle",

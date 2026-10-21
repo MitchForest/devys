@@ -5,7 +5,6 @@ import { providerName } from "../apps/code/capabilities.ts";
 import type { Provider } from "../apps/code/contract.ts";
 import { codingSession, codingSessionsFor } from "../apps/code/service.ts";
 import type { Business, Person } from "../identity/contract.ts";
-import { relayTerminal } from "../terminal/host-client.ts";
 import { workItem, setTakeover } from "../work/service.ts";
 import { postEvent } from "./conversations.ts";
 import { modeOf } from "./mode.ts";
@@ -22,7 +21,6 @@ export async function terminalRoute(request: Request, env: Env, access: Access) 
   const { person, business, trusted, path } = access;
   if (path !== "/terminals" && !path.startsWith("/terminals/")) return undefined;
   const mode = modeOf(env);
-  if (!mode.host) return new Response("Terminals run in local mode only.", { status: 503 });
   const terminals = mode.terminals(business.id);
   if (path === "/terminals" && request.method === "GET")
     return Response.json({
@@ -32,15 +30,13 @@ export async function terminalRoute(request: Request, env: Env, access: Access) 
   if (!trusted) return new Response("Forbidden", { status: 403 });
   const socket = /^\/terminals\/([A-Za-z0-9-]{1,64})\/socket$/.exec(path)?.[1];
   if (socket && request.headers.get("upgrade")?.toLowerCase() === "websocket") {
-    const where = mode.host;
     const pair = new WebSocketPair();
     const [client, server] = [pair[0], pair[1]];
     server.accept();
     const offset = Number(new URL(request.url).searchParams.get("offset") ?? 0) || 0;
-    void relayTerminal(where, { businessId: business.id, employeeId: "owner" }, server, {
-      id: socket,
-      offset,
-    }).catch(() => server.close(1011, "Terminal unavailable"));
+    void terminals
+      .relay({ businessId: business.id, employeeId: "owner" }, server, { id: socket, offset })
+      .catch(() => server.close(1011, "Terminal unavailable"));
     return new Response(null, { status: 101, webSocket: client });
   }
   const closing = /^\/terminals\/([A-Za-z0-9-]{1,64})\/close$/.exec(path)?.[1];

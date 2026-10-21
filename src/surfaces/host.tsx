@@ -20,7 +20,7 @@ const WhiteboardEditor = lazy(() =>
   import("./files/whiteboard.tsx").then((m) => ({ default: m.WhiteboardEditor })),
 );
 
-export type SurfaceContent =
+type SurfaceContent =
   | { kind: "diff"; patch: string; comments?: DiffComment[]; dark?: boolean }
   /** `version` changes when the text is replaced from outside, as after a conflict. */
   /** A markdown file; a deck (`isDeck`) edits beside its slides instead. */
@@ -29,7 +29,7 @@ export type SurfaceContent =
   | { kind: "sheet"; name: string; base64: string; version: string; dark?: boolean }
   | { kind: "whiteboard"; json: string; version: string; dark?: boolean };
 
-export type SurfaceMessage =
+type SurfaceMessage =
   | { type: "ready" }
   | { type: "select"; selection: DiffSelection | null }
   | { type: "change"; markdown: string }

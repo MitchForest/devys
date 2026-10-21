@@ -4,7 +4,7 @@ import type { Ref } from "../protocol/ref.ts";
  * The shared record of what was said in a DM, a project's channel or a work item's thread. Pi keeps
  * each employee's own reasoning; a conversation is what everyone in it reads.
  */
-export type ConversationKind = "direct" | "project" | "work";
+type ConversationKind = "direct" | "project" | "work";
 
 /** `direct:<employee>`, `project:<project>` or `work:<workItem>`. */
 export type ConversationKey = `${ConversationKind}:${string}`;
@@ -36,6 +36,11 @@ export interface Message {
 
 export const employeeOf = (author: string) =>
   author.startsWith("employee:") ? author.slice("employee:".length) : undefined;
+
+/** How a message's author is named to an employee, given the business's employees. */
+export const namer = (employees: readonly { id: string; name: string }[]) => (author: string) =>
+  employees.find((employee) => employee.id === employeeOf(author))?.name ??
+  (author.startsWith("person:") ? "Owner" : "Devys");
 
 /**
  * Who answers a new message, by the conversation's rules:

@@ -27,6 +27,6 @@ inside the HTML you pass to `artifactPage`.
 
 ## Versions
 
-Change a page with `artifactEdit`: give the page id, an exact `find` string that appears
+Change a page with `artifactEdit`: give the page's ref, an exact `find` string that appears
 once in its HTML, and its `replace`. Each edit publishes the next version under the same
 name, and the owner sees it update. Use `artifactPage` again only for a different page.

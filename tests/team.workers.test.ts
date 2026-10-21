@@ -96,7 +96,8 @@ it("a new business starts with its brief and the chosen team, each with its temp
   const engineering = await grantsOf(created.team[0]!.id);
   expect(engineering.run).toBe("auto");
   expect(engineering.hireEmployee).toBeUndefined();
-  expect((await grantsOf(created.team[1]!.id)).run).toBeUndefined();
+  // `run` is core: every employee is offered it, so every role is granted it.
+  expect((await grantsOf(created.team[1]!.id)).run).toBe("auto");
 });
 
 it("members hire from templates, edit employees and the brief, and retire with a handover", async () => {
@@ -293,7 +294,7 @@ it("projects have a lead, members, a goal, deadline and budget, and work created
   expect((await as(`${path}/conversations/space:${project.id}`)).status).toBe(404);
 });
 
-it("the app directory installs, uninstalls and pins apps; Documents stays and coming apps wait", async () => {
+it("the app directory installs, uninstalls and pins apps; coming apps wait", async () => {
   const acme = await business("Apps");
   const as = await session(acme.person);
   const path = `/api/businesses/${acme.business.id}`;
@@ -307,7 +308,20 @@ it("the app directory installs, uninstalls and pins apps; Documents stays and co
   expect(await byId("code")).toMatchObject({ installed: true, visible: false });
   expect(await byId("mail")).toMatchObject({ status: "coming", installed: false });
   expect((await post("/apps/mail/install")).status).toBe(409);
-  expect((await post("/apps/documents/uninstall")).status).toBe(409);
+  // Documents uninstalls like any business app; its records stay readable to the owner.
+  await sql.run(
+    `INSERT INTO artifacts (id, business_id, operation_id, object_key, filename, content_type, byte_length)
+     VALUES ($1, $2, 'kept', $3, 'kept.html', 'text/html', 0)`,
+    [crypto.randomUUID(), acme.business.id, `test/${crypto.randomUUID()}`],
+  );
+  expect((await post("/apps/documents/uninstall")).status).toBe(200);
+  expect(await byId("documents")).toMatchObject({ installed: false, visible: false });
+  expect(
+    (await json<{ artifacts: { filename: string }[] }>(as(path))).artifacts.map(
+      (artifact) => artifact.filename,
+    ),
+  ).toEqual(["kept.html"]);
+  expect((await post("/apps/documents/install")).status).toBe(200);
   expect((await post("/apps/nope/install")).status).toBe(404);
   expect((await post("/apps/code/uninstall")).status).toBe(200);
   expect(await byId("code")).toMatchObject({ installed: false, pinned: false });

@@ -1,10 +1,19 @@
-import { assertGoogle, googleAccess, type GoogleAccess, type GoogleBindings } from "./google.ts";
-import { query, type Database } from "../data/database.ts";
-import { readBounded, sha256 } from "../protocol/bytes.ts";
+import type { Connection, ConnectionAccess } from "../../connections/contract.ts";
+import { query, type Database } from "../../data/database.ts";
+import { readBounded, sha256 } from "../../protocol/bytes.ts";
+
+/**
+ * Google Drive files for Documents: the files the owner chose in the picker and the ones
+ * Devys wrote, read and written through the business's Google connection.
+ */
+export interface Drive {
+  db: Database;
+  connection: Connection;
+}
 
 const api = "https://www.googleapis.com/drive/v3";
 const fields = "id,name,mimeType,version,webViewLink,trashed";
-export interface DriveFile {
+interface DriveFile {
   id: string;
   name: string;
   mimeType: string;
@@ -17,13 +26,13 @@ const fileId = (id: string) => {
   return encodeURIComponent(id);
 };
 async function request(
-  env: GoogleBindings,
+  drive: Drive,
   business: string,
-  access: GoogleAccess,
+  access: ConnectionAccess,
   url: string,
   init: RequestInit = {},
 ) {
-  await assertGoogle(env, business, access);
+  await drive.connection.assertCurrent(business, access);
   const headers = new Headers(init.headers);
   headers.set("authorization", `Bearer ${access.token}`);
   const response = await fetch(url, {
@@ -38,9 +47,9 @@ async function request(
   }
   return response;
 }
-async function metadata(env: GoogleBindings, business: string, access: GoogleAccess, id: string) {
+async function metadata(drive: Drive, business: string, access: ConnectionAccess, id: string) {
   const response = await request(
-    env,
+    drive,
     business,
     access,
     `${api}/files/${fileId(id)}?fields=${fields}`,
@@ -49,9 +58,9 @@ async function metadata(env: GoogleBindings, business: string, access: GoogleAcc
   if (file.trashed) throw new Error("File is in the trash");
   return { file, etag: response.headers.get("etag") ?? "" };
 }
-async function selected(env: GoogleBindings, business: string, access: GoogleAccess, id: string) {
+async function selected(drive: Drive, business: string, access: ConnectionAccess, id: string) {
   fileId(id);
-  const known = await query(env.HYPERDRIVE, (sql) =>
+  const known = await query(drive.db, (sql) =>
     sql.row(
       `SELECT file_id FROM drive_files WHERE business_id = $1 AND connection_id = $2 AND file_id = $3
        UNION SELECT file_id FROM drive_operations
@@ -62,66 +71,62 @@ async function selected(env: GoogleBindings, business: string, access: GoogleAcc
   if (!known) throw new Error("Choose this file in the Google Drive picker first");
 }
 async function saveSelection(
-  env: GoogleBindings,
+  drive: Drive,
   business: string,
-  access: GoogleAccess,
+  access: ConnectionAccess,
   file: DriveFile,
 ) {
-  await query(env.HYPERDRIVE, (sql) =>
+  // The row references its connection: one removed since fails the insert rather than
+  // remembering a file under it.
+  await query(drive.db, (sql) =>
     sql.run(
       `INSERT INTO drive_files (business_id, connection_id, file_id, name, mime_type)
-       SELECT $1, $2, $3, $4, $5 WHERE EXISTS (
-         SELECT 1 FROM google_connections WHERE business_id = $1 AND id = $2)
+       VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (business_id, file_id) DO UPDATE SET connection_id = excluded.connection_id,
          name = excluded.name, mime_type = excluded.mime_type`,
       [business, access.id, file.id, file.name, file.mimeType],
     ),
   );
 }
-export async function selectDrive(env: GoogleBindings, business: string, ids: string[]) {
+export async function selectDrive(drive: Drive, business: string, ids: string[]) {
   if (!ids.length || ids.length > 20) throw new Error("Select 1–20 files");
-  const access = await googleAccess(env, business);
+  const access = await drive.connection.access(business);
   for (const id of ids) {
     // Google verifies the drive.file grant; browser metadata is never trusted.
-    const { file } = await metadata(env, business, access, id);
-    await saveSelection(env, business, access, file);
+    const { file } = await metadata(drive, business, access, id);
+    await saveSelection(drive, business, access, file);
   }
   return { selected: ids.length };
 }
-export async function listDrive(env: GoogleBindings, business: string) {
-  return query(env.HYPERDRIVE, (sql) =>
+/** The business's chosen and written files. Disconnecting removes them with the connection. */
+export async function listDrive(db: Database, business: string) {
+  return query(db, (sql) =>
     sql.rows<{ id: string; name: string; mimeType: string }>(
-      `SELECT f.file_id AS id, f.name, f.mime_type AS "mimeType" FROM drive_files f
-       JOIN google_connections c ON c.id = f.connection_id
-       WHERE f.business_id = $1 ORDER BY f.name LIMIT 100`,
+      `SELECT file_id AS id, name, mime_type AS "mimeType" FROM drive_files
+       WHERE business_id = $1 ORDER BY name LIMIT 100`,
       [business],
     ),
   );
 }
-async function content(
-  env: GoogleBindings,
-  business: string,
-  access: GoogleAccess,
-  file: DriveFile,
-) {
+async function content(drive: Drive, business: string, access: ConnectionAccess, file: DriveFile) {
   const native = file.mimeType === "application/vnd.google-apps.document";
   if (!native && !/^(text\/|application\/(json|xml)$)/.test(file.mimeType))
     throw new Error("This capability reads text files and Google Docs only");
   const response = await request(
-    env,
+    drive,
     business,
     access,
     `${api}/files/${fileId(file.id)}${native ? "/export?mimeType=text%2Fplain" : "?alt=media"}`,
   );
   return new TextDecoder("utf-8", { fatal: true }).decode(await readBounded(response.body, 64_000));
 }
-export async function readDrive(env: GoogleBindings, business: string, id: string) {
-  const access = await googleAccess(env, business);
-  await selected(env, business, access, id);
-  const { file, etag } = await metadata(env, business, access, id);
-  const text = await content(env, business, access, file);
+export async function readDrive(drive: Drive, business: string, id: string) {
+  const access = await drive.connection.access(business);
+  await selected(drive, business, access, id);
+  const { file, etag } = await metadata(drive, business, access, id);
+  const text = await content(drive, business, access, file);
   // Do not combine content from one revision with the write precondition of another.
-  const latest = await metadata(env, business, access, id);
+  const latest = await metadata(drive, business, access, id);
   if (latest.file.version !== file.version || latest.etag !== etag)
     throw new Error("File changed while reading; read it again");
   return {
@@ -141,7 +146,7 @@ interface Receipt {
   status: "prepared" | "uncertain" | "completed";
 }
 export async function writeDrive(
-  env: GoogleBindings,
+  drive: Drive,
   business: string,
   operation: string,
   input: { name: string; content: string } | { id: string; content: string; etag: string },
@@ -149,10 +154,10 @@ export async function writeDrive(
 ) {
   if (new TextEncoder().encode(input.content).byteLength > 64_000)
     throw new Error("File exceeds 64 KB");
-  const access = await googleAccess(env, business);
+  const access = await drive.connection.access(business);
   const hash = await sha256(JSON.stringify(input));
   const receiptQuery = () =>
-    query(env.HYPERDRIVE, (sql) =>
+    query(drive.db, (sql) =>
       sql.row<Receipt>(
         `SELECT input_hash, connection_id, file_id, status FROM drive_operations
          WHERE business_id = $1 AND operation_id = $2`,
@@ -160,7 +165,7 @@ export async function writeDrive(
       ),
     );
   const setStatus = (status: Receipt["status"], from?: Receipt["status"]) =>
-    query(env.HYPERDRIVE, (sql) =>
+    query(drive.db, (sql) =>
       sql.run(
         `UPDATE drive_operations SET status = $3
          WHERE business_id = $1 AND operation_id = $2 AND ($4::text IS NULL OR status = $4)`,
@@ -171,8 +176,8 @@ export async function writeDrive(
   if (!receipt) {
     let id: string;
     if ("id" in input) {
-      await selected(env, business, access, input.id);
-      const { file, etag } = await metadata(env, business, access, input.id);
+      await selected(drive, business, access, input.id);
+      const { file, etag } = await metadata(drive, business, access, input.id);
       if (
         file.mimeType.startsWith("application/vnd.google-apps.") ||
         !/^(text\/|application\/(json|xml)$)/.test(file.mimeType)
@@ -185,7 +190,7 @@ export async function writeDrive(
       id = input.id;
     } else {
       const response = await request(
-        env,
+        drive,
         business,
         access,
         `${api}/files/generateIds?count=1&space=drive&type=files`,
@@ -193,7 +198,7 @@ export async function writeDrive(
       id = ((await response.json()) as { ids: string[] }).ids[0]!;
       fileId(id);
     }
-    await query(env.HYPERDRIVE, (sql) =>
+    await query(drive.db, (sql) =>
       sql.run(
         `INSERT INTO drive_operations (business_id, operation_id, connection_id, input_hash, file_id, status)
          VALUES ($1, $2, $3, $4, $5, 'prepared') ON CONFLICT (business_id, operation_id) DO NOTHING`,
@@ -214,12 +219,12 @@ export async function writeDrive(
   if (receipt.status === "uncertain") {
     // Inspection may prove the intended bytes exist; a mismatch never triggers another write.
     try {
-      const { file } = await metadata(env, business, access, id);
+      const { file } = await metadata(drive, business, access, id);
       if (
-        (await content(env, business, access, file)) === input.content &&
+        (await content(drive, business, access, file)) === input.content &&
         (!("name" in input) || file.name === input.name)
       ) {
-        await saveSelection(env, business, access, file);
+        await saveSelection(drive, business, access, file);
         await setStatus("completed");
         return result("completed");
       }
@@ -229,14 +234,14 @@ export async function writeDrive(
     return result("uncertain");
   }
   await assertActive();
-  await assertGoogle(env, business, access);
+  await drive.connection.assertCurrent(business, access);
   if ((await setStatus("uncertain", "prepared")) !== 1) return result("uncertain");
   try {
     await assertActive();
     let response: Response;
     if ("id" in input) {
       response = await request(
-        env,
+        drive,
         business,
         access,
         `https://www.googleapis.com/upload/drive/v3/files/${fileId(id)}?uploadType=media&fields=${fields}`,
@@ -250,7 +255,7 @@ export async function writeDrive(
       const boundary = `devys_${crypto.randomUUID()}`;
       const body = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ id, name: input.name, mimeType: "text/plain" })}\r\n--${boundary}\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n${input.content}\r\n--${boundary}--`;
       response = await request(
-        env,
+        drive,
         business,
         access,
         `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=${fields}`,
@@ -262,7 +267,7 @@ export async function writeDrive(
       );
     }
     const file = (await response.json()) as DriveFile;
-    await saveSelection(env, business, access, file);
+    await saveSelection(drive, business, access, file);
     await setStatus("completed");
     return result("completed");
   } catch {

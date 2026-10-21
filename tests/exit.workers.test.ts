@@ -5,6 +5,7 @@ import type { Env } from "../infra/api.ts";
 import { capabilities } from "../src/app/capabilities.ts";
 import { createMemory } from "../src/memory/service.ts";
 import { Invocation } from "../src/protocol/capability.ts";
+import { ref } from "../src/protocol/ref.ts";
 import { createWorkItem } from "../src/work/service.ts";
 import { createProject } from "../src/work/projects.ts";
 import { business, db, sql } from "./fixtures/postgres.ts";
@@ -59,11 +60,12 @@ it("B0 exit: an employee's capabilities see only its own business's work, projec
     call(globex.scope, "workCreate", { title: "x", owner: acme.scope.employeeId }),
   ).rejects.toMatchObject({ code: "invalid_input" });
   // Nor put its own work in Acme's project, or change that project.
+  const launchRef = ref("work", "project", launch.id);
   await expect(
-    call(globex.scope, "workCreate", { title: "x", projectId: launch.id }),
+    call(globex.scope, "workCreate", { title: "x", project: launchRef }),
   ).rejects.toMatchObject({ code: "invalid_input" });
   await expect(
-    call(globex.scope, "projectUpdate", { id: launch.id, goal: "Theirs now" }),
+    call(globex.scope, "projectUpdate", { project: launchRef, goal: "Theirs now" }),
   ).rejects.toMatchObject({ code: "invalid_input" });
 });
 
@@ -71,15 +73,26 @@ it("capabilities that create a record return its ref; projectAdd takes refs of t
   const acme = await business("Acme refs");
   const globex = await business("Globex refs");
   const task = (await call(acme.scope, "workCreate", { title: "Write the plan" })) as {
-    id: string;
     ref: string;
   };
-  expect(task.ref).toBe(`devys:work/item/${task.id}`);
+  expect(task.ref).toMatch(/^devys:work\/item\/[0-9a-f-]+$/);
+  expect(task).not.toHaveProperty("id");
   const launch = (await call(acme.scope, "projectCreate", { name: "Launch" })) as {
-    id: string;
     ref: string;
   };
-  expect(launch.ref).toBe(`devys:work/project/${launch.id}`);
+  expect(launch.ref).toMatch(/^devys:work\/project\/[0-9a-f-]+$/);
+  expect(launch).not.toHaveProperty("id");
+  // Pointers are refs of the right kind: a bare id or another kind's ref is refused.
+  const launchId = launch.ref.split("/").at(-1)!;
+  for (const project of [launchId, task.ref])
+    await expect(
+      call(acme.scope, "projectUpdate", { project, goal: "Ship it" }),
+    ).rejects.toMatchObject({ code: "invalid_input" });
+  const placed = (await call(acme.scope, "workCreate", {
+    title: "Draft the launch post",
+    project: launch.ref,
+  })) as { project: string };
+  expect(placed.project).toBe(launch.ref);
   const artifact = async (businessId: string) => {
     const id = crypto.randomUUID();
     await sql.run(
@@ -91,13 +104,18 @@ it("capabilities that create a record return its ref; projectAdd takes refs of t
   };
   const ours = `devys:documents/artifact/${await artifact(acme.business.id)}`;
   const theirs = `devys:documents/artifact/${await artifact(globex.business.id)}`;
-  await call(acme.scope, "projectAdd", { projectId: launch.id, ref: ours });
+  expect(await call(acme.scope, "projectAdd", { project: launch.ref, ref: ours })).toEqual({
+    project: launch.ref,
+    ref: ours,
+  });
   const listed = (await call(acme.scope, "projectList", {})) as {
-    projects: { items: { ref: string }[] }[];
+    projects: { ref: string; items: string[] }[];
   };
-  expect(listed.projects[0]!.items.map((item) => item.ref)).toEqual([ours]);
-  for (const ref of [theirs, task.ref, `artifact:${ours.split("/").at(-1)}`])
+  expect(listed.projects.map((project) => [project.ref, project.items])).toEqual([
+    [launch.ref, [ours]],
+  ]);
+  for (const kept of [theirs, task.ref, `artifact:${ours.split("/").at(-1)}`])
     await expect(
-      call(acme.scope, "projectAdd", { projectId: launch.id, ref }),
+      call(acme.scope, "projectAdd", { project: launch.ref, ref: kept }),
     ).rejects.toMatchObject({ code: "invalid_input" });
 });

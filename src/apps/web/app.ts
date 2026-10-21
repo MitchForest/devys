@@ -12,4 +12,10 @@ export const web = defineApp({
   skills: [],
   connections: [],
   appears: "never",
+  defaultGrants: {
+    operations: ["readPublicUrl"],
+    engineering: ["readPublicUrl"],
+    growth: ["readPublicUrl"],
+    "business-operations": ["readPublicUrl"],
+  },
 });

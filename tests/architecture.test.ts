@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import type { AppManifest } from "../src/protocol/app.ts";
 const read = (path: string) => readFileSync(path, "utf8");
 function files(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) =>
@@ -22,7 +23,6 @@ it("only application wiring selects the memory engine; consumers use its contrac
       /(?:FROM|INTO|UPDATE)\s+(?:memories|memory_sources|memory_state|memory_links)\b/i,
     );
   }
-  expect(read("src/memory/contract.ts")).not.toMatch(/D1Database|Env|pi-durable|cloudflare|photon/);
 });
 it("HTTP adapters and application wiring do not own SQL or provider-specific agent input", () => {
   for (const path of [
@@ -218,12 +218,19 @@ it("document surfaces depend on no component, so every client can host them", ()
       expect(resolve(path, target), `${path} imports ${target}`).toMatch(/^src\/surfaces\//);
 });
 
+/** Code without its comments: a contract may name a provider in prose, never use its SDK. */
+const code = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+/** Runtime and SDK types that belong behind a contract, never in one. */
+const vendorWords =
+  /\b(?:Env|D1Database|R2Bucket|Hyperdrive|DurableObject\w*|Rpc|ExecutionContext|Fetcher|WorkerEntrypoint)\b|cloudflare|pi-durable|@earendil|photon|oauth4webapi/i;
+
 it("contracts are vendor-free and depend only on other contracts", () => {
   const contracts = files("src").filter((path) => path.endsWith("/contract.ts"));
   expect(contracts.length).toBeGreaterThan(4);
   for (const path of contracts) {
     const text = read(path);
     expect(text, `${path} owns SQL`).not.toMatch(sqlStatement);
+    expect(code(text), `${path} names a vendor runtime or SDK`).not.toMatch(vendorWords);
     for (const target of imports(path)) {
       if (target === "effect") continue;
       expect(target, `${path} imports ${target}`).toMatch(/^\.\.?\//);
@@ -267,5 +274,77 @@ it("only wiring composes the catalog of apps", () => {
       expect(resolve(path, target), `${path} imports a manifest`).not.toMatch(
         /^src\/apps\/[^/]+\/app\.ts$/,
       );
+  }
+});
+
+it("the shared kernel (protocol, data) imports only itself and outside libraries", () => {
+  for (const path of [...files("src/protocol"), ...files("src/data")])
+    for (const target of imports(path).filter((value) => value.startsWith(".")))
+      expect(
+        shared.some((prefix) => resolve(path, target).startsWith(prefix)),
+        `${path} imports ${target}`,
+      ).toBe(true);
+});
+
+it("components do not import each other in a cycle", () => {
+  const edges = new Map<string, Set<string>>();
+  for (const path of files("src")) {
+    const own = component(path);
+    if (!own) continue;
+    for (const target of imports(path).filter((value) => value.startsWith("."))) {
+      const other = component(resolve(path, target));
+      if (other && other !== own) edges.set(own, (edges.get(own) ?? new Set()).add(other));
+    }
+  }
+  // Depth-first search; a component met again on the current path closes a cycle.
+  const cycles: string[] = [];
+  const done = new Set<string>();
+  const visit = (node: string, path: string[]) => {
+    if (path.includes(node)) {
+      cycles.push([...path.slice(path.indexOf(node)), node].join(" -> "));
+      return;
+    }
+    if (done.has(node)) return;
+    for (const next of edges.get(node) ?? []) visit(next, [...path, node]);
+    done.add(node);
+  };
+  for (const node of edges.keys()) visit(node, []);
+  expect(cycles).toEqual([]);
+});
+
+// Placement (.docs/APPS_AND_CAPABILITIES.md#code-layout): a system app's capabilities live in
+// its kernel component, a business app's in its own folder; wiring defines none.
+const systemAppComponents: Record<string, string> = {
+  computer: "workspace",
+  browser: "browser",
+  web: "egress",
+  memory: "memory",
+  conversations: "conversations",
+  work: "work",
+  team: "identity",
+};
+
+it("wiring defines no capability; it only composes them", () => {
+  for (const path of files("src").filter(wiring))
+    expect(read(path), `${path} defines a capability`).not.toMatch(/\bcapability\(\{/);
+});
+
+it("each capability is defined in the component that owns its app", async () => {
+  const defining = files("src").filter((path) => /\bcapability\(\{/.test(read(path)));
+  for (const id of apps) {
+    const manifest = Object.values(
+      (await import(`../src/apps/${id}/app.ts`)) as Record<string, AppManifest>,
+    )[0]!;
+    const owner =
+      manifest.kind === "system" ? `src/${systemAppComponents[id]}/` : `src/apps/${id}/`;
+    expect(manifest.kind === "business" || id in systemAppComponents, id).toBe(true);
+    for (const name of manifest.capabilities) {
+      const definedIn = defining.filter((path) =>
+        new RegExp(`\\bname:[^\\n]*"${name}"`).test(read(path)),
+      );
+      expect(definedIn.length, `${name} is defined`).toBeGreaterThan(0);
+      for (const path of definedIn)
+        expect(path, `${id}'s ${name} is defined in ${path}`).toMatch(new RegExp(`^${owner}`));
+    }
   }
 });

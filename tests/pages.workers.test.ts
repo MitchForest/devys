@@ -7,6 +7,7 @@ import { artifactText } from "../src/apps/documents/service.ts";
 import { browserCapabilities } from "../src/browser/capabilities.ts";
 import type { Browser } from "../src/browser/contract.ts";
 import { Invocation } from "../src/protocol/capability.ts";
+import { parseRef } from "../src/protocol/ref.ts";
 import { business } from "./fixtures/postgres.ts";
 
 const bindings = env as unknown as Env;
@@ -37,17 +38,19 @@ it("an employee publishes a page, sees it announced where it is answering, and e
     named("artifactPage")
       .execute({ title: "Signups by week", html: "<h1>Signups</h1><p>12</p>" })
       .pipe(as(scope, { conversation: "project:launch" })),
-  )) as { id: string; ref: string };
-  // The page it created is returned as its ref, the same one the card carries.
-  expect(published.ref).toBe(`devys:documents/artifact/${published.id}`);
+  )) as { ref: string };
+  // The page it created is returned as its ref (only), the same one the card carries.
+  expect(Object.keys(published)).toEqual(["ref"]);
+  const publishedId = parseRef(published.ref)?.id ?? "";
+  expect(parseRef(published.ref)).toMatchObject({ app: "documents", kind: "artifact" });
   expect(cards).toEqual([
     {
       conversation: "project:launch",
       text: "Published a page: Signups by week",
-      ref: `devys:documents/artifact/${published.id}`,
+      ref: published.ref,
     },
   ]);
-  const stored = await Effect.runPromise(artifactText(bindings, scope.businessId, published.id));
+  const stored = await Effect.runPromise(artifactText(bindings, scope.businessId, publishedId));
   expect(stored).toMatchObject({ filename: "Signups by week.html", content_type: "text/html" });
   // Refused pages are said plainly; nothing is stored.
   const refused = await Effect.runPromise(
@@ -56,18 +59,26 @@ it("an employee publishes a page, sees it announced where it is answering, and e
       .pipe(as(scope), Effect.flip),
   );
   expect(refused).toMatchObject({ code: "invalid_input" });
+  // A page is named by its ref; its bare id is refused.
+  const bare = await Effect.runPromise(
+    named("artifactEdit")
+      .execute({ page: publishedId, find: "<p>12</p>", replace: "<p>14</p>" })
+      .pipe(as(scope), Effect.flip),
+  );
+  expect(bare).toMatchObject({ code: "invalid_input" });
   const edited = (await Effect.runPromise(
     named("artifactEdit")
-      .execute({ page: published.id, find: "<p>12</p>", replace: "<p>14</p>" })
+      .execute({ page: published.ref, find: "<p>12</p>", replace: "<p>14</p>" })
       .pipe(as(scope)),
-  )) as { id: string };
-  expect(edited.id).not.toBe(published.id);
-  expect((await Effect.runPromise(artifactText(bindings, scope.businessId, edited.id)))?.text).toBe(
+  )) as { ref: string };
+  expect(edited.ref).not.toBe(published.ref);
+  const editedId = parseRef(edited.ref)?.id ?? "";
+  expect((await Effect.runPromise(artifactText(bindings, scope.businessId, editedId)))?.text).toBe(
     "<h1>Signups</h1><p>14</p>",
   );
   const ambiguous = await Effect.runPromise(
     named("artifactEdit")
-      .execute({ page: edited.id, find: "<", replace: "" })
+      .execute({ page: edited.ref, find: "<", replace: "" })
       .pipe(as(scope), Effect.flip),
   );
   expect(ambiguous).toMatchObject({ code: "invalid_input" });

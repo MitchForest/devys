@@ -96,7 +96,7 @@ export function moodOf(state: WorkspaceState, employee: Employee): Mood {
   return state.workingOf(employee.id) ? "working" : "idle";
 }
 
-export function operationsMood(state: WorkspaceState): Mood {
+function operationsMood(state: WorkspaceState): Mood {
   // While talking by voice, Operations' face follows the conversation.
   const voice = state.voice.kind;
   if (voice === "starting" || voice === "listening" || voice === "finishing") return "listening";
@@ -106,13 +106,6 @@ export function operationsMood(state: WorkspaceState): Mood {
   if (state.status.status === "loading") return "thinking";
   return state.isRunning ? "working" : "idle";
 }
-
-export const formatBytes = (bytes: number) =>
-  bytes < 1024
-    ? `${bytes} bytes`
-    : bytes < 1024 * 1024
-      ? `${(bytes / 1024).toFixed(0)} KB`
-      : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
 /**
  * Who has taken a work item over, as the signed-in person reads it; undefined while its

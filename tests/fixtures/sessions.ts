@@ -147,7 +147,7 @@ export class SessionsProbe extends AgentRuntime {
 
   /** The work item a tool running in `session` would act for. */
   async workItemIn(session: string) {
-    return (await this.authority(undefined, session)).workItemId ?? null;
+    return (await this.host.authority(undefined, session)).workItemId ?? null;
   }
 
   async sessionCount() {

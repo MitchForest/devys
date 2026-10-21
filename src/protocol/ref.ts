@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Schema, SchemaTransformation } from "effect";
 
 /**
  * The record kinds anything can point at, by the app that owns each: one closed list
@@ -10,11 +10,11 @@ export const refKinds = {
   work: ["item", "project"],
 } as const;
 
-export type RefApp = keyof typeof refKinds;
-export type RefKind<A extends RefApp = RefApp> = (typeof refKinds)[A][number];
+type RefApp = keyof typeof refKinds;
+type RefKind<A extends RefApp = RefApp> = (typeof refKinds)[A][number];
 
 /** A ref taken apart: its app, its kind and its (decoded) id. */
-export type RefParts = { [A in RefApp]: { app: A; kind: RefKind<A>; id: string } }[RefApp];
+type RefParts = { [A in RefApp]: { app: A; kind: RefKind<A>; id: string } }[RefApp];
 
 /** The ref of one record. A file's id is its absolute path. */
 export const ref = <A extends RefApp>(app: A, kind: RefKind<A>, id: string) =>
@@ -49,3 +49,28 @@ export const Ref = /*#__PURE__*/ Schema.String.check(
   /*#__PURE__*/ Schema.makeFilter((value) => parseRef(value) !== undefined),
 ).pipe(/*#__PURE__*/ Schema.brand("Ref"));
 export type Ref = typeof Ref.Type;
+
+/**
+ * A ref to one kind of record, as a capability input: the model passes the ref it was given
+ * (`devys:<app>/<kind>/<id>`) and the capability receives the record's id.
+ */
+export const RefOf = <A extends RefApp>(app: A, kind: RefKind<A>) =>
+  Schema.String.annotate({ description: `A ref, devys:${app}/${kind}/<id>` })
+    .check(
+      Schema.isMaxLength(2048),
+      Schema.makeFilter((value) => {
+        const parts = parseRef(value);
+        return (
+          (parts?.app === app && parts.kind === kind) || `Expected a ref devys:${app}/${kind}/<id>`
+        );
+      }),
+    )
+    .pipe(
+      Schema.decodeTo(
+        Schema.String,
+        SchemaTransformation.transform({
+          decode: (value) => parseRef(value)?.id ?? "",
+          encode: (id) => ref(app, kind, id),
+        }),
+      ),
+    );

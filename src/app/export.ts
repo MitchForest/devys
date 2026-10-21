@@ -2,7 +2,7 @@ import { Effect } from "effect";
 import type { Env } from "./env.ts";
 import { memoryFor } from "./memory.ts";
 import { listArtifacts } from "../apps/documents/service.ts";
-import { exportDrive } from "../connections/drive.ts";
+import { exportDrive } from "../apps/documents/drive.ts";
 import { exportMessages } from "../conversations/service.ts";
 import { scopeName, type Business, type Employee } from "../identity/contract.ts";
 

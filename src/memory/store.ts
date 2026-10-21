@@ -39,10 +39,6 @@ export function store(db: Database, scope: string) {
     text,
     values: [scope, ...values],
   });
-  const run = (writes: Statement[]) =>
-    transaction(db, async (sql) => {
-      for (const write of writes) await sql.run(write.text, write.values);
-    });
   return {
     statement,
     rows: <T>(text: string, ...values: unknown[]) =>
@@ -72,6 +68,13 @@ export function store(db: Database, scope: string) {
         return true;
       });
     },
-    batch: run,
+    /** Applies `writes` together without advancing the revision. */
+    batch(writes: Statement[]) {
+      return transaction(db, async (sql) => {
+        for (const write of writes) await sql.run(write.text, write.values);
+      });
+    },
   };
 }
+
+export type Storage = ReturnType<typeof store>;

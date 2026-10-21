@@ -12,7 +12,7 @@ const read = (): Theme => {
 };
 
 /** Applies the owner's appearance as a class on the root, so Devys tokens switch with it. */
-export function applyTheme(theme: Theme) {
+function applyTheme(theme: Theme) {
   const root = document.documentElement;
   root.classList.toggle("light", theme === "light");
   root.classList.toggle("dark", theme === "dark");

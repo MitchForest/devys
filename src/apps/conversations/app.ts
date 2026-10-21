@@ -12,4 +12,12 @@ export const conversations = defineApp({
   skills: [],
   connections: [],
   appears: "never",
+  // Every employee reads back in the conversation it is answering.
+  defaultGrants: {
+    operations: ["conversationHistory"],
+    engineering: ["conversationHistory"],
+    growth: ["conversationHistory"],
+    "business-operations": ["conversationHistory"],
+    custom: ["conversationHistory"],
+  },
 });

@@ -8,7 +8,7 @@ const DateString = Schema.String.check(
       Number.isFinite(Date.parse(value)),
   ),
 );
-export const EvidenceSchema = Schema.Struct({
+const EvidenceSchema = Schema.Struct({
   id: Key,
   kind: Schema.Literals(["owner", "external"]),
   observedAt: DateString,

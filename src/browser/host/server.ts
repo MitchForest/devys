@@ -11,7 +11,7 @@ import { chromium, type BrowserContext, type Locator, type Page } from "playwrig
 import { HostRefusal, hostId, type HostRoutes } from "../../protocol/host.ts";
 import type { BrowserStatus, OwnerInput, PageState, Target } from "../contract.ts";
 
-export interface BrowsersHostOptions {
+interface BrowsersHostOptions {
   /** Profiles live in `<data>/browser/<business>`. */
   data: string;
   chrome?: string;

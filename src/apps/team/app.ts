@@ -12,4 +12,6 @@ export const team = defineApp({
   skills: [],
   connections: [],
   appears: "never",
+  // Operations proposes hires; its template holds this in `ask` mode.
+  defaultGrants: { operations: ["hireEmployee"] },
 });
