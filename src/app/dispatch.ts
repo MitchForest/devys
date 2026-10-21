@@ -6,7 +6,7 @@ import { workChat } from "../channels/work.ts";
 import { scopeName } from "../identity/contract.ts";
 import { activeEmployee, pausedEmployees } from "../identity/service.ts";
 import type { WorkItem } from "../work/contract.ts";
-import { dueWorkItems, markSubmitted } from "../work/service.ts";
+import { readyWorkItems, markSubmitted } from "../work/service.ts";
 import { postEvent } from "./conversations.ts";
 
 /** The minute tick: unanswered decisions expire, then ready work is handed over. */
@@ -14,7 +14,7 @@ export async function minuteTick(env: Env) {
   await Effect.runPromise(expireDecisions(env.HYPERDRIVE)).catch((error: unknown) =>
     console.error("Expiring decisions failed:", error),
   );
-  await dispatchDue(env);
+  await dispatchReady(env);
 }
 
 /**
@@ -22,9 +22,9 @@ export async function minuteTick(env: Env) {
  * lost response is simply resubmitted and Pi admits it once. Paused employees wait. One item
  * failing is logged and retried next minute without holding up the others.
  */
-export async function dispatchDue(env: Env) {
+export async function dispatchReady(env: Env) {
   const paused = await Effect.runPromise(pausedEmployees(env.HYPERDRIVE));
-  for (const work of await Effect.runPromise(dueWorkItems(env.HYPERDRIVE, paused)))
+  for (const work of await Effect.runPromise(readyWorkItems(env.HYPERDRIVE, paused)))
     await handOver(env, work).catch((error: unknown) =>
       console.error(`Dispatching work ${work.id} failed:`, error),
     );

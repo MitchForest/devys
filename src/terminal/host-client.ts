@@ -1,5 +1,5 @@
 import type { Scope } from "../identity/contract.ts";
-import { Unavailable } from "../protocol/host.ts";
+import { hostDown, hostFailure, Unavailable } from "../protocol/host.ts";
 import type { ClientMessage, Terminals } from "./contract.ts";
 
 type Host = { url: string; token: string };
@@ -13,9 +13,9 @@ async function call<T>(host: Host, path: string, body: Record<string, unknown>):
       body: JSON.stringify(body),
     });
   } catch {
-    throw new Error("The Mac host is not running, so terminals are unavailable.");
+    throw hostDown("terminals are");
   }
-  if (!response.ok) throw new Error((await response.text()) || `Mac host error ${response.status}`);
+  if (!response.ok) throw await hostFailure(response);
   return (await response.json()) as T;
 }
 

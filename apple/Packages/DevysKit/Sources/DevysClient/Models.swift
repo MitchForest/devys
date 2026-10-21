@@ -160,13 +160,16 @@ public struct Artifact: Equatable, Sendable, Decodable, Identifiable {
     public let contentType: String
     public let byteLength: Int
     public let createdAt: String
+    /// The newest version published under the same filename (itself when it is the newest).
+    public let latestID: String
 
-    public init(id: String, filename: String, contentType: String, byteLength: Int, createdAt: String) {
+    public init(id: String, filename: String, contentType: String, byteLength: Int, createdAt: String, latestID: String? = nil) {
         self.id = id
         self.filename = filename
         self.contentType = contentType
         self.byteLength = byteLength
         self.createdAt = createdAt
+        self.latestID = latestID ?? id
     }
 
     enum CodingKeys: String, CodingKey {
@@ -174,6 +177,7 @@ public struct Artifact: Equatable, Sendable, Decodable, Identifiable {
         case contentType = "content_type"
         case byteLength = "byte_length"
         case createdAt = "created_at"
+        case latestID = "latest_id"
     }
 }
 

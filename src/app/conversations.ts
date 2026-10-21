@@ -13,7 +13,13 @@ import {
   type ConversationKey,
   type Message,
 } from "../conversations/contract.ts";
-import { markSeen, messages, postMessage, unseenBy, messageIn } from "../conversations/service.ts";
+import {
+  markSeen,
+  messages,
+  postMessage,
+  unseenBefore,
+  messageIn,
+} from "../conversations/service.ts";
 import { scopeName, type Scope } from "../identity/contract.ts";
 import { activePerson, employeesOf } from "../identity/service.ts";
 import { ref, type Ref } from "../protocol/ref.ts";
@@ -70,8 +76,8 @@ export const conversationExists = async (env: Env, businessId: string, key: Conv
   Boolean(await resolve(env, businessId, key));
 
 /**
- * Hands a message to the employees it addresses. Each sees what was said since it last
- * looked, then the message, in its own Pi session for this conversation.
+ * Hands a message to the employees it addresses, once each. Each sees what was said before
+ * it since it last looked, then the message, in its own Pi session for this conversation.
  */
 async function deliver(
   env: Env,
@@ -92,11 +98,13 @@ async function deliver(
     const employee = employees.find((candidate) => candidate.id === target);
     if (!employee || employee.paused) continue;
     const scope = { businessId, employeeId: target };
-    const earlier = (
-      await Effect.runPromise(
-        unseenBy(env.HYPERDRIVE, businessId, key, `employee:${target}`, catchUp + 1),
-      )
-    ).filter((item) => item.id !== message.id && employeeOf(item.author) !== target);
+    const unseen = await Effect.runPromise(
+      unseenBefore(env.HYPERDRIVE, businessId, key, `employee:${target}`, message.id, catchUp),
+    );
+    // Already handed over (its read position is at or after the message): a repeated post
+    // must not compose a different delivery under the same message id.
+    if (!unseen) continue;
+    const earlier = unseen.filter((item) => employeeOf(item.author) !== target);
     const replied = message.reply_to
       ? await Effect.runPromise(messageIn(env.HYPERDRIVE, businessId, key, message.reply_to))
       : undefined;
@@ -154,8 +162,8 @@ async function post(
   );
   const resolved = await resolve(env, businessId, key);
   const to = responders({ message, history, defaultResponder: resolved?.defaultResponder });
-  // Delivered on a repeat too: a retry after a failed delivery must still wake whoever answers,
-  // and the runtime admits each message id once.
+  // Delivered on a repeat too, to whoever it has not reached: a retry after a failed delivery
+  // must still wake them.
   await deliver(env, businessId, key, message, to, resolved?.place ?? "");
   return { message, to };
 }

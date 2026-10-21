@@ -194,15 +194,24 @@ test("a page card opens a layer, is kept in the project, and a new version repla
       }),
     ).toBeVisible();
     await expect(layer.getByText("v2 of 2")).toBeVisible();
+    // The page is kept, whichever version is open.
+    await expect(layer.getByRole("button", { name: "Launch" })).toBeVisible();
     await layer.getByRole("button", { name: "Earlier version" }).click();
     await expect(layer.getByText("v1 of 2")).toBeVisible();
+    await expect(layer.getByRole("button", { name: "Launch" })).toBeVisible();
 
-    // × returns to the overview, which lists the kept page.
+    // × returns to the overview, which lists the kept page once and opens it as it is now.
     await layer.getByRole("button", { name: "Close (back to the panel)" }).click();
     await expect(overview).toBeVisible();
-    await expect(overview.getByRole("button", { name: "Pricing" })).toBeVisible();
+    await expect(overview.getByRole("button", { name: "Pricing" })).toHaveCount(1);
     await overview.getByRole("button", { name: "Pricing" }).click();
     await expect(page.getByRole("region", { name: "Pricing" })).toBeVisible();
+    await expect(layer.getByText("v2 of 2")).toBeVisible();
+    await expect(
+      layer.frameLocator('[data-testid="artifact-frame"]').getByRole("heading", {
+        name: "Pricing v2",
+      }),
+    ).toBeVisible();
   } finally {
     await page.close();
     await stores.remove([owner]);

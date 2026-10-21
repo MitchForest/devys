@@ -9,7 +9,7 @@ import { ui } from "../app/ui.ts";
 import { EmployeePortrait } from "../design/portrait.tsx";
 import { EmptyNote } from "../design/primitives.tsx";
 import { deadline, money } from "../lib/format.ts";
-import { kindOf, useRecordTitle } from "./layers/titles.ts";
+import { kindOf, useCurrentRef, useRecordTitle } from "./layers/titles.ts";
 import { WorkRow } from "./work.tsx";
 import { PanelBody, PanelHeader, PanelSection } from "./panel.tsx";
 
@@ -56,7 +56,12 @@ export function ProjectSummary({ project }: { project: Project }) {
   const members = employees.filter(
     (e) => project.member_ids.includes(e.id) && e.id !== project.lead_employee_id,
   );
-  const kept = project.items.filter((item) => kindOf(item.ref));
+  const current = useCurrentRef();
+  // Each kept record once, as it is now: a page kept at an earlier version opens its latest.
+  const kept = project.items
+    .filter((item) => kindOf(item.ref))
+    .map((item) => ({ id: item.id, ref: current(item.ref) }))
+    .filter((item, index, all) => all.findIndex((other) => other.ref === item.ref) === index);
   const open = (record: Ref) => nav.openLayer({ kind: "record", ref: record });
   return (
     <>

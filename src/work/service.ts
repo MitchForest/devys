@@ -186,14 +186,17 @@ export const setTakeover = (db: Database, businessId: string, id: string, person
     ),
   );
 
-/** Ready, due work, skipping owners who take no work now so they cannot hold up the rest. */
-export const dueWorkItems = (db: Database, skipOwners: readonly string[], limit = 20) =>
+/**
+ * Ready work, soonest deadline first, skipping owners who take no work now so they cannot hold
+ * up the rest. A due date is a deadline, never a start time: ready work is handed over now.
+ */
+export const readyWorkItems = (db: Database, skipOwners: readonly string[], limit = 20) =>
   database(db, (sql) =>
     sql.rows<WorkItem & { business_id: string }>(
       `SELECT business_id, ${columns} FROM work_items
-       WHERE state = 'ready' AND (due_at IS NULL OR due_at <= now()) AND taken_over_by IS NULL
+       WHERE state = 'ready' AND taken_over_by IS NULL
          AND submitted_revision IS DISTINCT FROM revision AND owner_employee_id <> ALL($2::text[])
-       ORDER BY coalesce(due_at, created_at) LIMIT $1`,
+       ORDER BY due_at NULLS LAST, created_at LIMIT $1`,
       [limit, skipOwners],
     ),
   );

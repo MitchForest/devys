@@ -1,4 +1,10 @@
-import { artifactText, publishArtifact, saveArtifact, type ArtifactBindings } from "./service.ts";
+import {
+  artifactRecord,
+  artifactText,
+  publishArtifact,
+  saveArtifact,
+  type ArtifactBindings,
+} from "./service.ts";
 import { Effect, Schema } from "effect";
 import type { Runner } from "../../workspace/contract.ts";
 import {
@@ -9,6 +15,7 @@ import {
   Text,
 } from "../../protocol/capability.ts";
 import { Ref, RefOf, ref } from "../../protocol/ref.ts";
+import { rpc, stored } from "../../protocol/rpc.ts";
 import { listDrive, readDrive, writeDrive, type Drive } from "./drive.ts";
 import { pageProblem } from "./page.ts";
 
@@ -28,10 +35,18 @@ const fileName = (title: string) =>
   }.html`;
 const invalid = (message: string) => new CapabilityError({ code: "invalid_input", message });
 
+/** How much of an artifact's text artifactRead returns. */
+const readBytes = 200_000;
+/** Content types artifactRead reads as text. */
+const textual = (type: string) =>
+  /^text\/|^application\/(json|xml|javascript|x-ndjson|yaml)$|\+(json|xml)$/.test(type);
+
 export function artifactCapabilities(
   env: ArtifactBindings & { FILES: R2Bucket },
   runner: Runner,
   announce: Announce,
+  /** The member-only link to an artifact's download. */
+  link: (businessId: string, id: string) => string,
 ) {
   const publishPage = (title: string, html: string) =>
     Effect.gen(function* () {
@@ -67,6 +82,53 @@ export function artifactCapabilities(
       }),
       output: Schema.Struct({ ref: Ref }),
       execute: ({ title, html }) => publishPage(title, html),
+    }),
+    capability({
+      name: "artifactRead",
+      description:
+        "Read one of the business's pages or text artifacts (its ref, devys:documents/artifact/<id>): its title, version, content type and text (the first 200 KB). A page's latest version is `latest`; read that one before changing it.",
+      effect: "read",
+      replay: "read",
+      input: Schema.Struct({ artifact: RefOf("documents", "artifact") }),
+      output: Schema.Struct({
+        ref: Ref,
+        title: Schema.String,
+        version: Schema.Int,
+        versions: Schema.Int,
+        latest: Ref,
+        contentType: Schema.String,
+        text: Schema.String,
+        truncated: Schema.Boolean,
+      }),
+      execute: ({ artifact }) =>
+        Effect.gen(function* () {
+          const { businessId } = yield* Invocation;
+          const record = yield* stored(artifactRecord(env.HYPERDRIVE, businessId, artifact));
+          if (!record) return yield* invalid("That isn't one of this business's artifacts.");
+          if (!textual(record.content_type))
+            return yield* invalid(
+              `This artifact is ${record.content_type}, not text; it can't be read as text.`,
+            );
+          const object = yield* rpc(() =>
+            env.FILES.get(record.object_key, { range: { offset: 0, length: readBytes } }),
+          );
+          if (!object)
+            return yield* new CapabilityError({
+              code: "unavailable",
+              message: "The artifact's bytes are temporarily unavailable.",
+            });
+          const bytes = yield* rpc(() => object.arrayBuffer());
+          return {
+            ref: ref("documents", "artifact", record.id),
+            title: record.title,
+            version: record.version,
+            versions: record.versions,
+            latest: ref("documents", "artifact", record.latest_id),
+            contentType: record.content_type,
+            text: new TextDecoder().decode(bytes),
+            truncated: record.byte_length > bytes.byteLength,
+          };
+        }),
     }),
     capability({
       name: "artifactEdit",
@@ -120,7 +182,7 @@ export function artifactCapabilities(
           );
           return {
             ref: ref("documents", "artifact", saved.id),
-            url: saved.url,
+            url: link(businessId, saved.id),
             bytes: saved.bytes,
           };
         }),

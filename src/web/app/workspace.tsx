@@ -200,10 +200,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     if (!page) return;
     const id = parseRef(page.ref)!.id;
     const author = employees.find((e) => e.id === employeeOf(page.author))?.name;
-    // A new version is a page of the same name, so the list must already hold the new page.
+    // A new version is a page of the same name, so the list must already hold the new page. A
+    // list fetched moments before the page was published is still fresh to the cache, so this
+    // fetch must not be answered from it (staleTime 0), or the open page is never replaced.
     let detail = client.getQueryData<Detail>(queries.detail(businessId).queryKey);
     if (!detail?.artifacts.some((a) => a.id === id))
-      detail = await client.fetchQuery(queries.detail(businessId)).catch(() => detail);
+      detail = await client
+        .fetchQuery({ ...queries.detail(businessId), staleTime: 0 })
+        .catch(() => detail);
     const name = (artifact: string) => detail?.artifacts.find((a) => a.id === artifact)?.filename;
     nav.pageArrived(id, author, (a, b) => name(a) !== undefined && name(a) === name(b));
   };

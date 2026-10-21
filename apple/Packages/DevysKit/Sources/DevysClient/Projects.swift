@@ -62,11 +62,6 @@ public struct Project: Equatable, Sendable, Decodable, Identifiable {
         case leadEmployeeID = "lead_employee_id"
         case memberIDs = "member_ids"
     }
-
-    /// Whether the project keeps this record on its overview.
-    public func keeps(_ ref: Ref) -> ProjectItem? {
-        items.first { $0.ref == ref }
-    }
 }
 
 /// A new project's name, goal, deadline, budget, lead and team. A nil goal, deadline or budget

@@ -1,5 +1,5 @@
 import type { Scope } from "../../identity/contract.ts";
-import { Unavailable } from "../../protocol/host.ts";
+import { hostDown, hostFailure, Unavailable } from "../../protocol/host.ts";
 import type { CodingHost } from "./contract.ts";
 
 /**
@@ -16,10 +16,9 @@ export function hostCoding(host: { url: string; token: string }, scope: Scope): 
         body: JSON.stringify({ scope, ...body }),
       });
     } catch {
-      throw new Error("The Mac host is not running, so coding sessions are unavailable.");
+      throw hostDown("coding sessions are");
     }
-    if (!response.ok)
-      throw new Error((await response.text()) || `Mac host error ${response.status}`);
+    if (!response.ok) throw await hostFailure(response);
     return (await response.json()) as T;
   }
   return {

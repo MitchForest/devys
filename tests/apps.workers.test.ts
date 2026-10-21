@@ -142,7 +142,7 @@ const collaboration = [
 ];
 const files = ["readSkill", "read", "write", "printPdf", "importAttachment"];
 const browsing = ["browserOpen", "browserRead", "browserClick", "browserType", "browserPress"];
-const artifacts = ["artifactPage", "artifactEdit", "publishArtifact"];
+const artifacts = ["artifactPage", "artifactRead", "artifactEdit", "publishArtifact"];
 const drive = ["driveList", "driveRead", "driveCreate", "driveUpdate"];
 const coding = [
   "codingStart",

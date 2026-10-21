@@ -58,16 +58,18 @@ public struct Aurora: View {
 }
 
 extension Color {
-    /// An appearance-adaptive color from two sRGB hex values.
-    init(light: UInt32, dark: UInt32, lightAlpha: Double = 1, darkAlpha: Double = 1) {
+    /// An appearance-adaptive color from two sRGB hex values. Nonisolated: SwiftUI resolves
+    /// the provider off the main thread when it renders asynchronously, and a main-actor
+    /// closure there traps on its isolation check.
+    nonisolated init(light: UInt32, dark: UInt32, lightAlpha: Double = 1, darkAlpha: Double = 1) {
         #if os(macOS)
-            self.init(nsColor: NSColor(name: nil) { appearance in
+            self.init(nsColor: NSColor(name: nil) { @Sendable appearance in
                 appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
                     ? NSColor(hex: dark, alpha: darkAlpha)
                     : NSColor(hex: light, alpha: lightAlpha)
             })
         #else
-            self.init(uiColor: UIColor { traits in
+            self.init(uiColor: UIColor { @Sendable traits in
                 traits.userInterfaceStyle == .dark
                     ? UIColor(hex: dark, alpha: darkAlpha)
                     : UIColor(hex: light, alpha: lightAlpha)
@@ -78,7 +80,7 @@ extension Color {
 
 #if os(macOS)
     extension NSColor {
-        convenience init(hex: UInt32, alpha: Double) {
+        nonisolated convenience init(hex: UInt32, alpha: Double) {
             self.init(
                 srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
                 green: CGFloat((hex >> 8) & 0xFF) / 255,
@@ -89,7 +91,7 @@ extension Color {
     }
 #else
     extension UIColor {
-        convenience init(hex: UInt32, alpha: Double) {
+        nonisolated convenience init(hex: UInt32, alpha: Double) {
             self.init(
                 red: CGFloat((hex >> 16) & 0xFF) / 255,
                 green: CGFloat((hex >> 8) & 0xFF) / 255,

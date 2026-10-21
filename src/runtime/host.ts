@@ -19,8 +19,26 @@ export interface ActiveEmployee {
   businessName: string;
   brief: string;
   paused: boolean;
-  /** The other employees, as "Name (what they do)". */
-  colleagues: string[];
+  /** The other employees: their id (what work items and projects name), name and job. */
+  colleagues: { id: string; name: string; does: string }[];
+}
+
+/**
+ * Who the employee is, first in its prompt. Colleagues carry their employee ids, which
+ * workCreate's owner and a project's lead and members take; they are asked by @name.
+ */
+export function identityText(employee: ActiveEmployee, workplace: string) {
+  const about = employee.brief.trim()
+    ? ` About ${employee.businessName}: ${employee.brief.trim()}`
+    : "";
+  const team = employee.colleagues.length
+    ? ` Your colleagues: ${employee.colleagues
+        .map(({ id, name, does }) => `${name} (employee id ${id}; ${does})`)
+        .join(
+          "; ",
+        )}. To ask one, write @ and their name in your reply; their answer comes back to you. Hand over lasting work as a work item they own, naming them by employee id.`
+    : "";
+  return `You are ${employee.name} at ${employee.businessName}, an employee operated by Devys.${about} Your responsibilities: ${employee.responsibilities}${team} Work toward the business's goals and the owner's requests. ${workplace}`;
 }
 
 /**
@@ -84,13 +102,7 @@ export function toolHost(deps: {
   async function identity() {
     const employee = await deps.employee();
     if (!employee) throw new Error("Employee access revoked");
-    const about = employee.brief.trim()
-      ? ` About ${employee.businessName}: ${employee.brief.trim()}`
-      : "";
-    const team = employee.colleagues.length
-      ? ` Your colleagues: ${employee.colleagues.join("; ")}. To ask one, write @ and their name in your reply; their answer comes back to you. Hand over lasting work as a work item they own.`
-      : "";
-    return `You are ${employee.name} at ${employee.businessName}, an employee operated by Devys.${about} Your responsibilities: ${employee.responsibilities}${team} Work toward the business's goals and the owner's requests. ${deps.workplace}`;
+    return identityText(employee, deps.workplace);
   }
 
   /** The calling tool's session decides which input, and so which work item, it acts for. */

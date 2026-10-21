@@ -96,8 +96,9 @@ struct RegularShell: View {
                 if !layout.overlay { panel(layout) }
             }
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .leading)
-            .onChange(of: narrow, initial: true) { _, now in
-                if now != store.isNarrow { store.send(.narrowChanged(now)) }
+            // A task, as in WorkspaceScreen: an initial onChange can run inside a reducer's mutation.
+            .task(id: narrow) {
+                if narrow != store.isNarrow { store.send(.narrowChanged(narrow)) }
             }
             .overlay(alignment: .trailing) {
                 if layout.overlay {

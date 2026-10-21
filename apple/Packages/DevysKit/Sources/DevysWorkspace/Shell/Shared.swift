@@ -48,6 +48,42 @@ extension Workspace.State {
         }
     }
 
+    /// A record's title from its ref, as the web names it: "Viewing Pricing".
+    func recordTitle(_ ref: Ref) -> String {
+        switch ref.recordKind {
+        case "documents/artifact": artifactName(ref.id)
+        case "documents/file": (ref.id as NSString).lastPathComponent
+        case "code/session": "Coding session"
+        case "work/item": work.value?.first { $0.id == ref.id }?.title ?? "Work item"
+        case "work/project": project(ref.id)?.name ?? "Project"
+        default: "Record"
+        }
+    }
+
+    /// What a kept record shows now: a page's latest version (a page kept anywhere means the page,
+    /// whichever version was kept); any other record as it is.
+    func currentRef(_ ref: Ref) -> Ref {
+        guard case .artifact(let id) = ref, let latest = artifacts.first(where: { $0.id == id })?.latestID else { return ref }
+        return .artifact(latest)
+    }
+
+    /// The project's entry keeping this record, or any version of this page.
+    func keptEntry(of record: Ref, in project: Project) -> ProjectItem? {
+        project.items.first { currentRef($0.ref) == currentRef(record) }
+    }
+
+    /// What kind of record it is, under its title on a card: "File", "Coding session".
+    func recordDetail(_ ref: Ref) -> String {
+        switch ref.recordKind {
+        case "documents/artifact": "Page"
+        case "documents/file": "File"
+        case "code/session": "Coding session"
+        case "work/item": "Work item"
+        case "work/project": "Project"
+        default: ""
+        }
+    }
+
     func project(_ id: String) -> Project? { projects.value?.first { $0.id == id } }
 
     func employee(_ id: String?) -> Employee? { snapshot.employees.first { $0.id == id } }

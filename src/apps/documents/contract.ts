@@ -14,6 +14,8 @@ export const Artifact = Schema.Struct({
   version: Schema.Int,
   /** How many artifacts the business has published under this filename. */
   versions: Schema.Int,
+  /** The id of the newest of them: what a kept or linked page shows. */
+  latest_id: Schema.String,
 });
 export type Artifact = typeof Artifact.Type;
 

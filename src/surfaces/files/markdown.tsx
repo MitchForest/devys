@@ -91,7 +91,13 @@ export function MarkdownDocument({
     const crepe = new Crepe({
       root: element,
       defaultValue: latest.current.markdown,
-      features: { [Crepe.Feature.AI]: false, [Crepe.Feature.TopBar]: false },
+      // Crepe's image block keeps its resize ratio in the alt text (`![1.00](logo.png)`), which
+      // would overwrite the owner's alt text on save; plain images keep it.
+      features: {
+        [Crepe.Feature.AI]: false,
+        [Crepe.Feature.TopBar]: false,
+        [Crepe.Feature.ImageBlock]: false,
+      },
     });
     // Loading a document rewrites it the editor's way (tables, task lists, images): that is not
     // an edit. Until the owner first acts here, the editor's text is only its normalised copy of

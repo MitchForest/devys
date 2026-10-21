@@ -9,15 +9,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import { useCurrentRef } from "./layers/titles.ts";
 
 /**
  * Keeps a page or file on a project's overview: a reference, so the record stays in its app.
- * Says where it is kept; dashed while it is kept nowhere.
+ * Says where it is kept; dashed while it is kept nowhere. Any version of a page keeps the page.
  */
 export function KeepInProject({ record }: { record: Ref }) {
   const all = useProjects().data ?? [];
   const keep = useKeep();
-  const keptIn = all.filter((project) => project.items.some((item) => item.ref === record));
+  const current = useCurrentRef();
+  const same = (kept: Ref) => current(kept) === current(record);
+  const keptIn = all.filter((project) => project.items.some((item) => same(item.ref)));
   if (!all.length) return null;
   return (
     <DropdownMenu>
@@ -34,7 +37,7 @@ export function KeepInProject({ record }: { record: Ref }) {
       />
       <DropdownMenuContent align="end" className="w-auto">
         {all.map((project) => {
-          const entry = project.items.find((item) => item.ref === record);
+          const entry = project.items.find((item) => same(item.ref));
           return (
             <DropdownMenuItem
               key={project.id}

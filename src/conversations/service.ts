@@ -100,28 +100,36 @@ export const messageIn = (db: Database, businessId: string, key: ConversationKey
   );
 
 /**
- * Messages a participant (`person:<id>` or `employee:<id>`) has not been shown, oldest first,
- * at most `limit`, the newest kept.
+ * What a participant had not seen before a message: the latest `limit` messages after its read
+ * position and before that message, oldest first. Undefined when its read position is already
+ * at or after the message, so the message reached it before.
  */
-export const unseenBy = (
+export const unseenBefore = (
   db: Database,
   businessId: string,
   key: ConversationKey,
   participant: string,
+  messageId: string,
   limit: number,
 ) =>
-  database(db, async (sql) =>
-    (
+  database(db, async (sql) => {
+    const position = await sql.row<{ seq: string; seen: string }>(
+      `SELECT m.seq::text AS seq, coalesce(r.seen_seq, 0)::text AS seen FROM messages m
+       LEFT JOIN conversation_reads r ON r.business_id = m.business_id
+         AND r.conversation = m.conversation AND r.participant = $3
+       WHERE m.business_id = $1 AND m.conversation = $2 AND m.id = $4`,
+      [businessId, key, participant, messageId],
+    );
+    if (!position || BigInt(position.seen) >= BigInt(position.seq)) return undefined;
+    return (
       await sql.rows<Message>(
         `SELECT ${columns} FROM messages
-         WHERE business_id = $1 AND conversation = $2
-           AND seq > coalesce((SELECT seen_seq FROM conversation_reads
-             WHERE business_id = $1 AND conversation = $2 AND participant = $3), 0)
-         ORDER BY seq DESC LIMIT $4`,
-        [businessId, key, participant, limit],
+         WHERE business_id = $1 AND conversation = $2 AND seq > $3::bigint AND seq < $4::bigint
+         ORDER BY seq DESC LIMIT $5`,
+        [businessId, key, position.seen, position.seq, limit],
       )
-    ).reverse(),
-  );
+    ).reverse();
+  });
 
 /**
  * Moves a participant's read position forward to a message (by id), or to the last message

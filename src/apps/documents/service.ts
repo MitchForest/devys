@@ -6,10 +6,9 @@ import { sha256 } from "../../protocol/bytes.ts";
 import { defaultLimits } from "../../protocol/limits.ts";
 import { rpc } from "../../protocol/rpc.ts";
 import type { Artifact } from "./contract.ts";
-/** What publishing needs from the deployment: records and the public address of links. */
+/** Where artifacts are recorded. */
 export interface ArtifactBindings {
   HYPERDRIVE: Database;
-  PUBLIC_URL: string;
 }
 
 export function publishArtifact(
@@ -42,7 +41,7 @@ export function publishArtifact(
         [id, scope.businessId, operationId, objectKey, filename, contentType, bytes],
       ),
     );
-    return { id, url: `${env.PUBLIC_URL}/api/artifacts/${id}`, bytes };
+    return { id, bytes };
   });
 }
 /** Saves bytes the caller already holds as an artifact, once per operation. */
@@ -74,7 +73,7 @@ export function saveArtifact(
         ],
       ),
     );
-    return { id, url: `${env.PUBLIC_URL}/api/artifacts/${id}` };
+    return { id };
   });
 }
 
@@ -93,27 +92,41 @@ export function artifactText(
 }
 
 /**
- * Each artifact with its title and its version: publishing again under the same filename makes
- * the next version of that page (counted over all of the business's artifacts).
+ * Each artifact with its title, its version and its latest version: publishing again under the
+ * same filename makes the next version of that page (counted over all of the business's
+ * artifacts). A page kept or linked anywhere means the page, so readers follow `latest_id`.
  */
-const withVersions = `SELECT id, filename, regexp_replace(filename, '\\.html$', '', 'i') AS title,
-    content_type, byte_length, created_at,
+const withVersions = `SELECT id, object_key, filename,
+    regexp_replace(filename, '\\.html$', '', 'i') AS title, content_type, byte_length, created_at,
     (row_number() OVER (PARTITION BY filename ORDER BY created_at, id))::int AS version,
-    (count(*) OVER (PARTITION BY filename))::int AS versions
+    (count(*) OVER (PARTITION BY filename))::int AS versions,
+    first_value(id) OVER (PARTITION BY filename ORDER BY created_at DESC, id DESC) AS latest_id
   FROM artifacts WHERE business_id = $1`;
+const listed = `id, filename, title, content_type, byte_length, created_at, version, versions, latest_id`;
 
 export function listArtifacts(db: Database, businessId: string, after?: string) {
   return database(db, (sql) =>
     after === undefined
-      ? sql.rows<Artifact>(`SELECT * FROM (${withVersions}) a ORDER BY created_at DESC LIMIT 100`, [
-          businessId,
-        ])
+      ? sql.rows<Artifact>(
+          `SELECT ${listed} FROM (${withVersions}) a ORDER BY created_at DESC LIMIT 100`,
+          [businessId],
+        )
       : sql.rows<Artifact>(
-          `SELECT * FROM (${withVersions}) a WHERE id > $2 ORDER BY id LIMIT 100`,
+          `SELECT ${listed} FROM (${withVersions}) a WHERE id > $2 ORDER BY id LIMIT 100`,
           [businessId, after],
         ),
   );
 }
+/** One artifact of the business with its versions, and where its bytes are. */
+export function artifactRecord(db: Database, businessId: string, id: string) {
+  return database(db, (sql) =>
+    sql.row<Artifact & { object_key: string }>(
+      `SELECT ${listed}, object_key FROM (${withVersions}) a WHERE id = $2`,
+      [businessId, id],
+    ),
+  );
+}
+
 export function artifactLocation(db: Database, businessId: string, id: string) {
   return database(db, (sql) =>
     sql.row<{ object_key: string; filename: string; content_type: string }>(

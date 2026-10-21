@@ -1,13 +1,13 @@
 {
   "business": {
-    "id": "00000000-0000-4000-8000-000000000050",
+    "id": "00000000-0000-4000-8000-000000000051",
     "name": "Acme Roofing",
     "look": null,
     "brief": "Roof repairs."
   },
   "operations": {
-    "id": "00000000-0000-4000-8000-000000000051",
-    "business_id": "00000000-0000-4000-8000-000000000050",
+    "id": "00000000-0000-4000-8000-000000000052",
+    "business_id": "00000000-0000-4000-8000-000000000051",
     "name": "Head of Operations",
     "responsibilities": "Run the business day to day. Keep the owner's priorities moving, coordinate the team by handing work to the right employee as work items, notice what is blocked or late, and bring the owner only real decisions. Propose new hires when the work needs a role nobody holds.",
     "model": "claude-opus-5-5",
@@ -17,8 +17,8 @@
   },
   "team": [
     {
-      "id": "00000000-0000-4000-8000-000000000052",
-      "business_id": "00000000-0000-4000-8000-000000000050",
+      "id": "00000000-0000-4000-8000-000000000053",
+      "business_id": "00000000-0000-4000-8000-000000000051",
       "name": "Engineering",
       "responsibilities": "Build, fix and ship the business's software. Work in the repositories on the owner's computer, run tests before calling work done, keep changes small and reviewable, and report what changed with evidence.",
       "model": "claude-opus-5-5",

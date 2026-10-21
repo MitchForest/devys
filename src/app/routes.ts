@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import type { Env } from "./env.ts";
-import { artifactLocation, listArtifacts } from "../apps/documents/service.ts";
+import { listArtifacts } from "../apps/documents/service.ts";
+import { artifactDownload, artifactPath } from "./artifacts.ts";
 import { Employee, type Business, type Person } from "../identity/contract.ts";
 import {
   activeEmployee,
@@ -128,8 +129,8 @@ export async function businessRoute(
   if (path === "/home" && method === "GET") return homeRoute(env, access);
   if (path === "/conversations" || path.startsWith("/conversations/"))
     return conversationRoute(request, env, access);
-  const artifactId = /^\/artifacts\/([a-f0-9-]{36})$/.exec(path)?.[1];
-  if (artifactId && method === "GET") return artifact(env, business.id, artifactId);
+  const artifactId = artifactPath.exec(path)?.[1];
+  if (artifactId && method === "GET") return artifactDownload(env, business.id, artifactId);
   const employee = /^\/employees\/([A-Za-z0-9-]{1,64})(\/.*)$/.exec(path);
   if (employee) {
     const scope = { businessId: business.id, employeeId: employee[1]! };
@@ -145,19 +146,4 @@ export async function businessRoute(
     });
   }
   return notFound();
-}
-
-async function artifact(env: Env, businessId: string, id: string) {
-  const location = await Effect.runPromise(artifactLocation(env.HYPERDRIVE, businessId, id));
-  if (!location) return notFound();
-  const object = await env.FILES.get(location.object_key);
-  if (!object) return new Response("File temporarily unavailable", { status: 503 });
-  return new Response(object.body, {
-    headers: {
-      "content-type": location.content_type,
-      "content-disposition": `attachment; filename="${location.filename.replace(/["\\\r\n]/g, "_")}"`,
-      "content-length": String(object.size),
-      "content-security-policy": "sandbox; default-src 'none'",
-    },
-  });
 }

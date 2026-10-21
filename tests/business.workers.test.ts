@@ -1,7 +1,10 @@
 import { env } from "cloudflare:workers";
 import { expect, it } from "vitest";
 import type { Env } from "../infra/api.ts";
+import { Effect } from "effect";
+import { capabilities } from "../src/app/capabilities.ts";
 import { apiRoute } from "../src/app/http.ts";
+import { Invocation } from "../src/protocol/capability.ts";
 import { sha256 } from "../src/protocol/bytes.ts";
 import { business, sql } from "./fixtures/postgres.ts";
 
@@ -152,4 +155,42 @@ it("employees run on a configured model chosen at hire time and changeable by me
       })
     ).status,
   ).toBe(404);
+});
+
+it("a published artifact's link opens it for a member and for nobody else", async () => {
+  const acme = await business("Acme");
+  const runtime = {
+    ...env,
+    PUBLIC_URL: origin,
+    WORKSPACE: {
+      getByName: () => ({
+        exportFile: async (_path: string, key: string) => {
+          await (env as unknown as Env).FILES.put(key, "quarterly numbers");
+          return { size: 17 };
+        },
+      }),
+    },
+  } as unknown as Env;
+  const published = (await Effect.runPromise(
+    capabilities(runtime)
+      .find((item) => item.name === "publishArtifact")!
+      .execute({ path: "/workspace/q3.txt", filename: "q3.txt", contentType: "text/plain" })
+      .pipe(
+        Effect.provideService(Invocation, {
+          ...acme.scope,
+          operationId: crypto.randomUUID(),
+          authorize: () => Effect.void,
+          assertActive: () => Effect.void,
+        }),
+      ),
+  )) as { url: string };
+  expect(published.url.startsWith(`${origin}/api/businesses/${acme.business.id}/artifacts/`)).toBe(
+    true,
+  );
+  const path = published.url.slice(origin.length);
+  const opened = await (await session(acme.person))(path);
+  expect(opened.status).toBe(200);
+  expect(await opened.text()).toBe("quarterly numbers");
+  const stranger = await business("Globex");
+  expect((await (await session(stranger.person))(path)).status).toBe(404);
 });

@@ -41,6 +41,22 @@ export class HostRefusal extends Error {
   }
 }
 
+/**
+ * What a host client throws for the host's non-OK answer. A refusal (4xx) is the host's own
+ * text, so it stays a `HostRefusal` that employees may read (bounded); anything else is a plain
+ * error whose detail is not shown to models.
+ */
+export async function hostFailure(response: Response) {
+  const text = (await response.text()).slice(0, 500);
+  if (response.status >= 400 && response.status < 500 && text)
+    return new HostRefusal(response.status, text);
+  return new Error(text || `Mac host error ${response.status}`);
+}
+
+/** What a host client throws when the Mac host does not answer at all. */
+export const hostDown = (what: string) =>
+  new Unavailable(`The Mac host is not running, so ${what} unavailable.`);
+
 /** One component's routes on the host. */
 export interface HostRoutes {
   /** For example `/coding/`. */

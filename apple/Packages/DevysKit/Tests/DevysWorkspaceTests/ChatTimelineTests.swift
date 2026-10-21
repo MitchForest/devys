@@ -73,6 +73,40 @@ struct ChatTimelineTests {
         #expect(bubbles(timeline).last?.quote?.employeeID == "ops")
     }
 
+    @Test("A message about a record says so under it, named as the web names it: \"Viewing Pricing\"")
+    func viewedRecord() {
+        let about = ConversationMessage(
+            id: "m1", conversation: "direct:ops", author: "employee:ops", kind: .message, text: "Here",
+            replyTo: nil, ref: .workItem("c1"), createdAt: ServerDate.format(start)
+        )
+        let timeline = ChatTimeline(messages: [about], pending: [], now: start)
+        #expect(bubbles(timeline).map(\.ref) == [.workItem("c1")])
+
+        var state = Workspace.State(server: URL(string: "http://127.0.0.1:5173")!)
+        state.work = .loaded([WorkItem(id: "c1", ownerEmployeeID: "growth", title: "Book the venue")])
+        state.artifacts = [Artifact(id: "a1", filename: "Pricing.html", contentType: "text/html", byteLength: 1, createdAt: "2026-10-21T00:00:00Z")]
+        #expect(state.recordTitle(.workItem("c1")) == "Book the venue")
+        #expect(state.recordTitle(.artifact("a1")) == "Pricing")
+        #expect(state.recordTitle(.file("/Users/o/Devys/b/plan.md")) == "plan.md")
+        #expect(state.recordTitle(.codeSession("s1")) == "Coding session")
+        #expect(state.recordDetail(.codeSession("s1")) == "Coding session")
+        #expect(state.recordDetail(.file("/Users/o/Devys/b/plan.md")) == "File")
+    }
+
+    @Test("A kept page means the page: it shows its latest version, once, and Keep sees any version")
+    func keptPages() {
+        var state = Workspace.State(server: URL(string: "http://127.0.0.1:5173")!)
+        state.artifacts = [
+            Artifact(id: "v1", filename: "Pricing.html", contentType: "text/html", byteLength: 1, createdAt: "2026-10-21T00:00:00Z", latestID: "v2"),
+            Artifact(id: "v2", filename: "Pricing.html", contentType: "text/html", byteLength: 1, createdAt: "2026-10-21T00:01:00Z")
+        ]
+        let project = Project(id: "p1", name: "Launch", leadEmployeeID: "ops", items: [ProjectItem(id: "i1", ref: .artifact("v1"))])
+        #expect(state.currentRef(.artifact("v1")) == .artifact("v2"))
+        #expect(state.currentRef(.file("/b/plan.md")) == .file("/b/plan.md"))
+        #expect(state.keptEntry(of: .artifact("v2"), in: project)?.id == "i1")
+        #expect(state.keptEntry(of: .artifact("other"), in: project) == nil)
+    }
+
     @Test("Working and faces derive from each teammate's runtime status, like the web's workingOf")
     func working() {
         var state = Workspace.State(server: URL(string: "http://127.0.0.1:5173")!)

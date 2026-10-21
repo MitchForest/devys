@@ -88,6 +88,7 @@ public struct Preferences {
         case ownerPhotoRemoved
         case lookPhotosLoaded([String: Data])
         case ownerLoaded(name: String?, photo: Data?)
+        case voicesLoaded([SpeechVoice])
         case directoryLoaded(Account, teams: [String: [Employee]])
         case business(BusinessIntent)
         case device(DeviceIntent)
@@ -183,6 +184,9 @@ public struct Preferences {
             case .lookPhotosLoaded(let photos):
                 state.lookPhotos.merge(photos) { _, new in new }
 
+            case .voicesLoaded(let voices):
+                state.voices = voices
+
             case .ownerLoaded(let name, let photo):
                 if let name { state.ownerName = name }
                 state.ownerPhoto = photo
@@ -230,7 +234,13 @@ public struct Preferences {
             }
         }
         .onMount { state in
-            state.voices = playback.voices()
+            // Off the main thread: listing system voices waits on the speech service, which can
+            // stall for seconds (or indefinitely in a simulator) and froze Settings as it opened.
+            let playback = playback
+            store.addTask {
+                let voices = await Task.detached { playback.voices() }.value
+                try store.send(Action(.voicesLoaded(voices)))
+            }
             state.voiceSettings = voiceSettingsClient.load()
             let profile = profileClient
             let runtime = runtime

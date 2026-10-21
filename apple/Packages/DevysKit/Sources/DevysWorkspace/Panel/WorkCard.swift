@@ -30,6 +30,7 @@ struct WorkCard: View {
                         WorkItemFields(store: store, item: item)
                             .task(id: item.revision) { await loadAnswered(item) }
                         WorkItemNotes(store: store, item: item)
+                        WorkItemStateActions(store: store, item: item)
                         CodingSessions(store: store, item: item)
                         BrowserLine(store: store, item: item)
                         evidence(item)
@@ -199,7 +200,7 @@ private struct WorkItemFields: View {
     @ViewBuilder private var due: some View {
         let date = item.dueAt.flatMap(ServerDate.parse)
         if !editable {
-            Text(date?.formatted(date: .abbreviated, time: .shortened) ?? "None").foregroundStyle(date == nil ? DevysColors.ink3 : DevysColors.ink)
+            Text(date?.formatted(date: .abbreviated, time: .shortened) ?? "No due date").foregroundStyle(date == nil ? DevysColors.ink3 : DevysColors.ink)
         } else if let date {
             DatePicker(
                 "Due",
@@ -211,7 +212,7 @@ private struct WorkItemFields: View {
             Spacer(minLength: 8)
             Button("Clear") { change(dueAt: .clear) }.buttonStyle(DevysButtonStyle(.quiet, compact: true))
         } else {
-            Text("None").foregroundStyle(DevysColors.ink3)
+            Text("No due date").foregroundStyle(DevysColors.ink3)
             Spacer(minLength: 8)
             Button("Add due date") { change(dueAt: .set(ServerDate.format(Date.now.addingTimeInterval(86_400)))) }
                 .buttonStyle(DevysButtonStyle(.quiet, compact: true))
@@ -244,7 +245,7 @@ private struct WorkItemNotes: View {
     }
 
     @ViewBuilder private var plan: some View {
-        let lines = [("Next action", item.nextAction), ("Waiting on", item.waitCondition ?? "")].filter { !$0.1.isEmpty }
+        let lines = [("Next", item.nextAction), ("Waiting on", item.waitCondition ?? "")].filter { !$0.1.isEmpty }
         if !lines.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(lines, id: \.0) { label, text in
@@ -261,7 +262,7 @@ private struct WorkItemNotes: View {
 
     private var form: some View {
         VStack(alignment: .leading, spacing: 10) {
-            note("Next action", text: $nextAction, prompt: "What happens next", saved: item.nextAction) {
+            note("Next", text: $nextAction, prompt: "What happens next", saved: item.nextAction) {
                 store.send(.workItemChanged(item.id, WorkItemChange(expectedRevision: item.revision, nextAction: nextAction)))
             }
             note("Waiting on", text: $waiting, prompt: "Nothing", saved: item.waitCondition ?? "") {
@@ -289,6 +290,38 @@ private struct WorkItemNotes: View {
                 }
             }
         }
+    }
+}
+
+/// Where the work stands, changed by hand once the owner has taken it over, as on the web:
+/// Mark done, Waiting and Cancel while it's open; Reopen once it's closed.
+private struct WorkItemStateActions: View {
+    let store: StoreOf<Workspace>
+    let item: WorkItem
+
+    var body: some View {
+        if store.state.isMine(item) {
+            HStack(spacing: 6) {
+                if item.state.isOpen {
+                    Button("Mark done", systemImage: "checkmark.circle") { set(.completed) }
+                        .buttonStyle(DevysButtonStyle(.raised, compact: true))
+                    if item.state != .waiting {
+                        Button("Waiting", systemImage: "clock") { set(.waiting) }
+                            .buttonStyle(DevysButtonStyle(.raised, compact: true))
+                    }
+                    Button("Cancel", systemImage: "xmark.circle") { set(.cancelled) }
+                        .buttonStyle(DevysButtonStyle(.quiet, compact: true))
+                } else {
+                    Button("Reopen", systemImage: "arrow.uturn.backward") { set(.ready) }
+                        .buttonStyle(DevysButtonStyle(.raised, compact: true))
+                }
+            }
+            .fixedSize()
+        }
+    }
+
+    private func set(_ state: WorkItemState) {
+        store.send(.workItemStateSet(item.id, state))
     }
 }
 

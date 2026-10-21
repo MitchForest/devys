@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import type { Env } from "../infra/api.ts";
 import { devysExtension, initialTools, describeCapabilities } from "../src/runtime/codemode.ts";
 import { capabilities } from "../src/app/capabilities.ts";
+import { identityText } from "../src/runtime/host.ts";
 
 it("keeps initial schemas smaller and returns only requested integration interfaces", () => {
   const bindings = { DEVYS_MODE: "cloud" } as Env;
@@ -104,4 +105,20 @@ it("the instructions list the available skills by name and description, and poin
   expect(text).toMatch(
     /Skills:\n- weekly-report — Build the weekly report\n- writing-pages — Write a page$/,
   );
+});
+
+it("an employee's prompt names each colleague with the employee id work and projects take", () => {
+  const text = identityText(
+    {
+      name: "Head of Operations",
+      responsibilities: "Runs the business.",
+      businessName: "Acme",
+      brief: "",
+      paused: false,
+      colleagues: [{ id: "emp-growth-1", name: "Growth", does: "Finds customers" }],
+    },
+    "You work on the owner's Mac.",
+  );
+  expect(text).toContain("Your colleagues: Growth (employee id emp-growth-1; Finds customers).");
+  expect(text).toContain("naming them by employee id");
 });

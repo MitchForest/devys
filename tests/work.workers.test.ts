@@ -4,7 +4,7 @@ import { expect, it } from "vitest";
 import type { Env } from "../infra/api.ts";
 import { authorize } from "../src/app/authorize.ts";
 import { capabilities } from "../src/app/capabilities.ts";
-import { dispatchDue } from "../src/app/dispatch.ts";
+import { dispatchReady } from "../src/app/dispatch.ts";
 import { apiRoute } from "../src/app/http.ts";
 import { answerDecision, grant, pendingDecisions } from "../src/authority/service.ts";
 import { sha256 } from "../src/protocol/bytes.ts";
@@ -217,7 +217,7 @@ it("work's conditions only narrow, and taking it over stops the employee acting 
   expect(result).toMatchObject({ code: "conflict" });
 });
 
-it("due work reaches its employee once per revision, and a lost hand-off is resubmitted under the same id", async () => {
+it("ready work reaches its employee once per revision, and a lost hand-off is resubmitted under the same id", async () => {
   const { scope } = await business();
   const received: { scope: unknown; messageId: string; chatId: string; text: string }[] = [];
   let failMark = true;
@@ -243,7 +243,7 @@ it("due work reaches its employee once per revision, and a lost hand-off is resu
       createdBy: "person:test",
     }),
   );
-  // Simulate the hand-off landing but its record failing: the work item stays due.
+  // Simulate the hand-off landing but its record failing: the work item stays ready.
   const revert = async () => {
     if (failMark)
       await sql.run(
@@ -252,10 +252,10 @@ it("due work reaches its employee once per revision, and a lost hand-off is resu
       );
     failMark = false;
   };
-  await dispatchDue(agentEnv);
+  await dispatchReady(agentEnv);
   await revert();
-  await dispatchDue(agentEnv);
-  await dispatchDue(agentEnv);
+  await dispatchReady(agentEnv);
+  await dispatchReady(agentEnv);
   const mine = received.filter((item) => item.chatId.endsWith(work.id));
   expect(mine.map((item) => item.messageId)).toEqual([`${work.id}:1`, `${work.id}:1`]);
   // The hand-off names the work item by its ref.
@@ -275,8 +275,38 @@ it("due work reaches its employee once per revision, and a lost hand-off is resu
       createdBy: "person:test",
     }),
   );
-  await dispatchDue(agentEnv);
+  await dispatchReady(agentEnv);
   expect(received.some((item) => item.chatId.endsWith(later.id))).toBe(false);
+});
+
+it("a due date is a deadline: ready work due next month is handed over now", async () => {
+  const { scope } = await business();
+  const received: string[] = [];
+  const agentEnv = {
+    ...bindings,
+    AGENT: {
+      getByName: () => ({
+        receive: async (_: unknown, input: { chatId: string }) => {
+          received.push(input.chatId);
+          return { accepted: true };
+        },
+      }),
+    },
+  } as unknown as Env;
+  const work = await Effect.runPromise(
+    createWorkItem(db, scope.businessId, {
+      id: crypto.randomUUID(),
+      owner: scope.employeeId,
+      title: "Quarterly filing",
+      dueAt: new Date(Date.now() + 30 * 24 * 3600_000).toISOString(),
+      createdBy: "person:test",
+    }),
+  );
+  await dispatchReady(agentEnv);
+  expect(received.some((chat) => chat.endsWith(work.id))).toBe(true);
+  expect((await Effect.runPromise(workItem(db, scope.businessId, work.id)))?.state).toBe(
+    "in_progress",
+  );
 });
 
 it("work in a project is handed over with a card in its thread and in the project's channel", async () => {
@@ -297,8 +327,8 @@ it("work in a project is handed over with a card in its thread and in the projec
       createdBy: "person:test",
     }),
   );
-  await dispatchDue(agentEnv);
-  await dispatchDue(agentEnv);
+  await dispatchReady(agentEnv);
+  await dispatchReady(agentEnv);
   for (const key of [`work:${work.id}`, `project:${launch.id}`] as const)
     expect(
       (await Effect.runPromise(messages(db, scope.businessId, key))).map((m) => [m.kind, m.ref]),
@@ -347,7 +377,7 @@ it("paused employees' work and a failing hand-off never hold up other work", asy
       }),
     },
   } as unknown as Env;
-  await dispatchDue(agentEnv);
+  await dispatchReady(agentEnv);
   expect(received.some((chat) => chat.endsWith(fine.id))).toBe(true);
   expect((await Effect.runPromise(workItem(db, scope.businessId, broken.id)))?.state).toBe("ready");
 });

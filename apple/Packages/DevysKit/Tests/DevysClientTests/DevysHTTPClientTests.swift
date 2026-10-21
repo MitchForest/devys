@@ -53,7 +53,7 @@ struct DevysHTTPClientTests {
             {"business":{"id":"b1","name":"Acme"},
              "employees":[{"id":"e1","business_id":"b1","name":"Head of Operations","responsibilities":"Runs the business.","model":"gpt-6.1-sol"}],
              "members":[{"id":"p1","display_name":"Mitch"}],
-             "artifacts":[{"id":"a1","filename":"x.md","content_type":"text/markdown","byte_length":3,"created_at":"2026-10-19T00:00:00.000Z"}]}
+             "artifacts":[{"id":"a1","filename":"x.md","content_type":"text/markdown","byte_length":3,"created_at":"2026-10-19T00:00:00.000Z","latest_id":"a1"}]}
             """,
             recorder: recorder
         ).business(session, id: "b1")

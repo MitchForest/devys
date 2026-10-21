@@ -4,7 +4,7 @@
  * permanent view can name the records it lists without importing the layers that show them.
  */
 import type { Artifact } from "../../../apps/documents/contract.ts";
-import { parseRef, type RecordKind, type Ref } from "../../../protocol/ref.ts";
+import { parseRef, ref, type RecordKind, type Ref } from "../../../protocol/ref.ts";
 import type { Project, WorkItem } from "../../../work/contract.ts";
 import { useArtifacts, useProjects, useWork } from "../../app/data.ts";
 
@@ -56,5 +56,19 @@ export function useRecordTitle() {
   return (value: Ref) => {
     const found = kindOf(value);
     return found ? recordNames[found.kind].title(found.id, names) : "Record";
+  };
+}
+
+/**
+ * What a kept record shows now: a page's latest version (a page kept anywhere means the page,
+ * whichever version was kept); any other record as it is.
+ */
+export function useCurrentRef() {
+  const artifacts = useArtifacts();
+  return (value: Ref): Ref => {
+    const parts = parseRef(value);
+    if (parts?.app !== "documents" || parts.kind !== "artifact") return value;
+    const latest = artifacts.find((a) => a.id === parts.id)?.latest_id;
+    return latest ? ref("documents", "artifact", latest) : value;
   };
 }

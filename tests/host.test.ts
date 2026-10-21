@@ -12,9 +12,11 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Effect } from "effect";
 import { afterAll, describe, expect, it } from "vitest";
 import type { Env } from "../infra/api.ts";
 import { modeOf } from "../src/app/mode.ts";
+import { rpc } from "../src/protocol/rpc.ts";
 import type { WorkspacePort } from "../src/workspace/contract.ts";
 import { hostRunner, type HostConnection } from "../src/workspace/host.ts";
 import { startHost } from "../src/workspace/host/server.ts";
@@ -182,6 +184,44 @@ describe("Mac host", () => {
     await expect(views.read(join(state.root, "private", "key"))).rejects.toThrow("inside");
     // Employees are not confined on the trusted host.
     expect((await state.port().read(join(folder, "linked", "key"))).content).toBe("secret");
+  });
+
+  it("tells a capability why the host refused, and nothing more for other failures", async () => {
+    const state = await host();
+    const runner = state.port();
+    const reason = (operation: () => Promise<unknown>) =>
+      Effect.runPromise(rpc(operation).pipe(Effect.flip)).then((error) => error.message);
+    const pending = runner.run("long", "sleep 30", 60_000, 10_000);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(await reason(() => runner.run("other", "true", 1_000, 1_000))).toBe(
+      "Operation failed: Workspace is busy; inspect state before retrying a write.",
+    );
+    await runner.cancel();
+    await pending;
+    const folder = join(state.root, "work", scope.businessId);
+    mkdirSync(folder, { recursive: true });
+    const views = hostRunner(
+      { url: state.url(), token, files: state.files, within: folder },
+      scope,
+    );
+    expect(await reason(() => views.read(join(state.root, "elsewhere.md")))).toBe(
+      "Operation failed: Stay inside the business folder; inspect state before retrying a write.",
+    );
+    expect(await reason(() => runner.read(join(folder, "missing.md")))).toBe(
+      "Operation failed: File is unavailable; inspect state before retrying a write.",
+    );
+    // A failure Devys did not word (a file system error naming paths) stays generic.
+    await runner.write(join(folder, "notes.md"), "hello");
+    expect(await reason(() => runner.write(join(folder, "notes.md", "inner.md"), "x"))).toBe(
+      "Operation failed; inspect state before retrying a write.",
+    );
+    expect(
+      await reason(() =>
+        hostRunner({ url: "http://127.0.0.1:1", token, files: state.files }, scope).list("/"),
+      ),
+    ).toBe(
+      "Operation failed: The Mac host is not running, so files and commands are unavailable; inspect state before retrying a write.",
+    );
   });
 
   it("refuses a wrong token and relative paths", async () => {

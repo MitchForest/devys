@@ -107,31 +107,29 @@ private struct TeamPane: View {
     let store: StoreOf<Preferences>
 
     var body: some View {
-        HStack(alignment: .top, spacing: DevysSpacing.roomy) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 2) {
-                    ForEach(store.businesses) { business in
-                        Text(business.name).font(DevysTypography.label).foregroundStyle(DevysColors.ink3).padding(.top, 10).padding(.horizontal, 8)
-                        ForEach(store.teams[business.id] ?? []) { employee in
-                            Button { store.send(.employeeSelected(employee.id)) } label: {
-                                HStack(spacing: 10) {
-                                    Portrait(source(employee), size: 24, isAnimated: false)
-                                    Text(employee.name).lineLimit(1)
-                                    Spacer(minLength: 0)
-                                }
-                                .font(DevysTypography.control)
-                                .foregroundStyle(DevysColors.ink)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 6)
-                                .background(store.selectedEmployeeID == employee.id ? DevysColors.sheetTint : .clear, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                                .contentShape(Rectangle())
+        ListAndDetail {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(store.businesses) { business in
+                    Text(business.name).font(DevysTypography.label).foregroundStyle(DevysColors.ink3).padding(.top, 10).padding(.horizontal, 8)
+                    ForEach(store.teams[business.id] ?? []) { employee in
+                        Button { store.send(.employeeSelected(employee.id)) } label: {
+                            HStack(spacing: 10) {
+                                Portrait(source(employee), size: 24, isAnimated: false)
+                                Text(employee.name).lineLimit(1)
+                                Spacer(minLength: 0)
                             }
-                            .buttonStyle(.plain)
+                            .font(DevysTypography.control)
+                            .foregroundStyle(DevysColors.ink)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(store.selectedEmployeeID == employee.id ? DevysColors.sheetTint : .clear, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                     }
                 }
             }
-            .frame(width: 200)
+        } detail: {
             if let employee = store.allEmployees.first(where: { $0.id == store.selectedEmployeeID }) {
                 LookEditor(
                     title: employee.name,
@@ -330,7 +328,8 @@ struct LookEditor: View {
 
     private var facePicker: some View {
         VStack(alignment: .leading, spacing: DevysSpacing.compact) {
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(44), spacing: 10), count: 8), spacing: 10) {
+            // Adaptive, so a phone wraps the row instead of running past the edge.
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 44, maximum: 44), spacing: 10)], alignment: .leading, spacing: 10) {
                 ForEach(AvatarShape.allCases, id: \.self) { shape in
                     option(selected: currentSpec.shape == shape) {
                         set(.face(AvatarSpec(palette: currentSpec.palette, shape: shape, seed: currentSpec.seed)))
@@ -410,7 +409,7 @@ struct LookEditor: View {
                 VStack(alignment: .leading, spacing: DevysSpacing.compact) {
                     ForEach(Self.emojiGroups, id: \.title) { group in
                         Text(group.title).font(DevysTypography.label).foregroundStyle(DevysColors.ink3)
-                        LazyVGrid(columns: Array(repeating: GridItem(.fixed(40), spacing: 6), count: 10), alignment: .leading, spacing: 6) {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 40, maximum: 40), spacing: 6)], alignment: .leading, spacing: 6) {
                             ForEach(group.emoji, id: \.self) { emoji in
                                 option(selected: current == .emoji(emoji, tint: currentTint.rawValue)) { setEmoji(emoji) } content: {
                                     Text(emoji).font(.system(size: 22))

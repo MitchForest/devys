@@ -39,10 +39,13 @@ export function agentDependencies(env: Env): AgentDependencies {
             paused: employee.paused,
             colleagues: team
               .filter((colleague) => colleague.id !== employee.id)
-              .map(
-                (colleague) =>
-                  `${colleague.name} (${roleTemplate(colleague.template)?.summary || colleague.responsibilities.slice(0, 120)})`,
-              ),
+              .map((colleague) => ({
+                id: colleague.id,
+                name: colleague.name,
+                does:
+                  roleTemplate(colleague.template)?.summary ||
+                  colleague.responsibilities.slice(0, 120),
+              })),
           }
         : undefined;
     },

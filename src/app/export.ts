@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import type { Env } from "./env.ts";
 import { memoryFor } from "./memory.ts";
+import { artifactUrl } from "./artifacts.ts";
 import { listArtifacts } from "../apps/documents/service.ts";
 import { exportDrive } from "../apps/documents/drive.ts";
 import { exportMessages } from "../conversations/service.ts";
@@ -53,7 +54,7 @@ export function exportBusiness(env: Env, business: Business, employees: Employee
         yield {
           kind: "artifact",
           artifact,
-          download: `${env.PUBLIC_URL}/api/artifacts/${artifact.id}`,
+          download: artifactUrl(env, business.id, artifact.id),
         };
       if (rows.length < 100) break;
       id = rows.at(-1)!.id;

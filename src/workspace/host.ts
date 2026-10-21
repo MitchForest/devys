@@ -1,4 +1,5 @@
 import type { Scope } from "../identity/contract.ts";
+import { hostDown, hostFailure } from "../protocol/host.ts";
 import type {
   Checkpoint,
   CommandResult,
@@ -32,10 +33,9 @@ export function hostRunner(host: HostConnection, scope: Scope): WorkspacePort {
         headers: { authorization: `Bearer ${host.token}`, ...init.headers },
       });
     } catch {
-      throw new Error("The Mac host is not running, so files and commands are unavailable.");
+      throw hostDown("files and commands are");
     }
-    if (!response.ok)
-      throw new Error((await response.text()) || `Mac host error ${response.status}`);
+    if (!response.ok) throw await hostFailure(response);
     return response;
   }
   const post = async <T>(path: string, input: Record<string, unknown> = {}) =>

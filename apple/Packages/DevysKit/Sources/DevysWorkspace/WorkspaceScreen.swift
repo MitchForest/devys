@@ -13,7 +13,10 @@ struct WorkspaceScreen: View {
 
     var body: some View {
         shell.modifier(WorkspaceSheets(store: store))
-            .onChange(of: scenePhase, initial: true) { _, phase in store.send(.activeChanged(phase == .active)) }
+            // A task, not `onChange(initial:)`: SwiftUI can flush a pending initial onChange
+            // synchronously while a reducer mutates observed state (the first account load),
+            // and sending then traps on the store's re-entrancy check.
+            .task(id: scenePhase) { store.send(.activeChanged(scenePhase == .active)) }
     }
 
     @ViewBuilder private var shell: some View {

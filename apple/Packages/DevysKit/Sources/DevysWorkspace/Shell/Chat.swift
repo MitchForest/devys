@@ -45,6 +45,7 @@ struct MessageRow: View {
                     Spacer(minLength: 48)
                 }
             }
+            viewed
             footer
         }
         .frame(maxWidth: .infinity, alignment: isOwner ? .trailing : .leading)
@@ -134,6 +135,26 @@ struct MessageRow: View {
                 }
         }
     #endif
+
+    /// The record the message was about, "Viewing Pricing", which opens it where the registry says.
+    @ViewBuilder private var viewed: some View {
+        if let ref = bubble.ref, let target = Records.open(ref, work: store.state.threadItem?.id) {
+            Button {
+                switch target {
+                case .layer(let layer): store.send(.layerOpened(layer))
+                case .place(.thread(let id)): store.send(.threadOpened(id))
+                case .place(let place): store.send(.placeSelected(place))
+                }
+            } label: {
+                Text("Viewing \(store.state.recordTitle(ref))")
+                    .font(DevysTypography.caption)
+                    .foregroundStyle(DevysColors.ink3)
+                    .lineLimit(1)
+            }
+            .buttonStyle(.plain)
+            .padding(.leading, isOwner ? 0 : Self.avatarSize + 8)
+        }
+    }
 
     @ViewBuilder private var footer: some View {
         switch bubble.delivery {
@@ -349,10 +370,16 @@ struct EventCard: View {
                 }
             } else if let item = workItem {
                 handoff(item)
-            } else if let target {
-                ConversationCard(help: "Open it") { open(target) } label: {
-                    Image(systemName: "arrow.up.right.square").foregroundStyle(DevysColors.indigo).accessibilityHidden(true)
-                    lines(event.text, "")
+            } else if let target, let ref = event.ref {
+                // Named as the web names it: the record's title over its kind.
+                ConversationCard(help: "Open") { open(target) } label: {
+                    Image(systemName: Self.symbol(ref))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(DevysColors.indigo)
+                        .frame(width: 22, height: 22)
+                        .background(DevysColors.indigo.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        .accessibilityHidden(true)
+                    lines(store.state.recordTitle(ref), store.state.recordDetail(ref))
                 }
             } else {
                 HStack(spacing: 8) {
@@ -385,6 +412,15 @@ struct EventCard: View {
                 Text("\(unread) new").font(DevysTypography.caption.weight(.semibold)).foregroundStyle(DevysColors.indigo)
             }
             item.state.chip(size: .small)
+        }
+    }
+
+    private static func symbol(_ ref: Ref) -> String {
+        switch ref.recordKind {
+        case "code/session": "chevron.left.forwardslash.chevron.right"
+        case "work/item": "checklist"
+        case "work/project": "folder"
+        default: "doc.text"
         }
     }
 

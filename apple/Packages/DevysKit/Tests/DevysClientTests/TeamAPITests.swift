@@ -171,7 +171,7 @@ struct TeamAPITests {
             memberIDs: ["growth"],
             items: [ProjectItem(id: "i1", ref: .artifact("a1")), ProjectItem(id: "i2", ref: .file("/b/plan.md"))]
         ))
-        #expect(projects.first?.keeps(.file("/b/plan.md"))?.id == "i2" && projects.first?.keeps(.file("a1")) == nil)
+        #expect(projects.first?.items.map(\.ref) == [.artifact("a1"), .file("/b/plan.md")])
         #expect(projects.last?.budget == nil && projects.last?.goal == nil)
         #expect(await recorder.requests.last?.url?.path() == "/api/businesses/b1/projects")
     }

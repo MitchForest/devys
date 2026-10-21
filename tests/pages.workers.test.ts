@@ -33,6 +33,7 @@ it("an employee publishes a page, sees it announced where it is answering, and e
       async (invocation, card) => {
         cards.push({ conversation: invocation.conversation, text: card.text, ref: card.ref });
       },
+      (businessId, id) => `https://devys.test/api/businesses/${businessId}/artifacts/${id}`,
     ).find((item) => item.name === name)!;
   const published = (await Effect.runPromise(
     named("artifactPage")
@@ -76,6 +77,29 @@ it("an employee publishes a page, sees it announced where it is answering, and e
   expect((await Effect.runPromise(artifactText(bindings, scope.businessId, editedId)))?.text).toBe(
     "<h1>Signups</h1><p>14</p>",
   );
+  // Reading either version says what it is and which version is the page now.
+  const read = (artifact: string) =>
+    Effect.runPromise(named("artifactRead").execute({ artifact }).pipe(as(scope)));
+  expect(await read(published.ref)).toEqual({
+    ref: published.ref,
+    title: "Signups by week",
+    version: 1,
+    versions: 2,
+    latest: edited.ref,
+    contentType: "text/html",
+    text: "<h1>Signups</h1><p>12</p>",
+    truncated: false,
+  });
+  expect(await read(edited.ref)).toMatchObject({ version: 2, text: "<h1>Signups</h1><p>14</p>" });
+  // Another business's artifact is not there to read.
+  const elsewhere = await business("Elsewhere");
+  expect(
+    await Effect.runPromise(
+      named("artifactRead")
+        .execute({ artifact: published.ref })
+        .pipe(as(elsewhere.scope), Effect.flip),
+    ),
+  ).toMatchObject({ code: "invalid_input" });
   const ambiguous = await Effect.runPromise(
     named("artifactEdit")
       .execute({ page: edited.ref, find: "<", replace: "" })
@@ -132,7 +156,51 @@ it("artifacts carry their title and their version among pages of the same name",
   const other = await add("notes.md", "2026-10-03T00:00:00Z");
   const listed = await Effect.runPromise(listArtifacts(bindings.HYPERDRIVE, acme.id));
   const of = (id: string) => listed.find((a) => a.id === id);
-  expect(of(first)).toMatchObject({ title: "Launch plan", version: 1, versions: 2 });
-  expect(of(second)).toMatchObject({ title: "Launch plan", version: 2, versions: 2 });
-  expect(of(other)).toMatchObject({ title: "notes.md", version: 1, versions: 1 });
+  expect(of(first)).toMatchObject({
+    title: "Launch plan",
+    version: 1,
+    versions: 2,
+    latest_id: second,
+  });
+  expect(of(second)).toMatchObject({
+    title: "Launch plan",
+    version: 2,
+    versions: 2,
+    latest_id: second,
+  });
+  expect(of(other)).toMatchObject({ title: "notes.md", version: 1, versions: 1, latest_id: other });
+});
+
+it("artifactRead refuses bytes that aren't text and bounds long text", async () => {
+  const { scope } = await business("Reading");
+  const capability = artifactCapabilities(
+    bindings,
+    () => ({}) as never,
+    async () => {},
+    () => "",
+  ).find((item) => item.name === "artifactRead")!;
+  const read = (artifact: string) =>
+    Effect.runPromise(capability.execute({ artifact }).pipe(as(scope))) as Promise<{
+      text: string;
+      truncated: boolean;
+    }>;
+  const add = async (filename: string, type: string, bytes: Uint8Array) => {
+    const id = crypto.randomUUID();
+    const key = `${scope.businessId}/artifacts/${id}`;
+    await bindings.FILES.put(key, bytes);
+    await sql.run(
+      `INSERT INTO artifacts (id, business_id, operation_id, object_key, filename, content_type, byte_length)
+       VALUES ($1, $2, $1, $3, $4, $5, $6)`,
+      [id, scope.businessId, key, filename, type, bytes.byteLength],
+    );
+    return `devys:documents/artifact/${id}`;
+  };
+  const image = await add("chart.png", "image/png", new Uint8Array([137, 80, 78, 71]));
+  expect(
+    await Effect.runPromise(capability.execute({ artifact: image }).pipe(as(scope), Effect.flip)),
+  ).toMatchObject({ code: "invalid_input" });
+  const long = await add("log.txt", "text/plain", new TextEncoder().encode("a".repeat(250_000)));
+  const bounded = await read(long);
+  expect(bounded.truncated).toBe(true);
+  expect(bounded.text).toHaveLength(200_000);
 });

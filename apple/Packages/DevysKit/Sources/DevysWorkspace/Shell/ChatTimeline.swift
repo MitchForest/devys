@@ -25,6 +25,8 @@ package struct ChatTimeline: Equatable {
         package let viaVoice: Bool
         package let reactions: [String]
         package let sentAt: Date?
+        /// The record the message was about ("Viewing …"), which opens it.
+        package var ref: Ref?
         package var position: Position
         /// Set for messages sent from this device that the server hasn't posted yet.
         package var delivery: PendingMessage.Delivery?
@@ -79,6 +81,7 @@ package struct ChatTimeline: Equatable {
                 viaVoice: message.viaVoice,
                 reactions: message.reactions,
                 sentAt: message.date,
+                ref: message.ref,
                 position: .single
             )))
         }

@@ -152,6 +152,34 @@ test("a markdown document is not edited until the owner types", async ({ page })
   expect(elsewhere).toEqual([]);
 });
 
+test("a markdown image keeps its alt text through an edit", async ({ page }) => {
+  const elsewhere = await openSurface(page);
+  const markdown = "# Brand\n\n![The company logo](logo.png)\n\nUse it on every page.\n";
+  await page.evaluate(
+    (text) =>
+      window.devysSurface!.show({
+        kind: "markdown",
+        name: "brand.md",
+        markdown: text,
+        version: "1",
+        readOnly: false,
+      }),
+    markdown,
+  );
+  const editor = page.getByTestId("markdown-document");
+  await expect(editor.getByText("Use it on every page.")).toBeVisible({ timeout: 30_000 });
+  await editor.getByText("Use it on every page.").click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Always.");
+  const saved = async () =>
+    ((await messages(page)) as { type: string; markdown?: string }[])
+      .filter((m) => m.type === "change")
+      .at(-1)?.markdown;
+  await expect.poll(saved).toContain("Use it on every page. Always.");
+  expect(await saved()).toContain("![The company logo](logo.png)");
+  expect(elsewhere).toEqual([]);
+});
+
 test("a whiteboard draws in the surface and saves as Excalidraw JSON", async ({ page }) => {
   const elsewhere = await openSurface(page);
   await page.evaluate(() =>

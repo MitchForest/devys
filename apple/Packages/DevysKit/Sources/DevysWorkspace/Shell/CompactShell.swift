@@ -29,6 +29,10 @@ struct CompactShell: View {
             }
         }
         .tint(DevysColors.indigo)
+        #if DEBUG
+            // DEVYS_PANEL=open: the phone shows the permanent view as its sheet.
+            .task(id: store.isOverlayOpen) { if store.isOverlayOpen { showsDetails = true } }
+        #endif
         .sheet(isPresented: Binding(
             get: { showsDetails || !store.layers.isEmpty },
             set: { shown in
@@ -122,7 +126,7 @@ struct CompactShell: View {
             let count = store.home.value?.needsYou.count ?? 0
             if count > 0 {
                 Button { showsDetails = true } label: {
-                    Text("\(count) need you")
+                    Text(count == 1 ? "1 needs you" : "\(count) need you")
                         .font(DevysTypography.caption.weight(.semibold))
                         .foregroundStyle(DevysColors.amber)
                         .padding(.horizontal, 10)

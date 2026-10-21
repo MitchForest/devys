@@ -72,11 +72,9 @@ it("a DM continues with its employee; a reply from the employee lands in the sam
   const first = await say(`direct:${ops}`, { id: "dm-message-0001", text: "What is next?" });
   expect(first.to).toEqual([ops]);
   expect(received.at(-1)?.input.chatId).toBe(`app:${acme.business.id}:${ops}`);
-  // Retrying the same post stores it once and delivers it again under the same message id
-  // (the runtime admits it once), so a retry after a failed delivery still wakes the employee.
+  // Retrying the same post stores it once and, having reached the employee, delivers nothing more.
   await say(`direct:${ops}`, { id: "dm-message-0001", text: "What is next?" });
-  expect(received).toHaveLength(2);
-  expect(received[1]!.input.messageId).toBe(received[0]!.input.messageId);
+  expect(received).toHaveLength(1);
 
   await postFromEmployee(
     bindings,
@@ -225,7 +223,7 @@ it("approving a request says so where the employee asked, which wakes it", async
 });
 
 it("client ids are per conversation, and read positions follow insertion order", async () => {
-  const { postMessage, markSeen, unseenBy } = await import("../src/conversations/service.ts");
+  const { postMessage, markSeen, unseenBefore } = await import("../src/conversations/service.ts");
   const { db } = await import("./fixtures/postgres.ts");
   const { scope } = await business("Reads");
   const post = (key: `direct:${string}` | `project:${string}`, text: string) =>
@@ -252,9 +250,58 @@ it("client ids are per conversation, and read positions follow insertion order",
        VALUES ($1, $2, $3, 'system', $4, $1, '2026-10-20T12:00:00.000Z')`,
       [id, scope.businessId, key, text],
     );
+  const third = (await post(key, "three")).message.id;
   await Effect.runPromise(markSeen(db, scope.businessId, key, "employee:x", { message: first! }));
-  const unseen = await Effect.runPromise(unseenBy(db, scope.businessId, key, "employee:x", 10));
-  expect(unseen.map((message) => message.text)).toEqual(["two"]);
+  const before = (id: string) =>
+    Effect.runPromise(unseenBefore(db, scope.businessId, key, "employee:x", id, 10));
+  // What came before a message, never after it; nothing for a message already seen.
+  expect((await before(third))?.map((message) => message.text)).toEqual(["two"]);
+  expect(await before(second!)).toEqual([]);
+  expect(await before(first!)).toBeUndefined();
+});
+
+it("a post retried after its delivery failed reaches the employee once, with the same text", async () => {
+  const acme = await business("Retries");
+  const ops = acme.operations.id;
+  const delivered: Inbound[] = [];
+  let failing = true;
+  const bindings = {
+    ...env,
+    AGENT: {
+      getByName: () => ({
+        receive: async (_scope: unknown, input: Inbound) => {
+          delivered.push(input);
+          if (failing) throw new Error("runtime unavailable");
+          return { accepted: true };
+        },
+      }),
+    },
+  } as unknown as Env;
+  const { postFromPerson } = await import("../src/app/conversations.ts");
+  const key = `direct:${ops}` as const;
+  const say = (id: string, text: string) =>
+    postFromPerson(bindings, acme.business.id, acme.person, key, { id, text });
+  failing = false;
+  await say("retry-0001", "Earlier question");
+  failing = true;
+  await expect(say("retry-0002", "Draft the brief")).rejects.toThrow("runtime unavailable");
+  failing = false;
+  await say("retry-0002", "Draft the brief");
+  await say("retry-0002", "Draft the brief");
+  const brief = delivered.filter((input) => input.text?.endsWith("Draft the brief"));
+  // The failed attempt and the retry: the same id and the same text; the repeat delivers nothing.
+  expect(brief).toHaveLength(2);
+  expect(brief[1]).toEqual(brief[0]);
+  // A message that fails and is overtaken reaches the employee in the next one's catch-up;
+  // retrying it afterwards delivers nothing more.
+  failing = true;
+  await expect(say("retry-0003", "Budget is 2k")).rejects.toThrow("runtime unavailable");
+  failing = false;
+  await say("retry-0004", "Timeline next");
+  expect(delivered.at(-1)?.text).toMatch(/Since you last looked:\n\[.*\] Budget is 2k/);
+  const count = delivered.length;
+  await say("retry-0003", "Budget is 2k");
+  expect(delivered).toHaveLength(count);
 });
 
 it("the record the owner is viewing goes with a message as its ref, and only a record of the business", async () => {

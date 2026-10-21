@@ -120,7 +120,12 @@ struct Overview: View {
     }
 
     @ViewBuilder private func kept(_ project: Project) -> some View {
-        let kept = project.items.map { (id: $0.id, layer: Layer(ref: $0.ref)) }
+        // Each kept record once, as it is now: a page kept at an earlier version opens its latest.
+        let current = project.items.map { (id: $0.id, ref: store.state.currentRef($0.ref)) }
+        let kept = current
+            .enumerated()
+            .filter { index, item in current.firstIndex { $0.ref == item.ref } == index }
+            .map { _, item in (id: item.id, layer: Layer(ref: item.ref)) }
         let pages = kept.compactMap { item in
             if case .artifact(let page, _) = item.layer, store.artifacts.contains(where: { $0.id == page }) { (id: item.id, page: page) } else { nil }
         }

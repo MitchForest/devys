@@ -431,7 +431,7 @@ struct WorkFeatureTests {
         let store = makeStore(server)
         await settle("projects", until: { store.projects.value?.first?.name == "Launch" })
         store.send(.projectItemAdded("p1", .artifact("a1")))
-        await settle("kept", until: { store.projects.value?.first?.keeps(.artifact("a1")) != nil })
+        await settle("kept", until: { store.projects.value?.first?.items.contains { $0.ref == .artifact("a1") } == true })
         #expect(await server.added == ["p1:devys:documents/artifact/a1"])
     }
 

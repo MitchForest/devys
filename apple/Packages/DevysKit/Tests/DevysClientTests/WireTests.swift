@@ -99,6 +99,7 @@ struct WireTests {
         let detail = try await Self.answering("business").business(Self.session, id: "b1")
         #expect(detail.employees.last?.responsibilities.hasPrefix("Build, fix") == true && detail.employees.last?.look != nil)
         #expect(detail.members.first?.displayName == "Owner" && detail.artifacts.first?.byteLength == 1840)
+        #expect(detail.artifacts.first?.latestID == "00000000-0000-4000-8000-000000000006")
 
         let status = try await Self.answering("status").status(Self.session, Self.scope)
         #expect(status.state.inbox.map(\.status) == [.done, .running] && status.state.inbox.first?.receivedAt == 1_800_000_000_000)

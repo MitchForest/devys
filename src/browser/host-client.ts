@@ -1,4 +1,4 @@
-import { Unavailable } from "../protocol/host.ts";
+import { hostDown, hostFailure, Unavailable } from "../protocol/host.ts";
 import type { Browser } from "./contract.ts";
 
 /** The business's browser on the trusted Mac host (local mode). */
@@ -12,10 +12,9 @@ export function hostBrowser(host: { url: string; token: string }, businessId: st
         body: JSON.stringify({ business: businessId, ...body }),
       });
     } catch {
-      throw new Error("The Mac host is not running, so the browser is unavailable.");
+      throw hostDown("the browser is");
     }
-    if (!response.ok)
-      throw new Error((await response.text()) || `Mac host error ${response.status}`);
+    if (!response.ok) throw await hostFailure(response);
     return (await response.json()) as T;
   }
   return {

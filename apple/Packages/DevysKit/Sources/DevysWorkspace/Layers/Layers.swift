@@ -119,15 +119,8 @@ private struct DocumentsApp: View {
         let artifacts = store.artifacts
         // One row per page: its latest version, kept in the chosen project when there is one.
         let pages = artifacts
-            .filter { page in page.contentType == "text/html" && !artifacts.contains { $0.filename == page.filename && $0.createdAt > page.createdAt } }
-            .filter { page in
-                chosen.map { project in
-                    project.items.contains { item in
-                        guard case .artifact(let kept, _) = Layer(ref: item.ref) else { return false }
-                        return artifacts.contains { $0.id == kept && $0.filename == page.filename }
-                    }
-                } ?? true
-            }
+            .filter { page in page.contentType == "text/html" && page.latestID == page.id }
+            .filter { page in chosen.map { store.state.keptEntry(of: .artifact(page.id), in: $0) != nil } ?? true }
             .sorted { $0.createdAt > $1.createdAt }
         if !pages.isEmpty {
             group("Pages") {

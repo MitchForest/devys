@@ -22,6 +22,7 @@ import { codingIncomplete, codingDependencies } from "./coding.ts";
 import type { Capability } from "../protocol/capability.ts";
 import { appSkills } from "./apps.ts";
 import { keepable } from "./projects.ts";
+import { artifactUrl } from "./artifacts.ts";
 /** Composition only: implementations and SQL belong to their domains. */
 export function capabilities(
   env: Env,
@@ -36,11 +37,16 @@ export function capabilities(
       Effect.runPromise(employeesOf(env.HYPERDRIVE, businessId)),
     ),
     ...workspaceCapabilities(runner, (businessId) => appSkills(env.HYPERDRIVE, businessId)),
-    ...artifactCapabilities(env, runner, async (invocation, card) => {
-      // The card goes where the employee is answering; a page made elsewhere goes to its DM.
-      const key = conversationKey(invocation.conversation ?? `direct:${invocation.employeeId}`);
-      if (key) await postEvent(env, invocation.businessId, key, card);
-    }),
+    ...artifactCapabilities(
+      env,
+      runner,
+      async (invocation, card) => {
+        // The card goes where the employee is answering; a page made elsewhere goes to its DM.
+        const key = conversationKey(invocation.conversation ?? `direct:${invocation.employeeId}`);
+        if (key) await postEvent(env, invocation.businessId, key, card);
+      },
+      (businessId, id) => artifactUrl(env, businessId, id),
+    ),
     ...codingCapabilities(codingDependencies(env)),
     ...browserCapabilities(modeOf(env).browser),
     ...workCapabilities(

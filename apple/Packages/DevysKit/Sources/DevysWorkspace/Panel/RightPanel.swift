@@ -159,18 +159,18 @@ struct PanelAction: View {
 }
 
 /// Keeps a page or file on a project's overview: a reference, so the record stays in its app.
-/// Says where it is kept; dashed while it is kept nowhere.
+/// Says where it is kept; dashed while it is kept nowhere. Any version of a page keeps the page.
 struct KeepInProject: View {
     let store: StoreOf<Workspace>
     let record: Ref
 
     var body: some View {
         let all = store.projects.value ?? []
-        let keptIn = all.filter { $0.keeps(record) != nil }
+        let keptIn = all.filter { store.state.keptEntry(of: record, in: $0) != nil }
         if !all.isEmpty {
             Menu {
                 ForEach(all) { project in
-                    if let entry = project.keeps(record) {
+                    if let entry = store.state.keptEntry(of: record, in: project) {
                         Button("Remove from \(project.name)") { store.send(.projectItemRemoved(project.id, entry.id)) }
                     } else {
                         Button("Keep in \(project.name)") { store.send(.projectItemAdded(project.id, record)) }

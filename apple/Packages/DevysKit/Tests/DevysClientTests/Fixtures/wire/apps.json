@@ -357,6 +357,7 @@
       ],
       "capabilities": [
         "artifactPage",
+        "artifactRead",
         "artifactEdit",
         "publishArtifact",
         "driveList",
@@ -382,6 +383,7 @@
       "default_grants": {
         "operations": [
           "artifactPage",
+          "artifactRead",
           "artifactEdit",
           "publishArtifact",
           "driveList",
@@ -391,16 +393,19 @@
         ],
         "engineering": [
           "artifactPage",
+          "artifactRead",
           "artifactEdit",
           "publishArtifact"
         ],
         "growth": [
           "artifactPage",
+          "artifactRead",
           "artifactEdit",
           "publishArtifact"
         ],
         "business-operations": [
           "artifactPage",
+          "artifactRead",
           "artifactEdit",
           "publishArtifact",
           "driveList",

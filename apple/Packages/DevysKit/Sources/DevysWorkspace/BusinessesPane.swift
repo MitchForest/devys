@@ -10,7 +10,7 @@ struct BusinessesPane: View {
     let store: StoreOf<Preferences>
 
     var body: some View {
-        HStack(alignment: .top, spacing: DevysSpacing.roomy) {
+        ListAndDetail {
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(store.businesses) { business in
                     Button { store.send(.businessSelected(business.id)) } label: {
@@ -31,14 +31,12 @@ struct BusinessesPane: View {
                 Button("New business…", systemImage: "plus") { store.send(.newBusinessTapped) }
                     .buttonStyle(DevysButtonStyle(.quiet, compact: true))
                     .padding(.top, 8)
-                Spacer()
             }
-            .frame(width: 200)
+        } detail: {
             if let business = store.businesses.first(where: { $0.id == store.selectedBusinessID }) {
                 PaneScroll {
                     VStack(alignment: .leading, spacing: DevysSpacing.roomy) {
                         BusinessDetails(store: store, business: business)
-                        ExportBusiness(business: business)
                         LookEditor(
                             title: business.name,
                             current: business.look,
@@ -48,6 +46,7 @@ struct BusinessesPane: View {
                             set: { store.send(.lookSet(.business(business.id), $0)) },
                             photo: { store.send(.photoPicked(.business(business.id), $0)) }
                         )
+                        ExportBusiness(business: business)
                     }
                 }
             }
@@ -76,10 +75,10 @@ private struct BusinessDetails: View {
             FieldBox { TextField("Name", text: $name) }
             Text("Brief").font(DevysTypography.label).foregroundStyle(DevysColors.ink3)
             FieldBox {
-                TextField("What the business does, its goals and constraints", text: $brief, axis: .vertical).lineLimit(4...10)
+                TextField("Brief", text: $brief, axis: .vertical).lineLimit(4...10)
             }
             HStack {
-                Text("Every employee reads the brief.").font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3)
+                Text("What it does, its goals and constraints. Every employee reads it.").font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3)
                 Spacer()
                 if name != business.name || brief != business.brief {
                     Button("Revert") { reset() }.buttonStyle(DevysButtonStyle(.quiet, compact: true))
@@ -113,15 +112,13 @@ private struct ExportBusiness: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Export").font(DevysTypography.label).foregroundStyle(DevysColors.ink3)
-            HStack(spacing: 8) {
-                Text("Every conversation, memory and index of files, without credentials.")
-                    .font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3)
-                Spacer()
-                Button(busy ? "Exporting…" : "Export…", systemImage: "square.and.arrow.down", action: export)
-                    .buttonStyle(DevysButtonStyle(.quiet, compact: true))
-                    .disabled(busy)
-            }
+            Text("Your data").font(DevysTypography.label).foregroundStyle(DevysColors.ink3)
+            Button(busy ? "Exporting…" : "Export business data", systemImage: "square.and.arrow.down", action: export)
+                .buttonStyle(DevysButtonStyle(.raised, compact: true))
+                .disabled(busy)
+            Text("\(business.name)'s conversations, memory and file index as one file. Credentials are left out, and saved files download separately.")
+                .font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3)
+                .fixedSize(horizontal: false, vertical: true)
             if let problem {
                 Label(problem, systemImage: "exclamationmark.circle.fill").font(DevysTypography.secondary).foregroundStyle(DevysColors.red)
             }
@@ -228,6 +225,26 @@ struct NewBusinessSheet: View {
 
 /// The Mac's Settings window has a fixed size, so tall panes scroll; on iPhone and iPad
 /// the whole pane already scrolls.
+/// A settings pane's list beside the selected item's details; where there isn't room for both
+/// (a phone), the list sits above them.
+struct ListAndDetail<List: View, Detail: View>: View {
+    @ViewBuilder var list: List
+    @ViewBuilder var detail: Detail
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: DevysSpacing.roomy) {
+                ScrollView { list }.frame(width: 200)
+                detail.frame(minWidth: 320, maxWidth: .infinity, alignment: .topLeading)
+            }
+            VStack(alignment: .leading, spacing: DevysSpacing.roomy) {
+                list
+                detail
+            }
+        }
+    }
+}
+
 struct PaneScroll<Content: View>: View {
     @ViewBuilder var content: Content
 
