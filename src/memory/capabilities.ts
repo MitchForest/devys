@@ -18,7 +18,7 @@ export function memoryCapabilities(factory: MemoryFactory) {
     capability({
       name: "recall",
       description:
-        "Search saved personal knowledge with evidence and scope. Empty query lists current knowledge. Use next as after for another page.",
+        "Search what the business knows (facts about the business, its owner and the people they work with) with evidence and scope. Empty query lists current knowledge. Use next as after for another page.",
       effect: "read",
       replay: "read",
       core: true,
@@ -36,7 +36,7 @@ export function memoryCapabilities(factory: MemoryFactory) {
     capability({
       name: "remember",
       description:
-        "Immediately save or correct useful personal context. Use source=user only for an explicit owner statement; trusted host evidence is attached. Preserve temporary scope and exceptions. Pass expectedRevision from recall or current personal context before correcting.",
+        "Immediately save or correct a useful fact about the business, its owner or the people they work with. Use source=user only for an explicit owner statement; trusted host evidence is attached. Preserve temporary scope and exceptions. Pass expectedRevision from recall or the current memory context before correcting.",
       effect: "change",
       replay: "idempotent",
       core: true,
