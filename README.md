@@ -139,9 +139,7 @@ also verified live. No public product has launched.
 - **Not built:** routines, the Knowledge app and a learning loop, the broker and vault,
   signed decisions, the event stream and push, connections for launch providers, mail,
   purchases, desktop control, the voice and ambient additions, cloud mode's coding runners,
-  files, terminals and browser, community and custom apps, and distribution. First comes an
-  alignment pass: some capabilities are still defined in wiring, and the web and native
-  clients copy the server's types by hand.
+  files, terminals and browser, community and custom apps, and distribution.
 
 The prior Pi/Effect refinement and
 iMessage acceptance guide retain foundation
@@ -165,13 +163,12 @@ billing, and automated customer provisioning are not implemented.
 
 ## Verification status
 
-On 2026-10-21, on the owner's MacBook standing in for the Mac mini, on `106d194`:
-`bun run verify` (format, lint, types, 138 unit tests, 4 Bun host tests, 133 Workers tests of
-which 4 are live-model tests skipped by default, build), `bun run test:browser` (17) and
-`bun run test:apple` (DevysKit 135 and DevysTerminal 72 tests, both builds, strict lint);
-web walk-throughs at desktop, iPad and phone widths and iPad and iPhone simulator
-walk-throughs against a seeded Acme business. `bun run test:channel` last passed at the
-conversations closeout.
+On 2026-10-21, on the owner's MacBook standing in for the Mac mini, after the alignment pass:
+`bun run verify` (format, lint, types, 146 unit tests, 4 Bun host tests, 142 Workers tests of
+which 4 more are live-model tests skipped by default, build), `bun run test:browser` (18),
+`bun run test:apple` (DevysKit and DevysTerminal tests including 36 server-generated wire
+fixtures, both builds, strict lint), `bun run test:channel` and `bun run test:workspace`.
+The native apps have not been walked through on a simulator since the alignment pass.
 Live: a conversation with real models routed by the rules (Engineering consulted Growth by
 @mention and got the answer back), and an employee opened a real pull request through
 Devys. Each slice's evidence is in the delivery plan.
@@ -255,9 +252,7 @@ is present. Model arguments never select credentials.
 
 ## Active roadmap
 
-Next: an alignment pass (one name per concept in code, schema and wire; every capability
-defined with its app; one wire contract; the same layer rules on web and native), then
-routines, the Knowledge app and a learning loop, the broker and signed decisions, a live
+Next: routines, the Knowledge app and a learning loop, the broker and signed decisions, a live
 event stream and push, connections in the app platform, mail, purchases, desktop control,
 voice, cloud mode and coding runners, the app directory, and distribution.
 
