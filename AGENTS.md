@@ -10,23 +10,28 @@ today; target design and historical evidence must remain distinguishable.
 
 - Build Devys for businesses operated by agents. The first dogfood business's launch is
   the first release; a second business is the next test of generality.
+- Product model (2026-10-20): a business is its Team (employees), Projects (bounded
+  initiatives), Apps (records, capabilities, connections) and Home (the owner's needs-you
+  list, briefing and conversation with Operations). Use the canonical words and meanings
+  in `.docs/DEVYS.md`.
 - The delivery plan owns launch sequencing and business-specific work. Do not encode
   one business's tasks into core rules. Field-service parity and wearables remain
   deferred vertical references.
 - Support native macOS, iPhone, iPad and web. Surface rule (2026-10-20): web everywhere
   (one `src/surfaces` implementation, hosted in WKWebView on Apple) unless Apple maintains
   the native component (SwiftUI shell and conversation, PDFKit, QuickLook, Speech); the one
-  exception is the terminal, native Ghostty on macOS and iOS. Spaces combine persistent app views and
-  discussion; apps and records retain domain ownership. Employees operate the
-  same capabilities as people. A space is not an implicit permission grant.
+  exception is the terminal, native Ghostty on macOS and iOS. Projects (spaces until U7)
+  reference records and hold discussion; apps own their records. Employees operate the
+  same capabilities as people. A project is not an implicit permission grant.
 - Keep companies independent. A dogfood business integrates through authenticated remote APIs
   and its own domain rules, never sibling imports, direct SQL, shared environment
   files or impersonated human sessions. An SDK is optional.
-- Devys ships a built-in tool registry (providers, modelled capabilities, relay
-  endpoints, CLI tools, skill bundles) modelled on treg and Executor v2. Neither is
-  a dependency; see `.docs/COMPONENTS.md`. Anything consequential is a modelled
-  capability, not a relay.
-  Check licenses before source reuse. Do not build a speculative marketplace/framework.
+- Devys's app platform (providers, modelled capabilities, relay endpoints, CLI tools,
+  skill bundles) is modelled on treg and Executor v2. Neither is a dependency; see
+  `.docs/COMPONENTS.md`. Anything consequential is a modelled capability, not a relay.
+  Check licenses before source reuse. Devys has an app directory: Devys apps first;
+  community and custom apps later, in their own slice. Do not build third-party
+  distribution or speculative framework machinery ahead of that slice.
 - Devys is intended to be open source and use existing models. No model training
   or fine-tuning. Keep Pi's installed provider/configuration boundary: models and
   providers are declared once in `config/models.ts`; employees pick one at setup. Coding

@@ -10,6 +10,14 @@ delegated coding specialists; Pi Durable is the employee runtime. [AGENTS.md](AG
 contains the engineering rules; the design documents and delivery plan are kept outside
 this repository.
 
+**Product model.** A business in Devys is four things: its **Team** (employees, each with
+ongoing responsibilities), its **Projects** (bounded initiatives with an optional goal,
+deadline, budget and lead), its **Apps** (the business's records, the capabilities on them
+and the accounts behind them, such as Documents and Code) and **Home**, the owner's seat:
+what needs them, a briefing, and the conversation with the Head of Operations. The shell is
+being reorganized to match (U7, planned). What runs today, below, still uses the previous
+layout, including spaces.
+
 ## What runs today (2026-10-20)
 
 Everything below is implemented and verified locally; employees publishing pull requests is
@@ -109,7 +117,7 @@ also verified live. No public product has launched.
 - **Pages.** Employees publish self-contained HTML pages (`artifactPage`, `artifactEdit`):
   reports, comparisons, dashboards. A card in the conversation opens the page in an
   opaque-origin sandbox that fetches nothing; **Save to space** keeps it as one of the space's tabs.
-- **Not built:** desktop control, the broker and vault, signed decisions, the tool registry,
+- **Not built:** desktop control, the broker and vault, signed decisions, the app platform,
   purchases, mail and launch connectors.
 
 The prior Pi/Effect refinement and
@@ -211,10 +219,9 @@ is present. Model arguments never select credentials.
 
 ## Active roadmap
 
-Next: a hands-on check of every client, then completing the coding workspace (outcome card,
-Follow), deploys run by employees, the browser and sandboxed artifacts, routines, the broker
-and signed decisions, a live event stream and push, the tool registry, mail, purchases,
-desktop control, voice, cloud mode and coding runners, and distribution.
+Next: the product model in code (projects, apps, Home), then routines, the broker and
+signed decisions, a live event stream and push, mail, purchases, desktop control, voice,
+cloud mode and coding runners, the app directory, and distribution.
 
 ## Native clients (macOS, iPhone, iPad)
 
