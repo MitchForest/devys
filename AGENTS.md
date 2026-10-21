@@ -22,7 +22,7 @@ today; target design and historical evidence must remain distinguishable.
 - Support native macOS, iPhone, iPad and web. Surface rule (2026-10-20): web everywhere
   (one `src/surfaces` implementation, hosted in WKWebView on Apple) unless Apple maintains
   the native component (SwiftUI shell and conversation, PDFKit, QuickLook, Speech); the one
-  exception is the terminal, native Ghostty on macOS and iOS. Projects (spaces until U7)
+  exception is the terminal, native Ghostty on macOS and iOS. Projects
   reference records and hold discussion; apps own their records. Employees operate the
   same capabilities as people. A project is not an implicit permission grant.
 - Keep companies independent. A dogfood business integrates through authenticated remote APIs
@@ -61,7 +61,7 @@ today; target design and historical evidence must remain distinguishable.
   before building substitutes.
 - Pi owns each employee's working transcript, inbox, steering, model loop,
   compaction, retries, task state and recovery. Derive execution status from Pi. The
-  conversations component owns the shared record of what was said in DMs, spaces and
+  conversations component owns the shared record of what was said in direct chats, project channels and
   work threads; employees read it through deliveries and write it through the channel.
 - Codex/Claude Code own their delegated coding sessions. Devys owns assignment
   scope, runner handles, authority and accepted artifacts; do not mirror provider
@@ -75,7 +75,7 @@ today; target design and historical evidence must remain distinguishable.
 - Business commitments, outboxes and reconciliation survive stopped agents.
   The dispatcher is wiring: it submits due work to Pi under a stable operation id
   and relies on Pi's idempotent `submit`. No handoff ledger or second scheduler.
-  One Durable Object per business employee. Its Pi sessions (one per DM, space or
+  One Durable Object per business employee. Its Pi sessions (one per direct chat, channel or
   work item it takes part in) hold that employee's own reasoning; the shared
   conversation everyone reads is the conversations component's record in Postgres.
 - Components are swappable and encapsulated. Each exposes one vendor-free

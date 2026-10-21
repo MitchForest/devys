@@ -25,9 +25,10 @@ const titles: Record<string, string> = {
   commitmentCreate: "Take on work",
   commitmentUpdate: "Update work",
   commitmentComplete: "Complete work",
-  spaceList: "List spaces",
-  spaceCreate: "Create spaces",
-  spaceAdd: "Add to spaces",
+  projectList: "List projects",
+  projectCreate: "Create projects",
+  projectUpdate: "Edit projects",
+  projectAdd: "Keep in projects",
   hireEmployee: "Propose hires",
 };
 export const accessTitle = (capability: string) => titles[capability] ?? capability;

@@ -174,6 +174,12 @@ function useWorkspaceState() {
   const [layers, setLayers] = useState<OpenLayer[]>([]);
   const [panels, setPanels] = useState(savedPanels);
   const [wide, setWide] = useState(false);
+  /**
+   * Too narrow for the conversation and the panel side by side: the panel lies over the
+   * conversation, so its permanent view opens only when asked for, never by itself.
+   */
+  const [narrow, setNarrow] = useState(false);
+  const [overlay, setOverlay] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(true);
   /** Whether the open layer goes with the next message as a reference. */
   const [referencing, setReferencing] = useState(true);
@@ -575,6 +581,7 @@ function useWorkspaceState() {
     },
     /** Goes to a place from the sidebar: the layers close, Back starts over. */
     selectPlace: (next: Place) => {
+      setOverlay(false);
       setHistory([]);
       setLayers([]);
       setWide(false);
@@ -617,6 +624,7 @@ function useWorkspaceState() {
     /** Shows or hides the right panel for this kind of place, remembered across visits. */
     togglePanel: () => {
       if (layers.length) return actions.closeLayers();
+      if (narrow) return setOverlay((v) => !v);
       setPanels((all) => {
         const next = { ...all, [place.kind]: !all[place.kind] };
         try {
@@ -628,6 +636,7 @@ function useWorkspaceState() {
       });
     },
     toggleWide: () => setWide((v) => !v),
+    setNarrow,
     setReferencing,
     /** Hear each milestone of a work item (and keep it in the sidebar), or only its outcome. */
     setFollowing: async (workId: string, on: boolean) => {
@@ -1031,7 +1040,7 @@ function useWorkspaceState() {
         homeValue.glance.moving.length ||
         homeValue.glance.stuck.length),
     );
-  const panelOpen = layers.length > 0 || (panels[place.kind] && hasPermanent);
+  const panelOpen = layers.length > 0 || (hasPermanent && (narrow ? overlay : panels[place.kind]));
   return {
     person,
     businesses,

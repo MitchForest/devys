@@ -88,10 +88,12 @@ export function Shell() {
  * conversation in the middle, and the right panel showing what the conversation is about.
  */
 function RegularShell() {
-  const { sidebarVisible, panelOpen, wide } = useWorkspace();
+  const { sidebarVisible, panelOpen, wide, actions } = useWorkspace();
   const [ref, width] = useWidth<HTMLDivElement>();
   const [preferred, setPreferred] = useState(savedWidth);
   const columns = layout(width, sidebarVisible, panelOpen, wide, preferred);
+  const narrow = layout(width, sidebarVisible, true, false, preferred).overlay;
+  useEffect(() => actions.setNarrow(narrow), [narrow]);
   const motion =
     "transition-[width,opacity] duration-300 ease-[cubic-bezier(.3,1.1,.4,1)] motion-reduce:duration-150";
   return (

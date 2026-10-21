@@ -14,9 +14,10 @@ this repository.
 ongoing responsibilities), its **Projects** (bounded initiatives with an optional goal,
 deadline, budget and lead), its **Apps** (the business's records, the capabilities on them
 and the accounts behind them, such as Documents and Code) and **Home**, the owner's seat:
-what needs them, a briefing, and the conversation with the Head of Operations. The shell is
-being reorganized to match (U7, planned). What runs today, below, still uses the previous
-layout, including spaces.
+what needs them, a briefing, and the conversation with the Head of Operations. The owner
+delegates by talking and reviews by glancing: the conversation is always the middle of the
+screen, and the right panel shows what it is about, with records, diffs and pages opening
+on top of it.
 
 ## What runs today (2026-10-20)
 
@@ -42,14 +43,23 @@ also verified live. No public product has launched.
   request is not asked again. Every call re-reads the grant and the employee, so revoke,
   pause and takeover apply to the next action. Hiring, creating a business and retiring
   are single transactions.
-- **Work and spaces.** Commitments (work items) with an owner, next action, wait
+- **Projects and work.** Commitments (work items) with an owner, next action, wait
   condition, conditions and evidence. A one-minute dispatcher hands ready work to its
-  employee under `<commitment>:<revision>`. Spaces have a lead employee and reference
-  work and saved files; their tabs are Conversation, Overview, Work and Files.
-- **Conversations.** One shared record (Postgres) per DM (`direct:<employee>`), space
-  (`space:<space>`) and work item (`work:<commitment>`). Who answers: an owner message
+  employee under `<commitment>:<revision>`. A project has an optional goal, deadline,
+  budget (a limit; spending arrives with P1), lead and team; its work items belong to it
+  (`project_id`) and kept pages and files are references to them.
+- **Apps.** `src/apps` lists Devys apps as literal manifests: Documents and Code are
+  installed for every business; Mail, Money, Website, Ads and Customers are listed as
+  coming. An app's capabilities are hidden from employees and refused unless the app is
+  installed, as well as granted. The owner installs, removes and pins apps in Settings.
+- **Home.** `GET /home` returns what needs the owner (pending decisions, work needing a
+  decision) and the business at a glance (moving, stuck). When the owner returns after
+  eight hours, Operations' briefing (done, moving, stuck) is posted in their direct chat
+  from records, without starting any turn.
+- **Conversations.** One shared record (Postgres) per direct chat (`direct:<employee>`),
+  project channel (`project:<project>`) and work item thread (`work:<commitment>`). Who answers: an owner message
   goes to those it @mentions, else to the employee it replies to, else to whoever last
-  spoke, else to the default (the DM's employee, the space's lead, the work item's
+  spoke, else to the default (the DM's employee, the project's lead, the work item's
   owner). An employee's message wakes only colleagues it @mentions, and the asker when
   it answers a request that mentioned it. At most three employee turns in a row between
   owner messages. An addressed employee sees up to 20 messages of catch-up in its own Pi
@@ -59,12 +69,19 @@ also verified live. No public product has launched.
   iMessage through Photon. iMessage messages and the employee's iMessage replies are
   recorded in that employee's DM conversation. iMessage is optional and has not been
   tested against a real Photon account.
-- **Clients.** Web (React, shadcn/ui, AI Elements), macOS, iPhone and iPad share one
-  layout: a sidebar of Direct messages and Spaces with unread badges, the conversation
-  as the main pane with a "To" chip showing who will answer and @-autocomplete, and the
-  selected work item in the right panel (pushed on top in compact width). Dictation and
-  hands-free voice, looks (Face, emoji or photo) stored on the server, ⌘K and Settings.
-  Inbox, Money and Apps show honest empty states.
+- **Clients.** One sidebar of Home (with what needs the owner), Projects (threads that
+  need the owner or that they follow nested under each), Team (status and unread) and the
+  business's apps. The middle is always a conversation: Home is the direct chat with
+  Operations, then a project's channel, a direct chat or a work item's thread, with a "To"
+  chip and @-autocomplete. The right panel shows that conversation's permanent view (Needs
+  you, the employee's desk, the project overview, the work card), remembered open or
+  closed per kind, with layers stacked above it: pages with their versions, files, the
+  Documents and Code apps, coding sessions and the live browser. A page published in reply
+  opens on its own and a new version replaces it in place; **Start a thread** on a message
+  creates a work item; **Ask** quotes a selection into the composer; the open layer goes
+  with the next message as a reference. Phones have Home, Projects, Team and Apps tabs
+  with the panel and layers as sheets. Dictation and hands-free voice, looks stored on the
+  server, ⌘K and Settings (with Apps & connections).
 - **Memory and files.** Business memory with evidence and forgetting; saved artifacts in
   R2; selected-file Google Drive access.
 - **Coding delegates (local mode).** From a work item, an employee starts Codex (through
@@ -105,7 +122,7 @@ also verified live. No public product has launched.
   save), and so do spreadsheets (Univer; xlsx, xls and CSV keep values and formulas, not styling),
   markdown slide decks (Marp slides beside the source, exported to `.pptx`) and Excalidraw
   whiteboards, on web, Mac, iPad and iPhone. PDFs, Word, presentations, code and images open in
-  viewers (PDFKit and QuickLook on Apple). Any file can be shown in a space; comments on a text
+  viewers (PDFKit and QuickLook on Apple). Any file can be kept in a project; comments on a text
   range or a PDF region go to an employee or a work item's thread as one message. Employees print HTML to PDF with the
   Mac's Chrome (`printPdf`).
 - **Browser (local mode).** Each business has its own visible Chrome on the Mac with its own
@@ -116,9 +133,9 @@ also verified live. No public product has launched.
   and lets the owner click and type (not recorded) until Hand back.
 - **Pages.** Employees publish self-contained HTML pages (`artifactPage`, `artifactEdit`):
   reports, comparisons, dashboards. A card in the conversation opens the page in an
-  opaque-origin sandbox that fetches nothing; **Save to space** keeps it as one of the space's tabs.
-- **Not built:** desktop control, the broker and vault, signed decisions, the app platform,
-  purchases, mail and launch connectors.
+  opaque-origin sandbox that fetches nothing; **Keep** lists it on a project's overview.
+- **Not built:** desktop control, the broker and vault, signed decisions, community and
+  custom apps, purchases, mail and launch connectors.
 
 The prior Pi/Effect refinement and
 iMessage acceptance guide retain foundation
@@ -219,7 +236,7 @@ is present. Model arguments never select credentials.
 
 ## Active roadmap
 
-Next: the product model in code (projects, apps, Home), then routines, the broker and
+Next: routines, the broker and
 signed decisions, a live event stream and push, mail, purchases, desktop control, voice,
 cloud mode and coding runners, the app directory, and distribution.
 
@@ -432,7 +449,9 @@ Everything under `/api/` needs a web session or a device bearer token; business 
   (name, brief), `/look`, `POST /employees` (hire), `/export`, `/memory`, `/work` (create,
   update at a revision, `takeover`, `release`), `GET /decisions` (pending;
   `?commitment=<id>` lists one work item's requests with their answers),
-  `/decisions/:id/approve|reject`, `/spaces` (and `/spaces/:id/items`), `/artifacts/:id`,
+  `/decisions/:id/approve|reject`, `/projects` (and `/projects/:id/items`), `/apps` (and
+  `install`, `uninstall`, `pin`), `/home`, `GET /coding` (work with coding sessions),
+  `/artifacts/:id`,
   `/connections/google/…`.
 - `/api/businesses/:id/conversations`: `GET` lists conversations with unread counts;
   `GET …/:key` returns a page of messages and who would answer; `POST …/:key/messages`
@@ -547,7 +566,7 @@ Postgres metadata belong together. A comprehensive coordinated restore drill
 and automatic backup retention are later operational work, not dogfood gates.
 
 `GET /api/businesses/:id/export` streams one business as NDJSON: every shared
-conversation message (DMs, spaces, work items), each employee's own Pi history for its
+conversation message (direct chats, project channels, threads), each employee's own Pi history for its
 direct chat, current memory, the artifact index and the selected Drive file index.
 Credentials are excluded. Download artifact bytes separately. A final `complete`
 record identifies a finished export. This is a data export, not a coordinated runtime
