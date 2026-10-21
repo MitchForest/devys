@@ -9,7 +9,6 @@ export const memory = defineApp({
   icon: "brain",
   summary: "What the business knows: facts and corrections employees recall, save and forget.",
   kind: "system",
-  status: "available",
   records: [],
   capabilities,
   skills: [],

@@ -46,16 +46,34 @@ while IFS= read -r line; do
 done
 `;
 
-/** A Mac host with two businesses, each holding a secret, and the host's data beside them. */
+/**
+ * A Mac host with two businesses, each holding a secret, and the server's own data outside the
+ * businesses folder, as installed (scripts/local.ts): the host's data with every business's
+ * deploy secrets and browser profiles, and Postgres beside it.
+ */
 async function host() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "devys-confined-")));
-  // As on the Mac: the businesses and the host's own data share one folder (src/host.ts).
   const work = join(root, "Devys");
-  const data = join(work, ".host");
+  const server = join(root, "Devys Server");
+  const data = join(server, "host");
+  const postgres = join(server, "postgres");
   for (const scope of [a, b]) {
     mkdirSync(join(work, scope.businessId), { recursive: true });
     writeFileSync(join(work, scope.businessId, "secret.txt"), `${scope.businessId} secret\n`);
+    mkdirSync(join(data, "deploy"), { recursive: true });
+    writeFileSync(
+      join(data, "deploy", `${scope.businessId}.env`),
+      `TOKEN=${scope.businessId}-deploy-token\n`,
+    );
+    mkdirSync(join(data, "browser", scope.businessId, "Default"), { recursive: true });
+    writeFileSync(
+      join(data, "browser", scope.businessId, "Default", "Cookies"),
+      `${scope.businessId} cookie\n`,
+    );
   }
+  mkdirSync(postgres, { recursive: true });
+  writeFileSync(join(postgres, "PG_VERSION"), "postgres-marker\n");
+  const hidden = [server];
   const cli = join(root, "fake-claude");
   writeFileSync(cli, harness, { mode: 0o755 });
   const delivered: CodingEvent[] = [];
@@ -63,10 +81,11 @@ async function host() {
   const spawned: string[] = [];
   const confined =
     (folder: string, readOnly: boolean) => (command: string, args: readonly string[]) =>
-      confine({ root: work, folder, readOnly }, command, args);
-  const server = await startHost({
+      confine({ root: work, folder, readOnly, hidden }, command, args);
+  const host = await startHost({
     token,
     data,
+    hidden,
     work,
     port: 0,
     shell: "/bin/sh",
@@ -102,13 +121,14 @@ async function host() {
       }),
     ],
   });
-  running.push(server);
-  const url = `http://127.0.0.1:${server.port}`;
+  running.push(host);
+  const url = `http://127.0.0.1:${host.port}`;
   const files = {} as Parameters<typeof hostRunner>[0]["files"];
   return {
     root,
     work,
     data,
+    postgres,
     delivered,
     spawned,
     secret: (scope: typeof a) => join(work, scope.businessId, "secret.txt"),
@@ -159,7 +179,7 @@ it("an employee's run reads its own business folder and nothing of another busin
       `echo x > ${join(state.work, b.businessId, "planted.txt")}`,
       `mv ${state.secret(a)} ${join(state.work, b.businessId, "moved.txt")}`,
       `ls ${state.work}`,
-      `cat ${join(state.data, "receipts.jsonl")}`,
+      `cat '${join(state.data, "receipts.jsonl")}'`,
     ].join("; "),
   );
   expect(escapes).not.toContain("business-b secret");
@@ -190,11 +210,40 @@ it("an employee's file tools refuse another business's folder", async () => {
   await expect(state.runner(a).list(join(state.work, b.businessId))).rejects.toThrow(
     /another business/,
   );
-  await expect(state.runner(a).list(state.data)).rejects.toThrow(/another business/);
+  await expect(state.runner(a).list(state.data)).rejects.toThrow(/server's own data/);
+  await expect(state.runner(a).read(join(state.data, "deploy", "business-a.env"))).rejects.toThrow(
+    /server's own data/,
+  );
   // The raw file route that moves bytes to and from R2 is held to the same folder.
   expect((await state.file(a.businessId, state.secret(a))).status).toBe(200);
   expect((await state.file(a.businessId, state.secret(b))).status).toBe(403);
   expect((await state.file("", state.secret(a))).status).toBe(400);
+});
+
+it("an employee's run reads nothing of the server's own data, its own business's included", async () => {
+  const state = await host();
+  const tried = await run(
+    state,
+    a,
+    [
+      `cat '${join(state.data, "deploy", "business-a.env")}'`,
+      `cat '${join(state.data, "deploy", "business-b.env")}'`,
+      `cat '${join(state.data, "browser", "business-a", "Default", "Cookies")}'`,
+      `cat '${join(state.data, "browser", "business-b", "Default", "Cookies")}'`,
+      `cat '${join(state.postgres, "PG_VERSION")}'`,
+      `ls '${state.postgres}'`,
+      `echo x > '${join(state.postgres, "planted")}'`,
+      `grep -r . '${join(state.data, "..")}' 2>&1`,
+    ].join("; "),
+  );
+  expect(tried).toContain("Operation not permitted");
+  expect(tried).not.toContain("deploy-token");
+  expect(tried).not.toContain("cookie");
+  expect(tried).not.toContain("postgres-marker");
+  expect(tried).not.toMatch(/^PG_VERSION$/m);
+  expect(existsSync(join(state.postgres, "planted"))).toBe(false);
+  // Its own folder still works.
+  expect(await run(state, a, `cat ${state.secret(a)}`)).toBe("business-a secret\n");
 });
 
 const build = (id: string, provider: StartRequest["provider"]): StartRequest => ({

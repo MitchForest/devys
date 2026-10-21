@@ -261,7 +261,7 @@ it("contracts are vendor-free and depend only on other contracts", () => {
 
 // The app model (.docs/APPS_AND_CAPABILITIES.md#code-layout).
 it("each app is a folder whose app.ts defines it under its folder's name", () => {
-  expect(apps.length).toBeGreaterThan(10);
+  expect(apps.length).toBeGreaterThan(8);
   for (const id of apps) {
     const text = read(`src/apps/${id}/app.ts`);
     expect(text, id).toMatch(/= defineApp\(\{/);

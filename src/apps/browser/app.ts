@@ -1,23 +1,18 @@
 import { defineApp } from "../../protocol/app.ts";
+import { bundledSkill } from "../../protocol/skill.ts";
+import usingTheBrowser from "./skills/using-the-browser/SKILL.md?raw";
 
-const capabilities = [
-  "browserOpen",
-  "browserRead",
-  "browserClick",
-  "browserType",
-  "browserPress",
-] as const;
+const capabilities = ["browserScript", "browserScreenshot", "browserTabs"] as const;
 
 export const browser = defineApp({
   id: "browser",
   name: "Browser",
   icon: "safari",
-  summary: "The business's own browser: open, read, click, type and press keys.",
+  summary: "The business's own browser: scripts against the page, screenshots and tabs.",
   kind: "system",
-  status: "available",
   records: [],
   capabilities,
-  skills: [],
+  skills: [bundledSkill("using-the-browser", usingTheBrowser)],
   connections: [],
   appears: "never",
   defaultGrants: {

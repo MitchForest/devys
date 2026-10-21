@@ -1,20 +1,17 @@
-import { Check, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 import type { NeedsYouItem, WorkCard } from "../../app/wire.ts";
-import type { Decision } from "../../authority/contract.ts";
+import { spendOf, type Decision } from "../../authority/contract.ts";
 import { useEmployees, useHome, useWork } from "../app/data.ts";
-import { useAnswer } from "../app/mutations.ts";
 import { useNav } from "../app/navigation.ts";
 import { EmployeePortrait } from "../design/portrait.tsx";
-import { decisionFields, decisionTitle } from "./work.tsx";
+import { decisionFields, decisionTitle, RequestActions } from "./work.tsx";
 import { PanelBody, PanelHeader, PanelSection } from "./panel.tsx";
 import { RoutineProposal } from "./routines.tsx";
-import { Button } from "@/components/ui/button";
 
 /**
  * Home's permanent view, all from one read of `/home`: everything waiting on the owner, then
  * what is moving and what is stuck. Each row opens its thread; a decision is answered right here.
- * (Spending joins it when it is recorded, with its currency.)
  */
 export function NeedsYou({ close }: { close: () => void }) {
   const value = useHome().data;
@@ -27,7 +24,7 @@ export function NeedsYou({ close }: { close: () => void }) {
         {value.needs_you.length > 0 && (
           <div className="flex flex-col gap-2">
             {value.needs_you.map((item) =>
-              item.kind === "decision" ? (
+              item.kind !== "work" ? (
                 item.routine ? (
                   <RoutineProposal key={item.id} decision={item} routine={item.routine} />
                 ) : (
@@ -63,7 +60,6 @@ function DecisionRow({ decision }: { decision: Decision }) {
   const employees = useEmployees();
   const work = useWork().data;
   const nav = useNav();
-  const answer = useAnswer();
   const [open, setOpen] = useState(false);
   const employee = employees.find((e) => e.id === decision.employee_id);
   const item = work?.find((w) => w.id === decision.work_item_id);
@@ -81,9 +77,9 @@ function DecisionRow({ decision }: { decision: Decision }) {
           </span>
         </div>
       </div>
-      {open && (
+      {(open || spendOf(decision)) && (
         <div className="flex flex-col gap-1 rounded-control bg-well p-2.5">
-          {decisionFields(decision.input).map(([key, value]) => (
+          {decisionFields(decision).map(([key, value]) => (
             <div key={key} className="flex items-baseline gap-2">
               <span className="min-w-14 text-caption text-ink-3">{key}</span>
               <span className="line-clamp-6 min-w-0 text-detail break-words text-ink select-text">
@@ -93,26 +89,17 @@ function DecisionRow({ decision }: { decision: Decision }) {
           ))}
         </div>
       )}
-      <div className="flex items-center gap-1.5">
-        <Button
-          variant="aurora"
-          size="compact"
-          onClick={() => answer.mutate({ id: decision.id, approve: true })}
-        >
-          <Check /> Approve
-        </Button>
-        <Button size="compact" onClick={() => answer.mutate({ id: decision.id, approve: false })}>
-          Decline
-        </Button>
-        <span className="ml-auto" />
-        <button
-          type="button"
-          onClick={() => setOpen(!open)}
-          aria-expanded={open}
-          className="text-caption text-ink-3 hover:text-ink-2"
-        >
-          {open ? "Hide details" : "Details"}
-        </button>
+      <RequestActions decision={decision} compact>
+        {!spendOf(decision) && (
+          <button
+            type="button"
+            onClick={() => setOpen(!open)}
+            aria-expanded={open}
+            className="text-caption text-ink-3 hover:text-ink-2"
+          >
+            {open ? "Hide details" : "Details"}
+          </button>
+        )}
         {decision.work_item_id && (
           <button
             type="button"
@@ -122,7 +109,7 @@ function DecisionRow({ decision }: { decision: Decision }) {
             Thread
           </button>
         )}
-      </div>
+      </RequestActions>
     </div>
   );
 }

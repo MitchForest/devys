@@ -18,6 +18,9 @@ struct WorkspaceSheets: ViewModifier {
             .sheet(isPresented: Binding(get: { store.newProject != nil }, set: { if !$0 { store.send(.newProjectDismissed) } })) {
                 NewProjectSheet(store: store)
             }
+            .sheet(isPresented: Binding(get: { store.signing != nil }, set: { if !$0 { store.send(.signDismissed) } })) {
+                SigningSheetView(store: store)
+            }
     }
 }
 

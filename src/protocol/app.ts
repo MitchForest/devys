@@ -15,8 +15,6 @@ export interface AppManifest {
   summary: string;
   /** System apps are always installed, never uninstalled and not in the sidebar. */
   kind: "system" | "business";
-  /** Coming apps are listed in the directory and cannot be installed yet. */
-  status: "available" | "coming";
   /** The `Ref` kinds it owns (`devys:<id>/<kind>/…`). */
   records: readonly { kind: string; title: string }[];
   /** Every capability belongs to exactly one app. */
@@ -24,8 +22,8 @@ export interface AppManifest {
   /** `SKILL.md` folders shipped with the app. */
   skills: readonly Skill[];
   connections: readonly { provider: string; scopes: readonly string[] }[];
-  /** When the sidebar lists it once installed: always, once it has records, once connected, or never. */
-  appears: "always" | "records" | "connected" | "never";
+  /** When the sidebar lists it once installed: always, once it has records, or never. */
+  appears: "always" | "records" | "never";
   /** The capabilities proposed to each role at hire, never granted by installing. */
   defaultGrants?: Partial<Record<RoleTemplateId, readonly string[]>>;
 }

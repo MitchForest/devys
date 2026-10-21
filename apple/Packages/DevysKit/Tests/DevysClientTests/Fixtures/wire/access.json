@@ -1,7 +1,7 @@
 {
   "grants": [
     {
-      "id": "00000000-0000-4000-8000-000000000016",
+      "id": "00000000-0000-4000-8000-000000000018",
       "capability": "artifactEdit",
       "mode": "auto",
       "constraints": {},
@@ -12,7 +12,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000017",
+      "id": "00000000-0000-4000-8000-000000000019",
       "capability": "artifactPage",
       "mode": "auto",
       "constraints": {},
@@ -23,7 +23,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000018",
+      "id": "00000000-0000-4000-8000-000000000020",
       "capability": "artifactRead",
       "mode": "auto",
       "constraints": {},
@@ -34,62 +34,51 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000019",
-      "capability": "browserClick",
-      "mode": "auto",
-      "constraints": {},
-      "responsibility": null,
-      "created_at": "2026-01-01T00:00:00.000Z",
-      "description": "Click an element in the business's browser, named by its role and name from browserRead (preferred), its visible text, or a CSS selector. Clicking can submit, buy or send: only do what the work allows.",
-      "effect": "external",
-      "limits": false
-    },
-    {
-      "id": "00000000-0000-4000-8000-000000000020",
-      "capability": "browserOpen",
-      "mode": "auto",
-      "constraints": {},
-      "responsibility": null,
-      "created_at": "2026-01-01T00:00:00.000Z",
-      "description": "Open a URL in the business's browser (its own Chrome, where the owner is signed in to the business's sites). Then read the page with browserRead.",
-      "effect": "read",
-      "limits": false
-    },
-    {
       "id": "00000000-0000-4000-8000-000000000021",
-      "capability": "browserPress",
+      "capability": "askOwner",
       "mode": "auto",
       "constraints": {},
       "responsibility": null,
       "created_at": "2026-01-01T00:00:00.000Z",
-      "description": "Press a key in the business's browser (Enter, Escape, Tab, PageDown, ArrowDown, …).",
-      "effect": "external",
+      "description": "Bring the owner in, from this work item's thread. {kind: \"approve\", action, counterparty, amount?, renewal?}: before a consequential action you will take anywhere (browser, shell, an app), state it exactly: action is what you will do, counterparty who or where (merchant, site, person); any spend has amount {cents, currency}, which the owner signs with Face ID or Touch ID, and renewal says what recurs. {kind: \"take_over\", reason, url?}: something only the owner can do in the business's browser (sign in, 2FA, CAPTCHA, enter a card); they take the work over, do it and hand it back. It returns at once: carry on with other work or wait; the answer arrives in this thread. Asking again with exactly the same input tells you where it stands (asked, approved, declined, taken_over, done). A changed amount, merchant or action is a new request. Never ask for passwords, codes or card numbers in chat.",
+      "effect": "change",
       "limits": false
     },
     {
       "id": "00000000-0000-4000-8000-000000000022",
-      "capability": "browserRead",
+      "capability": "browserScreenshot",
       "mode": "auto",
       "constraints": {},
       "responsibility": null,
       "created_at": "2026-01-01T00:00:00.000Z",
-      "description": "Read the page open in the business's browser: its URL, title and accessibility tree (each element's role and name, which browserClick and browserType take).",
+      "description": "See the current tab of the business's browser: a picture of the visible page in CSS pixels, so a point in it is the x and y Input.dispatchMouseEvent takes in browserScript.",
       "effect": "read",
       "limits": false
     },
     {
       "id": "00000000-0000-4000-8000-000000000023",
-      "capability": "browserType",
+      "capability": "browserScript",
       "mode": "auto",
       "constraints": {},
       "responsibility": null,
       "created_at": "2026-01-01T00:00:00.000Z",
-      "description": "Fill a field in the business's browser (named like browserClick) with text, optionally pressing Enter to submit. Never type passwords or card numbers: the owner signs in through the live view.",
+      "description": "Run a JavaScript snippet against the business's own browser (Chrome on the business's profile, where the owner is signed in to its sites). `session.<Domain>.<method>(params)` sends any Chrome DevTools Protocol command to the current tab (Page.navigate, Runtime.evaluate, Input.dispatchMouseEvent, Input.insertText, DOM.setFileInputFiles, …); `session.use(targetId)` routes to another tab or a cross-origin frame; `session.waitFor(event, predicate?, ms?)` waits for an event after your last command; `listPageTargets()` lists tabs. Await each call; the last expression (or `return`) is the result. Read the using-the-browser skill first. Clicking and typing can submit, buy or send: only do what the work allows; never type passwords or card numbers.",
       "effect": "external",
       "limits": false
     },
     {
       "id": "00000000-0000-4000-8000-000000000024",
+      "capability": "browserTabs",
+      "mode": "auto",
+      "constraints": {},
+      "responsibility": null,
+      "created_at": "2026-01-01T00:00:00.000Z",
+      "description": "List the business's browser tabs, or switch to, open (a URL) or close one. The current tab is the one browserScript and browserScreenshot act on and the owner watches.",
+      "effect": "change",
+      "limits": false
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000025",
       "capability": "codingAccept",
       "mode": "auto",
       "constraints": {},
@@ -100,7 +89,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000025",
+      "id": "00000000-0000-4000-8000-000000000026",
       "capability": "codingPublish",
       "mode": "auto",
       "constraints": {},
@@ -111,7 +100,7 @@
       "limits": true
     },
     {
-      "id": "00000000-0000-4000-8000-000000000026",
+      "id": "00000000-0000-4000-8000-000000000027",
       "capability": "codingSend",
       "mode": "auto",
       "constraints": {},
@@ -122,7 +111,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000027",
+      "id": "00000000-0000-4000-8000-000000000028",
       "capability": "codingStart",
       "mode": "auto",
       "constraints": {},
@@ -133,7 +122,7 @@
       "limits": true
     },
     {
-      "id": "00000000-0000-4000-8000-000000000028",
+      "id": "00000000-0000-4000-8000-000000000029",
       "capability": "codingStatus",
       "mode": "auto",
       "constraints": {},
@@ -144,7 +133,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000029",
+      "id": "00000000-0000-4000-8000-000000000030",
       "capability": "codingStop",
       "mode": "auto",
       "constraints": {},
@@ -155,7 +144,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000030",
+      "id": "00000000-0000-4000-8000-000000000031",
       "capability": "conversationHistory",
       "mode": "auto",
       "constraints": {},
@@ -166,7 +155,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000031",
+      "id": "00000000-0000-4000-8000-000000000032",
       "capability": "deployPreview",
       "mode": "auto",
       "constraints": {},
@@ -177,7 +166,7 @@
       "limits": true
     },
     {
-      "id": "00000000-0000-4000-8000-000000000032",
+      "id": "00000000-0000-4000-8000-000000000033",
       "capability": "deployProduction",
       "mode": "ask",
       "constraints": {},
@@ -188,7 +177,7 @@
       "limits": true
     },
     {
-      "id": "00000000-0000-4000-8000-000000000033",
+      "id": "00000000-0000-4000-8000-000000000034",
       "capability": "forget",
       "mode": "auto",
       "constraints": {},
@@ -199,7 +188,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000034",
+      "id": "00000000-0000-4000-8000-000000000035",
       "capability": "importAttachment",
       "mode": "auto",
       "constraints": {},
@@ -210,7 +199,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000035",
+      "id": "00000000-0000-4000-8000-000000000036",
       "capability": "printPdf",
       "mode": "auto",
       "constraints": {},
@@ -221,7 +210,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000036",
+      "id": "00000000-0000-4000-8000-000000000037",
       "capability": "projectAdd",
       "mode": "auto",
       "constraints": {},
@@ -232,7 +221,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000037",
+      "id": "00000000-0000-4000-8000-000000000038",
       "capability": "projectCreate",
       "mode": "auto",
       "constraints": {},
@@ -243,7 +232,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000038",
+      "id": "00000000-0000-4000-8000-000000000039",
       "capability": "projectList",
       "mode": "auto",
       "constraints": {},
@@ -254,7 +243,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000039",
+      "id": "00000000-0000-4000-8000-000000000040",
       "capability": "projectUpdate",
       "mode": "auto",
       "constraints": {},
@@ -265,7 +254,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000040",
+      "id": "00000000-0000-4000-8000-000000000041",
       "capability": "publishArtifact",
       "mode": "auto",
       "constraints": {},
@@ -276,7 +265,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000041",
+      "id": "00000000-0000-4000-8000-000000000042",
       "capability": "read",
       "mode": "auto",
       "constraints": {},
@@ -287,7 +276,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000042",
+      "id": "00000000-0000-4000-8000-000000000043",
       "capability": "readPublicUrl",
       "mode": "auto",
       "constraints": {},
@@ -298,7 +287,7 @@
       "limits": true
     },
     {
-      "id": "00000000-0000-4000-8000-000000000043",
+      "id": "00000000-0000-4000-8000-000000000044",
       "capability": "readSkill",
       "mode": "auto",
       "constraints": {},
@@ -309,7 +298,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000044",
+      "id": "00000000-0000-4000-8000-000000000045",
       "capability": "recall",
       "mode": "auto",
       "constraints": {},
@@ -320,7 +309,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000045",
+      "id": "00000000-0000-4000-8000-000000000046",
       "capability": "remember",
       "mode": "auto",
       "constraints": {},
@@ -331,7 +320,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000046",
+      "id": "00000000-0000-4000-8000-000000000047",
       "capability": "routineActivate",
       "mode": "ask",
       "constraints": {},
@@ -342,7 +331,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000047",
+      "id": "00000000-0000-4000-8000-000000000048",
       "capability": "routineList",
       "mode": "auto",
       "constraints": {},
@@ -353,7 +342,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000048",
+      "id": "00000000-0000-4000-8000-000000000049",
       "capability": "routinePause",
       "mode": "auto",
       "constraints": {},
@@ -364,7 +353,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000049",
+      "id": "00000000-0000-4000-8000-000000000050",
       "capability": "routinePropose",
       "mode": "auto",
       "constraints": {},
@@ -375,7 +364,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000050",
+      "id": "00000000-0000-4000-8000-000000000051",
       "capability": "run",
       "mode": "auto",
       "constraints": {},
@@ -386,7 +375,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000051",
+      "id": "00000000-0000-4000-8000-000000000052",
       "capability": "workComplete",
       "mode": "auto",
       "constraints": {},
@@ -397,7 +386,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000052",
+      "id": "00000000-0000-4000-8000-000000000053",
       "capability": "workCreate",
       "mode": "auto",
       "constraints": {},
@@ -408,7 +397,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000053",
+      "id": "00000000-0000-4000-8000-000000000054",
       "capability": "workList",
       "mode": "auto",
       "constraints": {},
@@ -419,7 +408,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000054",
+      "id": "00000000-0000-4000-8000-000000000055",
       "capability": "workUpdate",
       "mode": "auto",
       "constraints": {},
@@ -430,7 +419,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000055",
+      "id": "00000000-0000-4000-8000-000000000056",
       "capability": "write",
       "mode": "auto",
       "constraints": {},

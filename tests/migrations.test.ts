@@ -33,6 +33,7 @@ it("the migrations take an empty database to every component's tables, once", as
     "conversation_reads",
     "conversations",
     "decisions",
+    "device_keys",
     "drive_files",
     "drive_operations",
     "employees",

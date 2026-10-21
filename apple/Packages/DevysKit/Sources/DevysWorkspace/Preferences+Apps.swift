@@ -81,8 +81,7 @@ extension Preferences {
     }
 }
 
-/// Settings → Apps: the business's functions from the directory (Devys apps first; others are
-/// coming), installed, pinned to the sidebar or removed, the system apps every business has, and
+/// Settings → Apps: the business's functions from the directory (Devys apps first), installed, pinned to the sidebar or removed, the system apps every business has, and
 /// the connections they use. Installing grants nothing by itself.
 struct AppsPane: View {
     let store: StoreOf<Preferences>
@@ -116,8 +115,7 @@ struct AppsPane: View {
         case .failed(let message):
             EmptyNote(text: message)
         case .loaded(let apps):
-            let available = apps.filter { $0.kind == .business && $0.status == .available }
-            let coming = apps.filter { $0.status == .coming }
+            let available = apps.filter { $0.kind == .business }
             let system = apps.filter { $0.kind == .system }
             VStack(alignment: .leading, spacing: DevysSpacing.small) {
                 SectionHeader("Devys apps")
@@ -133,18 +131,6 @@ struct AppsPane: View {
                         AppSkills(app: app)
                     }
                     .padding(.vertical, 4)
-                }
-            }
-            if !coming.isEmpty {
-                VStack(alignment: .leading, spacing: DevysSpacing.small) {
-                    SectionHeader("Coming")
-                    ForEach(coming) { app in
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(app.name).font(DevysTypography.body).foregroundStyle(DevysColors.ink2)
-                            Text(app.summary).font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3)
-                        }
-                        .padding(.vertical, 4)
-                    }
                 }
             }
         }

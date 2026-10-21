@@ -108,6 +108,20 @@ export function capability<I, O, C = never>(definition: {
 }
 
 export const Text = Schema.String.check(Schema.isMaxLength(64_000));
+
+/** A picture the model sees: a capability's output field `image` reaches the model as one. */
+export const Image = Schema.Struct({
+  mimeType: Schema.Literals(["image/jpeg", "image/png"]),
+  /** Base64. */
+  data: Schema.String,
+});
+export type Image = typeof Image.Type;
+
+/** The output's `image`, when it has one. */
+export const imageOf = (output: unknown): Image | undefined => {
+  const image = (output as { image?: unknown } | null)?.image;
+  return Schema.is(Image)(image) ? image : undefined;
+};
 /**
  * An absolute file path. The runner decides where it may point: the cloud sandbox keeps
  * paths under /workspace; the trusted Mac host allows the owner's whole filesystem.

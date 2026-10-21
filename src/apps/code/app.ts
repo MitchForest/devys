@@ -17,7 +17,6 @@ export const code = defineApp({
   icon: "chevron.left.forwardslash.chevron.right",
   summary: "Repositories, coding sessions, pull requests and deploys.",
   kind: "business",
-  status: "available",
   records: [{ kind: "session", title: "Coding session" }],
   capabilities: coding,
   skills: [],

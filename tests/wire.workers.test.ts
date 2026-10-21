@@ -13,6 +13,8 @@ import { terminalRoute } from "../src/app/terminals.ts";
 import * as wire from "../src/app/wire.ts";
 import { Transcript, WorkingDiff, type CodingHost } from "../src/apps/code/contract.ts";
 import { recordCodingSession, recordStarted } from "../src/apps/code/service.ts";
+import { askOwnerFor } from "../src/app/asking.ts";
+import { DeviceKey } from "../src/authority/contract.ts";
 import { grant } from "../src/authority/service.ts";
 import { BrowserStatus, PageState, Screenshot } from "../src/browser/contract.ts";
 import { DeviceCode, DeviceList, Employee } from "../src/identity/contract.ts";
@@ -246,6 +248,34 @@ it("every route the clients read answers in its wire schema; the golden files ma
     { name: "order.txt", content: "12 fittings" },
     { workItemId: supplier.id, conversation: `work:${supplier.id}` },
   );
+
+  // What employees ask the owner (askOwner) on that work item: a spend to sign on a device, and
+  // a sign-in only the owner can do in the browser.
+  await Effect.runPromise(
+    grant(db, scope, {
+      capability: capabilities(bindings).find((item) => item.name === "askOwner")!,
+      mode: "auto",
+    }),
+  );
+  for (const request of [
+    {
+      kind: "approve",
+      action: "Register acme-plumbing.example for one year",
+      counterparty: "Namecheap",
+      amount: { cents: 1299, currency: "USD" },
+      renewal: "Renews yearly at $14.99",
+    },
+    {
+      kind: "take_over",
+      reason: "Sign in to the registrar (2FA)",
+      url: "https://www.namecheap.com/myaccount/login/",
+    },
+  ] as const)
+    await askOwnerFor(
+      bindings,
+      { ...scope, workItemId: supplier.id, conversation: `work:${supplier.id}` },
+      request,
+    );
 
   // Routines: Ada proposes a weekly report for the launch and asks the owner to activate it; an
   // event routine the owner has paused.
@@ -506,6 +536,17 @@ it("every route the clients read answers in its wire schema; the golden files ma
   };
   [body.business.id, body.operations.id, ...body.team.map((member) => member.id)].forEach(register);
   await keep("business-created", wire.BusinessCreated, created);
+
+  // This iPhone's signing key (a fixed public key, so the file is stable).
+  await keep(
+    "device-key",
+    DeviceKey,
+    await call("/api/device-keys", "POST", {
+      public_key:
+        "BCDij9urh2sNUg0gg0DUgyk1/FXSWQPxIEaK1wHb+twTfTKW/vHV8w2KPznUuKJXdRUXyN+j6cl07cNRrc2aQoo=",
+    }),
+  );
+  await keep("device-keys", wire.DeviceKeys, await call("/api/device-keys"));
 
   // Also decoded, not kept: shapes whose values are random or the browser's own.
   expect(Schema.decodeUnknownSync(PageState)({ url: "https://a.test", title: "A" })).toBeTruthy();

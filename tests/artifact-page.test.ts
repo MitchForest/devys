@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { createServer } from "node:http";
-import { chromium } from "playwright-core";
+import { chromium } from "@playwright/test";
 import { expect, it } from "vitest";
 import { sandboxed } from "../src/apps/documents/contract.ts";
 import { pageProblem } from "../src/apps/documents/page.ts";

@@ -6,7 +6,6 @@
       "icon": "desktopcomputer",
       "summary": "Commands, files, PDFs and skills where each employee works.",
       "kind": "system",
-      "status": "available",
       "records": [],
       "capabilities": [
         "run",
@@ -67,48 +66,42 @@
       "id": "browser",
       "name": "Browser",
       "icon": "safari",
-      "summary": "The business's own browser: open, read, click, type and press keys.",
+      "summary": "The business's own browser: scripts against the page, screenshots and tabs.",
       "kind": "system",
-      "status": "available",
       "records": [],
       "capabilities": [
-        "browserOpen",
-        "browserRead",
-        "browserClick",
-        "browserType",
-        "browserPress"
+        "browserScript",
+        "browserScreenshot",
+        "browserTabs"
       ],
-      "skills": [],
+      "skills": [
+        {
+          "name": "using-the-browser",
+          "description": "Drive the business's own browser with browserScript (DevTools Protocol commands), browserScreenshot and browserTabs to open and read pages, click and type by coordinates, upload files, and work in frames and tabs."
+        }
+      ],
       "connections": [],
       "appears": "never",
       "default_grants": {
         "operations": [
-          "browserOpen",
-          "browserRead",
-          "browserClick",
-          "browserType",
-          "browserPress"
+          "browserScript",
+          "browserScreenshot",
+          "browserTabs"
         ],
         "engineering": [
-          "browserOpen",
-          "browserRead",
-          "browserClick",
-          "browserType",
-          "browserPress"
+          "browserScript",
+          "browserScreenshot",
+          "browserTabs"
         ],
         "growth": [
-          "browserOpen",
-          "browserRead",
-          "browserClick",
-          "browserType",
-          "browserPress"
+          "browserScript",
+          "browserScreenshot",
+          "browserTabs"
         ],
         "business-operations": [
-          "browserOpen",
-          "browserRead",
-          "browserClick",
-          "browserType",
-          "browserPress"
+          "browserScript",
+          "browserScreenshot",
+          "browserTabs"
         ]
       },
       "installed": true,
@@ -121,7 +114,6 @@
       "icon": "network",
       "summary": "Reads public web pages.",
       "kind": "system",
-      "status": "available",
       "records": [],
       "capabilities": [
         "readPublicUrl"
@@ -153,7 +145,6 @@
       "icon": "brain",
       "summary": "What the business knows: facts and corrections employees recall, save and forget.",
       "kind": "system",
-      "status": "available",
       "records": [],
       "capabilities": [
         "recall",
@@ -200,7 +191,6 @@
       "icon": "bubble.left.and.bubble.right",
       "summary": "What was said in direct messages, project channels and work threads.",
       "kind": "system",
-      "status": "available",
       "records": [],
       "capabilities": [
         "conversationHistory"
@@ -233,9 +223,8 @@
       "id": "work",
       "name": "Work",
       "icon": "checklist",
-      "summary": "Work items the business owes, the projects they belong to and employees' routines.",
+      "summary": "Work items the business owes, the projects they belong to, employees' routines and what they ask the owner.",
       "kind": "system",
-      "status": "available",
       "records": [
         {
           "kind": "item",
@@ -262,7 +251,8 @@
         "routineList",
         "routinePropose",
         "routineActivate",
-        "routinePause"
+        "routinePause",
+        "askOwner"
       ],
       "skills": [],
       "connections": [],
@@ -280,7 +270,8 @@
           "routineList",
           "routinePropose",
           "routineActivate",
-          "routinePause"
+          "routinePause",
+          "askOwner"
         ],
         "engineering": [
           "workList",
@@ -294,7 +285,8 @@
           "routineList",
           "routinePropose",
           "routineActivate",
-          "routinePause"
+          "routinePause",
+          "askOwner"
         ],
         "growth": [
           "workList",
@@ -308,7 +300,8 @@
           "routineList",
           "routinePropose",
           "routineActivate",
-          "routinePause"
+          "routinePause",
+          "askOwner"
         ],
         "business-operations": [
           "workList",
@@ -322,7 +315,8 @@
           "routineList",
           "routinePropose",
           "routineActivate",
-          "routinePause"
+          "routinePause",
+          "askOwner"
         ],
         "custom": [
           "workList",
@@ -336,7 +330,8 @@
           "routineList",
           "routinePropose",
           "routineActivate",
-          "routinePause"
+          "routinePause",
+          "askOwner"
         ]
       },
       "installed": true,
@@ -349,7 +344,6 @@
       "icon": "person.3",
       "summary": "The business's employees: hiring from a role template.",
       "kind": "system",
-      "status": "available",
       "records": [],
       "capabilities": [
         "hireEmployee"
@@ -372,7 +366,6 @@
       "icon": "doc.text",
       "summary": "Documents, pages, sheets, slides, whiteboards, PDFs and uploads, and Google Drive.",
       "kind": "business",
-      "status": "available",
       "records": [
         {
           "kind": "artifact",
@@ -452,7 +445,6 @@
       "icon": "chevron.left.forwardslash.chevron.right",
       "summary": "Repositories, coding sessions, pull requests and deploys.",
       "kind": "business",
-      "status": "available",
       "records": [
         {
           "kind": "session",
@@ -501,111 +493,6 @@
       },
       "installed": true,
       "pinned": true,
-      "visible": false
-    },
-    {
-      "id": "mail",
-      "name": "Mail",
-      "icon": "envelope",
-      "summary": "The business's mailboxes: threads, drafts and sending.",
-      "kind": "business",
-      "status": "coming",
-      "records": [],
-      "capabilities": [],
-      "skills": [],
-      "connections": [
-        {
-          "provider": "google",
-          "scopes": []
-        }
-      ],
-      "appears": "connected",
-      "installed": false,
-      "pinned": false,
-      "visible": false
-    },
-    {
-      "id": "money",
-      "name": "Money",
-      "icon": "creditcard",
-      "summary": "Payments, cards and transactions.",
-      "kind": "business",
-      "status": "coming",
-      "records": [],
-      "capabilities": [],
-      "skills": [],
-      "connections": [
-        {
-          "provider": "stripe",
-          "scopes": []
-        }
-      ],
-      "appears": "connected",
-      "installed": false,
-      "pinned": false,
-      "visible": false
-    },
-    {
-      "id": "website",
-      "name": "Website",
-      "icon": "globe",
-      "summary": "The business's site, domains and pages.",
-      "kind": "business",
-      "status": "coming",
-      "records": [],
-      "capabilities": [],
-      "skills": [],
-      "connections": [
-        {
-          "provider": "cloudflare",
-          "scopes": []
-        }
-      ],
-      "appears": "connected",
-      "installed": false,
-      "pinned": false,
-      "visible": false
-    },
-    {
-      "id": "ads",
-      "name": "Ads",
-      "icon": "megaphone",
-      "summary": "Ad campaigns, spend and results.",
-      "kind": "business",
-      "status": "coming",
-      "records": [],
-      "capabilities": [],
-      "skills": [],
-      "connections": [
-        {
-          "provider": "meta",
-          "scopes": []
-        }
-      ],
-      "appears": "connected",
-      "installed": false,
-      "pinned": false,
-      "visible": false
-    },
-    {
-      "id": "customers",
-      "name": "Customers",
-      "icon": "person.2",
-      "summary": "Customers, conversations and follow-ups.",
-      "kind": "business",
-      "status": "coming",
-      "records": [],
-      "capabilities": [],
-      "skills": [],
-      "connections": [
-        {
-          "provider": "google",
-          "scopes": []
-        }
-      ],
-      "appears": "connected",
-      "installed": false,
-      "pinned": false,
       "visible": false
     }
   ]

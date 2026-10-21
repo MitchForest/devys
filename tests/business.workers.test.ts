@@ -57,6 +57,23 @@ it("a person sees only their businesses and can create one staffed with a Head o
   expect(detail.employees.map((e) => e.name)).toEqual(["Head of Operations"]);
 });
 
+it("a person changes the name they go by; a blank or long one is refused", async () => {
+  const acme = await business("Named");
+  const as = await session(acme.person);
+  const rename = (display_name: unknown) =>
+    as("/api/me", { method: "PUT", body: JSON.stringify({ display_name }) });
+  const renamed = await rename("  Sam Rivera ");
+  expect(renamed.status).toBe(200);
+  expect(((await renamed.json()) as { person: { display_name: string } }).person.display_name).toBe(
+    "Sam Rivera",
+  );
+  const me = (await (await as("/api/me")).json()) as { person: { display_name: string } };
+  expect(me.person.display_name).toBe("Sam Rivera");
+  expect((await rename("   ")).status).toBe(400);
+  expect((await rename("x".repeat(81))).status).toBe(400);
+  expect((await rename(7)).status).toBe(400);
+});
+
 it("another business's routes, employees, memory, files and connections do not exist for a non-member", async () => {
   const acme = await business("Acme");
   const globex = await business("Globex");

@@ -252,11 +252,11 @@ function makeNav(router: Router) {
   };
   const go = (
     place: Place,
-    options: { trail?: Place[]; business?: string; replace?: boolean } = {},
+    options: { trail?: Place[]; business?: string; replace?: boolean; layers?: Layer[] } = {},
   ) =>
     void router.navigate({
       ...routeOf(options.business ?? now().business, place),
-      search: {},
+      search: (options.layers ? searchOf(options.layers) : {}) as never,
       state: options.trail?.length ? { trail: options.trail } : {},
       ...(options.replace ? { replace: true } : {}),
     } as never);
@@ -296,6 +296,17 @@ function makeNav(router: Router) {
       const { place, history } = now();
       if (place.kind === "thread" && place.workId === workId) return;
       go({ kind: "thread", workId }, { trail: [...(history.trail ?? []), place] });
+    },
+    /** Opens a work item's live browser beside its thread, from wherever the owner is. */
+    openBrowser: (workId: string) => {
+      const { place, history } = now();
+      if (place.kind === "thread" && place.workId === workId)
+        return nav.openLayer({ kind: "browser", workId });
+      ui.openedLayer();
+      go(
+        { kind: "thread", workId },
+        { trail: [...(history.trail ?? []), place], layers: [{ kind: "browser", workId }] },
+      );
     },
     back: () => {
       const trail = now().history.trail ?? [];

@@ -54,6 +54,32 @@ struct RootRoutingTests {
         await settle("signed in") { store.route == .signedIn }
         #expect(store.signIn == nil && store.workspace != nil)
     }
+
+    @Test("Signed in with no business, the workspace opens the New business form; creating one closes it")
+    func firstBusiness() async {
+        let created = LockIsolated(false)
+        var runtime = RuntimeClient.fixture
+        runtime.account = { created.value ? .fixture : Account(person: Person(id: "p", displayName: "Owner"), businesses: []) }
+        runtime.createBusiness = { business in
+            created.setValue(true)
+            return Business(id: "acme", name: business.name, brief: business.brief)
+        }
+        let store = withDependencies {
+            $0.runtimeClient = runtime
+            $0.continuousClock = ContinuousClock()
+        } operation: {
+            Store(initialState: Workspace.State(server: server)) { Workspace() }
+        }
+        await settle("form") { store.spawn(\.preferences)?.newBusiness != nil }
+        guard let preferences = store.spawn(\.preferences), var draft = preferences.newBusiness else { return }
+        draft.name = "Acme"
+        preferences.send(.newBusinessEdited(draft))
+        preferences.send(.createBusinessTapped)
+        await settle("created") { preferences.businesses.isEmpty == false }
+        store.send(.preferencesToggled(false))
+        await settle("workspace") { store.businesses.isEmpty == false }
+        #expect(store.preferences == nil)
+    }
 }
 
 @MainActor
@@ -96,7 +122,8 @@ struct SignInFeatureTests {
         for _ in 0..<1_000 where await calls.signIns.isEmpty { await Task.yield() }
         let sent = await calls.signIns
         #expect(sent.count == 1)
-        #expect(sent.first?.0 == server)
+        // Debug builds default to the local install on this Mac.
+        #expect(sent.first?.0 == URL(string: "http://127.0.0.1:8787")!)
         #expect(sent.first?.1 == code)
     }
 

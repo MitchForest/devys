@@ -26,6 +26,8 @@ struct WireTests {
         "conversations": { try await $0.conversations($1, businessID: "b1") },
         "decisions": { try await $0.decisions($1, businessID: "b1", workItemID: "w1") },
         "device-code": { try await $0.issueDeviceCode($1) },
+        "device-key": { try await $0.enrollKey($1, publicKey: Data(repeating: 4, count: 65)) },
+        "device-keys": { try await $0.deviceKeys($1) },
         "devices": { try await $0.devices($1) },
         "diff": { try await $0.sessionDiff($1, businessID: "b1", workID: "w1", sessionID: "s1") },
         "employee": { try await $0.hire($1, businessID: "b1", Hire(template: "engineering", name: "Ada")) },
@@ -93,6 +95,14 @@ struct WireTests {
         #expect(home.decisions.last?.capability == "driveCreate" && home.decisions.last?.input.fields.first?.key == "content")
         #expect(home.decisions.first?.capability == "routineActivate" && home.needsYou.first?.workID == nil)
         #expect(home.glance.moving.first?.state == .inProgress && home.glance.moving.first?.dueAt != nil)
+        // What employees ask with askOwner: a take over, and a spend approval to sign.
+        #expect(home.needsYou.map(\.kind) == [.decision, .takeOver, .approve, .decision])
+        #expect(home.decisions[1].request == .takeOver(reason: "Sign in to the registrar (2FA)", url: "https://www.namecheap.com/myaccount/login/"))
+        let spend = try #require(SpendApproval(home.decisions[2], businessID: "b1"))
+        #expect(spend.amount == Amount(cents: 1299, currency: "USD") && spend.counterparty == "Namecheap" && spend.renewal == "Renews yearly at $14.99")
+        #expect(home.decisions[2].isSpend && !home.decisions[1].isSpend && home.decisions[2].signedBy == nil)
+        let keys = try await Self.answering("device-keys").deviceKeys(Self.session)
+        #expect(keys.first?.status == .active && keys.first?.current == true && keys.first?.label == "iPhone")
 
         let proposal = try #require(home.needsYou.first?.routine)
         #expect(proposal.state == .proposed && proposal.notify == .always && proposal.projectID != nil)
@@ -150,9 +160,9 @@ struct WireTests {
         #expect(session.state == .unknown)
         let app = try decoder.decode(
             AppEntry.self,
-            from: Data(#"{"id":"mail","name":"Mail","icon":"","summary":"","kind":"remote","status":"beta","records":[],"skills":[],"installed":true,"pinned":true,"visible":true}"#.utf8)
+            from: Data(#"{"id":"mail","name":"Mail","icon":"","summary":"","kind":"remote","records":[],"skills":[],"installed":true,"pinned":true,"visible":true}"#.utf8)
         )
-        #expect(app.kind == .unknown && app.status == .unknown)
+        #expect(app.kind == .unknown)
         let message = try decoder.decode(
             ConversationMessage.self,
             from: Data(#"{"id":"m","author":"system","kind":"event","text":"t","ref":"devys:mail/thread/t1","created_at":"2026-01-01T00:00:00.000Z"}"#.utf8)

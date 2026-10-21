@@ -72,6 +72,7 @@ struct PreferencesScreen: View {
 
 private struct AccountPane: View {
     let store: StoreOf<Preferences>
+    @State private var name = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: DevysSpacing.roomy) {
@@ -83,7 +84,19 @@ private struct AccountPane: View {
                 )
                 .overlay { if store.isUploading { ProgressView().controlSize(.small) } }
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(store.ownerName ?? "You").font(DevysTypography.title).foregroundStyle(DevysColors.ink)
+                    HStack(spacing: 8) {
+                        FieldBox {
+                            TextField("Your name", text: $name)
+                                .font(DevysTypography.title)
+                                .onSubmit { store.send(.ownerRenamed(name)) }
+                        }
+                        .frame(maxWidth: 260)
+                        if let current = store.ownerName, name.trimmingCharacters(in: .whitespacesAndNewlines) != current {
+                            Button("Save") { store.send(.ownerRenamed(name)) }
+                                .buttonStyle(DevysButtonStyle(.raised, compact: true))
+                                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }
+                    }
                     HStack(spacing: 8) {
                         PhotoChooser(title: store.ownerPhoto == nil ? "Add photo" : "Change photo") { store.send(.ownerPhotoPicked($0)) }
                         if store.ownerPhoto != nil {
@@ -100,6 +113,8 @@ private struct AccountPane: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(DevysSpacing.roomy)
+        .onAppear { name = store.ownerName ?? "" }
+        .onChange(of: store.ownerName) { name = store.ownerName ?? "" }
     }
 }
 

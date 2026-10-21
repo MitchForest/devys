@@ -24,12 +24,55 @@ export type Outcome =
   | { outcome: "ask"; grantId: string; decisionId?: string }
   | { outcome: "deny"; reason: string };
 
+/**
+ * What a request asks of the owner: `decision`, a modelled capability's `ask`; `approve` and
+ * `take_over`, an employee's `askOwner` (.docs/AUTHORITY.md#bringing-the-owner-in).
+ */
+export const RequestKind = Schema.Literals(["decision", "approve", "take_over"]);
+export type RequestKind = typeof RequestKind.Type;
+
+/** An amount in minor units (cents) of a three-letter currency. */
+export const Amount = Schema.Struct({
+  cents: Schema.Int.check(Schema.isGreaterThan(0), Schema.isLessThanOrEqualTo(100_000_000)),
+  currency: Schema.String.check(Schema.isPattern(/^[A-Z]{3}$/)),
+});
+export type Amount = typeof Amount.Type;
+
+const Words = (max: number) => Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(max));
+
+/**
+ * An employee's `askOwner` request, stored as its decision's input. An approve with an amount is
+ * a spend approval, answered only with a signature from one of the owner's devices.
+ */
+export const OwnerRequest = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("approve"),
+    /** Exactly what will be done: "Register acme.example for one year". */
+    action: Words(500),
+    /** Who or where: the merchant, site, registrar or person it is done with. */
+    counterparty: Words(200),
+    amount: Schema.optionalKey(Amount),
+    /** What recurs, in words: "Renews yearly at $12.99". */
+    renewal: Schema.optionalKey(Words(200)),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("take_over"),
+    /** What the owner does in the business's browser: "Sign in to the registrar (2FA)". */
+    reason: Words(500),
+    url: Schema.optionalKey(
+      Schema.String.check(Schema.isPattern(/^https?:\/\//), Schema.isMaxLength(2000)),
+    ),
+  }),
+]);
+export type OwnerRequest = typeof OwnerRequest.Type;
+
 /** A one-off owner approval of one exact request. Single-use; expires to rejected. */
 export const Decision = Schema.Struct({
   id: Schema.String,
+  kind: RequestKind,
   employee_id: Schema.String,
   capability: Schema.String,
-  /** The exact input the employee asked to run. */
+  /** The exact input the employee asked to run; an `OwnerRequest` for `askOwner`. */
   input: Schema.Unknown,
   work_item_id: Schema.NullOr(Schema.String),
   /** The conversation the asking turn was answering; the answer is posted there. */
@@ -37,5 +80,37 @@ export const Decision = Schema.Struct({
   status: Schema.Literals(["pending", "approved", "rejected", "used"]),
   requested_at: Timestamp,
   expires_at: Timestamp,
+  /** The device key that signed a spend approval. */
+  signed_by: Schema.NullOr(Schema.String),
 });
 export type Decision = typeof Decision.Type;
+
+/** The `askOwner` request a decision carries, if it is one. */
+export const ownerRequest = (decision: Pick<Decision, "kind" | "input">) =>
+  decision.kind !== "decision" && Schema.is(OwnerRequest)(decision.input)
+    ? decision.input
+    : undefined;
+
+/** The spend a decision asks the owner to sign: an approve with an amount. */
+export const spendOf = (decision: Pick<Decision, "kind" | "input">) => {
+  const request = ownerRequest(decision);
+  return request?.kind === "approve" && request.amount
+    ? { ...request, amount: request.amount }
+    : undefined;
+};
+
+/**
+ * A device's signing key, as the owner's devices list it: active, or pending until an active key
+ * of theirs signs it.
+ */
+export const DeviceKey = Schema.Struct({
+  id: Schema.String,
+  /** The signed-in device (its session id, as `GET /api/devices` lists it). */
+  device: Schema.String,
+  label: Schema.NullOr(Schema.String),
+  /** X9.63 uncompressed P-256 public key, base64. */
+  public_key: Schema.String,
+  status: Schema.Literals(["pending", "active"]),
+  created_at: Timestamp,
+});
+export type DeviceKey = typeof DeviceKey.Type;

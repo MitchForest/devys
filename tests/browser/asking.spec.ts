@@ -1,0 +1,83 @@
+import { test, expect } from "@playwright/test";
+import { randomUUID } from "node:crypto";
+import { localStores } from "../fixtures/local.ts";
+import { bearer, signIn } from "./helpers.ts";
+
+test("Needs you shows what employees ask: a spend is approved on a Mac or iPhone, a take over opens the browser", async ({
+  page,
+}) => {
+  const stores = await localStores();
+  const { sql } = stores;
+  const owner = await stores.owner("Riley", "Acme");
+  const post = await bearer(sql, owner.person);
+  const work = await post<{ id: string }>(`/api/businesses/${owner.business}/work`, {
+    title: "Register the domain",
+    owner: owner.operations,
+  });
+  const grant = await sql.row<{ id: string }>(
+    "SELECT id FROM grants WHERE employee_id = $1 AND capability = 'askOwner' AND revoked_at IS NULL",
+    [owner.operations],
+  );
+  // What the employee asked with askOwner, in the work item's thread.
+  const ask = async (kind: string, input: unknown) => {
+    const id = randomUUID();
+    await sql.run(
+      `INSERT INTO decisions (id, kind, business_id, employee_id, grant_id, capability, input,
+         input_hash, work_item_id, conversation, expires_at)
+       VALUES ($1, $2, $3, $4, $5, 'askOwner', $6, $1, $7, $8, now() + interval '1 hour')`,
+      [
+        id,
+        kind,
+        owner.business,
+        owner.operations,
+        grant!.id,
+        JSON.stringify(input),
+        work.id,
+        `work:${work.id}`,
+      ],
+    );
+    return id;
+  };
+  const spend = await ask("approve", {
+    kind: "approve",
+    action: "Register acme-plumbing.example for one year",
+    counterparty: "Namecheap",
+    amount: { cents: 1299, currency: "USD" },
+    renewal: "Renews yearly at $14.99",
+  });
+  const signInRequest = await ask("take_over", {
+    kind: "take_over",
+    reason: "Sign in to the registrar (2FA)",
+  });
+  try {
+    await signIn(page, sql, owner.person);
+    const needsYou = page.getByRole("region", { name: "Needs you" });
+    // The spend shows exactly, and says where it is approved: the web cannot sign it.
+    await expect(needsYou.getByTestId("sign-elsewhere")).toHaveText(
+      "Approve on your Mac or iPhone",
+    );
+    await expect(needsYou.getByText("Namecheap", { exact: true })).toBeVisible();
+    await expect(needsYou.getByText("$12.99", { exact: true })).toBeVisible();
+    await expect(needsYou.getByRole("button", { name: "Approve" })).toHaveCount(0);
+    // Take over takes the work over and opens its live browser beside the thread.
+    await needsYou.getByRole("button", { name: "Take over" }).click();
+    await expect(page).toHaveURL(new RegExp(`/thread/${work.id}\\?app=browser`));
+    await expect
+      .poll(
+        async () =>
+          (
+            await sql.row<{ status: string }>("SELECT status FROM decisions WHERE id = $1", [
+              signInRequest,
+            ])
+          )?.status,
+      )
+      .toBe("approved");
+    expect(
+      (await sql.row<{ status: string }>("SELECT status FROM decisions WHERE id = $1", [spend]))
+        ?.status,
+    ).toBe("pending");
+  } finally {
+    await stores.remove([owner]);
+    await stores.dispose();
+  }
+});

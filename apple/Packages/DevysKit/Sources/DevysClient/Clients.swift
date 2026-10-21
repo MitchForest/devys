@@ -28,6 +28,8 @@ public struct SessionClient: Sendable {
 /// runtime and conversation. Calls use the stored device session; features never hold the token.
 public struct RuntimeClient: Sendable {
     public var account: @Sendable () async throws -> Account
+    /// Changes the name the signed-in person goes by; returns the account as saved.
+    public var rename: @Sendable (_ name: String) async throws -> Account
     public var business: @Sendable (_ id: String) async throws -> BusinessDetail
     public var createBusiness: @Sendable (NewBusiness) async throws -> Business
     public var updateBusiness: @Sendable (_ id: String, _ name: String?, _ brief: String?) async throws -> Business
@@ -85,6 +87,7 @@ public struct RuntimeClient: Sendable {
 
     public init(
         account: @escaping @Sendable () async throws -> Account,
+        rename: @escaping @Sendable (String) async throws -> Account = { _ in throw DevysHTTPError.unauthorized },
         business: @escaping @Sendable (String) async throws -> BusinessDetail,
         createBusiness: @escaping @Sendable (NewBusiness) async throws -> Business = { _ in throw DevysHTTPError.unauthorized },
         updateBusiness: @escaping @Sendable (String, String?, String?) async throws -> Business = { id, name, brief in
@@ -146,6 +149,7 @@ public struct RuntimeClient: Sendable {
         googleConnection: @escaping @Sendable (String) async throws -> GoogleConnection = { _ in GoogleConnection(configured: false, connected: false) }
     ) {
         self.account = account
+        self.rename = rename
         self.business = business
         self.createBusiness = createBusiness
         self.updateBusiness = updateBusiness
@@ -306,6 +310,7 @@ extension RuntimeClient {
     public static func live(_ hub: SessionHub) -> Self {
         Self(
             account: { try await hub.call { api, session in try await api.account(session) } },
+            rename: { name in try await hub.call { api, session in try await api.rename(session, name) } },
             business: { id in try await hub.call { api, session in try await api.business(session, id: id) } },
             createBusiness: { business in try await hub.call { api, session in try await api.createBusiness(session, business) } },
             updateBusiness: { id, name, brief in
@@ -406,6 +411,12 @@ nonisolated enum RuntimeClientKey: DependencyKey {
     #endif
 }
 
+nonisolated enum SigningClientKey: DependencyKey {
+    static let liveValue = SigningClient.live(.shared, signer: .secureEnclave())
+    static let testValue = SigningClient.unimplemented
+    static let previewValue = SigningClient.unimplemented
+}
+
 nonisolated enum LookClientKey: DependencyKey {
     static let liveValue = LookClient.live(.shared)
     static let testValue = LookClient.inert
@@ -427,6 +438,12 @@ extension DependencyValues {
     public var profileClient: ProfileClient {
         get { self[ProfileClientKey.self] }
         set { self[ProfileClientKey.self] = newValue }
+    }
+
+    /// This device's signing key: spend approvals and allowing the person's other devices.
+    public var signingClient: SigningClient {
+        get { self[SigningClientKey.self] }
+        set { self[SigningClientKey.self] = newValue }
     }
 
     public var sessionClient: SessionClient {

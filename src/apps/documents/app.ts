@@ -11,7 +11,6 @@ export const documents = defineApp({
   icon: "doc.text",
   summary: "Documents, pages, sheets, slides, whiteboards, PDFs and uploads, and Google Drive.",
   kind: "business",
-  status: "available",
   records: [
     { kind: "artifact", title: "Artifact" },
     { kind: "file", title: "File" },

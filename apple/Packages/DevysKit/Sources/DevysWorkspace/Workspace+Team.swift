@@ -195,10 +195,32 @@ extension Workspace {
 /// How a request reads on an approval card.
 enum DecisionText {
     static func title(_ decision: Decision) -> String {
+        switch decision.request {
+        case .approve(let action, _, let amount, _):
+            return amount.map { "Spend \($0.text): \(action)" } ?? action
+        case .takeOver(let reason, _):
+            return "Sign in / take over: \(reason)"
+        case nil:
+            break
+        }
         guard decision.capability == "hireEmployee" else { return AccessNames.title(decision.capability) }
         let fields = Dictionary(decision.input.fields, uniquingKeysWith: { first, _ in first })
         let template = fields["template"].map(RoleTemplate.displayName) ?? "Custom"
         let name = fields["name"] ?? template
         return "Hire \(name) · \(template)"
+    }
+
+    /// A request as label/value rows: an `askOwner` request in its own words, else its input.
+    static func fields(_ decision: Decision) -> [(key: String, value: String)] {
+        switch decision.request {
+        case .approve(let action, let counterparty, let amount, let renewal):
+            return [("Action", action), ("With", counterparty)]
+                + (amount.map { [("Amount", $0.text)] } ?? [])
+                + (renewal.map { [("Renews", $0)] } ?? [])
+        case .takeOver(let reason, let url):
+            return [("Do", reason)] + (url.map { [("Site", $0)] } ?? [])
+        case nil:
+            return decision.input.fields
+        }
     }
 }

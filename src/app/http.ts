@@ -3,7 +3,7 @@ import type { Env } from "./env.ts";
 import { addressOf } from "../channels/contract.ts";
 import { authenticatePhoton } from "../channels/photon.ts";
 import { finishGoogle } from "../connections/google.ts";
-import { scopeName } from "../identity/contract.ts";
+import { NameChange, scopeName } from "../identity/contract.ts";
 import { devicesRoute, enroll, enrollDevice, logout, requestPerson } from "../identity/http.ts";
 import { profilePhoto } from "../identity/profile.ts";
 import {
@@ -11,12 +11,13 @@ import {
   channelBinding,
   createBusiness,
   memberBusiness,
+  renamePerson,
 } from "../identity/service.ts";
 import { atomically } from "../data/database.ts";
 import { defaultApps } from "./apps.ts";
 import { install } from "../apps/service.ts";
 import { modeOf } from "./mode.ts";
-import { body, RequestError } from "./request.ts";
+import { body, decodedBody, RequestError } from "./request.ts";
 import { Unavailable } from "../protocol/host.ts";
 import { respond, sameOrigin } from "../protocol/http.ts";
 import { BusinessCreated, Me, ModelCatalog, Roles } from "./wire.ts";
@@ -27,6 +28,7 @@ import { hiring, templateGrants } from "./team.ts";
 import { capabilities } from "./capabilities.ts";
 import { businessRoute } from "./routes.ts";
 import { codingEventsRoute } from "./coding.ts";
+import { deviceKeysRoute, signedOut } from "./asking.ts";
 import { modelCatalog } from "./models.ts";
 import { modelsConfig } from "../../config/models.ts";
 
@@ -60,7 +62,13 @@ async function route(request: Request, env: Env): Promise<Response | undefined> 
   if (path === "/api/enroll" && request.method === "POST") return enroll(request, env);
   if (path === "/api/native/session" && request.method === "POST")
     return enrollDevice(request, env);
-  if (path === "/api/logout" && request.method === "POST") return logout(request, env);
+  if (path === "/api/logout" && request.method === "POST") {
+    // A signed-out device's signing key stops signing.
+    const leaving = await requestPerson(request, env);
+    const response = await logout(request, env);
+    if (leaving && response.ok) await signedOut(env, leaving.person.id, leaving.device);
+    return response;
+  }
   if (!path.startsWith("/api/")) return undefined;
   const access = await requestPerson(request, env);
   if (!access) return new Response("Sign in required", { status: 401 });
@@ -83,18 +91,42 @@ async function route(request: Request, env: Env): Promise<Response | undefined> 
         };
       }),
     });
-  if (path === "/api/devices" || path.startsWith("/api/devices/"))
-    return devicesRoute(request, env, {
+  if (path === "/api/devices" || path.startsWith("/api/devices/")) {
+    const response = await devicesRoute(request, env, {
       personId: person.id,
       device: access.device,
       trusted,
       path,
     });
-  if (path === "/api/me" && request.method === "GET")
+    const revoked = /^\/api\/devices\/([a-f0-9]{16})\/revoke$/.exec(path)?.[1];
+    if (revoked && response.ok) await signedOut(env, person.id, revoked);
+    return response;
+  }
+  if (path === "/api/device-keys" || path.startsWith("/api/device-keys/"))
+    return deviceKeysRoute(request, env, {
+      personId: person.id,
+      device: access.device,
+      bearer: access.bearer,
+      trusted,
+      path,
+    });
+  if (path === "/api/me" && (request.method === "GET" || request.method === "PUT")) {
+    if (request.method === "PUT" && !trusted) return new Response("Forbidden", { status: 403 });
+    const renamed =
+      request.method === "PUT"
+        ? await Effect.runPromise(
+            renamePerson(
+              env.HYPERDRIVE,
+              person.id,
+              (await decodedBody(request, 2_000, NameChange)).display_name,
+            ),
+          )
+        : undefined;
     return respond(Me, {
-      person,
+      person: renamed ?? person,
       businesses: await Effect.runPromise(businessesFor(env.HYPERDRIVE, person.id)),
     });
+  }
   if (path === "/api/businesses" && request.method === "POST") {
     if (!trusted) return new Response("Forbidden", { status: 403 });
     if (!(await modeOf(env).mayUseMachine(person.id)))

@@ -42,6 +42,15 @@ public struct DevysHTTPClient: Sendable {
         try await send(authorized(session, path: "api/me"))
     }
 
+    /// Changes the name the signed-in person goes by (`PUT /api/me`).
+    public func rename(_ session: DeviceSession, _ name: String) async throws -> Account {
+        struct Body: Encodable {
+            let displayName: String
+            enum CodingKeys: String, CodingKey { case displayName = "display_name" }
+        }
+        return try await send(json(session, path: "api/me", method: "PUT", body: Body(displayName: name)))
+    }
+
     public func business(_ session: DeviceSession, id: String) async throws -> BusinessDetail {
         try await send(authorized(session, path: "api/businesses/\(id)"))
     }

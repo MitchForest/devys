@@ -35,6 +35,7 @@ it("keeps initial schemas smaller and returns only requested integration interfa
       .sort(),
   ).toEqual(
     [
+      "askOwner",
       "describe_capabilities",
       "execute",
       "forget",

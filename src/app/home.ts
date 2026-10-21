@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import type { Env } from "./env.ts";
 import type { Decision } from "../authority/contract.ts";
-import { pendingDecisions } from "../authority/service.ts";
+import { pendingDecisions, spentCents } from "../authority/service.ts";
 import { postMessage, readAt } from "../conversations/service.ts";
 import { type Business, type Person } from "../identity/contract.ts";
 import { employeesOf } from "../identity/service.ts";
@@ -66,7 +66,7 @@ export function briefing(
       stuck(item, now) &&
       (after(item.updated_at) || (after(item.due_at) && Date.parse(item.due_at!) < now)),
   );
-  // Spending is not recorded yet, so the briefing has no cost line.
+  // Spending (signed spend approvals) shows at a glance; the briefing has no cost line.
   const lines = [
     done.length && `Done: ${titles(done)}.`,
     moving.length && `Moving: ${titles(moving)}.`,
@@ -85,11 +85,13 @@ export async function homeRoute(
   access: { person: Person; business: Business; trusted: boolean },
 ) {
   const { person, business, trusted } = access;
-  const [decisions, work, employees, proposals] = await Promise.all([
+  const [decisions, work, employees, proposals, spent] = await Promise.all([
     Effect.runPromise(pendingDecisions(env.HYPERDRIVE, business.id)),
     Effect.runPromise(workItems(env.HYPERDRIVE, business.id)),
     Effect.runPromise(employeesOf(env.HYPERDRIVE, business.id)),
     Effect.runPromise(routines(env.HYPERDRIVE, business.id)),
+    // Spent is the sum of signed spend approvals; budgets are not built (.docs/AUTHORITY.md).
+    Effect.runPromise(spentCents(env.HYPERDRIVE, business.id, "USD")),
   ]);
   const now = Date.now();
   const workOf = (id: string | null) => work.find((item) => item.id === id);
@@ -113,7 +115,6 @@ export async function homeRoute(
       const about = routineOf(decision);
       return {
         ...decision,
-        kind: "decision" as const,
         title: about?.title ?? item?.title ?? decision.capability,
         work_id: decision.work_item_id,
         project_id: item?.project_id ?? about?.project_id ?? null,
@@ -162,7 +163,7 @@ export async function homeRoute(
     glance: {
       moving: work.filter((item) => item.state === "in_progress").map(card),
       stuck: work.filter((item) => stuck(item, now)).map(card),
-      spent_cents: null,
+      spent_cents: spent,
     },
     since: since ?? null,
     briefing: posted?.message ?? null,

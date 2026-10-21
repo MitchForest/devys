@@ -19,7 +19,7 @@ struct SignInScreen: View {
                     Text("Welcome to Devys")
                         .font(DevysTypography.greeting)
                         .foregroundStyle(DevysColors.ink)
-                    Text("Add a device in Settings › Devices on another signed-in device, then scan its code or paste it here.")
+                    Text("Run `bun run local code` (or `bun run local install`) on the Mac running Devys and open the link it prints, or paste its code here. Later devices: Settings › Devices on a signed-in one.")
                         .font(DevysTypography.body)
                         .foregroundStyle(DevysColors.ink2)
                         .multilineTextAlignment(.center)

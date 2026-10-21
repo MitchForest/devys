@@ -38,11 +38,25 @@ also verified live. No public product has launched.
   decisions. Each employee is one Pi Durable Object running on its chosen model.
 - **Authority.** Grants with typed limits in `auto` or `ask` mode; no grant denies.
   Single-use decisions bind the exact input and the work item and are approved in a
-  signed-in session (device signatures arrive with V0). Unanswered requests expire after
+  signed-in session. Unanswered requests expire after
   24 hours, checked every minute; an owner's rejection stands for that time, so the same
   request is not asked again. Every call re-reads the grant and the employee, so revoke,
   pause and takeover apply to the next action. Hiring, creating a business and retiring
   are single transactions.
+- **Asking the owner.** `askOwner`, a core capability of the Work app every role holds, is
+  asked in a work item's thread and returns at once: **approve** an exact action (what, with
+  whom, an amount and renewal for a spend) or **take over** (sign-in, 2FA, CAPTCHA in the
+  business's browser). Requests are decisions with a kind, listed in Needs you; the answer is
+  posted in the thread, which wakes the employee, and asking again with the same input reads
+  it. An approve with an amount is a spend approval: only a signature by one of the owner's
+  device keys over its canonical payload approves it (the web shows it and cannot sign). The
+  Mac and iPhone apps hold a Secure Enclave P-256 key unlocked by Face ID or Touch ID (or the
+  Mac's password without biometrics); a person's first key is active at once, a later one once
+  an enrolled device allows it in Settings › Devices, and signing a device out revokes its key
+  (`bun run local clear-keys` clears them all). Taking the work over answers a take-over
+  request; Hand back says it is done. Home's spent is the sum of signed spend approvals (USD).
+  Asking first is the employee's instruction and record for free browser or shell actions, not
+  something the browser or shell enforces.
 - **Projects and work.** Work items with an owner, next action, wait
   condition, conditions and evidence. A one-minute dispatcher hands ready work to its
   employee under `<work item>:<revision>`. A project has an optional goal, deadline,
@@ -59,8 +73,7 @@ also verified live. No public product has launched.
   posts nothing and is counted in the briefing. The owner pauses and resumes routines; a
   retired employee's routines pause. Event routing (`routeEvent`) has no source connected yet.
 - **Apps.** `src/apps` lists Devys apps as literal manifests: Documents and Code are
-  installed for every business; Mail, Money, Website, Ads and Customers are listed as
-  coming. An app's capabilities are hidden from employees and refused unless the app is
+  installed for every business. An app's capabilities are hidden from employees and refused unless the app is
   installed, as well as granted. The owner installs, removes and pins apps in Settings.
 - **Home.** `GET /home` returns what needs the owner (pending decisions, work needing a
   decision) and the business at a glance (moving, stuck). When the owner returns after
@@ -138,19 +151,25 @@ also verified live. No public product has launched.
   range or a PDF region go to an employee or a work item's thread as one message. Employees print HTML to PDF with the
   Mac's Chrome (`printPdf`).
 - **Browser (local mode).** Each business has its own visible Chrome on the Mac with its own
-  profile, so a site the owner signs in to once stays signed in for that business only. Employees
-  open pages, read their accessibility tree, click, type and press keys (`browserOpen`,
-  `browserRead`, `browserClick`, `browserType`, `browserPress`); a work item driving the browser
-  shows it on its panel with a live picture on every client, where Take over stops the employee
-  and lets the owner click and type (not recorded) until Hand back.
+  profile, so a site the owner signs in to once stays signed in for that business only. The host
+  starts it and drives it, over its DevTools pipe (no debugging port), with Browser Use's
+  [browser-harness-js](https://github.com/browser-use/browser-harness-js) (MIT). Employees run
+  scripts against the page (`browserScript`: any DevTools Protocol command, in an isolate with
+  no network, kept to web pages and the business's own folder), see it (`browserScreenshot`,
+  a picture the model reads) and manage tabs (`browserTabs`); the Browser app's
+  `using-the-browser` skill has the recipes. A work item driving the browser shows it on its
+  panel with a live picture on every client, where Take over stops the employee, mid-script
+  too, and lets the owner click and type (not recorded) until Hand back.
 - **Pages.** Employees publish self-contained HTML pages (`artifactPage`, `artifactEdit`):
   reports, comparisons, dashboards. A card in the conversation opens the page in an
   opaque-origin sandbox that fetches nothing; **Keep** lists it on a project's overview.
-- **Not built:** routines on the web and native desks (the API serves them), event sources
-  (mail), the Knowledge app and a learning loop, the broker and vault,
-  signed decisions, the event stream and push, connections for launch providers, mail,
-  purchases, desktop control, the voice and ambient additions, cloud mode's coding runners,
-  files, terminals and browser, community and custom apps, and distribution.
+- **Not built:** confining employee processes away from the host's own data folder
+  (`~/Library/Application Support/Devys Server/host`), `askOwner` secret requests,
+  scripted browser control with screenshots, secrets by name in a vault, event sources
+  (mail), the Knowledge app and a learning loop, the event stream and push, connections for
+  outside providers, mail, purchases, desktop control, the voice and ambient additions, cloud
+  mode's coding runners, files, terminals and browser, community and custom apps, and
+  distribution.
 
 The prior Pi/Effect refinement and
 iMessage acceptance guide retain foundation
@@ -263,9 +282,30 @@ is present. Model arguments never select credentials.
 
 ## Active roadmap
 
-Next: routines on the clients and their live check, the Knowledge app and a learning loop, the broker and signed decisions, a live
-event stream and push, connections in the app platform, mail, purchases, desktop control,
-voice, cloud mode and coding runners, the app directory, and distribution.
+Next is the **Launch path**: Devys builds only what agents cannot safely build for themselves
+(trust boundaries, the ways the owner is brought in, a few strong general tools) and then runs
+a real business launch with its employees. In order:
+
+1. Confinement: employee processes on the Mac cannot reach the host's data (browser profiles,
+   deploy secrets).
+2. `askOwner`, one core capability for bringing the owner in: approve an exact action (with an
+   amount, a spend approval signed with Face ID or Touch ID on the owner's Mac or iPhone), take
+   over the business's browser (sign-in, 2FA, CAPTCHA), or enter a secret. All appear in Needs
+   you. Built except secrets (above); its live step on the Mac and iPhone remains.
+3. The business's browser driven through Browser Use's browser-harness-js (scripts,
+   screenshots the model sees, tabs), replacing Playwright; the live view and Take over stay.
+4. Secrets by name in an envelope vault (master key in the Mac's login Keychain, or a
+   Cloudflare secret in cloud mode), injected by the host into one command, request or
+   browser field and redacted from output; a card is filled only against a signed spend
+   approval.
+5. Minimal onboarding, and the empty "coming" apps removed.
+6. The launch run itself: buying a domain, mail and DNS, a supplier inquiry, a website deploy,
+   analytics, social accounts, and a change shipped through a pull request, CI and an
+   approved merge.
+
+Then the Knowledge app and a learning loop, a live event stream and push, voice, cloud mode
+and coding runners, and distribution; connections in the app platform, mail, purchases,
+desktop control and the app directory are built when a run shows the need.
 
 ## Native clients (macOS, iPhone, iPad)
 
@@ -472,12 +512,14 @@ Everything under `/api/` needs a web session or a device bearer token; business 
 404 for non-members. Main routes:
 
 - `/api/me`, `/api/models`, `/api/roles`, `/api/devices` (`/codes` issues a code),
+  `/api/device-keys` (an app enrolls its signing key; `/:id/endorse`, `/:id/revoke`),
   `/api/profile/photo`, `POST /api/businesses`.
 - `/api/businesses/:id`: `GET` (the business, its employees, `members` and artifacts)/`PUT`
   (name, brief), `/look`, `POST /employees` (hire), `/export`, `/memory`, `/work` (create,
   update at a revision, `takeover`, `release`), `GET /decisions` (pending;
   `?workItem=<id>` lists one work item's requests with their answers),
-  `/decisions/:id/approve|reject`, `/projects` (and `/projects/:id/items`), `/apps` (and
+  `/decisions/:id/approve|reject` (a spend approval's approve carries the device signature),
+  `/projects` (and `/projects/:id/items`), `/apps` (and
   `install`, `uninstall`, `pin`), `/home`, `GET /coding` (work with coding sessions),
   `/artifacts/:id`,
   `/connections/google/…`.

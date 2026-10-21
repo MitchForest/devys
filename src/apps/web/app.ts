@@ -6,7 +6,6 @@ export const web = defineApp({
   icon: "network",
   summary: "Reads public web pages.",
   kind: "system",
-  status: "available",
   records: [],
   capabilities: ["readPublicUrl"],
   skills: [],

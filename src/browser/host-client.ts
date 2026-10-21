@@ -18,11 +18,9 @@ export function hostBrowser(host: { url: string; token: string }, businessId: st
     return (await response.json()) as T;
   }
   return {
-    open: (url, driver) => call("open", { url, driver }),
-    read: (driver) => call("read", { driver }),
-    click: (target, driver) => call("click", { target, driver }),
-    type: (target, text, submit, driver) => call("type", { target, text, submit, driver }),
-    press: (key, driver) => call("press", { key, driver }),
+    call: (method, params, driver) => call("call", { method, params, driver }),
+    events: (after, method, waitMs) => call("events", { after, method, waitMs }),
+    tabs: (action, driver) => call("tabs", { ...action, driver }),
     status: () => call("status"),
     screenshot: () => call("screenshot"),
     input: (action) => call("input", { action }),
@@ -36,11 +34,9 @@ export function unavailableBrowser(): Browser {
       new Unavailable("The browser runs in local mode only until cloud mode adds one."),
     );
   return {
-    open: refuse,
-    read: refuse,
-    click: refuse,
-    type: refuse,
-    press: refuse,
+    call: refuse,
+    events: refuse,
+    tabs: refuse,
     status: async () => ({ open: false, url: null, title: null, driver: null }),
     screenshot: refuse,
     input: refuse,

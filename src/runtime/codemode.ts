@@ -4,7 +4,7 @@ import type { Extension } from "@earendil-works/pi-durable";
 import { Type } from "@earendil-works/pi-ai";
 import { Effect, Schema } from "effect";
 import type { JSONSchema7 } from "json-schema";
-import { Invocation } from "../protocol/capability.ts";
+import { imageOf, Invocation } from "../protocol/capability.ts";
 import type { Capability, CapabilityError } from "../protocol/capability.ts";
 import { defaultLimits } from "../protocol/limits.ts";
 
@@ -85,6 +85,23 @@ export function describeCapabilities(contracts: Capability[], names: string[] = 
   );
 }
 
+/** A capability's result as the model reads it: JSON, and its `image` as a picture. */
+export function toolContent(result: unknown) {
+  const image = imageOf(result);
+  if (!image) return [{ type: "text" as const, text: JSON.stringify(result) }];
+  const { image: _, ...rest } = result as Record<string, unknown>;
+  return [
+    { type: "text" as const, text: JSON.stringify(rest) },
+    { type: "image" as const, data: image.data, mimeType: image.mimeType },
+  ];
+}
+
+/** Inside `execute` a result is data: a picture is named, not inlined. */
+const withoutImage = (result: unknown) =>
+  imageOf(result)
+    ? { ...(result as object), image: "A picture: call this capability directly to see it" }
+    : result;
+
 export function devysExtension(
   env: { LOADER: WorkerLoader },
   contracts: Capability[],
@@ -130,20 +147,15 @@ export function devysExtension(
           replay: contract.replay === "reconcile" ? "unsafe" : "safe",
           executionMode: "sequential",
           execute: async (args, api, context) => ({
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify(
-                  await invoke(
-                    contract,
-                    args,
-                    `pi:${api.taskId}`,
-                    context.abortSignal,
-                    String(api.conversationId),
-                  ),
-                ),
-              },
-            ],
+            content: toolContent(
+              await invoke(
+                contract,
+                args,
+                `pi:${api.taskId}`,
+                context.abortSignal,
+                String(api.conversationId),
+              ),
+            ),
           }),
         }),
       ),
@@ -187,12 +199,14 @@ export function devysExtension(
                   throw new Error("Capability call limit exceeded");
                 busy = true;
                 try {
-                  return await invoke(
-                    contract,
-                    args,
-                    `pi:${api.taskId}:${calls}`,
-                    context.abortSignal,
-                    String(api.conversationId),
+                  return withoutImage(
+                    await invoke(
+                      contract,
+                      args,
+                      `pi:${api.taskId}:${calls}`,
+                      context.abortSignal,
+                      String(api.conversationId),
+                    ),
                   );
                 } finally {
                   busy = false;

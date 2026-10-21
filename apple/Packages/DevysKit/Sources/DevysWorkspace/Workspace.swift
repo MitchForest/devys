@@ -65,6 +65,8 @@ package struct Workspace {
         package var workPlan: WorkPlanDraft?
         /// The New project sheet, while it is open.
         package var newProject: ProjectSheet?
+        /// The signing sheet for a spend approval, while it is open.
+        package var signing: SigningSheet?
         package var memory: Loadable<[MemoryClaim]> = .loading
         /// The business's work items; the requests waiting on the owner are Home's.
         package var work: Loadable<[WorkItem]> = .loading
@@ -147,6 +149,7 @@ package struct Workspace {
         case workItem(WorkItemIntent)
         case project(ProjectIntent)
         case routine(RoutineIntent)
+        case asking(AskingIntent)
         case workLoaded(businessID: String, WorkRecords)
         case decisionAnswered(decisionID: String, approve: Bool)
         case workItemStateSet(workItemID: String, WorkItemState)
@@ -189,6 +192,7 @@ package struct Workspace {
     @Dependency(\.uuid) var uuid
     @Dependency(\.profileClient) var profileClient: ProfileClient
     @Dependency(\.panelsClient) var panelsClient: PanelsClient
+    @Dependency(\.signingClient) var signing: SigningClient
 
     package var body: some Feature {
         Update { state, action in
@@ -198,9 +202,17 @@ package struct Workspace {
                 select(id, state: &state)
 
             case .accountLoaded(let account):
+                if state.account == nil { enrollKey() }
                 state.account = account
                 state.businesses = account.businesses
                 loadLookPhotos(state)
+                // Signed in with no business yet: Settings' New business form, on its own.
+                if account.businesses.isEmpty, state.preferences == nil {
+                    var preferences = Preferences.State()
+                    preferences.section = .businesses
+                    preferences.newBusiness = NewBusinessDraft()
+                    state.preferences = Spawn(preferences)
+                }
                 if !account.businesses.contains(where: { $0.id == state.businessID }) {
                     let first = state.businessID.isEmpty
                     select(account.businesses.first?.id ?? "", state: &state)
@@ -252,6 +264,8 @@ package struct Workspace {
             case .project(let intent): reduceProject(intent, state: &state)
 
             case .routine(let intent): reduceRoutine(intent, state: &state)
+
+            case .asking(let intent): reduceAsking(intent, state: &state)
 
             case .team(let intent): reduceTeam(intent, state: &state)
 

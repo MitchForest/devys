@@ -10,7 +10,6 @@ export const computer = defineApp({
   icon: "desktopcomputer",
   summary: "Commands, files, PDFs and skills where each employee works.",
   kind: "system",
-  status: "available",
   records: [],
   capabilities,
   skills: [],

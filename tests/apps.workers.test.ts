@@ -12,7 +12,7 @@ import { install, uninstall } from "../src/apps/service.ts";
 import { grant } from "../src/authority/service.ts";
 import { driveScope } from "../src/connections/google.ts";
 import { refKinds } from "../src/protocol/ref.ts";
-import { business, db, sql } from "./fixtures/postgres.ts";
+import { business, db } from "./fixtures/postgres.ts";
 
 const bindings = env as unknown as Env;
 const catalog = capabilities(bindings);
@@ -37,7 +37,7 @@ it("every Ref kind is owned by exactly one app's records, and apps own no other 
   expect(new Set(owned).size).toBe(owned.length);
 });
 
-it("manifests are consistent: ids unique, system apps never shown, coming apps own nothing yet", () => {
+it("manifests are consistent: ids unique, system apps never shown", () => {
   const ids = appCatalog.map((app) => app.id);
   expect(new Set(ids).size).toBe(ids.length);
   expect(appCatalog.filter((app) => app.kind === "system").map((app) => app.id)).toEqual([
@@ -52,7 +52,6 @@ it("manifests are consistent: ids unique, system apps never shown, coming apps o
   for (const app of appCatalog) {
     if (app.kind === "system") expect(app.appears, app.id).toBe("never");
     else expect(app.appears, app.id).not.toBe("never");
-    if (app.status === "coming") expect(app.capabilities, app.id).toEqual([]);
     for (const [role, granted] of Object.entries(app.defaultGrants ?? {}))
       for (const name of granted ?? [])
         expect(app.capabilities, `${app.id} proposes ${name} to ${role}`).toContain(name);
@@ -67,7 +66,7 @@ it("manifests are consistent: ids unique, system apps never shown, coming apps o
       .filter((item) => item.core)
       .map((item) => item.name)
       .sort(),
-  ).toEqual(["forget", "read", "readSkill", "recall", "remember", "run", "write"]);
+  ).toEqual(["askOwner", "forget", "read", "readSkill", "recall", "remember", "run", "write"]);
 });
 
 it("system apps are listed as installed without an install row, never pinned or shown", async () => {
@@ -86,7 +85,6 @@ it("system apps are listed as installed without an install row, never pinned or 
     skills: [{ name: "writing-pages", description: expect.any(String) }],
   });
   expect(JSON.stringify(apps)).not.toContain("## Versions");
-  expect(apps.find((app) => app.id === "mail")).toMatchObject({ installed: false });
 });
 
 it("an uninstalled app's capabilities are hidden from discovery and refused at the gate", async () => {
@@ -125,7 +123,8 @@ it("employees see the skills of their business's installed apps", async () => {
 
 // Before AL3 role templates listed their capabilities; the manifests now propose them. These
 // are the grants each role had then, written out, plus the core capabilities the rule "a core
-// capability is granted to every employee it is offered to" added, and Q1's routines.
+// capability is granted to every employee it is offered to" added, Q1's routines and LP1's
+// askOwner.
 const routines = ["routineList", "routinePropose", "routineActivate", "routinePause"];
 const collaboration = [
   ...routines,
@@ -141,9 +140,10 @@ const collaboration = [
   "projectCreate",
   "projectUpdate",
   "projectAdd",
+  "askOwner",
 ];
 const files = ["readSkill", "read", "write", "printPdf", "importAttachment"];
-const browsing = ["browserOpen", "browserRead", "browserClick", "browserType", "browserPress"];
+const browsing = ["browserScript", "browserScreenshot", "browserTabs"];
 const artifacts = ["artifactPage", "artifactRead", "artifactEdit", "publishArtifact"];
 const drive = ["driveList", "driveRead", "driveCreate", "driveUpdate"];
 const coding = [
@@ -239,18 +239,4 @@ it("every app that appears once it has records has a records check, and only tho
       .map((app) => app.id)
       .sort(),
   ).toEqual(Object.keys(recordsChecks).sort());
-});
-
-it("an app that appears once connected shows when the business connects one of its providers", async () => {
-  const { business: created, person } = await business("Connected");
-  // Coming apps cannot be installed through the directory yet; the rule is the same for any app.
-  await Effect.runPromise(install(db, created.id, ["mail"]));
-  const mail = async () =>
-    (await directory(bindings, created.id)).find((app) => app.id === "mail")!;
-  expect(await mail()).toMatchObject({ installed: true, visible: false });
-  await sql.run(
-    "INSERT INTO google_connections (business_id, id, refresh_token, connected_by) VALUES ($1, $2, 'sealed', $3)",
-    [created.id, crypto.randomUUID(), person],
-  );
-  expect(await mail()).toMatchObject({ installed: true, visible: true });
 });

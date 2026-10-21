@@ -12,8 +12,9 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { api } from "../app/api.ts";
-import type { Decision } from "../../authority/contract.ts";
-import type { Routine, WorkItem } from "../../work/contract.ts";
+import { ownerRequest, spendOf, type Decision } from "../../authority/contract.ts";
+import type { NeedsYouRequest } from "../../app/wire.ts";
+import type { WorkItem } from "../../work/contract.ts";
 import { employeeOf } from "../../conversations/contract.ts";
 import { dateTime, dueDate, upcoming } from "../lib/format.ts";
 import {
@@ -33,7 +34,7 @@ import {
   useMembers,
   usePerson,
 } from "../app/data.ts";
-import { useAnswer, useTakeover, useUpdateWorkItem } from "../app/mutations.ts";
+import { useAnswer, useTakeOverRequest, useTakeover, useUpdateWorkItem } from "../app/mutations.ts";
 import { useNav } from "../app/navigation.ts";
 import { keys } from "../app/query.ts";
 
@@ -240,8 +241,28 @@ export function waitingNote(item: WorkItem) {
   return until && `waiting ${until}`;
 }
 
-/** Pretty-prints a decision's exact input as key/value rows. */
-export function decisionFields(input: unknown): [string, string][] {
+/** An amount as the owner reads it: "$12.99", or "12.99 EUR" in another currency. */
+export const money = (amount: { cents: number; currency: string }) =>
+  amount.currency === "USD"
+    ? `$${(amount.cents / 100).toFixed(2)}`
+    : `${(amount.cents / 100).toFixed(2)} ${amount.currency}`;
+
+/** A decision's exact input as label/value rows; an `askOwner` request in its own words. */
+export function decisionFields(decision: Pick<Decision, "kind" | "input">): [string, string][] {
+  const request = ownerRequest(decision);
+  if (request?.kind === "approve")
+    return [
+      ["Action", request.action],
+      ["With", request.counterparty],
+      ...(request.amount ? ([["Amount", money(request.amount)]] as [string, string][]) : []),
+      ...(request.renewal ? ([["Renews", request.renewal]] as [string, string][]) : []),
+    ];
+  if (request?.kind === "take_over")
+    return [
+      ["Do", request.reason],
+      ...(request.url ? ([["Site", request.url]] as [string, string][]) : []),
+    ];
+  const { input } = decision;
   if (input && typeof input === "object" && !Array.isArray(input))
     return Object.entries(input).map(([key, value]) => [
       key,
@@ -250,8 +271,15 @@ export function decisionFields(input: unknown): [string, string][] {
   return [["input", JSON.stringify(input)]];
 }
 
-/** What a decision asks for, in words: a proposed hire names the person and role. */
+/**
+ * What a decision asks for, in words: a proposed hire names the person and role; an `askOwner`
+ * request says what to approve, or what to do in the browser.
+ */
 export function decisionTitle(decision: Decision) {
+  const request = ownerRequest(decision);
+  if (request?.kind === "approve")
+    return request.amount ? `Spend ${money(request.amount)}: ${request.action}` : request.action;
+  if (request?.kind === "take_over") return `Sign in / take over: ${request.reason}`;
   if (
     decision.capability === "hireEmployee" &&
     decision.input &&
@@ -266,31 +294,84 @@ export function decisionTitle(decision: Decision) {
 }
 
 /**
+ * How the owner answers a request: Approve or Decline; a take over takes the work over and opens
+ * its live browser; a spend approval is signed on the owner's Mac or iPhone, so the web only
+ * says so (.docs/AUTHORITY.md).
+ */
+export function RequestActions({
+  decision,
+  compact,
+  children,
+}: {
+  decision: Decision;
+  compact?: boolean;
+  children?: ReactNode;
+}) {
+  const answer = useAnswer();
+  const takeOver = useTakeOverRequest();
+  const size = compact ? "compact" : "regular";
+  if (spendOf(decision))
+    return (
+      <div className="flex w-full items-center gap-1.5">
+        <span className="text-detail text-ink-2" data-testid="sign-elsewhere">
+          Approve on your Mac or iPhone
+        </span>
+        <span className="ml-auto" />
+        {children}
+      </div>
+    );
+  return (
+    <div className="flex w-full items-center gap-1.5">
+      {decision.kind === "take_over" ? (
+        <Button
+          variant="aurora"
+          size={size}
+          disabled={!decision.work_item_id}
+          onClick={() => decision.work_item_id && takeOver.mutate(decision.work_item_id)}
+        >
+          <Hand /> Take over
+        </Button>
+      ) : (
+        <Button
+          variant="aurora"
+          size={size}
+          onClick={() => answer.mutate({ id: decision.id, approve: true })}
+          title="Allows this exact request once."
+        >
+          <Check /> Approve
+        </Button>
+      )}
+      <Button size={size} onClick={() => answer.mutate({ id: decision.id, approve: false })}>
+        Decline
+      </Button>
+      <span className="ml-auto" />
+      {children}
+    </div>
+  );
+}
+
+/**
  * One exact request: who asked, what they will do, and the input it will run with. A routine's
  * activation reads as its proposal.
  */
-export function DecisionCard({
-  decision,
-}: {
-  decision: Decision & { kind: "decision"; routine: Routine | null; title: string };
-}) {
+export function DecisionCard({ decision }: { decision: NeedsYouRequest }) {
   if (decision.routine) return <RoutineProposal decision={decision} routine={decision.routine} />;
   return <RequestCard decision={decision} />;
 }
 
 function RequestCard({ decision }: { decision: Decision }) {
   const employeeName = useEmployeeName();
-  const answer = useAnswer();
   return (
     <Card>
       <div className="flex flex-col items-start gap-2.5">
         <StatusChip tone="needsYou">Needs you</StatusChip>
         <span className="text-heading font-semibold text-ink">{decisionTitle(decision)}</span>
         <span className="text-detail text-ink-2">
-          {employeeName(decision.employee_id)} asked to run this exactly:
+          {employeeName(decision.employee_id)}{" "}
+          {decision.kind === "decision" ? "asked to run this exactly:" : "asks you:"}
         </span>
         <div className="flex w-full flex-col gap-1 rounded-control bg-well p-2.5">
-          {decisionFields(decision.input).map(([key, value]) => (
+          {decisionFields(decision).map(([key, value]) => (
             <div key={key} className="flex items-baseline gap-2">
               <span className="min-w-16 text-caption text-ink-3">{key}</span>
               <span className="line-clamp-6 min-w-0 text-body break-words text-ink select-text">
@@ -299,22 +380,23 @@ function RequestCard({ decision }: { decision: Decision }) {
             </div>
           ))}
         </div>
-        <div className="flex gap-2 pt-0.5">
-          <Button
-            variant="aurora"
-            onClick={() => answer.mutate({ id: decision.id, approve: true })}
-            title="Allows this exact request once. Face ID signing arrives with signed decisions."
-          >
-            <Check /> Approve
-          </Button>
-          <Button onClick={() => answer.mutate({ id: decision.id, approve: false })}>
-            Decline
-          </Button>
+        <div className="flex w-full gap-2 pt-0.5">
+          <RequestActions decision={decision} />
         </div>
       </div>
     </Card>
   );
 }
+
+/** How a request was answered: a take over is taken, then done; a spend approval was signed. */
+const answeredAs = (decision: Decision) =>
+  decision.status === "rejected"
+    ? "Declined"
+    : decision.kind === "take_over"
+      ? decision.status === "used"
+        ? "Done"
+        : "Taken over"
+      : `Approved${decision.signed_by ? " and signed" : ""}${decision.status === "used" ? " · used" : ""}`;
 
 /** A due time as the date field shows it, in the owner's time zone. */
 const dateField = (due: string | null) => {
@@ -581,8 +663,7 @@ export function WorkDetail({ item }: { item: WorkItem }) {
           <span className="text-label font-medium text-ink-3">Decided</span>
           {answered.map((decision) => (
             <p key={decision.id} className="text-caption text-ink-2">
-              {decision.status === "rejected" ? "Declined" : "Approved"}: {decisionTitle(decision)}
-              {decision.status === "used" ? " · used" : ""}
+              {answeredAs(decision)}: {decisionTitle(decision)}
             </p>
           ))}
         </div>

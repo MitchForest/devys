@@ -1,4 +1,5 @@
 import ComposableArchitecture2
+import DevysDesignSystem
 import SwiftUI
 
 /// macOS and regular-width iPad get the frame-and-workspace shell; compact
@@ -12,6 +13,14 @@ struct WorkspaceScreen: View {
     #endif
 
     var body: some View {
+        if store.account != nil, store.businesses.isEmpty {
+            FirstBusiness(store: store)
+        } else {
+            workspace
+        }
+    }
+
+    private var workspace: some View {
         shell.modifier(WorkspaceSheets(store: store))
             // A task, not `onChange(initial:)`: SwiftUI can flush a pending initial onChange
             // synchronously while a reducer mutates observed state (the first account load),
@@ -29,5 +38,33 @@ struct WorkspaceScreen: View {
         #else
             RegularShell(store: store)
         #endif
+    }
+}
+
+/// Signed in with no business yet: start one with Settings' New business form, as on the web.
+/// Once it exists, Settings closes and the workspace loads it.
+private struct FirstBusiness: View {
+    let store: StoreOf<Workspace>
+
+    var body: some View {
+        ScrollView {
+            Group {
+                if let preferences = store.spawn(\.preferences), preferences.newBusiness != nil {
+                    NewBusinessSheet(store: preferences, isFirst: true)
+                        .onChange(of: preferences.businesses.isEmpty) { _, empty in
+                            if !empty { store.send(.preferencesToggled(false)) }
+                        }
+                } else {
+                    ProgressView()
+                }
+            }
+            .frame(maxWidth: 520)
+            .background(DevysColors.sheet, in: RoundedRectangle(cornerRadius: DevysRadius.sheet, style: .continuous))
+            .devysElevation(.raised)
+            .padding(DevysSpacing.roomy)
+            .frame(maxWidth: .infinity, minHeight: 560)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .background(DevysColors.frame)
     }
 }

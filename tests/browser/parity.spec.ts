@@ -79,6 +79,21 @@ test("looks, the owner's photo, voice and settings work on the web as on native"
     });
     await expect(settings.getByRole("button", { name: "Remove" })).toBeVisible();
 
+    // The owner's name is theirs to change.
+    await settings.getByRole("textbox", { name: "Your name" }).fill("Riley Chen");
+    await settings.getByRole("button", { name: "Save" }).click();
+    await expect
+      .poll(
+        async () =>
+          (
+            await sql.row<{ display_name: string }>(
+              "SELECT display_name FROM people WHERE id = $1",
+              [owner.person],
+            )
+          )?.display_name,
+      )
+      .toBe("Riley Chen");
+
     // An employee's look is set in Team and stored on the server for every client.
     await settings.getByRole("button", { name: "Team", exact: true }).click();
     await settings.getByRole("tab", { name: "Emoji" }).click();

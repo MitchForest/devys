@@ -4,8 +4,6 @@ import { expect, it } from "vitest";
 import type { Env } from "../infra/api.ts";
 import { artifactCapabilities } from "../src/apps/documents/capabilities.ts";
 import { artifactText, listArtifacts } from "../src/apps/documents/service.ts";
-import { browserCapabilities } from "../src/browser/capabilities.ts";
-import type { Browser } from "../src/browser/contract.ts";
 import { Invocation } from "../src/protocol/capability.ts";
 import { parseRef } from "../src/protocol/ref.ts";
 import { business, sql } from "./fixtures/postgres.ts";
@@ -106,37 +104,6 @@ it("an employee publishes a page, sees it announced where it is answering, and e
       .pipe(as(scope), Effect.flip),
   );
   expect(ambiguous).toMatchObject({ code: "invalid_input" });
-});
-
-it("browser actions name the work they serve, so the owner sees the browser there", async () => {
-  const calls: { method: string; driver: string }[] = [];
-  const browser = {
-    open: async (_url: string, driver: string) => (
-      calls.push({ method: "open", driver }),
-      { url: "https://a.example/", title: "A" }
-    ),
-    read: async (driver: string) => (
-      calls.push({ method: "read", driver }),
-      { url: "", title: "", snapshot: '- heading "A"' }
-    ),
-  } as unknown as Browser;
-  const named = (name: string) =>
-    browserCapabilities(() => browser).find((item) => item.name === name)!;
-  const scope = { businessId: "b", employeeId: "e" };
-  await Effect.runPromise(
-    named("browserOpen")
-      .execute({ url: "https://a.example/" })
-      .pipe(as(scope, { workItemId: "work-7" })),
-  );
-  await Effect.runPromise(
-    named("browserRead")
-      .execute({})
-      .pipe(as(scope, { conversation: "direct:e" })),
-  );
-  expect(calls).toEqual([
-    { method: "open", driver: "work-7" },
-    { method: "read", driver: "direct:e" },
-  ]);
 });
 
 it("artifacts carry their title and their version among pages of the same name", async () => {

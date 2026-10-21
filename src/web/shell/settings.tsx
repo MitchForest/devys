@@ -35,6 +35,7 @@ import {
   useInstallApp,
   useOwnerPhotoChange,
   usePinApp,
+  useRename,
   useSetBusinessLook,
   useSetEmployeeLook,
   useSignOut,
@@ -154,6 +155,38 @@ function PhotoChooser({ title, choose }: { title: string; choose: (file: File) =
   );
 }
 
+/** The name the owner goes by, saved with Enter or the Save button. */
+function NameField({ current }: { current: string }) {
+  const rename = useRename();
+  const [name, setName] = useState(current);
+  useEffect(() => setName(current), [current]);
+  const changed = name.trim() !== current && name.trim().length > 0;
+  return (
+    <form
+      aria-label="Your name"
+      className="flex items-center gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (changed) rename.mutate(name);
+      }}
+    >
+      <Input
+        aria-label="Your name"
+        value={name}
+        maxLength={80}
+        onChange={(event) => setName(event.target.value)}
+        className="w-56"
+      />
+      {changed && (
+        <Button size="compact" variant="raised" type="submit" disabled={rename.isPending}>
+          Save
+        </Button>
+      )}
+      {rename.isError && <span className="text-detail text-red">That name couldn't be saved.</span>}
+    </form>
+  );
+}
+
 function AccountPane() {
   const person = usePerson();
   const ownerPhoto = useOwnerPhoto();
@@ -178,7 +211,11 @@ function AccountPane() {
           )}
         </span>
         <div className="flex flex-col gap-2">
-          <span className="text-title font-semibold text-ink">{person?.display_name ?? "You"}</span>
+          {person ? (
+            <NameField current={person.display_name} />
+          ) : (
+            <span className="text-title font-semibold text-ink">You</span>
+          )}
           <div className="flex gap-2">
             <PhotoChooser
               title={ownerPhoto ? "Change photo" : "Add photo"}
@@ -236,15 +273,14 @@ function AppSkills({ app }: { app: InstalledApp }) {
 
 /**
  * The app directory for the current business: Devys apps to install, pin to the sidebar or
- * remove, those coming later, the system apps every business has, and the accounts apps use.
+ * remove, the system apps every business has, and the accounts apps use.
  */
 function AppsPane() {
   const businessId = useBusinessId();
   const list = useApps().data ?? [];
   const pin = usePinApp();
   const install = useInstallApp();
-  const available = list.filter((app) => app.kind === "business" && app.status === "available");
-  const coming = list.filter((app) => app.status === "coming");
+  const available = list.filter((app) => app.kind === "business");
   const system = list.filter((app) => app.kind === "system");
   return (
     <div className="flex flex-col gap-5 p-5">
@@ -286,17 +322,6 @@ function AppsPane() {
           </div>
         ))}
       </div>
-      {coming.length > 0 && (
-        <div className="flex flex-col gap-1">
-          <span className="text-label font-medium text-ink-3">Coming</span>
-          {coming.map((app) => (
-            <div key={app.id} className="flex flex-col py-1 opacity-70">
-              <span className="text-control text-ink">{app.name}</span>
-              <span className="text-detail text-ink-3">{app.summary}</span>
-            </div>
-          ))}
-        </div>
-      )}
       <div className="flex flex-col gap-2">
         <span className="text-label font-medium text-ink-3">Connections</span>
         {businessId && <DriveConnection businessId={businessId} />}

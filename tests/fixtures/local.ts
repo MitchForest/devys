@@ -79,7 +79,7 @@ export async function localStores(channel = false) {
       ])
         await run(`DELETE FROM ${table} WHERE business_id = ANY($1)`, [businesses]);
       await run("DELETE FROM businesses WHERE id = ANY($1)", [businesses]);
-      for (const table of ["web_sessions", "enrollment_tokens"])
+      for (const table of ["device_keys", "web_sessions", "enrollment_tokens"])
         await run(`DELETE FROM ${table} WHERE person_id = ANY($1)`, [people]);
       await run("DELETE FROM people WHERE id = ANY($1)", [people]);
     },

@@ -68,6 +68,11 @@ extension Workspace.Action {
         Self(.workItemStateSet(workItemID: id, state))
     }
     package static func takeoverToggled(_ id: String) -> Self { Self(.takeoverToggled(workItemID: id)) }
+    package static func signTapped(_ id: String) -> Self { Self(.asking(.signTapped(decisionID: id))) }
+    package static var signConfirmed: Self { Self(.asking(.signConfirmed)) }
+    package static func signFinished(_ error: String?) -> Self { Self(.asking(.signFinished(error))) }
+    package static var signDismissed: Self { Self(.asking(.signDismissed)) }
+    package static func takeOverTapped(_ workItemID: String) -> Self { Self(.asking(.takeOverTapped(workItemID: workItemID))) }
     package static func newWorkItemTapped(owner: String? = nil, project: String? = nil) -> Self { Self(.workItem(.newWorkItemTapped(ownerID: owner, projectID: project))) }
     package static func workItemEdited(_ draft: WorkItemDraft) -> Self { Self(.workItem(.edited(draft))) }
     package static var workItemConfirmed: Self { Self(.workItem(.confirmed)) }

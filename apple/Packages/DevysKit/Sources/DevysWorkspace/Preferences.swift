@@ -26,7 +26,7 @@ package enum PreferencesSection: String, CaseIterable, Hashable, Sendable {
     }
 }
 
-/// Settings: the owner's photo, their businesses and teams, how employees and
+/// Settings: the owner's name and photo, their businesses and teams, how employees and
 /// businesses look, each business's apps and connections, voice and appearance. Businesses, teams, looks and the profile
 /// photo are on the server, so every client shows the same.
 @Feature
@@ -51,6 +51,9 @@ public struct Preferences {
         package var newBusiness: NewBusinessDraft?
         /// The person's signed-in devices, loaded when Devices opens.
         package var devices: Loadable<[Device]> = .loading
+        /// Their devices' signing keys: which approve spending, and which wait to be allowed.
+        package var keys: [DeviceKey] = []
+        package var ownerID: String?
         /// A code for adding a device, shown as a QR code until it expires.
         package var deviceCode: DeviceCode?
         package var isIssuingCode = false
@@ -86,6 +89,8 @@ public struct Preferences {
         case photoPicked(LookTarget, Data)
         case ownerPhotoPicked(Data)
         case ownerPhotoRemoved
+        case ownerRenamed(String)
+        case ownerNameSaved(String)
         case lookPhotosLoaded([String: Data])
         case ownerLoaded(name: String?, photo: Data?)
         case voicesLoaded([SpeechVoice])
@@ -106,6 +111,7 @@ public struct Preferences {
     @Dependency(\.lookClient) private var lookClient: LookClient
     @Dependency(\.profileClient) private var profileClient: ProfileClient
     @Dependency(\.runtimeClient) var runtime: RuntimeClient
+    @Dependency(\.signingClient) var signing: SigningClient
     @Dependency(\.sessionClient) private var session: SessionClient
     @Dependency(\.speechPlaybackClient) private var playback: SpeechPlaybackClient
     @Dependency(\.voiceSettingsClient) private var voiceSettingsClient: VoiceSettingsClient
@@ -181,6 +187,26 @@ public struct Preferences {
                     }
                 }
 
+            case .ownerRenamed(let name):
+                let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard name != state.ownerName else { return }
+                guard !name.isEmpty, name.count <= 80 else {
+                    state.errorText = "Your name needs 1 to 80 characters."
+                    return
+                }
+                state.errorText = nil
+                let runtime = runtime
+                store.addTask {
+                    do {
+                        try store.send(Action(.ownerNameSaved(try await runtime.rename(name).person.displayName)))
+                    } catch {
+                        try store.send(Action(.failed("Your name couldn't be saved. Try again.")))
+                    }
+                }
+
+            case .ownerNameSaved(let name):
+                state.ownerName = name
+
             case .lookPhotosLoaded(let photos):
                 state.lookPhotos.merge(photos) { _, new in new }
 
@@ -193,6 +219,7 @@ public struct Preferences {
 
             case .directoryLoaded(let account, let teams):
                 state.ownerName = account.person.displayName
+                state.ownerID = account.person.id
                 state.businesses = account.businesses
                 state.teams = teams
                 if state.selectedBusinessID == nil { state.selectedBusinessID = account.businesses.first?.id }
@@ -290,6 +317,7 @@ extension Preferences.Action {
     package static func photoPicked(_ target: LookTarget, _ data: Data) -> Self { Self(.photoPicked(target, data)) }
     package static func ownerPhotoPicked(_ data: Data) -> Self { Self(.ownerPhotoPicked(data)) }
     package static var ownerPhotoRemoved: Self { Self(.ownerPhotoRemoved) }
+    package static func ownerRenamed(_ name: String) -> Self { Self(.ownerRenamed(name)) }
     package static var signOutTapped: Self { Self(.signOutTapped) }
     package static func voiceSettingsChanged(_ settings: VoiceSettings) -> Self { Self(.voiceSettingsChanged(settings)) }
     package static var previewVoiceTapped: Self { Self(.previewVoiceTapped) }
@@ -300,6 +328,7 @@ extension Preferences.Action {
     package static func businessSaved(_ id: String, name: String, brief: String) -> Self { Self(.business(.saveTapped(id: id, name: name, brief: brief))) }
     package static var devicesRequested: Self { Self(.device(.requested)) }
     package static func deviceRevoked(_ id: String) -> Self { Self(.device(.revokeTapped(id))) }
+    package static func keyAllowed(_ id: String) -> Self { Self(.device(.allowTapped(keyID: id))) }
     package static var addDeviceTapped: Self { Self(.device(.addTapped)) }
     package static var deviceCodeDismissed: Self { Self(.device(.codeDismissed)) }
     package static var appsRequested: Self { Self(.app(.requested)) }

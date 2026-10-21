@@ -4,13 +4,16 @@
  * the tailnet address is read from the machine. Data lives outside any checkout, so
  * development resets never touch it.
  *
- *   bun scripts/local.ts install    build, copy the app, serve it on the tailnet, start at login
+ *   bun scripts/local.ts install    build, copy the app, serve it on the tailnet, start at login,
+ *                                   then print and open a sign-in link
  *   bun scripts/local.ts uninstall  stop and remove the LaunchAgent (data is kept)
  *   bun scripts/local.ts run        what launchd runs: Postgres, the Worker, the minute tick
  *   bun scripts/local.ts backup     dump Postgres and archive the Workers state now
  *   bun scripts/local.ts webhooks   publish only /webhooks/ to the internet with Funnel
  *   bun scripts/local.ts code       a sign-in code for the owner, as a code and a devys:// link
  *   bun scripts/local.ts deploy-env <business>   the private file of that business's deploy secrets
+ *   bun scripts/local.ts clear-keys revoke every device signing key (spend approvals need a
+ *                                   device enrolled again)
  *   bun scripts/local.ts status
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
@@ -26,6 +29,8 @@ import {
 } from "node:fs";
 import { homedir, userInfo } from "node:os";
 import { join, resolve } from "node:path";
+import { Effect } from "effect";
+import { revokeAllKeys } from "../src/authority/keys.ts";
 import { bin } from "./db.ts";
 
 const checkout = resolve(import.meta.dirname, "..");
@@ -189,9 +194,6 @@ async function install() {
     "build",
     "src/host.ts",
     "--target=bun",
-    // Playwright's optional WebDriver BiDi support isn't used (Chrome is driven over CDP).
-    "--external=chromium-bidi",
-    "--external=chromium-bidi/*",
     `--outfile=${join(paths.app, "host.js")}`,
   ]);
   must(process.execPath, ["scripts/db.ts", "migrate"], postgresEnv);
@@ -210,6 +212,8 @@ async function install() {
     spawnSync("sleep", ["1"]);
   }
   log(`Devys is starting at ${publicUrl()}. Logs: ${paths.logs}`);
+  log("Sign in with this (or run `bun run local code` for another):");
+  code(true);
 }
 
 function uninstall() {
@@ -233,8 +237,11 @@ function webhooks() {
   );
 }
 
-/** A one-hour sign-in code for the owner, printed as a code and a link the apps open. */
-function code() {
+/**
+ * A one-hour sign-in code for the owner, printed as a code and a link the apps open; `open`
+ * also opens the link on this Mac (the Mac app asks before replacing a session it has).
+ */
+function code(open = false) {
   const file = join(home, `code-${Date.now()}`);
   must(
     process.execPath,
@@ -245,7 +252,9 @@ function code() {
   rmSync(file);
   const server = publicUrl();
   console.log(`Server: ${server}\nCode:   ${value}`);
-  console.log(`Link:   devys://enroll?server=${encodeURIComponent(server)}&code=${value}`);
+  const link = `devys://enroll?server=${encodeURIComponent(server)}&code=${value}`;
+  console.log(`Link:   ${link}`);
+  if (open && process.platform === "darwin") spawnSync("open", [link]);
 }
 
 function backup() {
@@ -393,6 +402,8 @@ async function run() {
       DEVYS_HOST_TOKEN: token,
       DEVYS_HOST_PORT: String(hostPort),
       DEVYS_HOST_DATA: paths.host,
+      // Hidden from every process an employee starts (src/workspace/host/seatbelt.ts).
+      DEVYS_SERVER_HOME: home,
       // Coding events come back to the Worker on loopback.
       DEVYS_WORKER_URL: `http://127.0.0.1:${appPort}`,
     }),
@@ -495,6 +506,15 @@ function deployEnv() {
   console.log(file);
 }
 
+/**
+ * The Mac's owner clears the device signing keys (a lost or replaced device): the next Mac or
+ * iPhone that signs in, or signs, enrolls a key again (.docs/AUTHORITY.md).
+ */
+async function clearKeys() {
+  const cleared = await Effect.runPromise(revokeAllKeys({ connectionString: database }));
+  log(`Cleared ${cleared} signing key${cleared === 1 ? "" : "s"}.`);
+}
+
 if (import.meta.main) {
   const command = process.argv[2] ?? "status";
   const commands: Record<string, () => unknown> = {
@@ -503,9 +523,10 @@ if (import.meta.main) {
     run,
     backup,
     webhooks,
-    code,
+    code: () => code(),
     status,
     "deploy-env": deployEnv,
+    "clear-keys": clearKeys,
   };
   const selected = commands[command];
   if (!selected) throw new Error(`Unknown command: ${command}`);

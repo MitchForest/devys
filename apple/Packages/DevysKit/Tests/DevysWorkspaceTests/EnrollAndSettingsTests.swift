@@ -98,6 +98,7 @@ private actor DeviceServer {
     var revoked: [String] = []
     var created: [NewBusiness] = []
     var updates: [BusinessUpdate] = []
+    var names: [String] = []
 
     func revoke(_ id: String) {
         revoked.append(id)
@@ -106,6 +107,10 @@ private actor DeviceServer {
     func create(_ business: NewBusiness) -> Business {
         created.append(business)
         return Business(id: "new", name: business.name, brief: business.brief)
+    }
+    func rename(_ name: String) -> Account {
+        names.append(name)
+        return Account(person: Person(id: "person-preview", displayName: name), businesses: Account.fixture.businesses)
     }
     func update(_ id: String, _ name: String?, _ brief: String?) -> Business {
         updates.append(BusinessUpdate(id: id, name: name, brief: brief))
@@ -122,6 +127,7 @@ struct DevicesAndBusinessesTests {
             $0.profileClient = .inert
             $0.runtimeClient = RuntimeClient(
                 account: { .fixture },
+                rename: { await server.rename($0) },
                 business: { BusinessDetail.fixture($0) },
                 createBusiness: { await server.create($0) },
                 updateBusiness: { await server.update($0, $1, $2) },
@@ -173,6 +179,18 @@ struct DevicesAndBusinessesTests {
         store.send(.createBusinessTapped)
         await settle("created", until: { store.newBusiness == nil })
         #expect(await server.created == [NewBusiness(name: "Globex", brief: "Shared notes for families", team: ["engineering", "business-operations"])])
+    }
+
+    @Test("The owner's name saves trimmed; a blank one is refused here")
+    func renames() async {
+        let server = DeviceServer()
+        let store = makeStore(server)
+        await settle("owner", until: { store.ownerName == "Mitch" })
+        store.send(.ownerRenamed("   "))
+        #expect(store.errorText != nil)
+        store.send(.ownerRenamed(" Mitch White "))
+        await settle("renamed", until: { store.ownerName == "Mitch White" })
+        #expect(await server.names == ["Mitch White"])
     }
 
     @Test("Editing a business sends only what changed")

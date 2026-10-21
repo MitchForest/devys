@@ -2,22 +2,16 @@ import { Effect } from "effect";
 import type { Env } from "./env.ts";
 import type { InstalledApp } from "../apps/contract.ts";
 import { install, installs, setPinned, uninstall } from "../apps/service.ts";
-import { ads } from "../apps/ads/app.ts";
 import { browser } from "../apps/browser/app.ts";
 import { code } from "../apps/code/app.ts";
 import { hasCodingSessions } from "../apps/code/service.ts";
 import { computer } from "../apps/computer/app.ts";
 import { conversations } from "../apps/conversations/app.ts";
-import { customers } from "../apps/customers/app.ts";
 import { documents } from "../apps/documents/app.ts";
-import { mail } from "../apps/mail/app.ts";
 import { memory } from "../apps/memory/app.ts";
-import { money } from "../apps/money/app.ts";
 import { team } from "../apps/team/app.ts";
 import { web } from "../apps/web/app.ts";
-import { website } from "../apps/website/app.ts";
 import { work } from "../apps/work/app.ts";
-import { connectedProviders } from "../connections/google.ts";
 import type { Database } from "../data/database.ts";
 import { type Business, type Person } from "../identity/contract.ts";
 import type { AppManifest } from "../protocol/app.ts";
@@ -25,7 +19,7 @@ import { body, forbidden, notFound } from "./request.ts";
 import { respond } from "../protocol/http.ts";
 import { AppChanged, Apps } from "./wire.ts";
 
-/** Every Devys app: the system apps, then the business apps (available, then coming). */
+/** Every Devys app: the system apps, then the business apps. */
 export const appCatalog: readonly AppManifest[] = [
   computer,
   browser,
@@ -36,11 +30,6 @@ export const appCatalog: readonly AppManifest[] = [
   team,
   documents,
   code,
-  mail,
-  money,
-  website,
-  ads,
-  customers,
 ];
 
 const appById = (id: string) => appCatalog.find((app) => app.id === id);
@@ -92,7 +81,7 @@ export const recordsChecks: Readonly<
 async function hasSomething(
   env: Env,
   businessId: string,
-  app: Pick<AppManifest, "id" | "appears" | "connections">,
+  app: Pick<AppManifest, "id" | "appears">,
 ) {
   switch (app.appears) {
     case "always":
@@ -103,10 +92,6 @@ async function hasSomething(
       const check = recordsChecks[app.id];
       if (!check) throw new Error(`${app.id} appears once it has records but has no records check`);
       return check(env.HYPERDRIVE, businessId);
-    }
-    case "connected": {
-      const connected = await connectedProviders(env.HYPERDRIVE, businessId);
-      return app.connections.some((connection) => connected.includes(connection.provider));
     }
   }
 }
@@ -146,8 +131,6 @@ export async function appsRoute(
   if (app.kind === "system")
     return new Response(`${app.name} is part of every business`, { status: 409 });
   if (action === "install") {
-    if (app.status !== "available")
-      return new Response(`${app.name} is coming soon`, { status: 409 });
     await Effect.runPromise(install(env.HYPERDRIVE, business.id, [app.id]));
   } else if (action === "uninstall") {
     // Its records stay: owners still read them; only its capabilities and skills go.

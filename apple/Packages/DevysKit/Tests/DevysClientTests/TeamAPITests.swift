@@ -36,6 +36,19 @@ struct TeamAPITests {
         #expect(body["name"] as? String == "Mitch's iPad")
     }
 
+    @Test("Renaming the signed-in person puts their new name and reads the account back")
+    func rename() async throws {
+        let recorder = Recorder()
+        let account = try await api(
+            body: #"{"person":{"id":"p1","display_name":"Sam Rivera"},"businesses":[]}"#,
+            recorder: recorder
+        ).rename(Self.session, "Sam Rivera")
+        let (request, body) = try await sent(recorder)
+        #expect(request.httpMethod == "PUT" && request.url?.path() == "/api/me")
+        #expect(body["display_name"] as? String == "Sam Rivera")
+        #expect(account.person.displayName == "Sam Rivera")
+    }
+
     @Test("Devices list with the current one marked; a code carries its server; revoking posts to the device")
     func devices() async throws {
         let recorder = Recorder()
@@ -200,15 +213,15 @@ struct TeamAPITests {
         let recorder = Recorder()
         let apps = try await api(
             body: """
-            {"apps":[{"id":"documents","name":"Documents","icon":"file-text","summary":"Pages and files","kind":"business","status":"available","records":[],
+            {"apps":[{"id":"documents","name":"Documents","icon":"file-text","summary":"Pages and files","kind":"business","records":[],
               "skills":[{"name":"pages","description":"Publish a page"}],"installed":true,"pinned":true,"visible":true},
-             {"id":"memory","name":"Memory","icon":"brain","summary":"What employees remember","kind":"system","status":"available","records":[],
+             {"id":"memory","name":"Memory","icon":"brain","summary":"What employees remember","kind":"system","records":[],
               "skills":[],"installed":true,"pinned":false,"visible":false},
-             {"id":"mail","name":"Mail","icon":"mail","summary":"Mailboxes","kind":"business","status":"coming","records":[],"skills":[],"installed":false,"pinned":false,"visible":false}]}
+             {"id":"code","name":"Code","icon":"code","summary":"Repositories","kind":"business","records":[],"skills":[],"installed":false,"pinned":false,"visible":false}]}
             """,
             recorder: recorder
         ).apps(Self.session, businessID: "b1")
-        #expect(apps.map(\.id) == ["documents", "memory", "mail"] && apps.last?.status == .coming && apps.first?.visible == true)
+        #expect(apps.map(\.id) == ["documents", "memory", "code"] && apps.last?.installed == false && apps.first?.visible == true)
         #expect(apps.first?.skills == [AppEntry.Skill(name: "pages", description: "Publish a page")])
         #expect(apps.map(\.kind) == [.business, .system, .business] && apps[1].installed && !apps[1].pinned)
 
@@ -284,8 +297,8 @@ struct TeamAPITests {
     func workDecisions() async throws {
         let recorder = Recorder()
         let page = """
-        {"decisions":[{"id":"d1","employee_id":"growth","capability":"email.send","input":{},"work_item_id":"c1","status":"approved",
-         "requested_at":"2026-10-19T15:00:00.000Z","expires_at":"2026-10-20T15:00:00.000Z"}]}
+        {"decisions":[{"id":"d1","kind":"decision","employee_id":"growth","capability":"email.send","input":{},"work_item_id":"c1","status":"approved",
+         "requested_at":"2026-10-19T15:00:00.000Z","expires_at":"2026-10-20T15:00:00.000Z","signed_by":null}]}
         """
         let decisions = try await api(body: page, recorder: recorder).decisions(Self.session, businessID: "b1", workItemID: "c1")
         #expect(decisions.first?.workItemID == "c1")

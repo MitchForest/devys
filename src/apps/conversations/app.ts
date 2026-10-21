@@ -6,7 +6,6 @@ export const conversations = defineApp({
   icon: "bubble.left.and.bubble.right",
   summary: "What was said in direct messages, project channels and work threads.",
   kind: "system",
-  status: "available",
   records: [],
   capabilities: ["conversationHistory"],
   skills: [],

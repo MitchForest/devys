@@ -6,7 +6,6 @@ export const team = defineApp({
   icon: "person.3",
   summary: "The business's employees: hiring from a role template.",
   kind: "system",
-  status: "available",
   records: [],
   capabilities: ["hireEmployee"],
   skills: [],

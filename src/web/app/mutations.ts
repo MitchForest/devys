@@ -127,6 +127,19 @@ export function useTakeover() {
   );
 }
 
+/**
+ * Answers a take-over request: the owner takes its work over (which fences its employee), and
+ * the live browser opens beside the thread; Hand back says it is done.
+ */
+export function useTakeOverRequest() {
+  const nav = useNav();
+  return useChange((b, workId: string) => api.setTakeover(b, workId, true), {
+    failure: "Couldn't take that work over.",
+    settles: workSettles,
+    succeeded: (_, workId) => nav.openBrowser(workId),
+  });
+}
+
 /** Hear each milestone of a work item (and keep it in the sidebar), or only its outcome. */
 export function useFollow() {
   return useChange(
@@ -446,6 +459,15 @@ export function useOwnerPhotoChange() {
     mutationFn: async (file: Blob | null) =>
       file ? api.uploadProfilePhoto(await downscale(file, 1024)) : api.removeProfilePhoto(),
     onSettled: () => client.invalidateQueries({ queryKey: ["owner-photo"] }),
+  });
+}
+
+/** The name the signed-in person goes by. */
+export function useRename() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => api.rename(name.trim()),
+    onSuccess: (me) => client.setQueryData(keys.me, me),
   });
 }
 

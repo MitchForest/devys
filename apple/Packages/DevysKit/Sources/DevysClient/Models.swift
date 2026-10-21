@@ -519,29 +519,43 @@ public struct WorkItem: Equatable, Sendable, Decodable, Identifiable {
     }
 }
 
+/// What a request asks of the owner: a modelled capability's decision, or an employee's
+/// `askOwner` (approve, or take over in the business's browser).
+public enum RequestKind: String, Equatable, Sendable, WireEnum {
+    case decision, approve
+    case takeOver = "take_over"
+    case unknown
+}
+
 /// A request an employee made that the owner approves or rejects once.
 public struct Decision: Equatable, Sendable, Decodable, Identifiable {
     public let id: String
+    public let kind: RequestKind
     public let employeeID: String
     public let capability: String
     public let input: JSONValue
     public let workItemID: String?
-    /// pending, approved, rejected, or used (an approval that ran).
+    /// pending, approved, rejected, or used (an approval that ran; a take over handed back).
     public let status: String
     public let requestedAt: String
     public let expiresAt: String
+    /// The device key that signed a spend approval.
+    public let signedBy: String?
 
     public init(
         id: String,
+        kind: RequestKind = .decision,
         employeeID: String,
         capability: String,
         input: JSONValue,
         workItemID: String? = nil,
         status: String = "pending",
         requestedAt: String = "2026-10-19T00:00:00.000Z",
-        expiresAt: String = "2026-10-20T00:00:00.000Z"
+        expiresAt: String = "2026-10-20T00:00:00.000Z",
+        signedBy: String? = nil
     ) {
         self.id = id
+        self.kind = kind
         self.employeeID = employeeID
         self.capability = capability
         self.input = input
@@ -549,13 +563,15 @@ public struct Decision: Equatable, Sendable, Decodable, Identifiable {
         self.status = status
         self.requestedAt = requestedAt
         self.expiresAt = expiresAt
+        self.signedBy = signedBy
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, capability, input, status
+        case id, kind, capability, input, status
         case employeeID = "employee_id"
         case workItemID = "work_item_id"
         case requestedAt = "requested_at"
         case expiresAt = "expires_at"
+        case signedBy = "signed_by"
     }
 }

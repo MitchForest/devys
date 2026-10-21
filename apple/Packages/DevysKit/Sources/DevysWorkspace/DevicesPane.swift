@@ -40,8 +40,14 @@ struct DevicesPane: View {
             Text(message).font(DevysTypography.body).foregroundStyle(DevysColors.ink3)
         case .loaded(let devices):
             VStack(alignment: .leading, spacing: 2) {
+                let canAllow = store.keys.contains { $0.current && $0.status == .active }
                 ForEach(devices) { device in
-                    DeviceRow(device: device) { store.send(.deviceRevoked(device.id)) }
+                    let key = store.keys.first { $0.device == device.id }
+                    DeviceRow(device: device, key: key, canAllow: canAllow) {
+                        store.send(.deviceRevoked(device.id))
+                    } allow: {
+                        if let key { store.send(.keyAllowed(key.id)) }
+                    }
                 }
             }
         }
@@ -50,7 +56,12 @@ struct DevicesPane: View {
 
 private struct DeviceRow: View {
     let device: Device
+    /// Its signing key, when it is a Mac or iPhone app that has one.
+    let key: DeviceKey?
+    /// This device approves spending, so it can allow another.
+    let canAllow: Bool
     let revoke: () -> Void
+    let allow: () -> Void
 
     var body: some View {
         HStack(spacing: DevysSpacing.compact) {
@@ -66,8 +77,18 @@ private struct DeviceRow: View {
                     Text("Added \(added.formatted(date: .abbreviated, time: .shortened))")
                         .font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3)
                 }
+                if let key {
+                    Text(key.status == .active ? "Approves spending" : "Can't approve spending until allowed")
+                        .font(DevysTypography.caption).foregroundStyle(key.status == .active ? DevysColors.ink2 : DevysColors.ink3)
+                }
             }
             Spacer(minLength: 8)
+            if key?.status == .pending, canAllow, !device.current {
+                Button("Allow", action: allow)
+                    .buttonStyle(DevysButtonStyle(.raised, compact: true))
+                    .help("Lets this device approve spending. You confirm with Face ID or Touch ID.")
+                    .accessibilityLabel("Allow \(device.label ?? "this device") to approve spending")
+            }
             if !device.current {
                 Button("Sign out", role: .destructive, action: revoke)
                     .buttonStyle(DevysButtonStyle(.quiet, compact: true))

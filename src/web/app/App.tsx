@@ -89,8 +89,8 @@ function SignIn() {
         <div className="flex flex-col items-center gap-2 text-center">
           <h1 className="text-greeting font-bold tracking-tight text-ink">Welcome to Devys</h1>
           <p className="text-body text-ink-2">
-            Paste the one-time code from{" "}
-            <code className="font-mono text-[12px]">bun scripts/enroll.ts</code>.
+            Run <code className="font-mono text-[12px]">bun run local code</code> on the Mac running
+            Devys and paste the code (or open the link it prints).
           </p>
         </div>
         <label className="flex w-full flex-col gap-1.5">

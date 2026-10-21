@@ -20,6 +20,12 @@ const work = join(home, "Devys");
 const data = process.env.DEVYS_HOST_DATA ?? join(work, ".host");
 const worker = process.env.DEVYS_WORKER_URL ?? "http://127.0.0.1:8787";
 const port = Number(process.env.DEVYS_HOST_PORT ?? 8788);
+/**
+ * The server's own data outside the businesses folder, hidden from everything an employee
+ * starts: every business's deploy secrets and browser profiles, and, when installed, the whole
+ * server folder (Postgres, the Worker's state and vars, logs, backups).
+ */
+const hidden = [data, ...(process.env.DEVYS_SERVER_HOME ? [process.env.DEVYS_SERVER_HOME] : [])];
 
 const codexHome = process.env.DEVYS_CODEX_HOME ?? join(home, ".codex");
 const claudeConfig = process.env.DEVYS_CLAUDE_CONFIG_DIR ?? join(home, ".claude");
@@ -39,7 +45,7 @@ const ownLogin = Object.fromEntries(
  */
 const confineTo =
   (folder: string, readOnly: boolean) => (command: string, args: readonly string[]) =>
-    confine({ root: work, folder, readOnly }, command, args);
+    confine({ root: work, folder, readOnly, hidden }, command, args);
 
 const terminals = terminalsHost({
   spawn: bunPty,
@@ -87,9 +93,10 @@ const coding = codingHost({
 const host = await startHost({
   token,
   data,
+  hidden,
   work,
   port,
-  routes: [coding, terminals, browsersHost({ data })],
+  routes: [coding, terminals, browsersHost({ data, work })],
 });
 console.log(`Devys Mac host on 127.0.0.1:${host.port}`);
 const stop = () => void host.close().then(() => process.exit(0));

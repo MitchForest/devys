@@ -166,6 +166,7 @@ export const api = {
     send("/api/enroll", { method: "POST", body: JSON.stringify({ token }) }),
   logout: () => send("/api/logout", { method: "POST", body: "{}" }),
   me: () => get(Me, "/api/me"),
+  rename: (displayName: string) => put(Me, "/api/me", { display_name: displayName }),
   createBusiness: (input: { name: string; brief: string; team: StartingRole[] }) =>
     post(BusinessCreated, "/api/businesses", input),
   updateBusiness: (id: string, change: { name?: string; brief?: string }) =>

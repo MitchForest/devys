@@ -1,10 +1,15 @@
 import { Effect, Schema } from "effect";
 import type { Env } from "./env.ts";
 import { type Business, type Person } from "../identity/contract.ts";
-import { conversationKey } from "../conversations/contract.ts";
-import { postFromPerson } from "./conversations.ts";
 import { activeEmployee } from "../identity/service.ts";
-import { answerDecision, decisionsFor, pendingDecisions } from "../authority/service.ts";
+import {
+  answerDecision,
+  decision as findDecision,
+  decisionsFor,
+  pendingDecisions,
+} from "../authority/service.ts";
+import { spendOf } from "../authority/contract.ts";
+import { answerText, handedBack, signedSpend, tellEmployee, tookOver } from "./asking.ts";
 import {
   workItem,
   workItems,
@@ -91,8 +96,14 @@ export async function workRoute(
         takeover[2] === "takeover" ? person.id : null,
       ),
     );
-    if (item && takeover[2] === "release") await handBack(env, business.id, item.id);
-    return item ? respond(WorkItem, item) : notFound();
+    if (!item) return notFound();
+    // Taking over answers the work's take-over requests; handing back says they are done.
+    if (takeover[2] === "takeover") await tookOver(env, business.id, person.id, item.id);
+    else {
+      await handedBack(env, business.id, person.id, item.id);
+      await handBack(env, business.id, item.id);
+    }
+    return respond(WorkItem, item);
   }
   const id = /^\/work\/([A-Za-z0-9-]{1,64})$/.exec(path)?.[1];
   if (!id) return notFound();
@@ -148,24 +159,31 @@ export async function decisionRoute(
   const answer = /^\/decisions\/([A-Za-z0-9-]{1,64})\/(approve|reject)$/.exec(path);
   if (!answer || request.method !== "POST") return notFound();
   if (!trusted) return forbidden();
+  const approve = answer[2] === "approve";
+  const asked = await Effect.runPromise(findDecision(env.HYPERDRIVE, business.id, answer[1]!));
+  if (!asked) return notFound();
+  if (asked.status !== "pending")
+    return new Response("That request was already answered or has expired", { status: 409 });
+  if (approve && asked.kind === "take_over")
+    return new Response("Take the work over to do this; handing it back answers it.", {
+      status: 409,
+    });
+  // A spend is approved only with a device signature over exactly this request.
+  const signed =
+    approve && spendOf(asked)
+      ? await signedSpend(request, env, person.id, business.id, asked)
+      : undefined;
+  if (signed instanceof Response) return signed;
   const answered = await Effect.runPromise(
-    answerDecision(env.HYPERDRIVE, business.id, answer[1]!, {
-      approve: answer[2] === "approve",
+    answerDecision(env.HYPERDRIVE, business.id, asked.id, {
+      approve,
       by: person.id,
+      ...(signed ? { signed } : {}),
     }),
   );
   if (!answered)
     return new Response("That request was already answered or has expired", { status: 409 });
   // The answer is said where the employee asked, which wakes it to continue.
-  const key = answered.conversation ? conversationKey(answered.conversation) : undefined;
-  if (key)
-    await postFromPerson(env, business.id, person.id, key, {
-      id: `decision:${answered.id}`,
-      text:
-        answered.status === "approved"
-          ? `Approved: ${answered.capability}. Go ahead: call it once more with exactly the input you asked for.`
-          : `Declined: ${answered.capability}. Don't run it; find another way or ask me.`,
-      mentions: [answered.employee_id],
-    });
+  await tellEmployee(env, business.id, person.id, answered, answerText(answered));
   return respond(Answered, { status: answered.status });
 }

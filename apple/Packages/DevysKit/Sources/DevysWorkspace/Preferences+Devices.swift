@@ -49,6 +49,9 @@ package enum DeviceIntent {
     case codeIssued(DeviceCode)
     case codeFailed
     case codeDismissed
+    case keysLoaded([DeviceKey])
+    /// Lets another device's pending key sign, with this device's signature (Face ID or Touch ID).
+    case allowTapped(keyID: String)
 }
 
 extension Preferences {
@@ -155,6 +158,20 @@ extension Preferences {
         case .codeDismissed:
             state.deviceCode = nil
             loadDevices()
+        case .keysLoaded(let keys):
+            state.keys = keys
+        case .allowTapped(let keyID):
+            guard let key = state.keys.first(where: { $0.id == keyID && $0.status == .pending }), let person = state.ownerID else { return }
+            let signing = signing
+            let runtime = runtime
+            store.addTask {
+                do {
+                    try await signing.allow(key, person)
+                } catch {
+                    try store.send(Action(.failed(Workspace.signingMessage(error))))
+                }
+                try await loadDevices(runtime)
+            }
         }
     }
 
@@ -169,5 +186,6 @@ extension Preferences {
         } catch {
             try store.send(Action(.device(.loaded(.failed("Devices couldn't be loaded.")))))
         }
+        if let keys = try? await signing.keys() { try store.send(Action(.device(.keysLoaded(keys)))) }
     }
 }

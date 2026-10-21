@@ -5,6 +5,13 @@ import { Timestamp } from "../protocol/time.ts";
 /** Public identity facts other components may rely on. Storage stays internal. */
 export const Person = Schema.Struct({ id: Schema.String, display_name: Schema.String });
 export type Person = typeof Person.Type;
+/** `PUT /api/me`: the name the signed-in person goes by; not blank, at most 80 characters. */
+export const NameChange = Schema.Struct({
+  display_name: Schema.String.check(
+    Schema.isMaxLength(80),
+    Schema.makeFilter((value) => value.trim().length > 0 || "Expected a name"),
+  ),
+});
 
 export const palettes = [
   "brown",

@@ -44,7 +44,7 @@ struct NeedsYou: View {
     }
 }
 
-/// One request, answered in place; its input unfolds on demand.
+/// One request, answered in place; its input unfolds on demand (a spend shows it always).
 struct DecisionRow: View {
     let store: StoreOf<Workspace>
     let decision: Decision
@@ -63,15 +63,14 @@ struct DecisionRow: View {
                 }
                 .lineLimit(1)
             }
-            if open { DecisionFields(decision: decision) }
+            if open || decision.isSpend { DecisionFields(decision: decision) }
             HStack(spacing: 6) {
-                Button("Approve", systemImage: "checkmark") { store.send(.decisionAnswered(decision.id, approve: true)) }
-                    .buttonStyle(DevysButtonStyle(.aurora, compact: true))
-                Button("Decline") { store.send(.decisionAnswered(decision.id, approve: false)) }
-                    .buttonStyle(DevysButtonStyle(.raised, compact: true))
+                RequestActions(store: store, decision: decision, compact: true)
                 Spacer(minLength: 4)
-                Button(open ? "Hide details" : "Details") { open.toggle() }
-                    .buttonStyle(.plain).font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
+                if !decision.isSpend {
+                    Button(open ? "Hide details" : "Details") { open.toggle() }
+                        .buttonStyle(.plain).font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
+                }
                 if let workID = decision.workItemID {
                     Button("Thread") { store.send(.threadOpened(workID)) }
                         .buttonStyle(.plain).font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
@@ -89,18 +88,14 @@ struct DecisionCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            StatusChip("Needs approval", tone: .needsYou)
+            StatusChip(decision.kind == .takeOver ? "Needs you" : "Needs approval", tone: .needsYou)
             Text(DecisionText.title(decision)).font(DevysTypography.heading).foregroundStyle(DevysColors.ink)
-            Text("\(store.state.employeeName(decision.employeeID)) asked to run this exactly:")
+            Text("\(store.state.employeeName(decision.employeeID)) \(decision.kind == .decision ? "asked to run this exactly:" : "asks you:")")
                 .font(DevysTypography.secondary)
                 .foregroundStyle(DevysColors.ink2)
             DecisionFields(decision: decision)
             HStack(spacing: DevysSpacing.small) {
-                Button("Approve", systemImage: "checkmark") { store.send(.decisionAnswered(decision.id, approve: true)) }
-                    .buttonStyle(.aurora)
-                    .help("Allows this exact request once. Face ID signing arrives with signed decisions.")
-                Button("Decline") { store.send(.decisionAnswered(decision.id, approve: false)) }
-                    .buttonStyle(.raised)
+                RequestActions(store: store, decision: decision, compact: false)
             }
             .padding(.top, 2)
         }
@@ -108,13 +103,39 @@ struct DecisionCard: View {
     }
 }
 
-/// The input a request will run with, key by key.
+/// How the owner answers a request: Approve or Decline; a take over takes the work over and opens
+/// its live browser; a spend approval opens the signing sheet (Face ID or Touch ID).
+struct RequestActions: View {
+    let store: StoreOf<Workspace>
+    let decision: Decision
+    let compact: Bool
+
+    var body: some View {
+        if decision.kind == .takeOver, let workID = decision.workItemID {
+            Button("Take over", systemImage: "hand.raised") { store.send(.takeOverTapped(workID)) }
+                .buttonStyle(DevysButtonStyle(.aurora, compact: compact))
+                .help("Takes this work over and opens its browser; Hand back when you're done.")
+        } else if decision.isSpend {
+            Button("Approve…", systemImage: "faceid") { store.send(.signTapped(decision.id)) }
+                .buttonStyle(DevysButtonStyle(.aurora, compact: compact))
+                .help("Shows exactly what you sign, then asks for Face ID or Touch ID.")
+        } else {
+            Button("Approve", systemImage: "checkmark") { store.send(.decisionAnswered(decision.id, approve: true)) }
+                .buttonStyle(DevysButtonStyle(.aurora, compact: compact))
+                .help("Allows this exact request once.")
+        }
+        Button("Decline") { store.send(.decisionAnswered(decision.id, approve: false)) }
+            .buttonStyle(DevysButtonStyle(.raised, compact: compact))
+    }
+}
+
+/// The request's fields, key by key.
 private struct DecisionFields: View {
     let decision: Decision
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            ForEach(decision.input.fields, id: \.key) { field in
+            ForEach(DecisionText.fields(decision), id: \.key) { field in
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(field.key).font(DevysTypography.caption).foregroundStyle(DevysColors.ink3).frame(minWidth: 56, alignment: .leading)
                     Text(field.value).font(DevysTypography.secondary).foregroundStyle(DevysColors.ink).lineLimit(6).textSelection(.enabled)
@@ -124,6 +145,63 @@ private struct DecisionFields: View {
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(DevysColors.well, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
+/// The signing sheet: exactly what is signed (merchant, amount, renewal, action), then Face ID or
+/// Touch ID. The system prompt names the merchant and amount again.
+struct SigningSheetView: View {
+    let store: StoreOf<Workspace>
+
+    var body: some View {
+        if let sheet = store.signing {
+            let approval = sheet.approval
+            VStack(alignment: .leading, spacing: DevysSpacing.regular) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Approve spending").font(DevysTypography.title).foregroundStyle(DevysColors.ink)
+                    Text("\(sheet.employee) asks to spend exactly this, once.")
+                        .font(DevysTypography.secondary).foregroundStyle(DevysColors.ink2)
+                }
+                VStack(alignment: .leading, spacing: 10) {
+                    row("Merchant", approval.counterparty)
+                    row("Amount", approval.amount.text, emphasis: true)
+                    row("Renews", approval.renewal ?? "No renewal")
+                    row("Action", approval.action)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(DevysColors.well, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                Text("A different amount, merchant or action needs a new approval.")
+                    .font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
+                if let error = sheet.error {
+                    Label(error, systemImage: "exclamationmark.circle.fill").font(DevysTypography.secondary).foregroundStyle(DevysColors.red)
+                }
+                Spacer(minLength: 0)
+                HStack {
+                    Spacer()
+                    Button("Cancel") { store.send(.signDismissed) }.buttonStyle(.quiet).disabled(sheet.isSigning)
+                    Button(sheet.isSigning ? "Signing…" : "Approve with \(sheet.biometry)") { store.send(.signConfirmed) }
+                        .buttonStyle(.aurora)
+                        .disabled(sheet.isSigning)
+                        .keyboardShortcut(.defaultAction)
+                }
+            }
+            .padding(DevysSpacing.roomy)
+            .sheetFrame(width: 420, height: 360)
+            .background(DevysColors.sheet)
+            .presentationDetents([.medium])
+        }
+    }
+
+    private func row(_ label: String, _ value: String, emphasis: Bool = false) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(label).font(DevysTypography.label).foregroundStyle(DevysColors.ink3).frame(width: 70, alignment: .leading)
+            Text(value)
+                .font(emphasis ? DevysTypography.heading : DevysTypography.body)
+                .foregroundStyle(DevysColors.ink)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 

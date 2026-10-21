@@ -9,6 +9,15 @@ export const activePerson = (db: Database, personId: string) =>
     ]),
   );
 
+/** Changes the name a person goes by; undefined if they are not active. */
+export const renamePerson = (db: Database, personId: string, name: string) =>
+  database(db, (sql) =>
+    sql.row<Person>(
+      "UPDATE people SET display_name = $2 WHERE id = $1 AND revoked_at IS NULL RETURNING id, display_name",
+      [personId, name.trim()],
+    ),
+  );
+
 /**
  * Whether this person owns the machine in local mode: the earliest active person, the one
  * `bun run local code` and `enroll.ts --owner` sign in. Employees' shells, files and coding run

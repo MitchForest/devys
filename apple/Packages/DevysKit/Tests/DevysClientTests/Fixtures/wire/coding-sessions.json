@@ -1,7 +1,7 @@
 {
   "sessions": [
     {
-      "id": "00000000-0000-4000-8000-000000000056",
+      "id": "00000000-0000-4000-8000-000000000057",
       "work_item_id": "00000000-0000-4000-8000-000000000008",
       "employee_id": "00000000-0000-4000-8000-000000000004",
       "provider": "codex",
@@ -10,7 +10,7 @@
       "repository": "/Users/owner/Devys/acme/repos/site",
       "base_commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       "branch": "devys/booking-page",
-      "worktree": "/Users/owner/Devys/00000000-0000-4000-8000-000000000002/worktrees/00000000-0000-4000-8000-000000000056",
+      "worktree": "/Users/owner/Devys/00000000-0000-4000-8000-000000000002/worktrees/00000000-0000-4000-8000-000000000057",
       "provider_session_id": "thread-1",
       "created_at": "2026-01-01T00:00:00.000Z",
       "state": "idle",

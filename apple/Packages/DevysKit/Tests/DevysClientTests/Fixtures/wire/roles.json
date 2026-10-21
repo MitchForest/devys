@@ -29,11 +29,9 @@
         "codingPublish",
         "deployPreview",
         "deployProduction",
-        "browserOpen",
-        "browserRead",
-        "browserClick",
-        "browserType",
-        "browserPress",
+        "browserScript",
+        "browserScreenshot",
+        "browserTabs",
         "workList",
         "workCreate",
         "workUpdate",
@@ -45,7 +43,8 @@
         "routineList",
         "routinePropose",
         "routineActivate",
-        "routinePause"
+        "routinePause",
+        "askOwner"
       ]
     },
     {
@@ -69,11 +68,9 @@
         "artifactRead",
         "artifactEdit",
         "publishArtifact",
-        "browserOpen",
-        "browserRead",
-        "browserClick",
-        "browserType",
-        "browserPress",
+        "browserScript",
+        "browserScreenshot",
+        "browserTabs",
         "workList",
         "workCreate",
         "workUpdate",
@@ -85,7 +82,8 @@
         "routineList",
         "routinePropose",
         "routineActivate",
-        "routinePause"
+        "routinePause",
+        "askOwner"
       ]
     },
     {
@@ -113,11 +111,9 @@
         "artifactRead",
         "artifactEdit",
         "publishArtifact",
-        "browserOpen",
-        "browserRead",
-        "browserClick",
-        "browserType",
-        "browserPress",
+        "browserScript",
+        "browserScreenshot",
+        "browserTabs",
         "workList",
         "workCreate",
         "workUpdate",
@@ -129,7 +125,8 @@
         "routineList",
         "routinePropose",
         "routineActivate",
-        "routinePause"
+        "routinePause",
+        "askOwner"
       ]
     },
     {
@@ -157,7 +154,8 @@
         "routineList",
         "routinePropose",
         "routineActivate",
-        "routinePause"
+        "routinePause",
+        "askOwner"
       ]
     }
   ]

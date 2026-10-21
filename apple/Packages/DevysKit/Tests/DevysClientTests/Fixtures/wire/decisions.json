@@ -2,6 +2,7 @@
   "decisions": [
     {
       "id": "00000000-0000-4000-8000-000000000014",
+      "kind": "decision",
       "employee_id": "00000000-0000-4000-8000-000000000004",
       "capability": "routineActivate",
       "input": {
@@ -12,10 +13,51 @@
       "conversation": "project:00000000-0000-4000-8000-000000000005",
       "status": "pending",
       "requested_at": "2026-01-01T00:00:00.000Z",
-      "expires_at": "2026-01-01T00:00:00.000Z"
+      "expires_at": "2026-01-01T00:00:00.000Z",
+      "signed_by": null
     },
     {
       "id": "00000000-0000-4000-8000-000000000015",
+      "kind": "take_over",
+      "employee_id": "00000000-0000-4000-8000-000000000003",
+      "capability": "askOwner",
+      "input": {
+        "url": "https://www.namecheap.com/myaccount/login/",
+        "kind": "take_over",
+        "reason": "Sign in to the registrar (2FA)"
+      },
+      "work_item_id": "00000000-0000-4000-8000-000000000009",
+      "conversation": "work:00000000-0000-4000-8000-000000000009",
+      "status": "pending",
+      "requested_at": "2026-01-01T00:00:00.000Z",
+      "expires_at": "2026-01-01T00:00:00.000Z",
+      "signed_by": null
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000016",
+      "kind": "approve",
+      "employee_id": "00000000-0000-4000-8000-000000000003",
+      "capability": "askOwner",
+      "input": {
+        "kind": "approve",
+        "action": "Register acme-plumbing.example for one year",
+        "amount": {
+          "cents": 1299,
+          "currency": "USD"
+        },
+        "renewal": "Renews yearly at $14.99",
+        "counterparty": "Namecheap"
+      },
+      "work_item_id": "00000000-0000-4000-8000-000000000009",
+      "conversation": "work:00000000-0000-4000-8000-000000000009",
+      "status": "pending",
+      "requested_at": "2026-01-01T00:00:00.000Z",
+      "expires_at": "2026-01-01T00:00:00.000Z",
+      "signed_by": null
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000017",
+      "kind": "decision",
       "employee_id": "00000000-0000-4000-8000-000000000003",
       "capability": "driveCreate",
       "input": {
@@ -26,7 +68,8 @@
       "conversation": "work:00000000-0000-4000-8000-000000000009",
       "status": "pending",
       "requested_at": "2026-01-01T00:00:00.000Z",
-      "expires_at": "2026-01-01T00:00:00.000Z"
+      "expires_at": "2026-01-01T00:00:00.000Z",
+      "signed_by": null
     }
   ]
 }

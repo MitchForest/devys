@@ -35,6 +35,11 @@ interface HostOptions {
   port: number;
   shell?: string;
   env?: NodeJS.ProcessEnv;
+  /**
+   * Folders outside `work` no employee may reach, by command or file tool: the server's own data
+   * (deploy secrets, browser profiles, Postgres, logs). `data` is always among them.
+   */
+  hidden?: readonly string[];
   /** The browser that prints HTML to PDF. */
   chrome?: string;
   /** Other components' routes on this host, composed by `src/host.ts`. */
@@ -138,6 +143,14 @@ const skillFiles = {
 
 export async function startHost(options: HostOptions) {
   mkdirSync(options.data, { recursive: true });
+  const hidden = [...new Set([options.data, ...(options.hidden ?? [])])];
+  /** Where a process started for `businessId` may reach (./seatbelt.ts). */
+  const placeOf = (businessId: string) => ({
+    root: options.work,
+    folder: join(options.work, businessId),
+    readOnly: false,
+    hidden,
+  });
   const ledger = join(options.data, "receipts.jsonl");
   const receipts = new Map<string, Receipt>();
   if (existsSync(ledger))
@@ -197,13 +210,16 @@ export async function startHost(options: HostOptions) {
    */
   const ownBusiness = (path: string, input: Record<string, unknown>) =>
     ownFolder(path, scopeOf(input.scope).businessId);
-  /** Refuses a path in another business's folder or the host's own data under the root. */
+  /** Refuses a path in another business's folder or the server's own data. */
   const ownFolder = async (path: string, businessId: string) => {
     const root = await realpath(options.work).catch(() => options.work);
     const own = join(root, businessId);
     const resolved = (await resolvedPath(path)) ?? path;
     if (inside(resolved, root) && !inside(resolved, own))
       throw new Refusal(403, "That is another business's folder");
+    for (const folder of hidden)
+      if (inside(resolved, await realpath(folder).catch(() => folder)))
+        throw new Refusal(403, "That is the server's own data");
     return path;
   };
   let spawned = 0;
@@ -254,11 +270,7 @@ export async function startHost(options: HostOptions) {
     record({ key, fingerprint });
     spawned++;
     const child = spawn(
-      ...confine(
-        { root: options.work, folder: cwd, readOnly: false },
-        options.shell ?? "/bin/zsh",
-        ["-lc", command],
-      ),
+      ...confine(placeOf(scope.businessId), options.shell ?? "/bin/zsh", ["-lc", command]),
       {
         cwd,
         env: options.env ?? process.env,
@@ -431,23 +443,15 @@ export async function startHost(options: HostOptions) {
           // own sandbox cannot start inside another Seatbelt profile; it adds nothing here, where
           // the employee could run Chrome itself.
           const child = spawn(
-            ...confine(
-              {
-                root: options.work,
-                folder: join(options.work, scopeOf(input.scope).businessId),
-                readOnly: false,
-              },
-              chrome,
-              [
-                "--headless",
-                "--no-sandbox",
-                "--disable-gpu",
-                "--no-pdf-header-footer",
-                `--user-data-dir=${profile}`,
-                `--print-to-pdf=${target}`,
-                pathToFileURL(source).href,
-              ],
-            ),
+            ...confine(placeOf(scopeOf(input.scope).businessId), chrome, [
+              "--headless",
+              "--no-sandbox",
+              "--disable-gpu",
+              "--no-pdf-header-footer",
+              `--user-data-dir=${profile}`,
+              `--print-to-pdf=${target}`,
+              pathToFileURL(source).href,
+            ]),
             { stdio: "ignore" },
           );
           const timer = setTimeout(() => child.kill("SIGKILL"), 60_000);

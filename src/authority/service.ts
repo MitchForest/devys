@@ -3,7 +3,7 @@ import { database, type Database, type Sql } from "../data/database.ts";
 import type { Scope } from "../identity/contract.ts";
 import type { Capability } from "../protocol/capability.ts";
 import { sha256 } from "../protocol/bytes.ts";
-import type { Decision, Grant, Mode, Outcome } from "./contract.ts";
+import type { Decision, Grant, Mode, OwnerRequest, Outcome } from "./contract.ts";
 
 const columns = "id, capability, mode, constraints, responsibility, created_at";
 
@@ -123,7 +123,7 @@ const requestHash = (
 
 const decisionLife = "24 hours";
 const decisionColumns =
-  "id, employee_id, capability, input, work_item_id, conversation, status, requested_at, expires_at";
+  "id, kind, employee_id, capability, input, work_item_id, conversation, status, requested_at, expires_at, signed_by";
 
 /**
  * Settles an `ask`: uses an approved decision for this exact request once, or makes
@@ -232,18 +232,136 @@ export const decisionsFor = (db: Database, businessId: string, workItemId: strin
     ),
   );
 
-/** Approves or rejects a pending, unexpired request once. Returns it, or null if it can't. */
+/** One request of the business, whatever its answer. */
+export const decision = (db: Database, businessId: string, decisionId: string) =>
+  database(db, (sql) =>
+    sql.row<Decision>(
+      `SELECT ${decisionColumns} FROM decisions WHERE id = $1 AND business_id = $2`,
+      [decisionId, businessId],
+    ),
+  );
+
+/**
+ * Approves or rejects a pending, unexpired request once. Returns it, or null if it can't. A
+ * spend approval is approved only with the signature that was verified for it (the table
+ * refuses it otherwise); a take-over request is approved only by taking the work over.
+ */
 export const answerDecision = (
   db: Database,
   businessId: string,
   decisionId: string,
-  answer: { approve: boolean; by: string },
+  answer: { approve: boolean; by: string; signed?: { keyId: string; signature: string } },
 ) =>
   database(db, async (sql) => {
     return sql.row<Decision>(
-      `UPDATE decisions SET status = $3, decided_by = $4, decided_at = now()
+      `UPDATE decisions SET status = $3, decided_by = $4, decided_at = now(), signed_by = $5,
+         signature = $6
        WHERE id = $1 AND business_id = $2 AND status = 'pending' AND expires_at > now()
+         AND ($3 = 'rejected' OR kind <> 'take_over')
        RETURNING ${decisionColumns}`,
-      [decisionId, businessId, answer.approve ? "approved" : "rejected", answer.by],
+      [
+        decisionId,
+        businessId,
+        answer.approve ? "approved" : "rejected",
+        answer.by,
+        answer.signed?.keyId ?? null,
+        answer.signed?.signature ?? null,
+      ],
     );
+  });
+
+/**
+ * An employee's `askOwner`: the standing answer to exactly this request on this work item, if
+ * one was given in the last day (or the open request), else a new pending request. Asking
+ * again with the same input is how an employee reads the answer.
+ */
+export const askOwner = (
+  db: Database,
+  scope: Scope,
+  ask: { grantId: string; request: OwnerRequest; workItemId: string; conversation: string },
+) =>
+  database(
+    db,
+    async (sql) => {
+      const hash = await requestHash(ask.grantId, "askOwner", ask.request, ask.workItemId);
+      const standing = await sql.row<Decision>(
+        `SELECT ${decisionColumns} FROM decisions
+         WHERE grant_id = $1 AND input_hash = $2 AND requested_at > now() - interval '${decisionLife}'
+           AND status <> 'used' AND (status <> 'rejected' OR decided_by IS NOT NULL)
+         ORDER BY requested_at DESC LIMIT 1`,
+        [ask.grantId, hash],
+      );
+      if (standing) return standing;
+      // Older answers to the same request are spent, and unanswered ones lapsed: ask anew.
+      await sql.run(
+        `UPDATE decisions SET status = CASE status WHEN 'approved' THEN 'used' ELSE 'rejected' END,
+           used_at = CASE status WHEN 'approved' THEN now() ELSE used_at END,
+           decided_at = CASE status WHEN 'pending' THEN now() ELSE decided_at END
+         WHERE grant_id = $1 AND input_hash = $2 AND status IN ('pending', 'approved')`,
+        [ask.grantId, hash],
+      );
+      await sql.run(
+        `INSERT INTO decisions (id, kind, business_id, employee_id, grant_id, capability, input,
+           input_hash, work_item_id, conversation, expires_at)
+         VALUES ($1, $2, $3, $4, $5, 'askOwner', $6, $7, $8, $9, now() + interval '${decisionLife}')
+         ON CONFLICT (grant_id, input_hash) WHERE status IN ('pending', 'approved') DO NOTHING`,
+        [
+          crypto.randomUUID(),
+          ask.request.kind,
+          scope.businessId,
+          scope.employeeId,
+          ask.grantId,
+          JSON.stringify(ask.request),
+          hash,
+          ask.workItemId,
+          ask.conversation,
+        ],
+      );
+      return (await sql.row<Decision>(
+        `SELECT ${decisionColumns} FROM decisions
+         WHERE grant_id = $1 AND input_hash = $2 AND status IN ('pending', 'approved')`,
+        [ask.grantId, hash],
+      ))!;
+    },
+    { transaction: true },
+  );
+
+/** The owner took the work over: its pending take-over requests are being done. */
+export const takeOverRequests = (
+  db: Database,
+  businessId: string,
+  workItemId: string,
+  by: string,
+) =>
+  database(db, (sql) =>
+    sql.rows<Decision>(
+      `UPDATE decisions SET status = 'approved', decided_by = $3, decided_at = now()
+       WHERE business_id = $1 AND work_item_id = $2 AND kind = 'take_over' AND status = 'pending'
+         AND expires_at > now()
+       RETURNING ${decisionColumns}`,
+      [businessId, workItemId, by],
+    ),
+  );
+
+/** The owner handed the work back: the take-over requests they were doing are done. */
+export const handBackRequests = (db: Database, businessId: string, workItemId: string) =>
+  database(db, (sql) =>
+    sql.rows<Decision>(
+      `UPDATE decisions SET status = 'used', used_at = now()
+       WHERE business_id = $1 AND work_item_id = $2 AND kind = 'take_over' AND status = 'approved'
+       RETURNING ${decisionColumns}`,
+      [businessId, workItemId],
+    ),
+  );
+
+/** What the business has approved spending, in cents of one currency: its signed approvals. */
+export const spentCents = (db: Database, businessId: string, currency: string) =>
+  database(db, async (sql) => {
+    const row = await sql.row<{ cents: number | null }>(
+      `SELECT sum((input -> 'amount' ->> 'cents')::bigint) AS cents FROM decisions
+       WHERE business_id = $1 AND kind = 'approve' AND status IN ('approved', 'used')
+         AND signature IS NOT NULL AND input -> 'amount' ->> 'currency' = $2`,
+      [businessId, currency],
+    );
+    return row?.cents === null || row?.cents === undefined ? null : Number(row.cents);
   });

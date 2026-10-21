@@ -10,7 +10,7 @@ import { Schema } from "effect";
 import { InstalledApp } from "../apps/contract.ts";
 import { LiveCodingSession } from "../apps/code/contract.ts";
 import { Artifact } from "../apps/documents/contract.ts";
-import { Decision, Grant } from "../authority/contract.ts";
+import { Decision, DeviceKey, Grant } from "../authority/contract.ts";
 import {
   ConversationKey,
   ConversationSummary,
@@ -213,6 +213,25 @@ export const WorkItems = Schema.Struct({ work_items: Schema.Array(WorkItem) });
 export const Decisions = Schema.Struct({ decisions: Schema.Array(Decision) });
 /** `POST …/decisions/:id/approve` and `…/reject`. */
 export const Answered = Schema.Struct({ status: Decision.fields.status });
+/** Base64 of at most `max` characters. */
+const Base64 = (max: number) =>
+  Schema.String.check(Schema.isPattern(/^[A-Za-z0-9+/]+={0,2}$/), Schema.isMaxLength(max));
+/**
+ * `POST …/decisions/:id/approve` for a spend approval: the device key's DER signature of the
+ * request's canonical payload (src/authority/signing.ts), made on the owner's Mac or iPhone.
+ */
+export const SpendSignature = Schema.Struct({ key_id: Schema.String, signature: Base64(200) });
+
+// Device signing keys (the owner's Mac and iPhone apps).
+
+/** `GET /api/device-keys`: the person's keys; `current` is this device's. */
+export const DeviceKeys = Schema.Struct({
+  keys: Schema.Array(Schema.Struct({ ...DeviceKey.fields, current: Schema.Boolean })),
+});
+/** `POST /api/device-keys`: this device's public key (X9.63, base64), from its Secure Enclave. */
+export const KeyEnrollment = Schema.Struct({ public_key: Base64(100) });
+/** `POST /api/device-keys/:id/endorse`: an active key's signature letting another device sign. */
+export const KeyEndorsement = SpendSignature;
 /** `GET …/projects`. */
 export const Projects = Schema.Struct({ projects: Schema.Array(Project) });
 /** `POST …/projects/:id/items/:item/remove`. */
@@ -263,13 +282,12 @@ const WorkCard = Schema.Struct({
 });
 export type WorkCard = typeof WorkCard.Type;
 /**
- * One thing waiting on the owner: a decision (the whole request, so Needs you is answered from
- * this one read), or work that needs one.
+ * One thing waiting on the owner: a request by its kind (a decision, an approve or a take over;
+ * the whole request, so Needs you is answered from this one read), or work that needs one.
  */
 const NeedsYouItem = Schema.Union([
   Schema.Struct({
     ...Decision.fields,
-    kind: Schema.Literal("decision"),
     title: Schema.String,
     work_id: Schema.NullOr(Schema.String),
     project_id: Schema.NullOr(Schema.String),
@@ -288,6 +306,8 @@ const NeedsYouItem = Schema.Union([
   }),
 ]);
 export type NeedsYouItem = typeof NeedsYouItem.Type;
+/** A request in Needs you: a decision, an approve or a take over. */
+export type NeedsYouRequest = Exclude<NeedsYouItem, { kind: "work" }>;
 /**
  * `GET …/home`: what needs the owner, work at a glance, and Operations' briefing when it was
  * posted by this read (`since` is when they last read their direct chat).
@@ -297,6 +317,7 @@ export const Home = Schema.Struct({
   glance: Schema.Struct({
     moving: Schema.Array(WorkCard),
     stuck: Schema.Array(WorkCard),
+    /** Signed spend approvals in US cents; null before any. */
     spent_cents: Schema.NullOr(Schema.Number),
   }),
   since: Schema.NullOr(Timestamp),

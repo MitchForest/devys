@@ -293,11 +293,11 @@ it("projects have a lead, members, a goal, deadline and budget, and work created
   expect((await as(`${path}/conversations/space:${project.id}`)).status).toBe(404);
 });
 
-it("the app directory installs, uninstalls and pins apps; coming apps wait", async () => {
+it("the app directory installs, uninstalls and pins apps", async () => {
   const acme = await business("Apps");
   const as = await session(acme.person);
   const path = `/api/businesses/${acme.business.id}`;
-  type App = { id: string; status: string; installed: boolean; pinned: boolean; visible: boolean };
+  type App = { id: string; installed: boolean; pinned: boolean; visible: boolean };
   const apps = async () => (await json<{ apps: App[] }>(as(`${path}/apps`))).apps;
   const post = (url: string, value?: unknown) =>
     as(`${path}${url}`, { method: "POST", body: JSON.stringify(value ?? {}) });
@@ -305,8 +305,7 @@ it("the app directory installs, uninstalls and pins apps; coming apps wait", asy
   expect(await byId("documents")).toMatchObject({ installed: true, pinned: true, visible: true });
   // Code is installed but has no coding sessions yet, so it does not show.
   expect(await byId("code")).toMatchObject({ installed: true, visible: false });
-  expect(await byId("mail")).toMatchObject({ status: "coming", installed: false });
-  expect((await post("/apps/mail/install")).status).toBe(409);
+  expect((await post("/apps/mail/install")).status).toBe(404);
   // Documents uninstalls like any business app; its records stay readable to the owner.
   await sql.run(
     `INSERT INTO artifacts (id, business_id, operation_id, object_key, filename, content_type, byte_length)

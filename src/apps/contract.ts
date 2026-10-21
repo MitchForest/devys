@@ -13,7 +13,6 @@ export const InstalledApp = Schema.Struct({
   summary: Schema.String,
   /** System apps are always installed and never in the sidebar. */
   kind: Schema.Literals(["system", "business"]),
-  status: Schema.Literals(["available", "coming"]),
   records: Schema.Array(Schema.Struct({ kind: Schema.String, title: Schema.String })),
   capabilities: Schema.Array(Schema.String),
   /** The skills it ships, which employees load by name. */
@@ -21,7 +20,7 @@ export const InstalledApp = Schema.Struct({
   connections: Schema.Array(
     Schema.Struct({ provider: Schema.String, scopes: Schema.Array(Schema.String) }),
   ),
-  appears: Schema.Literals(["always", "records", "connected", "never"]),
+  appears: Schema.Literals(["always", "records", "never"]),
   default_grants: Schema.optionalKey(
     Schema.Record(RoleTemplateId, Schema.optionalKey(Schema.Array(Schema.String))),
   ),

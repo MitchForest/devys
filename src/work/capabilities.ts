@@ -1,4 +1,5 @@
 import { Effect, Schema } from "effect";
+import { OwnerRequest, type Decision } from "../authority/contract.ts";
 import type { Database } from "../data/database.ts";
 import { stableId } from "../protocol/bytes.ts";
 import { capability, CapabilityError, Invocation } from "../protocol/capability.ts";
@@ -135,6 +136,11 @@ export function workCapabilities(
   completionBlocked: (businessId: string, work: WorkItem) => Promise<string | undefined>,
   /** Whether this employee directs others' work (the Head of Operations). */
   coordinates: (businessId: string, employeeId: string) => Promise<boolean>,
+  /** Asks the owner, bound to this work item (authority's request, connected in wiring). */
+  askOwner: (
+    asking: { businessId: string; employeeId: string; workItemId: string; conversation: string },
+    request: OwnerRequest,
+  ) => Promise<Decision>,
 ) {
   /**
    * A work item is changed by its owner (colleagues ask there); Operations, coordinating,
@@ -591,5 +597,55 @@ export function workCapabilities(
           return routineView(paused);
         }),
     }),
+    capability({
+      name: "askOwner",
+      description:
+        'Bring the owner in, from this work item\'s thread. {kind: "approve", action, counterparty, amount?, renewal?}: before a consequential action you will take anywhere (browser, shell, an app), state it exactly: action is what you will do, counterparty who or where (merchant, site, person); any spend has amount {cents, currency}, which the owner signs with Face ID or Touch ID, and renewal says what recurs. {kind: "take_over", reason, url?}: something only the owner can do in the business\'s browser (sign in, 2FA, CAPTCHA, enter a card); they take the work over, do it and hand it back. It returns at once: carry on with other work or wait; the answer arrives in this thread. Asking again with exactly the same input tells you where it stands (asked, approved, declined, taken_over, done). A changed amount, merchant or action is a new request. Never ask for passwords, codes or card numbers in chat.',
+      effect: "change",
+      replay: "idempotent",
+      core: true,
+      input: OwnerRequest,
+      output: Schema.Struct({
+        request: Schema.String,
+        kind: Schema.Literals(["approve", "take_over"]),
+        state: Schema.Literals(["asked", "approved", "declined", "taken_over", "done"]),
+        expiresAt: Schema.String,
+      }),
+      execute: (request) =>
+        Effect.gen(function* () {
+          const { businessId, employeeId, workItemId } = yield* Invocation;
+          if (!workItemId)
+            return yield* new CapabilityError({
+              code: "conflict",
+              message:
+                "askOwner is asked in a work item's thread, where the answer binds: record the work (workCreate) or find it (workList), and ask in its thread.",
+            });
+          const asked = yield* rpc(() =>
+            askOwner(
+              // The answer is said in the thread, whichever turn asked.
+              { businessId, employeeId, workItemId, conversation: `work:${workItemId}` },
+              request,
+            ),
+          );
+          return {
+            request: asked.id,
+            kind: request.kind,
+            state: requestState(asked),
+            expiresAt: asked.expires_at,
+          };
+        }),
+    }),
   ];
 }
+
+/** Where an `askOwner` request stands, in the words its output uses. */
+const requestState = (decision: Decision) =>
+  decision.status === "pending"
+    ? ("asked" as const)
+    : decision.status === "rejected"
+      ? ("declined" as const)
+      : decision.kind === "take_over"
+        ? decision.status === "approved"
+          ? ("taken_over" as const)
+          : ("done" as const)
+        : ("approved" as const);

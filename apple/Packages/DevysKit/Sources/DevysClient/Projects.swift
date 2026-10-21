@@ -100,7 +100,6 @@ public struct ProjectChange: Equatable, Sendable, Encodable {
 
 /// An app in the directory, and whether this business has it.
 public struct AppEntry: Equatable, Sendable, Decodable, Identifiable {
-    public enum Status: String, Equatable, Sendable, WireEnum { case available, coming, unknown }
     /// System apps are always installed and never in the sidebar.
     public enum Kind: String, Equatable, Sendable, WireEnum { case system, business, unknown }
 
@@ -131,7 +130,6 @@ public struct AppEntry: Equatable, Sendable, Decodable, Identifiable {
     public let icon: String
     public let summary: String
     public let kind: Kind
-    public let status: Status
     public let records: [Record]
     /// The skills it ships, which employees load by name.
     public let skills: [Skill]
@@ -146,7 +144,6 @@ public struct AppEntry: Equatable, Sendable, Decodable, Identifiable {
         icon: String = "",
         summary: String = "",
         kind: Kind = .business,
-        status: Status = .available,
         records: [Record] = [],
         skills: [Skill] = [],
         installed: Bool = true,
@@ -158,7 +155,6 @@ public struct AppEntry: Equatable, Sendable, Decodable, Identifiable {
         self.icon = icon
         self.summary = summary
         self.kind = kind
-        self.status = status
         self.records = records
         self.skills = skills
         self.installed = installed
@@ -169,10 +165,14 @@ public struct AppEntry: Equatable, Sendable, Decodable, Identifiable {
 
 // MARK: - Home
 
-/// One thing waiting on the owner: a decision (the whole request, so Needs you is answered from
-/// Home alone), or work that needs one.
+/// One thing waiting on the owner: a request by its kind (a decision, an approve or a take over;
+/// the whole request, so Needs you is answered from Home alone), or work that needs one.
 public struct NeedsYouItem: Equatable, Sendable, Decodable, Identifiable {
-    public enum Kind: String, Equatable, Sendable, WireEnum { case decision, work, unknown }
+    public enum Kind: String, Equatable, Sendable, WireEnum {
+        case decision, approve
+        case takeOver = "take_over"
+        case work, unknown
+    }
 
     public let kind: Kind
     public let id: String
@@ -199,7 +199,11 @@ public struct NeedsYouItem: Equatable, Sendable, Decodable, Identifiable {
 
     /// A pending request as Home lists it.
     public init(_ decision: Decision, title: String, projectID: String? = nil, routine: Routine? = nil) {
-        self.kind = .decision
+        self.kind = switch decision.kind {
+        case .approve: .approve
+        case .takeOver: .takeOver
+        case .decision, .unknown: .decision
+        }
         self.id = decision.id
         self.title = title
         self.employeeID = decision.employeeID
@@ -217,7 +221,7 @@ public struct NeedsYouItem: Equatable, Sendable, Decodable, Identifiable {
         employeeID = try container.decodeIfPresent(String.self, forKey: .employeeID)
         workID = try container.decodeIfPresent(String.self, forKey: .workID)
         projectID = try container.decodeIfPresent(String.self, forKey: .projectID)
-        decision = kind == .decision ? try Decision(from: decoder) : nil
+        decision = [.decision, .approve, .takeOver].contains(kind) ? try Decision(from: decoder) : nil
         routine = try container.decodeIfPresent(Routine.self, forKey: .routine)
     }
 

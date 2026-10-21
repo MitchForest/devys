@@ -117,16 +117,22 @@ today; target design and historical evidence must remain distinguishable.
   MFA, CAPTCHA, business verification and provider enablement are external
   dependencies; use secure owner handoffs rather than inventing substitutes.
 - `.docs/AUTHORITY.md` owns vocabulary and semantics: grants with capability-typed
-  constraints, work-item conditions that only narrow, owner decisions signed by
-  Secure Enclave device keys, and credentials held by the broker.
-- Payment credentials and connection secrets stay out of models, logs, screenshots,
-  ordinary workspaces and generated UI. The broker injects them; agents hold handles.
-  Never put secrets in sandbox environment variables. The trusted Mac host (local
-  mode) is the stated exception for the owner's own CLI/coding logins and the
-  dedicated Devys Chrome profile; payment credentials never reach it.
-- Ramp and Stripe Link are distinct supported payment routes. Do not assume a
-  Ramp-through-Link chain or silently substitute a payment source. Provider-required
-  approval remains required even when Devys business authority exists.
+  constraints, work-item conditions that only narrow, `askOwner` (approve, take over,
+  secret), spend approvals signed by Secure Enclave device keys, and secrets by name.
+- Bitter lesson (owner direction 2026-10-21): give employees general tools, compute and
+  feedback; build only what agents cannot safely build themselves (trust boundaries, the
+  ways the owner is brought in, a few strong general tools). Employees choose API, CLI,
+  MCP, browser or computer per step; do not codify procedures or per-provider apps ahead
+  of a run that shows the need.
+- Secrets (API tokens, the card) stay out of models, transcripts, logs, screenshots and
+  shell environments: employees name a secret and the host injects it into the one
+  command, request or browser field that needs it. A card is released only against a
+  signed spend approval for that merchant and amount; it reaches only the vault, the
+  host's memory during the fill, and the merchant's page. The trusted Mac host is the
+  stated exception for the owner's own CLI/coding logins and each business's Chrome
+  profile, which the owner signs in to once.
+- Do not silently substitute a payment source; provider-required approval remains
+  required even when Devys business authority exists.
 - Record intent, dispatch identity, receipts and uncertainty. Inspect uncertain
   sends, charges, domain orders, account creation and deployments before retry.
   Stop/revocation cannot undo an effect already accepted remotely.

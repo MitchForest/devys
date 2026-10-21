@@ -23,6 +23,7 @@ import type { Capability } from "../protocol/capability.ts";
 import { appSkills } from "./apps.ts";
 import { keepable } from "./projects.ts";
 import { artifactUrl } from "./artifacts.ts";
+import { askOwnerFor } from "./asking.ts";
 /** Composition only: implementations and SQL belong to their domains. */
 export function capabilities(
   env: Env,
@@ -48,7 +49,7 @@ export function capabilities(
       (businessId, id) => artifactUrl(env, businessId, id),
     ),
     ...codingCapabilities(codingDependencies(env)),
-    ...browserCapabilities(modeOf(env).browser),
+    ...browserCapabilities(modeOf(env).browser, env.LOADER),
     ...workCapabilities(
       env.HYPERDRIVE,
       async (businessId, employeeId) =>
@@ -58,6 +59,7 @@ export function capabilities(
       (businessId, ref) => keepable(env, businessId, ref),
       (businessId, work) => codingIncomplete(env, businessId, work),
       (businessId, employeeId) => coordinates(env.HYPERDRIVE, { businessId, employeeId }),
+      (asking, request) => askOwnerFor(env, asking, request),
     ),
   ];
   return [

@@ -5,7 +5,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { useCallback } from "react";
-import type { Home, Me as MeSchema, RuntimeState } from "../../app/wire.ts";
+import type { Home, Me as MeSchema, NeedsYouRequest, RuntimeState } from "../../app/wire.ts";
 import type { ConversationKey } from "../../conversations/contract.ts";
 import type { Employee } from "../../identity/contract.ts";
 import { api } from "./api.ts";
@@ -75,7 +75,8 @@ export function useEmployeeName() {
 }
 export const useWork = () =>
   useQuery({ ...queries.work(useBusinessId()), select: (d) => d.work_items });
-const decisionsOf = (home: Home) => home.needs_you.filter((item) => item.kind === "decision");
+const decisionsOf = (home: Home) =>
+  home.needs_you.filter((item): item is NeedsYouRequest => item.kind !== "work");
 /** Requests waiting on the owner, from Home: the one source of what needs them. */
 export const useDecisions = () =>
   useQuery({ ...queries.home(useBusinessId()), select: decisionsOf });

@@ -142,7 +142,7 @@ esac
           data,
           providers: provider.factory,
           confine: (folder, readOnly) => (command, args) =>
-            confine({ root: join(root, "work"), folder, readOnly }, command, args),
+            confine({ root: join(root, "work"), folder, readOnly, hidden: [data] }, command, args),
           shell: "/bin/sh",
           env,
           gh,

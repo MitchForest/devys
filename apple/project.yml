@@ -42,6 +42,7 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait"
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_CFBundleDisplayName: Devys
+        INFOPLIST_KEY_NSFaceIDUsageDescription: Devys asks for Face ID to sign the spending you approve.
         INFOPLIST_KEY_NSMicrophoneUsageDescription: Devys listens when you dictate or talk with your team.
         INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: Devys turns your speech into text on this device.
     info:
