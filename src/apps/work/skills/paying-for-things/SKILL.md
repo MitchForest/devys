@@ -11,7 +11,7 @@ create one for the purchase if there isn't one.
 
 ## Find the business's payment source first
 
-1. `recall` how this business pays (for example "Edulist pays with its Ramp fund").
+1. `recall` how this business pays (for example "Acme pays with its Ramp fund").
 2. Look at what is set up: `appSearch` for "payments", "cards" or "spend" shows the
    business's own apps first (a connected payments or spend-management app may be a card
    source); a card the owner saved is a secret marked as a card.
