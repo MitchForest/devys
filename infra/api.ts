@@ -84,9 +84,6 @@ export const Api = Cloudflare.Worker(
         GOOGLE_PROJECT_NUMBER: yield* Config.String("GOOGLE_PROJECT_NUMBER").pipe(
           Config.withDefault(""),
         ),
-        CONNECTIONS_KEY: yield* Config.Redacted("CONNECTIONS_KEY").pipe(
-          Config.withDefault(Redacted.make("")),
-        ),
         PUBLIC_URL: Cloudflare.Worker.URL,
         // The deployment mode (.docs/COMPONENTS.md#deployment-modes); local mode is wrangler.local.jsonc.
         DEVYS_MODE: "cloud" as "local" | "cloud",

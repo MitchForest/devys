@@ -4,6 +4,7 @@ import { defaultLimits } from "../protocol/limits.ts";
 import { rpc } from "../protocol/rpc.ts";
 import { isSkillName, parseSkill, type Skill } from "../protocol/skill.ts";
 import type { Runner } from "./contract.ts";
+import { SecretName } from "../vault/contract.ts";
 const PathResult = Schema.Struct({ path: FilePath });
 
 /** The Computer app: commands, files and skills where the employee works. */
@@ -114,18 +115,21 @@ export function workspaceCapabilities(
     capability({
       name: "run",
       description:
-        "Run a shell command where you work (your instructions say where). On an uncertain result, inspect existing state; never blindly repeat a side effect.",
+        "Run a shell command where you work (your instructions say where). On an uncertain result, inspect existing state; never blindly repeat a side effect. `secrets` names the business's secrets this one command needs (an API key, a token): each is set as the environment variable of its name for this command only, and redacted from its output, so refer to it as $NAME and never print, store or send it anywhere else. A secret the business lacks is asked for with askOwner (kind secret). Cards are never put in a command.",
       effect: "change",
       replay: "reconcile",
       core: true,
-      input: Schema.Struct({ command: Text }),
+      input: Schema.Struct({
+        command: Text,
+        secrets: Schema.optional(Schema.Array(SecretName).check(Schema.isMaxLength(20))),
+      }),
       output: Schema.Struct({
         status: Schema.Literals(["completed", "uncertain", "cancelled", "limited"]),
         exitCode: Schema.NullOr(Schema.Int),
         stdout: Schema.String,
         stderr: Schema.String,
       }),
-      execute: ({ command }) =>
+      execute: ({ command, secrets }) =>
         Effect.gen(function* () {
           const invocation = yield* Invocation;
           return yield* rpc(() =>
@@ -134,6 +138,7 @@ export function workspaceCapabilities(
               command,
               defaultLimits.maxCommandMs,
               defaultLimits.maxOutputBytes,
+              secrets ?? [],
             ),
           );
         }),

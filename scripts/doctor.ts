@@ -9,7 +9,6 @@ const googleSettings = [
   "GOOGLE_CLIENT_SECRET",
   "GOOGLE_PICKER_API_KEY",
   "GOOGLE_PROJECT_NUMBER",
-  "CONNECTIONS_KEY",
 ];
 let ready = true;
 try {
@@ -35,10 +34,6 @@ for (const name of photonSettings)
   console.log(`${process.env[name] ? "OK" : "OPTIONAL / NOT CONFIGURED"} ${name}`);
 for (const name of googleSettings)
   console.log(`${process.env[name] ? "OK" : "OPTIONAL / NOT CONFIGURED"} ${name}`);
-if (process.env.CONNECTIONS_KEY && !/^[a-f0-9]{64}$/.test(process.env.CONNECTIONS_KEY)) {
-  console.log("INVALID CONNECTIONS_KEY: expected 32 bytes encoded as 64 lowercase hex characters");
-  ready = false;
-}
 for (const [label, command] of [
   ["Docker engine", ["docker", "info", "--format", "{{.ServerVersion}}"]],
   ["Alchemy Cloudflare profile", ["bunx", "alchemy", "profile", "show", "--no-input"]],

@@ -130,9 +130,8 @@ also verified live. No public product has launched.
   own deploy command: previews on their own (`deployPreview`), production only with the owner's
   approval (`deployProduction`). Each deploy runs at exactly one commit in a fresh worktree, then
   Devys checks the URL answers and records stage, commit and URL; rolling back deploys an
-  earlier commit of the same work item. Stage secrets live in a private host-side file per
-  business (`bun run local deploy-env <business>`) and reach only that deploy process, redacted
-  from its output. Diff line comments are always
+  earlier commit of the same work item. A deploy names the business's secrets it needs; the
+  host sets them in that deploy process only and redacts them from its output. Diff line comments are always
   sendable: to the session while you have taken it over, otherwise as one review message in
   the work item's thread. A work item's panel shows its pending and decided requests. Stop
   interrupts sessions and stops what they left running. Cloud mode reports coding as
@@ -159,13 +158,21 @@ also verified live. No public product has launched.
   a picture the model reads) and manage tabs (`browserTabs`); the Browser app's
   `using-the-browser` skill has the recipes. A work item driving the browser shows it on its
   panel with a live picture on every client, where Take over stops the employee, mid-script
-  too, and lets the owner click and type (not recorded) until Hand back.
+  too, and lets the owner click and type (not recorded) until Hand back. `browserFill` fills a
+  password or card by name without the employee seeing it (below).
+- **Secrets by name (local mode).** The owner adds a business's secrets (an API key, a password,
+  a card) in **Settings › Secrets** or when an employee asks with `askOwner` (kind secret, in
+  Needs you), in a secure entry sheet; lists show names only. Each is encrypted under its own key
+  in Postgres, wrapped by a master key the Mac host keeps in a file its employees' processes
+  cannot read. Employees name secrets: `run` and deploys get them as environment variables of
+  that one process, redacted from output; `browserFill` types a password, or a card only against
+  a signed spend approval in the same work item on the merchant's own site, once, hiding the
+  page from the employee until it moves on. Google Drive's token is kept the same way. Cloud
+  mode lists secrets but cannot add or use them yet.
 - **Pages.** Employees publish self-contained HTML pages (`artifactPage`, `artifactEdit`):
   reports, comparisons, dashboards. A card in the conversation opens the page in an
   opaque-origin sandbox that fetches nothing; **Keep** lists it on a project's overview.
-- **Not built:** confining employee processes away from the host's own data folder
-  (`~/Library/Application Support/Devys Server/host`), `askOwner` secret requests,
-  scripted browser control with screenshots, secrets by name in a vault, event sources
+- **Not built:** event sources
   (mail), the Knowledge app and a learning loop, the event stream and push, connections for
   outside providers, mail, purchases, desktop control, the voice and ambient additions, cloud
   mode's coding runners, files, terminals and browser, community and custom apps, and
@@ -287,17 +294,17 @@ Next is the **Launch path**: Devys builds only what agents cannot safely build f
 a real business launch with its employees. In order:
 
 1. Confinement: employee processes on the Mac cannot reach the host's data (browser profiles,
-   deploy secrets).
+   the vault's key).
 2. `askOwner`, one core capability for bringing the owner in: approve an exact action (with an
    amount, a spend approval signed with Face ID or Touch ID on the owner's Mac or iPhone), take
    over the business's browser (sign-in, 2FA, CAPTCHA), or enter a secret. All appear in Needs
-   you. Built except secrets (above); its live step on the Mac and iPhone remains.
+   you. Built; its live step on the Mac and iPhone remains.
 3. The business's browser driven through Browser Use's browser-harness-js (scripts,
    screenshots the model sees, tabs), replacing Playwright; the live view and Take over stay.
-4. Secrets by name in an envelope vault (master key in the Mac's login Keychain, or a
-   Cloudflare secret in cloud mode), injected by the host into one command, request or
-   browser field and redacted from output; a card is filled only against a signed spend
-   approval.
+4. Secrets by name in an envelope vault (master key in a file only the Mac host reads; a
+   Cloudflare secret with cloud mode), injected by the host into one command or browser field
+   and redacted from output; a card is filled only against a signed spend approval. Built; its
+   live step (a test card at a merchant's test checkout after a Face ID approval) remains.
 5. Minimal onboarding, and the empty "coming" apps removed.
 6. The launch run itself: buying a domain, mail and DNS, a supplier inquiry, a website deploy,
    analytics, social accounts, and a change shipped through a pull request, CI and an
@@ -435,7 +442,9 @@ bun run local uninstall  # stops it; data is kept
 `install` reads secrets from `.env` like development does. Re-run it after pulling
 changes. The launcher (`scripts/local.ts`) supervises two processes: the Worker on
 127.0.0.1:8787 and the Mac host (`src/host.ts`) on 127.0.0.1:8788, which runs employees'
-commands, file access, coding sessions and terminals behind a token. The token is written
+commands, file access, coding sessions, terminals and browsers behind a token, and holds the
+vault's master key (`host/vault.key`, created on first start; not in backups: keep the data
+folder, or enter the secrets again). The token is written
 to the Worker's vars file, not its command line. The host's environment excludes what
 `.env` supplies (the model gateway key and other secrets) and its own `DEVYS_*` settings,
 so employees' shells, coding sessions and terminals see neither. The launcher calls the
@@ -544,19 +553,17 @@ connects their own account and chooses files in the private workspace.
 3. Put `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_PROJECT_NUMBER`, and
    `GOOGLE_PICKER_API_KEY` in `.env`. Restrict the Picker browser API key to your
    application origin and Google Picker API. It is intentionally sent to the browser.
-4. Generate `CONNECTIONS_KEY` with `openssl rand -hex 32` and save it in `.env`.
-   Keep this key stable and backed up privately. Replacing it makes stored grants
-   unreadable; owners must reconnect. Redeploy through Alchemy.
-5. Sign in to Devys, choose **Connect Google Drive**, grant the `drive.file` scope,
+4. Sign in to Devys, choose **Connect Google Drive**, grant the `drive.file` scope,
    then use **Choose files**. Only selected files and Devys-created files are
    available through tools. Ask an employee: “Use my selected documents to write
    a comparison and save it to Drive as comparison.txt.”
-6. Follow up later to update that text file, then disconnect. Further Drive tool
+5. Follow up later to update that text file, then disconnect. Further Drive tool
    calls must fail while the conversation and private artifacts remain available.
 
 OAuth uses `oauth4webapi`, state tied to the active owner/session, and PKCE.
-Refresh tokens are encrypted in Postgres with owner/grant-bound AES-GCM. Models and
-workspace programs never receive tokens. The authenticated Picker receives a
+The refresh token is a connection secret in the business's vault (local mode only until
+cloud mode holds the vault's key): the Mac host opens it only to send Google's token and
+revoke requests. Models and workspace programs never receive tokens. The authenticated Picker receives a
 short-lived access token; it is not saved in browser storage. Disconnect removes
 local access immediately and attempts Google's token revocation, reporting if
 Google does not confirm it. A write already accepted remotely cannot be undone.

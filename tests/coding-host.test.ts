@@ -16,6 +16,8 @@ import type { ProviderAdapter, ProviderEvents } from "../src/apps/code/host/prov
 import { codingHost } from "../src/apps/code/host/server.ts";
 import { confine } from "../src/workspace/host/seatbelt.ts";
 import { startHost } from "../src/workspace/host/server.ts";
+import { hostKeyring, openFor } from "../src/vault/host/server.ts";
+import { memorySecrets } from "./fixtures/vault.ts";
 
 const token = "test-token";
 const scope = { businessId: "business-1", employeeId: "employee-1" };
@@ -128,6 +130,8 @@ esac
     GIT_COMMITTER_NAME: env.GIT_COMMITTER_NAME,
     GIT_COMMITTER_EMAIL: env.GIT_COMMITTER_EMAIL,
   });
+  const keyring = await hostKeyring(data);
+  const secrets = memorySecrets(keyring);
   const open = async () => {
     const server = await startHost({
       token,
@@ -140,6 +144,7 @@ esac
         codingHost({
           work: join(root, "work"),
           data,
+          open: (business, sealed, kinds) => openFor(keyring, business, sealed, kinds),
           providers: provider.factory,
           confine: (folder, readOnly) => (command, args) =>
             confine({ root: join(root, "work"), folder, readOnly, hidden: [data] }, command, args),
@@ -162,9 +167,18 @@ esac
     return server;
   };
   let server = await open();
-  const client = (as = scope) => hostCoding({ url: `http://127.0.0.1:${server.port}`, token }, as);
+  const client = (as = scope) =>
+    hostCoding(
+      {
+        url: `http://127.0.0.1:${server.port}`,
+        token,
+        sealed: (business, names) => secrets.sealed(business, names, ["secret", "spend"]),
+      },
+      as,
+    );
   return {
     root,
+    secrets,
     repository,
     provider,
     delivered,
@@ -275,7 +289,7 @@ it("a turn that ends before its start or follow-up returns is not lost", async (
 it("deploys run the accepted commit with the business's secrets, check the URL, and roll back", async () => {
   const state = await host();
   const started = await state.client().start(request("a-d", { path: state.repository }));
-  const deploy = (command: string, extra: { commit?: string } = {}) =>
+  const deploy = (command: string, extra: { commit?: string; secrets?: string[] } = {}) =>
     state.client().deploy("a-d", { stage: "preview", command, ...extra });
   await expect(deploy("true")).rejects.toThrow(/still working|accept it first/);
   state.provider.finish(started.providerSessionId, "Done.");
@@ -289,18 +303,26 @@ it("deploys run the accepted commit with the business's secrets, check the URL, 
     () => state.delivered,
     (events) => events.some((event) => event.kind === "checked"),
   );
-  // The business's secrets reach the deploy and nothing else; output never shows them.
-  mkdirSync(join(state.data, "deploy"), { recursive: true });
-  writeFileSync(
-    join(state.data, "deploy", `${scope.businessId}.env`),
-    "TOKEN=hunter2222\nproduction.ONLY_PROD=nope\n",
+  // The secrets the deploy names come from the vault, reach that deploy only, and its output
+  // never shows them; a card is never put in a deploy.
+  await state.secrets.put(scope.businessId, "TOKEN", "secret", "hunter2222", "owner");
+  await state.secrets.put(scope.businessId, "OTHER", "secret", "unnamed-secret", "owner");
+  await state.secrets.put(
+    scope.businessId,
+    "CARD",
+    "spend",
+    '{"number":"4242424242424242"}',
+    "owner",
   );
+  await expect(deploy("true", { secrets: ["CARD"] })).rejects.toThrow(/is a card/);
+  await expect(deploy("true", { secrets: ["MISSING"] })).rejects.toThrow(/No secret named MISSING/);
   // An uncommitted edit in the session's worktree is not what ships.
   writeFileSync(join(started.worktree, "uncommitted.txt"), "draft\n");
   const deployed = () => state.delivered.filter((event) => event.kind === "deployed");
   expect(
     await deploy(
-      'test ! -f uncommitted.txt && echo "token $TOKEN prod ${ONLY_PROD:-none} at $(git rev-parse HEAD)" && echo https://acme-preview.example.com',
+      'test ! -f uncommitted.txt && echo "token $TOKEN other ${OTHER:-none} at $(git rev-parse HEAD)" && echo https://acme-preview.example.com',
+      { secrets: ["TOKEN"] },
     ),
   ).toEqual({ commit: accepted.commit });
   const first = (await until(deployed, (events) => events.length === 1))[0]!;
@@ -312,7 +334,7 @@ it("deploys run the accepted commit with the business's secrets, check the URL, 
     status: 200,
     live: true,
   });
-  expect(first.deploy!.output).toContain(`token [redacted] prod none at ${accepted.commit}`);
+  expect(first.deploy!.output).toContain(`token [redacted] other none at ${accepted.commit}`);
   expect(first.deploy!.output).not.toContain("hunter2222");
   // A deploy that fails, or whose URL doesn't answer, is not live.
   await deploy("echo https://broken.invalid");

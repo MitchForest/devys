@@ -46,11 +46,16 @@ export type Checkpoint =
 export interface WorkspacePort {
   /** The business's own skills: its skills folder (local mode) or `/workspace/skills` (cloud). */
   skills(): Promise<SkillCatalog>;
+  /**
+   * Runs a shell command. `secrets` names the business's secrets set in this one command's
+   * environment (each as the variable of its name) and redacted from its output.
+   */
   run(
     operationId: string,
     command: string,
     timeoutMs: number,
     maxBytes: number,
+    secrets?: readonly string[],
   ): Promise<CommandResult>;
   cancel(): Promise<{ stopped: boolean }>;
   /**

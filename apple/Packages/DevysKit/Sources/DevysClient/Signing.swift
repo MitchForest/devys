@@ -29,6 +29,8 @@ public enum OwnerRequest: Equatable, Sendable {
     case approve(action: String, counterparty: String, amount: Amount?, renewal: String?)
     /// Something only the owner can do in the business's browser (sign in, 2FA, CAPTCHA).
     case takeOver(reason: String, url: String?)
+    /// A secret the business lacks, by the name it will be used by; `spend` asks for a card.
+    case secret(name: String, why: String, spend: Bool)
 }
 
 extension JSONValue {
@@ -38,6 +40,10 @@ extension JSONValue {
 
     fileprivate var string: String? {
         if case .string(let value) = self { value } else { nil }
+    }
+
+    fileprivate var bool: Bool? {
+        if case .bool(let value) = self { value } else { nil }
     }
 
     fileprivate var integer: Int? {
@@ -59,6 +65,9 @@ extension Decision {
         case .takeOver:
             guard let reason = input["reason"]?.string else { return nil }
             return .takeOver(reason: reason, url: input["url"]?.string)
+        case .secret:
+            guard let name = input["name"]?.string, let why = input["why"]?.string else { return nil }
+            return .secret(name: name, why: why, spend: input["spend"]?.bool ?? false)
         case .decision, .unknown:
             return nil
         }

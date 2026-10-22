@@ -4,6 +4,7 @@
  * Protocol and the owner watches and takes over.
  */
 import { Schema } from "effect";
+import type { Sealed } from "../vault/contract.ts";
 
 /** Where the browser is now. */
 export const PageState = Schema.Struct({ url: Schema.String, title: Schema.String });
@@ -51,6 +52,55 @@ export type TabAction =
   | { action: "open"; url: string }
   | { action: "close"; tab: string };
 
+/**
+ * Which part of a secret goes in a field: a card's number, expiry (`MM/YY`), month (`MM`), year
+ * (`YYYY`, or `YY` where the field takes two characters), security code, name or postal code; or a
+ * plain secret's whole value (a password).
+ */
+export const FillPart = Schema.Literals([
+  "number",
+  "expiry",
+  "month",
+  "year",
+  "cvc",
+  "name",
+  "postal",
+  "value",
+]);
+const Target = Schema.optionalKey(Schema.String.check(Schema.isMaxLength(200)));
+const Selector = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(500));
+/** Where to click: a CSS selector in the page (or frame), or a point in the tab's CSS pixels. */
+export const FillAt = Schema.Union([
+  Schema.Struct({ selector: Selector }),
+  Schema.Struct({ x: Schema.Finite, y: Schema.Finite }),
+]);
+export type FillAt = typeof FillAt.Type;
+/**
+ * One field to fill: found by selector, or focused by clicking a point; `target` is the frame
+ * (another site's payment frame) it is in, as `browserTabs`/`listPageTargets` name it.
+ */
+export const FillField = Schema.Union([
+  Schema.Struct({ target: Target, selector: Selector, part: FillPart }),
+  Schema.Struct({ target: Target, x: Schema.Finite, y: Schema.Finite, part: FillPart }),
+]);
+export type FillField = typeof FillField.Type;
+
+/** A fill for the host: the sealed secret, the merchant a card's approval names, the fields. */
+export interface FillRequest {
+  secret: Sealed;
+  /** For a card: the signed spend approval's counterparty, which the page's site must match. */
+  merchant: string | null;
+  fields: readonly FillField[];
+  submit?: FillAt;
+}
+
+/** What a fill did: the top-level page's origin, whether it submitted, and a card's last four. */
+export interface Filled {
+  origin: string;
+  submitted: boolean;
+  last4: string | null;
+}
+
 /** A DevTools Protocol event; `seq` orders every event the business's browser sent. */
 export interface BrowserEvent {
   seq: number;
@@ -77,6 +127,16 @@ export interface Browser {
   ): Promise<{ events: BrowserEvent[]; cursor: number }>;
   tabs(action: TabAction, driver: string): Promise<Tab[]>;
   status(): Promise<BrowserStatus>;
-  screenshot(): Promise<Screenshot>;
+  /**
+   * The current tab. While a filled card or password is on the page the employee's view is
+   * paused; the owner's live view is not.
+   */
+  screenshot(viewer: "owner" | "employee"): Promise<Screenshot>;
   input(action: OwnerInput): Promise<PageState>;
+  /**
+   * The host fills a secret into the page's fields (a card only on the merchant's site), may
+   * submit, and pauses employees' scripts, events and screenshots until the page moves on; the
+   * filled fields are cleared on failure. The value never comes back.
+   */
+  fill(request: FillRequest, driver: string): Promise<Filled>;
 }

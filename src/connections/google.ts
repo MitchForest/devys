@@ -4,15 +4,25 @@ import { sha256 } from "../protocol/bytes.ts";
 import { sessionCookie } from "../identity/contract.ts";
 import { Authorization, type Connection, type ConnectionAccess } from "./contract.ts";
 import { respond } from "../protocol/http.ts";
+import type { SecretStore, SendWithSecret } from "../vault/contract.ts";
 
-/** What the Google connection needs from the deployment: its OAuth client and storage key. */
+/** What the Google connection needs from the deployment: its OAuth client. */
 interface GoogleBindings {
   HYPERDRIVE: Database;
   PUBLIC_URL: string;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
-  CONNECTIONS_KEY: string;
 }
+
+/**
+ * Where the refresh token lives: the business's vault, as the connection secret `google`. It is
+ * opened only by the vault's master key holder, which sends the token requests with it.
+ */
+export interface GoogleVault {
+  secrets: SecretStore;
+  send: SendWithSecret;
+}
+const tokenName = "google";
 
 export const driveScope = "https://www.googleapis.com/auth/drive.file";
 const server: oauth.AuthorizationServer = {
@@ -23,40 +33,35 @@ const server: oauth.AuthorizationServer = {
 const client = (env: GoogleBindings): oauth.Client => ({ client_id: env.GOOGLE_CLIENT_ID });
 const redirect = (env: GoogleBindings) => `${env.PUBLIC_URL}/api/connections/google/callback`;
 export const googleConfigured = (env: GoogleBindings) =>
-  Boolean(
-    env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && /^[a-f0-9]{64}$/.test(env.CONNECTIONS_KEY),
-  );
+  Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
 
-/** Ciphertext is bound to both the business and this grant; no token reaches a model tool. */
-export async function protect(
-  env: GoogleBindings,
-  business: string,
-  grant: string,
-  value: string,
-  decrypt = false,
-) {
-  if (!/^[a-f0-9]{64}$/.test(env.CONNECTIONS_KEY))
-    throw new Error("Connection encryption is not configured");
-  const key = await crypto.subtle.importKey(
-    "raw",
-    Uint8Array.from(env.CONNECTIONS_KEY.match(/../g)!, (hex) => parseInt(hex, 16)),
-    "AES-GCM",
-    false,
-    ["encrypt", "decrypt"],
-  );
-  const data = decrypt
-    ? Uint8Array.from(atob(value), (c) => c.charCodeAt(0))
-    : new TextEncoder().encode(value);
-  const iv = decrypt ? data.slice(0, 12) : crypto.getRandomValues(new Uint8Array(12));
-  const algorithm = {
-    name: "AES-GCM",
-    iv,
-    additionalData: new TextEncoder().encode(`${business}:${grant}`),
+/**
+ * A request oauth4webapi builds with `placeholder` for the refresh token, sent by the vault's
+ * holder with the token in its place: the Worker never holds the stored token.
+ */
+async function withToken(vault: GoogleVault, business: string) {
+  const [sealed] = await vault.secrets.sealed(business, [tokenName], ["connection"]);
+  const placeholder = `devys-google-${crypto.randomUUID()}`;
+  const send: oauth.HttpRequestOptions<"POST", URLSearchParams>[typeof oauth.customFetch] = async (
+    url,
+    options,
+  ) => {
+    const answer = await vault.send(
+      sealed!,
+      {
+        url,
+        method: "POST",
+        headers: options.headers,
+        body: options.body ? String(options.body) : null,
+      },
+      placeholder,
+    );
+    return new Response(answer.body, {
+      status: answer.status,
+      headers: answer.type ? { "content-type": answer.type } : {},
+    });
   };
-  if (decrypt)
-    return new TextDecoder().decode(await crypto.subtle.decrypt(algorithm, key, data.slice(12)));
-  const cipher = new Uint8Array(await crypto.subtle.encrypt(algorithm, key, data));
-  return btoa(String.fromCharCode(...iv, ...cipher));
+  return { placeholder, send };
 }
 
 const sessionHash = (request: Request) =>
@@ -85,7 +90,8 @@ export async function beginGoogle(
     business,
     person,
     await sessionHash(request),
-    await protect(env, business, hash, verifier),
+    // Ten minutes, single use, and useless without the code only the callback receives.
+    verifier,
     Date.now() + 600_000,
   ];
   await query(env.HYPERDRIVE, (sql) =>
@@ -117,6 +123,7 @@ export async function beginGoogle(
 export async function finishGoogle(
   request: Request,
   env: GoogleBindings,
+  vault: GoogleVault,
   person: string,
   member: (business: string) => Promise<boolean>,
 ) {
@@ -143,14 +150,13 @@ export async function finishGoogle(
     oauth.ClientSecretPost(env.GOOGLE_CLIENT_SECRET),
     parameters,
     redirect(env),
-    await protect(env, business, hash, row.verifier, true),
+    row.verifier,
     { signal: AbortSignal.timeout(20_000) },
   );
   const tokens = await oauth.processAuthorizationCodeResponse(server, client(env), response);
   if (!tokens.refresh_token || (tokens.scope && !tokens.scope.split(" ").includes(driveScope)))
     throw new Error("Drive permission was not granted");
   const id = crypto.randomUUID();
-  const encrypted = await protect(env, business, id, tokens.refresh_token);
   // The state must still exist: disconnect or a newer connection request invalidates this callback.
   const connected = await transaction(env.HYPERDRIVE, async (sql) => {
     const current = await sql.row(
@@ -161,49 +167,64 @@ export async function finishGoogle(
     if (!current) return false;
     await sql.run("DELETE FROM google_connections WHERE business_id = $1", [business]);
     await sql.run(
-      "INSERT INTO google_connections (business_id, id, refresh_token, connected_by) VALUES ($1, $2, $3, $4)",
-      [business, id, encrypted, person],
+      "INSERT INTO google_connections (business_id, id, connected_by) VALUES ($1, $2, $3)",
+      [business, id, person],
     );
     await sql.run("DELETE FROM google_oauth_states WHERE state_hash = $1", [hash]);
     return true;
   });
   if (!connected) return new Response("Connection cancelled; start again", { status: 409 });
+  try {
+    await vault.secrets.put(business, tokenName, "connection", tokens.refresh_token, person);
+  } catch (error) {
+    await query(env.HYPERDRIVE, (sql) =>
+      sql.run("DELETE FROM google_connections WHERE business_id = $1 AND id = $2", [business, id]),
+    );
+    throw error;
+  }
   return new Response(null, { status: 303, headers: { location: "/" } });
 }
 
 export async function googleAccess(
   env: GoogleBindings,
+  vault: GoogleVault,
   business: string,
 ): Promise<ConnectionAccess> {
   const row = await query(env.HYPERDRIVE, (sql) =>
-    sql.row<{ id: string; refresh_token: string }>(
-      "SELECT id, refresh_token FROM google_connections WHERE business_id = $1",
+    sql.row<{ id: string; connected_by: string }>(
+      "SELECT id, connected_by FROM google_connections WHERE business_id = $1",
       [business],
     ),
   );
   if (!row) throw new Error("Connect Google Drive for this business first");
-  const refresh = await protect(env, business, row.id, row.refresh_token, true);
+  const { placeholder, send } = await withToken(vault, business);
   const response = await oauth.refreshTokenGrantRequest(
     server,
     client(env),
     oauth.ClientSecretPost(env.GOOGLE_CLIENT_SECRET),
-    refresh,
-    { signal: AbortSignal.timeout(20_000) },
+    placeholder,
+    { signal: AbortSignal.timeout(20_000), [oauth.customFetch]: send },
   );
   const tokens = await oauth.processRefreshTokenResponse(server, client(env), response);
   if (tokens.scope && !tokens.scope.split(" ").includes(driveScope))
     throw new Error("Reconnect Google Drive");
-  const refreshed = tokens.refresh_token
-    ? await protect(env, business, row.id, tokens.refresh_token)
-    : row.refresh_token;
-  const changed = await query(env.HYPERDRIVE, (sql) =>
-    sql.run(
-      `UPDATE google_connections SET refresh_token = $1
-       WHERE business_id = $2 AND id = $3 AND refresh_token = $4`,
-      [refreshed, business, row.id, row.refresh_token],
-    ),
+  // A disconnect while refreshing wins: the token answers nothing once the connection is gone.
+  const current = await query(env.HYPERDRIVE, (sql) =>
+    sql.row("SELECT id FROM google_connections WHERE business_id = $1 AND id = $2", [
+      business,
+      row.id,
+    ]),
   );
-  if (changed !== 1) throw new Error("Connection changed; try again");
+  if (!current) throw new Error("Connection changed; try again");
+  // A new refresh token replaces the stored one; the stored one sent back comes redacted.
+  if (tokens.refresh_token && !tokens.refresh_token.includes("[redacted]"))
+    await vault.secrets.put(
+      business,
+      tokenName,
+      "connection",
+      tokens.refresh_token,
+      row.connected_by,
+    );
   return { id: row.id, token: tokens.access_token };
 }
 
@@ -217,29 +238,30 @@ async function assertGoogle(env: GoogleBindings, business: string, access: Conne
   if (!current) throw new Error("Google Drive access disconnected");
 }
 
-export async function disconnectGoogle(env: GoogleBindings, business: string) {
+export async function disconnectGoogle(env: GoogleBindings, vault: GoogleVault, business: string) {
   const row = await transaction(env.HYPERDRIVE, async (sql) => {
     await sql.run("DELETE FROM google_oauth_states WHERE business_id = $1", [business]);
-    return sql.row<{ id: string; refresh_token: string }>(
-      "DELETE FROM google_connections WHERE business_id = $1 RETURNING id, refresh_token",
+    return sql.row<{ id: string }>(
+      "DELETE FROM google_connections WHERE business_id = $1 RETURNING id",
       [business],
     );
   });
   let revoked = !row;
   if (row) {
     try {
-      const token = await protect(env, business, row.id, row.refresh_token, true);
+      const { placeholder, send } = await withToken(vault, business);
       revoked = (
-        await fetch("https://oauth2.googleapis.com/revoke", {
+        await send("https://oauth2.googleapis.com/revoke", {
           method: "POST",
           headers: { "content-type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ token }),
-          signal: AbortSignal.timeout(15_000),
+          body: new URLSearchParams({ token: placeholder }),
+          redirect: "manual",
         })
       ).ok;
     } catch {
       /* Local access is already removed; report provider revocation truthfully. */
     }
+    await vault.secrets.remove(business, tokenName);
   }
   return { disconnected: true, revoked };
 }
@@ -254,8 +276,8 @@ export async function googleConnectionStatus(db: Database, business: string) {
 }
 
 /** The Google connection as the apps that use it see it (Documents, for Drive). */
-export const googleConnection = (env: GoogleBindings): Connection => ({
-  access: (business) => googleAccess(env, business),
+export const googleConnection = (env: GoogleBindings, vault: GoogleVault): Connection => ({
+  access: (business) => googleAccess(env, vault, business),
   assertCurrent: (business, access) => assertGoogle(env, business, access),
 });
 

@@ -79,7 +79,10 @@ export class Workspace extends DurableObject<{ FILES: R2Bucket }> implements Wor
     command: string,
     timeoutMs: number,
     maxBytes: number,
+    secrets: readonly string[] = [],
   ): Promise<CommandResult> {
+    // The vault's master key stays with the Mac host; injection here arrives with cloud mode (CM).
+    if (secrets.length) throw new Error("Secrets by name run on the Mac host only for now");
     if (!withinCommandLimits(command, timeoutMs, maxBytes))
       throw new Error("Invalid command limits");
     const key = `command:${operationId}`;

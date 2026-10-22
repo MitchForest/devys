@@ -55,6 +55,7 @@ it("the migrations take an empty database to every component's tables, once", as
     "project_members",
     "projects",
     "routines",
+    "secrets",
     "web_sessions",
     "work_items",
   ]);

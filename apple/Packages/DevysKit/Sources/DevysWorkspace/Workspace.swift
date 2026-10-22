@@ -67,6 +67,8 @@ package struct Workspace {
         package var newProject: ProjectSheet?
         /// The signing sheet for a spend approval, while it is open.
         package var signing: SigningSheet?
+        /// The secure entry sheet for an employee's secret request, while it is open.
+        package var secretEntry: SecretEntrySheet?
         package var memory: Loadable<[MemoryClaim]> = .loading
         /// The business's work items; the requests waiting on the owner are Home's.
         package var work: Loadable<[WorkItem]> = .loading

@@ -600,14 +600,14 @@ export function workCapabilities(
     capability({
       name: "askOwner",
       description:
-        'Bring the owner in, from this work item\'s thread. {kind: "approve", action, counterparty, amount?, renewal?}: before a consequential action you will take anywhere (browser, shell, an app), state it exactly: action is what you will do, counterparty who or where (merchant, site, person); any spend has amount {cents, currency}, which the owner signs with Face ID or Touch ID, and renewal says what recurs. {kind: "take_over", reason, url?}: something only the owner can do in the business\'s browser (sign in, 2FA, CAPTCHA, enter a card); they take the work over, do it and hand it back. It returns at once: carry on with other work or wait; the answer arrives in this thread. Asking again with exactly the same input tells you where it stands (asked, approved, declined, taken_over, done). A changed amount, merchant or action is a new request. Never ask for passwords, codes or card numbers in chat.',
+        'Bring the owner in, from this work item\'s thread. {kind: "approve", action, counterparty, amount?, renewal?}: before a consequential action you will take anywhere (browser, shell, an app), state it exactly: action is what you will do, counterparty who or where (merchant, site, person; for a card payment, the merchant\'s site such as namecheap.com, where the card will be filled); any spend has amount {cents, currency}, which the owner signs with Face ID or Touch ID, and renewal says what recurs. {kind: "take_over", reason, url?}: something only the owner can do in the business\'s browser (sign in, 2FA, CAPTCHA); they take the work over, do it and hand it back. {kind: "secret", name, why, spend?}: a secret the business lacks (an API key, a password; spend: true for a card), named as you will use it (STRIPE_KEY); the owner enters it in a secure sheet and you use it by name (run\'s secrets, browserFill), never seeing it. It returns at once: carry on with other work or wait; the answer arrives in this thread. Asking again with exactly the same input tells you where it stands (asked, approved, declined, taken_over, done). A changed amount, merchant or action is a new request. Never ask for passwords, codes or card numbers in chat.',
       effect: "change",
       replay: "idempotent",
       core: true,
       input: OwnerRequest,
       output: Schema.Struct({
         request: Schema.String,
-        kind: Schema.Literals(["approve", "take_over"]),
+        kind: Schema.Literals(["approve", "take_over", "secret"]),
         state: Schema.Literals(["asked", "approved", "declined", "taken_over", "done"]),
         expiresAt: Schema.String,
       }),
@@ -644,8 +644,10 @@ const requestState = (decision: Decision) =>
     ? ("asked" as const)
     : decision.status === "rejected"
       ? ("declined" as const)
-      : decision.kind === "take_over"
-        ? decision.status === "approved"
-          ? ("taken_over" as const)
-          : ("done" as const)
-        : ("approved" as const);
+      : decision.kind === "secret"
+        ? ("done" as const)
+        : decision.kind === "take_over"
+          ? decision.status === "approved"
+            ? ("taken_over" as const)
+            : ("done" as const)
+          : ("approved" as const);

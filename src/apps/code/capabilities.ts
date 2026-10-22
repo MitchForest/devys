@@ -5,6 +5,7 @@ import { stableId } from "../../protocol/bytes.ts";
 import { capability, CapabilityError, Invocation } from "../../protocol/capability.ts";
 import { Ref, RefOf, ref } from "../../protocol/ref.ts";
 import { rpc, stored } from "../../protocol/rpc.ts";
+import { SecretName } from "../../vault/contract.ts";
 import {
   providers,
   type CodingSession,
@@ -375,8 +376,8 @@ export function codingCapabilities(dependencies: CodingDependencies) {
       name: stage === "preview" ? "deployPreview" : "deployProduction",
       description:
         stage === "preview"
-          ? "Deploy a coding session's accepted, checked commit (name the session by its ref) to a preview with the repository's own deploy command (for example `bunx wrangler deploy --env preview`), then check the URL it prints (or the one you give) answers. The result arrives in this work item. To roll back, name an earlier commit this work item accepted or deployed."
-          : "Deploy a coding session's accepted, checked commit (name the session by its ref) to production with the repository's own production deploy command, then check its URL answers. The owner approves each production deploy. To roll back, name an earlier commit this work item accepted or deployed.",
+          ? "Deploy a coding session's accepted, checked commit (name the session by its ref) to a preview with the repository's own deploy command (for example `bunx wrangler deploy --env preview`), then check the URL it prints (or the one you give) answers. `secrets` names the business's secrets the command needs (each set as the variable of its name, redacted from the output). The result arrives in this work item. To roll back, name an earlier commit this work item accepted or deployed."
+          : "Deploy a coding session's accepted, checked commit (name the session by its ref) to production with the repository's own production deploy command, then check its URL answers. `secrets` names the business's secrets the command needs (each set as the variable of its name, redacted from the output). The owner approves each production deploy. To roll back, name an earlier commit this work item accepted or deployed.",
       effect: "external",
       replay: "reconcile",
       constraints: {
@@ -390,9 +391,10 @@ export function codingCapabilities(dependencies: CodingDependencies) {
         command: Text(500),
         commit: Schema.optional(Schema.String.check(Schema.isPattern(/^[0-9a-f]{7,40}$/))),
         url: Schema.optional(Schema.String.check(Schema.isPattern(/^https:\/\/\S{1,500}$/))),
+        secrets: Schema.optional(Schema.Array(SecretName).check(Schema.isMaxLength(20))),
       }),
       output: Schema.Struct({ deploying: Schema.String }),
-      execute: ({ session: id, command, commit, url }) =>
+      execute: ({ session: id, command, commit, url, secrets }) =>
         Effect.gen(function* () {
           const { invocation, workItemId } = yield* owned(id);
           const scope = { businessId: invocation.businessId, employeeId: invocation.employeeId };
@@ -411,6 +413,7 @@ export function codingCapabilities(dependencies: CodingDependencies) {
               command,
               ...(commit ? { commit } : {}),
               ...(url ? { url } : {}),
+              ...(secrets?.length ? { secrets } : {}),
             }),
           );
           return { deploying: started.commit };

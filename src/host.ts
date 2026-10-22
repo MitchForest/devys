@@ -1,6 +1,7 @@
 /**
- * The trusted Mac host process (local mode): the runner and the coding sessions behind one
- * loopback server and one token. The local launcher bundles and supervises it.
+ * The trusted Mac host process (local mode): the runner, coding sessions, terminals, the
+ * businesses' browsers and the vault's master key behind one loopback server and one token. The
+ * local launcher bundles and supervises it.
  */
 import { join } from "node:path";
 import { browsersHost } from "./browser/host/server.ts";
@@ -11,6 +12,8 @@ import { forgetHostSettings } from "./protocol/host.ts";
 import { bunPty, terminalsHost } from "./terminal/host/server.ts";
 import { confine } from "./workspace/host/seatbelt.ts";
 import { startHost } from "./workspace/host/server.ts";
+import type { OpenSecrets } from "./vault/contract.ts";
+import { hostKeyring, openFor, vaultHost } from "./vault/host/server.ts";
 
 const token = process.env.DEVYS_HOST_TOKEN;
 if (!token) throw new Error("DEVYS_HOST_TOKEN is required");
@@ -22,10 +25,14 @@ const worker = process.env.DEVYS_WORKER_URL ?? "http://127.0.0.1:8787";
 const port = Number(process.env.DEVYS_HOST_PORT ?? 8788);
 /**
  * The server's own data outside the businesses folder, hidden from everything an employee
- * starts: every business's deploy secrets and browser profiles, and, when installed, the whole
- * server folder (Postgres, the Worker's state and vars, logs, backups).
+ * starts: the vault's master key, every business's browser profile, and, when installed, the
+ * whole server folder (Postgres, the Worker's state and vars, logs, backups).
  */
 const hidden = [data, ...(process.env.DEVYS_SERVER_HOME ? [process.env.DEVYS_SERVER_HOME] : [])];
+
+/** The vault's master key, in the hidden data folder; secrets are opened only on this host. */
+const keyring = await hostKeyring(data);
+const open: OpenSecrets = (business, sealed, kinds) => openFor(keyring, business, sealed, kinds);
 
 const codexHome = process.env.DEVYS_CODEX_HOME ?? join(home, ".codex");
 const claudeConfig = process.env.DEVYS_CLAUDE_CONFIG_DIR ?? join(home, ".claude");
@@ -64,6 +71,7 @@ const terminals = terminalsHost({
 });
 
 const coding = codingHost({
+  open,
   spared: () => terminals.ttys(),
   work,
   data,
@@ -96,7 +104,8 @@ const host = await startHost({
   hidden,
   work,
   port,
-  routes: [coding, terminals, browsersHost({ data, work })],
+  open,
+  routes: [coding, terminals, browsersHost({ data, work, open }), vaultHost(keyring)],
 });
 console.log(`Devys Mac host on 127.0.0.1:${host.port}`);
 const stop = () => void host.close().then(() => process.exit(0));

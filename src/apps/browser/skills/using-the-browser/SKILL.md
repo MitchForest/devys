@@ -1,6 +1,6 @@
 ---
 name: using-the-browser
-description: Drive the business's own browser with browserScript (DevTools Protocol commands), browserScreenshot and browserTabs to open and read pages, click and type by coordinates, upload files, and work in frames and tabs.
+description: Drive the business's own browser with browserScript (DevTools Protocol commands), browserScreenshot and browserTabs to open and read pages, click and type by coordinates, upload files, and work in frames and tabs; fill passwords and cards with browserFill.
 ---
 
 # Using the browser
@@ -124,12 +124,33 @@ list the tabs and switch to it.
 `alert` and `confirm` freeze the page. Answer with
 `session.Page.handleJavaScriptDialog({ accept: true })`.
 
+## Passwords and cards: browserFill
+
+Never type a password or card yourself. `browserFill` types a secret the business holds by name,
+and you never see it:
+
+- A password (or any secret): `{ secret: "SHOP_PASSWORD", fields: [{ selector: "#password",
+part: "value" }] }`.
+- A card: first `askOwner` `{ kind: "approve", action, counterparty: "<merchant's site, e.g.
+namecheap.com>", amount: { cents, currency } }` in the work item's thread, with the total you
+  see at checkout. Once it is approved, fill on that site's checkout with its request id:
+  `{ secret: "RAMP_CARD", approval: "<request id>", fields: [{ selector: "#name", part: "name" },
+{ target: "<payment frame>", selector: "input[name=cardnumber]", part: "number" }, { target,
+selector: "input[name=exp-date]", part: "expiry" }, { target, selector: "input[name=cvc]",
+part: "cvc" }, { selector: "#zip", part: "postal" }], submit: { selector: "#pay" } }`.
+  Parts: number, expiry (MM/YY), month, year, cvc, name, postal. A field inside a payment
+  provider's frame (Stripe, Adyen) names that frame's target id from `listPageTargets` /
+  `Target.getTargets`; a field can also be a point `{ x, y }` read from a screenshot.
+- One approval is one fill. Afterwards the page is hidden from you until it moves on (at most two
+  minutes): wait, then take a screenshot to see the result. If the business lacks the secret,
+  ask with `askOwner` `{ kind: "secret", name, why, spend? }`.
+
 ## Care
 
 - Clicking and typing can submit, buy or send. Do only what the work allows, and read the
   page before a consequential click.
-- Never type passwords, codes or card numbers. If a site asks you to sign in, ask the owner to
-  sign in through the live view.
+- Never type passwords, codes or card numbers: use `browserFill`, or for a sign-in with 2FA or a
+  CAPTCHA ask the owner to take over (`askOwner` take_over).
 - If a command is refused, read the message: it says what the browser allows.
 
 Recipes adapted from Browser Use's browser-harness-js interaction skills (MIT).

@@ -32,13 +32,13 @@ describe("local mode launcher", () => {
 
   it("gives the Mac host no secret from .env, only its login folders and settings", () => {
     const dotenv =
-      "DEVYS_MODEL_GATEWAY_KEY=k\nexport CONNECTIONS_KEY=c\nDEVYS_CODEX_HOME=/codex\n# NOTE=x\n";
+      "DEVYS_MODEL_GATEWAY_KEY=k\nexport GOOGLE_CLIENT_SECRET=c\nDEVYS_CODEX_HOME=/codex\n# NOTE=x\n";
     const env = hostEnvironment(
       {
         PATH: "/bin",
         HOME: "/home",
         DEVYS_MODEL_GATEWAY_KEY: "k",
-        CONNECTIONS_KEY: "c",
+        GOOGLE_CLIENT_SECRET: "c",
         DEVYS_CODEX_HOME: "/codex",
         NOTE: "kept",
       },

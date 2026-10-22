@@ -22,8 +22,9 @@ export function hostBrowser(host: { url: string; token: string }, businessId: st
     events: (after, method, waitMs) => call("events", { after, method, waitMs }),
     tabs: (action, driver) => call("tabs", { ...action, driver }),
     status: () => call("status"),
-    screenshot: () => call("screenshot"),
+    screenshot: (viewer) => call("screenshot", { viewer }),
     input: (action) => call("input", { action }),
+    fill: (request, driver) => call("fill", { ...request, driver }),
   };
 }
 
@@ -40,5 +41,6 @@ export function unavailableBrowser(): Browser {
     status: async () => ({ open: false, url: null, title: null, driver: null }),
     screenshot: refuse,
     input: refuse,
+    fill: refuse,
   };
 }

@@ -29,7 +29,8 @@ import type {
   StartRequest,
   Started,
 } from "../contract.ts";
-import { deploySecrets, redact, smoke, urlIn } from "./deploy.ts";
+import { redact, type OpenSecrets } from "../../../vault/contract.ts";
+import { smoke, urlIn } from "./deploy.ts";
 import { cloneRepository, githubName, publishBranch } from "./github.ts";
 import { HostRefusal, hostId, scopeOf, type HostRoutes } from "../../../protocol/host.ts";
 import { bounded, type Confine, type ProviderAdapter, type ProviderEvents } from "./provider.ts";
@@ -96,6 +97,8 @@ interface CodingHostOptions {
   retryMs?: number;
   /** The ttys of the owner's terminals; cleanup never stops what runs in them. */
   spared?: () => Promise<string[]>;
+  /** Opens the secrets a deploy names (the vault's keyring); without it, none can be named. */
+  open?: OpenSecrets;
 }
 
 const checkOutputBytes = 16_000;
@@ -435,6 +438,11 @@ export function codingHost(options: CodingHostOptions): HostRoutes {
           : undefined;
     if (!commit)
       throw new HostRefusal(409, "Nothing accepted with a passing check yet: accept it first");
+    if (input.secrets !== undefined && !options.open)
+      throw new HostRefusal(503, "Secrets are not available on this host");
+    const secrets = options.open
+      ? Object.fromEntries(await options.open(job.scope.businessId, input.secrets, ["secret"]))
+      : {};
     const full = await git(job.repository, "rev-parse", "--verify", `${commit}^{commit}`).catch(
       () => {
         throw new HostRefusal(400, "That commit isn't in this repository");
@@ -449,7 +457,6 @@ export function codingHost(options: CodingHostOptions): HostRoutes {
     await rm(place, { recursive: true, force: true });
     await git(job.repository, "worktree", "prune");
     await git(job.repository, "worktree", "add", "--detach", place, full);
-    const secrets = await deploySecrets(options.data, job.scope.businessId, stage);
     save({ ...job, deploying: { stage, commit: full } });
     const child = spawn(
       ...options.confine(folderOf(job.scope.businessId), false)(options.shell ?? "/bin/zsh", [
@@ -482,7 +489,7 @@ export function codingHost(options: CodingHostOptions): HostRoutes {
       finished = true;
       clearTimeout(deadline);
       stop();
-      const shown = redact(output, secrets);
+      const shown = redact(output, Object.values(secrets));
       const checked = exitCode === 0 ? ((url as string | undefined) ?? urlIn(shown)) : null;
       const status = checked ? await (options.smoke ?? smoke)(checked) : null;
       const live = exitCode === 0 && status !== null && status < 400;

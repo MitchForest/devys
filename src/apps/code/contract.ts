@@ -113,6 +113,8 @@ interface DeployRequest {
   command: string;
   commit?: string;
   url?: string;
+  /** The business's secrets the deploy command needs, by name (set in its environment only). */
+  secrets?: readonly string[];
 }
 
 /** A finished deploy: its exit, the URL checked, and that URL's answer. */
@@ -126,7 +128,7 @@ export interface Deployed {
   status: number | null;
   /** Deployed and answering below 400. */
   live: boolean;
-  /** The end of the command's output, with stage secrets redacted. */
+  /** The end of the command's output, with its secrets redacted. */
   output: string;
 }
 

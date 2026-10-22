@@ -20,6 +20,7 @@ import { Readable } from "node:stream";
 import { HostRefusal as Refusal, scopeOf, type HostRoutes } from "../../protocol/host.ts";
 import { withinCommandLimits } from "../../protocol/limits.ts";
 import type { CommandResult } from "../contract.ts";
+import { redact, type OpenSecrets } from "../../vault/contract.ts";
 import { listWorkspaceSkills } from "../skills.ts";
 import { confine } from "./seatbelt.ts";
 
@@ -37,13 +38,15 @@ interface HostOptions {
   env?: NodeJS.ProcessEnv;
   /**
    * Folders outside `work` no employee may reach, by command or file tool: the server's own data
-   * (deploy secrets, browser profiles, Postgres, logs). `data` is always among them.
+   * (the vault's master key, browser profiles, Postgres, logs). `data` is always among them.
    */
   hidden?: readonly string[];
   /** The browser that prints HTML to PDF. */
   chrome?: string;
   /** Other components' routes on this host, composed by `src/host.ts`. */
   routes?: readonly HostRoutes[];
+  /** Opens the secrets a command names (the vault's keyring); without it, none can be named. */
+  open?: OpenSecrets;
 }
 
 interface Receipt {
@@ -245,9 +248,24 @@ export async function startHost(options: HostOptions) {
       !withinCommandLimits(command, timeoutMs, maxBytes)
     )
       throw new Refusal(400, "Invalid command limits");
+    // The named secrets, opened for this one command: set in its environment only, and redacted
+    // from its output before it is returned or recorded. A card is refused here.
+    if (input.secrets !== undefined && !options.open)
+      throw new Refusal(503, "Secrets are not available on this host");
+    const secrets = options.open
+      ? await options.open(scope.businessId, input.secrets, ["secret"])
+      : new Map<string, string>();
+    const values = [...secrets.values()];
     const key = `${scopeKey(scope)}/${operationId}`;
     const fingerprint = createHash("sha256")
-      .update(JSON.stringify({ command, timeoutMs, maxBytes }))
+      .update(
+        JSON.stringify({
+          command,
+          timeoutMs,
+          maxBytes,
+          ...(secrets.size ? { secrets: [...secrets.keys()] } : {}),
+        }),
+      )
       .digest("hex");
     const previous = receipts.get(key);
     if (previous) {
@@ -273,7 +291,7 @@ export async function startHost(options: HostOptions) {
       ...confine(placeOf(scope.businessId), options.shell ?? "/bin/zsh", ["-lc", command]),
       {
         cwd,
-        env: options.env ?? process.env,
+        env: { ...(options.env ?? process.env), ...Object.fromEntries(secrets) },
         detached: true,
         stdio: ["ignore", "pipe", "pipe"],
       },
@@ -311,8 +329,8 @@ export async function startHost(options: HostOptions) {
     const result: CommandResult = {
       status: job.stopped ? "cancelled" : limited ? "limited" : "completed",
       exitCode,
-      stdout: stdout(),
-      stderr: stderr(),
+      stdout: redact(stdout(), values),
+      stderr: redact(stderr(), values),
     };
     record({ key, fingerprint, result });
     return result;

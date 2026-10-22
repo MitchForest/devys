@@ -5,6 +5,7 @@ import {
   CircleX,
   Clock,
   Hand,
+  KeyRound,
   Pencil,
   Redo2,
   Undo2,
@@ -36,6 +37,7 @@ import {
 } from "../app/data.ts";
 import { useAnswer, useTakeOverRequest, useTakeover, useUpdateWorkItem } from "../app/mutations.ts";
 import { useNav } from "../app/navigation.ts";
+import { SecretEntrySheet } from "../shell/secret-entry.tsx";
 import { keys } from "../app/query.ts";
 
 /** The owner's changes to a work item, as the menus and buttons apply them. */
@@ -262,6 +264,11 @@ export function decisionFields(decision: Pick<Decision, "kind" | "input">): [str
       ["Do", request.reason],
       ...(request.url ? ([["Site", request.url]] as [string, string][]) : []),
     ];
+  if (request?.kind === "secret")
+    return [
+      ["Name", request.name],
+      ["Why", request.why],
+    ];
   const { input } = decision;
   if (input && typeof input === "object" && !Array.isArray(input))
     return Object.entries(input).map(([key, value]) => [
@@ -280,6 +287,7 @@ export function decisionTitle(decision: Decision) {
   if (request?.kind === "approve")
     return request.amount ? `Spend ${money(request.amount)}: ${request.action}` : request.action;
   if (request?.kind === "take_over") return `Sign in / take over: ${request.reason}`;
+  if (request?.kind === "secret") return `${request.spend ? "Card" : "Secret"}: ${request.name}`;
   if (
     decision.capability === "hireEmployee" &&
     decision.input &&
@@ -309,7 +317,10 @@ export function RequestActions({
 }) {
   const answer = useAnswer();
   const takeOver = useTakeOverRequest();
+  const businessId = useBusinessId();
+  const [entering, setEntering] = useState(false);
   const size = compact ? "compact" : "regular";
+  const secret = ownerRequest(decision);
   if (spendOf(decision))
     return (
       <div className="flex w-full items-center gap-1.5">
@@ -322,7 +333,19 @@ export function RequestActions({
     );
   return (
     <div className="flex w-full items-center gap-1.5">
-      {decision.kind === "take_over" ? (
+      {secret?.kind === "secret" ? (
+        <>
+          <Button variant="aurora" size={size} onClick={() => setEntering(true)}>
+            <KeyRound /> Add {secret.spend ? "card" : "secret"}
+          </Button>
+          <SecretEntrySheet
+            businessId={businessId}
+            open={entering}
+            onClose={() => setEntering(false)}
+            fixed={{ name: secret.name, spend: secret.spend ?? false }}
+          />
+        </>
+      ) : decision.kind === "take_over" ? (
         <Button
           variant="aurora"
           size={size}
@@ -392,11 +415,13 @@ function RequestCard({ decision }: { decision: Decision }) {
 const answeredAs = (decision: Decision) =>
   decision.status === "rejected"
     ? "Declined"
-    : decision.kind === "take_over"
-      ? decision.status === "used"
-        ? "Done"
-        : "Taken over"
-      : `Approved${decision.signed_by ? " and signed" : ""}${decision.status === "used" ? " · used" : ""}`;
+    : decision.kind === "secret"
+      ? "Added"
+      : decision.kind === "take_over"
+        ? decision.status === "used"
+          ? "Done"
+          : "Taken over"
+        : `Approved${decision.signed_by ? " and signed" : ""}${decision.status === "used" ? " · used" : ""}`;
 
 /** A due time as the date field shows it, in the owner's time zone. */
 const dateField = (due: string | null) => {

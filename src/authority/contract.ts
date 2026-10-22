@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 import { ConversationKey } from "../conversations/contract.ts";
 import { Timestamp } from "../protocol/time.ts";
+import { SecretName } from "../vault/contract.ts";
 
 /** `auto` runs inside the grant; `ask` needs an owner decision. Absence of a grant denies. */
 export const Mode = Schema.Literals(["auto", "ask"]);
@@ -25,10 +26,10 @@ export type Outcome =
   | { outcome: "deny"; reason: string };
 
 /**
- * What a request asks of the owner: `decision`, a modelled capability's `ask`; `approve` and
- * `take_over`, an employee's `askOwner` (.docs/AUTHORITY.md#bringing-the-owner-in).
+ * What a request asks of the owner: `decision`, a modelled capability's `ask`; `approve`,
+ * `take_over` and `secret`, an employee's `askOwner` (.docs/AUTHORITY.md#bringing-the-owner-in).
  */
-export const RequestKind = Schema.Literals(["decision", "approve", "take_over"]);
+export const RequestKind = Schema.Literals(["decision", "approve", "take_over", "secret"]);
 export type RequestKind = typeof RequestKind.Type;
 
 /** An amount in minor units (cents) of a three-letter currency. */
@@ -62,6 +63,15 @@ export const OwnerRequest = Schema.Union([
     url: Schema.optionalKey(
       Schema.String.check(Schema.isPattern(/^https?:\/\//), Schema.isMaxLength(2000)),
     ),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("secret"),
+    /** The name it will be used by: `STRIPE_KEY`, `RAMP_CARD`. */
+    name: SecretName,
+    /** What it is and why it is needed: "Stripe's restricted key, to read payouts". */
+    why: Words(500),
+    /** A card (number, expiry, security code, name, postal code), for checkouts. */
+    spend: Schema.optionalKey(Schema.Boolean),
   }),
 ]);
 export type OwnerRequest = typeof OwnerRequest.Type;

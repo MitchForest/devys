@@ -1,12 +1,21 @@
 import type { Scope } from "../../identity/contract.ts";
 import { hostDown, hostFailure, Unavailable } from "../../protocol/host.ts";
+import type { Sealed } from "../../vault/contract.ts";
 import type { CodingHost } from "./contract.ts";
 
 /**
  * Coding sessions on the trusted Mac host (local mode). The host owns worktrees, sessions
  * and checks; this side only speaks to it, always naming the business it acts for.
  */
-export function hostCoding(host: { url: string; token: string }, scope: Scope): CodingHost {
+export function hostCoding(
+  host: {
+    url: string;
+    token: string;
+    /** The business's named secrets, sealed, for the host to put in a deploy (the vault). */
+    sealed?: (businessId: string, names: readonly string[]) => Promise<Sealed[]>;
+  },
+  scope: Scope,
+): CodingHost {
   async function call<T>(path: string, body: Record<string, unknown>): Promise<T> {
     let response: Response;
     try {
@@ -32,7 +41,14 @@ export function hostCoding(host: { url: string; token: string }, scope: Scope): 
     },
     accept: (id, request) => call("accept", { id, ...request }),
     publish: (id, request) => call("publish", { id, ...request }),
-    deploy: (id, request) => call("deploy", { id, ...request }),
+    async deploy(id, { secrets = [], ...request }) {
+      if (secrets.length && !host.sealed) throw new Error("Secrets are not available here");
+      return call("deploy", {
+        id,
+        ...request,
+        ...(secrets.length ? { secrets: await host.sealed!(scope.businessId, secrets) } : {}),
+      });
+    },
   };
 }
 

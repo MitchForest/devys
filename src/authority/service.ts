@@ -365,3 +365,50 @@ export const spentCents = (db: Database, businessId: string, currency: string) =
     );
     return row?.cents === null || row?.cents === undefined ? null : Number(row.cents);
   });
+
+/**
+ * The owner added a secret: the pending `askOwner` requests for that name are answered. A card
+ * answers a request for a card only, and a plain secret one for a plain secret.
+ */
+export const secretProvided = (
+  db: Database,
+  businessId: string,
+  secret: { name: string; spend: boolean },
+  by: string,
+) =>
+  database(db, (sql) =>
+    sql.rows<Decision>(
+      `UPDATE decisions SET status = 'approved', decided_by = $4, decided_at = now()
+       WHERE business_id = $1 AND kind = 'secret' AND status = 'pending' AND expires_at > now()
+         AND input ->> 'name' = $2 AND coalesce((input ->> 'spend')::boolean, false) = $3
+       RETURNING ${decisionColumns}`,
+      [businessId, secret.name, secret.spend, by],
+    ),
+  );
+
+/**
+ * Spends a signed spend approval on one card fill: approved, signed, unexpired and unused, of
+ * this work item. It is used from then on; returned only if the fill sent nothing.
+ */
+export const claimSpend = (db: Database, businessId: string, workItemId: string, id: string) =>
+  database(db, (sql) =>
+    sql.row<Decision>(
+      `UPDATE decisions SET status = 'used', used_at = now()
+       WHERE id = $1 AND business_id = $2 AND work_item_id = $3 AND kind = 'approve'
+         AND status = 'approved' AND signature IS NOT NULL AND input -> 'amount' IS NOT NULL
+         AND expires_at > now()
+       RETURNING ${decisionColumns}`,
+      [id, businessId, workItemId],
+    ),
+  );
+
+/** A claimed spend approval back to approved: its fill was refused before anything was sent. */
+export const unclaimSpend = (db: Database, businessId: string, id: string) =>
+  database(db, (sql) =>
+    sql.run(
+      `UPDATE decisions SET status = 'approved', used_at = NULL
+       WHERE id = $1 AND business_id = $2 AND kind = 'approve' AND status = 'used'
+         AND signature IS NOT NULL`,
+      [id, businessId],
+    ),
+  );

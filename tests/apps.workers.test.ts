@@ -143,7 +143,7 @@ const collaboration = [
   "askOwner",
 ];
 const files = ["readSkill", "read", "write", "printPdf", "importAttachment"];
-const browsing = ["browserScript", "browserScreenshot", "browserTabs"];
+const browsing = ["browserScript", "browserScreenshot", "browserTabs", "browserFill"];
 const artifacts = ["artifactPage", "artifactRead", "artifactEdit", "publishArtifact"];
 const drive = ["driveList", "driveRead", "driveCreate", "driveUpdate"];
 const coding = [

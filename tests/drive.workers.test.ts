@@ -6,20 +6,34 @@ import {
   finishGoogle,
   googleAccess,
   disconnectGoogle,
-  protect,
   driveScope,
   googleConnection,
 } from "../src/connections/google.ts";
 import { listDrive, readDrive, selectDrive, writeDrive } from "../src/apps/documents/drive.ts";
 import { sha256 } from "../src/protocol/bytes.ts";
+import type { SendWithSecret } from "../src/vault/contract.ts";
+import { envelopeKeyring } from "../src/vault/envelope.ts";
+import { vaultHost } from "../src/vault/host/server.ts";
+import { postgresSecrets } from "../src/vault/store.ts";
 const config = {
   HYPERDRIVE: db,
   GOOGLE_CLIENT_ID: "test-client",
   GOOGLE_CLIENT_SECRET: "test-secret",
-  CONNECTIONS_KEY: "12".repeat(32),
   PUBLIC_URL: "https://devys.example",
-} as Env;
-const drive = { db, connection: googleConnection(config) };
+} as unknown as Env;
+// The refresh token lives in the vault; the host (here, its route in process) sends Google's
+// token and revoke requests with it, so what the Worker sees never holds it.
+const keyring = await envelopeKeyring(crypto.getRandomValues(new Uint8Array(32)));
+const secrets = postgresSecrets(db, keyring);
+const sentToGoogle: string[] = [];
+const send: SendWithSecret = async (secret, request, placeholder) =>
+  (await vaultHost(keyring).handle("/vault/request", {
+    secret,
+    request,
+    placeholder,
+  })) as Awaited<ReturnType<SendWithSecret>>;
+const vault = { secrets, send };
+const drive = { db, connection: googleConnection(config, vault) };
 // `owner` is the business that holds the connection; `person` is the member who connected it.
 let owner: string, person: string, grant: string;
 const session = "ab".repeat(32);
@@ -37,29 +51,69 @@ beforeEach(async () => {
   owner = created.business.id;
   person = created.person;
   grant = crypto.randomUUID();
-  await sql.run(
-    "INSERT INTO google_connections(business_id,id,refresh_token,connected_by) VALUES($1,$2,$3,$4)",
-    [owner, grant, await protect(config, owner, grant, "private-refresh"), person],
-  );
+  await sql.run("INSERT INTO google_connections(business_id,id,connected_by) VALUES($1,$2,$3)", [
+    owner,
+    grant,
+    person,
+  ]);
+  await secrets.put(owner, "google", "connection", "private-refresh", person);
+  sentToGoogle.length = 0;
 });
 afterEach(() => vi.restoreAllMocks());
 const member = async (businessId: string) => businessId === owner;
-it("encrypted grants cannot be decrypted for another owner or connection", async () => {
-  const encrypted = await protect(config, owner, grant, "secret");
-  expect(encrypted).not.toContain("secret");
-  expect(await protect(config, owner, grant, encrypted, true)).toBe("secret");
-  await expect(protect(config, "other", grant, encrypted, true)).rejects.toThrow();
-  await expect(protect(config, owner, "other", encrypted, true)).rejects.toThrow();
+/** Google's side: records each token or revoke request's body, as the host sent it. */
+const google = (answer: (url: string) => Promise<Response> | Response) =>
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const url = String(input);
+    if (/\/(token|revoke)$/.test(url)) sentToGoogle.push(String(init?.body ?? ""));
+    return answer(url);
+  });
+it("the refresh token is in the vault: only the host's request carries it, and only for its business", async () => {
+  const row = await sql.row<{ ciphertext: string; kind: string }>(
+    "SELECT ciphertext, kind FROM secrets WHERE business_id=$1 AND name='google'",
+    [owner],
+  );
+  expect(row).toMatchObject({ kind: "connection" });
+  expect(row!.ciphertext).not.toContain("private-refresh");
+  // Connection credentials are not the owner's secrets: not listed, and not runnable.
+  expect(await secrets.list(owner)).toEqual([]);
+  await expect(secrets.sealed(owner, ["google"], ["secret", "spend"])).rejects.toThrow(/No secret/);
+  google((url) => (url.endsWith("/token") ? tokens() : new Response(null, { status: 404 })));
+  const access = await googleAccess(config, vault, owner);
+  expect(access).toEqual({ id: grant, token: "private-access" });
+  expect(sentToGoogle[0]).toContain("refresh_token=private-refresh");
+  // Another business's token never opens in this business's name.
+  const [sealed] = await secrets.sealed(owner, ["google"], ["connection"]);
+  await expect(
+    send(
+      { ...sealed!, business: "other-business" },
+      { url: "https://oauth2.googleapis.com/token", method: "POST", headers: {}, body: "" },
+      "devys-google-placeholder-0000",
+    ),
+  ).rejects.toThrow(/could not be opened/);
+  // An answer that echoes the token comes back without it.
+  google(() => new Response("you sent private-refresh", { status: 400 }));
+  const echoed = await send(
+    sealed!,
+    {
+      url: "https://oauth2.googleapis.com/token",
+      method: "POST",
+      headers: {},
+      body: "t=devys-google-placeholder-0000",
+    },
+    "devys-google-placeholder-0000",
+  );
+  expect(echoed.body).toBe("you sent [redacted]");
 });
 it("disconnect prevents an in-flight refresh from restoring access", async () => {
-  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+  google(async (input) => {
     if (String(input).endsWith("/token")) {
       await sql.run("DELETE FROM google_connections WHERE business_id=$1", [owner]);
       return tokens();
     }
     throw new Error("Unexpected request");
   });
-  await expect(googleAccess(config, owner)).rejects.toThrow("Connection changed");
+  await expect(googleAccess(config, vault, owner)).rejects.toThrow("Connection changed");
   expect(
     await sql.row("SELECT id FROM google_connections WHERE business_id=$1", [owner]),
   ).toBeUndefined();
@@ -82,27 +136,29 @@ it("OAuth state binds the owner and session and disconnect invalidates a callbac
   expect(auth.searchParams.get("scope")).toBe(driveScope);
   expect(auth.searchParams.get("code_challenge_method")).toBe("S256");
   const callback = `${config.PUBLIC_URL}/api/connections/google/callback?code=code&state=${auth.searchParams.get("state")}`;
-  expect((await finishGoogle(new Request(callback), config, person, member)).status).toBe(400);
+  expect((await finishGoogle(new Request(callback), config, vault, person, member)).status).toBe(
+    400,
+  );
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     if (String(input).endsWith("/token")) {
-      await disconnectGoogle(config, owner);
+      await disconnectGoogle(config, vault, owner);
       return tokens();
     }
     if (String(input).endsWith("/revoke")) return new Response(null, { status: 200 });
     throw new Error("Unexpected request");
   });
   expect(
-    (await finishGoogle(new Request(callback, { headers }), config, person, member)).status,
+    (await finishGoogle(new Request(callback, { headers }), config, vault, person, member)).status,
   ).toBe(409);
   expect(
-    (await finishGoogle(new Request(callback, { headers }), config, person, member)).status,
+    (await finishGoogle(new Request(callback, { headers }), config, vault, person, member)).status,
   ).toBe(400);
   expect(
     await sql.row("SELECT id FROM google_connections WHERE business_id=$1", [owner]),
   ).toBeUndefined();
 });
 it("selection checks provider permission, isolates businesses, and disconnect removes selected files", async () => {
-  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+  google(async (input) => {
     const url = String(input);
     if (url.endsWith("/token")) return tokens();
     if (url.endsWith("/revoke")) return new Response(null);
@@ -115,7 +171,15 @@ it("selection checks provider permission, isolates businesses, and disconnect re
   expect(await listDrive(db, owner)).toHaveLength(1);
   expect(await listDrive(db, "other-owner")).toEqual([]);
   await expect(readDrive(drive, owner, "unselected")).rejects.toThrow("Choose this file");
-  expect(await disconnectGoogle(config, owner)).toEqual({ disconnected: true, revoked: true });
+  expect(await disconnectGoogle(config, vault, owner)).toEqual({
+    disconnected: true,
+    revoked: true,
+  });
+  // The revoke carried the token; the vault no longer holds it.
+  expect(sentToGoogle.at(-1)).toBe("token=private-refresh");
+  expect(
+    await sql.row("SELECT 1 FROM secrets WHERE business_id=$1 AND name='google'", [owner]),
+  ).toBeUndefined();
   expect(await listDrive(db, owner)).toEqual([]);
 });
 it("an uncertain create is inspected without uploading twice and changed inputs cannot reuse its receipt", async () => {
@@ -186,12 +250,14 @@ it("stale revisions and cancelled operations cannot issue an update", async () =
 });
 
 it("a second connected business cannot read another business's selected file", async () => {
-  const other = crypto.randomUUID(),
+  const other = (await business("Other drive")).business.id,
     otherGrant = crypto.randomUUID();
-  await sql.run(
-    "INSERT INTO google_connections(business_id,id,refresh_token,connected_by) VALUES($1,$2,$3,$4)",
-    [other, otherGrant, await protect(config, other, otherGrant, "other-refresh"), person],
-  );
+  await sql.run("INSERT INTO google_connections(business_id,id,connected_by) VALUES($1,$2,$3)", [
+    other,
+    otherGrant,
+    person,
+  ]);
+  await secrets.put(other, "google", "connection", "other-refresh", person);
   let fileReads = 0;
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     if (String(input).endsWith("/token")) return tokens();

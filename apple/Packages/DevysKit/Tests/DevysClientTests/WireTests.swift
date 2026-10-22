@@ -46,6 +46,7 @@ struct WireTests {
         "roles": { try await $0.roles($1) },
         "routine": { try await $0.setRoutinePaused($1, businessID: "b1", id: "r1", paused: true) },
         "routines": { try await $0.routines($1, businessID: "b1", employeeID: "e1") },
+        "secrets": { try await $0.addSecret($1, businessID: "b1", NewSecret(name: "STRIPE_KEY", value: .secret("sk_test"))) },
         "screenshot": { try await $0.browserPicture($1, businessID: "b1") },
         "status": { try await $0.status($1, scope) },
         "terminals": { try await $0.terminals($1, businessID: "b1") },
@@ -88,6 +89,22 @@ struct WireTests {
         _ = try await read(try Self.answering(name), Self.session)
     }
 
+    @Test("The secure entry sheet sends a value or a card as the server takes it, and never prints one")
+    func newSecret() throws {
+        let object = { (secret: NewSecret) throws -> [String: Any] in
+            try #require(JSONSerialization.jsonObject(with: Wire.encoder().encode(secret)) as? [String: Any])
+        }
+        let key = NewSecret(name: "STRIPE_KEY", value: .secret("sk_live_hidden"))
+        #expect(try object(key) as NSDictionary == ["name": "STRIPE_KEY", "kind": "secret", "value": "sk_live_hidden"])
+        let card = NewSecret(name: "RAMP_CARD", value: .card(CardEntry(number: "4242424242424242", expiry: "04/31", cvc: nil, name: "Sam", postal: "94107")))
+        #expect(try object(card) as NSDictionary == [
+            "name": "RAMP_CARD", "kind": "spend",
+            "card": ["number": "4242424242424242", "expiry": "04/31", "name": "Sam", "postal": "94107"]
+        ])
+        #expect(!"\(key)".contains("sk_live") && !String(reflecting: card).contains("4242"))
+        #expect(NewSecret.isName("RAMP_CARD") && !NewSecret.isName("ramp") && !NewSecret.isName("1KEY"))
+    }
+
     @Test("Golden values land in the right fields")
     func values() async throws {
         let home = try await Self.answering("home").home(Self.session, businessID: "b1")
@@ -95,12 +112,15 @@ struct WireTests {
         #expect(home.decisions.last?.capability == "driveCreate" && home.decisions.last?.input.fields.first?.key == "content")
         #expect(home.decisions.first?.capability == "routineActivate" && home.needsYou.first?.workID == nil)
         #expect(home.glance.moving.first?.state == .inProgress && home.glance.moving.first?.dueAt != nil)
-        // What employees ask with askOwner: a take over, and a spend approval to sign.
-        #expect(home.needsYou.map(\.kind) == [.decision, .takeOver, .approve, .decision])
-        #expect(home.decisions[1].request == .takeOver(reason: "Sign in to the registrar (2FA)", url: "https://www.namecheap.com/myaccount/login/"))
-        let spend = try #require(SpendApproval(home.decisions[2], businessID: "b1"))
+        // What employees ask with askOwner: a card to add, a take over, and a spend approval to sign.
+        #expect(home.needsYou.map(\.kind) == [.decision, .secret, .takeOver, .approve, .decision])
+        #expect(home.decisions[1].request == .secret(name: "RAMP_CARD", why: "The company card, to pay for the domain at Namecheap", spend: true))
+        #expect(home.decisions[2].request == .takeOver(reason: "Sign in to the registrar (2FA)", url: "https://www.namecheap.com/myaccount/login/"))
+        let spend = try #require(SpendApproval(home.decisions[3], businessID: "b1"))
         #expect(spend.amount == Amount(cents: 1299, currency: "USD") && spend.counterparty == "Namecheap" && spend.renewal == "Renews yearly at $14.99")
-        #expect(home.decisions[2].isSpend && !home.decisions[1].isSpend && home.decisions[2].signedBy == nil)
+        #expect(home.decisions[3].isSpend && !home.decisions[2].isSpend && home.decisions[3].signedBy == nil)
+        let secrets = try await Self.answering("secrets").secrets(Self.session, businessID: "b1")
+        #expect(secrets == [SecretEntry(name: "STRIPE_KEY", kind: .secret, addedBy: "00000000-0000-4000-8000-000000000001", addedAt: "2026-01-01T00:00:00.000Z")])
         let keys = try await Self.answering("device-keys").deviceKeys(Self.session)
         #expect(keys.first?.status == .active && keys.first?.current == true && keys.first?.label == "iPhone")
 

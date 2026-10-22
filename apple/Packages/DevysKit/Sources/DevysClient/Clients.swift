@@ -84,6 +84,10 @@ public struct RuntimeClient: Sendable {
     public var setRoutinePaused: @Sendable (_ businessID: String, _ routineID: String, _ paused: Bool) async throws -> Routine
     public var artifactText: @Sendable (_ businessID: String, _ artifactID: String) async throws -> String
     public var googleConnection: @Sendable (_ businessID: String) async throws -> GoogleConnection
+    /// The business's secrets by name; adding and removing answer the list as it now stands.
+    public var secrets: @Sendable (_ businessID: String) async throws -> [SecretEntry]
+    public var addSecret: @Sendable (_ businessID: String, NewSecret) async throws -> [SecretEntry]
+    public var removeSecret: @Sendable (_ businessID: String, _ name: String) async throws -> [SecretEntry]
 
     public init(
         account: @escaping @Sendable () async throws -> Account,
@@ -146,7 +150,12 @@ public struct RuntimeClient: Sendable {
         routines: @escaping @Sendable (String) async throws -> [Routine] = { _ in [] },
         setRoutinePaused: @escaping @Sendable (String, String, Bool) async throws -> Routine = { _, _, _ in throw DevysHTTPError.unauthorized },
         artifactText: @escaping @Sendable (String, String) async throws -> String = { _, _ in "" },
-        googleConnection: @escaping @Sendable (String) async throws -> GoogleConnection = { _ in GoogleConnection(configured: false, connected: false) }
+        googleConnection: @escaping @Sendable (String) async throws -> GoogleConnection = { _ in GoogleConnection(configured: false, connected: false) },
+        secrets: @escaping @Sendable (String) async throws -> [SecretEntry] = { _ in [] },
+        addSecret: @escaping @Sendable (String, NewSecret) async throws -> [SecretEntry] = { _, secret in
+            [SecretEntry(name: secret.name, kind: { if case .card = secret.value { .spend } else { .secret } }())]
+        },
+        removeSecret: @escaping @Sendable (String, String) async throws -> [SecretEntry] = { _, _ in [] }
     ) {
         self.account = account
         self.rename = rename
@@ -194,6 +203,9 @@ public struct RuntimeClient: Sendable {
         self.setRoutinePaused = setRoutinePaused
         self.artifactText = artifactText
         self.googleConnection = googleConnection
+        self.secrets = secrets
+        self.addSecret = addSecret
+        self.removeSecret = removeSecret
     }
 }
 
@@ -382,7 +394,10 @@ extension RuntimeClient {
             artifactText: { id, artifact in
                 try await hub.call { api, session in try await api.artifactText(session, businessID: id, artifactID: artifact) }
             },
-            googleConnection: { id in try await hub.call { api, session in try await api.googleConnection(session, businessID: id) } }
+            googleConnection: { id in try await hub.call { api, session in try await api.googleConnection(session, businessID: id) } },
+            secrets: { id in try await hub.call { api, session in try await api.secrets(session, businessID: id) } },
+            addSecret: { id, secret in try await hub.call { api, session in try await api.addSecret(session, businessID: id, secret) } },
+            removeSecret: { id, name in try await hub.call { api, session in try await api.removeSecret(session, businessID: id, name: name) } }
         )
     }
 

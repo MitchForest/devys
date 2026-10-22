@@ -21,6 +21,12 @@ struct WorkspaceSheets: ViewModifier {
             .sheet(isPresented: Binding(get: { store.signing != nil }, set: { if !$0 { store.send(.signDismissed) } })) {
                 SigningSheetView(store: store)
             }
+            .sheet(isPresented: Binding(get: { store.secretEntry != nil }, set: { if !$0 { store.send(.secretDismissed) } })) {
+                if let sheet = store.secretEntry {
+                    // Opened from a request, its name and kind are fixed: nothing to edit.
+                    SecretEntryView(sheet: sheet, edit: { _ in }, save: { store.send(.secretSubmitted($0)) }, cancel: { store.send(.secretDismissed) })
+                }
+            }
     }
 }
 

@@ -24,6 +24,7 @@ import { appSkills } from "./apps.ts";
 import { keepable } from "./projects.ts";
 import { artifactUrl } from "./artifacts.ts";
 import { askOwnerFor } from "./asking.ts";
+import { connectionVault, filling } from "./vault.ts";
 /** Composition only: implementations and SQL belong to their domains. */
 export function capabilities(
   env: Env,
@@ -31,7 +32,10 @@ export function capabilities(
 ): Capability[] {
   const runner = modeOf(env).runner();
   const catalog = [
-    ...driveCapabilities({ db: env.HYPERDRIVE, connection: googleConnection(env) }),
+    ...driveCapabilities({
+      db: env.HYPERDRIVE,
+      connection: googleConnection(env, connectionVault(env)),
+    }),
     ...publicCapabilities(env),
     ...memoryCapabilities(memory),
     ...conversationCapabilities(env.HYPERDRIVE, (businessId) =>
@@ -49,7 +53,7 @@ export function capabilities(
       (businessId, id) => artifactUrl(env, businessId, id),
     ),
     ...codingCapabilities(codingDependencies(env)),
-    ...browserCapabilities(modeOf(env).browser, env.LOADER),
+    ...browserCapabilities(modeOf(env).browser, env.LOADER, filling(env)),
     ...workCapabilities(
       env.HYPERDRIVE,
       async (businessId, employeeId) =>

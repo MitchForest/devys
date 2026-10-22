@@ -31,6 +31,13 @@ package enum AskingIntent {
     case signDismissed
     /// A take-over request: the owner takes the work over and its live browser opens.
     case takeOverTapped(workItemID: String)
+    /// A secret request: the secure entry sheet opens for that name (a card when it asks one).
+    case secretTapped(decisionID: String)
+    /// The sheet's value goes straight to the vault; it never enters state.
+    case secretSubmitted(NewSecret)
+    /// Nil when it was added; otherwise why not.
+    case secretFinished(String?)
+    case secretDismissed
 }
 
 extension Workspace {
@@ -75,6 +82,46 @@ extension Workspace {
             changeWork(state, failure: "Couldn't take that work over.") { runtime, businessID in
                 try await runtime.setTakeover(businessID, workItemID, true)
             }
+        case .secretTapped, .secretSubmitted, .secretFinished, .secretDismissed:
+            reduceSecretEntry(intent, state: &state)
+        }
+    }
+
+    /// The secure entry sheet for an employee's secret request; the value never enters state.
+    private func reduceSecretEntry(_ intent: AskingIntent, state: inout State) {
+        switch intent {
+        case .secretTapped(let decisionID):
+            guard let decision = state.decisions.first(where: { $0.id == decisionID }) else { return }
+            state.secretEntry = SecretEntrySheet(request: decision)
+        case .secretSubmitted(let secret):
+            guard var sheet = state.secretEntry, !sheet.isSaving, secret.name == sheet.name else { return }
+            sheet.isSaving = true
+            sheet.error = nil
+            state.secretEntry = sheet
+            let businessID = state.businessID
+            let runtime = runtime
+            store.addTask {
+                do {
+                    _ = try await runtime.addSecret(businessID, secret)
+                    try store.send(Action(.asking(.secretFinished(nil))))
+                } catch {
+                    try store.send(Action(.asking(.secretFinished(SecretEntrySheet.message(error)))))
+                }
+                try await reloadWork(runtime, businessID)
+            }
+        case .secretFinished(let error):
+            guard let sheet = state.secretEntry else { return }
+            if let error {
+                state.secretEntry?.isSaving = false
+                state.secretEntry?.error = error
+            } else {
+                state.secretEntry = nil
+                if let id = sheet.requestID, let home = state.home.value { state.home = .loaded(home.answering(id)) }
+            }
+        case .secretDismissed:
+            if state.secretEntry?.isSaving != true { state.secretEntry = nil }
+        default:
+            return
         }
     }
 

@@ -6,6 +6,7 @@ import {
   Copy,
   Download,
   Image,
+  KeyRound,
   Laptop,
   LayoutGrid,
   Play,
@@ -45,6 +46,7 @@ import {
 import { useNav, useSettingsSection } from "../app/navigation.ts";
 import { keys } from "../app/query.ts";
 import { DriveConnection } from "./drive-settings.tsx";
+import { SecretEntrySheet } from "./secret-entry.tsx";
 import { useTheme, type Theme } from "../app/theme.ts";
 import {
   availableVoices,
@@ -68,12 +70,21 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 
-type Section = "account" | "apps" | "team" | "businesses" | "devices" | "voice" | "appearance";
+type Section =
+  | "account"
+  | "apps"
+  | "team"
+  | "businesses"
+  | "secrets"
+  | "devices"
+  | "voice"
+  | "appearance";
 const sections: { value: Section; title: string; icon: LucideIcon }[] = [
   { value: "account", title: "Account", icon: CircleUserRound },
   { value: "apps", title: "Apps", icon: LayoutGrid },
   { value: "team", title: "Team", icon: Users },
   { value: "businesses", title: "Businesses", icon: Building2 },
+  { value: "secrets", title: "Secrets", icon: KeyRound },
   { value: "devices", title: "Devices", icon: Laptop },
   { value: "voice", title: "Voice", icon: AudioLines },
   { value: "appearance", title: "Appearance", icon: SunMoon },
@@ -100,7 +111,7 @@ export function Settings() {
               aria-pressed={section === s.value}
               onClick={() => setSection(s.value)}
               className={cn(
-                "flex w-[72px] shrink-0 flex-col items-center gap-1 rounded-control py-1.5 text-caption transition-colors",
+                "flex w-[66px] shrink-0 flex-col items-center gap-1 rounded-control py-1.5 text-caption transition-colors",
                 section === s.value ? "bg-track text-ink" : "text-ink-2 hover:text-ink",
               )}
             >
@@ -118,6 +129,8 @@ export function Settings() {
             <TeamPane />
           ) : section === "businesses" ? (
             <BusinessesPane />
+          ) : section === "secrets" ? (
+            <SecretsPane />
           ) : section === "devices" ? (
             <DevicesPane />
           ) : section === "voice" ? (
@@ -615,6 +628,66 @@ function CopyButton({ text, label }: { text: string; label: string }) {
     >
       {copied ? <Check /> : <Copy />} {copied ? "Copied" : "Copy"}
     </Button>
+  );
+}
+
+/**
+ * The current business's secrets by name: a card or a secret, when it was added and last used.
+ * Values are never shown or read back; a new one goes in through the secure entry sheet.
+ */
+function SecretsPane() {
+  const businessId = useBusinessId();
+  const client = useQueryClient();
+  const person = usePerson();
+  const [adding, setAdding] = useState(false);
+  const list = useQuery({
+    queryKey: keys.secrets(businessId ?? ""),
+    queryFn: () => api.secrets(businessId!),
+    enabled: Boolean(businessId),
+    select: (result) => result.secrets,
+  });
+  const remove = useMutation({
+    mutationFn: (name: string) => api.removeSecret(businessId!, name),
+    onSuccess: (left) => client.setQueryData(keys.secrets(businessId!), left),
+  });
+  if (!businessId) return null;
+  return (
+    <div className="flex flex-col gap-3 p-6">
+      <div className="flex items-center">
+        <span className="text-heading font-semibold text-ink">Secrets</span>
+        <span className="ml-auto" />
+        <Button size="compact" onClick={() => setAdding(true)}>
+          <Plus /> Add
+        </Button>
+      </div>
+      {list.isError && <span className="text-detail text-ink-2">Secrets are unavailable.</span>}
+      {(list.data ?? []).map((secret) => (
+        <div key={secret.name} className="flex items-center gap-3 py-1" data-testid="secret-row">
+          <div className="flex min-w-0 flex-col">
+            <span className="truncate font-mono text-control text-ink">{secret.name}</span>
+            <span className="text-detail text-ink-3">
+              {secret.kind === "spend" ? "Card" : "Secret"} · added{" "}
+              {secret.added_by === person?.id ? "by you " : ""}
+              {shortDate(secret.added_at)}
+              {secret.last_used_at ? ` · used ${shortDate(secret.last_used_at)}` : ""}
+            </span>
+          </div>
+          <span className="ml-auto" />
+          <Button
+            size="compact"
+            variant="quiet"
+            disabled={remove.isPending}
+            onClick={() => remove.mutate(secret.name)}
+          >
+            Delete
+          </Button>
+        </div>
+      ))}
+      {list.data?.length === 0 && (
+        <p className="text-detail text-ink-3">None yet. Employees use them by name, unseen.</p>
+      )}
+      <SecretEntrySheet businessId={businessId} open={adding} onClose={() => setAdding(false)} />
+    </div>
   );
 }
 

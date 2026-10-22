@@ -16,6 +16,9 @@ import { hostCoding } from "../src/apps/code/host-client.ts";
 import { hostRunner } from "../src/workspace/host.ts";
 import { confine } from "../src/workspace/host/seatbelt.ts";
 import { startHost } from "../src/workspace/host/server.ts";
+import { hostKeyring, openFor } from "../src/vault/host/server.ts";
+import { memorySecrets } from "./fixtures/vault.ts";
+import { readFileSync } from "node:fs";
 
 const token = "test-token";
 const fakeCodex = join(import.meta.dirname, "fixtures/fake-codex.mjs");
@@ -48,8 +51,8 @@ done
 
 /**
  * A Mac host with two businesses, each holding a secret, and the server's own data outside the
- * businesses folder, as installed (scripts/local.ts): the host's data with every business's
- * deploy secrets and browser profiles, and Postgres beside it.
+ * businesses folder, as installed (scripts/local.ts): the host's data with the vault's master key
+ * and every business's browser profile, and Postgres beside it.
  */
 async function host() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "devys-confined-")));
@@ -60,11 +63,6 @@ async function host() {
   for (const scope of [a, b]) {
     mkdirSync(join(work, scope.businessId), { recursive: true });
     writeFileSync(join(work, scope.businessId, "secret.txt"), `${scope.businessId} secret\n`);
-    mkdirSync(join(data, "deploy"), { recursive: true });
-    writeFileSync(
-      join(data, "deploy", `${scope.businessId}.env`),
-      `TOKEN=${scope.businessId}-deploy-token\n`,
-    );
     mkdirSync(join(data, "browser", scope.businessId, "Default"), { recursive: true });
     writeFileSync(
       join(data, "browser", scope.businessId, "Default", "Cookies"),
@@ -74,6 +72,9 @@ async function host() {
   mkdirSync(postgres, { recursive: true });
   writeFileSync(join(postgres, "PG_VERSION"), "postgres-marker\n");
   const hidden = [server];
+  // The vault's master key, as the host keeps it: a file in its data folder.
+  const keyring = await hostKeyring(data);
+  const secrets = memorySecrets(keyring);
   const cli = join(root, "fake-claude");
   writeFileSync(cli, harness, { mode: 0o755 });
   const delivered: CodingEvent[] = [];
@@ -89,6 +90,7 @@ async function host() {
     work,
     port: 0,
     shell: "/bin/sh",
+    open: (business, sealed, kinds) => openFor(keyring, business, sealed, kinds),
     routes: [
       codingHost({
         work,
@@ -126,13 +128,26 @@ async function host() {
   const files = {} as Parameters<typeof hostRunner>[0]["files"];
   return {
     root,
+    url,
     work,
     data,
     postgres,
     delivered,
     spawned,
+    secrets,
+    /** The master key file's contents, as only the host reads it. */
+    masterKey: () => readFileSync(join(data, "vault.key"), "utf8"),
     secret: (scope: typeof a) => join(work, scope.businessId, "secret.txt"),
-    runner: (scope: typeof a) => hostRunner({ url, token, files }, scope),
+    runner: (scope: typeof a) =>
+      hostRunner(
+        {
+          url,
+          token,
+          files,
+          sealed: (business, names) => secrets.sealed(business, names, ["secret", "spend"]),
+        },
+        scope,
+      ),
     /** The host's raw file route, as the Worker calls it to copy bytes to and from R2. */
     file: (business: string, path: string) =>
       fetch(`${url}/file?business=${business}&path=${encodeURIComponent(path)}`, {
@@ -211,7 +226,7 @@ it("an employee's file tools refuse another business's folder", async () => {
     /another business/,
   );
   await expect(state.runner(a).list(state.data)).rejects.toThrow(/server's own data/);
-  await expect(state.runner(a).read(join(state.data, "deploy", "business-a.env"))).rejects.toThrow(
+  await expect(state.runner(a).read(join(state.data, "vault.key"))).rejects.toThrow(
     /server's own data/,
   );
   // The raw file route that moves bytes to and from R2 is held to the same folder.
@@ -226,8 +241,8 @@ it("an employee's run reads nothing of the server's own data, its own business's
     state,
     a,
     [
-      `cat '${join(state.data, "deploy", "business-a.env")}'`,
-      `cat '${join(state.data, "deploy", "business-b.env")}'`,
+      `cat '${join(state.data, "vault.key")}'`,
+      `cp '${join(state.data, "vault.key")}' ./stolen.key`,
       `cat '${join(state.data, "browser", "business-a", "Default", "Cookies")}'`,
       `cat '${join(state.data, "browser", "business-b", "Default", "Cookies")}'`,
       `cat '${join(state.postgres, "PG_VERSION")}'`,
@@ -237,13 +252,102 @@ it("an employee's run reads nothing of the server's own data, its own business's
     ].join("; "),
   );
   expect(tried).toContain("Operation not permitted");
-  expect(tried).not.toContain("deploy-token");
+  expect(tried).not.toContain(state.masterKey());
+  expect(existsSync(join(state.work, a.businessId, "stolen.key"))).toBe(false);
   expect(tried).not.toContain("cookie");
   expect(tried).not.toContain("postgres-marker");
   expect(tried).not.toMatch(/^PG_VERSION$/m);
   expect(existsSync(join(state.postgres, "planted"))).toBe(false);
   // Its own folder still works.
   expect(await run(state, a, `cat ${state.secret(a)}`)).toBe("business-a secret\n");
+});
+
+it("a command's named secrets are in its environment only and redacted from what it prints", async () => {
+  const state = await host();
+  const key = "devys-test-secret-value-0123456789";
+  await state.secrets.put(a.businessId, "STRIPE_KEY", "secret", key, "owner");
+  await state.secrets.put(b.businessId, "STRIPE_KEY", "secret", "b-business-key", "owner");
+  await state.secrets.put(
+    a.businessId,
+    "RAMP_CARD",
+    "spend",
+    JSON.stringify({ number: "4242424242424242", expiry: "12/30", name: "Sam", postal: "94107" }),
+    "owner",
+  );
+  const used = await state
+    .runner(a)
+    .run(
+      "with-secret",
+      'echo "key=$STRIPE_KEY"; printf %s "$STRIPE_KEY" | base64; echo "$STRIPE_KEY" | sed "s/_/%5F/g"; env | grep -c sk_live; printf %s "$STRIPE_KEY" | cut -c1-6 >&2',
+      10_000,
+      64_000,
+      ["STRIPE_KEY"],
+    );
+  expect(used.exitCode).toBe(0);
+  expect(used.stdout).toContain("key=[redacted]");
+  expect(used.stdout + used.stderr).not.toContain(key);
+  // Another command, of the same employee, has no such variable.
+  const after = await state
+    .runner(a)
+    .run("without", 'echo "key=${STRIPE_KEY:-none}"', 10_000, 64_000);
+  expect(after.stdout).toBe("key=none\n");
+  // Nor is the value in the receipt the host keeps on disk.
+  expect(readFileSync(join(state.data, "receipts.jsonl"), "utf8")).not.toContain(key);
+  // A card is never put in a command; another business's secret never opens for this one.
+  await expect(state.runner(a).run("card", "true", 10_000, 64_000, ["RAMP_CARD"])).rejects.toThrow(
+    /is a card/,
+  );
+  const theirs = (await state.secrets.sealed(b.businessId, ["STRIPE_KEY"], ["secret"]))[0]!;
+  const forged = await fetch(`${state.url}/run`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      scope: a,
+      operationId: "forged",
+      command: "echo $STRIPE_KEY",
+      timeoutMs: 10_000,
+      maxBytes: 64_000,
+      secrets: [{ ...theirs, business: a.businessId }],
+    }),
+  });
+  expect(forged.status).toBe(403);
+  expect(await forged.text()).not.toContain("b-business-key");
+});
+
+it("no confined process obtains the vault's master key: commands, coding harnesses and checks", async () => {
+  const state = await host();
+  const keyFile = join(state.data, "vault.key");
+  const master = state.masterKey();
+  expect(master).toMatch(/^[a-f0-9]{64}$/);
+  const tried = await run(
+    state,
+    a,
+    [
+      `cat '${keyFile}'`,
+      `head -c 64 '${keyFile}'`,
+      `ls -la '${state.data}'`,
+      `find '${join(state.data, "..")}' -name 'vault.key' -exec cat {} \\;`,
+      `/usr/bin/python3 -c "print(open('${keyFile}').read())"`,
+      `ln '${keyFile}' ./linked.key; cat ./linked.key`,
+    ].join("; ") + " 2>&1",
+  );
+  expect(tried).toContain("Operation not permitted");
+  expect(tried).not.toContain(master);
+  // The coding harness's own shell, and what it runs, are held the same way.
+  await state.coding(a).start({
+    ...build("key-claude", "claude"),
+    objective: `cat '${keyFile}'`,
+  });
+  const reply = (
+    await until(() =>
+      state.delivered.find(
+        (event) =>
+          event.codingSessionId === "key-claude" && ["finished", "failed"].includes(event.kind),
+      ),
+    )
+  ).text;
+  expect(reply).toContain("Operation not permitted");
+  expect(reply).not.toContain(master);
 });
 
 const build = (id: string, provider: StartRequest["provider"]): StartRequest => ({

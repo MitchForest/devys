@@ -12,12 +12,16 @@ import { hostBrowser } from "../../src/browser/host-client.ts";
 import { browsersHost } from "../../src/browser/host/server.ts";
 import { scriptPrelude } from "../../src/browser/script.ts";
 import { startHost } from "../../src/workspace/host/server.ts";
+import { hostKeyring, openFor } from "../../src/vault/host/server.ts";
 
 setDefaultTimeout(90_000);
 const chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const token = "test-token";
 
-// A tiny site: a button and a field at known places, an upload, frames, and a sign-in cookie.
+/** What the test checkout received when paid. */
+const paid: Record<string, string>[] = [];
+// A tiny site: a button and a field at known places, an upload, frames, a sign-in cookie and a
+// checkout.
 const site = createServer((request, response) => {
   const url = new URL(request.url ?? "/", "http://site");
   const cookie = request.headers.cookie ?? "";
@@ -35,6 +39,34 @@ const site = createServer((request, response) => {
       `<title>Upload</title><input type="file" onchange="document.title = this.files[0].name">`,
     );
   if (url.pathname === "/inner") return response.end(`<title>Inner</title><h1>Inside</h1>`);
+  // A checkout: name and postal code on the merchant's page, the card in another site's frame
+  // (as a payment provider's). Pay collects the frame's fields by message and goes to /paid.
+  if (url.pathname === "/checkout")
+    return response.end(`<title>Checkout</title><body style="margin:0">
+      <input id="name" style="position:absolute;left:20px;top:20px;width:200px;height:30px">
+      <input id="postal" style="position:absolute;left:20px;top:70px;width:200px;height:30px">
+      <iframe src="${url.searchParams.get("frame")}/card-frame" style="position:absolute;left:20px;top:120px;width:400px;height:200px;border:0"></iframe>
+      <button id="pay" style="position:absolute;left:20px;top:360px;width:120px;height:40px"
+        onclick="frames[0].postMessage('collect', '*')">Pay</button>
+      <script>
+        addEventListener("message", (event) => {
+          const query = new URLSearchParams({ ...event.data, name: document.getElementById("name").value, postal: postal.value });
+          location.href = "/paid?" + query;
+        });
+      </script></body>`);
+  if (url.pathname === "/card-frame")
+    return response.end(`<title>Card</title><body style="margin:0">
+      <input id="number" style="position:absolute;left:0;top:0;width:200px;height:30px">
+      <input id="exp" style="position:absolute;left:0;top:50px;width:80px;height:30px">
+      <input id="cvc" style="position:absolute;left:0;top:100px;width:60px;height:30px">
+      <script>
+        addEventListener("message", () =>
+          parent.postMessage({ number: number.value, exp: exp.value, cvc: cvc.value }, "*"));
+      </script></body>`);
+  if (url.pathname === "/paid") {
+    paid.push(Object.fromEntries(url.searchParams));
+    return response.end("<title>Paid</title><h1>Thank you</h1>");
+  }
   if (url.pathname === "/frames")
     return response.end(
       `<title>Frames</title><iframe src="/inner"></iframe><iframe src="${url.searchParams.get("other")}/inner"></iframe>`,
@@ -54,12 +86,22 @@ const other = `http://localhost:${port}`;
 
 const root = realpathSync(mkdtempSync(join(tmpdir(), "devys-browser-")));
 const work = join(root, "work");
+const keyring = await hostKeyring(join(root, "data"));
+const pauseMs = 3_000;
 const host = await startHost({
   token,
   data: join(root, "data"),
   work,
   port: 0,
-  routes: [browsersHost({ data: join(root, "data"), work, headless: true })],
+  routes: [
+    browsersHost({
+      data: join(root, "data"),
+      work,
+      headless: true,
+      pauseMs,
+      open: (business, sealed, kinds) => openFor(keyring, business, sealed, kinds),
+    }),
+  ],
 });
 afterAll(async () => {
   await host.close();
@@ -229,5 +271,150 @@ it.skipIf(!existsSync(chrome))(
       { encoding: "utf8" },
     ).stdout.trim();
     expect(listening).toBe("");
+  },
+);
+
+const card = {
+  number: "4242424242424242",
+  expiry: "04/31",
+  cvc: "737",
+  name: "Sam Owner",
+  postal: "94107",
+};
+const value = (selector: string) =>
+  `return (await session.Runtime.evaluate({ expression: "document.querySelector('${selector}').value", returnByValue: true })).result.value;`;
+
+it.skipIf(!existsSync(chrome))(
+  "the host fills a card into a checkout and its payment frame only on the approved merchant's site, hides the page meanwhile, and clears a failed fill",
+  async () => {
+    const acme = browser("acme");
+    const sealedCard = await keyring.seal("acme", "RAMP_CARD", "spend", JSON.stringify(card));
+    await script(acme, open(`${base}/checkout?frame=${encodeURIComponent(other)}`));
+    const frame = (await script(
+      acme,
+      `const { targetInfos } = await session.Target.getTargets({});
+      return targetInfos.find((t) => t.type === "iframe" && t.url.startsWith(${JSON.stringify(other)})).targetId;`,
+    )) as string;
+    const fields = [
+      { selector: "#name", part: "name" as const },
+      { selector: "#postal", part: "postal" as const },
+      { target: frame, selector: "#number", part: "number" as const },
+      { target: frame, x: 40, y: 185, part: "expiry" as const },
+      { target: frame, selector: "#cvc", part: "cvc" as const },
+    ];
+
+    // Not on the site the approval names, and not without one: nothing is filled.
+    await expect(
+      acme.fill({ secret: sealedCard, merchant: "Namecheap (namecheap.com)", fields }, "work-1"),
+    ).rejects.toThrow(/127\.0\.0\.1, not namecheap\.com/);
+    await expect(
+      acme.fill({ secret: sealedCard, merchant: null, fields }, "work-1"),
+    ).rejects.toThrow(/doesn't name the merchant's site/);
+    expect(await script(acme, value("#name"))).toBe("");
+    // A card sealed for another business does not open here.
+    const theirs = await keyring.seal("globex", "RAMP_CARD", "spend", JSON.stringify(card));
+    await expect(
+      acme.fill({ secret: theirs, merchant: "127.0.0.1", fields }, "work-1"),
+    ).rejects.toThrow(/another business/);
+
+    // A failed fill clears what it filled and hides nothing afterwards.
+    await expect(
+      acme.fill(
+        {
+          secret: sealedCard,
+          merchant: "127.0.0.1",
+          fields: [
+            { selector: "#name", part: "name" },
+            { selector: "#missing", part: "postal" },
+          ],
+        },
+        "work-1",
+      ),
+    ).rejects.toThrow(/Nothing on the page matches #missing/);
+    expect(await script(acme, value("#name"))).toBe("");
+
+    // On the merchant's own page: every field, in the page and in the payment frame.
+    expect(
+      await acme.fill({ secret: sealedCard, merchant: "127.0.0.1", fields }, "work-1"),
+    ).toEqual({
+      origin: base,
+      submitted: false,
+      last4: "4242",
+    });
+    // Until the page moves on, employees see and read nothing of it; the owner still watches.
+    await expect(acme.screenshot("employee")).rejects.toThrow(/hidden from you/);
+    await expect(script(acme, value("#name"))).rejects.toThrow(/hidden from you/);
+    await expect(acme.events(0, null, 0)).rejects.toThrow(/hidden from you/);
+    await expect(acme.tabs({ action: "list" }, "work-1")).rejects.toThrow(/hidden from you/);
+    expect((await acme.screenshot("owner")).jpeg.length).toBeGreaterThan(100);
+    // The owner pays; the page moves on, and the employee sees it again.
+    await acme.input({ kind: "click", x: 80, y: 380 });
+    for (let tries = 0; tries < 100 && !paid.length; tries++)
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(paid.at(-1)).toEqual({
+      number: card.number,
+      exp: card.expiry,
+      cvc: card.cvc,
+      name: card.name,
+      postal: card.postal,
+    });
+    let shot;
+    for (let tries = 0; tries < 50 && !shot; tries++)
+      shot = await acme
+        .screenshot("employee")
+        .catch(() => new Promise((resolve) => setTimeout(resolve, 50)).then(() => undefined));
+    expect(shot).toBeDefined();
+    // What happened while the card was on the page is not kept for a later script to read.
+    const { events } = await acme.events(0, null, 0);
+    expect(JSON.stringify(events)).not.toContain(card.number);
+
+    // A fill that submits: the page moves on at once.
+    await script(acme, open(`${base}/checkout?frame=${encodeURIComponent(other)}`));
+    const again = (await script(
+      acme,
+      `const { targetInfos } = await session.Target.getTargets({});
+      return targetInfos.find((t) => t.type === "iframe" && t.url.startsWith(${JSON.stringify(other)})).targetId;`,
+    )) as string;
+    expect(
+      await acme.fill(
+        {
+          secret: sealedCard,
+          merchant: "https://127.0.0.1/cart",
+          fields: fields.map((field) => ("target" in field ? { ...field, target: again } : field)),
+          submit: { selector: "#pay" },
+        },
+        "work-1",
+      ),
+    ).toMatchObject({ submitted: true });
+    for (let tries = 0; tries < 100 && paid.length < 2; tries++)
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(paid).toHaveLength(2);
+    // The pause lifts when Chrome reports the navigation, which can trail the payment itself.
+    let visible = false;
+    for (let tries = 0; tries < 100 && !visible; tries++)
+      visible = await acme
+        .screenshot("employee")
+        .then(() => true)
+        .catch(() => new Promise((resolve) => setTimeout(resolve, 50)).then(() => false));
+    expect(visible).toBe(true);
+
+    // A password needs no approval; left on a page that doesn't move on, it is cleared when the
+    // pause ends.
+    const password = await keyring.seal("acme", "SITE_PASSWORD", "secret", "correct horse");
+    await script(acme, open(`${base}/checkout?frame=${encodeURIComponent(other)}`));
+    await acme.fill(
+      { secret: password, merchant: null, fields: [{ selector: "#name", part: "value" }] },
+      "work-1",
+    );
+    await expect(script(acme, value("#name"))).rejects.toThrow(/hidden from you/);
+    await new Promise((resolve) => setTimeout(resolve, pauseMs + 500));
+    expect(await script(acme, value("#name"))).toBe("");
+    // A plain secret has no card parts; a card is not a password.
+    await expect(
+      acme.fill(
+        { secret: password, merchant: null, fields: [{ selector: "#name", part: "number" }] },
+        "work-1",
+      ),
+    ).rejects.toThrow(/part value/);
   },
 );

@@ -32,6 +32,7 @@ import { appsRoute } from "./apps.ts";
 import { homeRoute } from "./home.ts";
 import { googleRoute } from "./google-route.ts";
 import { conversationRoute } from "./conversation-route.ts";
+import { secretsRoute } from "./vault.ts";
 
 /** Routes under /api/businesses/:id. The caller is a verified member of `business`. */
 export async function businessRoute(
@@ -107,12 +108,14 @@ export async function businessRoute(
       trusted,
     );
   if (path.startsWith("/connections/google")) return googleRoute(request, env, access);
-  // Coding, terminals, files and the browser run on the Mac as its owner.
+  // Coding, terminals, files, the browser and the secrets they use are on the Mac as its owner.
   if (
-    /^\/(coding|terminals|files|browser)(\/|$)|^\/work\/[^/]+\/sessions/.test(path) &&
+    /^\/(coding|terminals|files|browser|secrets)(\/|$)|^\/work\/[^/]+\/sessions/.test(path) &&
     !(await modeOf(env).mayUseMachine(person.id))
   )
     return forbidden();
+  if (path === "/secrets" || path.startsWith("/secrets/"))
+    return secretsRoute(request, env, access);
   const browsing = await browserRoute(request, env, access);
   if (browsing) return browsing;
   const coding = await codingRoute(request, env, access);

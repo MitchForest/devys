@@ -73,6 +73,7 @@ export async function localStores(channel = false) {
         "artifacts",
         "app_reactions",
         "channel_bindings",
+        "secrets",
         "grants",
         "employees",
         "memberships",

@@ -1,4 +1,5 @@
 import type { Scope } from "../identity/contract.ts";
+import type { Sealed } from "../vault/contract.ts";
 import { hostDown, hostFailure } from "../protocol/host.ts";
 import type {
   Checkpoint,
@@ -15,6 +16,8 @@ export interface HostConnection {
   files: Pick<R2Bucket, "get" | "put" | "head">;
   /** A folder file access must stay inside, symbolic links followed (the owner's file views). */
   within?: string;
+  /** The business's named secrets, sealed, for the host to put in one command (the vault). */
+  sealed?: (businessId: string, names: readonly string[]) => Promise<Sealed[]>;
 }
 
 const inputBytes = 20_000_000;
@@ -51,8 +54,16 @@ export function hostRunner(host: HostConnection, scope: Scope): WorkspacePort {
 
   return {
     skills: () => post<SkillCatalog>("/skills"),
-    run: (operationId, command, timeoutMs, maxBytes) =>
-      post<CommandResult>("/run", { operationId, command, timeoutMs, maxBytes }),
+    async run(operationId, command, timeoutMs, maxBytes, secrets = []) {
+      if (secrets.length && !host.sealed) throw new Error("Secrets are not available here");
+      return post<CommandResult>("/run", {
+        operationId,
+        command,
+        timeoutMs,
+        maxBytes,
+        ...(secrets.length ? { secrets: await host.sealed!(scope.businessId, secrets) } : {}),
+      });
+    },
     cancel: () => post<{ stopped: boolean }>("/cancel"),
     write: (path, content, expectedRevision) =>
       post<{ path: string; revision: string }>("/write", {

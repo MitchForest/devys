@@ -22,6 +22,7 @@ import { Timestamp } from "../protocol/time.ts";
 import { TerminalSession } from "../terminal/contract.ts";
 import { Project, Routine, WorkItem, WorkItemState } from "../work/contract.ts";
 import { FileEntry, FileText } from "../workspace/contract.ts";
+import { SecretEntry } from "../vault/contract.ts";
 
 // The person and their businesses.
 
@@ -416,3 +417,8 @@ export const TextSave = Schema.Struct({
   work: Schema.optional(Schema.String),
 });
 export type TextSave = typeof TextSave.Type;
+
+// Secrets.
+
+/** `GET`, `POST /api/businesses/:id/secrets` and `DELETE …/secrets/:name`: names, never values. */
+export const Secrets = Schema.Struct({ secrets: Schema.Array(SecretEntry) });

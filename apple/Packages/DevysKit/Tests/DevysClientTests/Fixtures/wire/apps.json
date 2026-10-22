@@ -66,18 +66,19 @@
       "id": "browser",
       "name": "Browser",
       "icon": "safari",
-      "summary": "The business's own browser: scripts against the page, screenshots and tabs.",
+      "summary": "The business's own browser: scripts against the page, screenshots, tabs, and passwords and cards filled by name.",
       "kind": "system",
       "records": [],
       "capabilities": [
         "browserScript",
         "browserScreenshot",
-        "browserTabs"
+        "browserTabs",
+        "browserFill"
       ],
       "skills": [
         {
           "name": "using-the-browser",
-          "description": "Drive the business's own browser with browserScript (DevTools Protocol commands), browserScreenshot and browserTabs to open and read pages, click and type by coordinates, upload files, and work in frames and tabs."
+          "description": "Drive the business's own browser with browserScript (DevTools Protocol commands), browserScreenshot and browserTabs to open and read pages, click and type by coordinates, upload files, and work in frames and tabs; fill passwords and cards with browserFill."
         }
       ],
       "connections": [],
@@ -86,22 +87,26 @@
         "operations": [
           "browserScript",
           "browserScreenshot",
-          "browserTabs"
+          "browserTabs",
+          "browserFill"
         ],
         "engineering": [
           "browserScript",
           "browserScreenshot",
-          "browserTabs"
+          "browserTabs",
+          "browserFill"
         ],
         "growth": [
           "browserScript",
           "browserScreenshot",
-          "browserTabs"
+          "browserTabs",
+          "browserFill"
         ],
         "business-operations": [
           "browserScript",
           "browserScreenshot",
-          "browserTabs"
+          "browserTabs",
+          "browserFill"
         ]
       },
       "installed": true,

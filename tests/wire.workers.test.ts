@@ -14,6 +14,7 @@ import * as wire from "../src/app/wire.ts";
 import { Transcript, WorkingDiff, type CodingHost } from "../src/apps/code/contract.ts";
 import { recordCodingSession, recordStarted } from "../src/apps/code/service.ts";
 import { askOwnerFor } from "../src/app/asking.ts";
+import { secretsRoute } from "../src/app/vault.ts";
 import { DeviceKey } from "../src/authority/contract.ts";
 import { grant } from "../src/authority/service.ts";
 import { BrowserStatus, PageState, Screenshot } from "../src/browser/contract.ts";
@@ -270,6 +271,12 @@ it("every route the clients read answers in its wire schema; the golden files ma
       reason: "Sign in to the registrar (2FA)",
       url: "https://www.namecheap.com/myaccount/login/",
     },
+    {
+      kind: "secret",
+      name: "RAMP_CARD",
+      why: "The company card, to pay for the domain at Namecheap",
+      spend: true,
+    },
   ] as const)
     await askOwnerFor(
       bindings,
@@ -494,6 +501,14 @@ it("every route the clients read answers in its wire schema; the golden files ma
       driver: `work:${supplier.id}`,
     },
     "/browser/screenshot": { jpeg: "/9j/4AAQSkZJRg==", width: 1280, height: 800 },
+    // The host seals what the secure entry sheet sends; the Worker stores only this.
+    "/vault/seal": {
+      business: acme.id,
+      name: "STRIPE_KEY",
+      kind: "secret",
+      key: "d3JhcHBlZA==",
+      data: "c2VhbGVk",
+    },
   };
   const realFetch = globalThis.fetch;
   const fetching = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
@@ -519,6 +534,17 @@ it("every route the clients read answers in its wire schema; the golden files ma
     );
     await keep("browser", BrowserStatus, (await mac("/browser", browserRoute))!);
     await keep("screenshot", Screenshot, (await mac("/browser/screenshot", browserRoute))!);
+    // Settings › Secrets: names, kinds and who added them; the value is never answered back.
+    const added = await secretsRoute(
+      new Request(`https://devys.test${at}/secrets`, {
+        method: "POST",
+        body: JSON.stringify({ name: "STRIPE_KEY", kind: "secret", value: "sk_test_never_echoed" }),
+      }),
+      local,
+      access("/secrets"),
+    );
+    expect(await added.clone().text()).not.toContain("sk_test_never_echoed");
+    await keep("secrets", wire.Secrets, added);
   } finally {
     fetching.mockRestore();
   }

@@ -63,6 +63,7 @@ struct PreferencesScreen: View {
         case .team: TeamPane(store: store)
         case .businesses: BusinessesPane(store: store)
         case .apps: AppsPane(store: store)
+        case .secrets: SecretsPane(store: store)
         case .devices: DevicesPane(store: store)
         case .voice: VoicePane(store: store)
         case .appearance: AppearancePane()

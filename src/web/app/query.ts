@@ -50,6 +50,7 @@ export const keys = {
   browser: (b: string) => ["business", b, "browser"] as const,
   screenshot: (b: string) => ["business", b, "browser", "screenshot"] as const,
   google: (b: string) => ["business", b, "google"] as const,
+  secrets: (b: string) => ["business", b, "secrets"] as const,
 };
 
 /** The message a failed read shows the owner. */

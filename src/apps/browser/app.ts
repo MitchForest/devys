@@ -2,13 +2,14 @@ import { defineApp } from "../../protocol/app.ts";
 import { bundledSkill } from "../../protocol/skill.ts";
 import usingTheBrowser from "./skills/using-the-browser/SKILL.md?raw";
 
-const capabilities = ["browserScript", "browserScreenshot", "browserTabs"] as const;
+const capabilities = ["browserScript", "browserScreenshot", "browserTabs", "browserFill"] as const;
 
 export const browser = defineApp({
   id: "browser",
   name: "Browser",
   icon: "safari",
-  summary: "The business's own browser: scripts against the page, screenshots and tabs.",
+  summary:
+    "The business's own browser: scripts against the page, screenshots, tabs, and passwords and cards filled by name.",
   kind: "system",
   records: [],
   capabilities,

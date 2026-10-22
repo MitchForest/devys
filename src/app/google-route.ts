@@ -13,6 +13,7 @@ import { body, forbidden, notFound } from "./request.ts";
 import { respond } from "../protocol/http.ts";
 import { DrivePicker, DriveSelected, GoogleConnection } from "./wire.ts";
 import { Disconnected } from "../connections/contract.ts";
+import { connectionVault } from "./vault.ts";
 
 export async function googleRoute(
   request: Request,
@@ -36,11 +37,11 @@ export async function googleRoute(
   if (path === "/connections/google/connect")
     return beginGoogle(request, env, business.id, person.id);
   if (path === "/connections/google/disconnect")
-    return respond(Disconnected, await disconnectGoogle(env, business.id));
+    return respond(Disconnected, await disconnectGoogle(env, connectionVault(env), business.id));
   if (path === "/connections/google/picker") {
     if (!env.GOOGLE_PICKER_API_KEY || !env.GOOGLE_PROJECT_NUMBER)
       return new Response("Picker is not configured", { status: 503 });
-    const google = await googleAccess(env, business.id);
+    const google = await googleAccess(env, connectionVault(env), business.id);
     return respond(DrivePicker, {
       token: google.token,
       key: env.GOOGLE_PICKER_API_KEY,
@@ -54,7 +55,7 @@ export async function googleRoute(
     return respond(
       DriveSelected,
       await selectDrive(
-        { db: env.HYPERDRIVE, connection: googleConnection(env) },
+        { db: env.HYPERDRIVE, connection: googleConnection(env, connectionVault(env)) },
         business.id,
         input.ids,
       ),

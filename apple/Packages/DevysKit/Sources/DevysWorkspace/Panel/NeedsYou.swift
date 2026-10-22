@@ -88,7 +88,7 @@ struct DecisionCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            StatusChip(decision.kind == .takeOver ? "Needs you" : "Needs approval", tone: .needsYou)
+            StatusChip([.takeOver, .secret].contains(decision.kind) ? "Needs you" : "Needs approval", tone: .needsYou)
             Text(DecisionText.title(decision)).font(DevysTypography.heading).foregroundStyle(DevysColors.ink)
             Text("\(store.state.employeeName(decision.employeeID)) \(decision.kind == .decision ? "asked to run this exactly:" : "asks you:")")
                 .font(DevysTypography.secondary)
@@ -104,14 +104,19 @@ struct DecisionCard: View {
 }
 
 /// How the owner answers a request: Approve or Decline; a take over takes the work over and opens
-/// its live browser; a spend approval opens the signing sheet (Face ID or Touch ID).
+/// its live browser; a spend approval opens the signing sheet (Face ID or Touch ID); a secret
+/// request opens the secure entry sheet.
 struct RequestActions: View {
     let store: StoreOf<Workspace>
     let decision: Decision
     let compact: Bool
 
     var body: some View {
-        if decision.kind == .takeOver, let workID = decision.workItemID {
+        if case .secret(let name, _, _) = decision.request {
+            Button("Add \(name)", systemImage: "key") { store.send(.secretTapped(decision.id)) }
+                .buttonStyle(DevysButtonStyle(.aurora, compact: compact))
+                .help("Opens a secure sheet; the employee uses it by name and never sees it.")
+        } else if decision.kind == .takeOver, let workID = decision.workItemID {
             Button("Take over", systemImage: "hand.raised") { store.send(.takeOverTapped(workID)) }
                 .buttonStyle(DevysButtonStyle(.aurora, compact: compact))
                 .help("Takes this work over and opens its browser; Hand back when you're done.")

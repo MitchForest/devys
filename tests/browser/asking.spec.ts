@@ -81,3 +81,92 @@ test("Needs you shows what employees ask: a spend is approved on a Mac or iPhone
     await stores.dispose();
   }
 });
+
+test("a secret request opens the secure entry sheet; the value goes in one post and nowhere else", async ({
+  page,
+}) => {
+  const stores = await localStores();
+  const { sql } = stores;
+  const owner = await stores.owner("Riley", "Acme");
+  const post = await bearer(sql, owner.person);
+  const work = await post<{ id: string }>(`/api/businesses/${owner.business}/work`, {
+    title: "Register the domain",
+    owner: owner.operations,
+  });
+  const grant = await sql.row<{ id: string }>(
+    "SELECT id FROM grants WHERE employee_id = $1 AND capability = 'askOwner' AND revoked_at IS NULL",
+    [owner.operations],
+  );
+  const id = randomUUID();
+  await sql.run(
+    `INSERT INTO decisions (id, kind, business_id, employee_id, grant_id, capability, input,
+       input_hash, work_item_id, conversation, expires_at)
+     VALUES ($1, 'secret', $2, $3, $4, 'askOwner', $5, $1, $6, $7, now() + interval '1 hour')`,
+    [
+      id,
+      owner.business,
+      owner.operations,
+      grant!.id,
+      JSON.stringify({ kind: "secret", name: "RAMP_CARD", why: "The company card", spend: true }),
+      work.id,
+      `work:${work.id}`,
+    ],
+  );
+  // The Mac host isn't running beside the dev server: its answer is stood in for here, and what
+  // the sheet sent is kept to check.
+  const posted: string[] = [];
+  await page.route(`**/api/businesses/${owner.business}/secrets`, async (route) => {
+    posted.push(route.request().postData() ?? "");
+    await route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify({
+        secrets: [
+          {
+            name: "RAMP_CARD",
+            kind: "spend",
+            added_by: owner.person,
+            added_at: new Date().toISOString(),
+            last_used_at: null,
+          },
+        ],
+      }),
+    });
+  });
+  try {
+    await signIn(page, sql, owner.person);
+    const needsYou = page.getByRole("region", { name: "Needs you" });
+    await expect(needsYou.getByText("Card: RAMP_CARD")).toBeVisible();
+    await expect(needsYou.getByRole("button", { name: "Approve" })).toHaveCount(0);
+    await needsYou.getByRole("button", { name: "Add card" }).click();
+    const sheet = page.getByTestId("secret-entry");
+    await expect(sheet.getByText("Add RAMP_CARD")).toBeVisible();
+    await expect(sheet.getByLabel("Card number")).toHaveAttribute("autocomplete", "cc-number");
+    await sheet.getByLabel("Card number").fill("4242 4242 4242 4242");
+    await sheet.getByLabel("Expiry").fill("04/31");
+    await sheet.getByLabel("Security code", { exact: true }).fill("737");
+    await sheet.getByLabel("Name on card").fill("Riley Owner");
+    await sheet.getByLabel("Postal code").fill("94107");
+    await sheet.getByRole("button", { name: "Save" }).click();
+    await expect(sheet).toHaveCount(0);
+    expect(posted.map((body) => JSON.parse(body))).toEqual([
+      {
+        name: "RAMP_CARD",
+        kind: "spend",
+        card: {
+          number: "4242424242424242",
+          expiry: "04/31",
+          cvc: "737",
+          name: "Riley Owner",
+          postal: "94107",
+        },
+      },
+    ]);
+    // Nothing of it stays in the page or the URL.
+    expect(await page.content()).not.toContain("4242424242424242");
+    expect(page.url()).not.toContain("4242");
+  } finally {
+    await stores.remove([owner]);
+    await stores.dispose();
+  }
+});

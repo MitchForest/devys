@@ -10,6 +10,9 @@ import type { Terminals } from "../terminal/contract.ts";
 import { hostTerminals, unavailableTerminals } from "../terminal/host-client.ts";
 import type { Runner } from "../workspace/contract.ts";
 import { hostRunner } from "../workspace/host.ts";
+import type { Keyring, SecretStore, SendWithSecret } from "../vault/contract.ts";
+import { hostVault } from "../vault/host-client.ts";
+import { postgresSecrets } from "../vault/store.ts";
 import { Effect } from "effect";
 import type { Env } from "./env.ts";
 
@@ -33,10 +36,23 @@ export interface Mode {
   businessFolder(businessId: string): string | undefined;
   /** Where an employee's files and commands live, stated in its instructions. */
   workplace: string;
+  /**
+   * The business's secrets by name: stored as ciphertext here, sealed and opened by the master
+   * key's holder (the Mac host in local mode; a Cloudflare secret with cloud mode, CM).
+   */
+  secrets: SecretStore;
+  /** A connection's request with its secret injected by the master key's holder. */
+  sendWithSecret: SendWithSecret;
 }
 
 const notConfigured = () => {
   throw new Unavailable("The Mac host is not configured; run `bun run local install`.");
+};
+
+/** Where no one holds the vault's master key yet: secrets can be listed, not added or used. */
+const noKeyring = (why: string) => {
+  const refuse = () => Promise.reject(new Unavailable(why));
+  return { keyring: { seal: refuse } satisfies Keyring, send: refuse as SendWithSecret };
 };
 
 /**
@@ -51,6 +67,13 @@ export function modeOf(env: Env): Mode {
       const host = url && token && home ? { url, token, home } : undefined;
       // The host keeps each business in ~/Devys/<business>; see src/host.ts.
       const folder = (businessId: string) => (home ? `${home}/Devys/${businessId}` : undefined);
+      const vault = host
+        ? hostVault(host)
+        : noKeyring("The Mac host is not configured, so secrets are unavailable.");
+      const secrets = postgresSecrets(env.HYPERDRIVE, vault.keyring);
+      // A command or deploy is handed its named secrets sealed; the host refuses a card there.
+      const sealed = (businessId: string, names: readonly string[]) =>
+        secrets.sealed(businessId, names, ["secret", "spend"]);
       return {
         // Without a configured host nothing acts on the Mac, so no one is refused.
         mayUseMachine: async (personId) =>
@@ -61,16 +84,20 @@ export function modeOf(env: Env): Mode {
             (await sha256(`Bearer ${token}`)),
         // Checked per call so a missing host breaks only file, command and coding tools.
         runner: (within) => (scope) =>
-          host ? hostRunner({ ...host, files: env.FILES, within }, scope) : notConfigured(),
-        coding: (scope) => (host ? hostCoding(host, scope) : notConfigured()),
+          host ? hostRunner({ ...host, files: env.FILES, within, sealed }, scope) : notConfigured(),
+        coding: (scope) => (host ? hostCoding({ ...host, sealed }, scope) : notConfigured()),
         terminals: (businessId) =>
           host ? hostTerminals(host, { businessId, employeeId: "owner" }) : unavailableTerminals(),
         browser: (businessId) => (host ? hostBrowser(host, businessId) : unavailableBrowser()),
         businessFolder: folder,
         workplace: `You work on the owner's Mac, as the owner: run executes zsh with the owner's tools and logins, starting in this business's folder under ${home ?? "the owner's home folder"}/Devys. The owner's files are under ${home ?? "the owner's home folder"}; use absolute paths. The business's skills folder is skills inside that business folder. Changes apply to the owner's real files immediately.`,
+        secrets,
+        sendWithSecret: vault.send,
       };
     }
-    case "cloud":
+    case "cloud": {
+      // The master key as a Cloudflare secret arrives with cloud mode's injection (CM).
+      const vault = noKeyring("Secrets are kept by the Mac host until cloud mode holds them.");
       return {
         mayUseMachine: async () => true,
         fromHost: async () => false,
@@ -81,7 +108,10 @@ export function modeOf(env: Env): Mode {
         businessFolder: () => undefined,
         workplace:
           "You work in a private Linux workspace: run executes bash starting in /workspace, files live under /workspace, and the business's skills folder is /workspace/skills (in your workspace until cloud mode shares one per business). Files persist at workspace checkpoints; snapshots preserve files, not processes.",
+        secrets: postgresSecrets(env.HYPERDRIVE, vault.keyring),
+        sendWithSecret: vault.send,
       };
+    }
     default:
       throw new Error(`Unknown DEVYS_MODE: ${String(env.DEVYS_MODE)}`);
   }

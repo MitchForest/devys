@@ -11,7 +11,6 @@
  *   bun scripts/local.ts backup     dump Postgres and archive the Workers state now
  *   bun scripts/local.ts webhooks   publish only /webhooks/ to the internet with Funnel
  *   bun scripts/local.ts code       a sign-in code for the owner, as a code and a devys:// link
- *   bun scripts/local.ts deploy-env <business>   the private file of that business's deploy secrets
  *   bun scripts/local.ts clear-keys revoke every device signing key (spend approvals need a
  *                                   device enrolled again)
  *   bun scripts/local.ts status
@@ -487,26 +486,6 @@ async function status() {
 }
 
 /**
- * A business's deploy secrets (`KEY=VALUE`, or `preview.KEY=…` / `production.KEY=…` for one
- * stage): only the host reads them, into the one deploy process (src/apps/code/host/deploy.ts).
- */
-function deployEnv() {
-  const business = process.argv[3];
-  if (!business || !/^[A-Za-z0-9-]{1,64}$/.test(business))
-    throw new Error("Name the business id: bun scripts/local.ts deploy-env <business>");
-  const folder = join(paths.host, "deploy");
-  mkdirSync(folder, { recursive: true, mode: 0o700 });
-  const file = join(folder, `${business}.env`);
-  if (!existsSync(file))
-    writeFileSync(
-      file,
-      "# Deploy secrets for this business: KEY=VALUE, or preview.KEY= / production.KEY= for one stage.\n",
-      { mode: 0o600 },
-    );
-  console.log(file);
-}
-
-/**
  * The Mac's owner clears the device signing keys (a lost or replaced device): the next Mac or
  * iPhone that signs in, or signs, enrolls a key again (.docs/AUTHORITY.md).
  */
@@ -525,7 +504,6 @@ if (import.meta.main) {
     webhooks,
     code: () => code(),
     status,
-    "deploy-env": deployEnv,
     "clear-keys": clearKeys,
   };
   const selected = commands[command];

@@ -7,6 +7,7 @@ package import Foundation
 package enum PreferencesSection: String, CaseIterable, Hashable, Sendable {
     case account = "Account"
     case apps = "Apps"
+    case secrets = "Secrets"
     case team = "Team"
     case businesses = "Businesses"
     case devices = "Devices"
@@ -19,6 +20,7 @@ package enum PreferencesSection: String, CaseIterable, Hashable, Sendable {
         case .team: "person.2"
         case .businesses: "building.2"
         case .apps: "square.grid.2x2"
+        case .secrets: "key"
         case .devices: "laptopcomputer.and.iphone"
         case .voice: "waveform"
         case .appearance: "circle.lefthalf.filled"
@@ -60,6 +62,10 @@ public struct Preferences {
         /// The selected business's app directory and its Google Drive connection, loaded when Apps opens.
         package var apps: Loadable<[AppEntry]> = .loading
         package var google: Loadable<GoogleConnection>?
+        /// The selected business's secrets by name, loaded when Secrets opens; never a value.
+        package var secrets: Loadable<[SecretEntry]> = .loading
+        /// The secure entry sheet, while it is open.
+        package var secretEntry: SecretEntrySheet?
 
         public init() {}
 
@@ -98,6 +104,7 @@ public struct Preferences {
         case business(BusinessIntent)
         case device(DeviceIntent)
         case app(AppIntent)
+        case secret(SecretIntent)
         case uploadFinished(Data?)
         case failed(String)
         case signOutTapped
@@ -130,6 +137,7 @@ public struct Preferences {
                 state.selectedBusinessID = id
                 state.apps = .loading
                 state.google = nil
+                state.secrets = .loading
 
             case .lookSet(let target, let look):
                 // Shows at once; the server copy replaces it when the directory reloads.
@@ -235,6 +243,9 @@ public struct Preferences {
             case .app(let intent):
                 reduceApps(intent, state: &state)
 
+            case .secret(let intent):
+                reduceSecrets(intent, state: &state)
+
             case .uploadFinished(let photo):
                 state.isUploading = false
                 state.ownerPhoto = photo
@@ -334,4 +345,10 @@ extension Preferences.Action {
     package static var appsRequested: Self { Self(.app(.requested)) }
     package static func appInstallToggled(_ id: String, _ install: Bool) -> Self { Self(.app(.installToggled(appID: id, install))) }
     package static func appPinToggled(_ id: String, _ pinned: Bool) -> Self { Self(.app(.pinToggled(appID: id, pinned))) }
+    package static var secretsRequested: Self { Self(.secret(.requested)) }
+    package static var addSecretTapped: Self { Self(.secret(.addTapped)) }
+    package static func secretEdited(_ sheet: SecretEntrySheet) -> Self { Self(.secret(.edited(sheet))) }
+    package static func secretSubmitted(_ secret: NewSecret) -> Self { Self(.secret(.submitted(secret))) }
+    package static var secretDismissed: Self { Self(.secret(.dismissed)) }
+    package static func secretRemoved(_ name: String) -> Self { Self(.secret(.removeTapped(name: name))) }
 }

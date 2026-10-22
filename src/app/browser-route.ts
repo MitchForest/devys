@@ -21,7 +21,7 @@ export async function browserRoute(
   if (path === "/browser" && request.method === "GET")
     return respond(BrowserStatus, await browser.status());
   if (path === "/browser/screenshot" && request.method === "GET")
-    return respond(Screenshot, await browser.screenshot());
+    return respond(Screenshot, await browser.screenshot("owner"));
   if (path === "/browser/input" && request.method === "POST") {
     if (!trusted) return forbidden();
     const action = await decodedBody(request, 8_000, OwnerInput);

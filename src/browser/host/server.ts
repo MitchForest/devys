@@ -18,10 +18,15 @@ import type { Readable, Writable } from "node:stream";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import type { Session } from "browser-harness-js/sdk/session.ts";
 import { HostRefusal, hostId, type HostRoutes } from "../../protocol/host.ts";
+import { redact, type OpenSecrets } from "../../vault/contract.ts";
+import { merchantRefusal } from "./merchant.ts";
 import { pipeSession } from "./pipe.ts";
 import type {
   BrowserEvent,
   BrowserStatus,
+  FillAt,
+  FillField,
+  Filled,
   OwnerInput,
   PageState,
   Screenshot,
@@ -36,6 +41,16 @@ interface BrowsersHostOptions {
   chrome?: string;
   /** Tests run Chrome without a window. */
   headless?: boolean;
+  /** Opens the secret a fill names (the vault's keyring); without it nothing is filled. */
+  open?: OpenSecrets;
+  /** How long a fill keeps the page out of employees' sight if it doesn't move on; two minutes. */
+  pauseMs?: number;
+}
+
+/** A field the host filled: where it is (its DevTools session and object), to clear it. */
+interface FilledField {
+  session: string;
+  objectId: string;
 }
 
 interface Running {
@@ -48,10 +63,89 @@ interface Running {
   events: BrowserEvent[];
   seq: number;
   wake: Set<() => void>;
+  /**
+   * While a filled card or password is on the page: employees' scripts, events and screenshots
+   * wait until the top-level page navigates, or `pauseMs` pass (the fields are cleared then).
+   */
+  paused: { tab: string; fields: FilledField[]; timer: ReturnType<typeof setTimeout> } | null;
 }
 
 const keptEvents = 500;
 const commandMs = 60_000;
+const pausedMessage =
+  "The page holds a card or password the host just filled: it is hidden from you until the page moves on (at most two minutes). Wait, then look again.";
+
+/** Empties a filled field the way typing would, so the page's own code sees it emptied. */
+const clearField = `function () {
+  const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(this), "value")?.set;
+  if (setter) setter.call(this, ""); else this.value = "";
+  this.dispatchEvent(new Event("input", { bubbles: true }));
+  this.dispatchEvent(new Event("change", { bubbles: true }));
+}`;
+
+/**
+ * Focuses a field and selects what it holds, so the inserted text replaces it. Answers what it
+ * is: a select (filled by choosing an option), a field, or nothing to type into.
+ */
+const focusField = `function () {
+  if (this.tagName === "SELECT") { this.focus(); return "select"; }
+  if (!("value" in this) && !this.isContentEditable) return "none";
+  this.focus();
+  if (typeof this.select === "function") this.select();
+  return this.maxLength === 2 ? "short" : "field";
+}`;
+
+/** Chooses the option whose value or text is one of the candidates. */
+const chooseOption = `function (candidates) {
+  const option = [...this.options].find((each) =>
+    candidates.includes(each.value.trim()) || candidates.includes(each.text.trim()));
+  if (!option) return false;
+  const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set;
+  setter.call(this, option.value);
+  this.dispatchEvent(new Event("input", { bubbles: true }));
+  this.dispatchEvent(new Event("change", { bubbles: true }));
+  return true;
+}`;
+
+/** What goes in a field of each part, from a card's stored JSON or a plain secret. */
+function partOf(kind: string, value: string, part: FillField["part"], short: boolean) {
+  if (kind !== "spend") {
+    if (part !== "value")
+      throw new HostRefusal(400, "Fill a password or other secret as part value");
+    return [value];
+  }
+  const card = JSON.parse(value) as {
+    number: string;
+    expiry: string;
+    cvc?: string;
+    name: string;
+    postal: string;
+  };
+  const [month, year] = card.expiry.split("/") as [string, string];
+  switch (part) {
+    case "number":
+      return [card.number];
+    case "expiry":
+      return [card.expiry];
+    case "month":
+      return [month, String(Number(month))];
+    case "year":
+      return short ? [year] : [`20${year}`, year];
+    case "cvc":
+      if (!card.cvc)
+        throw new HostRefusal(
+          409,
+          "The owner keeps this card's security code: ask them to take over to enter it",
+        );
+      return [card.cvc];
+    case "name":
+      return [card.name];
+    case "postal":
+      return [card.postal];
+    default:
+      throw new HostRefusal(400, "Fill a card's number, expiry, month, year, cvc, name or postal");
+  }
+}
 
 /** The only pages an employee may open: the web, or a blank tab. */
 const webUrl = (url: unknown): url is string =>
@@ -136,11 +230,24 @@ export function browsersHost(options: BrowsersHostOptions): HostRoutes {
       events: [],
       seq: 0,
       wake: new Set(),
+      paused: null,
     };
-    session.onEvent((method, params) => {
+    session.onEvent((method, params, sessionId) => {
       running.events.push({ seq: ++running.seq, method, params });
       if (running.events.length > keptEvents) running.events.shift();
       for (const wake of running.wake) wake();
+      // The page moved on from a fill: the filled fields went with it.
+      const paused = running.paused;
+      if (!paused) return;
+      const frame = (params as { frame?: { parentId?: string } } | undefined)?.frame;
+      const destroyed = (params as { targetId?: string } | undefined)?.targetId;
+      if (
+        (method === "Page.frameNavigated" &&
+          !frame?.parentId &&
+          sessionId === running.tab?.session) ||
+        (method === "Target.targetDestroyed" && destroyed === paused.tab)
+      )
+        resume(running);
     });
     void exited.then(() => {
       if (open.get(business) === running) open.delete(business);
@@ -302,6 +409,237 @@ export function browsersHost(options: BrowsersHostOptions): HostRoutes {
     };
   }
 
+  /** Employees wait while a fill is on the page; the owner does not. */
+  function unpaused(running: Running) {
+    if (running.paused) throw new HostRefusal(423, pausedMessage);
+  }
+
+  /**
+   * Ends a fill's pause. Events from while it was on the page are dropped (a submitted form's
+   * request carries the card), so no later script reads them.
+   */
+  function resume(running: Running) {
+    if (!running.paused) return;
+    clearTimeout(running.paused.timer);
+    running.paused = null;
+    running.events = [];
+  }
+
+  /** One command on a given DevTools session (a tab's or a frame's). */
+  function onSession<T>(running: Running, session: string, send: () => Promise<T>) {
+    const routed = running.session.getActiveSession();
+    running.session.setActiveSession(session);
+    const sent = send();
+    running.session.setActiveSession(routed);
+    return timed(sent, 15_000);
+  }
+
+  /** Empties filled fields; one already gone with its page is skipped. */
+  async function clear(running: Running, fields: readonly FilledField[]) {
+    for (const field of fields)
+      await onSession(running, field.session, () =>
+        running.session.domains.Runtime.callFunctionOn({
+          objectId: field.objectId,
+          functionDeclaration: clearField,
+        }),
+      ).catch(() => undefined);
+  }
+
+  /** The element at `at` in a session's document: by selector, or the one a click focused. */
+  async function element(
+    running: Running,
+    tab: string,
+    session: string,
+    at: { selector: string } | { x: number; y: number },
+    /** The frame's target id, when the field is in another site's frame. */
+    frame?: string,
+  ) {
+    const runtime = running.session.domains.Runtime;
+    if ("selector" in at) {
+      const { result } = await onSession(running, session, () =>
+        runtime.evaluate({ expression: `document.querySelector(${JSON.stringify(at.selector)})` }),
+      );
+      if (!result.objectId)
+        throw new HostRefusal(404, `Nothing on the page matches ${at.selector}`);
+      return result.objectId;
+    }
+    // A point in another site's frame is clicked in that frame, at the point less the frame's
+    // place on the page: it doesn't wait on the browser to route the click there.
+    let point = { x: at.x, y: at.y, session: tab };
+    if (frame) {
+      const owner = await onSession(running, tab, () =>
+        running.session.domains.DOM.getFrameOwner({ frameId: frame }),
+      ).catch(() => undefined);
+      const box =
+        owner &&
+        (await onSession(running, tab, () =>
+          running.session.domains.DOM.getBoxModel({ backendNodeId: owner.backendNodeId }),
+        ).catch(() => undefined));
+      if (box) {
+        const [left, top] = box.model.content as [number, number];
+        point = { x: at.x - left, y: at.y - top, session };
+      }
+    }
+    for (const type of ["mousePressed", "mouseReleased"] as const)
+      await onSession(running, point.session, () =>
+        running.session.domains.Input.dispatchMouseEvent({
+          type,
+          x: point.x,
+          y: point.y,
+          button: "left",
+          clickCount: 1,
+        }),
+      );
+    // Focus moves into another site's frame a moment after the click reaches it.
+    let result: { objectId?: string } = {};
+    for (let tries = 0; tries < 10 && !result.objectId; tries++) {
+      if (tries) await new Promise((resolve) => setTimeout(resolve, 50));
+      ({ result } = await onSession(running, session, () =>
+        runtime.evaluate({
+          expression:
+            "document.activeElement && document.activeElement !== document.body && document.activeElement.tagName !== 'IFRAME' ? document.activeElement : null",
+        }),
+      ));
+    }
+    if (!result.objectId)
+      throw new HostRefusal(
+        404,
+        `No field took focus at ${at.x},${at.y} (a field inside another site's frame needs its target)`,
+      );
+    return result.objectId;
+  }
+
+  /**
+   * Fills a secret into the page's fields (a card only on the merchant's https site), optionally
+   * submits, and pauses employees until the page moves on. On a failure before submitting, the
+   * fields filled so far are cleared and the pause ends; the error names no value.
+   */
+  async function fill(running: Running, business: string, input: Record<string, unknown>) {
+    if (!options.open) throw new HostRefusal(503, "Secrets are not available on this host");
+    const fields = input.fields as FillField[] | undefined;
+    if (!Array.isArray(fields) || !fields.length || fields.length > 10)
+      throw new HostRefusal(400, "Name one to ten fields");
+    unpaused(running);
+    const opened = await options.open(business, [input.secret], ["secret", "spend"]);
+    const [value] = [...opened.values()] as [string];
+    const kind = (input.secret as { kind: string }).kind;
+    const tab = await current(running);
+    const page = await pageState(running);
+    if (kind === "spend") {
+      const refusal = merchantRefusal(page.url, String(input.merchant ?? ""));
+      if (refusal) throw new HostRefusal(403, refusal);
+    }
+    const filled: FilledField[] = [];
+    // From here the page is the owner's: no employee script, event or screenshot until it moves on.
+    running.paused = {
+      tab: tab.id,
+      fields: filled,
+      timer: setTimeout(() => {
+        void clear(running, filled).finally(() => resume(running));
+      }, options.pauseMs ?? 120_000),
+    };
+    const sessions = new Map<string, string>([["", tab.session]]);
+    const sessionFor = async (target: string | undefined) => {
+      const key = target ?? "";
+      if (!sessions.has(key)) {
+        await routable(running, target);
+        const { sessionId } = await running.session.domains.Target.attachToTarget({
+          targetId: key,
+          flatten: true,
+        });
+        sessions.set(key, sessionId);
+      }
+      return sessions.get(key)!;
+    };
+    try {
+      // A request an earlier script asked to watch or hold would carry the card: stop that.
+      for (const field of [{ target: undefined }, ...fields]) {
+        const session = await sessionFor(field.target);
+        await onSession(running, session, () => running.session._call("Network.disable")).catch(
+          () => undefined,
+        );
+        await onSession(running, session, () => running.session._call("Fetch.disable")).catch(
+          () => undefined,
+        );
+      }
+      for (const field of fields) {
+        const session = await sessionFor(field.target);
+        const objectId = await element(running, tab.session, session, field, field.target);
+        filled.push({ session, objectId });
+        const { result } = await onSession(running, session, () =>
+          running.session.domains.Runtime.callFunctionOn({
+            objectId,
+            functionDeclaration: focusField,
+            returnByValue: true,
+          }),
+        );
+        const shape = result.value as "select" | "none" | "short" | "field";
+        if (shape === "none") throw new HostRefusal(409, "That isn't a field to fill");
+        const candidates = partOf(kind, value, field.part, shape === "short");
+        if (shape === "select") {
+          const { result: chosen } = await onSession(running, session, () =>
+            running.session.domains.Runtime.callFunctionOn({
+              objectId,
+              functionDeclaration: chooseOption,
+              arguments: [{ value: candidates }],
+              returnByValue: true,
+            }),
+          );
+          if (chosen.value !== true) throw new HostRefusal(409, `No option fits the ${field.part}`);
+        } else
+          await onSession(running, session, () =>
+            running.session.domains.Input.insertText({ text: candidates[0]! }),
+          );
+      }
+    } catch (error) {
+      await clear(running, filled);
+      resume(running);
+      if (error instanceof HostRefusal) throw error;
+      throw new HostRefusal(
+        409,
+        redact(error instanceof Error ? error.message.split("\n")[0]! : "The page refused", [
+          value,
+        ]),
+      );
+    }
+    const submit = input.submit as FillAt | undefined;
+    if (submit) {
+      try {
+        if ("selector" in submit) {
+          const objectId = await element(running, tab.session, tab.session, submit);
+          await onSession(running, tab.session, () =>
+            running.session.domains.Runtime.callFunctionOn({
+              objectId,
+              functionDeclaration: "function () { this.click(); }",
+            }),
+          );
+        } else
+          for (const type of ["mousePressed", "mouseReleased"] as const)
+            await onSession(running, tab.session, () =>
+              running.session.domains.Input.dispatchMouseEvent({
+                type,
+                x: submit.x,
+                y: submit.y,
+                button: "left",
+                clickCount: 1,
+              }),
+            );
+      } catch (error) {
+        // Not submitted: nothing was sent with the card.
+        await clear(running, filled);
+        resume(running);
+        throw error instanceof HostRefusal ? error : new HostRefusal(409, "Couldn't submit");
+      }
+    }
+    const last4 =
+      kind === "spend" ? (JSON.parse(value) as { number: string }).number.slice(-4) : null;
+    return {
+      origin: new URL(page.url).origin,
+      submitted: Boolean(submit),
+      last4,
+    } satisfies Filled;
+  }
+
   const timed = <T>(sent: Promise<T>, ms = commandMs) =>
     Promise.race([
       sent,
@@ -420,6 +758,7 @@ export function browsersHost(options: BrowsersHostOptions): HostRoutes {
       switch (path) {
         case "/browser/call":
           return act(async () => {
+            unpaused(running);
             const method = text(input.method, "method", 100);
             if (!/^[A-Z][A-Za-z]*\.[a-z][A-Za-z]*$/.test(method))
               throw new HostRefusal(400, "Name a DevTools Protocol method, like Page.navigate");
@@ -431,6 +770,7 @@ export function browsersHost(options: BrowsersHostOptions): HostRoutes {
             return { result: result ?? null, cursor };
           });
         case "/browser/events":
+          unpaused(running);
           return events(
             running,
             typeof input.after === "number" ? input.after : null,
@@ -439,6 +779,7 @@ export function browsersHost(options: BrowsersHostOptions): HostRoutes {
           );
         case "/browser/tabs":
           return act(async () => {
+            unpaused(running);
             drive(running, input.driver);
             if (input.action === "switch") {
               const target = await routable(running, input.tab);
@@ -464,7 +805,12 @@ export function browsersHost(options: BrowsersHostOptions): HostRoutes {
             return tabs(running);
           });
         case "/browser/screenshot":
+          // The owner may watch their own card being filled; employees may not.
+          if (input.viewer !== "owner") unpaused(running);
           return act(() => screenshot(running));
+        case "/browser/fill":
+          drive(running, input.driver);
+          return fill(running, business, input);
         case "/browser/input":
           return act(() => ownerInput(running, input.action as OwnerInput));
         default:

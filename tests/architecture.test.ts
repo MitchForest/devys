@@ -56,6 +56,7 @@ const components = [
   "runtime",
   "surfaces",
   "terminal",
+  "vault",
   "web",
   "work",
   "workspace",

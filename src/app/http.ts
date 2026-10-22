@@ -31,6 +31,7 @@ import { codingEventsRoute } from "./coding.ts";
 import { deviceKeysRoute, signedOut } from "./asking.ts";
 import { modelCatalog } from "./models.ts";
 import { modelsConfig } from "../../config/models.ts";
+import { connectionVault } from "./vault.ts";
 
 /** Webhooks and the API. Page rendering stays in the Worker entry. Undefined means "not an API path". */
 export async function apiRoute(request: Request, env: Env): Promise<Response | undefined> {
@@ -177,7 +178,7 @@ async function route(request: Request, env: Env): Promise<Response | undefined> 
     return respond(BusinessCreated, { ...created, team: hired }, { status: 201 });
   }
   if (path === "/api/connections/google/callback" && request.method === "GET")
-    return finishGoogle(request, env, person.id, async (businessId) =>
+    return finishGoogle(request, env, connectionVault(env), person.id, async (businessId) =>
       Boolean(await Effect.runPromise(memberBusiness(env.HYPERDRIVE, person.id, businessId))),
     );
   if (path === "/api/profile/photo") {

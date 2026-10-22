@@ -5,9 +5,9 @@
  * SBPL policy, paths passed as `-D` parameters). Codex starts from `(deny default)`; this host is
  * trusted by design, so everything the owner's toolchain needs (logins, Xcode, caches, the
  * network) stays allowed and only the businesses folder is closed, except the business's own
- * folder, together with the server's own data outside it (every business's deploy secrets and
- * browser profiles, Postgres, logs, backups), which no confined process needs: the host reads
- * deploy secrets and drives browsers itself. A behaviour guarantee, not isolation: see .docs/ARCHITECTURE.md "Native and host
+ * folder, together with the server's own data outside it (the vault's master key, every
+ * business's browser profile, Postgres, logs, backups), which no confined process needs: the host
+ * opens secrets and drives browsers itself. A behaviour guarantee, not isolation: see .docs/ARCHITECTURE.md "Native and host
  * boundaries".
  *
  * Seatbelt matches resolved paths (`/var` is `/private/var`), so all folders are passed as

@@ -25,6 +25,7 @@ import {
   type WorkItemState,
 } from "../../work/contract.ts";
 import { FileText, SavedFile } from "../../workspace/contract.ts";
+import type { NewSecret } from "../../vault/contract.ts";
 import {
   AccessList,
   Answered,
@@ -60,6 +61,7 @@ import {
   Removed,
   Routines,
   Retired,
+  Secrets,
   Revoked,
   Roles,
   RuntimeStatus,
@@ -319,6 +321,15 @@ export const api = {
     get(Decisions, `${business(b)}/decisions?work_item=${encodeURIComponent(workItem)}`),
   answer: (b: string, id: string, approve: boolean) =>
     post(Answered, `${business(b)}/decisions/${id}/${approve ? "approve" : "reject"}`),
+  /** The business's secrets by name; values are never read back. */
+  secrets: (b: string) => get(Secrets, `${business(b)}/secrets`),
+  /**
+   * The secure entry sheet's one post: the value goes straight to the server (and on to the Mac
+   * host, which seals it), never into a query cache, a conversation or a log.
+   */
+  addSecret: (b: string, entry: NewSecret) => post(Secrets, `${business(b)}/secrets`, entry),
+  removeSecret: (b: string, name: string) =>
+    request(Secrets, `${business(b)}/secrets/${encodeURIComponent(name)}`, { method: "DELETE" }),
   projects: (b: string) => get(Projects, `${business(b)}/projects`),
   routines: (b: string) => get(Routines, `${business(b)}/routines`),
   setRoutinePaused: (b: string, id: string, paused: boolean) =>

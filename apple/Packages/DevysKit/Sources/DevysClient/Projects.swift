@@ -169,7 +169,7 @@ public struct AppEntry: Equatable, Sendable, Decodable, Identifiable {
 /// the whole request, so Needs you is answered from Home alone), or work that needs one.
 public struct NeedsYouItem: Equatable, Sendable, Decodable, Identifiable {
     public enum Kind: String, Equatable, Sendable, WireEnum {
-        case decision, approve
+        case decision, approve, secret
         case takeOver = "take_over"
         case work, unknown
     }
@@ -202,6 +202,7 @@ public struct NeedsYouItem: Equatable, Sendable, Decodable, Identifiable {
         self.kind = switch decision.kind {
         case .approve: .approve
         case .takeOver: .takeOver
+        case .secret: .secret
         case .decision, .unknown: .decision
         }
         self.id = decision.id
@@ -221,7 +222,7 @@ public struct NeedsYouItem: Equatable, Sendable, Decodable, Identifiable {
         employeeID = try container.decodeIfPresent(String.self, forKey: .employeeID)
         workID = try container.decodeIfPresent(String.self, forKey: .workID)
         projectID = try container.decodeIfPresent(String.self, forKey: .projectID)
-        decision = [.decision, .approve, .takeOver].contains(kind) ? try Decision(from: decoder) : nil
+        decision = [.decision, .approve, .takeOver, .secret].contains(kind) ? try Decision(from: decoder) : nil
         routine = try container.decodeIfPresent(Routine.self, forKey: .routine)
     }
 

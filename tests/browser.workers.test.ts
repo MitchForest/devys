@@ -39,12 +39,22 @@ function recording() {
     status: async () => ({ open: true, url: null, title: null, driver: null }),
     screenshot: async () => ({ jpeg: "AAAA", width: 1280, height: 800 }),
     input: async () => ({ url: "", title: "" }),
+    fill: async () => ({ origin: "https://a.example", submitted: false, last4: null }),
   };
   return { browser, sent, switched };
 }
 
+/** Fills have their own tests (vault.workers.test.ts); these never fill. */
+const noFilling = {
+  sealed: () => Promise.reject(new Error("No fills here")),
+  claim: () => Promise.reject(new Error("No fills here")),
+  unclaim: async () => {},
+  record: async () => {},
+};
 const named = (browser: Browser, name: string) =>
-  browserCapabilities(() => browser, bindings.LOADER).find((item) => item.name === name)!;
+  browserCapabilities(() => browser, bindings.LOADER, noFilling).find(
+    (item) => item.name === name,
+  )!;
 
 const as = (extra: Record<string, unknown> = {}) =>
   Effect.provideService(Invocation, {

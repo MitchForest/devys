@@ -29,6 +29,18 @@ private actor AskServer {
         home = home.answering(approval.decisionID)
     }
 
+    var added: [(business: String, secret: NewSecret)] = []
+
+    func add(_ business: String, _ secret: NewSecret) throws -> [SecretEntry] {
+        if let refusal { throw refusal }
+        added.append((business, secret))
+        // The server answers the request once the named secret exists.
+        if let request = home.decisions.first(where: { if case .secret(secret.name, _, _) = $0.request { true } else { false } }) {
+            home = home.answering(request.id)
+        }
+        return [SecretEntry(name: secret.name, kind: .spend)]
+    }
+
     func refuse(_ error: any Error & Sendable) { refusal = error }
     func takeOver(_ id: String, _ taking: Bool) { takeovers.append((id, taking)) }
 }
@@ -58,6 +70,20 @@ private let signIn = Decision(
     workItemID: "c1"
 )
 
+private let cardRequest = Decision(
+    id: "d-card",
+    kind: .secret,
+    employeeID: "growth",
+    capability: "askOwner",
+    input: .object([
+        "kind": .string("secret"),
+        "name": .string("RAMP_CARD"),
+        "why": .string("The company card, for the domain"),
+        "spend": .bool(true)
+    ]),
+    workItemID: "c1"
+)
+
 @MainActor
 @Suite("Asking the owner")
 struct AskingFeatureTests {
@@ -72,7 +98,8 @@ struct AskingFeatureTests {
                 memory: { _ in [] },
                 work: { _ in [WorkItem(id: "c1", ownerEmployeeID: "growth", title: "Register the domain", state: .inProgress)] },
                 setTakeover: { _, id, taking in await server.takeOver(id, taking) },
-                home: { _ in await server.home }
+                home: { _ in await server.home },
+                addSecret: { id, secret in try await server.add(id, secret) }
             )
             // A mock signer: no Secure Enclave or Face ID in tests.
             $0.signingClient = SigningClient(
@@ -142,5 +169,51 @@ struct AskingFeatureTests {
         for _ in 0..<2_000 where await server.takeovers.isEmpty { await Task.yield() }
         let takeovers = await server.takeovers
         #expect(takeovers.count == 1 && takeovers.first?.0 == "c1" && takeovers.first?.1 == true)
+    }
+
+    @Test("A secret request opens the secure entry sheet for that name; the value goes to the vault, never into state")
+    func addsSecret() async {
+        let server = AskServer(home: Home(needsYou: [NeedsYouItem(cardRequest, title: "Register the domain")]))
+        let store = makeStore(server)
+        await settle("home", until: { store.home.value?.needsYou.first?.kind == .secret })
+        #expect(DecisionText.title(cardRequest) == "Card: RAMP_CARD")
+        store.send(.secretTapped("d-card"))
+        let sheet = store.secretEntry
+        #expect(sheet?.name == "RAMP_CARD" && sheet?.isCard == true && sheet?.isFixed == true && sheet?.why == "The company card, for the domain")
+        // A different name than the request's is not sent.
+        store.send(.secretSubmitted(NewSecret(name: "OTHER", value: .secret("x"))))
+        #expect(store.secretEntry?.isSaving == false)
+        let card = CardEntry(number: "4242424242424242", expiry: "04/31", cvc: "737", name: "Sam Owner", postal: "94107")
+        store.send(.secretSubmitted(NewSecret(name: "RAMP_CARD", value: .card(card))))
+        #expect(store.secretEntry?.isSaving == true)
+        await settle("added", until: { store.secretEntry == nil })
+        let added = await server.added
+        #expect(added.count == 1 && added.first?.business == store.businessID && added.first?.secret.value == .card(card))
+        #expect(store.state.decisions.isEmpty)
+        #expect(!String(describing: store.state).contains("4242424242424242"))
+    }
+
+    @Test("A refused secret keeps the sheet open with the server's reason")
+    func secretRefused() async {
+        let server = AskServer(home: Home(needsYou: [NeedsYouItem(cardRequest, title: "Register the domain")]))
+        await server.refuse(DevysHTTPError.rejected(status: 400, message: "That card number isn't valid; check it and try again"))
+        let store = makeStore(server)
+        await settle("home", until: { store.state.decisions.count == 1 })
+        store.send(.secretTapped("d-card"))
+        let card = CardEntry(number: "4242424242424241", expiry: "04/31", cvc: nil, name: "Sam", postal: "94107")
+        store.send(.secretSubmitted(NewSecret(name: "RAMP_CARD", value: .card(card))))
+        await settle("refused", until: { store.secretEntry?.error != nil })
+        #expect(store.secretEntry?.error == "That card number isn't valid; check it and try again" && store.secretEntry?.isSaving == false)
+        store.send(.secretDismissed)
+        #expect(store.secretEntry == nil && store.state.decisions.count == 1)
+    }
+
+    @Test("Approve is never what answers a secret request; approve on it opens no signing sheet")
+    func secretNotApproved() async {
+        let server = AskServer(home: Home(needsYou: [NeedsYouItem(cardRequest, title: "Register the domain")]))
+        let store = makeStore(server)
+        await settle("home", until: { store.state.decisions.count == 1 })
+        store.send(.signTapped("d-card"))
+        #expect(store.signing == nil && !cardRequest.isSpend)
     }
 }

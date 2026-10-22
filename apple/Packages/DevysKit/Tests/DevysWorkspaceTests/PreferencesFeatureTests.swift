@@ -73,4 +73,56 @@ struct PreferencesFeatureTests {
         #expect(!store.isUploading)
         #expect(store.errorText?.contains("connection") == true)
     }
+
+    private actor Vault {
+        var entries: [String: [SecretEntry]] = ["acme": [SecretEntry(name: "STRIPE_KEY", kind: .secret)]]
+        var sent: [NewSecret] = []
+        func add(_ business: String, _ secret: NewSecret) -> [SecretEntry] {
+            sent.append(secret)
+            let kind: SecretEntry.Kind = if case .card = secret.value { .spend } else { .secret }
+            entries[business, default: []].append(SecretEntry(name: secret.name, kind: kind))
+            return entries[business] ?? []
+        }
+        func remove(_ business: String, _ name: String) -> [SecretEntry] {
+            entries[business]?.removeAll { $0.name == name }
+            return entries[business] ?? []
+        }
+        func list(_ business: String) -> [SecretEntry] { entries[business] ?? [] }
+    }
+
+    @Test("Settings › Secrets lists names, adds one through the secure sheet and removes one; no value stays in state")
+    func secrets() async {
+        let vault = Vault()
+        var runtime = RuntimeClient.fixture
+        runtime.secrets = { await vault.list($0) }
+        runtime.addSecret = { await vault.add($0, $1) }
+        runtime.removeSecret = { await vault.remove($0, $1) }
+        let store = withDependencies {
+            $0.lookClient = LookClient(set: { _, _ in }, importPhoto: { _, _ in }, photo: { _ in nil })
+            $0.profileClient = ProfileClient(photo: { nil }, upload: { _ in }, remove: {})
+            $0.runtimeClient = runtime
+        } operation: {
+            Store(initialState: Preferences.State()) { Preferences() }
+        }
+        await settle { !store.businesses.isEmpty }
+        store.send(.secretsRequested)
+        await settle { store.secrets.value != nil }
+        #expect(store.secrets.value?.map(\.name) == ["STRIPE_KEY"])
+
+        store.send(.addSecretTapped)
+        #expect(store.secretEntry?.isFixed == false)
+        var sheet = store.secretEntry!
+        sheet.name = "GITHUB_TOKEN"
+        store.send(.secretEdited(sheet))
+        store.send(.secretSubmitted(NewSecret(name: "GITHUB_TOKEN", value: .secret("ghp_hidden_value"))))
+        await settle { store.secretEntry == nil }
+        #expect(await vault.sent == [NewSecret(name: "GITHUB_TOKEN", value: .secret("ghp_hidden_value"))])
+        #expect(store.secrets.value?.map(\.name) == ["STRIPE_KEY", "GITHUB_TOKEN"])
+        #expect(!String(describing: store.state).contains("ghp_hidden_value"))
+
+        store.send(.secretRemoved("STRIPE_KEY"))
+        #expect(store.secrets.value?.map(\.name) == ["GITHUB_TOKEN"])
+        await settle { await vault.list("acme").count == 1 }
+        #expect(await vault.list("acme").map(\.name) == ["GITHUB_TOKEN"])
+    }
 }

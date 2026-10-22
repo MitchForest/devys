@@ -100,6 +100,10 @@ export function answerText(decision: Decision) {
   }
   if (request?.kind === "take_over")
     return `I won't take this over: ${request.reason}. Find another way or ask me.`;
+  if (request?.kind === "secret")
+    return approved
+      ? `Added ${request.name}${request.spend ? " (a card)" : ""}: use it by name.`
+      : `I won't add ${request.name}. Find another way or ask me.`;
   return approved
     ? `Approved: ${decision.capability}. Go ahead: call it once more with exactly the input you asked for.`
     : `Declined: ${decision.capability}. Don't run it; find another way or ask me.`;
