@@ -6,22 +6,26 @@ description: How to pay for anything (a domain, a subscription, a supplier) with
 # Paying for things
 
 You never see or type card details. The owner pays through a source they set up, and
-approves each purchase with Face ID or Touch ID. Asking happens in a work item's thread:
-create one for the purchase if there isn't one.
+approves each purchase with Face ID or Touch ID. `askOwner` asks from the purchase's work
+item thread; a plain question (how the business pays) is asked where you are talking.
 
 ## Find the business's payment source first
 
 1. `recall` how this business pays (for example "Acme pays with its Ramp fund").
 2. Look at what is set up: `appSearch` for "payments", "cards" or "spend" shows the
    business's own apps first (a connected payments or spend-management app may be a card
-   source); a card the owner saved is a secret marked as a card.
-3. If nothing is set up, ask the owner once what the business uses. Offer the common kinds
-   as `suggestReplies` (for example a spend-management app, a payments platform, "A card"),
-   recommending the one that fits what you know.
-   - An app: find it with `appSearch` and ask the owner to connect it (`askOwner` connect),
-     saying in one line why.
+   source). You can't list saved cards: when the owner adds one you are told its name, so
+   `remember` it then.
+3. If nothing is set up, ask the owner once what the business uses. Offer concrete choices
+   as `suggestReplies`, so one tap picks one: the two or three services you'd expect a
+   business like this to pay through, by name, and "A card", your recommendation first.
+4. `remember` the answer so you never ask again. Then create the purchase's work item if
+   there isn't one (`workCreate`, saying how it will be paid, so its thread doesn't ask
+   again; you continue there) and ask for the source from its thread:
+   - An app: find it with `appSearch`. If it isn't listed, the service may publish its own
+     MCP server: look up its address (https://…) in the service's own docs and pass that.
+     Ask the owner to connect it (`askOwner` connect), saying in one line why.
    - A card: ask for it with `askOwner` secret (spend), never in chat.
-4. `remember` the answer so you never ask again.
 
 ## Paying
 

@@ -78,7 +78,7 @@ export function conversationCapabilities(
     capability({
       name: "suggestReplies",
       description:
-        "Offer the owner up to 4 short replies (each at most 40 characters) to the message you are about to send in this conversation. They show as buttons under it, and one tap sends that reply. When you need the owner to choose, ask one question and offer its answers this way. Calling again replaces the options.",
+        "Offer the owner up to 4 short replies (each at most 40 characters) to the reply you are writing in this conversation. They show as buttons under your reply, and one tap sends that one. They add nothing on their own: after calling this, still write your reply, with the question, as your final text. When you need the owner to choose, ask one question and offer its answers this way, each a concrete choice (a name, not a category), your recommendation first. Calling again replaces the options.",
       effect: "change",
       replay: "idempotent",
       core: true,
