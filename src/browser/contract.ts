@@ -85,20 +85,40 @@ export const FillField = Schema.Union([
 ]);
 export type FillField = typeof FillField.Type;
 
-/** A fill for the host: the sealed secret, the merchant a card's approval names, the fields. */
-export interface FillRequest {
-  secret: Sealed;
+/**
+ * A one-time card from a card app (Ramp's agent card tool), asked for by the host only after the
+ * page is found on the merchant's site: the app's address, its sealed sign-in, the tool and its
+ * arguments (the signed approval's exact amount, currency and merchant).
+ */
+export interface CardSource {
+  app: string;
+  url: string;
+  sealed: Sealed;
+  tool: string;
+  arguments: Record<string, unknown>;
+}
+
+/**
+ * A fill for the host: a sealed secret or a card to issue, the merchant a card's approval names,
+ * the fields.
+ */
+export type FillRequest = ({ secret: Sealed } | { issue: CardSource }) & {
   /** For a card: the signed spend approval's counterparty, which the page's site must match. */
   merchant: string | null;
   fields: readonly FillField[];
   submit?: FillAt;
-}
+};
 
-/** What a fill did: the top-level page's origin, whether it submitted, and a card's last four. */
+/**
+ * What a fill did: the top-level page's origin, whether it submitted, and a card's last four; for
+ * an issued card, the app's reference for it and the app's sign-in when a refresh changed it.
+ */
 export interface Filled {
   origin: string;
   submitted: boolean;
   last4: string | null;
+  reference?: string | null;
+  sealed?: Sealed;
 }
 
 /** A DevTools Protocol event; `seq` orders every event the business's browser sent. */

@@ -49,6 +49,8 @@ public struct ConversationMessage: Equatable, Sendable, Decodable, Identifiable 
     public let viaVoice: Bool
     /// The record an event is about: a work item's hand-off card, a page, a coding session.
     public let ref: Ref?
+    /// Short answers its employee offers; shown while it is the latest word.
+    public let replies: [String]
     public let createdAt: String
     public var reactions: [String]
 
@@ -62,6 +64,7 @@ public struct ConversationMessage: Equatable, Sendable, Decodable, Identifiable 
         mentions: [String] = [],
         viaVoice: Bool = false,
         ref: Ref? = nil,
+        replies: [String] = [],
         createdAt: String,
         reactions: [String] = []
     ) {
@@ -74,6 +77,7 @@ public struct ConversationMessage: Equatable, Sendable, Decodable, Identifiable 
         self.mentions = mentions
         self.viaVoice = viaVoice
         self.ref = ref
+        self.replies = replies
         self.createdAt = createdAt
         self.reactions = reactions
     }
@@ -90,13 +94,14 @@ public struct ConversationMessage: Equatable, Sendable, Decodable, Identifiable 
             mentions: try container.decodeIfPresent([String].self, forKey: .mentions) ?? [],
             viaVoice: try container.decodeIfPresent(Bool.self, forKey: .viaVoice) ?? false,
             ref: try container.decodeIfPresent(Ref.self, forKey: .ref),
+            replies: try container.decodeIfPresent([String].self, forKey: .replies) ?? [],
             createdAt: try container.decode(String.self, forKey: .createdAt),
             reactions: try container.decodeIfPresent([String].self, forKey: .reactions) ?? []
         )
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, conversation, author, kind, text, mentions, ref, reactions
+        case id, conversation, author, kind, text, mentions, ref, replies, reactions
         case replyTo = "reply_to"
         case viaVoice = "via_voice"
         case createdAt = "created_at"

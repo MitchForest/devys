@@ -1,13 +1,14 @@
 import type { Ref } from "../protocol/ref.ts";
 import { database, isoText, type Database } from "../data/database.ts";
-import type { ConversationKey, Message } from "./contract.ts";
+import { employeeOf, type ConversationKey, type Message } from "./contract.ts";
 
 const columns =
-  "id, conversation, author, kind, text, reply_to, mentions, via_voice, ref, created_at";
+  "id, conversation, author, kind, text, reply_to, mentions, via_voice, ref, replies, created_at";
 
 /**
  * Adds a message, creating the conversation on first use. A retried post with the same
- * client id returns the stored message and `created: false`.
+ * client id returns the stored message and `created: false`. An employee's message takes the
+ * replies it chose with `suggestReplies`; a person's drops every pending choice there.
  */
 export const postMessage = (
   db: Database,
@@ -40,10 +41,20 @@ export const postMessage = (
             )
           )?.id ?? null)
         : null;
+      const employee = input.kind === "event" ? undefined : employeeOf(input.author);
+      const replies = employee
+        ? ((
+            await sql.row<{ replies: string[] }>(
+              `SELECT replies FROM suggested_replies
+               WHERE business_id = $1 AND conversation = $2 AND employee_id = $3`,
+              [businessId, key, employee],
+            )
+          )?.replies ?? [])
+        : [];
       const inserted = await sql.row<Message>(
         `INSERT INTO messages
-           (id, business_id, conversation, author, kind, text, reply_to, mentions, via_voice, ref, client_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+           (id, business_id, conversation, author, kind, text, reply_to, mentions, via_voice, ref, client_id, replies)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
          ON CONFLICT (business_id, conversation, client_id) DO NOTHING
          RETURNING ${columns}`,
         [
@@ -58,9 +69,18 @@ export const postMessage = (
           input.viaVoice ?? false,
           input.ref ?? null,
           input.clientId,
+          replies,
         ],
       );
-      if (inserted) return { message: inserted, created: true };
+      if (inserted) {
+        if (employee || input.author.startsWith("person:"))
+          await sql.run(
+            `DELETE FROM suggested_replies WHERE business_id = $1 AND conversation = $2
+               AND ($3::text IS NULL OR employee_id = $3)`,
+            [businessId, key, employee ?? null],
+          );
+        return { message: inserted, created: true };
+      }
       const existing = await sql.row<Message>(
         `SELECT ${columns} FROM messages
          WHERE business_id = $1 AND conversation = $2 AND client_id = $3`,
@@ -70,6 +90,30 @@ export const postMessage = (
     },
     { transaction: true },
   );
+
+/**
+ * Sets the replies an employee offers with its next message in a conversation, replacing any it
+ * chose before.
+ */
+export const suggestReplies = (
+  db: Database,
+  businessId: string,
+  key: ConversationKey,
+  employeeId: string,
+  replies: readonly string[],
+) =>
+  database(db, async (sql) => {
+    await sql.run(
+      "INSERT INTO conversations (business_id, key) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+      [businessId, key],
+    );
+    await sql.run(
+      `INSERT INTO suggested_replies (business_id, conversation, employee_id, replies)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (business_id, conversation, employee_id) DO UPDATE SET replies = excluded.replies`,
+      [businessId, key, employeeId, replies],
+    );
+  });
 
 /** A page of a conversation, oldest first, ending before `before` (a message id). */
 export const messages = (

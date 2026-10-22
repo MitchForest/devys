@@ -7,7 +7,7 @@
  * Imported by the web client, so it imports only contracts, the shared kernel and Effect.
  */
 import { Schema } from "effect";
-import { InstalledApp } from "../apps/contract.ts";
+import { FoundApp, InstalledApp, Line } from "../apps/contract.ts";
 import { LiveCodingSession } from "../apps/code/contract.ts";
 import { Artifact } from "../apps/documents/contract.ts";
 import { Decision, DeviceKey, Grant } from "../authority/contract.ts";
@@ -249,6 +249,39 @@ export const Routines = Schema.Struct({ routines: Schema.Array(Routine) });
 export const Apps = Schema.Struct({ apps: Schema.Array(InstalledApp) });
 /** `POST …/apps/:id/install`, `…/uninstall` and `…/pin`. */
 export const AppChanged = Schema.Struct({ app: InstalledApp });
+/** `GET …/apps/search?q=`: the business's apps and the MCP Registry's that fit. */
+export const AppSearch = Schema.Struct({ apps: Schema.Array(FoundApp) });
+/** `POST …/apps/add`: an app as `appSearch` found it (id or registry name) or an MCP address. */
+export const AddApp = Schema.Struct({
+  app: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(2000)),
+});
+/**
+ * `POST …/apps/:id/connect`: the provider's sign-in page to open, or null when the app needed
+ * none (it is connected now, waiting for review).
+ */
+export const Connecting = Schema.Struct({ url: Schema.NullOr(Schema.String), app: InstalledApp });
+/**
+ * `GET …/apps/:id/review`: the one review card. Each tool's line (suggested from its own hints
+ * until the owner accepts; a tool that issues payment credentials is fixed at never) and who
+ * uses the app. `POST …/apps/:id/accept` takes `{lines, employees}` (`RemotePolicy`).
+ */
+export const AppReview = Schema.Struct({
+  app: InstalledApp,
+  tools: Schema.Array(
+    Schema.Struct({
+      capability: Schema.String,
+      title: Schema.String,
+      description: Schema.String,
+      line: Line,
+      /** Never available, whatever the owner chooses (it hands out payment credentials). */
+      fixed: Schema.Boolean,
+    }),
+  ),
+  employees: Schema.Array(
+    Schema.Struct({ id: Schema.String, name: Schema.String, uses: Schema.Boolean }),
+  ),
+});
+export type AppReview = typeof AppReview.Type;
 /** `GET …/connections/google`: whether Google is set up and connected, and the files picked. */
 export const GoogleConnection = Schema.Struct({
   configured: Schema.Boolean,
@@ -282,9 +315,16 @@ const WorkCard = Schema.Struct({
   updated_at: Timestamp,
 });
 export type WorkCard = typeof WorkCard.Type;
+/** A remote app as Needs you names it: its id (for its card and review), name and logo. */
+const AppBadge = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  logo: Schema.NullOr(Schema.String),
+});
 /**
- * One thing waiting on the owner: a request by its kind (a decision, an approve or a take over;
- * the whole request, so Needs you is answered from this one read), or work that needs one.
+ * One thing waiting on the owner: a request by its kind (a decision, an approve, a take over, a
+ * secret or a connect; the whole request, so Needs you is answered from this one read), work that
+ * needs one, or a remote app whose sign-in stopped working.
  */
 const NeedsYouItem = Schema.Union([
   Schema.Struct({
@@ -297,6 +337,8 @@ const NeedsYouItem = Schema.Union([
      * words); null when the routine has since moved to another revision, or for any other.
      */
     routine: Schema.NullOr(Routine),
+    /** For a connect request, or a remote app's capability held in `ask` mode, the app. */
+    app: Schema.NullOr(AppBadge),
     at: Timestamp,
   }),
   Schema.Struct({
@@ -305,10 +347,15 @@ const NeedsYouItem = Schema.Union([
     work_id: Schema.String,
     at: Timestamp,
   }),
+  Schema.Struct({
+    kind: Schema.Literal("reconnect"),
+    app: AppBadge,
+    at: Timestamp,
+  }),
 ]);
 export type NeedsYouItem = typeof NeedsYouItem.Type;
-/** A request in Needs you: a decision, an approve or a take over. */
-export type NeedsYouRequest = Exclude<NeedsYouItem, { kind: "work" }>;
+/** A request in Needs you: a decision, an approve, a take over, a secret or a connect. */
+export type NeedsYouRequest = Exclude<NeedsYouItem, { kind: "work" } | { kind: "reconnect" }>;
 /**
  * `GET …/home`: what needs the owner, work at a glance, and Operations' briefing when it was
  * posted by this read (`since` is when they last read their direct chat).

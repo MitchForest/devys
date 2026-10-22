@@ -32,6 +32,8 @@ export const keys = {
   routines: (b: string) => ["business", b, "routines"] as const,
   home: (b: string) => ["business", b, "home"] as const,
   apps: (b: string) => ["business", b, "apps"] as const,
+  appReview: (b: string, app: string) => ["business", b, "apps", app, "review"] as const,
+  appSearch: (b: string, query: string) => ["business", b, "apps", "search", query] as const,
   memory: (b: string) => ["business", b, "memory"] as const,
   summaries: (b: string) => ["business", b, "summaries"] as const,
   conversation: (b: string, key: ConversationKey) => ["business", b, "conversation", key] as const,
@@ -139,7 +141,18 @@ export const queries = {
       queryFn: () => api.status(b, employee),
       refetchInterval: poll,
     }),
-  apps: (b: string) => queryOptions({ queryKey: keys.apps(b), queryFn: () => api.apps(b) }),
+  // A remote app's state changes on the server (connected, lapsed), as on native.
+  apps: (b: string) =>
+    queryOptions({ queryKey: keys.apps(b), queryFn: () => api.apps(b), refetchInterval: poll }),
+  appReview: (b: string, app: string) =>
+    queryOptions({ queryKey: keys.appReview(b, app), queryFn: () => api.appReview(b, app) }),
+  appSearch: (b: string, query: string) =>
+    queryOptions({
+      queryKey: keys.appSearch(b, query),
+      queryFn: () => api.searchApps(b, query),
+      enabled: query.trim().length > 1,
+      staleTime: 60_000,
+    }),
   memory: (b: string) => queryOptions({ queryKey: keys.memory(b), queryFn: () => api.memory(b) }),
   models: queryOptions({ queryKey: keys.models, queryFn: api.models, staleTime: Infinity }),
   roles: queryOptions({ queryKey: keys.roles, queryFn: api.roles, staleTime: Infinity }),

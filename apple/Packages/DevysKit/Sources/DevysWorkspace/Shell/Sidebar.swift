@@ -103,9 +103,11 @@ struct SidebarSections: View {
         let shown = (store.apps.value ?? []).filter { $0.visible && $0.pinned }
         if !shown.isEmpty, only == nil { label("Apps") }
         ForEach(shown) { app in
-            let selected = store.state.topLayer == .app(app.id)
+            // A remote app opens its card; a Devys app its records.
+            let layer: Layer = app.state == nil ? .app(app.id) : .remoteApp(app.id)
+            let selected = store.state.topLayer == layer
             SidebarRow(title: app.name, selected: selected, pill: pill, leading: AppIcon(app: app)) {
-                store.send(selected ? .layersClosed : .layerOpened(.app(app.id)))
+                store.send(selected ? .layersClosed : .layerOpened(layer))
                 opened()
             }
         }
@@ -195,10 +197,14 @@ private struct AppIcon: View {
     let app: AppEntry
 
     var body: some View {
-        Image(systemName: Self.symbols[app.id] ?? "square.grid.2x2")
-            .font(.system(size: 13, weight: .medium))
-            .frame(width: 20)
-            .accessibilityHidden(true)
+        if app.state != nil {
+            AppLogo(path: app.logo, name: app.name, size: 18).frame(width: 20)
+        } else {
+            Image(systemName: Self.symbols[app.id] ?? "square.grid.2x2")
+                .font(.system(size: 13, weight: .medium))
+                .frame(width: 20)
+                .accessibilityHidden(true)
+        }
     }
 
     static let symbols = ["documents": "doc.text", "code": "chevron.left.forwardslash.chevron.right"]

@@ -4,7 +4,14 @@ import { capability, CapabilityError, Image, Invocation } from "../protocol/capa
 import { HostRefusal } from "../protocol/host.ts";
 import { rpc } from "../protocol/rpc.ts";
 import { SecretName, type Sealed } from "../vault/contract.ts";
-import { type Browser, FillAt, FillField, Tab, type TabAction } from "./contract.ts";
+import {
+  type Browser,
+  type CardSource,
+  FillAt,
+  FillField,
+  Tab,
+  type TabAction,
+} from "./contract.ts";
 import { scriptPrelude } from "./script.ts";
 
 const Url = Schema.String.check(Schema.isPattern(/^https?:\/\/\S{1,2000}$/));
@@ -51,12 +58,35 @@ export interface Filling {
     businessId: string,
     workItemId: string,
     approval: string,
-  ): Promise<{ counterparty: string }>;
+  ): Promise<{ counterparty: string; amount: { cents: number; currency: string } }>;
   /** Gives a claimed approval back: the fill failed before anything was submitted. */
   unclaim(businessId: string, approval: string): Promise<void>;
   /** Records a card fill on the work item as evidence. */
   record(businessId: string, workItemId: string, note: string, source: string): Promise<void>;
+  /**
+   * What the host asks a card app (Ramp) for, for this claimed approval: its exact amount,
+   * currency and merchant. Refuses (with why) when the app isn't connected or issues no cards.
+   */
+  cardSource(
+    businessId: string,
+    card: { app: string; fund: string; country?: string },
+    spend: { counterparty: string; amount: { cents: number; currency: string } },
+    approval: string,
+  ): Promise<CardSource>;
+  /** After a card app's fill: its refreshed sign-in kept, or the app marked lapsed. */
+  cardSettled(
+    businessId: string,
+    app: string,
+    outcome: { sealed?: Sealed } | { lapsed: true },
+  ): Promise<void>;
 }
+
+/** A card from a card app instead of a stored card: its id, the fund and the merchant's country. */
+const CardFrom = Schema.Struct({
+  app: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(2000)),
+  fund: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(100)),
+  country: Schema.optionalKey(Schema.String.check(Schema.isPattern(/^[A-Z]{2}$/))),
+});
 
 /**
  * The business's own browser (Chrome with its profile, signed in by the owner), driven like
@@ -183,27 +213,37 @@ export function browserCapabilities(
     capability({
       name: "browserFill",
       description:
-        "Fill a secret into the business's browser without ever seeing it: a password (part value) or a card (parts number, expiry MM/YY, month, year, cvc, name, postal), each field found by CSS selector or by clicking its x,y; a field inside another site's payment frame names its target (from listPageTargets/browserTabs). submit clicks a button afterwards. A card needs approval: the request id of the owner's signed spend approval in this work item's thread (askOwner approve with the amount and the merchant's site as counterparty, e.g. namecheap.com); the page must be on that site, and one approval is one fill. After a fill, scripts and screenshots wait until the page moves on (at most two minutes); a failed fill clears what it filled.",
+        "Fill a secret into the business's browser without ever seeing it: a password (part value) or a card (parts number, expiry MM/YY, month, year, cvc, name, postal), each field found by CSS selector or by clicking its x,y; a field inside another site's payment frame names its target (from listPageTargets/browserTabs). submit clicks a button afterwards. A card is a stored one (secret) or a one-time card from a connected card app such as Ramp (card: {app, fund, country?}: the app as appSearch names it, the fund to pay from and the merchant's two-letter country, US by default; the host asks the app for a card of the approval's exact amount and merchant, and you never see it). A card needs approval: the request id of the owner's signed spend approval in this work item's thread (askOwner approve with the amount and the merchant's site as counterparty, e.g. namecheap.com); the page must be on that site, and one approval is one fill. After a fill, scripts and screenshots wait until the page moves on (at most two minutes); a failed fill clears what it filled.",
       effect: "external",
       replay: "reconcile",
       input: Schema.Struct({
-        secret: SecretName,
+        secret: Schema.optional(SecretName),
+        card: Schema.optional(CardFrom),
         fields: Schema.Array(FillField).check(Schema.isMinLength(1), Schema.isMaxLength(10)),
         submit: Schema.optional(FillAt),
         approval: Schema.optional(Schema.String.check(Schema.isPattern(/^[A-Za-z0-9-]{1,64}$/))),
-      }),
+      }).check(
+        Schema.makeFilter(
+          (input) =>
+            (input.secret === undefined) !== (input.card === undefined) ||
+            "Name a secret, or a card app (card), not both",
+        ),
+      ),
       output: Schema.Struct({
         filled: Schema.Number,
         submitted: Schema.Boolean,
         origin: Schema.String,
       }),
-      execute: ({ secret, fields, submit, approval }) =>
+      execute: ({ secret, card, fields, submit, approval }) =>
         Effect.gen(function* () {
           const { invocation, driver } = yield* driving;
           const { businessId, workItemId } = invocation;
-          const sealed = yield* rpc(() => filling.sealed(businessId, secret));
-          let claimed: { counterparty: string } | undefined;
-          if (sealed.kind === "spend") {
+          const sealed = secret ? yield* rpc(() => filling.sealed(businessId, secret)) : undefined;
+          const named = secret ?? `a card from ${card!.app}`;
+          let claimed:
+            | { counterparty: string; amount: { cents: number; currency: string } }
+            | undefined;
+          if (!sealed || sealed.kind === "spend") {
             if (!workItemId)
               return yield* new CapabilityError({
                 code: "conflict",
@@ -213,18 +253,25 @@ export function browserCapabilities(
             if (!approval)
               return yield* new CapabilityError({
                 code: "forbidden",
-                message: `${secret} is a card: ask with askOwner {kind: "approve", action, counterparty: the merchant's site, amount} in this thread, and once it is approved pass its request id as approval.`,
+                message: `${named} is a card: ask with askOwner {kind: "approve", action, counterparty: the merchant's site, amount} in this thread, and once it is approved pass its request id as approval.`,
               });
             // Still the employee's work (not taken over) before the approval is spent on it.
             yield* invocation.assertActive();
             claimed = yield* rpc(() => filling.claim(businessId, workItemId, approval));
           }
+          // A card app's card: what the host will ask it for, from the approval just claimed.
+          const issue =
+            card && claimed && approval
+              ? yield* rpc(() => filling.cardSource(businessId, card, claimed!, approval)).pipe(
+                  Effect.tapError(() => rpc(() => filling.unclaim(businessId, approval))),
+                )
+              : undefined;
           yield* invocation.assertActive();
           const filled = yield* Effect.tryPromise({
             try: () =>
               browserFor(businessId).fill(
                 {
-                  secret: sealed,
+                  ...(issue ? { issue } : { secret: sealed! }),
                   merchant: claimed?.counterparty ?? null,
                   fields,
                   ...(submit ? { submit } : {}),
@@ -239,16 +286,25 @@ export function browserCapabilities(
                 // Anything else (the host gone mid-fill) leaves it spent: inspect the page.
                 if (claimed && approval && error instanceof HostRefusal)
                   yield* rpc(() => filling.unclaim(businessId, approval));
+                // The card app's sign-in stopped working: it shows in Needs you.
+                if (issue && error instanceof HostRefusal && error.status === 401)
+                  yield* rpc(() => filling.cardSettled(businessId, issue.app, { lapsed: true }));
                 return yield* rpc(() => Promise.reject(error));
               }),
             ),
           );
+          if (issue && filled.sealed)
+            yield* rpc(() =>
+              filling.cardSettled(businessId, issue.app, { sealed: filled.sealed! }),
+            );
           if (claimed && workItemId)
             yield* rpc(() =>
               filling.record(
                 businessId,
                 workItemId,
-                `Card ${secret} ending ${filled.last4} filled at ${filled.origin}${filled.submitted ? " and submitted" : ""}, against spend approval ${approval}.`,
+                issue
+                  ? `One-time card from ${issue.app} ending ${filled.last4}${filled.reference ? ` (its reference ${filled.reference})` : ""} filled at ${filled.origin}${filled.submitted ? " and submitted" : ""}, against spend approval ${approval}.`
+                  : `Card ${secret} ending ${filled.last4} filled at ${filled.origin}${filled.submitted ? " and submitted" : ""}, against spend approval ${approval}.`,
                 `fill:${approval}`,
               ),
             );

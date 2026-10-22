@@ -1,4 +1,6 @@
 import { defineApp } from "../../protocol/app.ts";
+import { bundledSkill } from "../../protocol/skill.ts";
+import payingForThings from "./skills/paying-for-things/SKILL.md?raw";
 
 const capabilities = [
   "workList",
@@ -29,7 +31,7 @@ export const work = defineApp({
     { kind: "routine", title: "Routine" },
   ],
   capabilities,
-  skills: [],
+  skills: [bundledSkill("paying-for-things", payingForThings)],
   connections: [],
   appears: "never",
   // Every employee tracks its work, takes part in projects, proposes routines and asks the owner

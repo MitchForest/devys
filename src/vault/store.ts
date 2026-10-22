@@ -29,6 +29,19 @@ export function postgresSecrets(db: Database, keyring: Keyring): SecretStore {
         ),
       );
     },
+    async putSealed(sealed, addedBy) {
+      if (sealed.kind !== "connection" || !named(sealed.name, sealed.kind))
+        throw new Error("Only a connection's credential is stored sealed");
+      await query(db, (sql) =>
+        sql.run(
+          `INSERT INTO secrets (business_id, name, kind, data_key, ciphertext, added_by)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (business_id, name) DO UPDATE SET kind = excluded.kind,
+             data_key = excluded.data_key, ciphertext = excluded.ciphertext`,
+          [sealed.business, sealed.name, sealed.kind, sealed.key, sealed.data, addedBy],
+        ),
+      );
+    },
     list: (business) =>
       query(db, (sql) =>
         sql.rows<SecretEntry>(

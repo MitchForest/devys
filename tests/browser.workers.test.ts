@@ -50,6 +50,8 @@ const noFilling = {
   claim: () => Promise.reject(new Error("No fills here")),
   unclaim: async () => {},
   record: async () => {},
+  cardSource: () => Promise.reject(new Error("No card apps here")),
+  cardSettled: async () => {},
 };
 const named = (browser: Browser, name: string) =>
   browserCapabilities(() => browser, bindings.LOADER, noFilling).find(

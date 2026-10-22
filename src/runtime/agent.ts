@@ -43,6 +43,11 @@ export interface AgentDependencies {
   ) => Promise<Outcome>;
   /** Capability names this employee holds a grant for, for discovery. */
   readonly granted: (scope: Scope) => Promise<string[]>;
+  /**
+   * The business's remote apps' capabilities (MCP tools the owner turned on), which change as the
+   * owner connects apps: discovered and called through `execute` with the same gate.
+   */
+  readonly remote: (scope: Scope) => Promise<Capability[]>;
   /** The skills the employee can load: its business's installed apps' and the business's own. */
   readonly skills: (scope: Scope) => Promise<readonly { name: string; description: string }[]>;
   readonly models: (beforeDispatch: (signal?: AbortSignal) => Promise<void>) => HarnessModels;
@@ -145,6 +150,7 @@ export abstract class AgentRuntime<
       this.services.authorize(this.scope, capability, input, context),
     granted: () => this.services.granted(this.scope),
     skills: () => this.services.skills(this.scope),
+    remote: () => this.services.remote(this.scope),
   });
   private readonly extension = devysExtension(this.env, this.services.capabilities, this.host);
 

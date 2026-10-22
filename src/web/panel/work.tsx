@@ -269,6 +269,7 @@ export function decisionFields(decision: Pick<Decision, "kind" | "input">): [str
       ["Name", request.name],
       ["Why", request.why],
     ];
+  if (request?.kind === "connect") return [["Why", request.why]];
   const { input } = decision;
   if (input && typeof input === "object" && !Array.isArray(input))
     return Object.entries(input).map(([key, value]) => [
@@ -288,6 +289,7 @@ export function decisionTitle(decision: Decision) {
     return request.amount ? `Spend ${money(request.amount)}: ${request.action}` : request.action;
   if (request?.kind === "take_over") return `Sign in / take over: ${request.reason}`;
   if (request?.kind === "secret") return `${request.spend ? "Card" : "Secret"}: ${request.name}`;
+  if (request?.kind === "connect") return "Connect an app";
   if (
     decision.capability === "hireEmployee" &&
     decision.input &&
@@ -378,6 +380,8 @@ export function RequestActions({
  * activation reads as its proposal.
  */
 export function DecisionCard({ decision }: { decision: NeedsYouRequest }) {
+  // A connect request is its app's card, already in the thread.
+  if (decision.kind === "connect") return null;
   if (decision.routine) return <RoutineProposal decision={decision} routine={decision.routine} />;
   return <RequestCard decision={decision} />;
 }
@@ -417,11 +421,13 @@ const answeredAs = (decision: Decision) =>
     ? "Declined"
     : decision.kind === "secret"
       ? "Added"
-      : decision.kind === "take_over"
-        ? decision.status === "used"
-          ? "Done"
-          : "Taken over"
-        : `Approved${decision.signed_by ? " and signed" : ""}${decision.status === "used" ? " · used" : ""}`;
+      : decision.kind === "connect"
+        ? "Connected"
+        : decision.kind === "take_over"
+          ? decision.status === "used"
+            ? "Done"
+            : "Taken over"
+          : `Approved${decision.signed_by ? " and signed" : ""}${decision.status === "used" ? " · used" : ""}`;
 
 /** A due time as the date field shows it, in the owner's time zone. */
 const dateField = (due: string | null) => {

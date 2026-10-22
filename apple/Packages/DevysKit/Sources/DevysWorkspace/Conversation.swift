@@ -157,6 +157,8 @@ package enum ConversationIntent {
     case replyTapped(ConversationKey, messageID: String)
     case replyCancelled(ConversationKey)
     case sendTapped(ConversationKey)
+    /// One of the answers an employee offered under its message: sent as the reply to it.
+    case suggestedReplyTapped(ConversationKey, messageID: String, text: String)
     case posted(ConversationKey, clientID: String, PostedMessage)
     /// `refusal` is the server's own words when it declined the message (409).
     case sendFailed(ConversationKey, clientID: String, refusal: String?)

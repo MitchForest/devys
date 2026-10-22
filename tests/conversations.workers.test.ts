@@ -14,6 +14,7 @@ import { hire, hireInput } from "../src/identity/team.ts";
 import { hiring } from "../src/app/team.ts";
 import { capabilities } from "../src/app/capabilities.ts";
 import type { Inbound } from "../src/channels/contract.ts";
+import { Invocation } from "../src/protocol/capability.ts";
 import { sha256 } from "../src/protocol/bytes.ts";
 import { business, sql } from "./fixtures/postgres.ts";
 
@@ -331,4 +332,54 @@ it("the record the owner is viewing goes with a message as its ref, and only a r
     });
     expect(refused.status).toBe(400);
   }
+});
+
+it("suggested replies go on the employee's next message only, drop when the owner speaks, and a tap answers that message", async () => {
+  const { acme, received, bindings, as, say } = await owner();
+  const ops = acme.operations.id;
+  const key = `direct:${ops}`;
+  const suggest = capabilities(bindings).find((contract) => contract.name === "suggestReplies")!;
+  const offer = (options: string[]) =>
+    Effect.runPromise(
+      suggest.execute({ options }).pipe(
+        Effect.provideService(Invocation, {
+          businessId: acme.business.id,
+          employeeId: ops,
+          operationId: "suggest",
+          conversation: key,
+          authorize: () => Effect.void,
+          assertActive: () => Effect.void,
+        }),
+      ),
+    );
+  const page = async () =>
+    (
+      (await (await as(`/conversations/${key}`)).json()) as {
+        messages: { id: string; text: string; replies: string[] }[];
+      }
+    ).messages;
+
+  const first = await say(key, { id: "suggest-message-01", text: "We need a tagline." });
+  const chat = received.at(-1)!.input.chatId;
+  expect(await offer([" Bold ", "Calm", "Bold"])).toEqual({ options: ["Bold", "Calm"] });
+  await postFromEmployee(bindings, chat, "Bold or calm?", "op-s1", first.message.id);
+  await postFromEmployee(bindings, chat, "Either works for me.", "op-s2");
+  const [, question, later] = await page();
+  expect(question).toMatchObject({ text: "Bold or calm?", replies: ["Bold", "Calm"] });
+  expect(later?.replies).toEqual([]);
+
+  // Offered, then the owner speaks first: the employee's next message carries none.
+  await offer(["Yes", "No"]);
+  await say(key, { id: "suggest-message-02", text: "Actually, wait." });
+  await postFromEmployee(bindings, chat, "Waiting.", "op-s3");
+  expect((await page()).at(-1)).toMatchObject({ text: "Waiting.", replies: [] });
+
+  // A tap is the owner's reply to the message it was offered on: its author answers.
+  const tapped = await say(key, { id: "suggest-message-03", text: "Calm", reply_to: question!.id });
+  expect(tapped.to).toEqual([ops]);
+  expect(received.at(-1)!.input.text).toContain('Replying to Head of Operations: "Bold or calm?"');
+  expect(
+    (await sql.rows("SELECT 1 FROM suggested_replies WHERE business_id = $1", [acme.business.id]))
+      .length,
+  ).toBe(0);
 });

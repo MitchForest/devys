@@ -80,6 +80,9 @@ extension Workspace {
             // what is on screen.
             send(open.draft, viaVoice: open.draftUsedVoice, ref: state.reference?.ref, in: key, state: &state)
             state.isReferencing = false
+        case .suggestedReplyTapped(let key, let messageID, let text):
+            // Answers the message it was offered on, so its author answers; the draft stays.
+            send(text, viaVoice: false, replyTo: messageID, in: key, state: &state)
         case .posted(let key, let clientID, let message):
             posted(message, clientID: clientID, in: key, state: &state)
         case .sendFailed(let key, let clientID, let refusal):
@@ -246,27 +249,32 @@ extension Workspace {
         if waiting, state.main?.awaiting.isEmpty == true { state.turns += 1 }
     }
 
-    /// Shows the message at once and posts it; returns its client id.
+    /// Shows the message at once and posts it; returns its client id. The draft is sent unless
+    /// `replyTo` names the message a suggested reply answers, which leaves the draft as it was.
     @discardableResult
-    func send(_ text: String, viaVoice: Bool, ref: Ref? = nil, in key: ConversationKey, state: inout State) -> String? {
+    func send(
+        _ text: String, viaVoice: Bool, ref: Ref? = nil, replyTo: String? = nil, in key: ConversationKey, state: inout State
+    ) -> String? {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, let open = state.conversation(key) else { return nil }
+        let suggested = replyTo != nil
         let message = PendingMessage(
             id: uuid().uuidString.lowercased(),
             text: text,
-            replyTo: open.replyingTo,
-            mentions: open.mentioned(team: state.snapshot.employees),
+            replyTo: replyTo ?? open.replyingTo,
+            mentions: suggested ? Mentions.recipients(in: text, team: state.snapshot.employees) : open.mentioned(team: state.snapshot.employees),
             viaVoice: viaVoice,
             ref: ref
         )
         update(key, &state) { conversation in
             conversation.pending.append(message)
+            conversation.error = nil
+            guard !suggested else { return }
             conversation.draft = ""
             conversation.draftUsedVoice = false
             conversation.replyingTo = nil
             conversation.mentions = []
             conversation.responderOverride = nil
-            conversation.error = nil
         }
         if state.isConversationMode || voiceSettings.load().speaksReplies {
             state.repliesToSpeak.insert(message.id)

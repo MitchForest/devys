@@ -25,6 +25,7 @@ import type { Business, Device, Employee, Look, SettableLook } from "../../ident
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   useApps,
+  useAppSearch,
   useBusinessId,
   useBusinesses,
   useEmployees,
@@ -32,6 +33,8 @@ import {
   usePerson,
 } from "../app/data.ts";
 import {
+  useAddApp,
+  useConnectApp,
   useCreateBusiness,
   useInstallApp,
   useOwnerPhotoChange,
@@ -46,6 +49,8 @@ import {
 import { useNav, useSettingsSection } from "../app/navigation.ts";
 import { keys } from "../app/query.ts";
 import { DriveConnection } from "./drive-settings.tsx";
+import { AppLogo } from "../panel/layers/team-app.tsx";
+import { ref } from "../../protocol/ref.ts";
 import { SecretEntrySheet } from "./secret-entry.tsx";
 import { useTheme, type Theme } from "../app/theme.ts";
 import {
@@ -293,10 +298,20 @@ function AppsPane() {
   const list = useApps().data ?? [];
   const pin = usePinApp();
   const install = useInstallApp();
-  const available = list.filter((app) => app.kind === "business");
+  const available = list.filter((app) => app.kind === "business" && app.state === null);
   const system = list.filter((app) => app.kind === "system");
+  const connected = list.filter((app) => app.state !== null);
   return (
     <div className="flex flex-col gap-5 p-5">
+      <AddApp />
+      {connected.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <span className="text-label font-medium text-ink-3">Connected apps</span>
+          {connected.map((app) => (
+            <RemoteAppRow key={app.id} app={app} />
+          ))}
+        </div>
+      )}
       <div className="flex flex-col gap-1">
         <span className="text-label font-medium text-ink-3">Devys apps</span>
         {available.map((app) => (
@@ -339,6 +354,123 @@ function AppsPane() {
         <span className="text-label font-medium text-ink-3">Connections</span>
         {businessId && <DriveConnection businessId={businessId} />}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Add app: search by name or what it does (the business's apps and the MCP Registry), or paste an
+ * app's address; choosing one connects it with its own sign-in, then its review opens.
+ */
+function AddApp() {
+  const [query, setQuery] = useState("");
+  const [typed, setTyped] = useState("");
+  useEffect(() => {
+    const timer = window.setTimeout(() => setTyped(query.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+  const found = useAppSearch(typed);
+  const add = useAddApp();
+  const connect = useConnectApp();
+  const choose = (app: string) =>
+    add.mutate(app, {
+      onSuccess: ({ app: added }) => {
+        setQuery("");
+        if (added.state === "connecting" || added.state === "lapsed") connect(added.id);
+      },
+    });
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-label font-medium text-ink-3">Add app</span>
+      <Input
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder="Search apps, or paste an app's address"
+        aria-label="Add app"
+      />
+      {typed.length > 1 && (
+        <div className="flex flex-col gap-0.5" data-testid="app-results">
+          {found.isFetching && !found.data && (
+            <span className="text-detail text-ink-3">Searching…</span>
+          )}
+          {found.data?.length === 0 && (
+            <span className="text-detail text-ink-3">No apps found.</span>
+          )}
+          {found.data?.map((app) => (
+            <div key={app.app} className="flex items-center gap-3 rounded-control px-1.5 py-1.5">
+              <AppLogo logo={app.logo} name={app.name} size={28} />
+              <div className="flex min-w-0 flex-col">
+                <span className="truncate text-control font-semibold text-ink">{app.name}</span>
+                {app.description && (
+                  <span className="line-clamp-1 text-detail text-ink-2">{app.description}</span>
+                )}
+              </div>
+              <span className="ml-auto" />
+              {app.installed ? (
+                <span className="text-caption text-ink-3">Added</span>
+              ) : (
+                <Button size="compact" onClick={() => choose(app.app)} disabled={add.isPending}>
+                  Add
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** A connected (or connecting) remote app: its logo, where it stands, and what to do next. */
+function RemoteAppRow({ app }: { app: InstalledApp }) {
+  const nav = useNav();
+  const connect = useConnectApp();
+  const install = useInstallApp();
+  const pin = usePinApp();
+  const review = () => {
+    nav.closeSettings();
+    nav.openLayer({ kind: "record", ref: ref("team", "app", app.id) });
+  };
+  return (
+    <div className="flex items-center gap-3 py-1.5">
+      <AppLogo logo={app.logo} name={app.name} size={28} />
+      <div className="flex min-w-0 flex-col">
+        <span className="truncate text-control font-semibold text-ink">{app.name}</span>
+        <span className="text-detail text-ink-2">
+          {app.state === "on"
+            ? "On"
+            : app.state === "review"
+              ? "Connected · waiting for you to turn it on"
+              : app.state === "lapsed"
+                ? "Its sign-in stopped working"
+                : "Not connected yet"}
+        </span>
+      </div>
+      <span className="ml-auto" />
+      {app.state === "on" && (
+        <Switch
+          checked={app.pinned}
+          onCheckedChange={(on) => pin.mutate({ app: app.id, pinned: on })}
+        >
+          <span className="text-caption text-ink-3">Sidebar</span>
+        </Switch>
+      )}
+      {app.state === "connecting" || app.state === "lapsed" ? (
+        <Button size="compact" variant="raised" onClick={() => connect(app.id)}>
+          {app.state === "lapsed" ? "Reconnect" : "Connect"}
+        </Button>
+      ) : (
+        <Button size="compact" variant="raised" onClick={review}>
+          {app.state === "review" ? "Review" : "Change"}
+        </Button>
+      )}
+      <Button
+        size="compact"
+        variant="quiet"
+        onClick={() => install.mutate({ app: app.id, on: false })}
+      >
+        Remove
+      </Button>
     </div>
   );
 }

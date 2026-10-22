@@ -2,6 +2,10 @@ import { Effect } from "effect";
 import type { Env } from "./env.ts";
 import type { Decision } from "../authority/contract.ts";
 import { pendingDecisions, spentCents } from "../authority/service.ts";
+import { ownerRequest } from "../authority/contract.ts";
+import { remoteApps, type RemoteApp } from "../apps/remote.ts";
+import { remoteCapabilityName } from "../apps/contract.ts";
+import { logoUrl } from "./remote-apps.ts";
 import { postMessage, readAt } from "../conversations/service.ts";
 import { type Business, type Person } from "../identity/contract.ts";
 import { employeesOf } from "../identity/service.ts";
@@ -85,14 +89,37 @@ export async function homeRoute(
   access: { person: Person; business: Business; trusted: boolean },
 ) {
   const { person, business, trusted } = access;
-  const [decisions, work, employees, proposals, spent] = await Promise.all([
+  const [decisions, work, employees, proposals, spent, apps] = await Promise.all([
     Effect.runPromise(pendingDecisions(env.HYPERDRIVE, business.id)),
     Effect.runPromise(workItems(env.HYPERDRIVE, business.id)),
     Effect.runPromise(employeesOf(env.HYPERDRIVE, business.id)),
     Effect.runPromise(routines(env.HYPERDRIVE, business.id)),
     // Spent is the sum of signed spend approvals; budgets are not built (.docs/AUTHORITY.md).
     Effect.runPromise(spentCents(env.HYPERDRIVE, business.id, "USD")),
+    Effect.runPromise(remoteApps(env.HYPERDRIVE, business.id)),
   ]);
+  const badge = (app: RemoteApp) => ({
+    id: app.id,
+    name: app.name,
+    logo: logoUrl(business.id, app.logo),
+  });
+  /** The remote app a request is about: the one a connect names, or the one whose tool asks. */
+  const appOf = (decision: Decision) => {
+    const request = ownerRequest(decision);
+    if (request?.kind === "connect")
+      return apps.find((app) => [app.id, app.url, app.registry_name].includes(request.app));
+    return apps.find((app) => decision.capability.startsWith(`${app.id}_`));
+  };
+  /** A request's title: the routine or work it is about, the app, or the capability. */
+  const titleOf = (decision: Decision, about: { title: string } | undefined) => {
+    const app = appOf(decision);
+    if (!app) return about?.title ?? workOf(decision.work_item_id)?.title ?? decision.capability;
+    if (decision.kind === "connect") return app.name;
+    const tool = app.tools.find(
+      (each) => remoteCapabilityName(app.id, each.name) === decision.capability,
+    );
+    return `${app.name}: ${tool?.title ?? tool?.name.replace(/[_-]+/g, " ") ?? decision.capability}`;
+  };
   const now = Date.now();
   const workOf = (id: string | null) => work.find((item) => item.id === id);
   /** The routine an activation request is about, by the ids in its input. */
@@ -113,15 +140,21 @@ export async function homeRoute(
     ...decisions.map((decision) => {
       const item = workOf(decision.work_item_id);
       const about = routineOf(decision);
+      const app = appOf(decision);
       return {
         ...decision,
-        title: about?.title ?? item?.title ?? decision.capability,
+        title: titleOf(decision, about),
         work_id: decision.work_item_id,
         project_id: item?.project_id ?? about?.project_id ?? null,
         routine: proposalOf(decision),
+        app: app ? badge(app) : null,
         at: decision.requested_at,
       };
     }),
+    // A remote app whose sign-in stopped working: the owner reconnects it.
+    ...apps
+      .filter((app) => app.state === "lapsed")
+      .map((app) => ({ kind: "reconnect" as const, app: badge(app), at: app.added_at })),
     // Work waiting on the owner's decision, unless a request above already stands for it.
     ...work
       .filter((item) => item.state === "needs_decision" && !asked.has(item.id))

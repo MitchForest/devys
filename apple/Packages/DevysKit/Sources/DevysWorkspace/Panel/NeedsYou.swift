@@ -18,7 +18,11 @@ struct NeedsYou: View {
                     if !home.needsYou.isEmpty {
                         VStack(spacing: 8) {
                             ForEach(home.needsYou) { item in
-                                if let decision = item.decision, let routine = item.routine {
+                                if item.kind == .reconnect, let app = item.app {
+                                    ReconnectRow(store: store, app: app)
+                                } else if item.kind == .connect, let decision = item.decision, let app = item.app {
+                                    ConnectRequestRow(store: store, decision: decision, app: app)
+                                } else if let decision = item.decision, let routine = item.routine {
                                     RoutineProposal(store: store, decision: decision, routine: routine)
                                 } else if let decision = item.decision {
                                     DecisionRow(store: store, decision: decision)

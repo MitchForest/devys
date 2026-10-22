@@ -11,6 +11,7 @@ it("keeps initial schemas smaller and returns only requested integration interfa
     identity: async () => "You are a test employee.",
     granted: async () => new Set(contracts.map((contract) => contract.name)),
     skills: async () => [],
+    remote: async () => [],
     authority: async () => {
       throw new Error("Discovery must not invoke a capability");
     },
@@ -35,6 +36,7 @@ it("keeps initial schemas smaller and returns only requested integration interfa
       .sort(),
   ).toEqual(
     [
+      "appSearch",
       "askOwner",
       "describe_capabilities",
       "execute",
@@ -44,6 +46,7 @@ it("keeps initial schemas smaller and returns only requested integration interfa
       "recall",
       "remember",
       "run",
+      "suggestReplies",
       "write",
     ].sort(),
   );
@@ -67,6 +70,7 @@ it("discovery lists and enables only capabilities the employee is granted", asyn
     identity: async () => "You are a test employee.",
     granted: async () => new Set(["recall", "driveRead"]),
     skills: async () => [],
+    remote: async () => [],
     authority: async () => {
       throw new Error("Discovery must not invoke a capability");
     },
@@ -95,6 +99,7 @@ it("the instructions list the available skills by name and description, and poin
       { name: "weekly-report", description: "Build the weekly report" },
       { name: "writing-pages", description: "Write a page" },
     ],
+    remote: async () => [],
     authority: async () => {
       throw new Error("Instructions must not invoke a capability");
     },

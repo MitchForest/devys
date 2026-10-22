@@ -13,6 +13,10 @@ import { browsersHost } from "../../src/browser/host/server.ts";
 import { scriptPrelude } from "../../src/browser/script.ts";
 import { startHost } from "../../src/workspace/host/server.ts";
 import { hostKeyring, openFor } from "../../src/vault/host/server.ts";
+import { cardIssuer } from "../../src/connections/host/card.ts";
+import { mcpHost } from "../../src/connections/host/mcp.ts";
+import type { Sealed } from "../../src/vault/contract.ts";
+import { fakeMcp, issuedCard } from "../fixtures/mcp.ts";
 
 setDefaultTimeout(90_000);
 const chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
@@ -87,6 +91,13 @@ const other = `http://localhost:${port}`;
 const root = realpathSync(mkdtempSync(join(tmpdir(), "devys-browser-")));
 const work = join(root, "work");
 const keyring = await hostKeyring(join(root, "data"));
+// A card app (Ramp's agent card tool, faked): an MCP server behind its own sign-in.
+const cards = Bun.serve({ port: 0, fetch: (request) => cardApp.fetch(request) });
+const cardApp = fakeMcp(`http://127.0.0.1:${cards.port}`);
+const mcp = mcpHost({
+  open: (business, sealed, kinds) => openFor(keyring, business, sealed, kinds),
+  seal: (...args) => keyring.seal(...args),
+});
 const pauseMs = 3_000;
 const host = await startHost({
   token,
@@ -100,12 +111,14 @@ const host = await startHost({
       headless: true,
       pauseMs,
       open: (business, sealed, kinds) => openFor(keyring, business, sealed, kinds),
+      issueCard: cardIssuer(mcp.call),
     }),
   ],
 });
 afterAll(async () => {
   await host.close();
   site.close();
+  cards.stop(true);
 });
 const browser = (business: string) =>
   hostBrowser({ url: `http://127.0.0.1:${host.port}`, token }, business);
@@ -416,5 +429,100 @@ it.skipIf(!existsSync(chrome))(
         "work-1",
       ),
     ).rejects.toThrow(/part value/);
+  },
+);
+
+it.skipIf(!existsSync(chrome))(
+  "a card from a card app: asked for only on the approved merchant's page, filled, never returned",
+  async () => {
+    // The owner connected the card app: its sign-in, sealed for the business.
+    const redirect = "http://127.0.0.1:8787/api/apps/callback";
+    const begun = (await mcp.routes.handle("/mcp/begin", {
+      business: "acme",
+      url: cardApp.url,
+      redirect,
+      state: "state-1",
+    })) as { authorize: string; pending: unknown };
+    const back = new URL(
+      (await fetch(begun.authorize, { redirect: "manual" })).headers.get("location")!,
+    );
+    const { sealed } = (await mcp.routes.handle("/mcp/finish", {
+      business: "acme",
+      url: cardApp.url,
+      name: "app-ramp",
+      redirect,
+      code: back.searchParams.get("code"),
+      iss: back.searchParams.get("iss"),
+      pending: begun.pending,
+    })) as { sealed: Sealed };
+    const issue = {
+      app: "ramp",
+      url: cardApp.url,
+      sealed,
+      tool: "ramp_get_agent_card_creds",
+      arguments: {
+        fund_id: "fund-1",
+        amount: "12.99",
+        currency_code: "USD",
+        merchant_name: "Shop (127.0.0.1)",
+        merchant_url: "https://127.0.0.1",
+        merchant_country_code: "US",
+        idempotency_key: "devys-approval-1",
+      },
+    };
+    const acme = browser("acme");
+    const paidBefore = paid.length;
+    await script(acme, open(`${base}/checkout?frame=${encodeURIComponent(other)}`));
+    const frame = (await script(
+      acme,
+      `const { targetInfos } = await session.Target.getTargets({});
+      return targetInfos.find((t) => t.type === "iframe" && t.url.startsWith(${JSON.stringify(other)})).targetId;`,
+    )) as string;
+    const fields = [
+      { selector: "#name", part: "name" as const },
+      { selector: "#postal", part: "postal" as const },
+      { target: frame, selector: "#number", part: "number" as const },
+      { target: frame, selector: "#exp", part: "expiry" as const },
+      { target: frame, selector: "#cvc", part: "cvc" as const },
+    ];
+    // Not the merchant's page: refused before the card app is ever asked.
+    await expect(
+      acme.fill({ issue, merchant: "Namecheap (namecheap.com)", fields }, "work-1"),
+    ).rejects.toThrow(/not namecheap\.com/);
+    expect(cardApp.calls.filter((call) => call.tool === "ramp_get_agent_card_creds")).toEqual([]);
+
+    // On the merchant's page: the app issues the card for exactly what was approved; it is filled
+    // and submitted, and only its last four and the app's reference come back.
+    const filled = await acme.fill(
+      { issue, merchant: "Shop (127.0.0.1)", fields, submit: { selector: "#pay" } },
+      "work-1",
+    );
+    expect(filled).toEqual({
+      origin: base,
+      submitted: true,
+      last4: "4242",
+      reference: "ramp-token-77",
+    });
+    expect(JSON.stringify(filled)).not.toContain(issuedCard.card_number);
+    expect(cardApp.calls.at(-1)).toEqual({
+      tool: "ramp_get_agent_card_creds",
+      args: issue.arguments,
+    });
+    for (let tries = 0; tries < 100 && paid.length === paidBefore; tries++)
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(paid.at(-1)).toEqual({
+      number: issuedCard.card_number,
+      exp: "12/31",
+      cvc: issuedCard.cvv,
+      name: issuedCard.cardholder_name,
+      postal: issuedCard.billing_address.postal_code,
+    });
+    // What happened while the card was on the page is not kept for a later script to read.
+    let events: unknown;
+    for (let tries = 0; tries < 100 && !events; tries++)
+      events = await acme
+        .events(0, null, 0)
+        .catch(() => new Promise((resolve) => setTimeout(resolve, 50)).then(() => undefined));
+    expect(JSON.stringify(events)).not.toContain(issuedCard.card_number);
   },
 );

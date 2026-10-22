@@ -8,6 +8,7 @@ import { Schema } from "effect";
 import type { Ref } from "../../protocol/ref.ts";
 import type { RoleTemplateId } from "../../protocol/roles.ts";
 import { Transcript, WorkingDiff } from "../../apps/code/contract.ts";
+import type { RemotePolicy } from "../../apps/contract.ts";
 import { Grant } from "../../authority/contract.ts";
 import { BrowserStatus, PageState, Screenshot, type OwnerInput } from "../../browser/contract.ts";
 import type { ConversationKey } from "../../conversations/contract.ts";
@@ -30,7 +31,10 @@ import {
   AccessList,
   Answered,
   AppChanged,
+  AppReview,
   Apps,
+  AppSearch,
+  Connecting,
   BusinessCreated,
   BusinessDetail,
   BusinessUpdated,
@@ -345,6 +349,14 @@ export const api = {
     post(AppChanged, `${business(b)}/apps/${app}/${on ? "install" : "uninstall"}`),
   pinApp: (b: string, app: string, pinned: boolean) =>
     post(AppChanged, `${business(b)}/apps/${app}/pin`, { pinned }),
+  searchApps: (b: string, query: string) =>
+    get(AppSearch, `${business(b)}/apps/search?q=${encodeURIComponent(query)}`),
+  addApp: (b: string, app: string) => post(AppChanged, `${business(b)}/apps/add`, { app }),
+  connectApp: (b: string, app: string) =>
+    post(Connecting, `${business(b)}/apps/${app}/connect`, { native: false }),
+  appReview: (b: string, app: string) => get(AppReview, `${business(b)}/apps/${app}/review`),
+  acceptApp: (b: string, app: string, acceptance: RemotePolicy) =>
+    post(AppChanged, `${business(b)}/apps/${app}/accept`, acceptance),
   home: (b: string) => get(Home, `${business(b)}/home`),
   artifactText: async (b: string, id: string) => {
     const response = await fetch(`${business(b)}/artifacts/${id}`);

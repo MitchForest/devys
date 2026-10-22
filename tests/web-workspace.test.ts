@@ -21,6 +21,7 @@ const message = (
   mentions: [],
   via_voice: false,
   ref: null,
+  replies: [],
   created_at: at,
   reactions: [],
 });
@@ -108,6 +109,23 @@ describe("conversation timeline, as native ChatTimeline", () => {
       error: "Growth is paused.",
       position: "last",
     });
+  });
+
+  it("offers suggested replies on the latest employee message, past events, until the owner speaks", () => {
+    const now = new Date("2026-10-19T10:10:00Z");
+    const asked = [
+      { ...message(1, "employee:e1", "2026-10-19T10:00:00Z"), replies: ["Old"] },
+      { ...message(2, "employee:e2", "2026-10-19T10:01:00Z"), replies: ["Bold", "Calm"] },
+      message(3, "system", "2026-10-19T10:02:00Z", "event"),
+    ];
+    const offered = (history: ShownMessage[], unsent: Parameters<typeof timeline>[1] = []) =>
+      timeline(history, unsent, me, now).flatMap((i) =>
+        i.kind === "bubble" && i.bubble.replies.length ? [[i.bubble.id, ...i.bubble.replies]] : [],
+      );
+    expect(offered(asked)).toEqual([["m2", "Bold", "Calm"]]);
+    expect(offered([...asked, message(4, me, "2026-10-19T10:03:00Z")])).toEqual([]);
+    expect(offered(asked, [{ id: "local", text: "Calm", delivery: "sending" }])).toEqual([]);
+    expect(offered([...asked, message(5, "employee:e1", "2026-10-19T10:04:00Z")])).toEqual([]);
   });
 });
 

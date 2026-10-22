@@ -27,6 +27,8 @@ package struct ChatTimeline: Equatable {
         package let sentAt: Date?
         /// The record the message was about ("Viewing …"), which opens it.
         package var ref: Ref?
+        /// Answers to tap, offered on the latest employee message until the owner says anything.
+        package var replies: [String] = []
         package var position: Position
         /// Set for messages sent from this device that the server hasn't posted yet.
         package var delivery: PendingMessage.Delivery?
@@ -62,7 +64,16 @@ package struct ChatTimeline: Equatable {
     static let groupGap: TimeInterval = 5 * 60
     static let headingGap: TimeInterval = 60 * 60
 
+    /// The message whose suggested replies show: the latest message, skipping events, when an
+    /// employee wrote it and nothing has been sent from this device since.
+    package static func offering(_ messages: [ConversationMessage], pending: [PendingMessage]) -> ConversationMessage? {
+        guard pending.isEmpty, let latest = messages.last(where: { !$0.isEvent }),
+              latest.employeeID != nil, !latest.replies.isEmpty else { return nil }
+        return latest
+    }
+
     package init(messages: [ConversationMessage], pending: [PendingMessage], now: Date, calendar: Calendar = .current) {
+        let offered = Self.offering(messages, pending: pending)?.id
         let byID = Dictionary(messages.map { ($0.id, $0) }) { first, _ in first }
         func quote(_ id: String?) -> Quote? {
             id.flatMap { byID[$0] }.map { Quote(messageID: $0.id, text: $0.text, employeeID: $0.employeeID) }
@@ -82,6 +93,7 @@ package struct ChatTimeline: Equatable {
                 reactions: message.reactions,
                 sentAt: message.date,
                 ref: message.ref,
+                replies: message.id == offered ? message.replies : [],
                 position: .single
             )))
         }

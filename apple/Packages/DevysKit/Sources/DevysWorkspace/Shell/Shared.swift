@@ -57,6 +57,7 @@ extension Workspace.State {
         case "work/item": work.value?.first { $0.id == ref.id }?.title ?? "Work item"
         case "work/project": project(ref.id)?.name ?? "Project"
         case "work/routine": routine(ref.id)?.title ?? "Routine"
+        case "team/app": remoteApp(ref.id)?.name ?? "App"
         default: "Record"
         }
     }
@@ -82,6 +83,7 @@ extension Workspace.State {
         case "work/item": "Work item"
         case "work/project": "Project"
         case "work/routine": routine(ref.id)?.schedule ?? "Routine"
+        case "team/app": "App"
         default: ""
         }
     }

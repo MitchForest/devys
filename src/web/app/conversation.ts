@@ -270,24 +270,32 @@ export function useConversation(key: ConversationKey | undefined, options: Optio
     [businessId, client, update],
   );
 
-  /** Sends text here; returns the client id, or undefined when there was nothing to send. */
+  /**
+   * Sends text here; returns the client id, or undefined when there was nothing to send. A
+   * suggested reply names the message it answers (`replyTo`) and goes to whoever wrote it.
+   */
   const send = useCallback(
-    (text: string, sending: { viaVoice?: boolean; speak?: boolean; ref?: Ref } = {}) => {
+    (
+      text: string,
+      sending: { viaVoice?: boolean; speak?: boolean; ref?: Ref; replyTo?: string } = {},
+    ) => {
       const trimmed = text.trim();
       const { local: now, options: current } = latest.current;
       if (!trimmed || !now.key) return undefined;
+      const replyTo = sending.replyTo ?? now.replyingTo;
       const message: Pending = {
         id: crypto.randomUUID(),
         text: trimmed,
-        ...(now.replyingTo ? { replyTo: now.replyingTo } : {}),
-        mentions: now.picked ? [now.picked] : mentionsIn(trimmed, current.employees),
+        ...(replyTo ? { replyTo } : {}),
+        mentions:
+          now.picked && !sending.replyTo ? [now.picked] : mentionsIn(trimmed, current.employees),
         ...(sending.viaVoice ? { viaVoice: true } : {}),
         ...(sending.ref ? { ref: sending.ref } : {}),
         delivery: "sending",
       };
+      // A suggested reply leaves what the owner was composing as it was.
       update((state) => ({
-        replyingTo: undefined,
-        picked: undefined,
+        ...(sending.replyTo ? {} : { replyingTo: undefined, picked: undefined }),
         pending: [...state.pending, message],
       }));
       void deliver(message, sending.speak ?? false);

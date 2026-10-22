@@ -60,6 +60,7 @@ export async function localStores(channel = false) {
       for (const table of [
         "follows",
         "conversation_reads",
+        "suggested_replies",
         "messages",
         "conversations",
         "decisions",
@@ -70,6 +71,8 @@ export async function localStores(channel = false) {
         "project_members",
         "projects",
         "app_installs",
+        "app_sign_ins",
+        "remote_apps",
         "artifacts",
         "app_reactions",
         "channel_bindings",

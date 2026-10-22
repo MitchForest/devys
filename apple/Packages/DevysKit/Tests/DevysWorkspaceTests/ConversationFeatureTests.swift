@@ -18,7 +18,10 @@ private actor ConversationServer {
     private var count = 0
 
     @discardableResult
-    func add(_ key: ConversationKey, _ author: String, _ text: String, kind: ConversationMessage.Kind = .message, ref: Ref? = nil, replyTo: String? = nil) -> ConversationMessage {
+    func add(
+        _ key: ConversationKey, _ author: String, _ text: String, kind: ConversationMessage.Kind = .message,
+        ref: Ref? = nil, replyTo: String? = nil, replies: [String] = []
+    ) -> ConversationMessage {
         count += 1
         let message = ConversationMessage(
             id: "m\(count)",
@@ -28,6 +31,7 @@ private actor ConversationServer {
             text: text,
             replyTo: replyTo,
             ref: ref,
+            replies: replies,
             createdAt: ServerDate.format(Date(timeIntervalSince1970: 1_792_400_000 + Double(count)))
         )
         messages[key.rawValue, default: []].append(message)
@@ -134,6 +138,34 @@ struct ConversationFeatureTests {
         #expect(store.state.recipients(in: key) == ["business-ops"])
         store.send(.responderPicked(key, nil))
         #expect(store.state.recipients(in: key) == ["engineering"])
+    }
+
+    @Test("A suggested reply answers its message and leaves the draft; the replies go once the owner speaks")
+    func suggestedReply() async {
+        let server = ConversationServer()
+        let key = ConversationKey.direct("growth")
+        await server.add(key, "person:person-preview", "We need a tagline.")
+        let question = await server.add(key, "employee:growth", "Bold or calm?", replies: ["Bold", "Calm"])
+        let store = await makeStore(server)
+        await open(.direct("growth"), in: store)
+        let offered = {
+            ChatTimeline(messages: store.main?.messages.value ?? [], pending: store.main?.pending ?? [], now: .now)
+                .items.compactMap { item -> [String]? in
+                    if case .bubble(let bubble) = item, !bubble.replies.isEmpty { bubble.replies } else { nil }
+                }
+        }
+        #expect(offered() == [["Bold", "Calm"]])
+        store.send(.draftChanged(key, "Also the logo"))
+        store.send(.suggestedReplyTapped(key, question.id, "Calm"))
+        #expect(offered().isEmpty)
+        await settle("posted") { await server.posts.count == 1 }
+        let sent = await server.posts.first?.message
+        #expect(sent?.text == "Calm")
+        #expect(sent?.replyTo == question.id)
+        #expect(sent?.mentions.isEmpty == true)
+        #expect(store.main?.draft == "Also the logo")
+        await settle("shown") { store.main?.pending.isEmpty == true }
+        #expect(offered().isEmpty)
     }
 
     @Test("Before anyone speaks, the conversation's default answers: the direct chat's employee, the project's lead")

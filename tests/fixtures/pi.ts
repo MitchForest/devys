@@ -134,6 +134,7 @@ export class PiRecoveryProbe extends DurableObject<ProbeEnv> {
         identity: async () => "You are a test employee.",
         granted: async () => new Set(capabilities(env).map((contract) => contract.name)),
         skills: async () => [],
+        remote: async () => [],
         authority: async () => ({
           businessId: "probe",
           employeeId: "probe",

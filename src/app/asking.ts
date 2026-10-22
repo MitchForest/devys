@@ -100,6 +100,10 @@ export function answerText(decision: Decision) {
   }
   if (request?.kind === "take_over")
     return `I won't take this over: ${request.reason}. Find another way or ask me.`;
+  if (request?.kind === "connect")
+    return approved
+      ? `Connected: ${request.app}. Find what it does with describe_capabilities.`
+      : `I won't connect ${request.app}. Find another way or ask me.`;
   if (request?.kind === "secret")
     return approved
       ? `Added ${request.name}${request.spend ? " (a card)" : ""}: use it by name.`

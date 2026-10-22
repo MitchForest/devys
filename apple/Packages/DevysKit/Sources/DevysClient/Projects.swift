@@ -137,6 +137,10 @@ public struct AppEntry: Equatable, Sendable, Decodable, Identifiable {
     public var pinned: Bool
     /// Installed and has something to show, so the sidebar lists it.
     public let visible: Bool
+    /// A remote app's logo, a path on the server; built-in apps draw their symbol.
+    public let logo: String?
+    /// A remote app's state; nil for a built-in app.
+    public let state: RemoteState?
 
     public init(
         id: String,
@@ -148,7 +152,9 @@ public struct AppEntry: Equatable, Sendable, Decodable, Identifiable {
         skills: [Skill] = [],
         installed: Bool = true,
         pinned: Bool = true,
-        visible: Bool = true
+        visible: Bool = true,
+        logo: String? = nil,
+        state: RemoteState? = nil
     ) {
         self.id = id
         self.name = name
@@ -160,6 +166,8 @@ public struct AppEntry: Equatable, Sendable, Decodable, Identifiable {
         self.installed = installed
         self.pinned = pinned
         self.visible = visible
+        self.logo = logo
+        self.state = state
     }
 }
 
@@ -169,9 +177,9 @@ public struct AppEntry: Equatable, Sendable, Decodable, Identifiable {
 /// the whole request, so Needs you is answered from Home alone), or work that needs one.
 public struct NeedsYouItem: Equatable, Sendable, Decodable, Identifiable {
     public enum Kind: String, Equatable, Sendable, WireEnum {
-        case decision, approve, secret
+        case decision, approve, secret, connect
         case takeOver = "take_over"
-        case work, unknown
+        case work, reconnect, unknown
     }
 
     public let kind: Kind
@@ -185,6 +193,8 @@ public struct NeedsYouItem: Equatable, Sendable, Decodable, Identifiable {
     /// For a routine's activation, the proposal it decides (at the revision asked about); nil
     /// when the routine has since moved to another revision, or for any other request.
     public let routine: Routine?
+    /// For a connect request, a remote app's request, or a reconnect: the app.
+    public let app: AppBadge?
 
     public init(kind: Kind, id: String, title: String, employeeID: String? = nil, workID: String? = nil, projectID: String? = nil) {
         self.kind = kind
@@ -195,14 +205,16 @@ public struct NeedsYouItem: Equatable, Sendable, Decodable, Identifiable {
         self.projectID = projectID
         self.decision = nil
         self.routine = nil
+        self.app = nil
     }
 
     /// A pending request as Home lists it.
-    public init(_ decision: Decision, title: String, projectID: String? = nil, routine: Routine? = nil) {
+    public init(_ decision: Decision, title: String, projectID: String? = nil, routine: Routine? = nil, app: AppBadge? = nil) {
         self.kind = switch decision.kind {
         case .approve: .approve
         case .takeOver: .takeOver
         case .secret: .secret
+        case .connect: .connect
         case .decision, .unknown: .decision
         }
         self.id = decision.id
@@ -212,22 +224,42 @@ public struct NeedsYouItem: Equatable, Sendable, Decodable, Identifiable {
         self.projectID = projectID
         self.decision = decision
         self.routine = routine
+        self.app = app
+    }
+
+    /// A remote app whose sign-in stopped working.
+    public init(reconnect app: AppBadge) {
+        kind = .reconnect
+        id = "reconnect-\(app.id)"
+        title = "Reconnect \(app.name)"
+        employeeID = nil
+        workID = nil
+        projectID = nil
+        decision = nil
+        routine = nil
+        self.app = app
     }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        kind = try container.decode(Kind.self, forKey: .kind)
+        let kind = try container.decode(Kind.self, forKey: .kind)
+        if kind == .reconnect, let app = try container.decodeIfPresent(AppBadge.self, forKey: .app) {
+            self = NeedsYouItem(reconnect: app)
+            return
+        }
+        self.kind = kind
+        app = try container.decodeIfPresent(AppBadge.self, forKey: .app)
         id = try container.decode(String.self, forKey: .id)
         title = try container.decode(String.self, forKey: .title)
         employeeID = try container.decodeIfPresent(String.self, forKey: .employeeID)
         workID = try container.decodeIfPresent(String.self, forKey: .workID)
         projectID = try container.decodeIfPresent(String.self, forKey: .projectID)
-        decision = [.decision, .approve, .takeOver, .secret].contains(kind) ? try Decision(from: decoder) : nil
+        decision = [.decision, .approve, .takeOver, .secret, .connect].contains(kind) ? try Decision(from: decoder) : nil
         routine = try container.decodeIfPresent(Routine.self, forKey: .routine)
     }
 
     enum CodingKeys: String, CodingKey {
-        case kind, id, title, routine
+        case kind, id, title, routine, app
         case employeeID = "employee_id"
         case workID = "work_id"
         case projectID = "project_id"

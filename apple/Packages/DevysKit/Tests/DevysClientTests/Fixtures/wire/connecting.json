@@ -1,0 +1,20 @@
+{
+  "url": "https://books.example/authorize?client_id=devys",
+  "app": {
+    "id": "acmebooks",
+    "name": "Acme Books",
+    "icon": "app.connected.to.app.below.fill",
+    "summary": "Bills and cards for Acme",
+    "kind": "business",
+    "records": [],
+    "capabilities": [],
+    "skills": [],
+    "connections": [],
+    "appears": "always",
+    "installed": false,
+    "pinned": true,
+    "visible": false,
+    "logo": null,
+    "state": "connecting"
+  }
+}

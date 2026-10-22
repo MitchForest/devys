@@ -10,6 +10,7 @@ import {
   type QueryKey,
 } from "@tanstack/react-query";
 import type { BusinessDetail, Conversations, Home, Me, Routines } from "../../app/wire.ts";
+import type { RemotePolicy } from "../../apps/contract.ts";
 import type { ConversationKey } from "../../conversations/contract.ts";
 import type { Employee, SettableLook } from "../../identity/contract.ts";
 import type { Ref } from "../../protocol/ref.ts";
@@ -96,7 +97,11 @@ export function useAnswer() {
         const before = client.getQueryData<Home>(keys.home(b));
         client.setQueryData<Home>(
           keys.home(b),
-          (home) => home && { ...home, needs_you: home.needs_you.filter((d) => d.id !== id) },
+          (home) =>
+            home && {
+              ...home,
+              needs_you: home.needs_you.filter((d) => d.kind === "reconnect" || d.id !== id),
+            },
         );
         return () => client.setQueryData(keys.home(b), before);
       },
@@ -518,4 +523,69 @@ export function useRefresh() {
   const client = useQueryClient();
   const business = useBusinessId();
   return () => invalidate(client, keys.me, keys.business(business));
+}
+
+const appSettles = (b: string, app?: string) => [
+  keys.apps(b),
+  keys.home(b),
+  ...(app ? [keys.appReview(b, app)] : []),
+];
+
+/** Adds a remote app (by what search found, or its address), not yet connected. */
+export function useAddApp() {
+  return useChange((b, app: string) => api.addApp(b, app), {
+    failure: (_app, error) =>
+      error instanceof ApiError && error.status < 500 && error.message
+        ? error.message
+        : "That app couldn't be added.",
+    settles: (b) => appSettles(b),
+  });
+}
+
+/**
+ * Connects a remote app with its provider's own sign-in, in a popup opened by the click itself
+ * (a popup opened later is blocked). When the popup closes, what it changed is read again.
+ */
+export function useConnectApp() {
+  const client = useQueryClient();
+  const business = useBusinessId();
+  return (app: string) => {
+    const popup = window.open("", "devys-connect", "popup,width=520,height=720");
+    void api.connectApp(business, app).then(
+      ({ url }) => {
+        const settle = () => invalidate(client, ...appSettles(business, app));
+        if (!url || !popup) {
+          popup?.close();
+          if (url) window.location.assign(url);
+          return settle();
+        }
+        popup.location.href = url;
+        const watch = window.setInterval(() => {
+          if (!popup.closed) return;
+          window.clearInterval(watch);
+          void settle();
+        }, 500);
+      },
+      (error: unknown) => {
+        popup?.close();
+        ui.notify(
+          error instanceof ApiError && error.status < 500 && error.message
+            ? error.message
+            : "That app couldn't be connected.",
+        );
+      },
+    );
+  };
+}
+
+/** The owner turns a remote app on (or changes it): their choices are its policy. */
+export function useAcceptApp() {
+  return useChange(
+    (b, { app, acceptance }: { app: string; acceptance: RemotePolicy }) =>
+      api.acceptApp(b, app, acceptance),
+    {
+      failure: "That app couldn't be turned on.",
+      settles: (b, { app }) => [...appSettles(b, app), keys.work(b)],
+    },
+  );
 }

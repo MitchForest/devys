@@ -19,6 +19,8 @@ import { HostRefusal } from "../protocol/host.ts";
 import { respond } from "../protocol/http.ts";
 import { NewSecret } from "../vault/contract.ts";
 import { addEvidence } from "../work/service.ts";
+import { merchantSite } from "../browser/host/merchant.ts";
+import { cardSettled, cardSource } from "./remote-apps.ts";
 
 /** A card number's own check digit (Luhn): a mistyped number is refused before it is stored. */
 function luhn(number: string) {
@@ -116,7 +118,7 @@ export const filling = (env: Env): Filling => ({
         403,
         "No approved, signed and unused spend approval with that id in this work item: ask with askOwner (approve, with the amount and the merchant's site); each approval is one fill",
       );
-    return { counterparty: spend.counterparty };
+    return { counterparty: spend.counterparty, amount: spend.amount };
   },
   unclaim: async (businessId, approval) => {
     await Effect.runPromise(unclaimSpend(env.HYPERDRIVE, businessId, approval));
@@ -126,6 +128,16 @@ export const filling = (env: Env): Filling => ({
       addEvidence(env.HYPERDRIVE, businessId, workItemId, { by: "devys", note, source }),
     );
   },
+  async cardSource(businessId, card, spend, approval) {
+    const site = merchantSite(spend.counterparty);
+    if (!site)
+      throw new HostRefusal(
+        403,
+        "The spend approval doesn't name the merchant's site (like namecheap.com): ask again naming it",
+      );
+    return cardSource(env, businessId, card, { ...spend, site }, approval);
+  },
+  cardSettled: (businessId, app, outcome) => cardSettled(env, businessId, app, outcome),
 });
 
 /** The vault as a connection uses it: its store, and requests sent with a secret injected. */

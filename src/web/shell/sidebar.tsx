@@ -38,6 +38,8 @@ import { useMood, useWorking } from "../app/workspace.tsx";
 import { PlaceLink, ThreadLink } from "./links.tsx";
 import { BusinessTile } from "../design/face.tsx";
 import { EmployeePortrait } from "../design/portrait.tsx";
+import { AppLogo } from "../panel/layers/team-app.tsx";
+import { ref } from "../../protocol/ref.ts";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -163,14 +165,25 @@ export function SidebarSections({ only }: { only?: "projects" | "team" }) {
         employees.map((employee) => <TeamRow key={employee.id} employee={employee} />)}
       {all && shownApps.length > 0 && <SectionLabel>Apps</SectionLabel>}
       {all &&
-        shownApps.map((app) => (
-          <LayerRow
-            key={app.id}
-            layer={{ kind: "app", app: app.id }}
-            title={app.name}
-            icon={appIcons[app.id] ?? LayoutGrid}
-          />
-        ))}
+        shownApps.map((app) =>
+          app.state ? (
+            // A remote app: its logo, and its card as a layer.
+            <LayerRow
+              key={app.id}
+              layer={{ kind: "record", ref: ref("team", "app", app.id) }}
+              title={app.name}
+              icon={LayoutGrid}
+              logo={<AppLogo logo={app.logo} name={app.name} size={18} />}
+            />
+          ) : (
+            <LayerRow
+              key={app.id}
+              layer={{ kind: "app", app: app.id }}
+              title={app.name}
+              icon={appIcons[app.id] ?? LayoutGrid}
+            />
+          ),
+        )}
     </div>
   );
 }
@@ -338,10 +351,22 @@ function ThreadRow({ item }: { item: WorkItem }) {
 }
 
 /** An app: opens its records as a layer beside the conversation. */
-function LayerRow({ layer, title, icon: Icon }: { layer: Layer; title: string; icon: LucideIcon }) {
+function LayerRow({
+  layer,
+  title,
+  icon: Icon,
+  logo,
+}: {
+  layer: Layer;
+  title: string;
+  icon: LucideIcon;
+  logo?: ReactNode;
+}) {
   const { top } = useLayers();
   const nav = useNav();
-  const selected = top?.kind === "app" && layer.kind === "app" && top.app === layer.app;
+  const selected =
+    (top?.kind === "app" && layer.kind === "app" && top.app === layer.app) ||
+    (top?.kind === "record" && layer.kind === "record" && top.ref === layer.ref);
   return (
     <button
       type="button"
@@ -349,7 +374,11 @@ function LayerRow({ layer, title, icon: Icon }: { layer: Layer; title: string; i
       onClick={() => (selected ? nav.closeLayers() : nav.openLayer(layer))}
       className={rowClass(selected, false)}
     >
-      <Icon className="size-[15px] w-5 shrink-0" strokeWidth={1.9} />
+      {logo ? (
+        <span className="grid w-5 shrink-0 place-items-center">{logo}</span>
+      ) : (
+        <Icon className="size-[15px] w-5 shrink-0" strokeWidth={1.9} />
+      )}
       <span className="truncate">{title}</span>
     </button>
   );

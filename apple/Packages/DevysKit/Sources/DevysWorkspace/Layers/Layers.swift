@@ -30,6 +30,8 @@ struct LayerView: View {
             BrowserLayer(store: store, workID: workID)
         case .routine(let id):
             RoutineLayer(store: store, routineID: id)
+        case .remoteApp(let id):
+            RemoteAppLayer(store: store, appID: id)
         }
     }
 }

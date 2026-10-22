@@ -6,7 +6,8 @@
 import type { Artifact } from "../../../apps/documents/contract.ts";
 import { parseRef, ref, type RecordKind, type Ref } from "../../../protocol/ref.ts";
 import type { Project, Routine, WorkItem } from "../../../work/contract.ts";
-import { useArtifacts, useProjects, useRoutines, useWork } from "../../app/data.ts";
+import type { InstalledApp } from "../../../apps/contract.ts";
+import { useApps, useArtifacts, useProjects, useRoutines, useWork } from "../../app/data.ts";
 
 /** What record titles are read from. */
 export interface Names {
@@ -14,6 +15,7 @@ export interface Names {
   work: readonly WorkItem[] | undefined;
   projects: readonly Project[] | undefined;
   routines: readonly Routine[] | undefined;
+  apps: readonly InstalledApp[] | undefined;
 }
 
 const fileName = (path: string) => path.split("/").at(-1) ?? path;
@@ -43,6 +45,10 @@ export const recordNames: Record<
     title: (id, { routines }) => routines?.find((r) => r.id === id)?.title ?? "Routine",
     detail: (id, { routines }) => routines?.find((r) => r.id === id)?.schedule ?? "Routine",
   },
+  "team/app": {
+    title: (id, { apps }) => apps?.find((a) => a.id === id)?.name ?? "App",
+    detail: () => "App",
+  },
 };
 
 /** A ref's kind and id, or undefined for a ref of a kind nobody knows. */
@@ -57,6 +63,7 @@ export function useNames(): Names {
     work: useWork().data,
     projects: useProjects().data,
     routines: useRoutines().data,
+    apps: useApps().data,
   };
 }
 

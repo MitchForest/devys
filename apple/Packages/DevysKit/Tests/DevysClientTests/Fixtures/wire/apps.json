@@ -60,7 +60,9 @@
       },
       "installed": true,
       "pinned": false,
-      "visible": false
+      "visible": false,
+      "logo": null,
+      "state": null
     },
     {
       "id": "browser",
@@ -111,7 +113,9 @@
       },
       "installed": true,
       "pinned": false,
-      "visible": false
+      "visible": false,
+      "logo": null,
+      "state": null
     },
     {
       "id": "web",
@@ -142,7 +146,9 @@
       },
       "installed": true,
       "pinned": false,
-      "visible": false
+      "visible": false,
+      "logo": null,
+      "state": null
     },
     {
       "id": "memory",
@@ -188,7 +194,9 @@
       },
       "installed": true,
       "pinned": false,
-      "visible": false
+      "visible": false,
+      "logo": null,
+      "state": null
     },
     {
       "id": "conversations",
@@ -198,31 +206,39 @@
       "kind": "system",
       "records": [],
       "capabilities": [
-        "conversationHistory"
+        "conversationHistory",
+        "suggestReplies"
       ],
       "skills": [],
       "connections": [],
       "appears": "never",
       "default_grants": {
         "operations": [
-          "conversationHistory"
+          "conversationHistory",
+          "suggestReplies"
         ],
         "engineering": [
-          "conversationHistory"
+          "conversationHistory",
+          "suggestReplies"
         ],
         "growth": [
-          "conversationHistory"
+          "conversationHistory",
+          "suggestReplies"
         ],
         "business-operations": [
-          "conversationHistory"
+          "conversationHistory",
+          "suggestReplies"
         ],
         "custom": [
-          "conversationHistory"
+          "conversationHistory",
+          "suggestReplies"
         ]
       },
       "installed": true,
       "pinned": false,
-      "visible": false
+      "visible": false,
+      "logo": null,
+      "state": null
     },
     {
       "id": "work",
@@ -259,7 +275,12 @@
         "routinePause",
         "askOwner"
       ],
-      "skills": [],
+      "skills": [
+        {
+          "name": "paying-for-things",
+          "description": "How to pay for anything (a domain, a subscription, a supplier) without ever handling card details. Load before any purchase."
+        }
+      ],
       "connections": [],
       "appears": "never",
       "default_grants": {
@@ -341,29 +362,52 @@
       },
       "installed": true,
       "pinned": false,
-      "visible": false
+      "visible": false,
+      "logo": null,
+      "state": null
     },
     {
       "id": "team",
       "name": "Team",
       "icon": "person.3",
-      "summary": "The business's employees: hiring from a role template.",
+      "summary": "The business's employees and the apps they use: hiring, and finding apps to connect.",
       "kind": "system",
-      "records": [],
+      "records": [
+        {
+          "kind": "app",
+          "title": "App"
+        }
+      ],
       "capabilities": [
-        "hireEmployee"
+        "hireEmployee",
+        "appSearch"
       ],
       "skills": [],
       "connections": [],
       "appears": "never",
       "default_grants": {
         "operations": [
-          "hireEmployee"
+          "hireEmployee",
+          "appSearch"
+        ],
+        "engineering": [
+          "appSearch"
+        ],
+        "growth": [
+          "appSearch"
+        ],
+        "business-operations": [
+          "appSearch"
+        ],
+        "custom": [
+          "appSearch"
         ]
       },
       "installed": true,
       "pinned": false,
-      "visible": false
+      "visible": false,
+      "logo": null,
+      "state": null
     },
     {
       "id": "documents",
@@ -442,7 +486,9 @@
       },
       "installed": true,
       "pinned": true,
-      "visible": true
+      "visible": true,
+      "logo": null,
+      "state": null
     },
     {
       "id": "code",
@@ -498,7 +544,43 @@
       },
       "installed": true,
       "pinned": true,
-      "visible": false
+      "visible": false,
+      "logo": null,
+      "state": null
+    },
+    {
+      "id": "acmebooks",
+      "name": "Acme Books",
+      "icon": "app.connected.to.app.below.fill",
+      "summary": "Bills and cards for Acme",
+      "kind": "business",
+      "records": [],
+      "capabilities": [],
+      "skills": [],
+      "connections": [],
+      "appears": "always",
+      "installed": false,
+      "pinned": true,
+      "visible": false,
+      "logo": null,
+      "state": "connecting"
+    },
+    {
+      "id": "ledger",
+      "name": "Ledger",
+      "icon": "app.connected.to.app.below.fill",
+      "summary": "The books",
+      "kind": "business",
+      "records": [],
+      "capabilities": [],
+      "skills": [],
+      "connections": [],
+      "appears": "always",
+      "installed": true,
+      "pinned": true,
+      "visible": true,
+      "logo": "/api/businesses/00000000-0000-4000-8000-000000000002/apps/logos/0000000000000000000000000000000000000000000000000000000000000003",
+      "state": "lapsed"
     }
   ]
 }

@@ -5,6 +5,8 @@
  */
 import { join } from "node:path";
 import { browsersHost } from "./browser/host/server.ts";
+import { cardIssuer } from "./connections/host/card.ts";
+import { mcpHost } from "./connections/host/mcp.ts";
 import { claudeAdapter } from "./apps/code/host/claude.ts";
 import { codexAdapter } from "./apps/code/host/codex.ts";
 import { codingHost } from "./apps/code/host/server.ts";
@@ -98,6 +100,17 @@ const coding = codingHost({
   },
 });
 
+/** Remote apps' MCP client: their tokens are opened only here. */
+const remote = mcpHost({ open, seal: (...args) => keyring.seal(...args) });
+
+const browsers = browsersHost({
+  data,
+  work,
+  open,
+  // A card app's one-time card, asked for by the fill once the page is on the merchant's site.
+  issueCard: cardIssuer(remote.call),
+});
+
 const host = await startHost({
   token,
   data,
@@ -105,7 +118,7 @@ const host = await startHost({
   work,
   port,
   open,
-  routes: [coding, terminals, browsersHost({ data, work, open }), vaultHost(keyring)],
+  routes: [coding, terminals, browsers, vaultHost(keyring), remote.routes],
 });
 console.log(`Devys Mac host on 127.0.0.1:${host.port}`);
 const stop = () => void host.close().then(() => process.exit(0));

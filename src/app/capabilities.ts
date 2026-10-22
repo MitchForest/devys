@@ -5,7 +5,7 @@ import { modeOf } from "./mode.ts";
 import { browserCapabilities } from "../browser/capabilities.ts";
 import { hiring } from "./team.ts";
 import { coordinates } from "../identity/team.ts";
-import { teamCapabilities } from "../identity/capabilities.ts";
+import { appSearchCapabilities, teamCapabilities } from "../identity/capabilities.ts";
 import { memoryCapabilities } from "../memory/capabilities.ts";
 import { googleConnection } from "../connections/google.ts";
 import { workspaceCapabilities } from "../workspace/capabilities.ts";
@@ -20,10 +20,10 @@ import { Effect } from "effect";
 import { codingCapabilities } from "../apps/code/capabilities.ts";
 import { codingIncomplete, codingDependencies } from "./coding.ts";
 import type { Capability } from "../protocol/capability.ts";
-import { appSkills } from "./apps.ts";
+import { appCatalog, appSkills, builtInDirectory } from "./apps.ts";
 import { keepable } from "./projects.ts";
 import { artifactUrl } from "./artifacts.ts";
-import { askOwnerFor } from "./asking.ts";
+import { askOwnerConnecting, searchApps } from "./remote-apps.ts";
 import { connectionVault, filling } from "./vault.ts";
 /** Composition only: implementations and SQL belong to their domains. */
 export function capabilities(
@@ -63,7 +63,10 @@ export function capabilities(
       (businessId, ref) => keepable(env, businessId, ref),
       (businessId, work) => codingIncomplete(env, businessId, work),
       (businessId, employeeId) => coordinates(env.HYPERDRIVE, { businessId, employeeId }),
-      (asking, request) => askOwnerFor(env, asking, request),
+      (asking, request) => askOwnerConnecting(env, asking, request, appCatalog),
+    ),
+    ...appSearchCapabilities(async (businessId, query) =>
+      searchApps(env, businessId, query, await builtInDirectory(env, businessId)),
     ),
   ];
   return [

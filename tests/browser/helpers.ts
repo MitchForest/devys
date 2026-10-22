@@ -61,6 +61,7 @@ export async function insertMessage(
     text: string;
     kind?: "message" | "event";
     ref?: string;
+    replies?: string[];
   },
 ) {
   const id = randomUUID();
@@ -69,8 +70,8 @@ export async function insertMessage(
     [business, key],
   );
   await sql.run(
-    `INSERT INTO messages (id, business_id, conversation, author, kind, text, ref, client_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    `INSERT INTO messages (id, business_id, conversation, author, kind, text, ref, client_id, replies)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
     [
       id,
       business,
@@ -80,6 +81,7 @@ export async function insertMessage(
       message.text,
       message.ref ?? null,
       randomUUID(),
+      message.replies ?? [],
     ],
   );
   // Times are stored to the millisecond; the next message must come strictly after.
@@ -115,6 +117,7 @@ export async function stubPosting(page: Page, to: () => string[] = () => []) {
           mentions: body.mentions ?? [],
           via_voice: false,
           ref: null,
+          replies: [],
           created_at: new Date().toISOString(),
         },
         to: to(),

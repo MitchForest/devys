@@ -1,0 +1,47 @@
+{
+  "app": {
+    "id": "ledger",
+    "name": "Ledger",
+    "icon": "app.connected.to.app.below.fill",
+    "summary": "The books",
+    "kind": "business",
+    "records": [],
+    "capabilities": [],
+    "skills": [],
+    "connections": [],
+    "appears": "always",
+    "installed": false,
+    "pinned": true,
+    "visible": false,
+    "logo": "/api/businesses/00000000-0000-4000-8000-000000000002/apps/logos/0000000000000000000000000000000000000000000000000000000000000003",
+    "state": "review"
+  },
+  "tools": [
+    {
+      "capability": "ledger_list_entries",
+      "title": "List entries",
+      "description": "List ledger entries.",
+      "line": "own",
+      "fixed": false
+    },
+    {
+      "capability": "ledger_post_entry",
+      "title": "Post entry",
+      "description": "Post a journal entry.",
+      "line": "ask",
+      "fixed": false
+    }
+  ],
+  "employees": [
+    {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "name": "Head of Operations",
+      "uses": true
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "name": "Ada",
+      "uses": true
+    }
+  ]
+}

@@ -17,6 +17,8 @@ export interface Bubble {
   reactions: readonly string[];
   /** What an event opens: a hand-off card's work item, a page. */
   ref: Ref | null;
+  /** Answers to tap, offered on the latest employee message until the owner says anything. */
+  replies: readonly string[];
   sentAt?: Date;
   position: Position;
   /** Set for messages sent from this browser that the conversation doesn't show yet. */
@@ -49,6 +51,16 @@ const groupGap = 5 * 60_000;
 const headingGap = 60 * 60_000;
 const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
 
+/**
+ * The message whose suggested replies show: the latest message, skipping events, when an
+ * employee wrote it and nothing has been sent from here since.
+ */
+export function offering(history: readonly ShownMessage[], unsent: readonly Unsent[]) {
+  if (unsent.length) return undefined;
+  const latest = history.findLast((m) => m.kind === "message");
+  return latest?.author.startsWith("employee:") && latest.replies.length ? latest : undefined;
+}
+
 /** `me` is the signed-in person's author string, `person:<id>`. */
 export function timeline(
   history: ShownMessage[],
@@ -56,6 +68,7 @@ export function timeline(
   me: string,
   now: Date,
 ): TimelineItem[] {
+  const offered = offering(history, unsent);
   const bubbles: Bubble[] = [
     ...history.map((m, index) => ({
       id: m.id,
@@ -67,6 +80,7 @@ export function timeline(
       viaVoice: m.via_voice,
       reactions: m.reactions,
       ref: m.ref,
+      replies: m === offered ? m.replies : [],
       sentAt: new Date(m.created_at),
       position: "single" as const,
     })),
@@ -80,6 +94,7 @@ export function timeline(
       viaVoice: p.viaVoice ?? false,
       reactions: [],
       ref: p.ref ?? null,
+      replies: [],
       sentAt: now,
       position: "single" as const,
       delivery: p.delivery,

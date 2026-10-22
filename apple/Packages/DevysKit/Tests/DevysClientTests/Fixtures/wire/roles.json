@@ -11,6 +11,7 @@
         "remember",
         "forget",
         "conversationHistory",
+        "suggestReplies",
         "readSkill",
         "importAttachment",
         "read",
@@ -45,7 +46,8 @@
         "routinePropose",
         "routineActivate",
         "routinePause",
-        "askOwner"
+        "askOwner",
+        "appSearch"
       ]
     },
     {
@@ -59,6 +61,7 @@
         "remember",
         "forget",
         "conversationHistory",
+        "suggestReplies",
         "readSkill",
         "importAttachment",
         "read",
@@ -85,7 +88,8 @@
         "routinePropose",
         "routineActivate",
         "routinePause",
-        "askOwner"
+        "askOwner",
+        "appSearch"
       ]
     },
     {
@@ -103,6 +107,7 @@
         "remember",
         "forget",
         "conversationHistory",
+        "suggestReplies",
         "readSkill",
         "importAttachment",
         "read",
@@ -129,7 +134,8 @@
         "routinePropose",
         "routineActivate",
         "routinePause",
-        "askOwner"
+        "askOwner",
+        "appSearch"
       ]
     },
     {
@@ -142,6 +148,7 @@
         "remember",
         "forget",
         "conversationHistory",
+        "suggestReplies",
         "readSkill",
         "read",
         "write",
@@ -158,7 +165,8 @@
         "routinePropose",
         "routineActivate",
         "routinePause",
-        "askOwner"
+        "askOwner",
+        "appSearch"
       ]
     }
   ]

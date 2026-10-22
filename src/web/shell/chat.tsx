@@ -17,7 +17,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { Employee } from "../../identity/contract.ts";
 import { answerersOf, draft, useDraft, type Conversation } from "../app/conversation.ts";
 import { employeeOf } from "../../conversations/contract.ts";
-import { capturing, modeOf } from "../app/voice.ts";
+import { capturing, loadVoiceSettings, modeOf } from "../app/voice.ts";
 import {
   endsGroup,
   startsGroup,
@@ -263,172 +263,214 @@ function MessageRow({
     ? conversation.messages?.find((m) => m.id === bubble.replyTo)
     : undefined;
   return (
-    <Message align={align} className="group/row items-end gap-2 text-body">
-      {!mine && (
-        <MessageAvatar className="min-w-0 self-end bg-transparent" style={{ width: avatarSize }}>
-          {endsGroup(bubble) &&
-            (speaker ? (
-              <EmployeePortrait employee={speaker} size={avatarSize} />
-            ) : (
-              <PersonPortrait name={nameOf(bubble.author)} size={avatarSize} />
-            ))}
-        </MessageAvatar>
-      )}
-      <MessageContent className="gap-[3px]">
-        {!mine && startsGroup(bubble) && (
-          <span className="px-3 text-caption text-ink-3" data-testid="speaker">
-            {nameOf(bubble.author)}
-          </span>
+    <>
+      <Message align={align} className="group/row items-end gap-2 text-body">
+        {!mine && (
+          <MessageAvatar className="min-w-0 self-end bg-transparent" style={{ width: avatarSize }}>
+            {endsGroup(bubble) &&
+              (speaker ? (
+                <EmployeePortrait employee={speaker} size={avatarSize} />
+              ) : (
+                <PersonPortrait name={nameOf(bubble.author)} size={avatarSize} />
+              ))}
+          </MessageAvatar>
         )}
-        {replied && (
-          <div
-            className={cn("flex items-center gap-1.5", mine ? "justify-end pl-16" : "pr-16")}
-            data-testid="quoted"
-          >
-            <CornerUpLeft className="size-3 shrink-0 text-ink-3" />
-            <span className="line-clamp-2 rounded-workspace border border-hairline px-2.5 py-[5px] text-detail text-ink-2">
-              <span className="font-medium text-ink">{nameOf(replied.author)}</span>{" "}
-              {replied.text.slice(0, 200)}
+        <MessageContent className="gap-[3px]">
+          {!mine && startsGroup(bubble) && (
+            <span className="px-3 text-caption text-ink-3" data-testid="speaker">
+              {nameOf(bubble.author)}
             </span>
-          </div>
-        )}
-        <div className={cn("flex items-end gap-1", mine ? "flex-row-reverse pl-12" : "pr-12")}>
-          <Popover open={picking} onOpenChange={setPicking}>
-            <ContextMenu>
-              <ContextMenuTrigger
-                render={
-                  <Bubble
-                    align={align}
-                    variant={mine ? "default" : "muted"}
-                    className={cn("max-w-full", bubble.reactions.length > 0 && "mt-3")}
-                    title={bubble.sentAt && dateTime(bubble.sentAt)}
-                  />
-                }
-              >
-                <BubbleContent
-                  className={cn(
-                    "rounded-none px-3 py-[7px] text-body leading-[1.4] select-text",
-                    mine
-                      ? "bg-indigo! text-white! [&_a]:text-white"
-                      : "bg-track! text-ink [&_a]:text-indigo",
-                    bubble.delivery === "sending" && "opacity-75",
-                    bubble.delivery === "failed" && "opacity-55",
-                  )}
-                  style={{ borderRadius: radius(bubble) }}
-                >
-                  <InlineMarkdown text={bubble.text} />
-                </BubbleContent>
-                {bubble.reactions.length > 0 && (
-                  <BubbleReactions
-                    side="top"
-                    align={mine ? "start" : "end"}
-                    className="-translate-y-[60%] border border-hairline bg-sheet px-1.5 py-[3px] text-[13px] shadow-raised ring-0"
-                    aria-label={`Reacted ${bubble.reactions.join("")}`}
-                  >
-                    {bubble.reactions.join("")}
-                  </BubbleReactions>
-                )}
-              </ContextMenuTrigger>
-              <ContextMenuContent>
-                {reacts && (
-                  <>
-                    {quick.map((emoji) => (
-                      <ContextMenuItem
-                        key={emoji}
-                        onClick={() => conversation.react(bubble.id, emoji)}
-                      >
-                        {bubble.reactions.includes(emoji) ? `${emoji} Remove` : emoji}
-                      </ContextMenuItem>
-                    ))}
-                    <ContextMenuSeparator />
-                  </>
-                )}
-                {replies && (
-                  <ContextMenuItem onClick={() => conversation.reply(bubble.id)}>
-                    <Reply /> Reply
-                  </ContextMenuItem>
-                )}
-                {threads && (
-                  <ContextMenuItem onClick={startThread}>
-                    <MessageSquarePlus /> Start a thread
-                  </ContextMenuItem>
-                )}
-                <ContextMenuItem
-                  onClick={() =>
-                    void navigator.clipboard.writeText(bubble.text).catch(() => undefined)
+          )}
+          {replied && (
+            <div
+              className={cn("flex items-center gap-1.5", mine ? "justify-end pl-16" : "pr-16")}
+              data-testid="quoted"
+            >
+              <CornerUpLeft className="size-3 shrink-0 text-ink-3" />
+              <span className="line-clamp-2 rounded-workspace border border-hairline px-2.5 py-[5px] text-detail text-ink-2">
+                <span className="font-medium text-ink">{nameOf(replied.author)}</span>{" "}
+                {replied.text.slice(0, 200)}
+              </span>
+            </div>
+          )}
+          <div className={cn("flex items-end gap-1", mine ? "flex-row-reverse pl-12" : "pr-12")}>
+            <Popover open={picking} onOpenChange={setPicking}>
+              <ContextMenu>
+                <ContextMenuTrigger
+                  render={
+                    <Bubble
+                      align={align}
+                      variant={mine ? "default" : "muted"}
+                      className={cn("max-w-full", bubble.reactions.length > 0 && "mt-3")}
+                      title={bubble.sentAt && dateTime(bubble.sentAt)}
+                    />
                   }
                 >
-                  <Copy /> Copy
-                </ContextMenuItem>
-              </ContextMenuContent>
-            </ContextMenu>
-            {/* Hover affordances; the context menu carries the same actions. */}
-            {replies && (
-              <div className="flex shrink-0 opacity-0 transition-opacity duration-150 group-hover/row:opacity-100 focus-within:opacity-100">
-                {reacts && (
-                  <PopoverTrigger render={<ChatActionButton label="React" />}>
-                    <Smile />
-                  </PopoverTrigger>
-                )}
-                <ChatActionButton label="Reply" onClick={() => conversation.reply(bubble.id)}>
-                  <Reply />
-                </ChatActionButton>
-                {threads && (
-                  <ChatActionButton label="Start a thread" onClick={startThread}>
-                    <MessageSquarePlus />
-                  </ChatActionButton>
-                )}
-              </div>
-            )}
-            <PopoverContent side="top" className="w-auto flex-row gap-1 rounded-full p-2">
-              {quick.map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  aria-label={emoji}
-                  className={cn(
-                    "grid size-[34px] place-items-center rounded-full text-[20px] hover:bg-well",
-                    bubble.reactions.includes(emoji) && "bg-indigo/18",
+                  <BubbleContent
+                    className={cn(
+                      "rounded-none px-3 py-[7px] text-body leading-[1.4] select-text",
+                      mine
+                        ? "bg-indigo! text-white! [&_a]:text-white"
+                        : "bg-track! text-ink [&_a]:text-indigo",
+                      bubble.delivery === "sending" && "opacity-75",
+                      bubble.delivery === "failed" && "opacity-55",
+                    )}
+                    style={{ borderRadius: radius(bubble) }}
+                  >
+                    <InlineMarkdown text={bubble.text} />
+                  </BubbleContent>
+                  {bubble.reactions.length > 0 && (
+                    <BubbleReactions
+                      side="top"
+                      align={mine ? "start" : "end"}
+                      className="-translate-y-[60%] border border-hairline bg-sheet px-1.5 py-[3px] text-[13px] shadow-raised ring-0"
+                      aria-label={`Reacted ${bubble.reactions.join("")}`}
+                    >
+                      {bubble.reactions.join("")}
+                    </BubbleReactions>
                   )}
-                  onClick={() => {
-                    setPicking(false);
-                    conversation.react(bubble.id, emoji);
-                  }}
-                >
-                  {emoji}
-                </button>
-              ))}
-            </PopoverContent>
-          </Popover>
-        </div>
-        {bubble.ref && (
-          <div className={cn("flex px-3", mine && "justify-end")}>
-            <ViewedRecord value={bubble.ref} />
+                </ContextMenuTrigger>
+                <ContextMenuContent>
+                  {reacts && (
+                    <>
+                      {quick.map((emoji) => (
+                        <ContextMenuItem
+                          key={emoji}
+                          onClick={() => conversation.react(bubble.id, emoji)}
+                        >
+                          {bubble.reactions.includes(emoji) ? `${emoji} Remove` : emoji}
+                        </ContextMenuItem>
+                      ))}
+                      <ContextMenuSeparator />
+                    </>
+                  )}
+                  {replies && (
+                    <ContextMenuItem onClick={() => conversation.reply(bubble.id)}>
+                      <Reply /> Reply
+                    </ContextMenuItem>
+                  )}
+                  {threads && (
+                    <ContextMenuItem onClick={startThread}>
+                      <MessageSquarePlus /> Start a thread
+                    </ContextMenuItem>
+                  )}
+                  <ContextMenuItem
+                    onClick={() =>
+                      void navigator.clipboard.writeText(bubble.text).catch(() => undefined)
+                    }
+                  >
+                    <Copy /> Copy
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
+              {/* Hover affordances; the context menu carries the same actions. */}
+              {replies && (
+                <div className="flex shrink-0 opacity-0 transition-opacity duration-150 group-hover/row:opacity-100 focus-within:opacity-100">
+                  {reacts && (
+                    <PopoverTrigger render={<ChatActionButton label="React" />}>
+                      <Smile />
+                    </PopoverTrigger>
+                  )}
+                  <ChatActionButton label="Reply" onClick={() => conversation.reply(bubble.id)}>
+                    <Reply />
+                  </ChatActionButton>
+                  {threads && (
+                    <ChatActionButton label="Start a thread" onClick={startThread}>
+                      <MessageSquarePlus />
+                    </ChatActionButton>
+                  )}
+                </div>
+              )}
+              <PopoverContent side="top" className="w-auto flex-row gap-1 rounded-full p-2">
+                {quick.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    aria-label={emoji}
+                    className={cn(
+                      "grid size-[34px] place-items-center rounded-full text-[20px] hover:bg-well",
+                      bubble.reactions.includes(emoji) && "bg-indigo/18",
+                    )}
+                    onClick={() => {
+                      setPicking(false);
+                      conversation.react(bubble.id, emoji);
+                    }}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </PopoverContent>
+            </Popover>
           </div>
-        )}
-        {(bubble.delivery || (bubble.viaVoice && endsGroup(bubble))) && (
-          <MessageFooter className="px-0 text-caption font-normal text-ink-3">
-            {bubble.delivery === "sending" ? (
-              "Sending…"
-            ) : bubble.delivery === "delivered" ? (
-              "Delivered"
-            ) : bubble.delivery === "failed" ? (
-              <button
-                type="button"
-                role={bubble.error ? "alert" : undefined}
-                className="inline-flex items-center gap-1 text-left text-red"
-                onClick={() => conversation.retry(bubble.id)}
-              >
-                <CircleAlert className="size-3 shrink-0 fill-red text-sheet" />
-                {bubble.error ?? "Not delivered"} · Try again
-              </button>
-            ) : (
-              "Dictated"
-            )}
-          </MessageFooter>
-        )}
-      </MessageContent>
-    </Message>
+          {bubble.ref && (
+            <div className={cn("flex px-3", mine && "justify-end")}>
+              <ViewedRecord value={bubble.ref} />
+            </div>
+          )}
+          {(bubble.delivery || (bubble.viaVoice && endsGroup(bubble))) && (
+            <MessageFooter className="px-0 text-caption font-normal text-ink-3">
+              {bubble.delivery === "sending" ? (
+                "Sending…"
+              ) : bubble.delivery === "delivered" ? (
+                "Delivered"
+              ) : bubble.delivery === "failed" ? (
+                <button
+                  type="button"
+                  role={bubble.error ? "alert" : undefined}
+                  className="inline-flex items-center gap-1 text-left text-red"
+                  onClick={() => conversation.retry(bubble.id)}
+                >
+                  <CircleAlert className="size-3 shrink-0 fill-red text-sheet" />
+                  {bubble.error ?? "Not delivered"} · Try again
+                </button>
+              ) : (
+                "Dictated"
+              )}
+            </MessageFooter>
+          )}
+        </MessageContent>
+      </Message>
+      {bubble.replies.length > 0 && (
+        <SuggestedReplies
+          replies={bubble.replies}
+          send={(text) =>
+            conversation.send(text, {
+              replyTo: bubble.id,
+              speak: loadVoiceSettings().speaksReplies,
+            })
+          }
+        />
+      )}
+    </>
+  );
+}
+
+/** Answers the employee offered: one tap sends that answer as the owner's reply. */
+function SuggestedReplies({
+  replies,
+  send,
+}: {
+  replies: readonly string[];
+  send: (text: string) => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Suggested replies"
+      className="flex flex-wrap gap-1.5 pt-1.5"
+      style={{ paddingLeft: avatarSize + 8 }}
+    >
+      {replies.map((reply) => (
+        <button
+          key={reply}
+          type="button"
+          className="rounded-full border border-indigo/35 px-3 py-[5px] text-detail text-indigo transition-colors hover:bg-indigo/10 focus-visible:ring-2 focus-visible:ring-indigo/40 focus-visible:outline-none"
+          onClick={() => send(reply)}
+        >
+          {reply}
+        </button>
+      ))}
+    </div>
   );
 }
 

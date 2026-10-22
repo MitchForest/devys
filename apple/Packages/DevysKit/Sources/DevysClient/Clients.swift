@@ -88,6 +88,17 @@ public struct RuntimeClient: Sendable {
     public var secrets: @Sendable (_ businessID: String) async throws -> [SecretEntry]
     public var addSecret: @Sendable (_ businessID: String, NewSecret) async throws -> [SecretEntry]
     public var removeSecret: @Sendable (_ businessID: String, _ name: String) async throws -> [SecretEntry]
+    /// Apps for a query: the business's own and the MCP Registry's.
+    public var searchApps: @Sendable (_ businessID: String, _ query: String) async throws -> [FoundApp]
+    /// Adds a remote app (by what search found, or its address), not yet connected.
+    public var addApp: @Sendable (_ businessID: String, _ app: String) async throws -> AppEntry
+    /// Starts connecting a remote app: its provider's sign-in page, or nil when it needs none.
+    public var connectApp: @Sendable (_ businessID: String, _ appID: String) async throws -> Connecting
+    public var appReview: @Sendable (_ businessID: String, _ appID: String) async throws -> AppReview
+    /// Turns a remote app on (or changes it): the owner's choices are its policy.
+    public var acceptApp: @Sendable (_ businessID: String, _ appID: String, AppAcceptance) async throws -> AppEntry
+    /// A remote app's logo bytes, from the path the server gave.
+    public var appLogo: @Sendable (_ path: String) async throws -> Data
 
     public init(
         account: @escaping @Sendable () async throws -> Account,
@@ -155,7 +166,13 @@ public struct RuntimeClient: Sendable {
         addSecret: @escaping @Sendable (String, NewSecret) async throws -> [SecretEntry] = { _, secret in
             [SecretEntry(name: secret.name, kind: { if case .card = secret.value { .spend } else { .secret } }())]
         },
-        removeSecret: @escaping @Sendable (String, String) async throws -> [SecretEntry] = { _, _ in [] }
+        removeSecret: @escaping @Sendable (String, String) async throws -> [SecretEntry] = { _, _ in [] },
+        searchApps: @escaping @Sendable (String, String) async throws -> [FoundApp] = { _, _ in [] },
+        addApp: @escaping @Sendable (String, String) async throws -> AppEntry = { _, _ in throw DevysHTTPError.unauthorized },
+        connectApp: @escaping @Sendable (String, String) async throws -> Connecting = { _, _ in throw DevysHTTPError.unauthorized },
+        appReview: @escaping @Sendable (String, String) async throws -> AppReview = { _, _ in throw DevysHTTPError.unauthorized },
+        acceptApp: @escaping @Sendable (String, String, AppAcceptance) async throws -> AppEntry = { _, _, _ in throw DevysHTTPError.unauthorized },
+        appLogo: @escaping @Sendable (String) async throws -> Data = { _ in Data() }
     ) {
         self.account = account
         self.rename = rename
@@ -206,6 +223,12 @@ public struct RuntimeClient: Sendable {
         self.secrets = secrets
         self.addSecret = addSecret
         self.removeSecret = removeSecret
+        self.searchApps = searchApps
+        self.addApp = addApp
+        self.connectApp = connectApp
+        self.appReview = appReview
+        self.acceptApp = acceptApp
+        self.appLogo = appLogo
     }
 }
 
@@ -397,7 +420,15 @@ extension RuntimeClient {
             googleConnection: { id in try await hub.call { api, session in try await api.googleConnection(session, businessID: id) } },
             secrets: { id in try await hub.call { api, session in try await api.secrets(session, businessID: id) } },
             addSecret: { id, secret in try await hub.call { api, session in try await api.addSecret(session, businessID: id, secret) } },
-            removeSecret: { id, name in try await hub.call { api, session in try await api.removeSecret(session, businessID: id, name: name) } }
+            removeSecret: { id, name in try await hub.call { api, session in try await api.removeSecret(session, businessID: id, name: name) } },
+            searchApps: { id, query in try await hub.call { api, session in try await api.searchApps(session, businessID: id, query: query) } },
+            addApp: { id, app in try await hub.call { api, session in try await api.addApp(session, businessID: id, app: app) } },
+            connectApp: { id, app in try await hub.call { api, session in try await api.connectApp(session, businessID: id, appID: app) } },
+            appReview: { id, app in try await hub.call { api, session in try await api.appReview(session, businessID: id, appID: app) } },
+            acceptApp: { id, app, acceptance in
+                try await hub.call { api, session in try await api.acceptApp(session, businessID: id, appID: app, acceptance) }
+            },
+            appLogo: { path in try await hub.call { api, session in try await api.appLogo(session, path: path) } }
         )
     }
 

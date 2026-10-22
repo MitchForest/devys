@@ -13,6 +13,7 @@ import { memoryFor } from "./memory.ts";
 import { applicationModels, modelChoice } from "./models.ts";
 import { modeOf } from "./mode.ts";
 import { interruptCodingSessions } from "./coding.ts";
+import { remoteCapabilities } from "./remote-apps.ts";
 
 /** The only production selection of the employee runtime's adapters. */
 export function agentDependencies(env: Env): AgentDependencies {
@@ -58,6 +59,7 @@ export function agentDependencies(env: Env): AgentDependencies {
         .map((grant) => grant.capability)
         .filter(usable);
     },
+    remote: (scope) => remoteCapabilities(env, scope.businessId),
     skills: async (scope) =>
       availableSkills(
         // Without the business's own (no Mac host or workspace right now), the apps' remain.

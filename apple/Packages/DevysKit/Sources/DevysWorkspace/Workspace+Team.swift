@@ -202,6 +202,8 @@ enum DecisionText {
             return "Sign in / take over: \(reason)"
         case .secret(let name, _, let spend):
             return spend ? "Card: \(name)" : "Secret: \(name)"
+        case .connect:
+            return "Connect an app"
         case nil:
             break
         }
@@ -223,6 +225,8 @@ enum DecisionText {
             return [("Do", reason)] + (url.map { [("Site", $0)] } ?? [])
         case .secret(let name, let why, _):
             return [("Name", name), ("Why", why)]
+        case .connect(_, let why):
+            return [("Why", why)]
         case nil:
             return decision.input.fields
         }

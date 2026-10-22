@@ -14,12 +14,16 @@ struct WireTests {
     /// Every golden file and the call that reads it.
     private static let reads: [String: Read] = [
         "access": { try await $0.access($1, scope) },
+        "app-changed": { try await $0.acceptApp($1, businessID: "b1", appID: "ledger", AppAcceptance(lines: ["ledger_list_entries": .own], employees: ["e1"])) },
+        "app-review": { try await $0.appReview($1, businessID: "b1", appID: "ledger") },
+        "app-search": { try await $0.searchApps($1, businessID: "b1", query: "books") },
         "apps": { try await $0.apps($1, businessID: "b1") },
         "browser": { try await $0.browserStatus($1, businessID: "b1") },
         "business-created": { try await $0.createBusiness($1, NewBusiness(name: "Acme Roofing")) },
         "business-updated": { try await $0.updateBusiness($1, id: "b1", name: nil, brief: "Roof repairs.") },
         "business": { try await $0.business($1, id: "b1") },
         "coded-work": { try await $0.codingWork($1, businessID: "b1") },
+        "connecting": { try await $0.connectApp($1, businessID: "b1", appID: "acmebooks") },
         "coding-sessions": { try await $0.codingSessions($1, businessID: "b1", workID: "w1") },
         "conversation-work": { try await $0.conversation($1, businessID: "b1", key: .work("w1")) },
         "conversation": { try await $0.conversation($1, businessID: "b1", key: .direct("e1")) },
@@ -108,23 +112,32 @@ struct WireTests {
     @Test("Golden values land in the right fields")
     func values() async throws {
         let home = try await Self.answering("home").home(Self.session, businessID: "b1")
-        #expect(home.needsYou.last?.kind == .decision && home.needsYou.last?.workID != nil && home.needsYou.last?.projectID != nil)
+        let drive = home.needsYou[5]
+        #expect(drive.kind == .decision && drive.workID != nil && drive.projectID != nil)
         #expect(home.decisions.last?.capability == "driveCreate" && home.decisions.last?.input.fields.first?.key == "content")
-        #expect(home.decisions.first?.capability == "routineActivate" && home.needsYou.first?.workID == nil)
+        #expect(home.decisions[1].capability == "routineActivate" && home.needsYou[1].workID == nil)
         #expect(home.glance.moving.first?.state == .inProgress && home.glance.moving.first?.dueAt != nil)
-        // What employees ask with askOwner: a card to add, a take over, and a spend approval to sign.
-        #expect(home.needsYou.map(\.kind) == [.decision, .secret, .takeOver, .approve, .decision])
-        #expect(home.decisions[1].request == .secret(name: "RAMP_CARD", why: "The company card, to pay for the domain at Namecheap", spend: true))
-        #expect(home.decisions[2].request == .takeOver(reason: "Sign in to the registrar (2FA)", url: "https://www.namecheap.com/myaccount/login/"))
-        let spend = try #require(SpendApproval(home.decisions[3], businessID: "b1"))
+        // What employees ask with askOwner: an app to connect, a card to add, a take over and a
+        // spend approval to sign; and a remote app whose sign-in lapsed.
+        #expect(home.needsYou.map(\.kind) == [.connect, .decision, .secret, .takeOver, .approve, .decision, .reconnect])
+        #expect(home.decisions[0].request == .connect(app: "acmebooks", why: "To read and draft the supplier's bills"))
+        #expect(home.needsYou[0].app == AppBadge(id: "acmebooks", name: "Acme Books") && home.needsYou[0].title == "Acme Books")
+        #expect(home.needsYou[6].app?.name == "Ledger" && home.needsYou[6].app?.logo?.hasPrefix("/api/businesses/") == true && home.needsYou[6].decision == nil)
+        #expect(home.decisions[2].request == .secret(name: "RAMP_CARD", why: "The company card, to pay for the domain at Namecheap", spend: true))
+        #expect(home.decisions[3].request == .takeOver(reason: "Sign in to the registrar (2FA)", url: "https://www.namecheap.com/myaccount/login/"))
+        let spend = try #require(SpendApproval(home.decisions[4], businessID: "b1"))
         #expect(spend.amount == Amount(cents: 1299, currency: "USD") && spend.counterparty == "Namecheap" && spend.renewal == "Renews yearly at $14.99")
-        #expect(home.decisions[3].isSpend && !home.decisions[2].isSpend && home.decisions[3].signedBy == nil)
+        #expect(home.decisions[4].isSpend && !home.decisions[3].isSpend && home.decisions[4].signedBy == nil)
+        let review = try await Self.answering("app-review").appReview(Self.session, businessID: "b1", appID: "ledger")
+        #expect(review.app.state == .review && review.tools.map(\.line) == [.own, .ask] && review.tools.map(\.title) == ["List entries", "Post entry"])
+        let apps = try await Self.answering("apps").apps(Self.session, businessID: "b1")
+        #expect(apps.first { $0.id == "ledger" }?.state == .lapsed && apps.first { $0.id == "documents" }?.state == nil)
         let secrets = try await Self.answering("secrets").secrets(Self.session, businessID: "b1")
         #expect(secrets == [SecretEntry(name: "STRIPE_KEY", kind: .secret, addedBy: "00000000-0000-4000-8000-000000000001", addedAt: "2026-01-01T00:00:00.000Z")])
         let keys = try await Self.answering("device-keys").deviceKeys(Self.session)
         #expect(keys.first?.status == .active && keys.first?.current == true && keys.first?.label == "iPhone")
 
-        let proposal = try #require(home.needsYou.first?.routine)
+        let proposal = try #require(home.needsYou[1].routine)
         #expect(proposal.state == .proposed && proposal.notify == .always && proposal.projectID != nil)
         #expect(proposal.trigger == .cron(expression: "0 9 * * 1", timezone: "America/Chicago", hours: ActiveHours(start: "08:00", end: "18:00", days: ["mon"])))
         #expect(home.needsYou.last?.routine == nil)
@@ -164,6 +177,9 @@ struct WireTests {
 
         let thread = try await Self.answering("conversation-work").conversation(Self.session, businessID: "b1", key: .work("w1"))
         #expect(thread.messages.first?.ref == .workItem("00000000-0000-4000-8000-000000000008") && thread.messages.first?.isEvent == true)
+
+        let direct = try await Self.answering("conversation").conversation(Self.session, businessID: "b1", key: .direct("e1"))
+        #expect(direct.messages.last?.replies == ["Ship it", "Wait"] && direct.messages.first?.replies.isEmpty == true)
 
         let projects = try await Self.answering("projects").projects(Self.session, businessID: "b1")
         #expect(projects.first?.items.first?.ref == .artifact("00000000-0000-4000-8000-000000000006"))

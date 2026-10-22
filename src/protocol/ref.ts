@@ -8,6 +8,7 @@ export const refKinds = {
   documents: ["artifact", "file"],
   code: ["session"],
   work: ["item", "project", "routine"],
+  team: ["app"],
 } as const;
 
 type RefApp = keyof typeof refKinds;

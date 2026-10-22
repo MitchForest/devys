@@ -75,6 +75,16 @@ also verified live. No public product has launched.
 - **Apps.** `src/apps` lists Devys apps as literal manifests: Documents and Code are
   installed for every business. An app's capabilities are hidden from employees and refused unless the app is
   installed, as well as granted. The owner installs, removes and pins apps in Settings.
+- **Remote apps (local mode).** An employee finds an app with `appSearch` (the business's apps
+  and the official MCP Registry) and asks with `askOwner` (kind connect); the owner sees a card
+  with its logo, name and why in the thread and in Needs you, or adds one in **Settings › Apps &
+  connections › Add app** (search, or paste an MCP server's address). Connect opens the
+  provider's own sign-in (OAuth 2.1 as the MCP spec has it, through the official TypeScript SDK
+  on the Mac host; tokens are vault secrets only the host opens). One review sets what employees
+  may do on their own, what asks first, what they never get, and who uses it; each allowed tool
+  becomes a gated capability of that app. Tools that issue payment credentials are never
+  offered: `browserFill` can instead take a one-time card from a connected card app (Ramp)
+  against a signed spend approval, filled by the host and never shown to the employee.
 - **Home.** `GET /home` returns what needs the owner (pending decisions, work needing a
   decision) and the business at a glance (moving, stuck). When the owner returns after
   eight hours, Operations' briefing (done, moving, stuck) is posted in their direct chat
@@ -175,8 +185,8 @@ also verified live. No public product has launched.
 - **Not built:** event sources
   (mail), the Knowledge app and a learning loop, the event stream and push, connections for
   outside providers, mail, purchases, desktop control, the voice and ambient additions, cloud
-  mode's coding runners, files, terminals and browser, community and custom apps, and
-  distribution.
+  mode's coding runners, files, terminals and browser, MCP Apps views and Devys as an MCP
+  server, and distribution.
 
 The prior Pi/Effect refinement and
 iMessage acceptance guide retain foundation

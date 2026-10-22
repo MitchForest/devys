@@ -4,12 +4,27 @@ import { capability, CapabilityError, Invocation } from "../protocol/capability.
 import { Ref } from "../protocol/ref.ts";
 import { rpc } from "../protocol/rpc.ts";
 import { conversationKey, namer } from "./contract.ts";
-import { messages } from "./service.ts";
+import { messages, suggestReplies } from "./service.ts";
+
+/** The conversation the running turn answers, from the host, never the model. */
+const answering = Effect.gen(function* () {
+  const { businessId, employeeId, conversation } = yield* Invocation;
+  const key = conversationKey(conversation);
+  if (!key)
+    return yield* new CapabilityError({
+      code: "invalid_input",
+      message: "This turn is not answering a conversation",
+    });
+  return { businessId, employeeId, key };
+});
+
+/** One reply the owner can tap: a few words. */
+const Reply = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(40));
 
 /**
- * The Conversations app's capability: an employee reads further back in the conversation it
- * is answering than the catch-up it was shown. The conversation comes from the running turn,
- * never the model. `employees` names the business's employees, so authors read as names.
+ * The Conversations app's capabilities, both about the conversation the running turn answers:
+ * an employee reads further back in it than the catch-up it was shown, and offers the owner
+ * replies to tap. `employees` names the business's employees, so authors read as names.
  */
 export function conversationCapabilities(
   db: Database,
@@ -38,13 +53,7 @@ export function conversationCapabilities(
       }),
       execute: ({ before }) =>
         Effect.gen(function* () {
-          const { businessId, conversation } = yield* Invocation;
-          const key = conversationKey(conversation);
-          if (!key)
-            return yield* new CapabilityError({
-              code: "invalid_input",
-              message: "This turn is not answering a conversation",
-            });
+          const { businessId, key } = yield* answering;
           const [page, named] = yield* rpc(() =>
             Promise.all([
               Effect.runPromise(
@@ -64,6 +73,30 @@ export function conversationCapabilities(
             })),
             before: page.length === 30 ? page[0]!.id : null,
           };
+        }),
+    }),
+    capability({
+      name: "suggestReplies",
+      description:
+        "Offer the owner up to 4 short replies (each at most 40 characters) to the message you are about to send in this conversation. They show as buttons under it, and one tap sends that reply. When you need the owner to choose, ask one question and offer its answers this way. Calling again replaces the options.",
+      effect: "change",
+      replay: "idempotent",
+      core: true,
+      input: Schema.Struct({
+        options: Schema.Array(Reply).check(Schema.isMinLength(1), Schema.isMaxLength(4)),
+      }),
+      output: Schema.Struct({ options: Schema.Array(Schema.String) }),
+      execute: ({ options }) =>
+        Effect.gen(function* () {
+          const { businessId, employeeId, key } = yield* answering;
+          const unique = [...new Set(options.map((option) => option.trim()).filter(Boolean))];
+          if (!unique.length)
+            return yield* new CapabilityError({
+              code: "invalid_input",
+              message: "Offer at least one reply",
+            });
+          yield* suggestReplies(db, businessId, key, employeeId, unique);
+          return { options: unique };
         }),
     }),
   ];

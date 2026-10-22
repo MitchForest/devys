@@ -27,9 +27,16 @@ export type Outcome =
 
 /**
  * What a request asks of the owner: `decision`, a modelled capability's `ask`; `approve`,
- * `take_over` and `secret`, an employee's `askOwner` (.docs/AUTHORITY.md#bringing-the-owner-in).
+ * `take_over`, `secret` and `connect`, an employee's `askOwner`
+ * (.docs/AUTHORITY.md#bringing-the-owner-in).
  */
-export const RequestKind = Schema.Literals(["decision", "approve", "take_over", "secret"]);
+export const RequestKind = Schema.Literals([
+  "decision",
+  "approve",
+  "take_over",
+  "secret",
+  "connect",
+]);
 export type RequestKind = typeof RequestKind.Type;
 
 /** An amount in minor units (cents) of a three-letter currency. */
@@ -72,6 +79,13 @@ export const OwnerRequest = Schema.Union([
     why: Words(500),
     /** A card (number, expiry, security code, name, postal code), for checkouts. */
     spend: Schema.optionalKey(Schema.Boolean),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("connect"),
+    /** The app as appSearch found it (its id or registry name) or its MCP server's address. */
+    app: Words(2000),
+    /** What it is for, in one line the owner reads on the card: "To pay bills from Ramp". */
+    why: Words(300),
   }),
 ]);
 export type OwnerRequest = typeof OwnerRequest.Type;

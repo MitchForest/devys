@@ -8,7 +8,10 @@ import Testing
 struct ChatTimelineTests {
     private let start = Date(timeIntervalSince1970: 1_792_400_000)
 
-    private func message(_ id: Int, _ author: String, after seconds: TimeInterval, kind: ConversationMessage.Kind = .message, replyTo: String? = nil) -> ConversationMessage {
+    private func message(
+        _ id: Int, _ author: String, after seconds: TimeInterval, kind: ConversationMessage.Kind = .message,
+        replyTo: String? = nil, replies: [String] = []
+    ) -> ConversationMessage {
         ConversationMessage(
             id: "m\(id)",
             conversation: "project:p1",
@@ -17,12 +20,27 @@ struct ChatTimelineTests {
             text: "m\(id)",
             replyTo: replyTo,
             ref: kind == .event ? .workItem("c1") : nil,
+            replies: replies,
             createdAt: ServerDate.format(start.addingTimeInterval(seconds))
         )
     }
 
     private var bubbles: (ChatTimeline) -> [ChatTimeline.Bubble] = { timeline in
         timeline.items.compactMap { if case .bubble(let bubble) = $0 { bubble } else { nil } }
+    }
+
+    @Test("Suggested replies show on the latest employee message, past events, until the owner speaks")
+    func suggestedReplies() {
+        let asked = [
+            message(1, "employee:ops", after: 0, replies: ["Old"]),
+            message(2, "employee:growth", after: 10, replies: ["Bold", "Calm"]),
+            message(3, "system", after: 20, kind: .event)
+        ]
+        let offered = { (timeline: ChatTimeline) in self.bubbles(timeline).filter { !$0.replies.isEmpty }.map(\.id) }
+        #expect(offered(ChatTimeline(messages: asked, pending: [], now: start)) == ["m2"])
+        #expect(offered(ChatTimeline(messages: asked + [message(4, "person:p1", after: 30)], pending: [], now: start)).isEmpty)
+        #expect(offered(ChatTimeline(messages: asked, pending: [PendingMessage(id: "x", text: "Calm")], now: start)).isEmpty)
+        #expect(offered(ChatTimeline(messages: asked + [message(5, "employee:ops", after: 40)], pending: [], now: start)).isEmpty)
     }
 
     @Test("Consecutive messages from one author group; a new author, an event or a long gap starts a group")

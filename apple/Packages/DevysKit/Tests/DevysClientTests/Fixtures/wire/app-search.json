@@ -1,0 +1,18 @@
+{
+  "apps": [
+    {
+      "app": "acmebooks",
+      "name": "Acme Books",
+      "description": "Bills and cards for Acme",
+      "logo": null,
+      "installed": false
+    },
+    {
+      "app": "ledger",
+      "name": "Ledger",
+      "description": "The books",
+      "logo": "/api/businesses/00000000-0000-4000-8000-000000000002/apps/logos/0000000000000000000000000000000000000000000000000000000000000003",
+      "installed": false
+    }
+  ]
+}

@@ -99,6 +99,19 @@ export const revokeGrant = (db: Database, scope: Scope, grantId: string) =>
     ),
   );
 
+/**
+ * Ends every employee's grants for these capabilities in a business (a remote app changed or was
+ * removed): its acceptance grants them again.
+ */
+export const revokeCapabilities = (db: Database, businessId: string, names: readonly string[]) =>
+  database(db, (sql) =>
+    sql.run(
+      `UPDATE grants SET revoked_at = now()
+       WHERE business_id = $1 AND capability = ANY($2::text[]) AND revoked_at IS NULL`,
+      [businessId, [...names]],
+    ),
+  );
+
 /** JSON with object keys sorted at every depth, so equal inputs hash equally. */
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
@@ -257,7 +270,7 @@ export const answerDecision = (
       `UPDATE decisions SET status = $3, decided_by = $4, decided_at = now(), signed_by = $5,
          signature = $6
        WHERE id = $1 AND business_id = $2 AND status = 'pending' AND expires_at > now()
-         AND ($3 = 'rejected' OR kind <> 'take_over')
+         AND ($3 = 'rejected' OR kind NOT IN ('take_over', 'connect'))
        RETURNING ${decisionColumns}`,
       [
         decisionId,
@@ -324,6 +337,21 @@ export const askOwner = (
       ))!;
     },
     { transaction: true },
+  );
+
+/** The standing answer to exactly this `askOwner` request on this work item, if any (a read). */
+export const standingRequest = (
+  db: Database,
+  ask: { grantId: string; request: OwnerRequest; workItemId: string },
+) =>
+  database(db, async (sql) =>
+    sql.row<Decision>(
+      `SELECT ${decisionColumns} FROM decisions
+       WHERE grant_id = $1 AND input_hash = $2 AND requested_at > now() - interval '${decisionLife}'
+         AND status <> 'used' AND (status <> 'rejected' OR decided_by IS NOT NULL)
+       ORDER BY requested_at DESC LIMIT 1`,
+      [ask.grantId, await requestHash(ask.grantId, "askOwner", ask.request, ask.workItemId)],
+    ),
   );
 
 /** The owner took the work over: its pending take-over requests are being done. */
@@ -410,5 +438,25 @@ export const unclaimSpend = (db: Database, businessId: string, id: string) =>
        WHERE id = $1 AND business_id = $2 AND kind = 'approve' AND status = 'used'
          AND signature IS NOT NULL`,
       [id, businessId],
+    ),
+  );
+
+/**
+ * The owner turned an app on: the pending `askOwner` connect requests that named it (by its id,
+ * address or registry name) are answered.
+ */
+export const connectAnswered = (
+  db: Database,
+  businessId: string,
+  names: readonly string[],
+  by: string,
+) =>
+  database(db, (sql) =>
+    sql.rows<Decision>(
+      `UPDATE decisions SET status = 'approved', decided_by = $3, decided_at = now()
+       WHERE business_id = $1 AND kind = 'connect' AND status = 'pending' AND expires_at > now()
+         AND input ->> 'app' = ANY($2::text[])
+       RETURNING ${decisionColumns}`,
+      [businessId, [...names], by],
     ),
   );

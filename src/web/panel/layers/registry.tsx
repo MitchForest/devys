@@ -10,6 +10,7 @@ import {
   FolderKanban,
   ListChecks,
   MessageSquareQuote,
+  Plug,
   Repeat,
   type LucideIcon,
 } from "lucide-react";
@@ -39,6 +40,7 @@ import { BrowserLayer } from "./browser.tsx";
 import { CodeSessionLayer } from "./code-session.tsx";
 import { ArtifactLayer } from "./documents-artifact.tsx";
 import { FileView } from "./documents-file.tsx";
+import { AppCard, AppLayer } from "./team-app.tsx";
 import { kindOf, recordNames, useNames } from "./titles.ts";
 
 interface RecordView {
@@ -87,6 +89,12 @@ export const records: Record<RecordKind, RecordView> = {
     icon: Repeat,
     keepable: false,
     Layer: RoutineLayer,
+  },
+  "team/app": {
+    icon: Plug,
+    keepable: false,
+    Layer: AppLayer,
+    Card: AppCard,
   },
 };
 

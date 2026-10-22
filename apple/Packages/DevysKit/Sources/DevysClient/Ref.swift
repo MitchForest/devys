@@ -11,6 +11,8 @@ public enum Ref: Hashable, Sendable, CustomStringConvertible {
     case workItem(String)
     case workProject(String)
     case workRoutine(String)
+    /// A remote app the business connected (an MCP server).
+    case teamApp(String)
     /// A record kind the server knows and this client does not yet.
     case unknown(app: String, kind: String, id: String)
 
@@ -20,6 +22,7 @@ public enum Ref: Hashable, Sendable, CustomStringConvertible {
         case .artifact, .file: "documents"
         case .codeSession: "code"
         case .workItem, .workProject, .workRoutine: "work"
+        case .teamApp: "team"
         case .unknown(let app, _, _): app
         }
     }
@@ -33,6 +36,7 @@ public enum Ref: Hashable, Sendable, CustomStringConvertible {
         case .workItem: "item"
         case .workProject: "project"
         case .workRoutine: "routine"
+        case .teamApp: "app"
         case .unknown(_, let kind, _): kind
         }
     }
@@ -43,7 +47,7 @@ public enum Ref: Hashable, Sendable, CustomStringConvertible {
     /// The record's (decoded) id.
     public var id: String {
         switch self {
-        case .artifact(let id), .file(let id), .codeSession(let id), .workItem(let id), .workProject(let id), .workRoutine(let id), .unknown(_, _, let id): id
+        case .artifact(let id), .file(let id), .codeSession(let id), .workItem(let id), .workProject(let id), .workRoutine(let id), .teamApp(let id), .unknown(_, _, let id): id
         }
     }
 
@@ -66,6 +70,7 @@ public enum Ref: Hashable, Sendable, CustomStringConvertible {
         case ("work", "item"): self = .workItem(id)
         case ("work", "project"): self = .workProject(id)
         case ("work", "routine"): self = .workRoutine(id)
+        case ("team", "app"): self = .teamApp(id)
         default: self = .unknown(app: String(parts[0]), kind: String(parts[1]), id: id)
         }
     }

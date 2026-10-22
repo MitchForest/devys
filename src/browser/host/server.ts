@@ -18,11 +18,12 @@ import type { Readable, Writable } from "node:stream";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import type { Session } from "browser-harness-js/sdk/session.ts";
 import { HostRefusal, hostId, type HostRoutes } from "../../protocol/host.ts";
-import { redact, type OpenSecrets } from "../../vault/contract.ts";
+import { redact, type OpenSecrets, type Sealed } from "../../vault/contract.ts";
 import { merchantRefusal } from "./merchant.ts";
 import { pipeSession } from "./pipe.ts";
 import type {
   BrowserEvent,
+  CardSource,
   BrowserStatus,
   FillAt,
   FillField,
@@ -43,6 +44,15 @@ interface BrowsersHostOptions {
   headless?: boolean;
   /** Opens the secret a fill names (the vault's keyring); without it nothing is filled. */
   open?: OpenSecrets;
+  /**
+   * Asks a card app for a one-time card (the connections' MCP client, in this process): the card
+   * as a spend secret's value, the app's reference for it, and its sign-in if a refresh changed it.
+   * A lapsed sign-in is a 401 refusal.
+   */
+  issueCard?: (
+    business: string,
+    source: CardSource,
+  ) => Promise<{ card: string; reference: string | null; sealed?: Sealed }>;
   /** How long a fill keeps the page out of employees' sight if it doesn't move on; two minutes. */
   pauseMs?: number;
 }
@@ -520,15 +530,23 @@ export function browsersHost(options: BrowsersHostOptions): HostRoutes {
     if (!Array.isArray(fields) || !fields.length || fields.length > 10)
       throw new HostRefusal(400, "Name one to ten fields");
     unpaused(running);
-    const opened = await options.open(business, [input.secret], ["secret", "spend"]);
-    const [value] = [...opened.values()] as [string];
-    const kind = (input.secret as { kind: string }).kind;
+    const source = input.issue as CardSource | undefined;
+    if (source && !options.issueCard)
+      throw new HostRefusal(503, "Cards from an app are not available on this host");
+    const opened = source
+      ? undefined
+      : await options.open(business, [input.secret], ["secret", "spend"]);
+    let value = opened ? ([...opened.values()] as [string])[0] : "";
+    const kind = source ? "spend" : (input.secret as { kind: string }).kind;
     const tab = await current(running);
     const page = await pageState(running);
     if (kind === "spend") {
       const refusal = merchantRefusal(page.url, String(input.merchant ?? ""));
       if (refusal) throw new HostRefusal(403, refusal);
     }
+    // A card app issues its one-time card only now, for a checkout already on the merchant's site.
+    const issued = source ? await options.issueCard!(business, source) : undefined;
+    if (issued) value = issued.card;
     const filled: FilledField[] = [];
     // From here the page is the owner's: no employee script, event or screenshot until it moves on.
     running.paused = {
@@ -637,6 +655,8 @@ export function browsersHost(options: BrowsersHostOptions): HostRoutes {
       origin: new URL(page.url).origin,
       submitted: Boolean(submit),
       last4,
+      ...(issued ? { reference: issued.reference } : {}),
+      ...(issued?.sealed ? { sealed: issued.sealed } : {}),
     } satisfies Filled;
   }
 

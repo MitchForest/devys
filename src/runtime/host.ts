@@ -61,6 +61,8 @@ export function toolHost(deps: {
   ) => Promise<Outcome>;
   granted: () => Promise<string[]>;
   skills: () => Promise<readonly { name: string; description: string }[]>;
+  /** The business's remote apps' capabilities, as the owner turned them on. */
+  remote: () => Promise<Capability[]>;
 }) {
   const { storage, harness } = deps;
 
@@ -176,5 +178,6 @@ export function toolHost(deps: {
     checkAccess,
     granted: async () => new Set(await deps.granted()),
     skills: deps.skills,
+    remote: deps.remote,
   } satisfies ToolHost & { checkAccess: typeof checkAccess };
 }

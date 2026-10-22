@@ -522,7 +522,7 @@ public struct WorkItem: Equatable, Sendable, Decodable, Identifiable {
 /// What a request asks of the owner: a modelled capability's decision, or an employee's
 /// `askOwner` (approve, take over in the business's browser, or a secret to add).
 public enum RequestKind: String, Equatable, Sendable, WireEnum {
-    case decision, approve, secret
+    case decision, approve, secret, connect
     case takeOver = "take_over"
     case unknown
 }

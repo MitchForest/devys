@@ -7,16 +7,16 @@ export const conversations = defineApp({
   summary: "What was said in direct messages, project channels and work threads.",
   kind: "system",
   records: [],
-  capabilities: ["conversationHistory"],
+  capabilities: ["conversationHistory", "suggestReplies"],
   skills: [],
   connections: [],
   appears: "never",
-  // Every employee reads back in the conversation it is answering.
+  // Every employee reads back in the conversation it is answering and offers replies to tap.
   defaultGrants: {
-    operations: ["conversationHistory"],
-    engineering: ["conversationHistory"],
-    growth: ["conversationHistory"],
-    "business-operations": ["conversationHistory"],
-    custom: ["conversationHistory"],
+    operations: ["conversationHistory", "suggestReplies"],
+    engineering: ["conversationHistory", "suggestReplies"],
+    growth: ["conversationHistory", "suggestReplies"],
+    "business-operations": ["conversationHistory", "suggestReplies"],
+    custom: ["conversationHistory", "suggestReplies"],
   },
 });

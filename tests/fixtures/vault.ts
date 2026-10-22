@@ -15,6 +15,9 @@ export function memorySecrets(
     async put(business, name, kind, value) {
       stored.set(key(business, name), await keyring.seal(business, name, kind, value));
     },
+    async putSealed(sealed) {
+      stored.set(key(sealed.business, sealed.name), sealed);
+    },
     list: async (business) =>
       [...stored.values()]
         .filter((sealed) => sealed.business === business && sealed.kind !== "connection")

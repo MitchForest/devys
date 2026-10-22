@@ -12,6 +12,8 @@ import type { Runner } from "../workspace/contract.ts";
 import { hostRunner } from "../workspace/host.ts";
 import type { Keyring, SecretStore, SendWithSecret } from "../vault/contract.ts";
 import { hostVault } from "../vault/host-client.ts";
+import type { RemoteApps } from "../connections/contract.ts";
+import { hostRemoteApps, unavailableRemoteApps } from "../connections/host-client.ts";
 import { postgresSecrets } from "../vault/store.ts";
 import { Effect } from "effect";
 import type { Env } from "./env.ts";
@@ -43,6 +45,8 @@ export interface Mode {
   secrets: SecretStore;
   /** A connection's request with its secret injected by the master key's holder. */
   sendWithSecret: SendWithSecret;
+  /** Remote apps' MCP client, run by the master key's holder, which alone opens their tokens. */
+  remoteApps: RemoteApps;
 }
 
 const notConfigured = () => {
@@ -93,6 +97,11 @@ export function modeOf(env: Env): Mode {
         workplace: `You work on the owner's Mac, as the owner: run executes zsh with the owner's tools and logins, starting in this business's folder under ${home ?? "the owner's home folder"}/Devys. The owner's files are under ${home ?? "the owner's home folder"}; use absolute paths. The business's skills folder is skills inside that business folder. Changes apply to the owner's real files immediately.`,
         secrets,
         sendWithSecret: vault.send,
+        remoteApps: host
+          ? hostRemoteApps(host)
+          : unavailableRemoteApps(
+              "The Mac host is not configured, so remote apps are unavailable.",
+            ),
       };
     }
     case "cloud": {
@@ -110,6 +119,9 @@ export function modeOf(env: Env): Mode {
           "You work in a private Linux workspace: run executes bash starting in /workspace, files live under /workspace, and the business's skills folder is /workspace/skills (in your workspace until cloud mode shares one per business). Files persist at workspace checkpoints; snapshots preserve files, not processes.",
         secrets: postgresSecrets(env.HYPERDRIVE, vault.keyring),
         sendWithSecret: vault.send,
+        remoteApps: unavailableRemoteApps(
+          "Remote apps' sign-ins are kept by the Mac host until cloud mode holds them.",
+        ),
       };
     }
     default:

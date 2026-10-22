@@ -38,6 +38,8 @@ export const Message = Schema.Struct({
   via_voice: Schema.Boolean,
   /** The record an event is about: the work item a hand-off card opens, a page, a session. */
   ref: Schema.NullOr(Ref),
+  /** Short answers its employee offers; the owner's clients show them while it is the latest word. */
+  replies: Schema.Array(Schema.String),
   created_at: Timestamp,
 });
 export type Message = typeof Message.Type;

@@ -1,3 +1,4 @@
+import AuthenticationServices
 import ComposableArchitecture2
 import Dependencies
 package import DevysClient
@@ -115,8 +116,20 @@ struct AppsPane: View {
         case .failed(let message):
             EmptyNote(text: message)
         case .loaded(let apps):
-            let available = apps.filter { $0.kind == .business }
+            let available = apps.filter { $0.kind == .business && $0.state == nil }
             let system = apps.filter { $0.kind == .system }
+            let connected = apps.filter { $0.state != nil }
+            if let businessID = store.selectedBusinessID ?? store.businesses.first?.id {
+                AddAppSection(businessID: businessID) { store.send(.appsRequested) }
+                if !connected.isEmpty {
+                    VStack(alignment: .leading, spacing: DevysSpacing.small) {
+                        SectionHeader("Connected apps")
+                        ForEach(connected) { app in
+                            ConnectedAppRow(businessID: businessID, app: app, store: store)
+                        }
+                    }
+                }
+            }
             VStack(alignment: .leading, spacing: DevysSpacing.small) {
                 SectionHeader("Devys apps")
                 ForEach(available) { AppRow(store: store, app: $0) }
@@ -231,6 +244,145 @@ private struct AppRow: View {
             Button("Install") { store.send(.appInstallToggled(app.id, true)) }
                 .buttonStyle(DevysButtonStyle(.raised, compact: true))
                 .fixedSize()
+        }
+    }
+}
+
+/// Add app: search by name or what it does (the business's apps and the MCP Registry), or paste an
+/// app's address; adding one connects it with its own sign-in.
+private struct AddAppSection: View {
+    let businessID: String
+    let reload: () -> Void
+    @Dependency(\.runtimeClient) private var runtime
+    @Environment(\.webAuthenticationSession) private var session
+    @State private var query = ""
+    @State private var found: [FoundApp] = []
+    @State private var searching = false
+    @State private var error: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DevysSpacing.small) {
+            SectionHeader("Add app")
+            TextField("Search apps, or paste an app's address", text: $query)
+                .textFieldStyle(.roundedBorder)
+                .accessibilityLabel("Add app")
+            if let error {
+                Text(error).font(DevysTypography.secondary).foregroundStyle(DevysColors.red)
+            }
+            if searching, found.isEmpty {
+                ProgressView().controlSize(.small)
+            } else if query.trimmingCharacters(in: .whitespaces).count > 1, found.isEmpty {
+                Text("No apps found.").font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3)
+            }
+            ForEach(found) { app in
+                HStack(spacing: DevysSpacing.compact) {
+                    AppLogo(path: app.logo, name: app.name, size: 28)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(app.name).font(DevysTypography.body.weight(.semibold)).foregroundStyle(DevysColors.ink)
+                        if !app.description.isEmpty {
+                            Text(app.description).font(DevysTypography.secondary).foregroundStyle(DevysColors.ink2).lineLimit(1)
+                        }
+                    }
+                    Spacer(minLength: 8)
+                    if app.installed {
+                        Text("Added").font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
+                    } else {
+                        Button("Add") { add(app.app) }
+                            .buttonStyle(DevysButtonStyle(.raised, compact: true))
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+        }
+        .task(id: query) { await search() }
+    }
+
+    private func search() async {
+        let typed = query.trimmingCharacters(in: .whitespaces)
+        guard typed.count > 1 else { found = []; return }
+        try? await Task.sleep(for: .milliseconds(300))
+        guard !Task.isCancelled else { return }
+        searching = true
+        found = (try? await runtime.searchApps(businessID, typed)) ?? []
+        searching = false
+    }
+
+    private func add(_ app: String) {
+        error = nil
+        Task {
+            do {
+                let added = try await runtime.addApp(businessID, app)
+                query = ""
+                if added.state == .connecting || added.state == .lapsed {
+                    let connecting = try await runtime.connectApp(businessID, added.id)
+                    if let url = connecting.url {
+                        _ = try await session.authenticate(using: url, callback: .customScheme("devys"), additionalHeaderFields: [:])
+                    }
+                }
+            } catch DevysHTTPError.rejected(_, let message) where !message.isEmpty {
+                error = message
+            } catch {
+                // Cancelled sign-ins leave the app added; Connect is on its row.
+            }
+            reload()
+        }
+    }
+}
+
+/// A connected (or connecting) remote app: its logo, where it stands, and what to do next; its
+/// review opens here.
+private struct ConnectedAppRow: View {
+    let businessID: String
+    let app: AppEntry
+    let store: StoreOf<Preferences>
+    @State private var reviewing = false
+
+    var body: some View {
+        HStack(spacing: DevysSpacing.compact) {
+            AppLogo(path: app.logo, name: app.name, size: 28)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(app.name).font(DevysTypography.body.weight(.semibold)).foregroundStyle(DevysColors.ink)
+                Text(stateText).font(DevysTypography.secondary).foregroundStyle(DevysColors.ink2)
+            }
+            Spacer(minLength: 8)
+            if app.state == .connecting || app.state == .lapsed {
+                ConnectButton(businessID: businessID, appID: app.id, title: app.state == .lapsed ? "Reconnect" : "Connect") {
+                    store.send(.appsRequested)
+                }
+            } else {
+                Button(app.state == .review ? "Review" : "Change") { reviewing = true }
+                    .buttonStyle(DevysButtonStyle(.raised, compact: true))
+            }
+            Button("Remove") { store.send(.appInstallToggled(app.id, false)) }
+                .buttonStyle(DevysButtonStyle(.quiet, compact: true))
+        }
+        .padding(.vertical, 6)
+        .sheet(isPresented: $reviewing) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(spacing: 12) {
+                        AppLogo(path: app.logo, name: app.name, size: 40)
+                        Text(app.name).font(DevysTypography.heading).foregroundStyle(DevysColors.ink)
+                        Spacer()
+                        Button("Done") { reviewing = false }.buttonStyle(DevysButtonStyle(.quiet, compact: true))
+                    }
+                    AppReviewCard(businessID: businessID, app: app) {
+                        reviewing = false
+                        store.send(.appsRequested)
+                    }
+                }
+                .padding(20)
+            }
+            .frame(minWidth: 420, minHeight: 420)
+        }
+    }
+
+    private var stateText: String {
+        switch app.state {
+        case .turnedOn: "On"
+        case .review: "Connected · waiting for you to turn it on"
+        case .lapsed: "Its sign-in stopped working"
+        default: "Not connected yet"
         }
     }
 }

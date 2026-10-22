@@ -111,6 +111,46 @@ test("a direct chat is the middle; who answers follows replies and @mentions; re
   }
 });
 
+test("an employee's suggested replies show under its question; a tap answers it and they go", async ({
+  page,
+}) => {
+  const stores = await localStores();
+  const { sql } = stores;
+  const owner = await stores.owner("Casey", "Acme");
+  const sent = await stubPosting(page, () => [owner.operations]);
+  const direct = `direct:${owner.operations}`;
+  await insertMessage(sql, owner.business, direct, {
+    author: `employee:${owner.operations}`,
+    text: "An older question.",
+    replies: ["Old"],
+  });
+  const question = await insertMessage(sql, owner.business, direct, {
+    author: `employee:${owner.operations}`,
+    text: "Should the launch post go out today?",
+    replies: ["Today", "Tomorrow"],
+  });
+  try {
+    await signIn(page, sql, owner.person);
+    await sidebar(page).getByRole("link", { name: "Head of Operations" }).click();
+    const field = page.getByLabel("Message Head of Operations");
+    await field.fill("Half-written thought");
+    // Only the latest employee message offers its replies.
+    const replies = page.getByRole("group", { name: "Suggested replies" });
+    await expect(replies).toHaveCount(1);
+    await expect(replies.getByRole("button")).toHaveText(["Today", "Tomorrow"]);
+    await replies.getByRole("button", { name: "Tomorrow" }).click();
+    await expect.poll(() => sent.length).toBe(1);
+    expect(sent[0]!.body).toMatchObject({ text: "Tomorrow", reply_to: question });
+    // Sent: the replies go, and what the owner was writing stays.
+    await expect(replies).toHaveCount(0);
+    await expect(field).toHaveValue("Half-written thought");
+  } finally {
+    await page.close();
+    await stores.remove([owner]);
+    await stores.dispose();
+  }
+});
+
 test("a project opens on its channel; a hand-off card opens the thread; Back and Start a thread", async ({
   page,
 }) => {

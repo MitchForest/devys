@@ -31,6 +31,8 @@ public enum OwnerRequest: Equatable, Sendable {
     case takeOver(reason: String, url: String?)
     /// A secret the business lacks, by the name it will be used by; `spend` asks for a card.
     case secret(name: String, why: String, spend: Bool)
+    /// An app to connect (its id, registry name or address), and why, in one line.
+    case connect(app: String, why: String)
 }
 
 extension JSONValue {
@@ -68,6 +70,9 @@ extension Decision {
         case .secret:
             guard let name = input["name"]?.string, let why = input["why"]?.string else { return nil }
             return .secret(name: name, why: why, spend: input["spend"]?.bool ?? false)
+        case .connect:
+            guard let app = input["app"]?.string, let why = input["why"]?.string else { return nil }
+            return .connect(app: app, why: why)
         case .decision, .unknown:
             return nil
         }

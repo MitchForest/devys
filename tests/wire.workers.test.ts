@@ -6,6 +6,7 @@ import { authorize } from "../src/app/authorize.ts";
 import { capabilities } from "../src/app/capabilities.ts";
 import { codingRoute } from "../src/app/coding.ts";
 import { postEvent } from "../src/app/conversations.ts";
+import { postMessage, suggestReplies } from "../src/conversations/service.ts";
 import { browserRoute } from "../src/app/browser-route.ts";
 import { filesRoute } from "../src/app/files.ts";
 import { apiRoute } from "../src/app/http.ts";
@@ -27,6 +28,7 @@ import { TerminalSession } from "../src/terminal/contract.ts";
 import { Project, ProjectItem, Routine, WorkItem } from "../src/work/contract.ts";
 import { activateRoutine, proposeRoutine } from "../src/work/routines.ts";
 import { addEvidence } from "../src/work/service.ts";
+import { addRemoteApp, connectedRemoteApp, lapseRemoteApp } from "../src/apps/remote.ts";
 import { FileText } from "../src/workspace/contract.ts";
 import { business, db, sql } from "./fixtures/postgres.ts";
 
@@ -357,6 +359,18 @@ it("every route the clients read answers in its wire schema; the golden files ma
     ),
   );
   register(posted.message.id);
+  // Ada answers with a question and the replies she offers for it.
+  const direct = `direct:${operations.id}` as const;
+  await Effect.runPromise(suggestReplies(db, acme.id, direct, engineer.id, ["Ship it", "Wait"]));
+  const answered = await Effect.runPromise(
+    postMessage(db, acme.id, direct, {
+      author: `employee:${engineer.id}`,
+      text: "The site is ready. Ship it today?",
+      clientId: "wire-answer",
+      replyTo: posted.message.id,
+    }),
+  );
+  register(answered.message.id);
   await postEvent(bindings, acme.id, `work:${site.id}`, {
     clientId: "wire-event",
     text: "Ada started a coding session.",
@@ -384,6 +398,96 @@ it("every route the clients read answers in its wire schema; the golden files ma
     (a.last?.created_at ?? "").localeCompare(b.last?.created_at ?? ""),
   );
   await keep("conversations", wire.Conversations, Response.json(listed));
+
+  // Remote apps: one asked for and not connected yet, one on whose sign-in lapsed.
+  const books = await Effect.runPromise(
+    addRemoteApp(
+      db,
+      acme.id,
+      {
+        name: "Acme Books",
+        summary: "Bills and cards for Acme",
+        url: "https://books.example/mcp",
+        registryName: "example.books/acme",
+        website: "https://books.example",
+        logo: null,
+        addedBy: `employee:${operations.id}`,
+      },
+      [],
+    ),
+  );
+  await askOwnerFor(
+    bindings,
+    { ...scope, workItemId: supplier.id, conversation: `work:${supplier.id}` },
+    { kind: "connect", app: books.id, why: "To read and draft the supplier's bills" },
+  );
+  const ledger = await Effect.runPromise(
+    addRemoteApp(
+      db,
+      acme.id,
+      {
+        name: "Ledger",
+        summary: "",
+        url: "https://ledger.example/mcp",
+        registryName: null,
+        website: null,
+        logo: "a".repeat(64),
+        addedBy: `person:${person}`,
+      },
+      [],
+    ),
+  );
+  await Effect.runPromise(
+    connectedRemoteApp(db, acme.id, ledger.id, {
+      server: { name: "ledger", title: "Ledger", description: "The books", icons: [] },
+      tools: [
+        {
+          name: "list_entries",
+          title: "List entries",
+          description: "List ledger entries.",
+          input: { type: "object", properties: {} },
+          hints: { readOnlyHint: true },
+        },
+        {
+          name: "post_entry",
+          description: "Post a journal entry.",
+          input: { type: "object", properties: { memo: { type: "string" } }, required: ["memo"] },
+          hints: { destructiveHint: true },
+        },
+      ],
+      logo: null,
+    }),
+  );
+  await keep("app-review", wire.AppReview, await call(`${at}/apps/${ledger.id}/review`));
+  await keep(
+    "app-changed",
+    wire.AppChanged,
+    await call(`${at}/apps/${ledger.id}/accept`, "POST", {
+      lines: { ledger_list_entries: "own", ledger_post_entry: "ask" },
+      employees: [operations.id],
+    }),
+  );
+  await Effect.runPromise(lapseRemoteApp(db, acme.id, ledger.id));
+  // Search answers from the business's apps (the registry has nothing for this).
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+    new URL(String(input instanceof Request ? input.url : input)).hostname === "cloudflare-dns.com"
+      ? Response.json({ Answer: [{ type: 1, data: "93.184.216.34" }] })
+      : Response.json({ servers: [], metadata: { count: 0 } }),
+  );
+  await keep("app-search", wire.AppSearch, await call(`${at}/apps/search?q=books`));
+  vi.restoreAllMocks();
+  await keep(
+    "connecting",
+    wire.Connecting,
+    Response.json({
+      url: "https://books.example/authorize?client_id=devys",
+      app: {
+        ...((await (await call(`${at}/apps`)).json()) as { apps: { id: string }[] }).apps.find(
+          (app) => app.id === books.id,
+        ),
+      },
+    }),
+  );
 
   // The business at a glance.
   await keep("work", wire.WorkItems, await call(`${at}/work`));

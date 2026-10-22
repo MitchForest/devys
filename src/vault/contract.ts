@@ -92,6 +92,11 @@ export interface SecretStore {
     value: string,
     addedBy: string,
   ): Promise<void>;
+  /**
+   * Stores a value the master key's holder sealed itself (a remote app's tokens, which never reach
+   * the caller): a connection's credential only.
+   */
+  putSealed(sealed: Sealed, addedBy: string): Promise<void>;
   /** The owner's secrets (never connection credentials), by name. */
   list(business: string): Promise<SecretEntry[]>;
   remove(business: string, name: string): Promise<boolean>;

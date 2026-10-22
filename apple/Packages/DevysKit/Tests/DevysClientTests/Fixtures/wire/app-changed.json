@@ -1,0 +1,22 @@
+{
+  "app": {
+    "id": "ledger",
+    "name": "Ledger",
+    "icon": "app.connected.to.app.below.fill",
+    "summary": "The books",
+    "kind": "business",
+    "records": [],
+    "capabilities": [
+      "ledger_list_entries",
+      "ledger_post_entry"
+    ],
+    "skills": [],
+    "connections": [],
+    "appears": "always",
+    "installed": true,
+    "pinned": true,
+    "visible": true,
+    "logo": "/api/businesses/00000000-0000-4000-8000-000000000002/apps/logos/0000000000000000000000000000000000000000000000000000000000000003",
+    "state": "on"
+  }
+}

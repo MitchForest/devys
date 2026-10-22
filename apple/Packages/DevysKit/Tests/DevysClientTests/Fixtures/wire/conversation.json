@@ -12,9 +12,27 @@
       ],
       "via_voice": false,
       "ref": null,
+      "replies": [],
+      "created_at": "2026-01-01T00:00:00.000Z",
+      "reactions": []
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000013",
+      "conversation": "direct:00000000-0000-4000-8000-000000000003",
+      "author": "employee:00000000-0000-4000-8000-000000000004",
+      "kind": "message",
+      "text": "The site is ready. Ship it today?",
+      "reply_to": "00000000-0000-4000-8000-000000000012",
+      "mentions": [],
+      "via_voice": false,
+      "ref": null,
+      "replies": [
+        "Ship it",
+        "Wait"
+      ],
       "created_at": "2026-01-01T00:00:00.000Z",
       "reactions": []
     }
   ],
-  "respondent": "00000000-0000-4000-8000-000000000003"
+  "respondent": "00000000-0000-4000-8000-000000000004"
 }

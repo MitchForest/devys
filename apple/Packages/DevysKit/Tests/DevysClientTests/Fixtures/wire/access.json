@@ -1,7 +1,18 @@
 {
   "grants": [
     {
-      "id": "00000000-0000-4000-8000-000000000019",
+      "id": "00000000-0000-4000-8000-000000000021",
+      "capability": "appSearch",
+      "mode": "auto",
+      "constraints": {},
+      "responsibility": null,
+      "created_at": "2026-01-01T00:00:00.000Z",
+      "description": "Find apps for a job by name or what they do (\"ramp\", \"accounting\", \"calendar\"): the business's own apps and the public MCP Registry. An app that isn't on yet is connected by the owner: pass its `app` to askOwner {kind: \"connect\", app, why} in a work item's thread. When you know an app's MCP server address (https://…), askOwner connect takes that too.",
+      "effect": "read",
+      "limits": false
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000022",
       "capability": "artifactEdit",
       "mode": "auto",
       "constraints": {},
@@ -12,7 +23,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000020",
+      "id": "00000000-0000-4000-8000-000000000023",
       "capability": "artifactPage",
       "mode": "auto",
       "constraints": {},
@@ -23,7 +34,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000021",
+      "id": "00000000-0000-4000-8000-000000000024",
       "capability": "artifactRead",
       "mode": "auto",
       "constraints": {},
@@ -34,29 +45,29 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000022",
+      "id": "00000000-0000-4000-8000-000000000025",
       "capability": "askOwner",
       "mode": "auto",
       "constraints": {},
       "responsibility": null,
       "created_at": "2026-01-01T00:00:00.000Z",
-      "description": "Bring the owner in, from this work item's thread. {kind: \"approve\", action, counterparty, amount?, renewal?}: before a consequential action you will take anywhere (browser, shell, an app), state it exactly: action is what you will do, counterparty who or where (merchant, site, person; for a card payment, the merchant's site such as namecheap.com, where the card will be filled); any spend has amount {cents, currency}, which the owner signs with Face ID or Touch ID, and renewal says what recurs. {kind: \"take_over\", reason, url?}: something only the owner can do in the business's browser (sign in, 2FA, CAPTCHA); they take the work over, do it and hand it back. {kind: \"secret\", name, why, spend?}: a secret the business lacks (an API key, a password; spend: true for a card), named as you will use it (STRIPE_KEY); the owner enters it in a secure sheet and you use it by name (run's secrets, browserFill), never seeing it. It returns at once: carry on with other work or wait; the answer arrives in this thread. Asking again with exactly the same input tells you where it stands (asked, approved, declined, taken_over, done). A changed amount, merchant or action is a new request. Never ask for passwords, codes or card numbers in chat.",
+      "description": "Bring the owner in, from this work item's thread. {kind: \"approve\", action, counterparty, amount?, renewal?}: before a consequential action you will take anywhere (browser, shell, an app), state it exactly: action is what you will do, counterparty who or where (merchant, site, person; for a card payment, the merchant's site such as namecheap.com, where the card will be filled); any spend has amount {cents, currency}, which the owner signs with Face ID or Touch ID, and renewal says what recurs. {kind: \"take_over\", reason, url?}: something only the owner can do in the business's browser (sign in, 2FA, CAPTCHA); they take the work over, do it and hand it back. {kind: \"secret\", name, why, spend?}: a secret the business lacks (an API key, a password; spend: true for a card), named as you will use it (STRIPE_KEY); the owner enters it in a secure sheet and you use it by name (run's secrets, browserFill), never seeing it. {kind: \"connect\", app, why}: an app the business doesn't have yet (an id or registry name from appSearch, or an MCP server's https address); the owner connects it with its own sign-in and chooses what you may do with it; why is one line on the card. It returns at once: carry on with other work or wait; the answer arrives in this thread. Asking again with exactly the same input tells you where it stands (asked, approved, declined, taken_over, done). A changed amount, merchant or action is a new request. Never ask for passwords, codes or card numbers in chat.",
       "effect": "change",
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000023",
+      "id": "00000000-0000-4000-8000-000000000026",
       "capability": "browserFill",
       "mode": "auto",
       "constraints": {},
       "responsibility": null,
       "created_at": "2026-01-01T00:00:00.000Z",
-      "description": "Fill a secret into the business's browser without ever seeing it: a password (part value) or a card (parts number, expiry MM/YY, month, year, cvc, name, postal), each field found by CSS selector or by clicking its x,y; a field inside another site's payment frame names its target (from listPageTargets/browserTabs). submit clicks a button afterwards. A card needs approval: the request id of the owner's signed spend approval in this work item's thread (askOwner approve with the amount and the merchant's site as counterparty, e.g. namecheap.com); the page must be on that site, and one approval is one fill. After a fill, scripts and screenshots wait until the page moves on (at most two minutes); a failed fill clears what it filled.",
+      "description": "Fill a secret into the business's browser without ever seeing it: a password (part value) or a card (parts number, expiry MM/YY, month, year, cvc, name, postal), each field found by CSS selector or by clicking its x,y; a field inside another site's payment frame names its target (from listPageTargets/browserTabs). submit clicks a button afterwards. A card is a stored one (secret) or a one-time card from a connected card app such as Ramp (card: {app, fund, country?}: the app as appSearch names it, the fund to pay from and the merchant's two-letter country, US by default; the host asks the app for a card of the approval's exact amount and merchant, and you never see it). A card needs approval: the request id of the owner's signed spend approval in this work item's thread (askOwner approve with the amount and the merchant's site as counterparty, e.g. namecheap.com); the page must be on that site, and one approval is one fill. After a fill, scripts and screenshots wait until the page moves on (at most two minutes); a failed fill clears what it filled.",
       "effect": "external",
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000024",
+      "id": "00000000-0000-4000-8000-000000000027",
       "capability": "browserScreenshot",
       "mode": "auto",
       "constraints": {},
@@ -67,7 +78,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000025",
+      "id": "00000000-0000-4000-8000-000000000028",
       "capability": "browserScript",
       "mode": "auto",
       "constraints": {},
@@ -78,7 +89,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000026",
+      "id": "00000000-0000-4000-8000-000000000029",
       "capability": "browserTabs",
       "mode": "auto",
       "constraints": {},
@@ -89,7 +100,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000027",
+      "id": "00000000-0000-4000-8000-000000000030",
       "capability": "codingAccept",
       "mode": "auto",
       "constraints": {},
@@ -100,7 +111,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000028",
+      "id": "00000000-0000-4000-8000-000000000031",
       "capability": "codingPublish",
       "mode": "auto",
       "constraints": {},
@@ -111,7 +122,7 @@
       "limits": true
     },
     {
-      "id": "00000000-0000-4000-8000-000000000029",
+      "id": "00000000-0000-4000-8000-000000000032",
       "capability": "codingSend",
       "mode": "auto",
       "constraints": {},
@@ -122,7 +133,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000030",
+      "id": "00000000-0000-4000-8000-000000000033",
       "capability": "codingStart",
       "mode": "auto",
       "constraints": {},
@@ -133,7 +144,7 @@
       "limits": true
     },
     {
-      "id": "00000000-0000-4000-8000-000000000031",
+      "id": "00000000-0000-4000-8000-000000000034",
       "capability": "codingStatus",
       "mode": "auto",
       "constraints": {},
@@ -144,7 +155,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000032",
+      "id": "00000000-0000-4000-8000-000000000035",
       "capability": "codingStop",
       "mode": "auto",
       "constraints": {},
@@ -155,7 +166,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000033",
+      "id": "00000000-0000-4000-8000-000000000036",
       "capability": "conversationHistory",
       "mode": "auto",
       "constraints": {},
@@ -166,7 +177,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000034",
+      "id": "00000000-0000-4000-8000-000000000037",
       "capability": "deployPreview",
       "mode": "auto",
       "constraints": {},
@@ -177,7 +188,7 @@
       "limits": true
     },
     {
-      "id": "00000000-0000-4000-8000-000000000035",
+      "id": "00000000-0000-4000-8000-000000000038",
       "capability": "deployProduction",
       "mode": "ask",
       "constraints": {},
@@ -188,7 +199,7 @@
       "limits": true
     },
     {
-      "id": "00000000-0000-4000-8000-000000000036",
+      "id": "00000000-0000-4000-8000-000000000039",
       "capability": "forget",
       "mode": "auto",
       "constraints": {},
@@ -199,7 +210,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000037",
+      "id": "00000000-0000-4000-8000-000000000040",
       "capability": "importAttachment",
       "mode": "auto",
       "constraints": {},
@@ -210,7 +221,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000038",
+      "id": "00000000-0000-4000-8000-000000000041",
       "capability": "printPdf",
       "mode": "auto",
       "constraints": {},
@@ -221,7 +232,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000039",
+      "id": "00000000-0000-4000-8000-000000000042",
       "capability": "projectAdd",
       "mode": "auto",
       "constraints": {},
@@ -232,7 +243,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000040",
+      "id": "00000000-0000-4000-8000-000000000043",
       "capability": "projectCreate",
       "mode": "auto",
       "constraints": {},
@@ -243,7 +254,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000041",
+      "id": "00000000-0000-4000-8000-000000000044",
       "capability": "projectList",
       "mode": "auto",
       "constraints": {},
@@ -254,7 +265,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000042",
+      "id": "00000000-0000-4000-8000-000000000045",
       "capability": "projectUpdate",
       "mode": "auto",
       "constraints": {},
@@ -265,7 +276,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000043",
+      "id": "00000000-0000-4000-8000-000000000046",
       "capability": "publishArtifact",
       "mode": "auto",
       "constraints": {},
@@ -276,7 +287,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000044",
+      "id": "00000000-0000-4000-8000-000000000047",
       "capability": "read",
       "mode": "auto",
       "constraints": {},
@@ -287,7 +298,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000045",
+      "id": "00000000-0000-4000-8000-000000000048",
       "capability": "readPublicUrl",
       "mode": "auto",
       "constraints": {},
@@ -298,7 +309,7 @@
       "limits": true
     },
     {
-      "id": "00000000-0000-4000-8000-000000000046",
+      "id": "00000000-0000-4000-8000-000000000049",
       "capability": "readSkill",
       "mode": "auto",
       "constraints": {},
@@ -309,7 +320,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000047",
+      "id": "00000000-0000-4000-8000-000000000050",
       "capability": "recall",
       "mode": "auto",
       "constraints": {},
@@ -320,7 +331,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000048",
+      "id": "00000000-0000-4000-8000-000000000051",
       "capability": "remember",
       "mode": "auto",
       "constraints": {},
@@ -331,7 +342,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000049",
+      "id": "00000000-0000-4000-8000-000000000052",
       "capability": "routineActivate",
       "mode": "ask",
       "constraints": {},
@@ -342,7 +353,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000050",
+      "id": "00000000-0000-4000-8000-000000000053",
       "capability": "routineList",
       "mode": "auto",
       "constraints": {},
@@ -353,7 +364,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000051",
+      "id": "00000000-0000-4000-8000-000000000054",
       "capability": "routinePause",
       "mode": "auto",
       "constraints": {},
@@ -364,7 +375,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000052",
+      "id": "00000000-0000-4000-8000-000000000055",
       "capability": "routinePropose",
       "mode": "auto",
       "constraints": {},
@@ -375,7 +386,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000053",
+      "id": "00000000-0000-4000-8000-000000000056",
       "capability": "run",
       "mode": "auto",
       "constraints": {},
@@ -386,7 +397,18 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000054",
+      "id": "00000000-0000-4000-8000-000000000057",
+      "capability": "suggestReplies",
+      "mode": "auto",
+      "constraints": {},
+      "responsibility": null,
+      "created_at": "2026-01-01T00:00:00.000Z",
+      "description": "Offer the owner up to 4 short replies (each at most 40 characters) to the message you are about to send in this conversation. They show as buttons under it, and one tap sends that reply. When you need the owner to choose, ask one question and offer its answers this way. Calling again replaces the options.",
+      "effect": "change",
+      "limits": false
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000058",
       "capability": "workComplete",
       "mode": "auto",
       "constraints": {},
@@ -397,7 +419,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000055",
+      "id": "00000000-0000-4000-8000-000000000059",
       "capability": "workCreate",
       "mode": "auto",
       "constraints": {},
@@ -408,7 +430,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000056",
+      "id": "00000000-0000-4000-8000-000000000060",
       "capability": "workList",
       "mode": "auto",
       "constraints": {},
@@ -419,7 +441,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000057",
+      "id": "00000000-0000-4000-8000-000000000061",
       "capability": "workUpdate",
       "mode": "auto",
       "constraints": {},
@@ -430,7 +452,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000058",
+      "id": "00000000-0000-4000-8000-000000000062",
       "capability": "write",
       "mode": "auto",
       "constraints": {},

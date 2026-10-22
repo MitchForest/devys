@@ -66,7 +66,18 @@ it("manifests are consistent: ids unique, system apps never shown", () => {
       .filter((item) => item.core)
       .map((item) => item.name)
       .sort(),
-  ).toEqual(["askOwner", "forget", "read", "readSkill", "recall", "remember", "run", "write"]);
+  ).toEqual([
+    "appSearch",
+    "askOwner",
+    "forget",
+    "read",
+    "readSkill",
+    "recall",
+    "remember",
+    "run",
+    "suggestReplies",
+    "write",
+  ]);
 });
 
 it("system apps are listed as installed without an install row, never pinned or shown", async () => {
@@ -123,8 +134,8 @@ it("employees see the skills of their business's installed apps", async () => {
 
 // Before AL3 role templates listed their capabilities; the manifests now propose them. These
 // are the grants each role had then, written out, plus the core capabilities the rule "a core
-// capability is granted to every employee it is offered to" added, Q1's routines and LP1's
-// askOwner.
+// capability is granted to every employee it is offered to" added, Q1's routines, LP1's
+// askOwner and suggested replies.
 const routines = ["routineList", "routinePropose", "routineActivate", "routinePause"];
 const collaboration = [
   ...routines,
@@ -133,6 +144,7 @@ const collaboration = [
   "workUpdate",
   "workComplete",
   "conversationHistory",
+  "suggestReplies",
   "remember",
   "recall",
   "forget",
@@ -190,11 +202,11 @@ const before: Record<string, string[]> = {
   custom: [...collaboration],
 };
 const coreAdded: Record<string, string[]> = {
-  operations: [],
-  engineering: [],
-  growth: ["run"],
-  "business-operations": ["run"],
-  custom: ["run", "read", "write", "readSkill"],
+  operations: ["appSearch"],
+  engineering: ["appSearch"],
+  growth: ["run", "appSearch"],
+  "business-operations": ["run", "appSearch"],
+  custom: ["run", "read", "write", "readSkill", "appSearch"],
 };
 // Activating a routine is the owner's decision, whatever the role.
 const asked: Record<string, string[]> = {

@@ -118,6 +118,7 @@ enum AccessNames {
         "write": "Write workspace files",
         "run": "Run commands",
         "conversationHistory": "Read older conversation",
+        "suggestReplies": "Offer replies to tap",
         "publishArtifact": "Save files for you",
         "driveList": "List Drive files",
         "driveRead": "Read Drive files",

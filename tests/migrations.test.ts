@@ -26,6 +26,7 @@ it("the migrations take an empty database to every component's tables, once", as
     "__alchemy_migrations",
     "app_installs",
     "app_reactions",
+    "app_sign_ins",
     "artifacts",
     "businesses",
     "channel_bindings",
@@ -54,8 +55,10 @@ it("the migrations take an empty database to every component's tables, once", as
     "project_items",
     "project_members",
     "projects",
+    "remote_apps",
     "routines",
     "secrets",
+    "suggested_replies",
     "web_sessions",
     "work_items",
   ]);

@@ -56,6 +56,12 @@ export interface Capability {
   readonly output: Schema.Top;
   /** A direct tool for every employee; the rest are found with describe_capabilities. */
   readonly core?: true;
+  /**
+   * A remote app's tool: the JSON Schema its MCP server declares, which discovery shows as is.
+   * Its `input` checks only the boundary (an object, its required keys, its size); the remote
+   * server validates the rest and is authoritative.
+   */
+  readonly remoteSchema?: Record<string, unknown>;
   readonly execute: (args: unknown) => Effect.Effect<unknown, CapabilityError, Invocation>;
 }
 
@@ -70,6 +76,7 @@ export function capability<I, O, C = never>(definition: {
   input: Schema.Codec<I, unknown>;
   output: Schema.Codec<O, unknown>;
   core?: true;
+  remoteSchema?: Record<string, unknown>;
   execute: (input: I) => Effect.Effect<O, CapabilityError, Invocation>;
 }): Capability {
   const contract: Capability = {

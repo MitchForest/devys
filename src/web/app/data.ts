@@ -76,7 +76,9 @@ export function useEmployeeName() {
 export const useWork = () =>
   useQuery({ ...queries.work(useBusinessId()), select: (d) => d.work_items });
 const decisionsOf = (home: Home) =>
-  home.needs_you.filter((item): item is NeedsYouRequest => item.kind !== "work");
+  home.needs_you.filter(
+    (item): item is NeedsYouRequest => item.kind !== "work" && item.kind !== "reconnect",
+  );
 /** Requests waiting on the owner, from Home: the one source of what needs them. */
 export const useDecisions = () =>
   useQuery({ ...queries.home(useBusinessId()), select: decisionsOf });
@@ -85,6 +87,9 @@ export const useProjects = () =>
 export const useRoutines = () =>
   useQuery({ ...queries.routines(useBusinessId()), select: (d) => d.routines });
 export const useApps = () => useQuery({ ...queries.apps(useBusinessId()), select: (d) => d.apps });
+export const useAppReview = (app: string) => useQuery(queries.appReview(useBusinessId(), app));
+export const useAppSearch = (query: string) =>
+  useQuery({ ...queries.appSearch(useBusinessId(), query), select: (d) => d.apps });
 export const useHome = () => useQuery(queries.home(useBusinessId()));
 export const useMemory = () =>
   useQuery({ ...queries.memory(useBusinessId()), select: (d) => d.items });

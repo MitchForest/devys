@@ -46,6 +46,11 @@ struct MessageRow: View {
                 }
             }
             viewed
+            if !bubble.replies.isEmpty {
+                SuggestedReplies(replies: bubble.replies) { store.send(.suggestedReplyTapped(key, bubble.id, $0)) }
+                    .padding(.leading, Self.avatarSize + 8)
+                    .padding(.top, 3)
+            }
             footer
         }
         .frame(maxWidth: .infinity, alignment: isOwner ? .trailing : .leading)
@@ -176,6 +181,36 @@ struct MessageRow: View {
                     .foregroundStyle(DevysColors.ink3)
                     .labelStyle(VoiceMarkStyle())
             }
+        }
+    }
+}
+
+/// Answers the employee offered: one tap sends that answer as the owner's reply. In a row when
+/// they fit, else one under another.
+struct SuggestedReplies: View {
+    let replies: [String]
+    let send: (String) -> Void
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 6) { chips }
+            VStack(alignment: .leading, spacing: 6) { chips }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Suggested replies")
+    }
+
+    private var chips: some View {
+        ForEach(replies, id: \.self) { reply in
+            Button(reply) { send(reply) }
+                .font(DevysTypography.secondary)
+                .foregroundStyle(DevysColors.indigo)
+                .lineLimit(1)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 5)
+                .overlay(Capsule().strokeBorder(DevysColors.indigo.opacity(0.35)))
+                .contentShape(Capsule())
+                .buttonStyle(.plain)
         }
     }
 }
@@ -370,6 +405,8 @@ struct EventCard: View {
                 }
             } else if let item = workItem {
                 handoff(item)
+            } else if case .layer(.remoteApp(let appID)) = target {
+                RemoteAppCard(store: store, appID: appID, text: event.text)
             } else if let target, let ref = event.ref {
                 // Named as the web names it: the record's title over its kind.
                 ConversationCard(help: "Open") { open(target) } label: {

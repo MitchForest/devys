@@ -32,6 +32,7 @@ import { deviceKeysRoute, signedOut } from "./asking.ts";
 import { modelCatalog } from "./models.ts";
 import { modelsConfig } from "../../config/models.ts";
 import { connectionVault } from "./vault.ts";
+import { callbackPath, finishConnect } from "./remote-apps.ts";
 
 /** Webhooks and the API. Page rendering stays in the Worker entry. Undefined means "not an API path". */
 export async function apiRoute(request: Request, env: Env): Promise<Response | undefined> {
@@ -71,6 +72,9 @@ async function route(request: Request, env: Env): Promise<Response | undefined> 
     return response;
   }
   if (!path.startsWith("/api/")) return undefined;
+  // A provider sends the owner back from signing in to a remote app: the state, not a session,
+  // names the business (the native sign-in sheet has no Devys session).
+  if (path === callbackPath && request.method === "GET") return finishConnect(request, env);
   const access = await requestPerson(request, env);
   if (!access) return new Response("Sign in required", { status: 401 });
   const { person } = access;

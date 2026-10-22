@@ -172,6 +172,8 @@ export async function decisionRoute(
     return new Response("Add the secret to answer this; it is answered once it exists.", {
       status: 409,
     });
+  if (approve && asked.kind === "connect")
+    return new Response("Connect the app and turn it on to answer this.", { status: 409 });
   // A spend is approved only with a device signature over exactly this request.
   const signed =
     approve && spendOf(asked)

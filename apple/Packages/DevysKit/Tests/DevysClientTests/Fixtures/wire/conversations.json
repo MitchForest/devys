@@ -3,26 +3,28 @@
     {
       "key": "direct:00000000-0000-4000-8000-000000000003",
       "last": {
-        "id": "00000000-0000-4000-8000-000000000012",
+        "id": "00000000-0000-4000-8000-000000000013",
         "conversation": "direct:00000000-0000-4000-8000-000000000003",
-        "author": "person:00000000-0000-4000-8000-000000000001",
+        "author": "employee:00000000-0000-4000-8000-000000000004",
         "kind": "message",
-        "text": "What's left before the launch? @Ada please check the site.",
-        "reply_to": null,
-        "mentions": [
-          "00000000-0000-4000-8000-000000000004"
-        ],
+        "text": "The site is ready. Ship it today?",
+        "reply_to": "00000000-0000-4000-8000-000000000012",
+        "mentions": [],
         "via_voice": false,
         "ref": null,
+        "replies": [
+          "Ship it",
+          "Wait"
+        ],
         "created_at": "2026-01-01T00:00:00.000Z"
       },
-      "unread": 0,
+      "unread": 1,
       "following": false
     },
     {
       "key": "work:00000000-0000-4000-8000-000000000008",
       "last": {
-        "id": "00000000-0000-4000-8000-000000000013",
+        "id": "00000000-0000-4000-8000-000000000014",
         "conversation": "work:00000000-0000-4000-8000-000000000008",
         "author": "system",
         "kind": "event",
@@ -31,6 +33,7 @@
         "mentions": [],
         "via_voice": false,
         "ref": "devys:work/item/00000000-0000-4000-8000-000000000008",
+        "replies": [],
         "created_at": "2026-01-01T00:00:00.000Z"
       },
       "unread": 1,
