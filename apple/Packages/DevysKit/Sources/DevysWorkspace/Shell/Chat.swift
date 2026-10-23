@@ -19,6 +19,8 @@ struct MessageRow: View {
     /// A thread starts from a message anywhere but inside a thread.
     private var startsThreads: Bool { canAct && key.kind != .work }
     static let avatarSize: CGFloat = 26
+    /// Room beside a bubble that its hover actions sit in, so showing them never moves the text.
+    static let actionsRoom: CGFloat = 84
 
     var body: some View {
         VStack(alignment: isOwner ? .trailing : .leading, spacing: 3) {
@@ -34,16 +36,22 @@ struct MessageRow: View {
             }
             HStack(alignment: .bottom, spacing: 8) {
                 if isOwner {
-                    Spacer(minLength: 48)
-                    if isHovering, canAct { actions }
+                    Spacer(minLength: Self.actionsRoom)
                 } else {
                     avatar
                 }
+                // The actions float beside the bubble, outside its layout.
                 bubbleView
-                if !isOwner {
-                    if isHovering, canAct { actions }
-                    Spacer(minLength: 48)
-                }
+                    .overlay(alignment: isOwner ? .leading : .trailing) {
+                        if isHovering, canAct {
+                            actions
+                                .fixedSize()
+                                .alignmentGuide(isOwner ? .leading : .trailing) { size in
+                                    isOwner ? size[.trailing] + 6 : size[.leading] - 6
+                                }
+                        }
+                    }
+                if !isOwner { Spacer(minLength: Self.actionsRoom) }
             }
             viewed
             if !bubble.replies.isEmpty {

@@ -162,7 +162,7 @@ export async function appsRoute(
     const query = (new URL(request.url).searchParams.get("q") ?? "").trim().slice(0, 200);
     return respond(AppSearch, {
       apps: query
-        ? await searchApps(env, business.id, query, await builtInDirectory(env, business.id))
+        ? (await searchApps(env, business.id, query, await builtInDirectory(env, business.id))).apps
         : [],
     });
   }

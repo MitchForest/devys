@@ -50,7 +50,10 @@ export function teamCapabilities(db: Database, hiring: Hiring) {
  * business's apps and the MCP Registry, searched in wiring).
  */
 export function appSearchCapabilities(
-  search: (businessId: string, query: string) => Promise<FoundApp[]>,
+  search: (
+    businessId: string,
+    query: string,
+  ) => Promise<{ apps: FoundApp[]; registryAnswered: boolean }>,
 ) {
   return [
     capability({
@@ -63,11 +66,17 @@ export function appSearchCapabilities(
       input: Schema.Struct({
         query: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(200)),
       }),
-      output: Schema.Struct({ apps: Schema.Array(FoundApp) }),
+      output: Schema.Struct({ apps: Schema.Array(FoundApp), note: Schema.optional(Schema.String) }),
       execute: ({ query }) =>
         Effect.gen(function* () {
           const { businessId } = yield* Invocation;
-          return { apps: yield* rpc(() => search(businessId, query)) };
+          const { apps, registryAnswered } = yield* rpc(() => search(businessId, query));
+          return registryAnswered
+            ? { apps }
+            : {
+                apps,
+                note: "The public app directory is still answering; search the same words again in a minute for its apps. Meanwhile carry on with other steps.",
+              };
         }),
     }),
   ];

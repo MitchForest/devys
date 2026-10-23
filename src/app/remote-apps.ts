@@ -239,14 +239,42 @@ async function registry(env: Env, path: string) {
   return JSON.parse(new TextDecoder().decode(fetched.bytes)) as unknown;
 }
 
-/** Registry servers matching `query` that Devys can connect, latest versions only. */
-async function searchRegistry(env: Env, query: string) {
-  const page = Schema.decodeUnknownSync(RegistryPage)(
-    await registry(
-      env,
-      `/v0.1/servers?search=${encodeURIComponent(query)}&version=latest&limit=30`,
-    ),
-  );
+/** How long a registry search is kept, and how long a search waits for an uncached one. */
+const registryKeptSeconds = 24 * 60 * 60;
+const registryWaitMs = 8_000;
+
+/**
+ * Registry servers matching `query` that Devys can connect, latest versions only, or null when
+ * the registry hasn't answered in time. Its first answer for a query can take most of a minute;
+ * the search goes on and its answer is kept for a day, so asking again soon finds it at once.
+ */
+async function searchRegistry(env: Env, query: string): Promise<Listed[] | null> {
+  const path = `/v0.1/servers?search=${encodeURIComponent(query.toLowerCase())}&version=latest&limit=30`;
+  const cache = await caches.open("mcp-registry");
+  const kept = await cache.match(`${registryUrl}${path}`);
+  if (kept) return connectable(await kept.json());
+  const answer = registry(env, path).then(async (body) => {
+    await cache.put(
+      `${registryUrl}${path}`,
+      new Response(JSON.stringify(body), {
+        headers: {
+          "content-type": "application/json",
+          "cache-control": `max-age=${registryKeptSeconds}`,
+        },
+      }),
+    );
+    return body;
+  });
+  answer.catch(() => undefined);
+  const body = await Promise.race([
+    answer,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), registryWaitMs)),
+  ]);
+  return body === null ? null : connectable(body);
+}
+
+function connectable(body: unknown) {
+  const page = Schema.decodeUnknownSync(RegistryPage)(body);
   const found = new Map<string, Listed>();
   for (const { server } of page.servers) {
     const entry = listed(server);
@@ -384,7 +412,7 @@ export async function searchApps(
   businessId: string,
   query: string,
   builtIn: readonly InstalledApp[],
-): Promise<FoundApp[]> {
+): Promise<{ apps: FoundApp[]; registryAnswered: boolean }> {
   const words = query.toLowerCase().trim();
   const matches = (text: string) => text.toLowerCase().includes(words);
   const own = builtIn
@@ -427,8 +455,9 @@ export async function searchApps(
   const listedApps = address
     ? []
     : await searchRegistry(env, query.trim()).catch(() => [] as Listed[]);
+  const registryAnswered = listedApps !== null;
   const fromRegistry = await Promise.all(
-    listedApps
+    (listedApps ?? [])
       .filter((entry) => !known.has(entry.url) && !known.has(entry.name))
       .slice(0, 8)
       .map(async (entry) => ({
@@ -450,7 +479,7 @@ export async function searchApps(
         installed: false,
       })),
   );
-  return [...own, ...added, ...typed, ...fromRegistry].slice(0, 12);
+  return { apps: [...own, ...added, ...typed, ...fromRegistry].slice(0, 12), registryAnswered };
 }
 
 /**
