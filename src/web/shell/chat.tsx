@@ -672,9 +672,13 @@ function ReplyBanner({ name, text, cancel }: { name: string; text: string; cance
   );
 }
 
+/** The composer's send (or talk) button: a solid indigo circle with a white icon. */
+const sendButton =
+  "size-7 rounded-full bg-indigo p-0 text-white hover:bg-[color-mix(in_oklab,var(--indigo),black_12%)] hover:text-white disabled:bg-ink-3/30 disabled:opacity-100 [&_svg]:size-3.5";
+
 /**
  * The composer: who answers (the To chip), a tinted field with @-mentions, the mic and the
- * aurora send button, as native `Composer`.
+ * indigo send button, as native `Composer`.
  */
 export function Composer({
   conversation,
@@ -863,11 +867,7 @@ export function Composer({
               <MicButton listening={listening} />
               {/* An empty field offers talking instead of sending, as in ChatGPT. */}
               {text.trim() ? (
-                <InputGroupButton
-                  aria-label="Send"
-                  onClick={sendDraft}
-                  className="aurora size-7 rounded-full p-0 text-white [&_svg]:size-3.5"
-                >
+                <InputGroupButton aria-label="Send" onClick={sendDraft} className={sendButton}>
                   <ArrowUp strokeWidth={3} />
                 </InputGroupButton>
               ) : (
@@ -875,7 +875,7 @@ export function Composer({
                   aria-label="Talk hands-free"
                   title="Talk hands-free: speak, hear the answer, keep talking"
                   onClick={voiceActions.conversationToggled}
-                  className="aurora size-7 rounded-full p-0 text-white [&_svg]:size-3.5"
+                  className={sendButton}
                 >
                   <AudioLines strokeWidth={2.6} />
                 </InputGroupButton>

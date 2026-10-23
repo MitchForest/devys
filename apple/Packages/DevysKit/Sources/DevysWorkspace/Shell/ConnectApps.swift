@@ -47,7 +47,7 @@ struct ConnectAppsSheet: View {
                 .padding(20)
             }
         }
-        .sheetFrame(width: 720, height: 600)
+        // On the Mac it sits in a panel over the workspace (RegularShell), which sizes it.
         .background(DevysColors.sheet)
         .task(id: query) { await search() }
     }

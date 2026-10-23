@@ -1,7 +1,15 @@
 import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { localStores } from "../fixtures/local.ts";
-import { bearer, insertMessage, openAbout, sidebar, signIn, stubPosting } from "./helpers.ts";
+import {
+  bearer,
+  fromPalette,
+  insertMessage,
+  openAbout,
+  sidebar,
+  signIn,
+  stubPosting,
+} from "./helpers.ts";
 
 // G (2026-10-23): the sidebar after Grok Bot. Pinned tiles (the Chief of Staff pinned: face and
 // name, no card or mark), Projects only while there are any, Chats as Messages rows with a menu; the header's pill
@@ -77,6 +85,8 @@ test("pinned tiles, chats as rows, and each row's menu: pin, unpin, mark unread,
       .click({ button: "right" });
     await page.getByRole("menuitem", { name: "Hide from sidebar" }).click();
     await expect(sidebar(page).getByRole("link", { name: /^Finance/ })).toHaveCount(0);
+    // The hide is stored before the next message, which then brings the row back.
+    await expect.poll(async () => (await mark(sql, `direct:${finance.id}`))?.hidden).toBe(true);
     await insertMessage(sql, owner.business, `direct:${finance.id}`, {
       author: `employee:${finance.id}`,
       text: "The books are closed for October.",
@@ -255,6 +265,18 @@ test("Connect apps: listed apps by category with logos, search, Add, and the con
     await expect(
       page.getByRole("dialog", { name: "Connected" }).getByText("Not connected yet"),
     ).toBeVisible();
+
+    // A click outside the sheet, on the dim backdrop, closes it, as Esc does.
+    await page.mouse.click(8, 8);
+    await expect(page.getByRole("dialog", { name: /Connect/ })).toHaveCount(0);
+    await button.click();
+    await expect(sheet).toBeVisible();
+    await page.mouse.click(8, 8);
+    await expect(sheet).toBeHidden();
+    await button.click();
+    await expect(sheet).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(sheet).toBeHidden();
   } finally {
     await page.close();
     await stores.remove([owner]);
@@ -271,8 +293,7 @@ test("New employee: a face, a name, a role and a look; Create hires them and ope
   await stubPosting(page);
   try {
     await signIn(page, sql, owner.person);
-    await sidebar(page).getByRole("button", { name: "New", exact: true }).click();
-    await page.getByRole("menuitem", { name: "New employee" }).click();
+    await fromPalette(page, "New employee");
     const sheet = page.getByRole("dialog", { name: "New employee" });
     await sheet.getByLabel("Role").selectOption({ label: "Growth" });
     await expect(sheet.getByLabel("Name")).toHaveValue("Growth");
@@ -360,6 +381,89 @@ test("the composer's + uploads a file or attaches a business file or page; it go
     await page.close();
     await stores.remove([owner]);
     await stores.files.delete(key);
+    await stores.dispose();
+  }
+});
+
+test("Search: the toolbar's search and ⌘K open the palette; its rows run by click, keys and ⌘1…⌘9", async ({
+  page,
+}) => {
+  const stores = await localStores();
+  const { sql } = stores;
+  const owner = await stores.owner("Iris", "Acme");
+  await stubPosting(page);
+  try {
+    await signIn(page, sql, owner.person);
+    // Nothing is created or searched from the sidebar itself: the toolbar has Search.
+    for (const name of ["Search", "New"])
+      await expect(sidebar(page).getByRole("button", { name, exact: true })).toHaveCount(0);
+    await page.getByRole("toolbar").getByRole("button", { name: "Search" }).click();
+    const palette = page.getByRole("dialog", { name: "Search" });
+    await expect(palette.getByPlaceholder("Search")).toBeFocused();
+    const rows = palette.getByRole("option");
+    // The Chief of Staff, then the actions and Settings, each with its shortcut.
+    await expect(rows.nth(0)).toContainText("Chief of Staff");
+    await expect(rows.nth(0)).toContainText("⌘1");
+    const titles = [
+      "New employee",
+      "New project",
+      "Connect apps",
+      "Keyboard shortcuts",
+      "Settings: Account",
+    ];
+    for (const [index, title] of titles.entries()) {
+      await expect(rows.nth(index + 1)).toContainText(title);
+      await expect(rows.nth(index + 1)).toContainText(`⌘${index + 2}`);
+    }
+    await expect(palette.getByRole("option", { name: /Settings: Voice/ })).toContainText(
+      "Settings",
+    );
+    // The other employees follow.
+    await expect(palette.getByRole("option", { name: /^Growth/ })).toBeVisible();
+    await page.mouse.move(0, 0);
+    await page.waitForTimeout(600);
+    await page.screenshot({ path: "/tmp/palette-web.png" });
+
+    // ⌘2 runs New employee.
+    await page.keyboard.press("Meta+2");
+    await expect(palette).toBeHidden();
+    const hire = page.getByRole("dialog", { name: "New employee" });
+    await expect(hire).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(hire).toBeHidden();
+
+    // ⌘K, typing and Enter: a Settings row opens Settings at that section.
+    await page.keyboard.press("Meta+k");
+    await expect(palette).toBeVisible();
+    await page.keyboard.type("voice");
+    await expect(rows.first()).toContainText("Settings: Voice");
+    await page.keyboard.press("Enter");
+    const settings = page.getByRole("dialog", { name: "Settings" });
+    await expect(settings).toBeVisible();
+    await expect(settings.getByRole("button", { name: "Voice", exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await page.keyboard.press("Escape");
+    await expect(settings).toBeHidden();
+
+    // ↓ and Enter; Keyboard shortcuts lists the web's shortcuts.
+    await page.keyboard.press("Meta+k");
+    for (let step = 0; step < 4; step++) await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+    const sheet = page.getByRole("dialog", { name: "Keyboard shortcuts" });
+    await expect(sheet.getByText("⌘K")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(sheet).toBeHidden();
+
+    // A click outside the palette closes it.
+    await page.keyboard.press("Meta+k");
+    await expect(palette).toBeVisible();
+    await page.mouse.click(8, 8);
+    await expect(palette).toBeHidden();
+  } finally {
+    await page.close();
+    await stores.remove([owner]);
     await stores.dispose();
   }
 });

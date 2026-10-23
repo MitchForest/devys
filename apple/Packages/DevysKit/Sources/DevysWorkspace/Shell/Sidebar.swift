@@ -5,48 +5,22 @@ import DevysDesignSystem
 import SwiftUI
 
 /// The sidebar is people and projects, as Messages lays out a list: pinned tiles, Projects while
-/// one is active, then Chats, most recent first. Search and New sit at the top; the owner's face
-/// (Settings) and Connect apps at the bottom.
+/// one is active, then Chats, most recent first; the owner's face (Settings) and Connect apps at
+/// the bottom. Search and New are ⌘K and the menu bar (the title bar's search on the Mac).
 struct Sidebar: View {
     let store: StoreOf<Workspace>
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 4) {
-                Spacer(minLength: 0)
-                SidebarCircleButton(title: "Search (⌘K)", symbol: "magnifyingglass") { store.send(.paletteToggled(true)) }
-                NewMenu(store: store)
-            }
-            .padding(.horizontal, 12)
-            .padding(.top, 8)
-            .padding(.bottom, 6)
             ScrollView {
                 SidebarList(store: store)
                     .padding(.horizontal, 10)
+                    .padding(.top, 8)
                     .padding(.bottom, 12)
             }
             .scrollIndicators(.never)
             SidebarFooter(store: store)
         }
-    }
-}
-
-/// +: a new employee or a new project. A message needs nothing: the composer is always there.
-struct NewMenu: View {
-    let store: StoreOf<Workspace>
-
-    var body: some View {
-        Menu {
-            Button("New employee", systemImage: "person.badge.plus") { store.send(.hireTapped) }
-            Button("New project", systemImage: "square.grid.2x2") { store.send(.newProjectTapped) }
-        } label: {
-            SidebarCircle(symbol: "plus")
-        }
-        .menuIndicator(.hidden)
-        .buttonStyle(.plain)
-        .fixedSize()
-        .help("New")
-        .accessibilityLabel("New")
     }
 }
 
@@ -396,34 +370,5 @@ struct ConnectAppsButton: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .accessibilityLabel("Connect apps")
-    }
-}
-
-/// A round icon button in the sidebar's header.
-private struct SidebarCircleButton: View {
-    let title: String
-    let symbol: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) { SidebarCircle(symbol: symbol) }
-            .buttonStyle(.plain)
-            .help(title)
-            .accessibilityLabel(title)
-    }
-}
-
-private struct SidebarCircle: View {
-    let symbol: String
-    @State private var hovering = false
-
-    var body: some View {
-        Image(systemName: symbol)
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(DevysColors.ink2)
-            .frame(width: 30, height: 30)
-            .background(hovering ? DevysColors.sheet : DevysColors.track.opacity(0.5), in: Circle())
-            .contentShape(Circle())
-            .onHover { hovering = $0 }
     }
 }

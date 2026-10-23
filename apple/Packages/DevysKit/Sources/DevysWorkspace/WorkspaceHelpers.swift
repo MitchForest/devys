@@ -17,7 +17,7 @@ extension Workspace {
 extension Workspace {
     #if DEBUG
         /// QA only, for screenshots: DEVYS_PLACE=direct:<id>|project:<id>|thread:<id> opens there
-        /// at launch (or `palette` opens ⌘K); DEVYS_LAYER=artifact:<id>|file:<path>
+        /// at launch (`palette` opens ⌘K, `connect` Connect apps); DEVYS_LAYER=artifact:<id>|file:<path>
         /// stacks a layer; DEVYS_SIDEBAR=hidden hides the sidebar;
         /// DEVYS_SETTINGS=<section> opens Settings.
         static func applyQAPlace(to state: inout State) {
@@ -27,6 +27,7 @@ extension Workspace {
                 return (String(raw[..<colon]), String(raw[raw.index(after: colon)...]))
             }
             if environment["DEVYS_PLACE"] == "palette" { state.isPaletteOpen = true }
+            if environment["DEVYS_PLACE"] == "connect" { state.isConnectingApps = true }
             switch parts("DEVYS_PLACE") {
             case ("direct", let id)?: state.place = .direct(id)
             case ("project", let id)?: state.place = .project(id)
@@ -141,6 +142,8 @@ extension Workspace.Action {
     }
     package static var sidebarToggled: Self { Self(.sidebarToggled) }
     package static func paletteToggled(_ open: Bool) -> Self { Self(.paletteToggled(open)) }
+    package static func paletteRan(_ command: PaletteCommand) -> Self { Self(.palette(.ran(command))) }
+    package static func shortcutsToggled(_ open: Bool) -> Self { Self(.palette(.shortcutsToggled(open))) }
     package static var refreshTapped: Self { Self(.refreshTapped) }
     package static func activeChanged(_ isActive: Bool) -> Self { Self(.activeChanged(isActive)) }
     /// ⌘.: the employee of the conversation in view.

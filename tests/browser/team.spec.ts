@@ -1,6 +1,15 @@
 import { test, expect } from "@playwright/test";
 import { localStores } from "../fixtures/local.ts";
-import { hash, hex, openAbout, openSettings, sidebar, signIn, stubPosting } from "./helpers.ts";
+import {
+  fromPalette,
+  hash,
+  hex,
+  openAbout,
+  openSettings,
+  sidebar,
+  signIn,
+  stubPosting,
+} from "./helpers.ts";
 
 test("the owner hires from a template, edits and retires, and talks to any employee", async ({
   page,
@@ -15,8 +24,7 @@ test("the owner hires from a template, edits and retires, and talks to any emplo
     await signIn(page, sql, owner.person);
 
     // Hire Growth from its template: the name comes prefilled, its responsibilities with it.
-    await sidebar(page).getByRole("button", { name: "New", exact: true }).click();
-    await page.getByRole("menuitem", { name: "New employee" }).click();
+    await fromPalette(page, "New employee");
     const sheet = page.getByRole("dialog", { name: "New employee" });
     await sheet.getByLabel("Role").selectOption({ label: "Growth" });
     await expect(sheet.getByLabel("Name")).toHaveValue("Growth");
@@ -71,8 +79,7 @@ test("the owner hires from a template, edits and retires, and talks to any emplo
 
     // A project's details start a thread in it, owned by whoever the owner picks.
     await page.keyboard.press("Escape");
-    await sidebar(page).getByRole("button", { name: "New", exact: true }).click();
-    await page.getByRole("menuitem", { name: "New project" }).click();
+    await fromPalette(page, "New project");
     const create = page.getByRole("dialog", { name: "New project" });
     await create.getByLabel("Name").fill("Launch");
     await create.getByRole("button", { name: "Create project" }).click();

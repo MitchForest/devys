@@ -119,6 +119,8 @@ test("a connect request is the work card's one ask; the review turns the app on"
     expect(await mode("ledger_post_entry")).toBe("ask");
     expect(await mode("ledger_ramp_get_agent_card_creds")).toBeUndefined();
   } finally {
+    // Stop the page's polling before its business is removed.
+    await page.close();
     await stores.remove([owner]);
     await stores.dispose();
   }

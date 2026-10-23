@@ -10,7 +10,7 @@ import { EmployeePortrait } from "../design/portrait.tsx";
 import { Desk } from "../panel/desk.tsx";
 import { kindOf, useCurrentRef, useRecordTitle } from "../panel/layers/titles.ts";
 import { Overview } from "../panel/overview.tsx";
-import { projectTint } from "./sidebar.tsx";
+import { projectTint, SearchButton } from "./sidebar.tsx";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
@@ -31,9 +31,12 @@ export function ConversationHeader() {
     <header className="relative flex h-[52px] shrink-0 items-center justify-center px-3">
       <div className="absolute inset-y-0 left-3 flex items-center gap-1">
         {!sidebarVisible && (
-          <HeaderButton label="Show sidebar (⌃⌘S)" onClick={ui.toggleSidebar}>
-            <PanelLeft className="size-[15px]" />
-          </HeaderButton>
+          <>
+            <HeaderButton label="Show sidebar (⌃⌘S)" onClick={ui.toggleSidebar}>
+              <PanelLeft className="size-[15px]" />
+            </HeaderButton>
+            <SearchButton />
+          </>
         )}
         {canGoBack && (
           <HeaderButton label="Back (⌘[)" onClick={nav.back}>

@@ -21,7 +21,7 @@ import { compactQuery, defaultPanel, layout, panelRange, sidebarWidth } from "./
 import { NewEmployeeSheet, NewProjectDialog, NewWorkItemDialog } from "./dialogs.tsx";
 import { CommandPalette } from "./palette.tsx";
 import { Settings } from "./settings.tsx";
-import { Sidebar } from "./sidebar.tsx";
+import { SearchButton, Sidebar } from "./sidebar.tsx";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
@@ -344,10 +344,15 @@ function CompactShell() {
       <div className="flex h-dvh flex-col bg-sheet">
         <header className="relative flex h-12 shrink-0 items-center justify-center px-4 pt-[env(safe-area-inset-top)]">
           {list ? (
-            <span className="flex items-center gap-2">
-              {business && <BusinessPortrait business={business} size={26} />}
-              <span className="text-heading font-semibold text-ink">{business?.name}</span>
-            </span>
+            <>
+              <span className="flex items-center gap-2">
+                {business && <BusinessPortrait business={business} size={26} />}
+                <span className="text-heading font-semibold text-ink">{business?.name}</span>
+              </span>
+              <span className="absolute right-3">
+                <SearchButton />
+              </span>
+            </>
           ) : (
             <>
               <button

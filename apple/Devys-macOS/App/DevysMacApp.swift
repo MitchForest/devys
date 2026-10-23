@@ -36,6 +36,7 @@ struct DevysMacApp: App {
         }
         .windowToolbarStyle(.unifiedCompact(showsTitle: false))
         .defaultSize(width: 1280, height: 820)
+        .commands { WorkspaceCommands(store: Self.store) }
         // A window per terminal on the owner's Mac; closing it leaves the session running.
         WindowGroup("Terminal", for: TerminalRef.self) { $ref in
             if let ref {

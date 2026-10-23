@@ -44,6 +44,14 @@ export async function hire(
   });
 }
 
+/** Runs a row of ⌘K (New employee, New project, …), opened from the toolbar's Search. */
+export async function fromPalette(page: Page, title: string) {
+  await page.getByRole("toolbar").getByRole("button", { name: "Search" }).click();
+  const palette = page.getByRole("dialog", { name: "Search" });
+  await palette.getByRole("option", { name: title }).click();
+  await expect(palette).toBeHidden();
+}
+
 /** Settings, from the owner's face at the bottom of the sidebar. */
 export async function openSettings(page: Page) {
   await sidebar(page).getByRole("button", { name: "Settings" }).click();

@@ -85,8 +85,8 @@ public struct FilterChip: View {
 }
 
 /// The message field: an inset capsule with an optional leading control (who answers), the
-/// mic, which dictates into the field, and the aurora button: send, or with an empty field,
-/// talk hands-free.
+/// mic, which dictates into the field, and the round indigo button: send, or with an empty
+/// field, talk hands-free.
 public struct Composer: View {
     let placeholder: String
     @Binding var text: String
@@ -164,14 +164,13 @@ public struct Composer: View {
                 }
                 // An empty field offers talking instead of sending, as in ChatGPT.
                 if isEmpty, let onHandsFree {
-                    AuroraButton(symbol: "waveform", action: onHandsFree)
+                    SendButton(symbol: "waveform", action: onHandsFree)
                         .disabled(!isEnabled)
                         .help("Talk hands-free: speak, hear the answer, keep talking")
                         .accessibilityLabel("Talk hands-free")
                 } else {
-                    AuroraButton(symbol: "arrow.up", action: onSend)
+                    SendButton(symbol: "arrow.up", action: onSend)
                         .disabled(!isEnabled || isEmpty)
-                        .opacity(isEnabled && !isEmpty ? 1 : 0.4)
                         .keyboardShortcut(.return, modifiers: .command)
                         .accessibilityLabel("Send")
                 }
@@ -202,8 +201,9 @@ private struct ComposerFocus: ViewModifier {
     }
 }
 
-/// The round aurora button at the end of the field.
-private struct AuroraButton: View {
+/// The round button at the end of the field: solid indigo with a white glyph, darker while
+/// pressed and muted while disabled.
+private struct SendButton: View {
     let symbol: String
     let action: () -> Void
 
@@ -213,9 +213,24 @@ private struct AuroraButton: View {
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(width: 28, height: 28)
-                .background { Aurora().clipShape(Circle()) }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SendButtonStyle())
+    }
+}
+
+private struct SendButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background {
+                Circle()
+                    .fill(DevysColors.indigo)
+                    .overlay { Circle().fill(.black.opacity(configuration.isPressed ? 0.18 : 0)) }
+            }
+            .opacity(isEnabled ? 1 : 0.35)
+            .contentShape(Circle())
+            .animation(DevysMotion.quick, value: configuration.isPressed)
     }
 }
 

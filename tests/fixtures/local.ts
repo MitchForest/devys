@@ -16,6 +16,50 @@ export async function localStores(channel = false) {
   });
   const run = async (text: string, values: unknown[] = []) =>
     (await client.query(text, values)).rowCount ?? 0;
+  async function removeOnce(owners: { person: string; business: string }[]) {
+    const people = owners.map((o) => o.person);
+    const businesses = owners.map((o) => o.business);
+    for (const table of [
+      "memories",
+      "memory_state",
+      "memory_sources",
+      "memory_links",
+      "memory_operations",
+      "memory_exclusions",
+    ])
+      await run(`DELETE FROM ${table} WHERE scope_id = ANY($1)`, [businesses]);
+    for (const table of [
+      "conversation_marks",
+      "follows",
+      "conversation_reads",
+      "suggested_replies",
+      "messages",
+      "conversations",
+      "decisions",
+      "coding_sessions",
+      "routines",
+      "work_items",
+      "project_items",
+      "project_members",
+      "projects",
+      "app_installs",
+      "app_sign_ins",
+      "remote_apps",
+      "artifacts",
+      "app_reactions",
+      "channel_bindings",
+      "secrets",
+      "grants",
+      "employees",
+      "memberships",
+    ])
+      await run(`DELETE FROM ${table} WHERE business_id = ANY($1)`, [businesses]);
+    await run("DELETE FROM businesses WHERE id = ANY($1)", [businesses]);
+    for (const table of ["device_keys", "web_sessions", "sign_in_links"])
+      await run(`DELETE FROM ${table} WHERE person_id = ANY($1)`, [people]);
+    await run("DELETE FROM join_requests WHERE allowed_by = ANY($1)", [people]);
+    await run("DELETE FROM people WHERE id = ANY($1)", [people]);
+  }
   return {
     files: proxy.env.FILES,
     /**
@@ -58,50 +102,19 @@ export async function localStores(channel = false) {
         team,
       };
     },
-    /** Removes fixtures and everything they own, children first. */
+    /**
+     * Removes fixtures and everything they own, children first. The server may still be writing
+     * for a page that just closed (a read mark, a reply), so a row it adds meanwhile is retried.
+     */
     async remove(owners: { person: string; business: string }[]) {
-      const people = owners.map((o) => o.person);
-      const businesses = owners.map((o) => o.business);
-      for (const table of [
-        "memories",
-        "memory_state",
-        "memory_sources",
-        "memory_links",
-        "memory_operations",
-        "memory_exclusions",
-      ])
-        await run(`DELETE FROM ${table} WHERE scope_id = ANY($1)`, [businesses]);
-      for (const table of [
-        "conversation_marks",
-        "follows",
-        "conversation_reads",
-        "suggested_replies",
-        "messages",
-        "conversations",
-        "decisions",
-        "coding_sessions",
-        "routines",
-        "work_items",
-        "project_items",
-        "project_members",
-        "projects",
-        "app_installs",
-        "app_sign_ins",
-        "remote_apps",
-        "artifacts",
-        "app_reactions",
-        "channel_bindings",
-        "secrets",
-        "grants",
-        "employees",
-        "memberships",
-      ])
-        await run(`DELETE FROM ${table} WHERE business_id = ANY($1)`, [businesses]);
-      await run("DELETE FROM businesses WHERE id = ANY($1)", [businesses]);
-      for (const table of ["device_keys", "web_sessions", "sign_in_links"])
-        await run(`DELETE FROM ${table} WHERE person_id = ANY($1)`, [people]);
-      await run("DELETE FROM join_requests WHERE allowed_by = ANY($1)", [people]);
-      await run("DELETE FROM people WHERE id = ANY($1)", [people]);
+      for (let attempt = 1; ; attempt++) {
+        try {
+          return await removeOnce(owners);
+        } catch (error) {
+          if (attempt === 3 || (error as { code?: string }).code !== "23503") throw error;
+          await new Promise((resolve) => setTimeout(resolve, 300));
+        }
+      }
     },
     sql: {
       run: async (text: string, values: unknown[] = []) =>

@@ -1,3 +1,4 @@
+import ComposableArchitecture2
 import DevysCharacter
 import DevysClient
 import DevysDesignSystem
@@ -208,3 +209,24 @@ extension Workspace.State {
         }
     }
 }
+
+#if os(iOS)
+    /// New, in the iPhone and iPad bars (on the Mac it is the File menu): a new employee or a new
+    /// project. A message needs nothing: the composer is always there.
+    struct NewMenu: View {
+        let store: StoreOf<Workspace>
+
+        var body: some View {
+            Menu {
+                Button("New Employee", systemImage: "person.badge.plus") { store.send(.hireTapped) }
+                Button("New Project", systemImage: "folder.badge.plus") { store.send(.newProjectTapped) }
+            } label: {
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: 15, weight: .medium))
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel("New")
+        }
+    }
+#endif

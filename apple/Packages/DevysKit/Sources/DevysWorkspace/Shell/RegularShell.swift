@@ -40,6 +40,20 @@ struct RegularShell: View {
             .toolbar { MacToolbar(store: store) }
         #endif
         .overlay {
+            #if os(macOS)
+                // A sheet can't close on a click outside it; these panels do, and on Esc.
+                if store.isConnectingApps {
+                    ConnectAppsSheet(store: store)
+                        .frame(maxWidth: 720, maxHeight: 600)
+                        .modalPanel { store.send(.connectAppsToggled(false)) }
+                        .transition(.opacity)
+                }
+                if store.isShowingShortcuts {
+                    ShortcutsSheet { store.send(.shortcutsToggled(false)) }
+                        .modalPanel { store.send(.shortcutsToggled(false)) }
+                        .transition(.opacity)
+                }
+            #endif
             if store.isPaletteOpen {
                 CommandPalette(store: store)
                     .transition(.opacity.combined(with: .scale(scale: 0.97)))
@@ -49,9 +63,16 @@ struct RegularShell: View {
         .animation(reduceMotion ? .easeInOut(duration: 0.15) : DevysMotion.panel, value: store.state.isPanelOpen)
         .animation(reduceMotion ? .easeInOut(duration: 0.15) : DevysMotion.panel, value: store.state.isWideShown)
         .animation(DevysMotion.quick, value: store.isPaletteOpen)
-        .sheet(isPresented: Binding(get: { store.isConnectingApps }, set: { if !$0 { store.send(.connectAppsToggled(false)) } })) {
-            ConnectAppsSheet(store: store)
-        }
+        .animation(DevysMotion.quick, value: store.isConnectingApps)
+        .animation(DevysMotion.quick, value: store.isShowingShortcuts)
+        #if os(iOS)
+            .sheet(isPresented: Binding(get: { store.isConnectingApps }, set: { if !$0 { store.send(.connectAppsToggled(false)) } })) {
+                ConnectAppsSheet(store: store)
+            }
+            .sheet(isPresented: Binding(get: { store.isShowingShortcuts }, set: { if !$0 { store.send(.shortcutsToggled(false)) } })) {
+                ShortcutsSheet { store.send(.shortcutsToggled(false)) }
+            }
+        #endif
         .background { Shortcuts(store: store) }
         #if os(iOS)
             .sheet(isPresented: Binding(get: { store.preferences != nil }, set: { if !$0 { store.send(.preferencesToggled(false)) } })) {
@@ -186,6 +207,7 @@ private struct ResizeHandle: View {
             ToolbarItem(placement: .navigation) {
                 HStack(spacing: 6) {
                     SidebarToggle(store: store)
+                    ToolbarIconButton("Search (⌘K)", symbol: "magnifyingglass") { store.send(.paletteToggled(true)) }
                     BackButton(store: store)
                 }
             }
@@ -201,8 +223,12 @@ private struct ShellToolbar: View {
     var body: some View {
         HStack(spacing: 6) {
             SidebarToggle(store: store)
+            ToolbarIconButton("Search (⌘K)", symbol: "magnifyingglass") { store.send(.paletteToggled(true)) }
             BackButton(store: store)
             Spacer(minLength: DevysSpacing.regular)
+            #if os(iOS)
+                NewMenu(store: store)
+            #endif
         }
         .padding(.leading, 12)
         .padding(.trailing, 10)
@@ -270,11 +296,17 @@ private struct Shortcuts: View {
 
     var body: some View {
         ZStack {
-            Button("Search") { store.send(.paletteToggled(!store.isPaletteOpen)) }.keyboardShortcut("k", modifiers: .command)
+            #if !os(macOS)
+                // The Mac's menu bar has these (WorkspaceCommands); an iPad keyboard needs them here.
+                Button("Search") { store.send(.paletteToggled(!store.isPaletteOpen)) }.keyboardShortcut("k", modifiers: .command)
+                Button("New Employee") { store.send(.hireTapped) }.keyboardShortcut("n", modifiers: .command)
+                Button("New Project") { store.send(.newProjectTapped) }.keyboardShortcut("n", modifiers: [.command, .shift])
+            #endif
             Button("Back") { store.send(.backTapped) }.keyboardShortcut("[", modifiers: .command).disabled(store.history.isEmpty)
             Button("Sidebar") { store.send(.sidebarToggled) }.keyboardShortcut("s", modifiers: [.command, .control])
-            // Esc goes back one layer, unless the palette has it.
-            Button("Back one layer") { store.send(.layerPopped) }.keyboardShortcut(.escape, modifiers: []).disabled(store.layers.isEmpty || store.isPaletteOpen)
+            // Esc goes back one layer, unless the palette or a panel over the workspace has it.
+            Button("Back one layer") { store.send(.layerPopped) }.keyboardShortcut(.escape, modifiers: [])
+                .disabled(store.layers.isEmpty || store.isPaletteOpen || store.isConnectingApps || store.isShowingShortcuts)
             Button("Refresh") { store.send(.refreshTapped) }.keyboardShortcut("r", modifiers: .command)
             // ⌘.: the employee of the conversation in view.
             Button("Stop") { store.send(.stopTapped) }.keyboardShortcut(".", modifiers: .command)

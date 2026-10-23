@@ -47,6 +47,8 @@ package struct Workspace {
         package var isActive = true
         package var isSidebarVisible = true
         package var isPaletteOpen = false
+        /// The Keyboard shortcuts sheet, opened from ⌘K.
+        package var isShowingShortcuts = false
         /// The Chief of Staff's runtime state.
         package var status: Loadable<EmployeeStatus> = .loading
         /// Each employee's latest runtime status, refreshed every tick; the sidebar's status dots derive from it.
@@ -138,6 +140,7 @@ package struct Workspace {
         case place(PlaceIntent)
         case sidebarToggled
         case paletteToggled(Bool)
+        case palette(PaletteIntent)
         case refreshTapped
         /// The scene became active, or left the foreground.
         case activeChanged(Bool)
@@ -316,6 +319,8 @@ package struct Workspace {
 
             case .paletteToggled(let open):
                 state.isPaletteOpen = open
+
+            case .palette(let intent): reducePalette(intent, state: &state)
 
             case .activeChanged(let isActive):
                 guard isActive != state.isActive else { return }

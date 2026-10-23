@@ -2,17 +2,14 @@ import {
   CirclePause,
   CirclePlay,
   EyeOff,
-  LayoutGrid,
   MessageCircle,
   MoreHorizontal,
   PanelLeft,
   Pencil,
   Pin,
   PinOff,
-  Plus,
   Search,
   UserMinus,
-  UserPlus,
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
@@ -63,28 +60,31 @@ export const projectTint = (index: number) => tints[(index + 1) % tints.length]!
 /**
  * The sidebar, as Messages lays one out: pinned tiles, then Projects (only while there are
  * any), then Chats with everyone else, most recent first. At the bottom, the owner (Settings)
- * and Connect apps. On a phone it is the list a conversation goes back to.
+ * and Connect apps. Above it, the toolbar: the sidebar toggle and Search (⌘K); nothing is
+ * created from here, ⌘K does that. On a phone it is the list a conversation goes back to.
  */
 export function Sidebar({ compact = false }: { compact?: boolean }) {
   return (
-    <nav aria-label="Sidebar" className="flex h-full flex-col">
-      <div className="flex items-center gap-1 px-3 pt-2.5 pb-1.5">
-        {!compact && (
+    <div className="flex h-full flex-col">
+      {!compact && (
+        <div
+          role="toolbar"
+          aria-label="Toolbar"
+          className="flex items-center gap-0.5 px-3 pt-2.5 pb-1.5"
+        >
           <SidebarButton label="Hide sidebar (⌃⌘S)" onClick={ui.toggleSidebar}>
             <PanelLeft className="size-[15px]" />
           </SidebarButton>
-        )}
-        <span className="ml-auto" />
-        <SidebarButton label="Search (⌘K)" onClick={() => ui.setPaletteOpen(true)}>
-          <Search className="size-[15px]" strokeWidth={2.1} />
-        </SidebarButton>
-        <NewMenu />
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-3 [scrollbar-width:none]">
-        <SidebarList />
-      </div>
-      <SidebarFooter />
-    </nav>
+          <SearchButton />
+        </div>
+      )}
+      <nav aria-label="Sidebar" className="flex min-h-0 flex-1 flex-col">
+        <div className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-3 [scrollbar-width:none]">
+          <SidebarList />
+        </div>
+        <SidebarFooter />
+      </nav>
+    </div>
   );
 }
 
@@ -98,7 +98,7 @@ function SidebarButton({
       type="button"
       aria-label={label.replace(/ \(.*\)$/, "")}
       title={label}
-      className="grid size-8 place-items-center rounded-full bg-sheet text-ink-2 shadow-resting transition hover:text-ink"
+      className="grid size-8 place-items-center rounded-full text-ink-2 transition hover:bg-track hover:text-ink"
       {...props}
     >
       {children}
@@ -106,26 +106,12 @@ function SidebarButton({
   );
 }
 
-/** **+**: a new employee or a new project. A message needs nothing: the composer is there. */
-function NewMenu() {
+/** The toolbar's search, beside the sidebar toggle: it opens ⌘K. */
+export function SearchButton() {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        aria-label="New"
-        title="New"
-        className="grid size-8 place-items-center rounded-full bg-sheet text-ink-2 shadow-resting transition hover:text-ink"
-      >
-        <Plus className="size-4" strokeWidth={2.1} />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-auto min-w-44">
-        <DropdownMenuItem onClick={() => ui.setHireOpen(true)}>
-          <UserPlus /> New employee
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => ui.setProjectOpen(true)}>
-          <LayoutGrid /> New project
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <SidebarButton label="Search (⌘K)" onClick={() => ui.setPaletteOpen(true)}>
+      <Search className="size-[15px]" strokeWidth={2.1} />
+    </SidebarButton>
   );
 }
 

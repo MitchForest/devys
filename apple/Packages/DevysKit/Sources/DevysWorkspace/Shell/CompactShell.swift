@@ -45,6 +45,10 @@ struct CompactShell: View {
         .sheet(isPresented: Binding(get: { store.isConnectingApps }, set: { if !$0 { store.send(.connectAppsToggled(false)) } })) {
             ConnectAppsSheet(store: store)
         }
+        .sheet(isPresented: Binding(get: { store.isShowingShortcuts }, set: { if !$0 { store.send(.shortcutsToggled(false)) } })) {
+            ShortcutsSheet { store.send(.shortcutsToggled(false)) }
+                .presentationDetents([.medium, .large])
+        }
         .sheet(isPresented: Binding(get: { store.preferences != nil }, set: { if !$0 { store.send(.preferencesToggled(false)) } })) {
             if let preferences = store.spawn(\.preferences) {
                 PreferencesScreen(store: preferences) { store.send(.preferencesToggled(false)) }
@@ -71,6 +75,7 @@ struct CompactShell: View {
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         if showsList {
             ToolbarItem(placement: .topBarLeading) { BusinessMenu(store: store) }
+            // Search opens ⌘K's palette; New (compose) is the iOS place for a new employee or project.
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Search", systemImage: "magnifyingglass") { store.send(.paletteToggled(true)) }
             }

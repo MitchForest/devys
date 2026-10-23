@@ -1,7 +1,15 @@
 import { test, expect } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { localStores } from "../fixtures/local.ts";
-import { bearer, insertMessage, openAbout, sidebar, signIn, stubPosting } from "./helpers.ts";
+import {
+  bearer,
+  fromPalette,
+  insertMessage,
+  openAbout,
+  sidebar,
+  signIn,
+  stubPosting,
+} from "./helpers.ts";
 
 type Stores = Awaited<ReturnType<typeof localStores>>;
 
@@ -31,8 +39,7 @@ test("New project with goal, deadline, budget, lead and team opens its channel; 
     // No projects yet: the section is absent, not an empty destination.
     await expect(sidebar(page).getByRole("heading", { name: "Projects" })).toHaveCount(0);
 
-    await sidebar(page).getByRole("button", { name: "New", exact: true }).click();
-    await page.getByRole("menuitem", { name: "New project" }).click();
+    await fromPalette(page, "New project");
     const dialog = page.getByRole("dialog", { name: "New project" });
     await dialog.getByLabel("Name").fill("Launch");
     await dialog.getByLabel("Goal").fill("Ship Acme v1 to the first ten customers");
@@ -236,7 +243,7 @@ test("the right panel opens only for a layer; a further layer stacks; Esc goes b
     await page.keyboard.press("Meta+k");
     await page.keyboard.type(title);
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("dialog", { name: "Jump to" })).toBeHidden();
+    await expect(page.getByRole("dialog", { name: "Search" })).toBeHidden();
   };
   try {
     await signIn(page, sql, owner.person);

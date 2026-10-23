@@ -83,7 +83,7 @@ type Section =
   | "devices"
   | "voice"
   | "appearance";
-const sections: { value: Section; title: string; icon: LucideIcon }[] = [
+export const sections: { value: Section; title: string; icon: LucideIcon }[] = [
   { value: "account", title: "Account", icon: CircleUserRound },
   { value: "apps", title: "Apps", icon: LayoutGrid },
   { value: "team", title: "Team", icon: Users },
