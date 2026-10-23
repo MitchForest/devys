@@ -255,7 +255,7 @@ export function workCapabilities(
     capability({
       name: "workCreate",
       description:
-        "Record something the business owes: a title, objective and next action, accountable to you or another employee, optionally in a project. Use for work that outlives this conversation. If you need the owner's answer to start, ask where you are talking first and create it once they answer; a question asked there is never asked again in its thread. Returns its ref and revision, which workUpdate and workComplete take as they are.",
+        'Record something the business owes: a title, objective and next action, accountable to you or another employee, optionally in a project. Use for work that outlives this conversation. Give work of more than two steps its plan as steps (at most 10, each {title, state: todo, by?: "owner"}): plain words the owner reads, in order, with by: "owner" on each step only the owner can do (connect an app, sign in, approve a payment). A plan with a step for the owner, a payment or anything public waits for the owner\'s Start (it always does with an owner step; set waitForStart for a payment or anything public) and is handed to its employee once started; any other plan starts at once. Start approves the order only: each payment, send, publish or production deploy is still asked when reached. Returns its ref and revision, which workUpdate and workComplete take as they are.',
       effect: "change",
       replay: "idempotent",
       input: Schema.Struct({
@@ -265,6 +265,8 @@ export function workCapabilities(
         owner: Schema.optional(WorkItemFields.owner),
         dueAt: Schema.optional(WorkItemFields.dueAt),
         project: Schema.optional(ProjectRef),
+        steps: Schema.optional(WorkItemFields.steps),
+        waitForStart: Schema.optional(Schema.Boolean),
       }),
       output: Summary,
       execute: (input) =>
@@ -291,9 +293,14 @@ export function workCapabilities(
               ...(input.nextAction ? { nextAction: input.nextAction } : {}),
               ...(input.dueAt ? { dueAt: new Date(input.dueAt).toISOString() } : {}),
               ...(input.project ? { projectId: input.project } : {}),
+              ...(input.steps ? { steps: input.steps } : {}),
+              waitsForStart:
+                Boolean(input.waitForStart) ||
+                Boolean(input.steps?.some((step) => step.by === "owner")),
               createdBy: `employee:${employeeId}`,
             }),
           );
+          if (input.steps?.length) yield* rpc(() => showCard(businessId, created));
           // The conversation it came from shows its card, which opens it and follows its progress.
           if (conversation && !conversation.startsWith("work:"))
             yield* rpc(() => showCard(businessId, created, conversation));

@@ -23,6 +23,7 @@ import {
   workItems,
   createWorkItem,
   setTakeover,
+  startWorkItem,
   updateWorkItem,
   type Change,
 } from "../work/service.ts";
@@ -32,6 +33,7 @@ import { Answered, Decisions, WorkItems } from "./wire.ts";
 import { project } from "../work/projects.ts";
 import { capabilities } from "./capabilities.ts";
 import { handBack } from "./coding.ts";
+import { dispatchReady } from "./dispatch.ts";
 import { decodedBody, forbidden, notFound } from "./request.ts";
 
 const when = (value: string | null) =>
@@ -111,6 +113,14 @@ export async function workRoute(
       await handedBack(env, business.id, person.id, item.id);
       await handBack(env, business.id, item.id);
     }
+    return respond(WorkItem, item);
+  }
+  // A plan that waited for the owner starts: it is handed to its employee now, not next minute.
+  const start = /^\/work\/([A-Za-z0-9-]{1,64})\/start$/.exec(path)?.[1];
+  if (start) {
+    const item = await Effect.runPromise(startWorkItem(env.HYPERDRIVE, business.id, start));
+    if (!item) return new Response("That plan already started or was cancelled", { status: 409 });
+    await dispatchReady(env);
     return respond(WorkItem, item);
   }
   const id = /^\/work\/([A-Za-z0-9-]{1,64})$/.exec(path)?.[1];

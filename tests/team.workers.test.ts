@@ -63,7 +63,13 @@ it("a new business starts with its brief and the chosen team, each with its temp
   const { person } = await business("Owner's first");
   const as = await session(person);
   const roles = await json<{ roles: { id: string; capabilities: string[] }[] }>(as("/api/roles"));
-  expect(roles.roles.map((role) => role.id)).toEqual(["admin", "finance", "growth", "engineering", "custom"]);
+  expect(roles.roles.map((role) => role.id)).toEqual([
+    "admin",
+    "finance",
+    "growth",
+    "engineering",
+    "custom",
+  ]);
   expect(
     (
       await as("/api/businesses", {

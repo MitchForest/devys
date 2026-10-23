@@ -410,6 +410,9 @@ it("an approve shows its draft and steps, bound by the draft's content: a change
   const third = await ask(resend);
   expect(third).toMatchObject({ state: "asked" });
   expect(third.request).not.toBe(second.request);
+  // One request at a time: another waits until this one is answered.
+  expect(await refusal(ask(send))).toContain("hasn't answered this work item's request yet");
+  expect((await mac.call(at(`/decisions/${third.request}/reject`), {})).status).toBe(200);
   // The approval already given no longer stands for the changed draft either.
   expect((await ask(send)).state).toBe("asked");
   // A draft is a page or file of this business.

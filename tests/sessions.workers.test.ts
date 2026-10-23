@@ -134,7 +134,11 @@ it("stop aborts work running in a work session", async () => {
   const id = await target.agent.idOf("m-slow");
   expect(running).toMatchObject({ operationId: id });
   expect(running!.session).not.toBe("1");
-  expect(JSON.parse(await target.agent.inspect(target.scope)).run).toMatchObject({ id });
+  // Status says where it is working: the work item's thread, so its card can show it.
+  expect(JSON.parse(await target.agent.inspect(target.scope)).run).toMatchObject({
+    id,
+    conversation: "work:c-9",
+  });
   // A tool in the work session acts for its work item; the direct chat serves none.
   expect(await target.agent.workItemIn(running!.session)).toBe("c-9");
   expect(await target.agent.workItemIn("1")).toBeNull();

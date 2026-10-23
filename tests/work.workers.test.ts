@@ -828,3 +828,73 @@ it("work created while talking to the owner shows its card in that conversation,
   expect(await cards(`work:${nested.ref.split("/").at(-1)}`)).toEqual([]);
   expect(await cards(direct)).toHaveLength(1);
 });
+
+it("a plan with a step for the owner waits for Start; Start hands it out at once, once", async () => {
+  const { person, scope } = await business();
+  await Effect.runPromise(grant(db, scope, { capability: named("workCreate"), mode: "auto" }));
+  const create = (input: Record<string, unknown>) =>
+    Effect.runPromise(named("workCreate").execute(input).pipe(as(scope))) as Promise<{
+      ref: string;
+      state: string;
+      steps: { title: string; by?: string }[];
+    }>;
+  // A plan without the owner, money or anything public starts at once.
+  expect((await create({ title: "Tidy the notes", steps: [step("Sort them")] })).state).toBe(
+    "ready",
+  );
+  const planned = await create({
+    title: "Buy acme-widgets.com",
+    steps: [
+      step("Connect the card", "owner"),
+      step("Check out"),
+      step("Approve the total", "owner"),
+    ],
+  });
+  expect(planned.state).toBe("proposed");
+  expect(planned.steps.map((s) => s.by ?? "employee")).toEqual(["owner", "employee", "owner"]);
+  // A payment or anything public waits too, when the employee says so.
+  expect((await create({ title: "Post the launch", waitForStart: true })).state).toBe("proposed");
+
+  const received: string[] = [];
+  const agentEnv = {
+    ...bindings,
+    AGENT: {
+      getByName: () => ({
+        receive: async (_: unknown, input: { text: string }) => {
+          received.push(input.text);
+          return { accepted: true };
+        },
+      }),
+    },
+  } as unknown as Env;
+  // Nothing proposed is handed out by the minute tick.
+  await dispatchReady(agentEnv);
+  expect(received.some((text) => text.includes("Buy acme-widgets.com"))).toBe(false);
+
+  const token = Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) =>
+    b.toString(16).padStart(2, "0"),
+  ).join("");
+  await sql.run(
+    "INSERT INTO web_sessions (token_hash, person_id, expires_at) VALUES ($1, $2, now() + interval '1 hour')",
+    [await sha256(token), person],
+  );
+  const id = planned.ref.split("/").at(-1)!;
+  const start = () =>
+    apiRoute(
+      new Request(`https://devys.test/api/businesses/${scope.businessId}/work/${id}/start`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: "{}",
+      }),
+      agentEnv,
+    );
+  expect((await start())!.status).toBe(200);
+  // Handed out now, with its plan and whose steps are the owner's.
+  const handOff = received.find((text) => text.includes("Buy acme-widgets.com"))!;
+  expect(handOff).toContain("1. Owner: Connect the card (todo)");
+  expect(handOff).toContain("2. Check out (todo)");
+  expect((await Effect.runPromise(workItem(db, scope.businessId, id)))!.state).toBe("in_progress");
+  expect((await start())!.status).toBe(409);
+});
+
+const step = (title: string, by?: "owner") => ({ title, state: "todo", ...(by ? { by } : {}) });

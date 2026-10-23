@@ -1,13 +1,13 @@
 {
   "business": {
-    "id": "00000000-0000-4000-8000-000000000069",
+    "id": "00000000-0000-4000-8000-000000000075",
     "name": "Acme Roofing",
     "look": null,
     "brief": "Roof repairs."
   },
   "chief_of_staff": {
-    "id": "00000000-0000-4000-8000-000000000070",
-    "business_id": "00000000-0000-4000-8000-000000000069",
+    "id": "00000000-0000-4000-8000-000000000076",
+    "business_id": "00000000-0000-4000-8000-000000000075",
     "name": "Chief of Staff",
     "responsibilities": "Be the owner's front door. Turn what the owner asks for into work items with a clear plan, do small things yourself and hand specialist work to the right employee, keep priorities moving, notice what is blocked or late, and bring the owner only real decisions, one at a time. Brief the owner on what changed. Propose new hires when the work needs a role nobody holds.",
     "model": "claude-opus-5-5",
@@ -17,8 +17,8 @@
   },
   "team": [
     {
-      "id": "00000000-0000-4000-8000-000000000071",
-      "business_id": "00000000-0000-4000-8000-000000000069",
+      "id": "00000000-0000-4000-8000-000000000077",
+      "business_id": "00000000-0000-4000-8000-000000000075",
       "name": "Engineering",
       "responsibilities": "Build, fix and ship the business's software. Work in the repositories on the owner's computer, run tests before calling work done, keep changes small and reviewable, and report what changed with evidence.",
       "model": "claude-opus-5-5",

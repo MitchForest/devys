@@ -119,6 +119,8 @@ const RuntimeState = Schema.Struct({
       id: Schema.String,
       stopped: Schema.Boolean,
       deadline: Schema.NullOr(Schema.Number),
+      /** The conversation the running turn is in (`work:<id>`, `direct:<id>`, `project:<id>`). */
+      conversation: Schema.NullOr(Schema.String),
     }),
   ),
   inbox: Schema.Array(

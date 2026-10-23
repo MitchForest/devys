@@ -33,7 +33,7 @@ import { ref } from "../src/protocol/ref.ts";
 import { TerminalSession } from "../src/terminal/contract.ts";
 import { Project, ProjectItem, Routine, WorkItem } from "../src/work/contract.ts";
 import { activateRoutine, proposeRoutine } from "../src/work/routines.ts";
-import { addEvidence, updateWorkItem, workItem } from "../src/work/service.ts";
+import { addEvidence, createWorkItem, updateWorkItem, workItem } from "../src/work/service.ts";
 import { addRemoteApp, connectedRemoteApp, lapseRemoteApp } from "../src/apps/remote.ts";
 import { FileText } from "../src/workspace/contract.ts";
 import { business, db, sql } from "./fixtures/postgres.ts";
@@ -321,12 +321,24 @@ it("every route the clients read answers in its wire schema; the golden files ma
       preview: ref("documents", "artifact", artifactId),
     },
     { kind: "file", purpose: "The signed supplier agreement", accept: ["application/pdf"] },
-  ] as const)
+  ] as const) {
+    // One request at a time per work item: each waits on its own step.
+    const step = await Effect.runPromise(
+      createWorkItem(db, acme.id, {
+        id: crypto.randomUUID(),
+        owner: chiefOfStaff.id,
+        title: `Order fittings: ${request.kind}`,
+        projectId: launch.id,
+        createdBy: `person:${person}`,
+      }),
+    );
+    register(step.id);
     await askOwnerFor(
       bindings,
-      { ...scope, workItemId: supplier.id, conversation: `work:${supplier.id}` },
+      { ...scope, workItemId: step.id, conversation: `work:${step.id}` },
       request,
     );
+  }
 
   // Routines: Ada proposes a weekly report for the launch and asks the owner to activate it; an
   // event routine the owner has paused.
@@ -769,7 +781,12 @@ it("every route the clients read answers in its wire schema; the golden files ma
 
 /** An employee runtime's status as its Durable Object reports it (`employeeStatus`). */
 const runtimeState = {
-  run: { id: "message-2", stopped: false, deadline: 1_800_000_600_000 },
+  run: {
+    id: "message-2",
+    stopped: false,
+    deadline: 1_800_000_600_000,
+    conversation: "work:00000000-0000-4000-8000-000000000009",
+  },
   inbox: [
     { id: "message-1", text: "What's left?", received_at: 1_800_000_000_000, status: "done" },
     {

@@ -10,6 +10,8 @@ import type { Env } from "./env.ts";
 import {
   activeGrant,
   askOwner,
+  pendingOn,
+  standingRequest,
   fileProvided,
   handBackRequests,
   lapseDecision,
@@ -65,6 +67,24 @@ export async function askOwnerFor(
       );
     asked = { ...request, previewHash } as OwnerRequest;
   }
+  // One request to the owner at a time on a work item: the same one reads where it stands.
+  const waiting = await Effect.runPromise(
+    pendingOn(env.HYPERDRIVE, asking.businessId, asking.workItemId),
+  );
+  if (waiting) {
+    const same = await Effect.runPromise(
+      standingRequest(env.HYPERDRIVE, {
+        grantId: grant.id,
+        request: asked,
+        workItemId: asking.workItemId,
+      }),
+    );
+    if (same?.id !== waiting.id)
+      throw new HostRefusal(
+        409,
+        `The owner hasn't answered this work item's request yet (${requestWhat(waiting)}). Finish that step first: wait for the answer, which arrives in this thread, then ask the next`,
+      );
+  }
   return Effect.runPromise(
     askOwner(env.HYPERDRIVE, scope, {
       grantId: grant.id,
@@ -73,6 +93,24 @@ export async function askOwnerFor(
       conversation: asking.conversation,
     }),
   );
+}
+
+/** A pending request in a few words, for the employee who would ask another. */
+function requestWhat(decision: Decision) {
+  const request = ownerRequest(decision);
+  if (!request) return `a decision on ${decision.capability}`;
+  switch (request.kind) {
+    case "approve":
+      return `approve: ${request.action}`;
+    case "take_over":
+      return `take over: ${request.reason}`;
+    case "secret":
+      return `add ${request.name}`;
+    case "connect":
+      return `connect ${request.app}`;
+    case "file":
+      return `a file: ${request.purpose}`;
+  }
 }
 
 const money = (amount: { cents: number; currency: string }) =>

@@ -39,14 +39,19 @@ export const createWorkItem = (
     createdBy: string;
     /** A person who drives it from the start: in progress and never dispatched until handed back. */
     takenOverBy?: string;
+    /** Its plan from the start. */
+    steps?: readonly WorkStep[];
+    /** A plan that waits for the owner's Start (`proposed`) before it is handed out. */
+    waitsForStart?: boolean;
   },
 ) =>
   database(db, async (sql) => {
     await sql.run(
       `INSERT INTO work_items (id, business_id, owner_employee_id, title, objective, next_action,
-         due_at, conditions, created_by, taken_over_by, project_id, state)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-         CASE WHEN $10::text IS NULL THEN 'ready' ELSE 'in_progress' END)
+         due_at, conditions, created_by, taken_over_by, project_id, steps, state)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+         CASE WHEN $10::text IS NOT NULL THEN 'in_progress'
+           WHEN $13::boolean THEN 'proposed' ELSE 'ready' END)
        ON CONFLICT (id) DO NOTHING`,
       [
         input.id,
@@ -60,6 +65,8 @@ export const createWorkItem = (
         input.createdBy,
         input.takenOverBy ?? null,
         input.projectId ?? null,
+        JSON.stringify(input.steps ?? []),
+        input.waitsForStart ?? false,
       ],
     );
     // A retry finds the item its first attempt made; an id of another business finds nothing.
@@ -200,6 +207,16 @@ export const requeue = (db: Database, businessId: string, id: string) =>
     sql.run(
       `UPDATE work_items SET state = 'ready', revision = revision + 1, updated_at = now()
        WHERE business_id = $1 AND id = $2 AND state = 'in_progress'`,
+      [businessId, id],
+    ),
+  );
+
+/** The owner starts a plan that waited for them: it becomes ready and is handed out. */
+export const startWorkItem = (db: Database, businessId: string, id: string) =>
+  database(db, (sql) =>
+    sql.row<WorkItem>(
+      `UPDATE work_items SET state = 'ready', revision = revision + 1, updated_at = now()
+       WHERE business_id = $1 AND id = $2 AND state = 'proposed' RETURNING ${columns}`,
       [businessId, id],
     ),
   );

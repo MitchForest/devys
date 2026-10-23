@@ -3,6 +3,7 @@ import type { PiHarness } from "agents/harness/pi";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { defaultLimits } from "../protocol/limits.ts";
 import { messageKey, messageOf, outboxKey, type ChannelMessage, type Outbox } from "./delivery.ts";
+import { employeeChatOf } from "../channels/contract.ts";
 import { conversationOf, type Sessions } from "./sessions.ts";
 
 /** What the employee is doing: its run, the last 100 inputs and replies, checkpoint and usage. */
@@ -69,6 +70,8 @@ export async function employeeStatus(
           id: messageOf(running.operationId),
           stopped: Boolean(current?.cancelled),
           deadline: current ? current.receivedAt + defaultLimits.maxDurationMs : null,
+          // Where it is working: the conversation whose turn this is (a work item's thread, a chat).
+          conversation: current ? runningIn(current.input.chatId) : null,
         }
       : null,
     inbox,
@@ -109,3 +112,9 @@ const spend = ({ cacheRead, cacheWrite, cacheWrite1h, totalTokens, cost, ...usag
 });
 const spendBy = (byName: Record<string, Usage>) =>
   Object.fromEntries(Object.entries(byName).map(([name, usage]) => [name, spend(usage)]));
+
+/** The conversation a chat id answers in: its key, or the employee's direct chat without one. */
+function runningIn(chatId: string) {
+  const chat = employeeChatOf(chatId);
+  return chat ? (chat.conversation ?? `direct:${chat.scope.employeeId}`) : null;
+}

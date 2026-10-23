@@ -249,6 +249,21 @@ export const pendingDecisions = (db: Database, businessId: string) =>
     ),
   );
 
+/**
+ * An employee's request still waiting on the owner on this work item, if any (F1: one at a time).
+ * A capability held in `ask` raises its own decision, which an approve's steps may cover.
+ */
+export const pendingOn = (db: Database, businessId: string, workItemId: string) =>
+  database(db, (sql) =>
+    sql.row<Decision>(
+      `SELECT ${decisionColumns} FROM decisions
+       WHERE business_id = $1 AND work_item_id = $2 AND capability = 'askOwner'
+         AND status = 'pending' AND expires_at > now()
+       ORDER BY requested_at LIMIT 1`,
+      [businessId, workItemId],
+    ),
+  );
+
 /** A work item's requests, newest first, whatever their answer: its page shows them. */
 export const decisionsFor = (db: Database, businessId: string, workItemId: string) =>
   database(db, (sql) =>

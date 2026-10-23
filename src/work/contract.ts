@@ -31,10 +31,14 @@ const Instant = Schema.String.check(
 
 /** Every state a step can be in. */
 const stepStates = ["todo", "doing", "done", "blocked"] as const;
-/** One step of the plan an employee shows while the work takes time. */
+/**
+ * One step of a work item's plan: what happens, where it stands, and whether it is the owner's
+ * to do (`by: "owner"`, shown as "You: …"); otherwise its employee does it.
+ */
 export const WorkStep = Schema.Struct({
   title: Line(120),
   state: Schema.Literals(stepStates),
+  by: Schema.optionalKey(Schema.Literal("owner")),
 });
 export type WorkStep = typeof WorkStep.Type;
 /** An https address: a result links only where the owner can safely open it. */
