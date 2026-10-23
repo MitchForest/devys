@@ -5,7 +5,7 @@ import type { Env } from "../infra/api.ts";
 import { authorize } from "../src/app/authorize.ts";
 import { capabilities } from "../src/app/capabilities.ts";
 import { codingRoute } from "../src/app/coding.ts";
-import { postEvent } from "../src/app/conversations.ts";
+import { postEvent, showWorkCard } from "../src/app/conversations.ts";
 import { postMessage, suggestReplies } from "../src/conversations/service.ts";
 import { browserRoute } from "../src/app/browser-route.ts";
 import { filesRoute } from "../src/app/files.ts";
@@ -27,7 +27,7 @@ import { ref } from "../src/protocol/ref.ts";
 import { TerminalSession } from "../src/terminal/contract.ts";
 import { Project, ProjectItem, Routine, WorkItem } from "../src/work/contract.ts";
 import { activateRoutine, proposeRoutine } from "../src/work/routines.ts";
-import { addEvidence } from "../src/work/service.ts";
+import { addEvidence, updateWorkItem, workItem } from "../src/work/service.ts";
 import { addRemoteApp, connectedRemoteApp, lapseRemoteApp } from "../src/apps/remote.ts";
 import { FileText } from "../src/workspace/contract.ts";
 import { business, db, sql } from "./fixtures/postgres.ts";
@@ -177,6 +177,7 @@ it("every route the clients read answers in its wire schema; the golden files ma
      VALUES ($1, $2, 'wire', $3, 'launch-plan.md', 'text/markdown', 1840)`,
     [artifactId, acme.id, `${acme.id}/artifacts/${artifactId}`],
   );
+  await bindings.FILES.put(`${acme.id}/artifacts/${artifactId}`, "# Launch plan\n");
   await keep(
     "project-item",
     ProjectItem,
@@ -221,6 +222,32 @@ it("every route the clients read answers in its wire schema; the golden files ma
   ).json()) as { state: string };
   expect(moving.state).toBe("in_progress");
   await handling(site.id, null);
+  // Ada shows her steps and the results she checked: one card in the thread draws them.
+  const before = (await Effect.runPromise(workItem(db, acme.id, site.id)))!;
+  const shown = await Effect.runPromise(
+    updateWorkItem(
+      db,
+      acme.id,
+      site.id,
+      before.revision,
+      {
+        steps: [
+          { title: "Build the page", state: "done" },
+          { title: "Deploy a preview", state: "doing" },
+          { title: "Check the booking form", state: "todo" },
+          { title: "Connect the calendar", state: "blocked" },
+        ],
+        results: [
+          { label: "Preview", url: "https://preview.acme.test", ok: true },
+          { label: "Booking form", value: "test booking received", ok: true },
+          { label: "Calendar sync", ok: null },
+          { label: "Pages", value: "3" },
+        ],
+      },
+      { kind: "employee", id: engineer.id },
+    ),
+  );
+  await showWorkCard(bindings, acme.id, shown!);
   const supplier = await keep(
     "work-item-updated",
     WorkItem,
@@ -279,6 +306,14 @@ it("every route the clients read answers in its wire schema; the golden files ma
       why: "The company card, to pay for the domain at Namecheap",
       spend: true,
     },
+    {
+      kind: "approve",
+      action: "Send the launch plan to the supplier",
+      counterparty: "orders@supplier.test",
+      steps: ["Email the launch plan to orders@supplier.test", "Mark the order placed"],
+      preview: ref("documents", "artifact", artifactId),
+    },
+    { kind: "file", purpose: "The signed supplier agreement", accept: ["application/pdf"] },
   ] as const)
     await askOwnerFor(
       bindings,
@@ -316,7 +351,7 @@ it("every route the clients read answers in its wire schema; the golden files ma
     bindings,
     ada,
     capabilities(bindings).find((item) => item.name === "routineActivate")!,
-    { routine: report, revision: 1 },
+    { ref: report, revision: 1 },
     { conversation: `project:${launch.id}` },
   );
   const replies = crypto.randomUUID();
@@ -603,6 +638,7 @@ it("every route the clients read answers in its wire schema; the golden files ma
       url: "https://supplier.test/orders",
       title: "Orders",
       driver: `work:${supplier.id}`,
+      driving: true,
     },
     "/browser/screenshot": { jpeg: "/9j/4AAQSkZJRg==", width: 1280, height: 800 },
     // The host seals what the secure entry sheet sends; the Worker stores only this.

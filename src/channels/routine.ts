@@ -6,6 +6,7 @@ import {
   type Binding,
   type Channel,
   type Inbound,
+  type Notice,
 } from "./contract.ts";
 
 /**
@@ -39,6 +40,8 @@ export function routineChannel(dependencies: {
     reply: string,
     operationId: string,
   ) => Promise<void>;
+  /** Posts Devys's notice about a run that ended without its report, where the routine speaks. */
+  notice: (chatId: string, notice: Notice, operationId: string) => Promise<void>;
 }): Channel {
   const text = (input: Inbound) => {
     if (input.text === undefined) throw new Error("Routine runs carry their text");
@@ -62,6 +65,10 @@ export function routineChannel(dependencies: {
       const routineId = routineOf(inReplyTo);
       if (!routineId) throw new Error("A routine's reply names its run");
       await dependencies.report(scope, chatId, routineId, reply, operationId);
+      return { status: "sent", guid: null };
+    },
+    notice: async (_scope, chatId, notice, operationId) => {
+      await dependencies.notice(chatId, notice, operationId);
       return { status: "sent", guid: null };
     },
   };

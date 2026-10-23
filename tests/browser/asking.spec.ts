@@ -59,6 +59,9 @@ test("Needs you shows what employees ask: a spend is approved on a Mac or iPhone
     await expect(needsYou.getByText("Namecheap", { exact: true })).toBeVisible();
     await expect(needsYou.getByText("$12.99", { exact: true })).toBeVisible();
     await expect(needsYou.getByRole("button", { name: "Approve" })).toHaveCount(0);
+    // A take over says what to do once.
+    await needsYou.getByRole("button", { name: "Details" }).waitFor({ state: "detached" });
+    await expect(needsYou.getByText("Sign in to the registrar (2FA)")).toHaveCount(1);
     // Take over takes the work over and opens its live browser beside the thread.
     await needsYou.getByRole("button", { name: "Take over" }).click();
     await expect(page).toHaveURL(new RegExp(`/thread/${work.id}\\?app=browser`));
@@ -136,11 +139,15 @@ test("a secret request opens the secure entry sheet; the value goes in one post 
   try {
     await signIn(page, sql, owner.person);
     const needsYou = page.getByRole("region", { name: "Needs you" });
-    await expect(needsYou.getByText("Card: RAMP_CARD")).toBeVisible();
+    // The owner reads what it is; the name is the employee's and never shows.
+    await expect(needsYou.getByText("Your card")).toBeVisible();
+    await expect(needsYou.getByText("RAMP_CARD")).toHaveCount(0);
     await expect(needsYou.getByRole("button", { name: "Approve" })).toHaveCount(0);
     await needsYou.getByRole("button", { name: "Add card" }).click();
     const sheet = page.getByTestId("secret-entry");
-    await expect(sheet.getByText("Add RAMP_CARD")).toBeVisible();
+    await expect(sheet.getByText("Add your card")).toBeVisible();
+    await expect(sheet.getByText("The company card")).toBeVisible();
+    await expect(sheet.getByText("RAMP_CARD")).toHaveCount(0);
     await expect(sheet.getByLabel("Card number")).toHaveAttribute("autocomplete", "cc-number");
     await sheet.getByLabel("Card number").fill("4242 4242 4242 4242");
     await sheet.getByLabel("Expiry").fill("04/31");
@@ -165,6 +172,103 @@ test("a secret request opens the secure entry sheet; the value goes in one post 
     // Nothing of it stays in the page or the URL.
     expect(await page.content()).not.toContain("4242424242424242");
     expect(page.url()).not.toContain("4242");
+  } finally {
+    await stores.remove([owner]);
+    await stores.dispose();
+  }
+});
+
+test("an approval lists its steps and shows its draft; a file request sends the chosen file", async ({
+  page,
+}) => {
+  const stores = await localStores();
+  const { sql } = stores;
+  const owner = await stores.owner("Riley", "Acme");
+  const post = await bearer(sql, owner.person);
+  const work = await post<{ id: string }>(`/api/businesses/${owner.business}/work`, {
+    title: "Ship the waitlist page",
+    owner: owner.operations,
+  });
+  const grant = await sql.row<{ id: string }>(
+    "SELECT id FROM grants WHERE employee_id = $1 AND capability = 'askOwner' AND revoked_at IS NULL",
+    [owner.operations],
+  );
+  const page_ = randomUUID();
+  await sql.run(
+    `INSERT INTO artifacts (id, business_id, operation_id, object_key, filename, content_type, byte_length)
+     VALUES ($1, $2, $1, $3, 'Launch email.html', 'text/html', 20)`,
+    [page_, owner.business, `${owner.business}/artifacts/${page_}`],
+  );
+  const ask = async (kind: string, input: unknown) => {
+    const id = randomUUID();
+    await sql.run(
+      `INSERT INTO decisions (id, kind, business_id, employee_id, grant_id, capability, input,
+         input_hash, work_item_id, conversation, expires_at)
+       VALUES ($1, $2, $3, $4, $5, 'askOwner', $6, $1, $7, $8, now() + interval '1 hour')`,
+      [
+        id,
+        kind,
+        owner.business,
+        owner.operations,
+        grant!.id,
+        JSON.stringify(input),
+        work.id,
+        `work:${work.id}`,
+      ],
+    );
+    return id;
+  };
+  await ask("approve", {
+    kind: "approve",
+    action: "Ship the waitlist page",
+    counterparty: "github.com/acme/site",
+    steps: ["Merge PR #12 at a1b2c3", "Deploy a1b2c3 of site to production"],
+    preview: `devys:documents/artifact/${page_}`,
+    previewHash: "d".repeat(64),
+  });
+  const logo = await ask("file", {
+    kind: "file",
+    purpose: "Your logo, for the site",
+    accept: ["image/*"],
+  });
+  // The Mac host isn't running beside the dev server: the upload's answer is stood in for.
+  const sent: { url: string; type: string | null; size: number }[] = [];
+  await page.route(`**/api/businesses/${owner.business}/decisions/${logo}/file*`, async (route) => {
+    sent.push({
+      url: route.request().url(),
+      type: route.request().headers()["content-type"] ?? null,
+      size: route.request().postDataBuffer()?.length ?? 0,
+    });
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: '{"status":"approved"}',
+    });
+  });
+  try {
+    await signIn(page, sql, owner.person);
+    const needsYou = page.getByRole("region", { name: "Needs you" });
+    await expect(needsYou.getByTestId("request-steps").getByRole("listitem")).toHaveText([
+      "Merge PR #12 at a1b2c3",
+      "Deploy a1b2c3 of site to production",
+    ]);
+    const draft = needsYou.getByTestId("draft-preview");
+    await expect(draft.getByText("Launch email")).toBeVisible();
+
+    await expect(needsYou.getByText("Your logo, for the site")).toBeVisible();
+    await expect(needsYou.getByTestId("choose-file")).toHaveAttribute("accept", "image/*");
+    await needsYou.getByTestId("choose-file").setInputFiles({
+      name: "logo.png",
+      mimeType: "image/png",
+      buffer: Buffer.from([137, 80, 78, 71]),
+    });
+    await expect.poll(() => sent.length).toBe(1);
+    expect(sent[0]).toMatchObject({ type: "image/png", size: 4 });
+    expect(new URL(sent[0]!.url).searchParams.get("name")).toBe("logo.png");
+    await expect(needsYou.getByText("Your logo, for the site")).toHaveCount(0);
+    // The draft opens as its layer.
+    await draft.getByRole("button", { name: /Launch email/ }).click();
+    await expect(page).toHaveURL(/layer=/);
   } finally {
     await stores.remove([owner]);
     await stores.dispose();

@@ -2,5 +2,6 @@
   "open": true,
   "url": "https://supplier.test/orders",
   "title": "Orders",
-  "driver": "work:00000000-0000-4000-8000-000000000009"
+  "driver": "work:00000000-0000-4000-8000-000000000009",
+  "driving": true
 }

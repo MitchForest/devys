@@ -29,6 +29,38 @@ const Instant = Schema.String.check(
   Schema.makeFilter((value) => Number.isFinite(Date.parse(value)) || "Expected a date and time"),
 );
 
+/** Every state a step can be in. */
+const stepStates = ["todo", "doing", "done", "blocked"] as const;
+/** One step of the plan an employee shows while the work takes time. */
+export const WorkStep = Schema.Struct({
+  title: Line(120),
+  state: Schema.Literals(stepStates),
+});
+export type WorkStep = typeof WorkStep.Type;
+/** An https address: a result links only where the owner can safely open it. */
+const HttpsUrl = Schema.String.check(
+  Schema.isMaxLength(500),
+  Schema.makeFilter((value) => {
+    try {
+      return new URL(value).protocol === "https:" || "Expected an https:// address";
+    } catch {
+      return "Expected an https:// address";
+    }
+  }),
+);
+/**
+ * Proof of an effect the owner can glance at: "Registered acme-widgets.com" with "expires
+ * 2027-10-22", "Live at" with its url. `ok` says whether it was checked from outside: true
+ * (it held), false (it failed) or null (uncertain); absent when there is nothing to check.
+ */
+export const WorkResult = Schema.Struct({
+  label: Line(80),
+  value: Schema.optionalKey(Line(120)),
+  url: Schema.optionalKey(HttpsUrl),
+  ok: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
+});
+export type WorkResult = typeof WorkResult.Type;
+
 /** A work item's fields as people and employees write them: one rule for HTTP and capabilities. */
 export const WorkItemFields = {
   title: Line(200),
@@ -40,7 +72,11 @@ export const WorkItemFields = {
   wakeAt: Instant,
   owner: EmployeeId,
   state: WorkItemState,
-  expectedRevision: Schema.Int,
+  revision: Schema.Int,
+  /** The whole plan, replacing the last one. */
+  steps: Schema.Array(WorkStep).check(Schema.isMaxLength(10)),
+  /** The whole list of results, replacing the last one. */
+  results: Schema.Array(WorkResult).check(Schema.isMaxLength(12)),
 };
 
 /** A project's fields as people and employees write them. Null clears an optional one. */
@@ -80,7 +116,7 @@ export const NewWorkItem = Schema.Struct({
 export type NewWorkItem = typeof NewWorkItem.Type;
 /** A person's change at the revision they saw; null clears what waits or the due date. */
 export const WorkItemChange = Schema.Struct({
-  expected_revision: WorkItemFields.expectedRevision,
+  expected_revision: WorkItemFields.revision,
   title: Schema.optional(WorkItemFields.title),
   owner: Schema.optional(WorkItemFields.owner),
   state: Schema.optional(WorkItemFields.state),
@@ -146,6 +182,10 @@ export const WorkItem = Schema.Struct({
   /** Values for capabilities' own constraint fields, by capability name. They only narrow. */
   conditions: Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.Unknown)),
   evidence: Schema.Array(Evidence),
+  /** The plan its employee shows while it takes time. */
+  steps: Schema.Array(WorkStep),
+  /** What it achieved, each checked from outside where it can be. */
+  results: Schema.Array(WorkResult),
   revision: Schema.Int,
   /** The person who took this over from the employee, if anyone. */
   taken_over_by: Schema.NullOr(Schema.String),
@@ -255,3 +295,28 @@ export const Routine = Schema.Struct({
   updated_at: Timestamp,
 });
 export type Routine = typeof Routine.Type;
+
+/** A result in words, the same in every client: "Registered acme.com · expires 2027-10-22 ✓". */
+export const resultText = (result: WorkResult) =>
+  [
+    result.label,
+    result.value && `· ${result.value}`,
+    result.url,
+    result.ok === true ? "✓" : result.ok === false ? "✗" : result.ok === null ? "?" : undefined,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+/** Where the steps stand, as Home shows moving work: "2 of 5 · Setting up email". */
+export function progressText(steps: readonly WorkStep[]) {
+  if (!steps.length) return null;
+  const done = steps.filter((step) => step.state === "done").length;
+  const now =
+    steps.find((step) => step.state === "blocked") ?? steps.find((step) => step.state === "doing");
+  return [
+    `${done} of ${steps.length}`,
+    now && `· ${now.state === "blocked" ? "Blocked: " : ""}${now.title}`,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}

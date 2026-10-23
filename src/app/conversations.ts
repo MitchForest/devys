@@ -1,7 +1,13 @@
 import { Effect } from "effect";
 import type { Env } from "./env.ts";
 import { appChat, composeAppMessage } from "../channels/app.ts";
-import { employeeChatOf, type Binding } from "../channels/contract.ts";
+import {
+  employeeChatOf,
+  noticeReplies,
+  noticeText,
+  type Binding,
+  type Notice,
+} from "../channels/contract.ts";
 import {
   employeeOf,
   mentionsIn,
@@ -87,6 +93,8 @@ async function deliver(
   targets: readonly string[],
   /** Where the conversation is, told to each employee it reaches. */
   place: string,
+  /** What only employees read, after the message: a secret's name the owner never sees. */
+  forEmployees?: string,
 ) {
   if (!targets.length) return;
   const employees = await Effect.runPromise(employeesOf(env.HYPERDRIVE, businessId));
@@ -129,7 +137,7 @@ async function deliver(
     const text = await Effect.runPromise(
       composeAppMessage(env.HYPERDRIVE, scope, {
         id: message.id,
-        text: message.text,
+        text: forEmployees ? `${message.text}\n${forEmployees}` : message.text,
         viaVoice: message.via_voice,
         ...(about ? { about } : {}),
       }),
@@ -154,6 +162,7 @@ async function post(
   businessId: string,
   key: ConversationKey,
   input: Parameters<typeof postMessage>[3],
+  forEmployees?: string,
 ) {
   const { message } = await Effect.runPromise(postMessage(env.HYPERDRIVE, businessId, key, input));
   // The history before this message, so a repeated post answers to the same people.
@@ -169,7 +178,7 @@ async function post(
   });
   // Delivered on a repeat too, to whoever it has not reached: a retry after a failed delivery
   // must still wake them.
-  await deliver(env, businessId, key, message, to, resolved?.place ?? "");
+  await deliver(env, businessId, key, message, to, resolved?.place ?? "", forEmployees);
   return { message, to };
 }
 
@@ -187,6 +196,8 @@ export async function postFromPerson(
     viaVoice?: boolean;
     /** The record the person was viewing as they wrote, checked to be the business's. */
     ref?: Ref;
+    /** Added to what the employees it reaches receive, never shown: a secret's name. */
+    forEmployees?: string;
   },
 ) {
   const employees = await Effect.runPromise(employeesOf(env.HYPERDRIVE, businessId));
@@ -209,15 +220,21 @@ export async function postFromPerson(
         ? `${answering.map((employee) => employee.name).join(" and ")} is paused. Resume them to send.`
         : "Nobody here can answer: mention an employee of this business.",
     };
-  const posted = await post(env, businessId, key, {
-    author: `person:${personId}`,
-    text: input.text,
-    clientId: input.id,
-    replyTo: input.replyTo ?? null,
-    mentions: [...new Set(mentions)],
-    viaVoice: input.viaVoice === true,
-    ref: input.ref ?? null,
-  });
+  const posted = await post(
+    env,
+    businessId,
+    key,
+    {
+      author: `person:${personId}`,
+      text: input.text,
+      clientId: input.id,
+      replyTo: input.replyTo ?? null,
+      mentions: [...new Set(mentions)],
+      viaVoice: input.viaVoice === true,
+      ref: input.ref ?? null,
+    },
+    input.forEmployees,
+  );
   await Effect.runPromise(
     markSeen(env.HYPERDRIVE, businessId, key, `person:${personId}`, {
       message: posted.message.id,
@@ -242,6 +259,27 @@ export async function postFromEmployee(
   if (!chat) throw new Error(`No conversation for chat ${chatId}`);
   const key = chat.conversation ?? (`direct:${chat.scope.employeeId}` as const);
   await reply(env, chat.scope, key, text, operationId, inReplyTo);
+}
+
+/**
+ * Devys's notice that an employee's turn ended without its answer (it took too long, failed, is
+ * paused): an event in the conversation the input came from, never the employee's message.
+ */
+export async function postNotice(env: Env, chatId: string, notice: Notice, operationId: string) {
+  const chat = employeeChatOf(chatId);
+  if (!chat) throw new Error(`No conversation for chat ${chatId}`);
+  const key = chat.conversation ?? (`direct:${chat.scope.employeeId}` as const);
+  const employees = await Effect.runPromise(employeesOf(env.HYPERDRIVE, chat.scope.businessId));
+  const name = employees.find((employee) => employee.id === chat.scope.employeeId)?.name;
+  await Effect.runPromise(
+    postMessage(env.HYPERDRIVE, chat.scope.businessId, key, {
+      author: "system",
+      kind: "event",
+      text: noticeText(notice, name),
+      clientId: `notice:${operationId}`,
+      replies: noticeReplies(notice),
+    }),
+  );
 }
 
 async function reply(
@@ -294,22 +332,37 @@ export async function recordChannelMessage(
 export const recordChannelReply = (env: Env, scope: Scope, text: string, operationId: string) =>
   reply(env, scope, `direct:${scope.employeeId}`, text, operationId);
 
-/** A system event, such as work being handed to an employee. Posting twice is harmless. */
+/**
+ * A system event, such as work being handed to an employee, or a card, which clients show as
+ * its record is now. Posting twice is harmless.
+ */
 export const postEvent = (
   env: Env,
   businessId: string,
   key: ConversationKey,
-  event: { clientId: string; text: string; ref?: Ref },
+  event: { clientId: string; text: string; ref?: Ref; kind?: "event" | "card" },
 ) =>
   Effect.runPromise(
     postMessage(env.HYPERDRIVE, businessId, key, {
       author: "system",
-      kind: "event",
+      kind: event.kind ?? "event",
       text: event.text,
       clientId: event.clientId,
       ref: event.ref ?? null,
     }),
   );
+
+/**
+ * A work item's card in its thread, posted the first time its steps or results are set: clients
+ * draw it from the item as it is now, so every later change updates this one card in place.
+ */
+export const showWorkCard = (env: Env, businessId: string, work: { id: string; title: string }) =>
+  postEvent(env, businessId, `work:${work.id}`, {
+    kind: "card",
+    clientId: `card:${work.id}`,
+    text: work.title,
+    ref: ref("work", "item", work.id),
+  }).then(() => undefined);
 
 /** A conversation page and who would answer the owner's next plain message. */
 export async function conversationPage(

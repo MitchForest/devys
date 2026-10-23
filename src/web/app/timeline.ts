@@ -9,7 +9,8 @@ export interface Bubble {
   author: string;
   /** Whether the signed-in person wrote it, so it sits on the right. */
   mine: boolean;
-  kind: "message" | "event";
+  /** A card shows its record as it is now (a work item's steps and results). */
+  kind: "message" | "event" | "card";
   text: string;
   /** The message it answers, quoted only when that isn't the message right above it. */
   replyTo: string | null;
@@ -52,13 +53,19 @@ const headingGap = 60 * 60_000;
 const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
 
 /**
- * The message whose suggested replies show: the latest message, skipping events, when an
- * employee wrote it and nothing has been sent from here since.
+ * The message whose suggested replies show: the latest message (or Devys's notice offering
+ * "Ask again"), skipping other events, when an employee wrote it and nothing has been sent from
+ * here since.
  */
 export function offering(history: readonly ShownMessage[], unsent: readonly Unsent[]) {
   if (unsent.length) return undefined;
-  const latest = history.findLast((m) => m.kind === "message");
-  return latest?.author.startsWith("employee:") && latest.replies.length ? latest : undefined;
+  const notice = (m: ShownMessage) => m.kind === "event" && m.replies.length > 0;
+  const latest = history.findLast((m) => m.kind === "message" || notice(m));
+  return latest &&
+    (notice(latest) || latest.author.startsWith("employee:")) &&
+    latest.replies.length
+    ? latest
+    : undefined;
 }
 
 /** `me` is the signed-in person's author string, `person:<id>`. */

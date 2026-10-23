@@ -130,6 +130,13 @@ it("employees see the skills of their business's installed apps", async () => {
   expect(await skills()).toContain("writing-pages");
   await Effect.runPromise(uninstall(db, scope.businessId, "documents"));
   expect(await skills()).not.toContain("writing-pages");
+  // System apps' skills are always there; a business app's go with it.
+  expect(await skills()).toEqual(
+    expect.arrayContaining(["checking-your-work", "accounts-and-sign-ins", "shipping-code"]),
+  );
+  await Effect.runPromise(uninstall(db, scope.businessId, "code"));
+  expect(await skills()).not.toContain("shipping-code");
+  expect(await skills()).toContain("checking-your-work");
 });
 
 // Before AL3 role templates listed their capabilities; the manifests now propose them. These
@@ -201,12 +208,13 @@ const before: Record<string, string[]> = {
   ],
   custom: [...collaboration],
 };
+// Every role also sees the business's saved secrets by name (secretList).
 const coreAdded: Record<string, string[]> = {
-  operations: ["appSearch"],
-  engineering: ["appSearch"],
-  growth: ["run", "appSearch"],
-  "business-operations": ["run", "appSearch"],
-  custom: ["run", "read", "write", "readSkill", "appSearch"],
+  operations: ["appSearch", "secretList"],
+  engineering: ["appSearch", "secretList"],
+  growth: ["run", "appSearch", "secretList"],
+  "business-operations": ["run", "appSearch", "secretList"],
+  custom: ["run", "read", "write", "readSkill", "appSearch", "secretList"],
 };
 // Activating a routine is the owner's decision, whatever the role.
 const asked: Record<string, string[]> = {

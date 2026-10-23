@@ -5,6 +5,7 @@ import {
   type Binding,
   type Channel,
   type Inbound,
+  type Notice,
 } from "./contract.ts";
 import { idOf, kindOf } from "../conversations/contract.ts";
 
@@ -20,6 +21,8 @@ export const workChat = (scope: Scope, workItemId: string) =>
 export function workChannel(dependencies: {
   open: (scope: Scope, workItemId: string) => Promise<boolean>;
   post: (chatId: string, text: string, operationId: string) => Promise<void>;
+  /** Posts Devys's notice about a turn as an event in the thread. */
+  notice: (chatId: string, notice: Notice, operationId: string) => Promise<void>;
 }): Channel {
   const text = (input: Inbound) => {
     if (input.text === undefined) throw new Error("Work inputs carry their text");
@@ -40,6 +43,10 @@ export function workChannel(dependencies: {
     prepare: async (_scope, input) => text(input),
     send: async (_scope, chatId, reply, operationId) => {
       await dependencies.post(chatId, reply, operationId);
+      return { status: "sent", guid: null };
+    },
+    notice: async (_scope, chatId, notice, operationId) => {
+      await dependencies.notice(chatId, notice, operationId);
       return { status: "sent", guid: null };
     },
   };

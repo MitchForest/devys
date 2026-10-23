@@ -208,8 +208,8 @@ it("work's conditions only narrow, and taking it over stops the employee acting 
   const result = await Effect.runPromise(
     update
       .execute({
-        item: ref("work", "item", work.id),
-        expectedRevision: work.revision,
+        ref: ref("work", "item", work.id),
+        revision: work.revision,
         nextAction: "Mine now",
       })
       .pipe(as(scope), Effect.flip),
@@ -659,8 +659,8 @@ it("an employee changes only its own work items; Operations changes anyone's", a
   );
   const update = (id: string, revision: number) =>
     named("workUpdate").execute({
-      item: ref("work", "item", id),
-      expectedRevision: revision,
+      ref: ref("work", "item", id),
+      revision,
       nextAction: "Draft",
     });
   const refused = await Effect.runPromise(
@@ -678,4 +678,121 @@ it("an employee changes only its own work items; Operations changes anyone's", a
   expect(
     await Effect.runPromise(update(theirs.id, theirs.revision).pipe(acting(scope.employeeId))),
   ).toMatchObject({ nextAction: "Draft" });
+});
+
+it("steps and results are replaced whole, bounded, and shown as one card in the thread updated in place", async () => {
+  const { scope } = await business();
+  for (const name of ["workCreate", "workUpdate", "workComplete"])
+    await Effect.runPromise(grant(db, scope, { capability: named(name), mode: "auto" }));
+  const created = (await Effect.runPromise(
+    named("workCreate").execute({ title: "Set up acme-widgets.com" }).pipe(as(scope)),
+  )) as { ref: string; revision: number; steps: unknown[]; results: unknown[] };
+  expect(created).toMatchObject({ steps: [], results: [] });
+  const id = created.ref.split("/").at(-1)!;
+  const thread = `work:${id}` as const;
+  const cards = async () =>
+    (await Effect.runPromise(messages(db, scope.businessId, thread))).filter(
+      (m) => m.kind === "card",
+    );
+  type Shown = { ref: string; revision: number; steps: unknown[]; results: unknown[] };
+  // What workCreate returns is what workUpdate takes, as is: one naming rule.
+  const update = (from: Shown, change: Record<string, unknown>) =>
+    Effect.runPromise(
+      named("workUpdate")
+        .execute({ ref: from.ref, revision: from.revision, ...change })
+        .pipe(as(scope, id)),
+    ) as Promise<Shown>;
+  const refused = (from: Shown, change: Record<string, unknown>) =>
+    Effect.runPromise(
+      Effect.flip(
+        named("workUpdate")
+          .execute({ ref: from.ref, revision: from.revision, ...change })
+          .pipe(as(scope, id)),
+      ),
+    );
+  expect(await cards()).toEqual([]);
+  const planned = await update(created, {
+    steps: [
+      { title: "Register the domain", state: "doing" },
+      { title: "Set up email", state: "todo" },
+    ],
+  });
+  expect(planned.steps).toHaveLength(2);
+  const [card] = await cards();
+  expect(card).toMatchObject({ kind: "card", ref: created.ref, author: "system" });
+
+  // Each change replaces the whole list; the same one card stands for it.
+  const moved = await update(planned, {
+    steps: [
+      { title: "Register the domain", state: "done" },
+      { title: "Set up email", state: "doing" },
+    ],
+    results: [
+      { label: "Registered acme-widgets.com", value: "expires 2027-10-22", ok: true },
+      { label: "Live at", url: "https://acme-widgets.com" },
+      { label: "Payment", value: "uncertain", ok: null },
+    ],
+  });
+  expect(moved.steps).toEqual([
+    { title: "Register the domain", state: "done" },
+    { title: "Set up email", state: "doing" },
+  ]);
+  expect(moved.results).toHaveLength(3);
+  const fewer = await update(moved, { results: [{ label: "MX records", ok: true }] });
+  expect(fewer.results).toEqual([{ label: "MX records", ok: true }]);
+  expect(fewer.steps).toHaveLength(2);
+  expect((await cards()).map((m) => m.id)).toEqual([card!.id]);
+
+  // Bounded: at most 10 steps and 12 results, short words, https links only.
+  const step = { title: "A step", state: "todo" };
+  for (const change of [
+    { steps: Array.from({ length: 11 }, () => step) },
+    { steps: [{ title: "A step", state: "started" }] },
+    { steps: [{ title: "x".repeat(121), state: "todo" }] },
+    { results: Array.from({ length: 13 }, () => ({ label: "ok" })) },
+    { results: [{ label: "x".repeat(81) }] },
+    { results: [{ label: " " }] },
+    { results: [{ label: "Live at", url: "http://acme-widgets.com" }] },
+    { results: [{ label: "Live at", url: "javascript:alert(1)" }] },
+  ])
+    expect(await refused(fewer, change)).toMatchObject({ code: "invalid_input" });
+
+  // Completing records its results too; the card still stands alone.
+  const done = (await Effect.runPromise(
+    named("workComplete")
+      .execute({
+        ref: fewer.ref,
+        revision: fewer.revision,
+        evidence: "The domain is registered and mail is set up.",
+        results: [{ label: "Test email delivered", ok: true }],
+      })
+      .pipe(as(scope, id)),
+  )) as Shown & { state: string };
+  expect(done).toMatchObject({
+    state: "completed",
+    results: [{ label: "Test email delivered", ok: true }],
+  });
+  expect(await cards()).toHaveLength(1);
+  expect(await Effect.runPromise(workItem(db, scope.businessId, id))).toMatchObject({
+    results: [{ label: "Test email delivered", ok: true }],
+  });
+});
+
+it("work, project and routine capabilities name the record they change ref and its revision revision, as their outputs do", () => {
+  for (const name of [
+    "workUpdate",
+    "workComplete",
+    "projectUpdate",
+    "projectAdd",
+    "routinePropose",
+    "routineActivate",
+    "routinePause",
+  ]) {
+    const fields = Object.keys(
+      (named(name).input as unknown as { fields: Record<string, unknown> }).fields,
+    );
+    expect(fields, name).toContain("ref");
+    for (const old of ["item", "expectedRevision", "routine"])
+      expect(fields, name).not.toContain(old);
+  }
 });

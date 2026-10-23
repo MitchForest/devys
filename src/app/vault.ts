@@ -10,7 +10,8 @@ import { modeOf } from "./mode.ts";
 import { answerText, tellEmployee } from "./asking.ts";
 import { forbidden, notFound } from "./request.ts";
 import { Secrets } from "./wire.ts";
-import { spendOf } from "../authority/contract.ts";
+import { previewOf, spendOf } from "../authority/contract.ts";
+import { contentHash } from "./refs.ts";
 import { claimSpend, secretProvided, unclaimSpend } from "../authority/service.ts";
 import type { Filling } from "../browser/capabilities.ts";
 import type { Business, Person } from "../identity/contract.ts";
@@ -118,6 +119,15 @@ export const filling = (env: Env): Filling => ({
         403,
         "No approved, signed and unused spend approval with that id in this work item: ask with askOwner (approve, with the amount and the merchant's site); each approval is one fill",
       );
+    // The draft it showed (an invoice) must still be what the owner signed for.
+    const preview = previewOf(decision);
+    if (preview && (await contentHash(env, businessId, preview.ref)) !== preview.hash) {
+      await Effect.runPromise(unclaimSpend(env.HYPERDRIVE, businessId, approval));
+      throw new HostRefusal(
+        409,
+        "The draft this approval showed has changed since the owner signed it: ask again with it as it is now",
+      );
+    }
     return { counterparty: spend.counterparty, amount: spend.amount };
   },
   unclaim: async (businessId, approval) => {

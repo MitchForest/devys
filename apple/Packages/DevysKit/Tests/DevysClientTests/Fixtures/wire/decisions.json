@@ -1,7 +1,7 @@
 {
   "decisions": [
     {
-      "id": "00000000-0000-4000-8000-000000000015",
+      "id": "00000000-0000-4000-8000-000000000016",
       "kind": "connect",
       "employee_id": "00000000-0000-4000-8000-000000000003",
       "capability": "askOwner",
@@ -15,15 +15,16 @@
       "status": "pending",
       "requested_at": "2026-01-01T00:00:00.000Z",
       "expires_at": "2026-01-01T00:00:00.000Z",
-      "signed_by": null
+      "signed_by": null,
+      "answer": null
     },
     {
-      "id": "00000000-0000-4000-8000-000000000016",
+      "id": "00000000-0000-4000-8000-000000000017",
       "kind": "decision",
       "employee_id": "00000000-0000-4000-8000-000000000004",
       "capability": "routineActivate",
       "input": {
-        "routine": "00000000-0000-4000-8000-000000000010",
+        "ref": "00000000-0000-4000-8000-000000000010",
         "revision": 1
       },
       "work_item_id": null,
@@ -31,10 +32,55 @@
       "status": "pending",
       "requested_at": "2026-01-01T00:00:00.000Z",
       "expires_at": "2026-01-01T00:00:00.000Z",
-      "signed_by": null
+      "signed_by": null,
+      "answer": null
     },
     {
-      "id": "00000000-0000-4000-8000-000000000017",
+      "id": "00000000-0000-4000-8000-000000000018",
+      "kind": "file",
+      "employee_id": "00000000-0000-4000-8000-000000000003",
+      "capability": "askOwner",
+      "input": {
+        "kind": "file",
+        "accept": [
+          "application/pdf"
+        ],
+        "purpose": "The signed supplier agreement"
+      },
+      "work_item_id": "00000000-0000-4000-8000-000000000009",
+      "conversation": "work:00000000-0000-4000-8000-000000000009",
+      "status": "pending",
+      "requested_at": "2026-01-01T00:00:00.000Z",
+      "expires_at": "2026-01-01T00:00:00.000Z",
+      "signed_by": null,
+      "answer": null
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000019",
+      "kind": "approve",
+      "employee_id": "00000000-0000-4000-8000-000000000003",
+      "capability": "askOwner",
+      "input": {
+        "kind": "approve",
+        "steps": [
+          "Email the launch plan to orders@supplier.test",
+          "Mark the order placed"
+        ],
+        "action": "Send the launch plan to the supplier",
+        "preview": "devys:documents/artifact/00000000-0000-4000-8000-000000000006",
+        "previewHash": "0000000000000000000000000000000000000000000000000000000000000004",
+        "counterparty": "orders@supplier.test"
+      },
+      "work_item_id": "00000000-0000-4000-8000-000000000009",
+      "conversation": "work:00000000-0000-4000-8000-000000000009",
+      "status": "pending",
+      "requested_at": "2026-01-01T00:00:00.000Z",
+      "expires_at": "2026-01-01T00:00:00.000Z",
+      "signed_by": null,
+      "answer": null
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000020",
       "kind": "secret",
       "employee_id": "00000000-0000-4000-8000-000000000003",
       "capability": "askOwner",
@@ -49,10 +95,11 @@
       "status": "pending",
       "requested_at": "2026-01-01T00:00:00.000Z",
       "expires_at": "2026-01-01T00:00:00.000Z",
-      "signed_by": null
+      "signed_by": null,
+      "answer": null
     },
     {
-      "id": "00000000-0000-4000-8000-000000000018",
+      "id": "00000000-0000-4000-8000-000000000021",
       "kind": "take_over",
       "employee_id": "00000000-0000-4000-8000-000000000003",
       "capability": "askOwner",
@@ -66,10 +113,11 @@
       "status": "pending",
       "requested_at": "2026-01-01T00:00:00.000Z",
       "expires_at": "2026-01-01T00:00:00.000Z",
-      "signed_by": null
+      "signed_by": null,
+      "answer": null
     },
     {
-      "id": "00000000-0000-4000-8000-000000000019",
+      "id": "00000000-0000-4000-8000-000000000022",
       "kind": "approve",
       "employee_id": "00000000-0000-4000-8000-000000000003",
       "capability": "askOwner",
@@ -88,10 +136,11 @@
       "status": "pending",
       "requested_at": "2026-01-01T00:00:00.000Z",
       "expires_at": "2026-01-01T00:00:00.000Z",
-      "signed_by": null
+      "signed_by": null,
+      "answer": null
     },
     {
-      "id": "00000000-0000-4000-8000-000000000020",
+      "id": "00000000-0000-4000-8000-000000000023",
       "kind": "decision",
       "employee_id": "00000000-0000-4000-8000-000000000003",
       "capability": "driveCreate",
@@ -104,7 +153,8 @@
       "status": "pending",
       "requested_at": "2026-01-01T00:00:00.000Z",
       "expires_at": "2026-01-01T00:00:00.000Z",
-      "signed_by": null
+      "signed_by": null,
+      "answer": null
     }
   ]
 }

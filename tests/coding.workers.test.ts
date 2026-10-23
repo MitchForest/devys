@@ -11,7 +11,9 @@ import {
   codingRoute,
   handBack,
 } from "../src/app/coding.ts";
-import { grant } from "../src/authority/service.ts";
+import { askOwnerFor } from "../src/app/asking.ts";
+import { capabilities } from "../src/app/capabilities.ts";
+import { answerDecision, grant } from "../src/authority/service.ts";
 import type { Inbound } from "../src/channels/contract.ts";
 import { messages } from "../src/conversations/service.ts";
 import { codingCapabilities } from "../src/apps/code/capabilities.ts";
@@ -639,4 +641,62 @@ it("previews deploy on their own, production asks, rollbacks name a known commit
         .pipe(as(bindings, scope, work.id)),
     ),
   ).toEqual({ deploying: "bbbbbbbbbbbb" });
+});
+
+it("one approval of several steps covers the production deploy it names exactly, once; another commit still asks", async () => {
+  const { bindings, scope, work, deploys, named } = await setup();
+  const { ref: sessionRef } = (await Effect.runPromise(
+    named("codingStart")
+      .execute({ provider: "codex", objective: "Build it", newRepository: "site" })
+      .pipe(as(bindings, scope, work.id)),
+  )) as { ref: string };
+  await Effect.runPromise(
+    addEvidence(db, scope.businessId, work.id, {
+      by: "devys",
+      note: "Accepted",
+      commit: "b".repeat(40),
+    }),
+  );
+  const askOwner = capabilities(bindings).find((item) => item.name === "askOwner")!;
+  await Effect.runPromise(grant(db, scope, { capability: askOwner, mode: "auto" }));
+  // The host started the session in /Users/owner/acme: the step names that repository.
+  const asked = await askOwnerFor(
+    bindings,
+    { ...scope, workItemId: work.id, conversation: `work:${work.id}` },
+    {
+      kind: "approve",
+      action: "Merge and ship the waitlist page",
+      counterparty: "github.com/acme/site",
+      steps: ["Merge PR #7 at bbbbbbbbbbbb", "Deploy bbbbbbbbbbbb of acme to production"],
+    },
+  );
+  const deploy = (commit: string) =>
+    Effect.runPromiseExit(
+      named("deployProduction")
+        .execute({ session: sessionRef, command: "bunx wrangler deploy", commit })
+        .pipe(as(bindings, scope, work.id)),
+    );
+  // Before the owner answers, the deploy asks as usual.
+  expect((await deploy("bbbbbbbbbbbb"))._tag).toBe("Failure");
+  const owner = (await ownerOf(scope.businessId))!;
+  expect(
+    await Effect.runPromise(
+      answerDecision(db, scope.businessId, asked.id, { approve: true, by: owner }),
+    ),
+  ).toMatchObject({ status: "approved" });
+  // Another commit is not what was approved: it still asks.
+  expect((await deploy("cccccccccccc"))._tag).toBe("Failure");
+  expect(deploys).toEqual([]);
+  // The exact deploy runs on that approval, which it uses: a second one asks again.
+  expect(await deploy("bbbbbbbbbbbb")).toMatchObject({
+    _tag: "Success",
+    value: { deploying: "bbbbbbbbbbbb" },
+  });
+  expect(deploys).toHaveLength(1);
+  expect((await deploy("bbbbbbbbbbbb"))._tag).toBe("Failure");
+  expect(deploys).toHaveLength(1);
+  expect(
+    (await sql.row<{ status: string }>("SELECT status FROM decisions WHERE id = $1", [asked.id]))
+      ?.status,
+  ).toBe("used");
 });

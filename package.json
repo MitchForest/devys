@@ -23,6 +23,7 @@
     "test:apple": "scripts/apple-check.sh",
     "db": "bun scripts/db.ts",
     "local": "bun scripts/local.ts",
+    "scenario": "bun scripts/scenario.ts",
     "doctor": "bun scripts/doctor.ts",
     "site:sync": "bun scripts/site-sync.ts",
     "codex:protocol": "bun scripts/codex-protocol.ts",

@@ -1,4 +1,4 @@
-import type { Channel } from "../channels/contract.ts";
+import type { Channel, Notice } from "../channels/contract.ts";
 import type { Scope } from "../identity/contract.ts";
 import { outboxKey, type ChannelMessage, type Outbox } from "./delivery.ts";
 
@@ -6,12 +6,21 @@ import { outboxKey, type ChannelMessage, type Outbox } from "./delivery.ts";
 export const reaches = (scope: Scope, binding: Scope | undefined) =>
   binding?.businessId === scope.businessId && binding.employeeId === scope.employeeId;
 
-/** Queues the reply to a message once; a reply already queued wins. */
-export function queueReply(storage: DurableObjectStorage, message: ChannelMessage, answer: string) {
+/**
+ * Queues the answer to a message once (the employee's words, or Devys's notice); an answer
+ * already queued wins.
+ */
+export function queueReply(
+  storage: DurableObjectStorage,
+  message: ChannelMessage,
+  answer: string | { notice: Notice },
+) {
   const pending: Outbox = {
     id: message.id,
     chatId: message.input.chatId,
-    text: answer.slice(0, 16_000),
+    ...(typeof answer === "string"
+      ? { text: answer.slice(0, 16_000) }
+      : { text: "", notice: answer.notice }),
     replyTo: message.input.messageId,
     attempts: 0,
     status: "pending",
@@ -56,7 +65,9 @@ export async function deliver(
     return latest;
   });
   if (output.status !== "pending") return;
-  const sent = await channel.send(scope, output.chatId, output.text, output.id, output.replyTo);
+  const sent = output.notice
+    ? await channel.notice(scope, output.chatId, output.notice, output.id)
+    : await channel.send(scope, output.chatId, output.text, output.id, output.replyTo);
   output = await storage.transaction(async (tx) => {
     // Forgotten meanwhile: the send's outcome is still what is reported, not stored.
     const latest = (await tx.get<Outbox>(key)) ?? { ...output };

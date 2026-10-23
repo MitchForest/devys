@@ -109,25 +109,48 @@ struct WireTests {
         #expect(NewSecret.isName("RAMP_CARD") && !NewSecret.isName("ramp") && !NewSecret.isName("1KEY"))
     }
 
+    @Test("A work item's steps and results, its card in the thread and Home's progress decode in the web's words")
+    func workProgress() async throws {
+        let work = try await Self.answering("work").work(Self.session, businessID: "b1")
+        let site = try #require(work.first { !$0.steps.isEmpty })
+        #expect(site.steps.map(\.state) == [.done, .doing, .todo, .blocked])
+        #expect(site.results.map(\.text) == [
+            "Preview https://preview.acme.test ✓",
+            "Booking form · test booking received ✓",
+            "Calendar sync ?",
+            "Pages · 3"
+        ])
+        #expect(WorkStep.progress(site.steps) == "1 of 4 · Blocked: Connect the calendar")
+        let thread = try await Self.answering("conversation-work").conversation(Self.session, businessID: "b1", key: .work("w1"))
+        let cards = thread.messages.filter { $0.kind == .card }
+        #expect(cards.count == 1 && cards.first?.ref == .workItem(site.id) && cards.first?.isEvent == true)
+        let home = try await Self.answering("home").home(Self.session, businessID: "b1")
+        #expect(home.glance.moving.first { $0.id == site.id }?.progress == WorkStep.progress(site.steps))
+    }
+
     @Test("Golden values land in the right fields")
     func values() async throws {
         let home = try await Self.answering("home").home(Self.session, businessID: "b1")
-        let drive = home.needsYou[5]
+        let drive = home.needsYou[7]
         #expect(drive.kind == .decision && drive.workID != nil && drive.projectID != nil)
         #expect(home.decisions.last?.capability == "driveCreate" && home.decisions.last?.input.fields.first?.key == "content")
         #expect(home.decisions[1].capability == "routineActivate" && home.needsYou[1].workID == nil)
         #expect(home.glance.moving.first?.state == .inProgress && home.glance.moving.first?.dueAt != nil)
-        // What employees ask with askOwner: an app to connect, a card to add, a take over and a
-        // spend approval to sign; and a remote app whose sign-in lapsed.
-        #expect(home.needsYou.map(\.kind) == [.connect, .decision, .secret, .takeOver, .approve, .decision, .reconnect])
+        // What employees ask with askOwner: an app to connect, a file to choose, an approval of
+        // steps with its draft, a card to add, a take over and a spend approval to sign; and a
+        // remote app whose sign-in lapsed.
+        #expect(home.needsYou.map(\.kind) == [.connect, .decision, .file, .approve, .secret, .takeOver, .approve, .decision, .reconnect])
+        #expect(home.decisions[2].request == .file(purpose: "The signed supplier agreement", accept: ["application/pdf"]))
+        #expect(home.decisions[3].steps == ["Email the launch plan to orders@supplier.test", "Mark the order placed"])
+        #expect(home.decisions[3].preview?.kind == "artifact" && home.decisions[3].previewHash?.count == 64)
         #expect(home.decisions[0].request == .connect(app: "acmebooks", why: "To read and draft the supplier's bills"))
         #expect(home.needsYou[0].app == AppBadge(id: "acmebooks", name: "Acme Books") && home.needsYou[0].title == "Acme Books")
-        #expect(home.needsYou[6].app?.name == "Ledger" && home.needsYou[6].app?.logo?.hasPrefix("/api/businesses/") == true && home.needsYou[6].decision == nil)
-        #expect(home.decisions[2].request == .secret(name: "RAMP_CARD", why: "The company card, to pay for the domain at Namecheap", spend: true))
-        #expect(home.decisions[3].request == .takeOver(reason: "Sign in to the registrar (2FA)", url: "https://www.namecheap.com/myaccount/login/"))
-        let spend = try #require(SpendApproval(home.decisions[4], businessID: "b1"))
+        #expect(home.needsYou[8].app?.name == "Ledger" && home.needsYou[8].app?.logo?.hasPrefix("/api/businesses/") == true && home.needsYou[8].decision == nil)
+        #expect(home.decisions[4].request == .secret(name: "RAMP_CARD", why: "The company card, to pay for the domain at Namecheap", spend: true))
+        #expect(home.decisions[5].request == .takeOver(reason: "Sign in to the registrar (2FA)", url: "https://www.namecheap.com/myaccount/login/"))
+        let spend = try #require(SpendApproval(home.decisions[6], businessID: "b1"))
         #expect(spend.amount == Amount(cents: 1299, currency: "USD") && spend.counterparty == "Namecheap" && spend.renewal == "Renews yearly at $14.99")
-        #expect(home.decisions[4].isSpend && !home.decisions[3].isSpend && home.decisions[4].signedBy == nil)
+        #expect(home.decisions[6].isSpend && !home.decisions[5].isSpend && home.decisions[6].signedBy == nil)
         let review = try await Self.answering("app-review").appReview(Self.session, businessID: "b1", appID: "ledger")
         #expect(review.app.state == .review && review.tools.map(\.line) == [.own, .ask] && review.tools.map(\.title) == ["List entries", "Post entry"])
         let apps = try await Self.answering("apps").apps(Self.session, businessID: "b1")

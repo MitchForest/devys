@@ -2,11 +2,19 @@
  * Bringing the owner in (LP1, .docs/AUTHORITY.md#bringing-the-owner-in-askowner-and-signed-spend-approvals):
  * an employee's `askOwner` becomes authority's request; a spend approval is answered only with a
  * device signature over its canonical payload; Take over and Hand back answer take-over
- * requests; the owner's Mac and iPhone enroll their signing keys here.
+ * requests; a file request is answered with the file the owner chose; the owner's Mac and iPhone
+ * enroll their signing keys here.
  */
 import { Effect } from "effect";
 import type { Env } from "./env.ts";
-import { activeGrant, askOwner, handBackRequests, takeOverRequests } from "../authority/service.ts";
+import {
+  activeGrant,
+  askOwner,
+  fileProvided,
+  handBackRequests,
+  lapseDecision,
+  takeOverRequests,
+} from "../authority/service.ts";
 import { deviceKey, deviceKeys, endorseKey, enrollKey, revokeKeys } from "../authority/keys.ts";
 import {
   endorsementPayload,
@@ -14,28 +22,53 @@ import {
   spendPayload,
   verifySignature,
 } from "../authority/signing.ts";
-import { ownerRequest, spendOf, type Decision, type OwnerRequest } from "../authority/contract.ts";
+import {
+  ownerRequest,
+  previewOf,
+  spendOf,
+  type Decision,
+  type OwnerRequest,
+} from "../authority/contract.ts";
 import { conversationKey } from "../conversations/contract.ts";
 import { devices } from "../identity/sessions.ts";
 import { respond } from "../protocol/http.ts";
-import { postFromPerson } from "./conversations.ts";
+import { HostRefusal } from "../protocol/host.ts";
+import { parseRef, ref } from "../protocol/ref.ts";
+import { readBounded } from "../protocol/bytes.ts";
+import { revisionConflict } from "../workspace/contract.ts";
+import { postEvent, postFromPerson } from "./conversations.ts";
+import { modeOf } from "./mode.ts";
+import { contentHash } from "./refs.ts";
 import { decodedBody, forbidden, notFound } from "./request.ts";
 import { DeviceKeys, KeyEndorsement, KeyEnrollment, SpendSignature } from "./wire.ts";
 import { DeviceKey } from "../authority/contract.ts";
 
-/** `askOwner`, bound to the employee's grant revision and the work item it is asked in. */
+/**
+ * `askOwner`, bound to the employee's grant revision and the work item it is asked in. A draft to
+ * preview is bound by the hash of its content now, so a changed draft is a new request.
+ */
 export async function askOwnerFor(
-  env: Pick<Env, "HYPERDRIVE">,
+  env: Env,
   asking: { businessId: string; employeeId: string; workItemId: string; conversation: string },
   request: OwnerRequest,
 ): Promise<Decision> {
   const scope = { businessId: asking.businessId, employeeId: asking.employeeId };
   const grant = await Effect.runPromise(activeGrant(env.HYPERDRIVE, scope, "askOwner"));
   if (!grant) throw new Error("Not granted: askOwner");
+  let asked: OwnerRequest = request;
+  if (request.kind === "approve" && request.preview) {
+    const previewHash = await contentHash(env, asking.businessId, request.preview);
+    if (!previewHash)
+      throw new HostRefusal(
+        400,
+        "Preview a page or a file of this business by its ref (devys:documents/artifact/<id> or devys:documents/file/<path>)",
+      );
+    asked = { ...request, previewHash } as OwnerRequest;
+  }
   return Effect.runPromise(
     askOwner(env.HYPERDRIVE, scope, {
       grantId: grant.id,
-      request,
+      request: asked,
       workItemId: asking.workItemId,
       conversation: asking.conversation,
     }),
@@ -49,6 +82,7 @@ const money = (amount: { cents: number; currency: string }) =>
 export function spendTerms(decision: Decision, businessId: string) {
   const spend = spendOf(decision);
   if (!spend || !decision.work_item_id) return undefined;
+  const preview = previewOf(decision);
   return spendPayload({
     decision: decision.id,
     business: businessId,
@@ -58,8 +92,36 @@ export function spendTerms(decision: Decision, businessId: string) {
     amountCents: spend.amount.cents,
     currency: spend.amount.currency,
     renewal: spend.renewal ?? null,
+    steps: spend.steps ?? [],
+    preview: preview?.ref ?? null,
+    previewHash: preview?.hash ?? null,
     expiresAt: decision.expires_at,
   });
+}
+
+/**
+ * Whether the draft an approve shows is still what was asked; a request without one always is.
+ * A changed draft voids the request: it lapses, and the employee is told to ask again.
+ */
+export async function draftUnchanged(
+  env: Env,
+  businessId: string,
+  personId: string,
+  decision: Decision,
+) {
+  const preview = previewOf(decision);
+  if (!preview) return true;
+  if (preview.hash && (await contentHash(env, businessId, preview.ref)) === preview.hash)
+    return true;
+  await Effect.runPromise(lapseDecision(env.HYPERDRIVE, businessId, decision.id));
+  await tellEmployee(
+    env,
+    businessId,
+    personId,
+    decision,
+    "That draft changed after you asked, so I can't approve it. Ask again with it as it is now.",
+  );
+  return false;
 }
 
 /**
@@ -88,47 +150,165 @@ export async function signedSpend(
   return { keyId: key.id, signature: signed.signature };
 }
 
-/** What the owner's answer says in the thread, which wakes the employee there. */
-export function answerText(decision: Decision) {
+/** What a secret request asks for, as the owner reads it: what it is, never its name. */
+const secretWhat = (request: { why: string; spend?: boolean }) =>
+  request.spend ? "the card you asked for" : `the secret you asked for (${request.why})`;
+
+/** A file's name, from its ref. */
+const fileName = (file: string) =>
+  decodeURIComponent(parseRef(file)?.id ?? file)
+    .split("/")
+    .at(-1) ?? file;
+
+/**
+ * What the owner's answer says in the thread, which wakes the employee there: `text` everyone
+ * reads, and `forEmployee`, what only the employee's delivery adds (a secret's name, a file's
+ * ref), so identifiers stay out of what the owner reads.
+ */
+export function answerText(decision: Decision): { text: string; forEmployee?: string } {
   const request = ownerRequest(decision);
   const approved = decision.status === "approved";
   if (request?.kind === "approve") {
     const spend = request.amount ? ` for ${money(request.amount)}` : "";
-    return approved
-      ? `Approved${request.amount ? " and signed" : ""}: ${request.action} (${request.counterparty}${spend}). Go ahead, exactly as asked, once.`
-      : `Declined: ${request.action}. Don't do it; find another way or ask me.`;
+    const steps = request.steps?.length ? ` These steps: ${request.steps.join("; ")}.` : "";
+    return {
+      text: approved
+        ? `Approved${request.amount ? " and signed" : ""}: ${request.action} (${request.counterparty}${spend}).${steps} Go ahead, exactly as asked, once.`
+        : `Declined: ${request.action}. Don't do it; find another way or ask me.`,
+    };
   }
   if (request?.kind === "take_over")
-    return `I won't take this over: ${request.reason}. Find another way or ask me.`;
+    return { text: `I won't take this over: ${request.reason}. Find another way or ask me.` };
   if (request?.kind === "connect")
-    return approved
-      ? `Connected: ${request.app}. Find what it does with describe_capabilities.`
-      : `I won't connect ${request.app}. Find another way or ask me.`;
+    return {
+      text: approved
+        ? `Connected: ${request.app}. Find what it does with describe_capabilities.`
+        : `I won't connect ${request.app}. Find another way or ask me.`,
+    };
   if (request?.kind === "secret")
     return approved
-      ? `Added ${request.name}${request.spend ? " (a card)" : ""}: use it by name.`
-      : `I won't add ${request.name}. Find another way or ask me.`;
-  return approved
-    ? `Approved: ${decision.capability}. Go ahead: call it once more with exactly the input you asked for.`
-    : `Declined: ${decision.capability}. Don't run it; find another way or ask me.`;
+      ? { text: `Added ${secretWhat(request)}.`, forEmployee: `Use it by name: ${request.name}.` }
+      : {
+          text: `I won't add ${secretWhat(request)}. Find another way or ask me.`,
+          forEmployee: `(The secret you asked for as ${request.name}.)`,
+        };
+  if (request?.kind === "file")
+    return approved && decision.answer
+      ? {
+          text: `Here's the file: ${fileName(decision.answer)}.`,
+          forEmployee: `It is ${decision.answer} in the business folder; read it there.`,
+        }
+      : { text: `I won't send a file for this: ${request.purpose}. Find another way or ask me.` };
+  return {
+    text: approved
+      ? `Approved: ${decision.capability}. Go ahead: call it once more with exactly the input you asked for.`
+      : `Declined: ${decision.capability}. Don't run it; find another way or ask me.`,
+  };
 }
 
-/** Posts the owner's answer where the employee asked, mentioning it, which wakes it. */
+/**
+ * Posts the owner's answer where the employee asked, mentioning it, which wakes it. What only the
+ * employee should read (`forEmployee`) goes into its delivery, not into the shared message.
+ */
 export async function tellEmployee(
   env: Env,
   businessId: string,
   personId: string,
   decision: Decision,
-  text: string,
+  answer: string | { text: string; forEmployee?: string },
   id = `decision:${decision.id}`,
 ) {
+  const { text, forEmployee } = typeof answer === "string" ? { text: answer } : answer;
   const key = decision.conversation ? conversationKey(decision.conversation) : undefined;
   if (key)
     await postFromPerson(env, businessId, personId, key, {
       id,
       text,
       mentions: [decision.employee_id],
+      ...(forEmployee ? { forEmployees: forEmployee } : {}),
     });
+}
+
+/** The largest file a file request takes. */
+const fileBytes = 20_000_000;
+
+/** Whether a media type is one a file request accepts (`image/*` takes any image). */
+export const accepts = (accept: readonly string[] | undefined, type: string) =>
+  !accept?.length ||
+  accept.some((each) =>
+    each.endsWith("/*") ? type.startsWith(each.slice(0, -1)) : each === type.toLowerCase(),
+  );
+
+/**
+ * `POST …/decisions/:id/file?name=`: the file the owner chose for a file request, its bytes as the
+ * body. It goes into the business folder's Uploads (never over another file), answers the
+ * request with its ref, and shows it in the thread.
+ */
+export async function answerWithFile(
+  request: Request,
+  env: Env,
+  access: { personId: string; businessId: string },
+  decision: Decision,
+) {
+  const asked = ownerRequest(decision);
+  if (asked?.kind !== "file" || decision.status !== "pending")
+    return new Response("That request was already answered or has expired", { status: 409 });
+  const type = (request.headers.get("content-type") ?? "").split(";")[0]!.trim().toLowerCase();
+  if (!accepts(asked.accept, type))
+    return new Response(`Choose a file of type ${asked.accept!.join(" or ")}`, { status: 415 });
+  // A name, never a path: separators and control characters become "_".
+  const name = Array.from(new URL(request.url).searchParams.get("name") ?? "", (char) =>
+    char === "/" || char === "\\" || char.charCodeAt(0) < 32 ? "_" : char,
+  )
+    .join("")
+    .replace(/^\.+/, "")
+    .slice(0, 200);
+  if (!name) return new Response("Send the file's name", { status: 400 });
+  const root = modeOf(env).businessFolder(access.businessId);
+  if (!root) return new Response("Files run in local mode only for now.", { status: 503 });
+  const bytes = await readBounded(request.body, fileBytes).catch(() => undefined);
+  if (!bytes) return new Response("The file is too large", { status: 413 });
+  const key = `${access.businessId}/file-saves/${crypto.randomUUID()}`;
+  await env.FILES.put(key, bytes);
+  const runner = modeOf(env).runner(root)({ businessId: access.businessId, employeeId: "owner" });
+  const dot = name.lastIndexOf(".");
+  const [stem, extension] = dot > 0 ? [name.slice(0, dot), name.slice(dot)] : [name, ""];
+  let path: string | undefined;
+  try {
+    // Never over an existing file: "logo.png", then "logo 2.png", …
+    for (let copy = 1; copy <= 20 && !path; copy++) {
+      const candidate = `${root}/Uploads/${copy === 1 ? stem : `${stem} ${copy}`}${extension}`;
+      path = await runner.importFile(candidate, key, null).then(
+        () => candidate,
+        (error: unknown) => {
+          if (error instanceof Error && error.message.startsWith(revisionConflict))
+            return undefined;
+          throw error;
+        },
+      );
+    }
+  } catch {
+    path = undefined;
+  } finally {
+    await env.FILES.delete(key);
+  }
+  if (!path) return new Response("The file couldn't be saved", { status: 409 });
+  const file = ref("documents", "file", path);
+  const answered = await Effect.runPromise(
+    fileProvided(env.HYPERDRIVE, access.businessId, decision.id, file, access.personId),
+  );
+  if (!answered)
+    return new Response("That request was already answered or has expired", { status: 409 });
+  if (answered.conversation) {
+    const key = conversationKey(answered.conversation)!;
+    await postEvent(env, access.businessId, key, {
+      clientId: `file:${answered.id}`,
+      text: fileName(file),
+      ref: file,
+    });
+  }
+  await tellEmployee(env, access.businessId, access.personId, answered, answerText(answered));
+  return answered;
 }
 
 /** Taking work over answers its take-over requests: the owner is doing them now. */

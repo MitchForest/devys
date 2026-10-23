@@ -7,6 +7,7 @@ import {
   type Binding,
   type Channel,
   type Inbound,
+  type Notice,
 } from "./contract.ts";
 
 /**
@@ -125,6 +126,8 @@ export function appChannel(dependencies: {
   /** A member of the business (`person`'s id) or an active colleague (`employee:<id>`). */
   allowed: (senderId: string, scope: Scope) => Promise<boolean>;
   post: (chatId: string, text: string, operationId: string, inReplyTo?: string) => Promise<void>;
+  /** Posts Devys's notice about a turn as an event in the conversation. */
+  notice: (chatId: string, notice: Notice, operationId: string) => Promise<void>;
 }): Channel {
   const text = (input: Inbound) => {
     if (input.text === undefined) throw new Error("App messages carry their text");
@@ -143,6 +146,10 @@ export function appChannel(dependencies: {
     prepare: async (_scope, input) => text(input),
     send: async (_scope, chatId, reply, operationId, inReplyTo) => {
       await dependencies.post(chatId, reply, operationId, inReplyTo);
+      return { status: "sent", guid: null };
+    },
+    notice: async (_scope, chatId, notice, operationId) => {
+      await dependencies.notice(chatId, notice, operationId);
       return { status: "sent", guid: null };
     },
   };

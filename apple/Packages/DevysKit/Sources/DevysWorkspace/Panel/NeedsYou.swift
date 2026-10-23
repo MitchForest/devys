@@ -67,11 +67,13 @@ struct DecisionRow: View {
                 }
                 .lineLimit(1)
             }
-            if open || decision.isSpend { DecisionFields(decision: decision) }
+            // A spend, steps or a draft are what is approved: shown without asking for details.
+            let shown = decision.isSpend || !decision.steps.isEmpty || decision.preview != nil
+            if open || shown { DecisionFields(store: store, decision: decision) }
             HStack(spacing: 6) {
                 RequestActions(store: store, decision: decision, compact: true)
                 Spacer(minLength: 4)
-                if !decision.isSpend {
+                if !shown, !DecisionText.fields(decision).isEmpty {
                     Button(open ? "Hide details" : "Details") { open.toggle() }
                         .buttonStyle(.plain).font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
                 }
@@ -92,12 +94,12 @@ struct DecisionCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            StatusChip([.takeOver, .secret].contains(decision.kind) ? "Needs you" : "Needs approval", tone: .needsYou)
+            StatusChip([.takeOver, .secret, .file].contains(decision.kind) ? "Needs you" : "Needs approval", tone: .needsYou)
             Text(DecisionText.title(decision)).font(DevysTypography.heading).foregroundStyle(DevysColors.ink)
             Text("\(store.state.employeeName(decision.employeeID)) \(decision.kind == .decision ? "asked to run this exactly:" : "asks you:")")
                 .font(DevysTypography.secondary)
                 .foregroundStyle(DevysColors.ink2)
-            DecisionFields(decision: decision)
+            DecisionFields(store: store, decision: decision)
             HStack(spacing: DevysSpacing.small) {
                 RequestActions(store: store, decision: decision, compact: false)
             }
@@ -116,10 +118,12 @@ struct RequestActions: View {
     let compact: Bool
 
     var body: some View {
-        if case .secret(let name, _, _) = decision.request {
-            Button("Add \(name)", systemImage: "key") { store.send(.secretTapped(decision.id)) }
+        if case .secret(_, _, let spend) = decision.request {
+            Button(spend ? "Add card" : "Add secret", systemImage: "key") { store.send(.secretTapped(decision.id)) }
                 .buttonStyle(DevysButtonStyle(.aurora, compact: compact))
                 .help("Opens a secure sheet; the employee uses it by name and never sees it.")
+        } else if case .file(_, let accept) = decision.request {
+            ChooseFileButton(store: store, decision: decision, accept: accept, compact: compact)
         } else if decision.kind == .takeOver, let workID = decision.workItemID {
             Button("Take over", systemImage: "hand.raised") { store.send(.takeOverTapped(workID)) }
                 .buttonStyle(DevysButtonStyle(.aurora, compact: compact))
@@ -138,22 +142,43 @@ struct RequestActions: View {
     }
 }
 
-/// The request's fields, key by key.
+/// The request's fields, key by key, then the exact steps it covers and the draft it shows.
 private struct DecisionFields: View {
+    let store: StoreOf<Workspace>
     let decision: Decision
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            ForEach(DecisionText.fields(decision), id: \.key) { field in
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(field.key).font(DevysTypography.caption).foregroundStyle(DevysColors.ink3).frame(minWidth: 56, alignment: .leading)
-                    Text(field.value).font(DevysTypography.secondary).foregroundStyle(DevysColors.ink).lineLimit(6).textSelection(.enabled)
+        let fields = DecisionText.fields(decision)
+        VStack(alignment: .leading, spacing: 8) {
+            if !fields.isEmpty || !decision.steps.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(fields, id: \.key) { field in
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            label(field.key)
+                            Text(field.value).font(DevysTypography.secondary).foregroundStyle(DevysColors.ink).lineLimit(6).textSelection(.enabled)
+                        }
+                    }
+                    if !decision.steps.isEmpty {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            label("Steps")
+                            VStack(alignment: .leading, spacing: 2) {
+                                ForEach(Array(decision.steps.enumerated()), id: \.offset) { index, step in
+                                    Text("\(index + 1). \(step)").font(DevysTypography.secondary).foregroundStyle(DevysColors.ink).textSelection(.enabled)
+                                }
+                            }
+                        }
+                    }
                 }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(DevysColors.well, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
+            if let preview = decision.preview { DraftPreview(store: store, ref: preview) }
         }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DevysColors.well, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func label(_ text: String) -> some View {
+        Text(text).font(DevysTypography.caption).foregroundStyle(DevysColors.ink3).frame(minWidth: 56, alignment: .leading)
     }
 }
 
@@ -176,11 +201,17 @@ struct SigningSheetView: View {
                     row("Amount", approval.amount.text, emphasis: true)
                     row("Renews", approval.renewal ?? "No renewal")
                     row("Action", approval.action)
+                    if !approval.steps.isEmpty {
+                        row("Steps", approval.steps.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n"))
+                    }
+                    if approval.preview != nil {
+                        row("Draft", "As shown on the card, unchanged")
+                    }
                 }
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(DevysColors.well, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                Text("A different amount, merchant or action needs a new approval.")
+                Text("A different amount, merchant, action or draft needs a new approval.")
                     .font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
                 if let error = sheet.error {
                     Label(error, systemImage: "exclamationmark.circle.fill").font(DevysTypography.secondary).foregroundStyle(DevysColors.red)
@@ -196,7 +227,7 @@ struct SigningSheetView: View {
                 }
             }
             .padding(DevysSpacing.roomy)
-            .sheetFrame(width: 420, height: 360)
+            .sheetFrame(width: 420, height: 420)
             .background(DevysColors.sheet)
             .presentationDetents([.medium])
         }
@@ -257,6 +288,8 @@ private struct GlanceRow: View {
                     if stuck {
                         Text(card.waitCondition.map { "Waiting on \($0)" } ?? "No change in a day")
                             .font(DevysTypography.caption).foregroundStyle(DevysColors.red).lineLimit(1)
+                    } else if let progress = card.progress {
+                        Text(progress).font(DevysTypography.caption).foregroundStyle(DevysColors.ink3).lineLimit(1)
                     }
                 }
                 Spacer(minLength: 0)

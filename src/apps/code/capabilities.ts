@@ -36,6 +36,10 @@ export interface CodingDependencies {
   coordinates(scope: Scope): Promise<boolean>;
 }
 
+/** A deploy as the one step an owner's approval names: "Deploy a1b2c3 of site to production". */
+export const deployStep = (commit: string, repository: string, stage: Stage) =>
+  `Deploy ${commit} of ${repository} to ${stage}`;
+
 export const providerName = (provider: Provider) =>
   provider === "codex" ? "Codex" : "Claude Code";
 
@@ -377,7 +381,7 @@ export function codingCapabilities(dependencies: CodingDependencies) {
       description:
         stage === "preview"
           ? "Deploy a coding session's accepted, checked commit (name the session by its ref) to a preview with the repository's own deploy command (for example `bunx wrangler deploy --env preview`), then check the URL it prints (or the one you give) answers. `secrets` names the business's secrets the command needs (each set as the variable of its name, redacted from the output). The result arrives in this work item. To roll back, name an earlier commit this work item accepted or deployed."
-          : "Deploy a coding session's accepted, checked commit (name the session by its ref) to production with the repository's own production deploy command, then check its URL answers. `secrets` names the business's secrets the command needs (each set as the variable of its name, redacted from the output). The owner approves each production deploy. To roll back, name an earlier commit this work item accepted or deployed.",
+          : "Deploy a coding session's accepted, checked commit (name the session by its ref) to production with the repository's own production deploy command, then check its URL answers. `secrets` names the business's secrets the command needs (each set as the variable of its name, redacted from the output). The owner approves each production deploy. To ask once for several steps (merge, then deploy), list this deploy in an askOwner approve's steps exactly as `Deploy <commit> of <repository> to production` (repository: the last part of its folder's path) and pass that commit here: that approval covers this deploy, once. To roll back, name an earlier commit this work item accepted or deployed.",
       effect: "external",
       replay: "reconcile",
       constraints: {
@@ -394,6 +398,19 @@ export function codingCapabilities(dependencies: CodingDependencies) {
         secrets: Schema.optional(Schema.Array(SecretName).check(Schema.isMaxLength(20))),
       }),
       output: Schema.Struct({ deploying: Schema.String }),
+      // A production deploy of a named commit is one step an owner's approval can list.
+      ...(stage === "production"
+        ? {
+            step: async (
+              { session: id, commit }: { session: string; commit?: string },
+              businessId: string,
+            ) => {
+              const found = await Effect.runPromise(codingSession(db, businessId, id));
+              const repository = found?.repository?.split("/").filter(Boolean).at(-1);
+              return commit && repository ? deployStep(commit, repository, stage) : undefined;
+            },
+          }
+        : {}),
       execute: ({ session: id, command, commit, url, secrets }) =>
         Effect.gen(function* () {
           const { invocation, workItemId } = yield* owned(id);

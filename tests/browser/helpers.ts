@@ -59,7 +59,7 @@ export async function insertMessage(
   message: {
     author: string;
     text: string;
-    kind?: "message" | "event";
+    kind?: "message" | "event" | "card";
     ref?: string;
     replies?: string[];
   },

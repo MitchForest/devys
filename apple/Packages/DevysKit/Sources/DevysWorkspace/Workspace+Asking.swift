@@ -38,6 +38,8 @@ package enum AskingIntent {
     /// Nil when it was added; otherwise why not.
     case secretFinished(String?)
     case secretDismissed
+    /// A file request: the file the owner chose goes into the business folder and answers it.
+    case fileChosen(decisionID: String, file: ChosenFile)
 }
 
 extension Workspace {
@@ -84,6 +86,11 @@ extension Workspace {
             }
         case .secretTapped, .secretSubmitted, .secretFinished, .secretDismissed:
             reduceSecretEntry(intent, state: &state)
+        case .fileChosen(let decisionID, let file):
+            if let home = state.home.value { state.home = .loaded(home.answering(decisionID)) }
+            changeWork(state, failure: "That file wasn't sent.") { runtime, businessID in
+                try await runtime.sendFile(businessID, decisionID, file)
+            }
         }
     }
 

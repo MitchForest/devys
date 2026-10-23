@@ -9,9 +9,12 @@ import {
   Pencil,
   Redo2,
   Undo2,
+  Upload,
 } from "lucide-react";
+import { WorkResults, WorkSteps } from "./work-progress.tsx";
+import { progressText } from "../../work/contract.ts";
 import { useQuery } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { api } from "../app/api.ts";
 import { ownerRequest, spendOf, type Decision } from "../../authority/contract.ts";
 import type { NeedsYouRequest } from "../../app/wire.ts";
@@ -35,7 +38,13 @@ import {
   useMembers,
   usePerson,
 } from "../app/data.ts";
-import { useAnswer, useTakeOverRequest, useTakeover, useUpdateWorkItem } from "../app/mutations.ts";
+import {
+  useAnswer,
+  useSendFile,
+  useTakeOverRequest,
+  useTakeover,
+  useUpdateWorkItem,
+} from "../app/mutations.ts";
 import { useNav } from "../app/navigation.ts";
 import { SecretEntrySheet } from "../shell/secret-entry.tsx";
 import { keys } from "../app/query.ts";
@@ -59,6 +68,7 @@ function useWorkChanges() {
 import { StatusChip, Card } from "../design/primitives.tsx";
 import { endOfDay } from "../shell/dialogs.tsx";
 import { BrowserSection } from "./layers/browser.tsx";
+import { DraftPreview } from "./layers/preview.tsx";
 import { CodingSessions } from "./coding.tsx";
 import { RoutineProposal } from "./routines.tsx";
 import {
@@ -259,17 +269,13 @@ export function decisionFields(decision: Pick<Decision, "kind" | "input">): [str
       ...(request.amount ? ([["Amount", money(request.amount)]] as [string, string][]) : []),
       ...(request.renewal ? ([["Renews", request.renewal]] as [string, string][]) : []),
     ];
-  if (request?.kind === "take_over")
-    return [
-      ["Do", request.reason],
-      ...(request.url ? ([["Site", request.url]] as [string, string][]) : []),
-    ];
-  if (request?.kind === "secret")
-    return [
-      ["Name", request.name],
-      ["Why", request.why],
-    ];
+  // The reason is the card's title; only where it happens is added.
+  if (request?.kind === "take_over") return request.url ? [["Site", request.url]] : [];
+  // What it is, never the name the employee uses for it.
+  if (request?.kind === "secret") return [["Why", request.why]];
   if (request?.kind === "connect") return [["Why", request.why]];
+  if (request?.kind === "file")
+    return request.accept?.length ? [["Type", request.accept.join(", ")]] : [];
   const { input } = decision;
   if (input && typeof input === "object" && !Array.isArray(input))
     return Object.entries(input).map(([key, value]) => [
@@ -280,6 +286,61 @@ export function decisionFields(decision: Pick<Decision, "kind" | "input">): [str
 }
 
 /**
+ * A request's details on its card: its fields, the exact steps an approval covers, and the draft
+ * it shows. `compact` is Needs you's smaller type.
+ */
+export function RequestDetails({
+  decision,
+  compact,
+}: {
+  decision: Pick<Decision, "kind" | "input">;
+  compact?: boolean;
+}) {
+  const request = ownerRequest(decision);
+  const fields = decisionFields(decision);
+  const steps = request?.kind === "approve" ? (request.steps ?? []) : [];
+  const preview = request?.kind === "approve" ? request.preview : undefined;
+  const text = compact ? "text-detail" : "text-body";
+  if (!fields.length && !steps.length && !preview) return null;
+  return (
+    <div className="flex w-full flex-col gap-2">
+      {(fields.length > 0 || steps.length > 0) && (
+        <div className="flex w-full flex-col gap-1 rounded-control bg-well p-2.5">
+          {fields.map(([key, value]) => (
+            <div key={key} className="flex items-baseline gap-2">
+              <span className={`${compact ? "min-w-14" : "min-w-16"} text-caption text-ink-3`}>
+                {key}
+              </span>
+              <span className={`line-clamp-6 min-w-0 ${text} break-words text-ink select-text`}>
+                {value}
+              </span>
+            </div>
+          ))}
+          {steps.length > 0 && (
+            <div className="flex items-baseline gap-2">
+              <span className={`${compact ? "min-w-14" : "min-w-16"} text-caption text-ink-3`}>
+                Steps
+              </span>
+              <ol
+                data-testid="request-steps"
+                className={`flex min-w-0 list-decimal flex-col gap-0.5 pl-4 ${text} text-ink select-text`}
+              >
+                {steps.map((step) => (
+                  <li key={step} className="break-words">
+                    {step}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+        </div>
+      )}
+      {preview && <DraftPreview value={preview} />}
+    </div>
+  );
+}
+
+/**
  * What a decision asks for, in words: a proposed hire names the person and role; an `askOwner`
  * request says what to approve, or what to do in the browser.
  */
@@ -287,9 +348,10 @@ export function decisionTitle(decision: Decision) {
   const request = ownerRequest(decision);
   if (request?.kind === "approve")
     return request.amount ? `Spend ${money(request.amount)}: ${request.action}` : request.action;
-  if (request?.kind === "take_over") return `Sign in / take over: ${request.reason}`;
-  if (request?.kind === "secret") return `${request.spend ? "Card" : "Secret"}: ${request.name}`;
+  if (request?.kind === "take_over") return request.reason;
+  if (request?.kind === "secret") return request.spend ? "Your card" : "A secret";
   if (request?.kind === "connect") return "Connect an app";
+  if (request?.kind === "file") return request.purpose;
   if (
     decision.capability === "hireEmployee" &&
     decision.input &&
@@ -344,9 +406,11 @@ export function RequestActions({
             businessId={businessId}
             open={entering}
             onClose={() => setEntering(false)}
-            fixed={{ name: secret.name, spend: secret.spend ?? false }}
+            fixed={{ name: secret.name, spend: secret.spend ?? false, why: secret.why }}
           />
         </>
+      ) : secret?.kind === "file" ? (
+        <ChooseFile decision={decision} accept={secret.accept} size={size} />
       ) : decision.kind === "take_over" ? (
         <Button
           variant="aurora"
@@ -376,6 +440,47 @@ export function RequestActions({
 }
 
 /**
+ * A file request's answer: the owner picks a file, which goes into the business folder and
+ * answers the request with it.
+ */
+function ChooseFile({
+  decision,
+  accept,
+  size,
+}: {
+  decision: Decision;
+  accept: readonly string[] | undefined;
+  size: "compact" | "regular";
+}) {
+  const send = useSendFile();
+  const input = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <Button
+        variant="aurora"
+        size={size}
+        disabled={send.isPending}
+        onClick={() => input.current?.click()}
+      >
+        <Upload /> {send.isPending ? "Sending…" : "Choose file"}
+      </Button>
+      <input
+        ref={input}
+        type="file"
+        hidden
+        data-testid="choose-file"
+        accept={accept?.join(",")}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) send.mutate({ id: decision.id, file });
+        }}
+      />
+    </>
+  );
+}
+
+/**
  * One exact request: who asked, what they will do, and the input it will run with. A routine's
  * activation reads as its proposal.
  */
@@ -397,16 +502,7 @@ function RequestCard({ decision }: { decision: Decision }) {
           {employeeName(decision.employee_id)}{" "}
           {decision.kind === "decision" ? "asked to run this exactly:" : "asks you:"}
         </span>
-        <div className="flex w-full flex-col gap-1 rounded-control bg-well p-2.5">
-          {decisionFields(decision).map(([key, value]) => (
-            <div key={key} className="flex items-baseline gap-2">
-              <span className="min-w-16 text-caption text-ink-3">{key}</span>
-              <span className="line-clamp-6 min-w-0 text-body break-words text-ink select-text">
-                {value}
-              </span>
-            </div>
-          ))}
-        </div>
+        <RequestDetails decision={decision} />
         <div className="flex w-full gap-2 pt-0.5">
           <RequestActions decision={decision} />
         </div>
@@ -419,7 +515,7 @@ function RequestCard({ decision }: { decision: Decision }) {
 const answeredAs = (decision: Decision) =>
   decision.status === "rejected"
     ? "Declined"
-    : decision.kind === "secret"
+    : decision.kind === "secret" || decision.kind === "file"
       ? "Added"
       : decision.kind === "connect"
         ? "Connected"
@@ -640,6 +736,20 @@ export function WorkDetail({ item }: { item: WorkItem }) {
         </div>
         <WorkPlan item={item} editable={open && mine} />
       </div>
+      {item.results.length > 0 && (
+        <div className="flex flex-col gap-1.5" data-testid="work-results">
+          <span className="text-label font-medium text-ink-3">Results</span>
+          <WorkResults results={item.results} />
+        </div>
+      )}
+      {item.steps.length > 0 && (
+        <div className="flex flex-col gap-1.5" data-testid="work-steps">
+          <span className="text-label font-medium text-ink-3">
+            Steps · {progressText(item.steps)}
+          </span>
+          <WorkSteps steps={item.steps} />
+        </div>
+      )}
       <div className="flex flex-wrap gap-1.5">
         {open && (item.taken_over_by === null || mine) && (
           <Button size="compact" onClick={() => actions.toggleTakeover(item)}>

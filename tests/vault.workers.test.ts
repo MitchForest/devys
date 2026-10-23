@@ -132,12 +132,16 @@ async function owner() {
           }),
         ) as Effect.Effect<T>,
     );
+  /**
+   * The thread, without hand-offs: under the full run another file's dispatcher may hand this
+   * work item on and post its card here at any time.
+   */
   const thread = async () =>
     (
       (await (await call(`/conversations/${encodeURIComponent(`work:${work.id}`)}`)).json()) as {
-        messages: { text: string }[];
+        messages: { text: string; ref: string | null }[];
       }
-    ).messages;
+    ).messages.filter((message) => !message.ref?.startsWith("devys:work/item/"));
   return { ...acme, work, call, secrets, use, thread };
 }
 
@@ -243,8 +247,11 @@ it("an employee asks for a secret; the owner enters it in the secure sheet; it i
   );
   expect(entered.status).toBe(201);
   expect(await entered.text()).not.toContain(card.number);
-  expect((await thread()).at(-1)?.text).toBe("Added RAMP_CARD (a card): use it by name.");
+  // The owner reads what it is; only the employee's delivery names it.
+  expect((await thread()).at(-1)?.text).toBe("Added the card you asked for.");
+  expect(JSON.stringify(await thread())).not.toContain("RAMP_CARD");
   expect(received.map((each) => each.employee)).toEqual([scope.employeeId]);
+  expect(received[0]!.input.text).toContain("Use it by name: RAMP_CARD.");
   expect(await use<{ state: string }>("askOwner", ask)).toMatchObject({ state: "done" });
   // The thread, the transcript-facing results and Home hold the name only.
   expect(JSON.stringify(await thread())).not.toContain(card.number);
@@ -275,6 +282,27 @@ it("run hands the host the named secrets sealed; a missing one is asked for by n
   expect(await failure(use("run", { command: "true", secrets: ["NOT_ADDED"] }))).toContain(
     "No secret or card named NOT_ADDED",
   );
+});
+
+it("secretList tells an employee what is saved, by name and kind, never a value", async () => {
+  const { use, secrets } = await owner();
+  expect(await use("secretList", {})).toEqual({ secrets: [] });
+  await secrets("POST", "/secrets", JSON.stringify({ name: "RAMP_CARD", kind: "spend", card }));
+  await secrets(
+    "POST",
+    "/secrets",
+    JSON.stringify({ name: "API_TOKEN", kind: "secret", value: "tok-123456" }),
+  );
+  const listed = await use<{ secrets: { name: string; kind: string; addedBy: string }[] }>(
+    "secretList",
+    {},
+  );
+  expect(listed.secrets.map(({ name, kind }) => ({ name, kind }))).toEqual([
+    { name: "API_TOKEN", kind: "secret" },
+    { name: "RAMP_CARD", kind: "card" },
+  ]);
+  expect(listed.secrets.map((each) => each.addedBy)).toEqual(["Owner", "Owner"]);
+  expect(JSON.stringify(listed)).not.toMatch(/tok-123456|4242424242424242/);
 });
 
 it("a card is filled only against a signed, unused spend approval of this work item, and only once", async () => {

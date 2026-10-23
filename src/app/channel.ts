@@ -8,7 +8,12 @@ import { workChannel } from "../channels/work.ts";
 import { workItem } from "../work/service.ts";
 import { activeEmployee, channelBinding, memberBusiness } from "../identity/service.ts";
 import type { Scope } from "../identity/contract.ts";
-import { postFromEmployee, recordChannelMessage, recordChannelReply } from "./conversations.ts";
+import {
+  postFromEmployee,
+  postNotice,
+  recordChannelMessage,
+  recordChannelReply,
+} from "./conversations.ts";
 import { reportRun, runOpen } from "./routines.ts";
 
 /**
@@ -54,6 +59,7 @@ export function channelFor(env: Env): Channel {
     },
     post: (chatId, text, operationId, inReplyTo) =>
       postFromEmployee(env, chatId, text, operationId, inReplyTo),
+    notice: (chatId, notice, operationId) => postNotice(env, chatId, notice, operationId),
   });
   const work = workChannel({
     open: async (scope, workItemId) => {
@@ -65,11 +71,13 @@ export function channelFor(env: Env): Channel {
       );
     },
     post: (chatId, text, operationId) => postFromEmployee(env, chatId, text, operationId),
+    notice: (chatId, notice, operationId) => postNotice(env, chatId, notice, operationId),
   });
   const routine = routineChannel({
     open: (scope, routineId, conversation) => runOpen(env, scope, routineId, conversation),
     report: (scope, chatId, routineId, reply, operationId) =>
       reportRun(env, scope, chatId, routineId, reply, operationId),
+    notice: (chatId, notice, operationId) => postNotice(env, chatId, notice, operationId),
   });
   const channels = [app, work, routine, imessage];
   const pick = (chatId: string) => {
@@ -85,5 +93,7 @@ export function channelFor(env: Env): Channel {
     prepare: (scope, input) => pick(input.chatId).prepare(scope, input),
     send: (scope, chatId, text, operationId, inReplyTo) =>
       pick(chatId).send(scope, chatId, text, operationId, inReplyTo),
+    notice: (scope, chatId, notice, operationId) =>
+      pick(chatId).notice(scope, chatId, notice, operationId),
   };
 }

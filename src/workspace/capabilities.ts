@@ -5,6 +5,15 @@ import { rpc } from "../protocol/rpc.ts";
 import { isSkillName, parseSkill, type Skill } from "../protocol/skill.ts";
 import type { Runner } from "./contract.ts";
 import { SecretName } from "../vault/contract.ts";
+
+/** A saved secret as an employee may know it: its name and kind, never its value. */
+export interface SavedSecret {
+  name: string;
+  kind: "secret" | "spend";
+  /** Who added it, by name. */
+  addedBy: string;
+  addedAt: string;
+}
 const PathResult = Schema.Struct({ path: FilePath });
 
 /** The Computer app: commands, files and skills where the employee works. */
@@ -12,8 +21,39 @@ export function workspaceCapabilities(
   runner: Runner,
   /** The skills the business's installed apps ship. */
   appSkills: (businessId: string) => Promise<readonly Skill[]>,
+  /** The business's saved secrets and cards, by name. */
+  savedSecrets: (businessId: string) => Promise<readonly SavedSecret[]>,
 ) {
   return [
+    capability({
+      name: "secretList",
+      description:
+        "List the secrets and cards the owner has saved for this business: each one's name (what run's `secrets` and browserFill take), whether it is a secret or a card, who added it and when. Never a value. Check here before asking the owner for a key or a card.",
+      effect: "read",
+      replay: "read",
+      input: Schema.Struct({}),
+      output: Schema.Struct({
+        secrets: Schema.Array(
+          Schema.Struct({
+            name: Schema.String,
+            kind: Schema.Literals(["secret", "card"]),
+            addedBy: Schema.String,
+            addedAt: Schema.String,
+          }),
+        ),
+      }),
+      execute: () =>
+        Effect.gen(function* () {
+          const { businessId } = yield* Invocation;
+          const saved = yield* rpc(() => savedSecrets(businessId));
+          return {
+            secrets: saved.map((secret) => ({
+              ...secret,
+              kind: secret.kind === "spend" ? ("card" as const) : ("secret" as const),
+            })),
+          };
+        }),
+    }),
     capability({
       name: "readSkill",
       description:

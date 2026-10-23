@@ -9,16 +9,27 @@ export function MarkdownView({ text }: { text: string }) {
   );
 }
 
-/** Inline Markdown (bold, links, code) without block layout, as chat bubbles on native. */
+/**
+ * Inline Markdown (bold, links, code) in paragraphs and lists, as chat bubbles on native (whose
+ * lines keep their markers); other blocks are unwrapped to their text.
+ */
 export function InlineMarkdown({ text }: { text: string }) {
   return (
     <Markdown
-      allowedElements={["p", "strong", "em", "a", "code", "del", "br"]}
+      allowedElements={["p", "strong", "em", "a", "code", "del", "br", "ul", "ol", "li"]}
       unwrapDisallowed
       components={{
         p: ({ children }) => (
           <span className="block whitespace-pre-wrap not-first:mt-2">{children}</span>
         ),
+        ul: ({ children }) => <ul className="list-disc pl-5 not-first:mt-2">{children}</ul>,
+        ol: ({ children, start }) => (
+          <ol start={start} className="list-decimal pl-5 not-first:mt-2">
+            {children}
+          </ol>
+        ),
+        // A loose list's items hold paragraphs: keep them tight inside the item.
+        li: ({ children }) => <li className="[&>span]:mt-0">{children}</li>,
         a: ({ children, href }) => (
           <a href={href} target="_blank" rel="noreferrer" className="underline">
             {children}

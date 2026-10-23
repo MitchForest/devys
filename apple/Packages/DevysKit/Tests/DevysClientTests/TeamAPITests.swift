@@ -264,7 +264,7 @@ struct TeamAPITests {
         let recorder = Recorder()
         let workItem = """
         {"id":"c1","owner_employee_id":"growth","title":"PR inquiry","objective":"","next_action":"","wait_condition":null,
-         "due_at":null,"state":"ready","evidence":[],"revision":4,"taken_over_by":null,"project_id":"p1","updated_at":"2026-10-19T15:00:00.000Z"}
+         "due_at":null,"state":"ready","evidence":[],"steps":[],"results":[],"revision":4,"taken_over_by":null,"project_id":"p1","updated_at":"2026-10-19T15:00:00.000Z"}
         """
         let created = try await api(status: 201, body: workItem, recorder: recorder).createWorkItem(
             Self.session,

@@ -8,7 +8,8 @@ const columns =
 /**
  * Adds a message, creating the conversation on first use. A retried post with the same
  * client id returns the stored message and `created: false`. An employee's message takes the
- * replies it chose with `suggestReplies`; a person's drops every pending choice there.
+ * replies it chose with `suggestReplies`; a person's drops every pending choice there. An event
+ * carries the replies it is posted with (Devys's notice offers "Ask again").
  */
 export const postMessage = (
   db: Database,
@@ -21,8 +22,10 @@ export const postMessage = (
     replyTo?: string | null;
     mentions?: string[];
     viaVoice?: boolean;
-    kind?: "message" | "event";
+    kind?: Message["kind"];
     ref?: Ref | null;
+    /** An event's replies to tap. */
+    replies?: readonly string[];
   },
 ) =>
   database(
@@ -41,7 +44,8 @@ export const postMessage = (
             )
           )?.id ?? null)
         : null;
-      const employee = input.kind === "event" ? undefined : employeeOf(input.author);
+      const employee =
+        (input.kind ?? "message") === "message" ? employeeOf(input.author) : undefined;
       const replies = employee
         ? ((
             await sql.row<{ replies: string[] }>(
@@ -50,7 +54,9 @@ export const postMessage = (
               [businessId, key, employee],
             )
           )?.replies ?? [])
-        : [];
+        : input.kind === "event"
+          ? [...(input.replies ?? [])]
+          : [];
       const inserted = await sql.row<Message>(
         `INSERT INTO messages
            (id, business_id, conversation, author, kind, text, reply_to, mentions, via_voice, ref, client_id, replies)

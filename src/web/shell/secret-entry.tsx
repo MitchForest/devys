@@ -27,8 +27,8 @@ export function SecretEntrySheet({
   businessId: string;
   open: boolean;
   onClose: () => void;
-  /** What an employee asked for: its name, and whether it is a card. */
-  fixed?: { name: string; spend: boolean };
+  /** What an employee asked for: its name (never shown), whether it is a card, and why. */
+  fixed?: { name: string; spend: boolean; why?: string };
 }) {
   const client = useQueryClient();
   const [name, setName] = useState(fixed?.name ?? "");
@@ -89,8 +89,16 @@ export function SecretEntrySheet({
     <Dialog open={open} onOpenChange={(next) => !next && close()}>
       <DialogContent className="sm:max-w-md" data-testid="secret-entry">
         <DialogTitle>
-          {fixed ? `Add ${fixed.name}` : spend ? "Add a card" : "Add a secret"}
+          {/* An employee's request names it for itself; the owner reads what it is. */}
+          {fixed
+            ? fixed.spend
+              ? "Add your card"
+              : "Add the secret"
+            : spend
+              ? "Add a card"
+              : "Add a secret"}
         </DialogTitle>
+        {fixed?.why && <p className="text-detail text-ink-2">{fixed.why}</p>}
         <form
           className="flex flex-col gap-3"
           onSubmit={(event) => void save(event)}

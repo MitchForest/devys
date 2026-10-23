@@ -110,7 +110,9 @@ export async function businessRoute(
   if (path.startsWith("/connections/google")) return googleRoute(request, env, access);
   // Coding, terminals, files, the browser and the secrets they use are on the Mac as its owner.
   if (
-    /^\/(coding|terminals|files|browser|secrets)(\/|$)|^\/work\/[^/]+\/sessions/.test(path) &&
+    /^\/(coding|terminals|files|browser|secrets)(\/|$)|^\/work\/[^/]+\/sessions|^\/decisions\/[^/]+\/file$/.test(
+      path,
+    ) &&
     !(await modeOf(env).mayUseMachine(person.id))
   )
     return forbidden();

@@ -325,6 +325,18 @@ export const api = {
     get(Decisions, `${business(b)}/decisions?work_item=${encodeURIComponent(workItem)}`),
   answer: (b: string, id: string, approve: boolean) =>
     post(Answered, `${business(b)}/decisions/${id}/${approve ? "approve" : "reject"}`),
+  /** Answers a file request with the file the owner chose; it goes into the business folder. */
+  sendFile: async (b: string, id: string, file: File) => {
+    const url = `${business(b)}/decisions/${id}/file?name=${encodeURIComponent(file.name)}`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": file.type || "application/octet-stream" },
+      body: file,
+    });
+    if (!response.ok)
+      throw new ApiError(response.status, (await response.text()) || "The file wasn't sent.");
+    return decode(Answered, url, await response.json());
+  },
   /** The business's secrets by name; values are never read back. */
   secrets: (b: string) => get(Secrets, `${business(b)}/secrets`),
   /**

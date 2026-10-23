@@ -109,6 +109,26 @@ export function useAnswer() {
   );
 }
 
+/** A file request answered with the file the owner chose. */
+export function useSendFile() {
+  return useChange((b, { id, file }: { id: string; file: File }) => api.sendFile(b, id, file), {
+    failure: "That file wasn't sent.",
+    settles: (b) => workSettles(b),
+    optimistic: (client, b, { id }) => {
+      const before = client.getQueryData<Home>(keys.home(b));
+      client.setQueryData<Home>(
+        keys.home(b),
+        (home) =>
+          home && {
+            ...home,
+            needs_you: home.needs_you.filter((d) => d.kind === "reconnect" || d.id !== id),
+          },
+      );
+      return () => client.setQueryData(keys.home(b), before);
+    },
+  });
+}
+
 type WorkChange = {
   state?: WorkItemState;
   owner?: string;

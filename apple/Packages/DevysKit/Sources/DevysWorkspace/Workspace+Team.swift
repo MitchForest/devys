@@ -199,11 +199,14 @@ enum DecisionText {
         case .approve(let action, _, let amount, _):
             return amount.map { "Spend \($0.text): \(action)" } ?? action
         case .takeOver(let reason, _):
-            return "Sign in / take over: \(reason)"
-        case .secret(let name, _, let spend):
-            return spend ? "Card: \(name)" : "Secret: \(name)"
+            return reason
+        case .secret(_, _, let spend):
+            // What it is; the name is the employee's, never shown.
+            return spend ? "Your card" : "A secret"
         case .connect:
             return "Connect an app"
+        case .file(let purpose, _):
+            return purpose
         case nil:
             break
         }
@@ -221,12 +224,15 @@ enum DecisionText {
             return [("Action", action), ("With", counterparty)]
                 + (amount.map { [("Amount", $0.text)] } ?? [])
                 + (renewal.map { [("Renews", $0)] } ?? [])
-        case .takeOver(let reason, let url):
-            return [("Do", reason)] + (url.map { [("Site", $0)] } ?? [])
-        case .secret(let name, let why, _):
-            return [("Name", name), ("Why", why)]
+        case .takeOver(_, let url):
+            // The reason is the title; only where it happens is added.
+            return url.map { [("Site", $0)] } ?? []
+        case .secret(_, let why, _):
+            return [("Why", why)]
         case .connect(_, let why):
             return [("Why", why)]
+        case .file(_, let accept):
+            return accept.isEmpty ? [] : [("Type", accept.joined(separator: ", "))]
         case nil:
             return decision.input.fields
         }

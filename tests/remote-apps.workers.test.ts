@@ -188,12 +188,16 @@ async function owner() {
     );
   const remote = async (name: string) =>
     (await remoteCapabilities(local, scope.businessId)).find((item) => item.name === name);
+  /**
+   * The thread, without hand-offs: under the full run another file's dispatcher may hand this
+   * work item on and post its card here at any time. The app's connect card stays.
+   */
   const thread = async () =>
     (
       (await json(`/conversations/${encodeURIComponent(`work:${work.id}`)}`)) as {
         messages: { text: string; ref: string | null; kind: string }[];
       }
-    ).messages;
+    ).messages.filter((message) => !message.ref?.startsWith("devys:work/item/"));
   /** The owner signs in at the provider: its authorize page sends them back to Devys. */
   const signIn = async (url: string) => {
     const authorized = await fetch(url, { redirect: "manual" });

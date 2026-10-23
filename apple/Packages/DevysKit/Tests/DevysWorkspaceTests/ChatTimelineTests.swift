@@ -43,6 +43,45 @@ struct ChatTimelineTests {
         #expect(offered(ChatTimeline(messages: asked + [message(5, "employee:ops", after: 40)], pending: [], now: start)).isEmpty)
     }
 
+    @Test("Devys's notice that a turn stopped offers Ask again while it is the latest word")
+    func noticeReplies() {
+        let stopped = message(6, "system", after: 50, kind: .event, replies: ["Ask again"])
+        let events = { (timeline: ChatTimeline) in
+            timeline.items.compactMap { if case .event(let event) = $0, !event.replies.isEmpty { event.id } else { nil } }
+        }
+        let base = [message(2, "employee:growth", after: 10, replies: ["Bold"])]
+        #expect(events(ChatTimeline(messages: base + [stopped], pending: [], now: start)) == ["m6"])
+        #expect(events(ChatTimeline(messages: base + [stopped, message(7, "person:p1", after: 60)], pending: [], now: start)).isEmpty)
+    }
+
+    @Test("A work item's card is one event, drawn live, and never offers replies or groups bubbles")
+    func workCard() {
+        let card = ConversationMessage(
+            id: "m9", conversation: "work:c1", author: "system", kind: .card, text: "Set up the domain",
+            ref: .workItem("c1"), createdAt: ServerDate.format(start.addingTimeInterval(30))
+        )
+        let timeline = ChatTimeline(messages: [message(2, "employee:growth", after: 10, replies: ["Bold"]), card], pending: [], now: start)
+        let events = timeline.items.compactMap { if case .event(let event) = $0 { event } else { nil } }
+        #expect(events.map(\.id) == ["m9"] && events.first?.isCard == true && events.first?.ref == .workItem("c1"))
+        #expect(bubbles(timeline).first?.replies == ["Bold"])
+    }
+
+    @Test("Results and steps read the same words as the web")
+    func resultWords() {
+        #expect(WorkResult(label: "Registered acme-widgets.com", value: "expires 2027-10-22", check: .held).text == "Registered acme-widgets.com · expires 2027-10-22 ✓")
+        #expect(WorkResult(label: "Live at", url: "https://acme-widgets.com").text == "Live at https://acme-widgets.com")
+        #expect(WorkResult(label: "Payment", value: "uncertain", check: .uncertain).text == "Payment · uncertain ?")
+        #expect(WorkResult(label: "MX", check: .failed).text == "MX ✗")
+        #expect(WorkStep.progress([]) == nil)
+        #expect(WorkStep.progress([WorkStep(title: "Register", state: .done), WorkStep(title: "Set up email", state: .doing), WorkStep(title: "Test", state: .todo)]) == "1 of 3 · Set up email")
+    }
+
+    @Test("A bubble keeps a list one item per line, bullets as bullets, numbers as written")
+    func listsInBubbles() {
+        let text = String(MessageBubble.rendered("Two ways:\n- **Ramp**\n* A card\n2. Later").characters)
+        #expect(text == "Two ways:\n• Ramp\n• A card\n2. Later")
+    }
+
     @Test("Consecutive messages from one author group; a new author, an event or a long gap starts a group")
     func grouping() {
         let timeline = ChatTimeline(

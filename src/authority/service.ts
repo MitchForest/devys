@@ -136,11 +136,13 @@ const requestHash = (
 
 const decisionLife = "24 hours";
 const decisionColumns =
-  "id, kind, employee_id, capability, input, work_item_id, conversation, status, requested_at, expires_at, signed_by";
+  "id, kind, employee_id, capability, input, work_item_id, conversation, status, requested_at, expires_at, signed_by, answer";
 
 /**
  * Settles an `ask`: uses an approved decision for this exact request once, or makes
- * sure one pending request exists and returns it. Runs in one transaction.
+ * sure one pending request exists and returns it. Runs in one transaction. A call whose exact
+ * `step` an approved `askOwner` approve in the same work item lists is covered by that approval
+ * instead, which it uses: one tap for "merge, then deploy".
  */
 export const settleAsk = (
   db: Database,
@@ -151,11 +153,24 @@ export const settleAsk = (
     input: unknown;
     workItemId?: string;
     conversation?: string;
+    step?: string;
   },
 ) =>
   database(
     db,
     async (sql): Promise<Outcome> => {
+      if (ask.step && ask.workItemId) {
+        const covered = await sql.run(
+          `UPDATE decisions SET status = 'used', used_at = now()
+           WHERE id = (SELECT id FROM decisions
+             WHERE business_id = $1 AND employee_id = $2 AND work_item_id = $3 AND kind = 'approve'
+               AND status = 'approved' AND expires_at > now() AND input -> 'amount' IS NULL
+               AND input -> 'steps' @> jsonb_build_array($4::text)
+             ORDER BY requested_at LIMIT 1 FOR UPDATE)`,
+          [scope.businessId, scope.employeeId, ask.workItemId, ask.step],
+        );
+        if (covered === 1) return { outcome: "allow", grantId: ask.grantId };
+      }
       const hash = await requestHash(
         ask.grantId,
         ask.capability,
@@ -270,7 +285,7 @@ export const answerDecision = (
       `UPDATE decisions SET status = $3, decided_by = $4, decided_at = now(), signed_by = $5,
          signature = $6
        WHERE id = $1 AND business_id = $2 AND status = 'pending' AND expires_at > now()
-         AND ($3 = 'rejected' OR kind NOT IN ('take_over', 'connect'))
+         AND ($3 = 'rejected' OR kind NOT IN ('take_over', 'connect', 'file'))
        RETURNING ${decisionColumns}`,
       [
         decisionId,
@@ -282,6 +297,37 @@ export const answerDecision = (
       ],
     );
   });
+
+/**
+ * A request whose draft changed before the owner answered: it lapses (no one refused it), so
+ * asking again with the draft as it is now makes a new request.
+ */
+export const lapseDecision = (db: Database, businessId: string, decisionId: string) =>
+  database(db, (sql) =>
+    sql.run(
+      `UPDATE decisions SET status = 'rejected', decided_at = now()
+       WHERE id = $1 AND business_id = $2 AND status = 'pending'`,
+      [decisionId, businessId],
+    ),
+  );
+
+/** The owner chose the file a file request asked for: it is answered with that file. */
+export const fileProvided = (
+  db: Database,
+  businessId: string,
+  decisionId: string,
+  file: string,
+  by: string,
+) =>
+  database(db, (sql) =>
+    sql.row<Decision>(
+      `UPDATE decisions SET status = 'approved', decided_by = $3, decided_at = now(), answer = $4
+       WHERE id = $1 AND business_id = $2 AND kind = 'file' AND status = 'pending'
+         AND expires_at > now()
+       RETURNING ${decisionColumns}`,
+      [decisionId, businessId, by, file],
+    ),
+  );
 
 /**
  * An employee's `askOwner`: the standing answer to exactly this request on this work item, if

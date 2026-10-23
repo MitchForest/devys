@@ -7,9 +7,10 @@ import { useApps, useEmployees, useHome, useWork } from "../app/data.ts";
 import { useAnswer, useConnectApp } from "../app/mutations.ts";
 import { AppLogo } from "./layers/team-app.tsx";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { useNav } from "../app/navigation.ts";
 import { EmployeePortrait } from "../design/portrait.tsx";
-import { decisionFields, decisionTitle, RequestActions } from "./work.tsx";
+import { decisionFields, decisionTitle, RequestActions, RequestDetails } from "./work.tsx";
 import { PanelBody, PanelHeader, PanelSection } from "./panel.tsx";
 import { RoutineProposal } from "./routines.tsx";
 
@@ -147,6 +148,9 @@ function DecisionRow({ decision }: { decision: NeedsYouRequest }) {
   const [open, setOpen] = useState(false);
   const employee = employees.find((e) => e.id === decision.employee_id);
   const item = work?.find((w) => w.id === decision.work_item_id);
+  const request = ownerRequest(decision);
+  // A draft or steps to approve are what is approved: shown without asking for details.
+  const hasPreview = request?.kind === "approve" && Boolean(request.preview || request.steps);
   return (
     <div className="flex flex-col gap-2 rounded-card border border-hairline bg-sheet p-3 shadow-resting">
       <div className="flex items-center gap-2">
@@ -161,20 +165,9 @@ function DecisionRow({ decision }: { decision: NeedsYouRequest }) {
           </span>
         </div>
       </div>
-      {(open || spendOf(decision)) && (
-        <div className="flex flex-col gap-1 rounded-control bg-well p-2.5">
-          {decisionFields(decision).map(([key, value]) => (
-            <div key={key} className="flex items-baseline gap-2">
-              <span className="min-w-14 text-caption text-ink-3">{key}</span>
-              <span className="line-clamp-6 min-w-0 text-detail break-words text-ink select-text">
-                {value}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
+      {(open || spendOf(decision) || hasPreview) && <RequestDetails decision={decision} compact />}
       <RequestActions decision={decision} compact>
-        {!spendOf(decision) && (
+        {!spendOf(decision) && !hasPreview && decisionFields(decision).length > 0 && (
           <button
             type="button"
             onClick={() => setOpen(!open)}
@@ -224,7 +217,7 @@ function GlanceRow({ item, tone }: { item: WorkCard; tone?: "stuck" }) {
       ? item.wait_condition
         ? `Waiting on ${item.wait_condition}`
         : "No change in a day"
-      : undefined;
+      : item.progress;
   return (
     <button
       type="button"
@@ -234,7 +227,13 @@ function GlanceRow({ item, tone }: { item: WorkCard; tone?: "stuck" }) {
       {employee && <EmployeePortrait employee={employee} size={20} />}
       <span className="flex min-w-0 flex-col">
         <span className="truncate text-detail font-medium text-ink">{item.title}</span>
-        {note && <span className="truncate text-caption text-red">{note}</span>}
+        {note && (
+          <span
+            className={cn("truncate text-caption", tone === "stuck" ? "text-red" : "text-ink-3")}
+          >
+            {note}
+          </span>
+        )}
       </span>
     </button>
   );

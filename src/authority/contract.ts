@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import { ConversationKey } from "../conversations/contract.ts";
+import { parseRef, Ref } from "../protocol/ref.ts";
 import { Timestamp } from "../protocol/time.ts";
 import { SecretName } from "../vault/contract.ts";
 
@@ -27,7 +28,7 @@ export type Outcome =
 
 /**
  * What a request asks of the owner: `decision`, a modelled capability's `ask`; `approve`,
- * `take_over`, `secret` and `connect`, an employee's `askOwner`
+ * `take_over`, `secret`, `connect` and `file`, an employee's `askOwner`
  * (.docs/AUTHORITY.md#bringing-the-owner-in).
  */
 export const RequestKind = Schema.Literals([
@@ -36,6 +37,7 @@ export const RequestKind = Schema.Literals([
   "take_over",
   "secret",
   "connect",
+  "file",
 ]);
 export type RequestKind = typeof RequestKind.Type;
 
@@ -47,6 +49,22 @@ export const Amount = Schema.Struct({
 export type Amount = typeof Amount.Type;
 
 const Words = (max: number) => Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(max));
+
+/** A page or a file the owner sees in an approval, as it is when asked. */
+export const PreviewRef = Ref.check(
+  Schema.makeFilter((value) => {
+    const parts = parseRef(value);
+    return (
+      (parts?.app === "documents" && (parts.kind === "artifact" || parts.kind === "file")) ||
+      "Preview a page (devys:documents/artifact/<id>) or a file (devys:documents/file/<path>)"
+    );
+  }),
+);
+
+/** A media type a file request accepts: `application/pdf`, or a family like `image/*`. */
+export const AcceptedType = Schema.String.check(
+  Schema.isPattern(/^[a-z]+\/(\*|[a-z0-9][a-z0-9.+-]{0,99})$/),
+);
 
 /**
  * An employee's `askOwner` request, stored as its decision's input. An approve with an amount is
@@ -62,6 +80,13 @@ export const OwnerRequest = Schema.Union([
     amount: Schema.optionalKey(Amount),
     /** What recurs, in words: "Renews yearly at $12.99". */
     renewal: Schema.optionalKey(Words(200)),
+    /**
+     * Each step the approval covers, exactly ("Merge PR #12 at a1b2c3", "Deploy a1b2c3 of site
+     * to production"): approving covers those steps and nothing else.
+     */
+    steps: Schema.optionalKey(Schema.Array(Words(300)).check(Schema.isMaxLength(10))),
+    /** The draft the owner approves (an email, a post, an invoice), shown on the card. */
+    preview: Schema.optionalKey(PreviewRef),
   }),
   Schema.Struct({
     kind: Schema.Literal("take_over"),
@@ -87,6 +112,13 @@ export const OwnerRequest = Schema.Union([
     /** What it is for, in one line the owner reads on the card: "To pay bills from Ramp". */
     why: Words(300),
   }),
+  Schema.Struct({
+    kind: Schema.Literal("file"),
+    /** What the file is for, in one line on the card: "Your logo, for the site's header". */
+    purpose: Words(300),
+    /** The media types it may be: `image/*`, `application/pdf`. Any when absent. */
+    accept: Schema.optionalKey(Schema.Array(AcceptedType).check(Schema.isMaxLength(10))),
+  }),
 ]);
 export type OwnerRequest = typeof OwnerRequest.Type;
 
@@ -106,6 +138,8 @@ export const Decision = Schema.Struct({
   expires_at: Timestamp,
   /** The device key that signed a spend approval. */
   signed_by: Schema.NullOr(Schema.String),
+  /** What answered a file request: the file the owner chose, in the business folder. */
+  answer: Schema.NullOr(Ref),
 });
 export type Decision = typeof Decision.Type;
 
@@ -114,6 +148,17 @@ export const ownerRequest = (decision: Pick<Decision, "kind" | "input">) =>
   decision.kind !== "decision" && Schema.is(OwnerRequest)(decision.input)
     ? decision.input
     : undefined;
+
+/**
+ * The draft an approve shows, with the hash of its content when it was asked (set by the
+ * server, never by the employee): the approval stands only while the draft is unchanged.
+ */
+export const previewOf = (decision: Pick<Decision, "kind" | "input">) => {
+  const request = ownerRequest(decision);
+  if (request?.kind !== "approve" || !request.preview) return undefined;
+  const hash = (decision.input as { previewHash?: unknown }).previewHash;
+  return { ref: request.preview, hash: typeof hash === "string" ? hash : null };
+};
 
 /** The spend a decision asks the owner to sign: an approve with an amount. */
 export const spendOf = (decision: Pick<Decision, "kind" | "input">) => {

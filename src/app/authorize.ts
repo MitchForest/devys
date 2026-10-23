@@ -9,7 +9,8 @@ import { usableIn } from "./apps.ts";
 
 /**
  * The one authorization path: the app gate, the work item's fence and conditions, then the grant.
- * An `ask` uses an approved decision for this exact request once, or opens one.
+ * An `ask` uses an approved decision for this exact request once (or an approved `askOwner`
+ * whose steps name this call exactly), or opens one.
  */
 export async function authorize(
   env: Pick<Env, "HYPERDRIVE">,
@@ -42,6 +43,8 @@ export async function authorize(
     input,
   );
   if (decision.outcome !== "ask") return decision;
+  // An owner's approval of several steps in this work item covers a call it names exactly.
+  const step = workItemId ? await capability.step?.(input, scope.businessId) : undefined;
   return Effect.runPromise(
     settleAsk(env.HYPERDRIVE, scope, {
       grantId: decision.grantId,
@@ -49,6 +52,7 @@ export async function authorize(
       input,
       ...(workItemId ? { workItemId } : {}),
       ...(conversation ? { conversation } : {}),
+      ...(step ? { step } : {}),
     }),
   );
 }

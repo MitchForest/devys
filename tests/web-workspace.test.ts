@@ -126,6 +126,13 @@ describe("conversation timeline, as native ChatTimeline", () => {
     expect(offered([...asked, message(4, me, "2026-10-19T10:03:00Z")])).toEqual([]);
     expect(offered(asked, [{ id: "local", text: "Calm", delivery: "sending" }])).toEqual([]);
     expect(offered([...asked, message(5, "employee:e1", "2026-10-19T10:04:00Z")])).toEqual([]);
+    // Devys's notice that a turn stopped offers "Ask again" while it is the latest word.
+    const stopped = {
+      ...message(6, "system", "2026-10-19T10:05:00Z", "event"),
+      replies: ["Ask again"],
+    };
+    expect(offered([...asked, stopped])).toEqual([["m6", "Ask again"]]);
+    expect(offered([...asked, stopped, message(7, me, "2026-10-19T10:06:00Z")])).toEqual([]);
   });
 });
 

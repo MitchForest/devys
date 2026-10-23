@@ -149,6 +149,7 @@ it("readSkill loads the business's skill first, then an installed app's", async 
   const readSkill = workspaceCapabilities(
     () => port,
     async () => [appSkill, { ...appSkill, name: "app-only" }],
+    async () => [],
   ).find((item) => item.name === "readSkill")!;
   const read = (name: string) =>
     Effect.runPromise(
@@ -171,4 +172,22 @@ it("readSkill loads the business's skill first, then an installed app's", async 
   expect(await read("app-only")).toEqual({ ...appSkill, name: "app-only" });
   await expect(read("missing")).rejects.toThrow("No skill is named missing");
   expect(readSkill.core).toBe(true);
+});
+
+it("checking work, shipping code and accounts ship with their apps, short and general", async () => {
+  const { computer } = await import("../src/apps/computer/app.ts");
+  const { code } = await import("../src/apps/code/app.ts");
+  const { browser } = await import("../src/apps/browser/app.ts");
+  const shipped = [
+    [computer, "checking-your-work"],
+    [code, "shipping-code"],
+    [browser, "accounts-and-sign-ins"],
+  ] as const;
+  for (const [app, name] of shipped) {
+    const skill = app.skills.find((each) => each.name === name);
+    expect(skill, name).toBeDefined();
+    expect(skill!.body.split("\n").length, name).toBeLessThanOrEqual(60);
+    // Each ends in what the owner glances at: the work item's results.
+    expect(skill!.body, name).toMatch(/results/);
+  }
 });

@@ -9,7 +9,7 @@ import { logoUrl } from "./remote-apps.ts";
 import { postMessage, readAt } from "../conversations/service.ts";
 import { type Business, type Person } from "../identity/contract.ts";
 import { employeesOf } from "../identity/service.ts";
-import type { WorkItem } from "../work/contract.ts";
+import { progressText, resultText, type WorkItem } from "../work/contract.ts";
 import { workItems } from "../work/service.ts";
 import { quietRuns, routines } from "../work/routines.ts";
 import { respond } from "../protocol/http.ts";
@@ -39,11 +39,15 @@ const card = (item: WorkItem): WorkCard => ({
   wait_condition: item.wait_condition,
   due_at: item.due_at,
   updated_at: item.updated_at,
+  progress: progressText(item.steps),
 });
 
-/** `"A", "B" and 3 more`. */
-function titles(items: readonly WorkItem[]) {
-  const shown = items.slice(0, 5).map((item) => `"${item.title}"`);
+/** `"A", "B" and 3 more`; with `results`, each followed by its first results. */
+function titles(items: readonly WorkItem[], results = false) {
+  const shown = items.slice(0, 5).map((item) => {
+    const proof = results ? item.results.slice(0, 3).map(resultText).join("; ") : "";
+    return proof ? `"${item.title}" (${proof})` : `"${item.title}"`;
+  });
   return items.length > 5 ? `${shown.join(", ")} and ${items.length - 5} more` : shown.join(", ");
 }
 
@@ -72,7 +76,7 @@ export function briefing(
   );
   // Spending (signed spend approvals) shows at a glance; the briefing has no cost line.
   const lines = [
-    done.length && `Done: ${titles(done)}.`,
+    done.length && `Done: ${titles(done, true)}.`,
     moving.length && `Moving: ${titles(moving)}.`,
     blocked.length && `Stuck: ${titles(blocked)}.`,
     quiet.length && `Checked, nothing to report: ${quietly(quiet)}.`,
@@ -125,8 +129,8 @@ export async function homeRoute(
   /** The routine an activation request is about, by the ids in its input. */
   const routineOf = (decision: Decision) => {
     if (decision.capability !== "routineActivate") return undefined;
-    const asked = decision.input as { routine?: unknown };
-    return proposals.find((routine) => routine.id === asked.routine);
+    const asked = decision.input as { ref?: unknown };
+    return proposals.find((routine) => routine.id === asked.ref);
   };
   /** The proposal an activation request decides, while the routine is still at that revision. */
   const proposalOf = (decision: Decision) => {

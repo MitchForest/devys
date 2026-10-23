@@ -1,11 +1,14 @@
 import { env } from "cloudflare:workers";
 import { Effect } from "effect";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import type { Env } from "../infra/api.ts";
 import { authorize } from "../src/app/authorize.ts";
 import { capabilities } from "../src/app/capabilities.ts";
 import { apiRoute } from "../src/app/http.ts";
 import { spendTerms } from "../src/app/asking.ts";
+import { modeOf } from "../src/app/mode.ts";
+import { decisionRoute } from "../src/app/work.ts";
+import { ref } from "../src/protocol/ref.ts";
 import { decision, grant } from "../src/authority/service.ts";
 import { endorsementPayload, spendPayload } from "../src/authority/signing.ts";
 import type { Inbound } from "../src/channels/contract.ts";
@@ -101,12 +104,16 @@ async function owner() {
         state: string;
       }>,
     );
+  /**
+   * The thread, without hand-offs: under the full run another file's dispatcher may hand this
+   * work item on and post its card here at any time.
+   */
   const thread = async () =>
     (
       (await (
         await mac.call(at(`/conversations/${encodeURIComponent(`work:${work.id}`)}`))
-      ).json()) as { messages: { text: string; mentions: string[] }[] }
-    ).messages;
+      ).json()) as { messages: { text: string; mentions: string[]; ref: string | null }[] }
+    ).messages.filter((message) => !message.ref?.startsWith("devys:work/item/"));
   return { ...acme, work, mac, at, ask, thread };
 }
 
@@ -226,6 +233,9 @@ it("a spend approval needs a device signature over exactly the request; the web 
       amountCents: Number(changed.amount_cents ?? terms.amount_cents),
       currency: "USD",
       renewal: "Renews yearly at $14.99",
+      steps: [],
+      preview: null,
+      previewHash: null,
       expiresAt: String(terms.expires_at),
     });
     expect(
@@ -354,4 +364,126 @@ it("a take-over request is answered by taking the work over, and handing it back
         )
     ).decisions.find((each) => each.id === asked.request)?.status,
   ).toBe("used");
+});
+
+/** A page of the business, as an employee publishes it: a new version under the same name. */
+async function publishPage(businessId: string, filename: string, text: string) {
+  const id = crypto.randomUUID();
+  const key = `${businessId}/artifacts/${id}`;
+  await bindings.FILES.put(key, text);
+  await sql.run(
+    `INSERT INTO artifacts (id, business_id, operation_id, object_key, filename, content_type, byte_length)
+     VALUES ($1, $2, $3, $4, $5, 'text/html', $6)`,
+    [id, businessId, crypto.randomUUID(), key, filename, text.length],
+  );
+  return ref("documents", "artifact", id);
+}
+
+it("an approve shows its draft and steps, bound by the draft's content: a changed draft voids it", async () => {
+  const { business: acme, mac, at, ask, thread } = await owner();
+  const draft = await publishPage(acme.id, "quote.html", "<p>Quote: $400</p>");
+  const send = {
+    kind: "approve",
+    action: "Email the quote to Ada",
+    counterparty: "ada@example.com",
+    steps: ["Send the quote to ada@example.com", "Mark the lead quoted"],
+    preview: draft,
+  };
+  const asked = await ask(send);
+  // The draft's content is bound into the request (by the server, not the employee).
+  const stored = (await Effect.runPromise(decision(db, acme.id, asked.request)))!;
+  expect(stored.input).toMatchObject({ ...send, previewHash: await sha256("<p>Quote: $400</p>") });
+  expect((await mac.call(at(`/decisions/${asked.request}/approve`), {})).status).toBe(200);
+  expect((await thread()).at(-1)?.text).toBe(
+    "Approved: Email the quote to Ada (ada@example.com). These steps: Send the quote to ada@example.com; Mark the lead quoted. Go ahead, exactly as asked, once.",
+  );
+  expect(await ask(send)).toMatchObject({ request: asked.request, state: "approved" });
+
+  // Asked again with other steps, then the page changes before the owner answers.
+  const resend = { ...send, steps: ["Send the quote to ada@example.com"] };
+  const second = await ask(resend);
+  expect(second.request).not.toBe(asked.request);
+  await publishPage(acme.id, "quote.html", "<p>Quote: $450</p>");
+  expect((await mac.call(at(`/decisions/${second.request}/approve`), {})).status).toBe(409);
+  expect((await thread()).at(-1)?.text).toContain("That draft changed after you asked");
+  // Asking again binds the draft as it is now: a new request.
+  const third = await ask(resend);
+  expect(third).toMatchObject({ state: "asked" });
+  expect(third.request).not.toBe(second.request);
+  // The approval already given no longer stands for the changed draft either.
+  expect((await ask(send)).state).toBe("asked");
+  // A draft is a page or file of this business.
+  expect(
+    await refusal(ask({ ...send, preview: ref("documents", "artifact", crypto.randomUUID()) })),
+  ).toContain("Preview a page or a file");
+  expect(
+    await refusal(ask({ ...send, preview: ref("work", "item", crypto.randomUUID()) })),
+  ).toContain("Invalid arguments");
+});
+
+it("a file request is answered with the file the owner chooses, put in the business folder", async () => {
+  const { business: acme, person, mac, at, ask, thread } = await owner();
+  const asked = await ask({
+    kind: "file",
+    purpose: "Your logo, for the site",
+    accept: ["image/*"],
+  });
+  expect(asked.state).toBe("asked");
+  // Approving is not how: the owner chooses the file.
+  expect((await mac.call(at(`/decisions/${asked.request}/approve`), {})).status).toBe(409);
+
+  const hostUrl = "http://127.0.0.1:1";
+  const local = {
+    ...bindings,
+    DEVYS_MODE: "local",
+    DEVYS_HOST_URL: hostUrl,
+    DEVYS_HOST_TOKEN: "host-token",
+    DEVYS_HOST_HOME: "/Users/owner",
+  } as unknown as Env;
+  const folder = modeOf(local).businessFolder(acme.id)!;
+  const written: string[] = [];
+  const realFetch = globalThis.fetch;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    if (url.origin !== hostUrl) return realFetch(input, init);
+    const path = url.searchParams.get("path")!;
+    // logo.png is already there: it is never written over.
+    if (path === `${folder}/Uploads/logo.png`)
+      return new Response("Revision conflict: the file exists", { status: 409 });
+    written.push(path);
+    return Response.json({});
+  });
+  try {
+    const choose = (type: string, name: string) =>
+      decisionRoute(
+        new Request(
+          `https://devys.test/api/businesses/${acme.id}/decisions/${asked.request}/file?name=${encodeURIComponent(name)}`,
+          { method: "POST", headers: { "content-type": type }, body: new Uint8Array([1, 2, 3]) },
+        ),
+        local,
+        {
+          person: { id: person } as never,
+          business: { id: acme.id } as never,
+          trusted: true,
+          path: `/decisions/${asked.request}/file`,
+        },
+      );
+    expect((await choose("application/pdf", "logo.pdf")).status).toBe(415);
+    received.length = 0;
+    expect((await choose("image/png", "logo.png")).status).toBe(200);
+    const file = ref("documents", "file", `${folder}/Uploads/logo 2.png`);
+    expect(written).toEqual([`${folder}/Uploads/logo 2.png`]);
+    // The thread shows the file, and the employee alone is told its ref.
+    const said = await thread();
+    expect(said.at(-1)?.text).toBe("Here's the file: logo 2.png.");
+    expect(said.at(-1)?.text).not.toContain(file);
+    expect(said.some((message) => message.ref === file)).toBe(true);
+    expect(received[0]!.input.text).toContain(file);
+    expect(
+      await ask({ kind: "file", purpose: "Your logo, for the site", accept: ["image/*"] }),
+    ).toMatchObject({ request: asked.request, state: "done", file });
+    expect((await choose("image/png", "logo.png")).status).toBe(409);
+  } finally {
+    vi.restoreAllMocks();
+  }
 });

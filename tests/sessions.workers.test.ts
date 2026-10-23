@@ -150,6 +150,21 @@ it("stop aborts work running in a work session", async () => {
   expect(status.inbox).toEqual([expect.objectContaining({ id, status: "failed" })]);
 });
 
+it("a turn without words posts nothing; a failed one is Devys's notice, not the employee's", async () => {
+  const target = employee();
+  await send(target, "m-quiet", target.app, "Do it quietly");
+  const id = await target.agent.idOf("m-quiet");
+  await until(
+    async () => JSON.parse(await target.agent.inspect(target.scope)).inbox,
+    (inbox: { id: string; status: string }[]) =>
+      inbox.some((item) => item.id === id && item.status === "done"),
+  );
+  expect(await target.agent.outbox("m-quiet")).toBeNull();
+
+  await send(target, "m-broken", target.app, "This is broken");
+  expect(await answered(target, "m-broken")).toMatchObject({ notice: "failed", text: "" });
+});
+
 it("a message in a work item's thread acts for that work item", async () => {
   const target = employee();
   await send(target, "m-thread", `${target.app}:work:c-7`, "Do the slow thing");

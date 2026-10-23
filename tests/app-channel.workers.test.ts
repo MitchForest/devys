@@ -18,6 +18,7 @@ it("an app message reaches only the employee in its chat, and only from a member
     allowed: async (senderId, scope) =>
       senderId === acme.person && scope.businessId === acme.scope.businessId,
     post: async () => {},
+    notice: async () => {},
   });
   const input = {
     messageId: "msg-00000001",

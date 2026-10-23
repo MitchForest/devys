@@ -13,16 +13,23 @@
         "cents": 1299,
         "currency": "USD"
       },
-      "renewal": "Renews yearly at $12.99"
+      "renewal": "Renews yearly at $12.99",
+      "steps": [
+        "Pay the invoice",
+        "Mark \"INV-7\" paid"
+      ],
+      "preview": "devys:documents/artifact/00000000-0000-4000-8000-000000000005",
+      "previewHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
     },
     "work_item_id": "00000000-0000-4000-8000-000000000003",
     "conversation": "work:00000000-0000-4000-8000-000000000003",
     "status": "pending",
     "requested_at": "2026-10-21T09:30:00.000Z",
     "expires_at": "2026-10-22T09:30:00.000Z",
-    "signed_by": null
+    "signed_by": null,
+    "answer": null
   },
-  "payload": "{\"action\":\"Register \\\"acme.example\\\" for 1 year\\\\2 — café ☕ a/b\\n\\ttab \\u0001 \\u001f\",\"amount_cents\":1299,\"business\":\"00000000-0000-4000-8000-000000000002\",\"counterparty\":\"Namecheap\",\"currency\":\"USD\",\"decision\":\"00000000-0000-4000-8000-000000000001\",\"expires_at\":\"2026-10-22T09:30:00.000Z\",\"renewal\":\"Renews yearly at $12.99\",\"type\":\"spend_approval\",\"work_item\":\"00000000-0000-4000-8000-000000000003\"}",
-  "public_key": "BCDij9urh2sNUg0gg0DUgyk1/FXSWQPxIEaK1wHb+twTfTKW/vHV8w2KPznUuKJXdRUXyN+j6cl07cNRrc2aQoo=",
-  "signature": "MEUCIBO6ZVfwwhqQCb1uzdq+Ch/WEPX6LjX+GsKY0vS5hybpAiEAhH4XvuUIdAK+6Zlr6vjhqs9935dauvlW7q32TICtY/w="
+  "payload": "{\"action\":\"Register \\\"acme.example\\\" for 1 year\\\\2 — café ☕ a/b\\n\\ttab \\u0001 \\u001f\",\"amount_cents\":1299,\"business\":\"00000000-0000-4000-8000-000000000002\",\"counterparty\":\"Namecheap\",\"currency\":\"USD\",\"decision\":\"00000000-0000-4000-8000-000000000001\",\"expires_at\":\"2026-10-22T09:30:00.000Z\",\"preview\":\"devys:documents/artifact/00000000-0000-4000-8000-000000000005\",\"preview_hash\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"renewal\":\"Renews yearly at $12.99\",\"steps\":[\"Pay the invoice\",\"Mark \\\"INV-7\\\" paid\"],\"type\":\"spend_approval\",\"work_item\":\"00000000-0000-4000-8000-000000000003\"}",
+  "public_key": "BEQtaW+xcSOdg4gZ+5H7mMQG5lzQRx0wXOCGDwQ29UIbDp/tDgbSEyM+euTRMeozkgDfg4+ENK6ruQzZSyyS7J4=",
+  "signature": "MEQCIGogUpuKtkQvysKYTuO9O+s9Jh5O2l/VczaCE/Yi7miHAiBpgWYnUp38w70pKrTOZNW1o9U/fcFrrwbtJjA1muS2XQ=="
 }

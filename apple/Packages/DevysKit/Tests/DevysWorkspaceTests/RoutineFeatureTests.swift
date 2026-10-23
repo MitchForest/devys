@@ -23,7 +23,7 @@ private actor RoutineServer {
     ]
     var home = Home(needsYou: [
         NeedsYouItem(
-            Decision(id: "d1", employeeID: "growth", capability: "routineActivate", input: .object(["routine": .string("r2"), "revision": .number(1)])),
+            Decision(id: "d1", employeeID: "growth", capability: "routineActivate", input: .object(["ref": .string("r2"), "revision": .number(1)])),
             title: "Supplier replies",
             projectID: "p1",
             routine: Routine(id: "r2", employeeID: "growth", projectID: "p1", title: "Supplier replies", state: .proposed)

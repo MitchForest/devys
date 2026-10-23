@@ -55,6 +55,10 @@ export class SessionsProbe extends AgentRuntime {
           stream.push({ type: "error", reason: "aborted", error: message("", "aborted") });
         if (options?.signal?.aborted) aborted();
         else options?.signal?.addEventListener("abort", aborted, { once: true });
+      } else if (owner.includes("quietly")) {
+        stream.push({ type: "done", reason: "stop", message: message("", "stop") });
+      } else if (owner.includes("broken")) {
+        stream.push({ type: "error", reason: "error", error: message("", "error") });
       } else {
         stream.push({ type: "done", reason: "stop", message: message(`Re: ${owner}`, "stop") });
       }
@@ -81,6 +85,7 @@ export class SessionsProbe extends AgentRuntime {
         readText: async (input) => input.text ?? "",
         prepare: async (_scope, input) => input.text ?? "",
         send: async () => ({ status: "sent", guid: null }),
+        notice: async () => ({ status: "sent", guid: null }),
       },
       memory: () => ({
         progress: () =>
@@ -139,7 +144,11 @@ export class SessionsProbe extends AgentRuntime {
 
   async outbox(messageId: string) {
     const id = await this.idOf(messageId);
-    return (await this.ctx.storage.get<{ status: string; text: string }>(`outbox:${id}`)) ?? null;
+    return (
+      (await this.ctx.storage.get<{ status: string; text: string; notice?: string }>(
+        `outbox:${id}`,
+      )) ?? null
+    );
   }
 
   async runningWork() {

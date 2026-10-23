@@ -59,7 +59,7 @@ struct SecretEntryView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DevysSpacing.regular) {
-            Text(sheet.isFixed ? "Add \(sheet.name)" : sheet.isCard ? "Add a card" : "Add a secret")
+            Text(sheet.isFixed ? (sheet.isCard ? "Add your card" : "Add the secret") : sheet.isCard ? "Add a card" : "Add a secret")
                 .font(DevysTypography.title).foregroundStyle(DevysColors.ink)
             if let why = sheet.why {
                 Text(why).font(DevysTypography.secondary).foregroundStyle(DevysColors.ink2)

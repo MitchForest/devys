@@ -1,4 +1,4 @@
-import { addressOf, type Binding, type Channel, type Inbound } from "./contract.ts";
+import { addressOf, noticeText, type Binding, type Channel, type Inbound } from "./contract.ts";
 import { loadInput, readMessageText, type InputBindings } from "./input.ts";
 import { sendReply } from "./photon.ts";
 
@@ -17,5 +17,7 @@ export function imessageChannel(
     readText: (input) => readMessageText(env, raw(input)),
     prepare: (scope, input) => loadInput(env, scope.businessId, raw(input)),
     send: (_scope, chat, text, operation) => sendReply(env, addressOf(chat), text, operation),
+    notice: (_scope, chat, notice, operation) =>
+      sendReply(env, addressOf(chat), noticeText(notice), operation),
   };
 }

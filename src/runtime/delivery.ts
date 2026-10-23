@@ -1,4 +1,4 @@
-import type { Inbound } from "../channels/contract.ts";
+import type { Inbound, Notice } from "../channels/contract.ts";
 /** Adapter receipts only; Pi owns queued/running/completed work. */
 export interface ChannelMessage {
   id: string;
@@ -16,6 +16,8 @@ export interface Outbox {
   id: string;
   chatId: string;
   text: string;
+  /** Set when Devys, not the employee, answers: the turn ended without the employee's words. */
+  notice?: Notice;
   /** The inbound message the reply answers. */
   replyTo?: string;
   attempts: number;

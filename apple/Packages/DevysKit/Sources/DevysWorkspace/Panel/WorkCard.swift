@@ -35,6 +35,7 @@ struct WorkCard: View {
                         // Attached to a view that always exists, so it runs with no decisions yet.
                         WorkSummary(store: store, item: item)
                             .task(id: item.revision) { await loadAnswered(item) }
+                        progress(item)
                         WorkItemActions(store: store, item: item)
                         decisions(item)
                         CodingSessions(store: store, item: item)
@@ -60,6 +61,22 @@ struct WorkCard: View {
                     following ? "Following: told at each step. Stop following" : "Follow each step",
                     symbol: following ? "bell.fill" : "bell"
                 ) { store.send(.followToggled(item.id)) }
+            }
+        }
+    }
+
+    /// What it achieved, then the steps it shows while it takes time.
+    @ViewBuilder private func progress(_ item: WorkItem) -> some View {
+        if !item.results.isEmpty {
+            VStack(alignment: .leading, spacing: DevysSpacing.small) {
+                SectionHeader("Results")
+                WorkResultsView(results: item.results)
+            }
+        }
+        if let progress = WorkStep.progress(item.steps) {
+            VStack(alignment: .leading, spacing: DevysSpacing.small) {
+                SectionHeader("Steps · \(progress)")
+                WorkStepsView(steps: item.steps)
             }
         }
     }

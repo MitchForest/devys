@@ -5,12 +5,15 @@
  * (`SpendApproval.canonical` in DevysClient), checked against a golden file.
  *
  * A payload is JSON with its keys in sorted order and no whitespace, strings escaped as
- * `JSON.stringify` escapes them, and every field present (`null` when absent). The device signs
+ * `JSON.stringify` escapes them, and every field present (`null` when absent; `[]` for no steps). The device signs
  * its UTF-8 bytes with ECDSA over SHA-256; the signature is DER (X9.62), as the Secure Enclave
  * produces it, and the public key is X9.63 uncompressed (65 bytes), both base64.
  */
 
-/** What a spend approval binds: the request, where it is spent, and until when. */
+/**
+ * What a spend approval binds: the request, where it is spent, the steps and draft it covers
+ * (the draft by its ref and the hash of its content when asked), and until when.
+ */
 export interface SpendTerms {
   decision: string;
   business: string;
@@ -20,6 +23,9 @@ export interface SpendTerms {
   amountCents: number;
   currency: string;
   renewal: string | null;
+  steps: readonly string[];
+  preview: string | null;
+  previewHash: string | null;
   expiresAt: string;
 }
 
@@ -33,7 +39,10 @@ export const spendPayload = (terms: SpendTerms) =>
     currency: terms.currency,
     decision: terms.decision,
     expires_at: terms.expiresAt,
+    preview: terms.preview,
+    preview_hash: terms.previewHash,
     renewal: terms.renewal,
+    steps: terms.steps,
     type: "spend_approval",
     work_item: terms.workItem,
   });

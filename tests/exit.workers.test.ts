@@ -65,7 +65,7 @@ it("B0 exit: an employee's capabilities see only its own business's work, projec
     call(globex.scope, "workCreate", { title: "x", project: launchRef }),
   ).rejects.toMatchObject({ code: "invalid_input" });
   await expect(
-    call(globex.scope, "projectUpdate", { project: launchRef, goal: "Theirs now" }),
+    call(globex.scope, "projectUpdate", { ref: launchRef, goal: "Theirs now" }),
   ).rejects.toMatchObject({ code: "invalid_input" });
 });
 
@@ -86,7 +86,7 @@ it("capabilities that create a record return its ref; projectAdd takes refs of t
   const launchId = launch.ref.split("/").at(-1)!;
   for (const project of [launchId, task.ref])
     await expect(
-      call(acme.scope, "projectUpdate", { project, goal: "Ship it" }),
+      call(acme.scope, "projectUpdate", { ref: project, goal: "Ship it" }),
     ).rejects.toMatchObject({ code: "invalid_input" });
   const placed = (await call(acme.scope, "workCreate", {
     title: "Draft the launch post",
@@ -104,9 +104,10 @@ it("capabilities that create a record return its ref; projectAdd takes refs of t
   };
   const ours = `devys:documents/artifact/${await artifact(acme.business.id)}`;
   const theirs = `devys:documents/artifact/${await artifact(globex.business.id)}`;
-  expect(await call(acme.scope, "projectAdd", { project: launch.ref, ref: ours })).toEqual({
-    project: launch.ref,
-    ref: ours,
+  // Inputs and outputs name the record they change the same way: its ref.
+  expect(await call(acme.scope, "projectAdd", { ref: launch.ref, record: ours })).toMatchObject({
+    ref: launch.ref,
+    items: [ours],
   });
   const listed = (await call(acme.scope, "projectList", {})) as {
     projects: { ref: string; items: string[] }[];
@@ -116,6 +117,6 @@ it("capabilities that create a record return its ref; projectAdd takes refs of t
   ]);
   for (const kept of [theirs, task.ref, `artifact:${ours.split("/").at(-1)}`])
     await expect(
-      call(acme.scope, "projectAdd", { project: launch.ref, ref: kept }),
+      call(acme.scope, "projectAdd", { ref: launch.ref, record: kept }),
     ).rejects.toMatchObject({ code: "invalid_input" });
 });

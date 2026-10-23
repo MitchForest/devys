@@ -1,7 +1,7 @@
 import type { PiHarness } from "agents/harness/pi";
 import type { LifecycleJobs } from "agents/lifecycle";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { Channel, Inbound } from "../channels/contract.ts";
+import type { Channel, Inbound, Notice } from "../channels/contract.ts";
 import type { ConversationKey } from "../conversations/contract.ts";
 import type { Scope } from "../identity/contract.ts";
 import { defaultLimits } from "../protocol/limits.ts";
@@ -14,6 +14,11 @@ import { deliver, queueReply, reaches } from "./outbox.ts";
 import { conversationIn, conversationOf, type Sessions } from "./sessions.ts";
 
 type Later = { rescheduleAt: number };
+/**
+ * What answers a message: the employee's words, Devys's notice when the turn ended without them,
+ * or nothing when the employee finished without saying anything (its cards carry the turn).
+ */
+type Answer = string | { notice: Notice } | null;
 
 const expired = (message: ChannelMessage) =>
   Date.now() >= message.receivedAt + defaultLimits.maxDurationMs;
@@ -192,7 +197,8 @@ export function channelInbox(deps: {
         message = prepared.message;
       }
       const answer = await answerOf(message, conversation);
-      if (typeof answer !== "string") return answer;
+      if (answer === null) return;
+      if (typeof answer === "object" && "rescheduleAt" in answer) return answer;
       output = await queueReply(storage, message, answer);
     }
     return deliver({ storage, channel: deps.channel, scope }, message, output);
@@ -228,11 +234,11 @@ export function channelInbox(deps: {
     }
   }
 
-  /** The reply text for a message, or when to look again while Pi is still working. */
+  /** The answer to a message, or when to look again while Pi is still working. */
   async function answerOf(
     message: ChannelMessage,
     conversation: ConversationKey | undefined,
-  ): Promise<string | Later> {
+  ): Promise<Answer | Later> {
     if (message.control) {
       if (message.control === "stop") await cancel(message.targets ?? []);
       return message.control === "stop"
@@ -250,12 +256,12 @@ export function channelInbox(deps: {
         ...(session === undefined ? [] : [harness.abort({ operationId: message.id, session })]),
         ...(active ? [deps.runner().cancel()] : []),
       ]);
-      return message.preparationAttempts && message.preparationAttempts >= 3
-        ? "I couldn't read that message or its attachments. Please check the files and try again."
-        : "That request was stopped or reached its time limit. Saved results remain available; incomplete actions need inspection.";
+      // A stop the owner sent is answered by the stop itself; the rest are Devys's to say.
+      if (message.preparationAttempts && message.preparationAttempts >= 3)
+        return { notice: "unreadable" };
+      return expired(message) ? { notice: "too_long" } : null;
     }
-    if (await deps.paused())
-      return "I'm paused by the owner, so I didn't act on that. Ask the owner to resume me.";
+    if (await deps.paused()) return { notice: "paused" };
     return run(message, conversation);
   }
 
@@ -263,7 +269,7 @@ export function channelInbox(deps: {
   async function run(
     message: ChannelMessage,
     conversation: ConversationKey | undefined,
-  ): Promise<string | Later> {
+  ): Promise<Answer | Later> {
     const session = await sessions.open(conversation);
     // Submitted once; the polls that follow only wait (no memory search per poll).
     if (!message.submitted) {
@@ -283,20 +289,33 @@ export function channelInbox(deps: {
     if ((await storage.get<ChannelMessage>(messageKey(message.id)))?.cancelled)
       await harness.abort({ operationId: message.id, session });
     const signal = AbortSignal.timeout(5_000);
-    let text: string;
+    let answer: Answer;
     try {
       const result = await harness.wait(message.id, { session, signal });
-      text =
-        result.status === "done"
-          ? result.text || "Finished; there was no text response."
-          : "I couldn't finish that request. Any incomplete actions need inspection before another attempt.";
+      if (result.status !== "done") answer = { notice: "failed" };
+      else if (result.text?.trim()) answer = result.text;
+      else {
+        silent(message);
+        answer = null;
+      }
     } catch (error) {
       if (signal.aborted) return { rescheduleAt: Date.now() + 1_000 };
       throw error;
     }
     // The workspace is shared by every session, so checkpoint only when all are idle.
     if (!(await harness.pending()).length) await checkpointWorkspace();
-    return text;
+    return answer;
+  }
+
+  /** A turn that ended without words: its cards (suggested replies, asks) carry it, if any. */
+  function silent(message: ChannelMessage) {
+    console.info(
+      JSON.stringify({
+        event: "turn_without_text",
+        operation: message.id,
+        chat: message.input.chatId,
+      }),
+    );
   }
 
   async function checkpointWorkspace() {

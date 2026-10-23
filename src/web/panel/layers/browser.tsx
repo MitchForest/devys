@@ -39,6 +39,77 @@ export function BrowserSection({ item }: { item: WorkItem }) {
 }
 
 /**
+ * While an employee drives the business's browser for this work item, a small live picture in its
+ * thread (a new one every 2 seconds while the page is in view), with Watch and Take over. It is
+ * gone once the browser is idle.
+ */
+export function BrowserThumbnail({ workId }: { workId: string }) {
+  const businessId = useBusinessId();
+  const nav = useNav();
+  const takeover = useTakeover();
+  const item = useWork().data?.find((w) => w.id === workId);
+  // Read every 2 seconds while it is driven, as often as anything else otherwise.
+  const status = useQuery({
+    queryKey: keys.browser(businessId),
+    queryFn: () => api.browserStatus(businessId),
+    refetchInterval: (query) => (query.state.data?.driving ? 2_000 : poll),
+  }).data;
+  const driving =
+    item !== undefined &&
+    item.taken_over_by === null &&
+    status?.open === true &&
+    status.driving &&
+    status.driver === workId;
+  const picture = useQuery({
+    queryKey: keys.screenshot(businessId),
+    queryFn: () => api.browserScreenshot(businessId),
+    refetchInterval: 2_000,
+    enabled: driving,
+  });
+  if (!driving || !item) return null;
+  const watch = () => nav.openLayer({ kind: "browser", workId });
+  return (
+    <div
+      data-testid="browser-thumbnail"
+      className="mx-auto mt-2.5 flex w-full max-w-[520px] items-center gap-3 rounded-card border border-hairline bg-sheet p-2 shadow-resting"
+    >
+      <button
+        type="button"
+        onClick={watch}
+        aria-label="Watch the browser"
+        className="h-[68px] w-[108px] shrink-0 overflow-hidden rounded-control bg-sheet-tint"
+      >
+        {picture.data && (
+          <img
+            alt=""
+            src={`data:image/jpeg;base64,${picture.data.jpeg}`}
+            className="size-full object-cover object-top"
+          />
+        )}
+      </button>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="flex items-center gap-1.5 text-control font-semibold text-ink">
+          <Globe className="size-3.5 shrink-0 text-ink-3" /> Browsing
+        </span>
+        <span className="truncate text-caption text-ink-3">{status?.title || status?.url}</span>
+      </span>
+      <Button size="compact" variant="quiet" onClick={watch}>
+        Watch
+      </Button>
+      <Button
+        size="compact"
+        onClick={() => {
+          takeover.mutate(item);
+          watch();
+        }}
+      >
+        <Hand /> Take over
+      </Button>
+    </div>
+  );
+}
+
+/**
  * The live picture of the business's browser. Take over stops employees acting on this work
  * item; while it's yours, clicks on the picture and typing go to the page (not recorded).
  */

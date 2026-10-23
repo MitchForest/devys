@@ -1,8 +1,21 @@
 import { defineApp } from "../../protocol/app.ts";
+import { bundledSkill } from "../../protocol/skill.ts";
+import checkingYourWork from "./skills/checking-your-work/SKILL.md?raw";
 
-const capabilities = ["run", "read", "write", "printPdf", "importAttachment", "readSkill"] as const;
-/** The core capabilities, offered to every employee and so granted to every role. */
-const core = ["run", "read", "write", "readSkill"] as const;
+const capabilities = [
+  "run",
+  "read",
+  "write",
+  "printPdf",
+  "importAttachment",
+  "readSkill",
+  "secretList",
+] as const;
+/**
+ * The core capabilities, offered to every employee and so granted to every role, and the list of
+ * saved secrets by name: whoever runs commands or fills a checkout needs to know what is saved.
+ */
+const core = ["run", "read", "write", "readSkill", "secretList"] as const;
 
 export const computer = defineApp({
   id: "computer",
@@ -12,7 +25,7 @@ export const computer = defineApp({
   kind: "system",
   records: [],
   capabilities,
-  skills: [],
+  skills: [bundledSkill("checking-your-work", checkingYourWork)],
   connections: [],
   appears: "never",
   defaultGrants: {

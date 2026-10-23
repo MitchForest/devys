@@ -74,6 +74,7 @@ extension Workspace.Action {
     package static var signDismissed: Self { Self(.asking(.signDismissed)) }
     package static func takeOverTapped(_ workItemID: String) -> Self { Self(.asking(.takeOverTapped(workItemID: workItemID))) }
     package static func secretTapped(_ decisionID: String) -> Self { Self(.asking(.secretTapped(decisionID: decisionID))) }
+    package static func fileChosen(_ decisionID: String, _ file: ChosenFile) -> Self { Self(.asking(.fileChosen(decisionID: decisionID, file: file))) }
     package static func secretSubmitted(_ secret: NewSecret) -> Self { Self(.asking(.secretSubmitted(secret))) }
     package static func secretFinished(_ error: String?) -> Self { Self(.asking(.secretFinished(error))) }
     package static var secretDismissed: Self { Self(.asking(.secretDismissed)) }

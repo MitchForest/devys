@@ -92,13 +92,7 @@ test("routines show on the desk and overview, open read-only, pause and resume, 
   await sql.run(
     `INSERT INTO decisions (id, business_id, employee_id, grant_id, capability, input, input_hash, expires_at)
      VALUES ($1, $2, $3, $4, 'routineActivate', $5, 'fixture', now() + interval '1 hour')`,
-    [
-      decision,
-      owner.business,
-      growth.id,
-      grant!.id,
-      JSON.stringify({ routine: sweep, revision: 1 }),
-    ],
+    [decision, owner.business, growth.id, grant!.id, JSON.stringify({ ref: sweep, revision: 1 })],
   );
   // Waiting work with a follow-up says when it looks again.
   const work = await post<{ id: string; revision: number }>(

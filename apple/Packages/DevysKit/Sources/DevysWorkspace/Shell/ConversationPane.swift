@@ -96,7 +96,16 @@ struct ConversationMessages: View {
                 case .heading(let date):
                     TimeHeading(date: date)
                 case .event(let event):
-                    EventCard(store: store, event: event)
+                    if event.isCard, case .workItem(let id)? = event.ref {
+                        WorkProgressCard(store: store, workItemID: id, text: event.text)
+                    } else {
+                        EventCard(store: store, event: event)
+                    }
+                    if !event.replies.isEmpty {
+                        SuggestedReplies(replies: event.replies) { store.send(.suggestedReplyTapped(key, event.id, $0)) }
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 3)
+                    }
                 case .bubble(let bubble):
                     MessageRow(store: store, key: key, bubble: bubble)
                         .padding(.top, bubble.startsGroup ? 10 : 2)
@@ -114,6 +123,7 @@ struct ConversationMessages: View {
                     .padding(.top, 10)
                     .transition(.opacity)
             }
+            if key.kind == .work { BrowserThumbnail(store: store, workID: key.ref) }
         }
         .animation(DevysMotion.arrive, value: timeline.items.map(\.id))
         .animation(DevysMotion.quick, value: open.awaiting)

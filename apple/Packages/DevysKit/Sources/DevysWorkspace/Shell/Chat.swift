@@ -255,10 +255,12 @@ struct MessageBubble: View {
             : UnevenRoundedRectangle(topLeadingRadius: top, bottomLeadingRadius: bottom, bottomTrailingRadius: round, topTrailingRadius: round, style: .continuous)
     }
 
-    /// Inline Markdown (bold, links, code) without block layout.
+    /// Inline Markdown (bold, links, code) without block layout. Lines keep their breaks, so a
+    /// list stays one item per line; a bulleted item's marker shows as a bullet, as on the web.
     static func rendered(_ text: String) -> AttributedString {
-        (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
-            ?? AttributedString(text)
+        let source = text.replacingOccurrences(of: #"(?m)^([ \t]*)[-*+][ \t]+"#, with: "$1• ", options: .regularExpression)
+        return (try? AttributedString(markdown: source, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
+            ?? AttributedString(source)
     }
 }
 

@@ -185,14 +185,14 @@ it("activation is the owner's decision on one exact revision; a later revision n
   const id = proposed.ref.slice("devys:work/routine/".length);
   const activate = (revision: number) =>
     Effect.runPromise(
-      named("routineActivate").execute({ routine: proposed.ref, revision }).pipe(as(scope)),
+      named("routineActivate").execute({ ref: proposed.ref, revision }).pipe(as(scope)),
     );
   // Proposing activated nothing; activating asks the owner.
   await expect(activate(1)).rejects.toMatchObject({ code: "approval_required" });
   const [asked] = await Effect.runPromise(pendingDecisions(db, scope.businessId));
   expect(asked).toMatchObject({
     capability: "routineActivate",
-    input: { routine: id, revision: 1 },
+    input: { ref: id, revision: 1 },
   });
   await Effect.runPromise(
     answerDecision(db, scope.businessId, asked!.id, { approve: true, by: person }),
@@ -205,8 +205,8 @@ it("activation is the owner's decision on one exact revision; a later revision n
   const revised = (await Effect.runPromise(
     named("routinePropose")
       .execute({
-        routine: proposed.ref,
-        expectedRevision: 1,
+        ref: proposed.ref,
+        revision: 1,
         title: "Inbox sweep",
         instruction: "Look for supplier and customer replies that need an answer.",
         trigger: { kind: "cron", expression: "0 * * * *", timezone: "America/New_York" },
@@ -385,22 +385,22 @@ it("a follow-up wakes waiting work once, and any other state clears it", async (
   const update = (input: Record<string, unknown>) =>
     Effect.runPromise(
       named("workUpdate")
-        .execute({ item: ref("work", "item", work.id), ...input })
+        .execute({ ref: ref("work", "item", work.id), ...input })
         .pipe(as(scope, { workItemId: work.id }), Effect.flip),
     ).catch(() => undefined);
   const thursday = new Date(Date.now() + 3 * 24 * 3600_000).toISOString();
   // A follow-up goes with waiting, in the future.
-  expect(await update({ expectedRevision: 1, wakeAt: thursday })).toMatchObject({
+  expect(await update({ revision: 1, wakeAt: thursday })).toMatchObject({
     code: "invalid_input",
   });
   expect(
-    await update({ expectedRevision: 1, state: "waiting", wakeAt: "2020-01-01T00:00:00Z" }),
+    await update({ revision: 1, state: "waiting", wakeAt: "2020-01-01T00:00:00Z" }),
   ).toMatchObject({ code: "invalid_input" });
   const waiting = await Effect.runPromise(
     named("workUpdate")
       .execute({
-        item: ref("work", "item", work.id),
-        expectedRevision: 1,
+        ref: ref("work", "item", work.id),
+        revision: 1,
         state: "waiting",
         waitCondition: "The supplier's price",
         wakeAt: thursday,
@@ -427,8 +427,8 @@ it("a follow-up wakes waiting work once, and any other state clears it", async (
   const again = await Effect.runPromise(
     named("workUpdate")
       .execute({
-        item: ref("work", "item", work.id),
-        expectedRevision: woken.revision,
+        ref: ref("work", "item", work.id),
+        revision: woken.revision,
         state: "waiting",
         wakeAt: thursday,
       })
@@ -437,8 +437,8 @@ it("a follow-up wakes waiting work once, and any other state clears it", async (
   const moved = await Effect.runPromise(
     named("workUpdate")
       .execute({
-        item: ref("work", "item", work.id),
-        expectedRevision: (again as { revision: number }).revision,
+        ref: ref("work", "item", work.id),
+        revision: (again as { revision: number }).revision,
         state: "in_progress",
       })
       .pipe(as(scope, { workItemId: work.id })),
@@ -470,8 +470,8 @@ it("work is updated from any conversation but completed only in its thread; Oper
   const elsewhere = { conversation: `direct:${engineer.id}` };
   const thread = { workItemId: work.id, conversation: `work:${work.id}` };
   const update = named("workUpdate").execute({
-    item: ref("work", "item", work.id),
-    expectedRevision: 1,
+    ref: ref("work", "item", work.id),
+    revision: 1,
     nextAction: "Draft",
   });
   // What the owner asks for in a chat is recorded there: its plan changes from anywhere.
@@ -481,8 +481,8 @@ it("work is updated from any conversation but completed only in its thread; Oper
   // It is completed only in its own thread, where it is worked; another item's thread is
   // elsewhere too.
   const complete = named("workComplete").execute({
-    item: ref("work", "item", work.id),
-    expectedRevision: 2,
+    ref: ref("work", "item", work.id),
+    revision: 2,
     evidence: "Shipped",
   });
   const refused = await Effect.runPromise(Effect.flip(complete.pipe(as(mine, elsewhere))));
@@ -517,7 +517,7 @@ it("work is updated from any conversation but completed only in its thread; Oper
   expect(
     await Effect.runPromise(
       named("workUpdate")
-        .execute({ item: ref("work", "item", other.id), expectedRevision: 1, nextAction: "Ship" })
+        .execute({ ref: ref("work", "item", other.id), revision: 1, nextAction: "Ship" })
         .pipe(as(scope, { conversation: `direct:${scope.employeeId}` })),
     ),
   ).toMatchObject({ nextAction: "Ship" });

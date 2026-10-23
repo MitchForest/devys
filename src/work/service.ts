@@ -1,8 +1,8 @@
 import { database, isoText, type Database } from "../data/database.ts";
-import type { WorkItem, WorkItemState } from "./contract.ts";
+import type { WorkItem, WorkItemState, WorkResult, WorkStep } from "./contract.ts";
 
 const columns = `id, owner_employee_id, title, objective, next_action, wait_condition, due_at, wake_at, woken_at, state,
-  project_id, conditions, evidence, revision, taken_over_by, created_by, updated_at`;
+  project_id, conditions, evidence, steps, results, revision, taken_over_by, created_by, updated_at`;
 
 export const workItems = (db: Database, businessId: string, since?: string) =>
   database(db, (sql) =>
@@ -81,6 +81,10 @@ export interface Change {
   /** A follow-up while `waiting` (null clears it). Any other state clears it too. */
   wakeAt?: string | null;
   evidence?: { by: string; note: string };
+  /** The whole plan, replacing the last. */
+  steps?: readonly WorkStep[];
+  /** The whole list of results, replacing the last. */
+  results?: readonly WorkResult[];
 }
 
 /**
@@ -109,6 +113,8 @@ export const updateWorkItem = (
          woken_at = NULL,
          evidence = CASE WHEN $12::jsonb IS NULL THEN evidence
            ELSE evidence || jsonb_build_array($12::jsonb || jsonb_build_object('at', ${isoText("now()")})) END,
+         steps = coalesce($16::jsonb, steps),
+         results = coalesce($17::jsonb, results),
          revision = revision + 1,
          updated_at = now()
        WHERE business_id = $1 AND id = $2 AND revision = $3
@@ -130,6 +136,8 @@ export const updateWorkItem = (
         actor.kind,
         change.wakeAt !== undefined,
         change.wakeAt ?? null,
+        change.steps ? JSON.stringify(change.steps) : null,
+        change.results ? JSON.stringify(change.results) : null,
       ],
     );
     return updated;

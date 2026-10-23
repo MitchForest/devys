@@ -68,6 +68,8 @@ public struct RuntimeClient: Sendable {
     /// One work item's requests, answered ones included.
     public var workDecisions: @Sendable (_ businessID: String, _ workItemID: String) async throws -> [Decision]
     public var answer: @Sendable (_ businessID: String, _ decisionID: String, _ approve: Bool) async throws -> Void
+    /// Answers a file request with the file the owner chose; it goes into the business folder.
+    public var sendFile: @Sendable (_ businessID: String, _ decisionID: String, ChosenFile) async throws -> Void
     public var projects: @Sendable (_ businessID: String) async throws -> [Project]
     public var createProject: @Sendable (_ businessID: String, ProjectChange) async throws -> Project
     public var addToProject: @Sendable (_ businessID: String, _ projectID: String, _ ref: Ref) async throws -> Void
@@ -148,6 +150,7 @@ public struct RuntimeClient: Sendable {
         setTakeover: @escaping @Sendable (String, String, Bool) async throws -> Void = { _, _, _ in },
         workDecisions: @escaping @Sendable (String, String) async throws -> [Decision] = { _, _ in [] },
         answer: @escaping @Sendable (String, String, Bool) async throws -> Void = { _, _, _ in },
+        sendFile: @escaping @Sendable (String, String, ChosenFile) async throws -> Void = { _, _, _ in },
         projects: @escaping @Sendable (String) async throws -> [Project] = { _ in [] },
         createProject: @escaping @Sendable (String, ProjectChange) async throws -> Project = { _, project in
             Project(id: UUID().uuidString, name: project.name, leadEmployeeID: project.lead, memberIDs: project.members)
@@ -208,6 +211,7 @@ public struct RuntimeClient: Sendable {
         self.setTakeover = setTakeover
         self.workDecisions = workDecisions
         self.answer = answer
+        self.sendFile = sendFile
         self.projects = projects
         self.createProject = createProject
         self.addToProject = addToProject
@@ -395,6 +399,9 @@ extension RuntimeClient {
             },
             answer: { id, decision, approve in
                 try await hub.call { api, session in try await api.answer(session, businessID: id, decisionID: decision, approve: approve) }
+            },
+            sendFile: { id, decision, file in
+                try await hub.call { api, session in try await api.sendFile(session, businessID: id, decisionID: decision, file) }
             },
             projects: { id in try await hub.call { api, session in try await api.projects(session, businessID: id) } },
             createProject: { id, project in try await hub.call { api, session in try await api.createProject(session, businessID: id, project) } },

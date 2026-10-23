@@ -12,6 +12,31 @@ export const Inbound = Schema.Struct({
 });
 export type Inbound = typeof Inbound.Type;
 export type Delivery = { status: "sent"; guid: string | null } | { status: "uncertain" };
+/**
+ * Why a turn ended without the employee's answer: it ran out of time, failed, the employee is
+ * paused, or the message couldn't be read. Devys says so; the employee didn't speak.
+ */
+export type Notice = "too_long" | "failed" | "paused" | "unreadable";
+
+/** A notice in plain words, naming the employee where the channel shows who it is about. */
+export function noticeText(notice: Notice, employee?: string) {
+  const who = employee ?? "This employee";
+  switch (notice) {
+    case "too_long":
+      return `${who} stopped: it took too long.`;
+    case "failed":
+      return `${who} couldn't finish: something went wrong.`;
+    case "paused":
+      return `${who} is paused, so nothing was done.`;
+    case "unreadable":
+      return `${who} couldn't read that message or its attachments.`;
+  }
+}
+
+/** What the owner can tap after a notice: asking again, where that could help. */
+export const noticeReplies = (notice: Notice): string[] =>
+  notice === "too_long" || notice === "failed" ? ["Ask again"] : [];
+
 /** Who sent an input and which employee of which business it reaches. */
 export interface Binding extends Scope {
   personId: string;
@@ -37,6 +62,11 @@ export interface Channel {
     operationId: string,
     inReplyTo?: string,
   ): Promise<Delivery>;
+  /**
+   * Says, as Devys and never as the employee, that a turn ended without the employee's answer
+   * (the apps show it as an event, not a message).
+   */
+  notice(scope: Scope, chatId: string, notice: Notice, operationId: string): Promise<Delivery>;
 }
 
 /** The channel a chat id belongs to: the part before the first colon. */

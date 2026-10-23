@@ -36,7 +36,7 @@ function recording() {
       if (action.action === "switch") switched.push(action.tab);
       return [{ id: "t1", url: "https://a.example/", title: "A", current: true }];
     },
-    status: async () => ({ open: true, url: null, title: null, driver: null }),
+    status: async () => ({ open: true, url: null, title: null, driver: null, driving: false }),
     screenshot: async () => ({ jpeg: "AAAA", width: 1280, height: 800 }),
     input: async () => ({ url: "", title: "" }),
     fill: async () => ({ origin: "https://a.example", submitted: false, last4: null }),

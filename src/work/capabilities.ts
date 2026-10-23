@@ -11,6 +11,8 @@ import {
   RoutineState,
   Trigger,
   WorkItemFields,
+  WorkResult,
+  WorkStep,
   type Project,
   type Routine,
   type WorkItem,
@@ -42,6 +44,11 @@ const WorkItemUpdateState = Schema.Literals([
   "cancelled",
 ] as const satisfies readonly WorkItemState[]);
 
+/**
+ * One naming rule for every work, project and routine capability: the record a capability reads
+ * or changes is `ref` and its revision `revision`, the names its output gives them, so what one
+ * call returns is passed to the next as is. Any other record is named by what it is (`project`).
+ */
 const Summary = Schema.Struct({
   ref: Ref,
   title: Schema.String,
@@ -54,6 +61,8 @@ const Summary = Schema.Struct({
   revision: Schema.Number,
   takenOver: Schema.Boolean,
   project: Schema.NullOr(Ref),
+  steps: Schema.Array(WorkStep),
+  results: Schema.Array(WorkResult),
 });
 const summary = (item: WorkItem) => ({
   ref: ref("work", "item", item.id),
@@ -67,6 +76,8 @@ const summary = (item: WorkItem) => ({
   revision: item.revision,
   takenOver: item.taken_over_by !== null,
   project: item.project_id === null ? null : ref("work", "project", item.project_id),
+  steps: item.steps,
+  results: item.results,
 });
 const WorkItemRef = RefOf("work", "item");
 const ProjectRef = RefOf("work", "project");
@@ -136,6 +147,11 @@ export function workCapabilities(
   completionBlocked: (businessId: string, work: WorkItem) => Promise<string | undefined>,
   /** Whether this employee directs others' work (the Head of Operations). */
   coordinates: (businessId: string, employeeId: string) => Promise<boolean>,
+  /**
+   * Shows the work item's steps and results in its thread: one card, which clients draw from
+   * the item as it is now, so each later change updates it in place.
+   */
+  showCard: (businessId: string, work: WorkItem) => Promise<void>,
   /** Asks the owner, bound to this work item (authority's request, connected in wiring). */
   askOwner: (
     asking: { businessId: string; employeeId: string; workItemId: string; conversation: string },
@@ -170,11 +186,11 @@ export function workCapabilities(
         });
       return work;
     });
-  const change = (id: string, expectedRevision: number, value: Change) =>
+  const change = (id: string, revision: number, value: Change) =>
     Effect.gen(function* () {
       const { businessId, employeeId } = yield* Invocation;
       const updated = yield* stored(
-        updateWorkItem(db, businessId, id, expectedRevision, value, {
+        updateWorkItem(db, businessId, id, revision, value, {
           kind: "employee",
           id: employeeId,
         }),
@@ -184,6 +200,7 @@ export function workCapabilities(
           code: "conflict",
           message: "The work item changed or was taken over; list it again",
         });
+      if (value.steps || value.results) yield* rpc(() => showCard(businessId, updated));
       return summary(updated);
     });
   const checkEmployees = (businessId: string, ids: readonly string[]) =>
@@ -219,7 +236,7 @@ export function workCapabilities(
     capability({
       name: "workList",
       description:
-        "List the business's work items: what is owed, who is accountable, the next action and state, each with its ref. Read before changing one; changes name it by its ref and need its current revision.",
+        "List the business's work items: what is owed, who is accountable, the next action and state, its steps and results, each with its ref and revision. Read before changing one; a change passes its ref and revision as they are.",
       effect: "read",
       replay: "read",
       input: Schema.Struct({ openOnly: Schema.optional(Schema.Boolean) }),
@@ -238,7 +255,7 @@ export function workCapabilities(
     capability({
       name: "workCreate",
       description:
-        "Record something the business owes: a title, objective and next action, accountable to you or another employee, optionally in a project. Use for work that outlives this conversation.",
+        "Record something the business owes: a title, objective and next action, accountable to you or another employee, optionally in a project. Use for work that outlives this conversation. Returns its ref and revision, which workUpdate and workComplete take as they are.",
       effect: "change",
       replay: "idempotent",
       input: Schema.Struct({
@@ -284,23 +301,35 @@ export function workCapabilities(
     capability({
       name: "workUpdate",
       description:
-        'Update a work item (its ref) at its current revision, from any conversation: the next action, its state (ready, in_progress, waiting, needs_decision, cancelled), what it waits on, or its due date (a deadline only). To follow up later ("look again Thursday"), set state waiting with wakeAt: at that time it becomes ready and is handed back to you in its thread, once. A routine (routinePropose) is for work that recurs.',
+        'Update a work item (ref and revision, as workList or the last change returned them), from any conversation: the next action, its state (ready, in_progress, waiting, needs_decision, cancelled), what it waits on, or its due date (a deadline only). steps is the whole plan the owner watches in the thread for anything that takes more than a minute (at most 10, each {title, state: todo, doing, done or blocked}); send it again as each step moves. results is the whole list of what it achieved, each checked from outside (at most 12, each {label, value?, url? (https), ok?: true held, false failed, null uncertain}), such as {label: "Live at", url} or {label: "MX records", ok: true}. Each replaces the last. To follow up later ("look again Thursday"), set state waiting with wakeAt: at that time it becomes ready and is handed back to you in its thread, once. A routine (routinePropose) is for work that recurs.',
       effect: "change",
       replay: "idempotent",
       input: Schema.Struct({
-        item: WorkItemRef,
-        expectedRevision: WorkItemFields.expectedRevision,
+        ref: WorkItemRef,
+        revision: WorkItemFields.revision,
         state: Schema.optional(WorkItemUpdateState),
         nextAction: Schema.optional(WorkItemFields.nextAction),
         waitCondition: Schema.optional(WorkItemFields.waitCondition),
         dueAt: Schema.optional(Schema.NullOr(WorkItemFields.dueAt)),
         /** With state waiting: when to look again. Null clears it. */
         wakeAt: Schema.optional(Schema.NullOr(WorkItemFields.wakeAt)),
+        steps: Schema.optional(WorkItemFields.steps),
+        results: Schema.optional(WorkItemFields.results),
       }),
       output: Summary,
-      execute: ({ item, expectedRevision, state, nextAction, waitCondition, dueAt, wakeAt }) =>
+      execute: ({
+        ref: id,
+        revision,
+        state,
+        nextAction,
+        waitCondition,
+        dueAt,
+        wakeAt,
+        steps,
+        results,
+      }) =>
         Effect.gen(function* () {
-          yield* ownWork(item, "anywhere");
+          yield* ownWork(id, "anywhere");
           if (wakeAt && state !== "waiting")
             return yield* new CapabilityError({
               code: "invalid_input",
@@ -311,36 +340,40 @@ export function workCapabilities(
               code: "invalid_input",
               message: "A follow-up (wakeAt) is a time in the future",
             });
-          return yield* change(item, expectedRevision, {
+          return yield* change(id, revision, {
             ...(state ? { state } : {}),
             ...(nextAction !== undefined ? { nextAction } : {}),
             ...(waitCondition !== undefined ? { waitCondition } : {}),
             ...(dueAt !== undefined ? { dueAt: dueAt && new Date(dueAt).toISOString() } : {}),
             ...(wakeAt !== undefined ? { wakeAt: wakeAt && new Date(wakeAt).toISOString() } : {}),
+            ...(steps ? { steps } : {}),
+            ...(results ? { results } : {}),
           });
         }),
     }),
     capability({
       name: "workComplete",
       description:
-        "Mark a work item (its ref) completed, at its current revision, in its own thread, with evidence: what was done and where to see it. Saying 'done' in chat does not complete work.",
+        "Mark a work item (ref and revision, as returned) completed, in its own thread, with evidence: what was done and where to see it, and results: the whole list of what it achieved, as in workUpdate, each checked from outside first. Saying 'done' in chat does not complete work.",
       effect: "change",
       replay: "idempotent",
       input: Schema.Struct({
-        item: WorkItemRef,
-        expectedRevision: WorkItemFields.expectedRevision,
+        ref: WorkItemRef,
+        revision: WorkItemFields.revision,
         evidence: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(2000)),
+        results: Schema.optional(WorkItemFields.results),
       }),
       output: Summary,
-      execute: ({ item, expectedRevision, evidence }) =>
+      execute: ({ ref: id, revision, evidence, results }) =>
         Effect.gen(function* () {
           const { businessId, employeeId } = yield* Invocation;
-          const work = yield* ownWork(item, "thread");
+          const work = yield* ownWork(id, "thread");
           const blocked = yield* rpc(() => completionBlocked(businessId, work));
           if (blocked) return yield* new CapabilityError({ code: "conflict", message: blocked });
-          return yield* change(item, expectedRevision, {
+          return yield* change(id, revision, {
             state: "completed",
             evidence: { by: `employee:${employeeId}`, note: evidence },
+            ...(results ? { results } : {}),
           });
         }),
     }),
@@ -398,7 +431,7 @@ export function workCapabilities(
       effect: "change",
       replay: "idempotent",
       input: Schema.Struct({
-        project: ProjectRef,
+        ref: ProjectRef,
         name: Schema.optional(ProjectFields.name),
         goal: Schema.optional(Schema.NullOr(ProjectFields.goal)),
         deadline: Schema.optional(Schema.NullOr(ProjectFields.deadline)),
@@ -407,7 +440,7 @@ export function workCapabilities(
         members: Schema.optional(ProjectFields.members),
       }),
       output: ProjectView,
-      execute: ({ project: id, lead, members, ...rest }) =>
+      execute: ({ ref: id, lead, members, ...rest }) =>
         Effect.gen(function* () {
           const { businessId } = yield* Invocation;
           yield* checkEmployees(businessId, [...(lead ? [lead] : []), ...(members ?? [])]);
@@ -429,12 +462,12 @@ export function workCapabilities(
     capability({
       name: "projectAdd",
       description:
-        "Show a saved artifact (devys:documents/artifact/<id>), a file in the business folder (devys:documents/file/<percent-encoded absolute path>) or a coding session (devys:code/session/<id>) on a project (its ref), by the record's ref. It's a reference: the record keeps one home and can appear in several projects. Work items join a project when created with its ref as project.",
+        "Show a record on a project (its ref): record is a saved artifact (devys:documents/artifact/<id>), a file in the business folder (devys:documents/file/<percent-encoded absolute path>) or a coding session (devys:code/session/<id>). It's a reference: the record keeps one home and can appear in several projects. Returns the project. Work items join a project when created with its ref as project.",
       effect: "change",
       replay: "idempotent",
-      input: Schema.Struct({ project: ProjectRef, ref: Ref }),
-      output: Schema.Struct({ project: Ref, ref: Ref }),
-      execute: ({ project: projectId, ref: kept }) =>
+      input: Schema.Struct({ ref: ProjectRef, record: Ref }),
+      output: ProjectView,
+      execute: ({ ref: projectId, record: kept }) =>
         Effect.gen(function* () {
           const { businessId } = yield* Invocation;
           if (!(yield* rpc(() => keepable(businessId, kept))))
@@ -443,12 +476,13 @@ export function workCapabilities(
               message: "No such artifact, file or coding session in this business",
             });
           const item = yield* stored(addToProject(db, businessId, projectId, kept));
-          if (!item)
+          const shown = item && (yield* stored(project(db, businessId, projectId)));
+          if (!shown)
             return yield* new CapabilityError({
               code: "invalid_input",
               message: "No such project in this business",
             });
-          return { project: ref("work", "project", projectId), ref: item.ref };
+          return view(shown);
         }),
     }),
     capability({
@@ -477,12 +511,12 @@ export function workCapabilities(
     capability({
       name: "routinePropose",
       description:
-        'Propose a routine: work you (or, for Operations, another employee) run on a schedule or when an event happens, for a responsibility or a project (its ref; runs then speak in its channel, else in the employee\'s direct chat). trigger is {kind: "cron", expression: five-field cron like "0 9 * * 1", timezone: the owner\'s IANA zone, hours?: {start: "09:00", end: "18:00", days?: ["mon", …]}} or {kind: "event", source, type, filters: {field: exact value}}. notify when_found makes a quiet check-in: a run that finds nothing posts nothing. To change a routine, pass its ref and current revision: that is a new proposal and it stops running until approved. Proposing activates nothing: then call routineActivate with its ref and revision, which asks the owner. For a one-off look later, use workUpdate with wakeAt instead.',
+        'Propose a routine: work you (or, for Operations, another employee) run on a schedule or when an event happens, for a responsibility or a project (its ref; runs then speak in its channel, else in the employee\'s direct chat). trigger is {kind: "cron", expression: five-field cron like "0 9 * * 1", timezone: the owner\'s IANA zone, hours?: {start: "09:00", end: "18:00", days?: ["mon", …]}} or {kind: "event", source, type, filters: {field: exact value}}. notify when_found makes a quiet check-in: a run that finds nothing posts nothing. To change a routine, pass its ref and revision as returned: that is a new proposal and it stops running until approved. Proposing activates nothing: then call routineActivate with the ref and revision it returns, which asks the owner. For a one-off look later, use workUpdate with wakeAt instead.',
       effect: "change",
       replay: "idempotent",
       input: Schema.Struct({
-        routine: Schema.optional(RoutineRef),
-        expectedRevision: Schema.optional(Schema.Int),
+        ref: Schema.optional(RoutineRef),
+        revision: Schema.optional(Schema.Int),
         title: WorkItemFields.title,
         instruction: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(4000)),
         trigger: Trigger,
@@ -521,20 +555,20 @@ export function workCapabilities(
             trigger: input.trigger,
             notify: input.notify,
           };
-          if (!input.routine) {
+          if (!input.ref) {
             const id = yield* Effect.promise(() => stableId(`${businessId}:${operationId}`));
             return routineView(
               yield* stored(proposeRoutine(db, businessId, id, proposal, `employee:${employeeId}`)),
             );
           }
-          yield* ownRoutine(input.routine);
-          if (input.expectedRevision === undefined)
+          yield* ownRoutine(input.ref);
+          if (input.revision === undefined)
             return yield* new CapabilityError({
               code: "invalid_input",
-              message: "Revising a routine needs its current revision (expectedRevision)",
+              message: "Revising a routine needs its current revision",
             });
           const revised = yield* stored(
-            reviseRoutine(db, businessId, input.routine, input.expectedRevision, proposal),
+            reviseRoutine(db, businessId, input.ref, input.revision, proposal),
           );
           if (!revised)
             return yield* new CapabilityError({
@@ -550,9 +584,9 @@ export function workCapabilities(
         "Ask the owner to activate a proposed routine (its ref) at exactly this revision. It is the owner's decision each time: the request waits in Needs you, and once approved, calling it again with the same input activates it. A later revision needs a new decision.",
       effect: "change",
       replay: "idempotent",
-      input: Schema.Struct({ routine: RoutineRef, revision: Schema.Int }),
+      input: Schema.Struct({ ref: RoutineRef, revision: Schema.Int }),
       output: RoutineView,
-      execute: ({ routine: id, revision }) =>
+      execute: ({ ref: id, revision }) =>
         Effect.gen(function* () {
           const { businessId } = yield* Invocation;
           const found = yield* ownRoutine(id);
@@ -582,9 +616,9 @@ export function workCapabilities(
         "Pause an active routine (its ref) of yours, such as one that no longer finds anything worth doing; say why where you are talking. Only the owner resumes it.",
       effect: "change",
       replay: "idempotent",
-      input: Schema.Struct({ routine: RoutineRef }),
+      input: Schema.Struct({ ref: RoutineRef }),
       output: RoutineView,
-      execute: ({ routine: id }) =>
+      execute: ({ ref: id }) =>
         Effect.gen(function* () {
           const { businessId } = yield* Invocation;
           yield* ownRoutine(id);
@@ -600,16 +634,18 @@ export function workCapabilities(
     capability({
       name: "askOwner",
       description:
-        'Bring the owner in, from a work item\'s thread; a turn in a direct chat or channel can\'t ask: workCreate the work, say you will ask there, and ask when you continue in its thread. {kind: "approve", action, counterparty, amount?, renewal?}: before a consequential action you will take anywhere (browser, shell, an app), state it exactly: action is what you will do, counterparty who or where (merchant, site, person; for a card payment, the merchant\'s site such as namecheap.com, where the card will be filled); any spend has amount {cents, currency}, which the owner signs with Face ID or Touch ID, and renewal says what recurs. {kind: "take_over", reason, url?}: something only the owner can do in the business\'s browser (sign in, 2FA, CAPTCHA); they take the work over, do it and hand it back. {kind: "secret", name, why, spend?}: a secret the business lacks (an API key, a password; spend: true for a card), named as you will use it (STRIPE_KEY); the owner enters it in a secure sheet and you use it by name (run\'s secrets, browserFill), never seeing it. {kind: "connect", app, why}: an app the business doesn\'t have yet (an id or registry name from appSearch, or an MCP server\'s https address); the owner connects it with its own sign-in and chooses what you may do with it; why is one line on the card. It returns at once: carry on with other work or wait; the answer arrives in this thread. Asking again with exactly the same input tells you where it stands (asked, approved, declined, taken_over, done). A changed amount, merchant or action is a new request. Never ask for passwords, codes or card numbers in chat.',
+        'Bring the owner in, from a work item\'s thread; a turn in a direct chat or channel can\'t ask: workCreate the work, say you will ask there, and ask when you continue in its thread. {kind: "approve", action, counterparty, amount?, renewal?}: before a consequential action you will take anywhere (browser, shell, an app), state it exactly: action is what you will do, counterparty who or where (merchant, site, person; for a card payment, the merchant\'s site such as namecheap.com, where the card will be filled); any spend has amount {cents, currency}, which the owner signs with Face ID or Touch ID, and renewal says what recurs. To ask once for several actions that go together, list each exactly in steps (["Merge PR #12 at a1b2c3", "Deploy a1b2c3 of site to production"]): the approval covers those steps and nothing else. To show the owner what goes out (an email draft, a post, an invoice, a page), pass it as preview: the ref of a page or a file; changing it afterwards voids the approval, so ask again. {kind: "take_over", reason, url?}: something only the owner can do in the business\'s browser (sign in, 2FA, CAPTCHA); they take the work over, do it and hand it back. {kind: "secret", name, why, spend?}: a secret the business lacks (an API key, a password; spend: true for a card), named as you will use it (STRIPE_KEY); the owner enters it in a secure sheet and you use it by name (run\'s secrets, browserFill), never seeing it. {kind: "connect", app, why}: an app the business doesn\'t have yet (an id or registry name from appSearch, or an MCP server\'s https address); the owner connects it with its own sign-in and chooses what you may do with it; why is one line on the card. {kind: "file", purpose, accept?}: a file only the owner has (a logo, a signed contract, an ID scan); purpose is one line on the card, accept the media types it may be (["image/*", "application/pdf"]); their file arrives in the business folder and its ref in this thread. It returns at once: carry on with other work or wait; the answer arrives in this thread. Asking again with exactly the same input tells you where it stands (asked, approved, declined, taken_over, done). A changed amount, merchant or action is a new request. Never ask for passwords, codes or card numbers in chat.',
       effect: "change",
       replay: "idempotent",
       core: true,
       input: OwnerRequest,
       output: Schema.Struct({
         request: Schema.String,
-        kind: Schema.Literals(["approve", "take_over", "secret", "connect"]),
+        kind: Schema.Literals(["approve", "take_over", "secret", "connect", "file"]),
         state: Schema.Literals(["asked", "approved", "declined", "taken_over", "done"]),
         expiresAt: Schema.String,
+        /** For a file request once answered: the file the owner chose. */
+        file: Schema.optional(Ref),
       }),
       execute: (request) =>
         Effect.gen(function* () {
@@ -632,6 +668,7 @@ export function workCapabilities(
             kind: request.kind,
             state: requestState(asked),
             expiresAt: asked.expires_at,
+            ...(asked.answer ? { file: asked.answer } : {}),
           };
         }),
     }),
@@ -644,7 +681,7 @@ const requestState = (decision: Decision) =>
     ? ("asked" as const)
     : decision.status === "rejected"
       ? ("declined" as const)
-      : decision.kind === "secret" || decision.kind === "connect"
+      : decision.kind === "secret" || decision.kind === "connect" || decision.kind === "file"
         ? ("done" as const)
         : decision.kind === "take_over"
           ? decision.status === "approved"

@@ -455,6 +455,84 @@ public struct CodingOutcome: Equatable, Sendable {
     }
 }
 
+/// One step of the plan an employee shows while work takes time.
+public struct WorkStep: Equatable, Sendable, Decodable {
+    public enum State: String, Equatable, Sendable, WireEnum { case todo, doing, done, blocked, unknown }
+
+    public let title: String
+    public let state: State
+
+    public init(title: String, state: State) {
+        self.title = title
+        self.state = state
+    }
+
+    /// Where the steps stand, as Home shows moving work: "2 of 5 · Setting up email" (the web's
+    /// `progressText`); nil without steps.
+    public static func progress(_ steps: [WorkStep]) -> String? {
+        guard !steps.isEmpty else { return nil }
+        let done = steps.filter { $0.state == .done }.count
+        let now = steps.first { $0.state == .blocked } ?? steps.first { $0.state == .doing }
+        let current = now.map { " · \($0.state == .blocked ? "Blocked: " : "")\($0.title)" } ?? ""
+        return "\(done) of \(steps.count)\(current)"
+    }
+}
+
+/// Proof of an effect the owner can glance at: "Registered acme-widgets.com · expires 2027-10-22 ✓".
+public struct WorkResult: Equatable, Sendable, Decodable {
+    /// Whether it was checked from outside: it held, it failed, or it is uncertain.
+    public enum Check: Equatable, Sendable { case held, failed, uncertain }
+
+    public let label: String
+    public let value: String?
+    /// An https link.
+    public let url: String?
+    /// nil when there was nothing to check.
+    public let check: Check?
+
+    public init(label: String, value: String? = nil, url: String? = nil, check: Check? = nil) {
+        self.label = label
+        self.value = value
+        self.url = url
+        self.check = check
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        label = try container.decode(String.self, forKey: .label)
+        value = try container.decodeIfPresent(String.self, forKey: .value)
+        url = try container.decodeIfPresent(String.self, forKey: .url)
+        // ok is absent (nothing to check), null (uncertain) or a boolean.
+        if !container.contains(.held) {
+            check = nil
+        } else if try container.decodeNil(forKey: .held) {
+            check = .uncertain
+        } else {
+            check = try container.decode(Bool.self, forKey: .held) ? .held : .failed
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case label, value, url
+        case held = "ok"
+    }
+
+    /// The mark after it: ✓, ✗ or ?.
+    public var mark: String? {
+        switch check {
+        case .held: "✓"
+        case .failed: "✗"
+        case .uncertain: "?"
+        case nil: nil
+        }
+    }
+
+    /// The result in words, the same as the web's `resultText`.
+    public var text: String {
+        [label, value.map { "· \($0)" }, url, mark].compactMap { $0 }.joined(separator: " ")
+    }
+}
+
 /// What the business owes: who is accountable, what's next, and evidence when done.
 public struct WorkItem: Equatable, Sendable, Decodable, Identifiable {
     public let id: String
@@ -468,6 +546,10 @@ public struct WorkItem: Equatable, Sendable, Decodable, Identifiable {
     public let wakeAt: String?
     public let state: WorkItemState
     public let evidence: [WorkItemEvidence]
+    /// The plan its employee shows while it takes time.
+    public let steps: [WorkStep]
+    /// What it achieved, each checked from outside where it can be.
+    public let results: [WorkResult]
     public let revision: Int
     public let takenOverBy: String?
     /// The project the work belongs to, if any; its thread is in that project's channel.
@@ -485,6 +567,8 @@ public struct WorkItem: Equatable, Sendable, Decodable, Identifiable {
         wakeAt: String? = nil,
         state: WorkItemState = .ready,
         evidence: [WorkItemEvidence] = [],
+        steps: [WorkStep] = [],
+        results: [WorkResult] = [],
         revision: Int = 1,
         takenOverBy: String? = nil,
         projectID: String? = nil,
@@ -500,6 +584,8 @@ public struct WorkItem: Equatable, Sendable, Decodable, Identifiable {
         self.wakeAt = wakeAt
         self.state = state
         self.evidence = evidence
+        self.steps = steps
+        self.results = results
         self.revision = revision
         self.takenOverBy = takenOverBy
         self.projectID = projectID
@@ -507,7 +593,7 @@ public struct WorkItem: Equatable, Sendable, Decodable, Identifiable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, title, objective, state, evidence, revision
+        case id, title, objective, state, evidence, steps, results, revision
         case ownerEmployeeID = "owner_employee_id"
         case nextAction = "next_action"
         case waitCondition = "wait_condition"
@@ -520,9 +606,10 @@ public struct WorkItem: Equatable, Sendable, Decodable, Identifiable {
 }
 
 /// What a request asks of the owner: a modelled capability's decision, or an employee's
-/// `askOwner` (approve, take over in the business's browser, or a secret to add).
+/// `askOwner` (approve, take over in the business's browser, a secret to add, an app to connect,
+/// or a file to choose).
 public enum RequestKind: String, Equatable, Sendable, WireEnum {
-    case decision, approve, secret, connect
+    case decision, approve, secret, connect, file
     case takeOver = "take_over"
     case unknown
 }
@@ -541,6 +628,8 @@ public struct Decision: Equatable, Sendable, Decodable, Identifiable {
     public let expiresAt: String
     /// The device key that signed a spend approval.
     public let signedBy: String?
+    /// What answered a file request: the file the owner chose (its ref).
+    public let answer: String?
 
     public init(
         id: String,
@@ -552,7 +641,8 @@ public struct Decision: Equatable, Sendable, Decodable, Identifiable {
         status: String = "pending",
         requestedAt: String = "2026-10-19T00:00:00.000Z",
         expiresAt: String = "2026-10-20T00:00:00.000Z",
-        signedBy: String? = nil
+        signedBy: String? = nil,
+        answer: String? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -564,10 +654,11 @@ public struct Decision: Equatable, Sendable, Decodable, Identifiable {
         self.requestedAt = requestedAt
         self.expiresAt = expiresAt
         self.signedBy = signedBy
+        self.answer = answer
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, kind, capability, input, status
+        case id, kind, capability, input, status, answer
         case employeeID = "employee_id"
         case workItemID = "work_item_id"
         case requestedAt = "requested_at"

@@ -419,6 +419,22 @@ bun run test:workspace
 
 The opt-in Workers and channel checks make real model calls through the configured
 gateway with the local key.
+
+Scenario runs play the owner against real models, end to end:
+
+```sh
+bun run scenario tests/scenarios/pay-ramp.ts
+```
+
+It starts its own Mac host (your real home folder, so Chrome and its keychain work, with a
+throwaway host data folder) and a development server on 127.0.0.1:5190 pointed at it, fires
+the minute tick, seeds the scenario's sample business, then plays its turns: say something,
+tap the suggested reply matching a persona fact (never typing: no matching chip fails the
+step), answer a scripted request, or stop at one. It stops at spend approvals, connects and
+take-overs unless the scenario scripts them, and removes everything afterwards. Results
+(summary with rubric checks, transcript, every card's wire JSON, screenshots at 1440×900 and
+390×844) go to `.scratch/scenarios/<name>/<timestamp>/`. Scenarios are typed TypeScript
+files in `tests/scenarios/`.
 `closeout` runs format, lint, types, unit/Workers, build, browser, channel and
 Docker workspace checks. The normal Workers suite skips its optional live-model
 tests; enable them separately as shown above. Browser and

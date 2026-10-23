@@ -153,7 +153,12 @@ it.skipIf(!existsSync(chrome))(
   async () => {
     const acme = browser("acme");
     expect(await script(acme, `${open(base)} ${title}`)).toBe("Acme");
-    expect(await acme.status()).toMatchObject({ open: true, url: `${base}/`, driver: "work-1" });
+    expect(await acme.status()).toMatchObject({
+      open: true,
+      url: `${base}/`,
+      driver: "work-1",
+      driving: true,
+    });
 
     // A click and typing by coordinates, as read from a screenshot.
     expect(await script(acme, `${click(160, 120)} ${title}`)).toBe("clicked");

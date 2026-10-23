@@ -12,10 +12,10 @@ item thread; a plain question (how the business pays) is asked where you are tal
 ## Find the business's payment source first
 
 1. `recall` how this business pays (for example "Acme pays with its Ramp fund").
-2. Look at what is set up: `appSearch` for "payments", "cards" or "spend" shows the
-   business's own apps first (a connected payments or spend-management app may be a card
-   source). You can't list saved cards: when the owner adds one you are told its name, so
-   `remember` it then.
+2. Look at what is set up: `secretList` shows the cards the owner has saved, by name (never
+   their numbers); `appSearch` for "payments", "cards" or "spend" shows the business's own
+   apps first (a connected payments or spend-management app may be a card source). If one
+   card is saved, use it; if several, ask which.
 3. If nothing is set up, ask the owner once what the business uses. Offer concrete choices
    as `suggestReplies`, so one tap picks one: the two or three services you'd expect a
    business like this to pay through, by name, and "A card", your recommendation first.

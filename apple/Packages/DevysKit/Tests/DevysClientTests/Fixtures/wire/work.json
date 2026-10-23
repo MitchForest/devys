@@ -14,6 +14,8 @@
       "project_id": "00000000-0000-4000-8000-000000000005",
       "conditions": {},
       "evidence": [],
+      "steps": [],
+      "results": [],
       "revision": 2,
       "taken_over_by": null,
       "created_by": "person:00000000-0000-4000-8000-000000000001",
@@ -51,7 +53,45 @@
           "source": "wire-fixture"
         }
       ],
-      "revision": 3,
+      "steps": [
+        {
+          "title": "Build the page",
+          "state": "done"
+        },
+        {
+          "title": "Deploy a preview",
+          "state": "doing"
+        },
+        {
+          "title": "Check the booking form",
+          "state": "todo"
+        },
+        {
+          "title": "Connect the calendar",
+          "state": "blocked"
+        }
+      ],
+      "results": [
+        {
+          "label": "Preview",
+          "url": "https://preview.acme.test",
+          "ok": true
+        },
+        {
+          "label": "Booking form",
+          "value": "test booking received",
+          "ok": true
+        },
+        {
+          "label": "Calendar sync",
+          "ok": null
+        },
+        {
+          "label": "Pages",
+          "value": "3"
+        }
+      ],
+      "revision": 4,
       "taken_over_by": null,
       "created_by": "person:00000000-0000-4000-8000-000000000001",
       "updated_at": "2026-01-01T00:00:00.000Z"

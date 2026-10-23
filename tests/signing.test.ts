@@ -20,12 +20,24 @@ const terms = {
   amountCents: 1299,
   currency: "USD",
   renewal: "Renews yearly at $12.99",
+  steps: ["Pay the invoice", 'Mark "INV-7" paid'],
+  preview: "devys:documents/artifact/00000000-0000-4000-8000-000000000005",
+  previewHash: "d".repeat(64),
   expiresAt: "2026-10-22T09:30:00.000Z",
 };
 
 it("a spend approval's payload is canonical JSON: sorted keys, every field, no whitespace", () => {
-  expect(spendPayload({ ...terms, action: "Buy", renewal: null })).toBe(
-    '{"action":"Buy","amount_cents":1299,"business":"00000000-0000-4000-8000-000000000002","counterparty":"Namecheap","currency":"USD","decision":"00000000-0000-4000-8000-000000000001","expires_at":"2026-10-22T09:30:00.000Z","renewal":null,"type":"spend_approval","work_item":"00000000-0000-4000-8000-000000000003"}',
+  expect(
+    spendPayload({
+      ...terms,
+      action: "Buy",
+      renewal: null,
+      steps: [],
+      preview: null,
+      previewHash: null,
+    }),
+  ).toBe(
+    '{"action":"Buy","amount_cents":1299,"business":"00000000-0000-4000-8000-000000000002","counterparty":"Namecheap","currency":"USD","decision":"00000000-0000-4000-8000-000000000001","expires_at":"2026-10-22T09:30:00.000Z","preview":null,"preview_hash":null,"renewal":null,"steps":[],"type":"spend_approval","work_item":"00000000-0000-4000-8000-000000000003"}',
   );
   expect(
     endorsementPayload({ person: "p", key: "k", device: "0123456789abcdef", publicKey: "AQ==" }),
@@ -53,6 +65,21 @@ it("a device's DER signature verifies; a changed payload, another key or a malfo
     await verifySignature(
       device.publicKey,
       spendPayload({ ...terms, counterparty: "GoDaddy" }),
+      signature,
+    ),
+  ).toBe(false);
+  // A changed draft or another step is another request.
+  expect(
+    await verifySignature(
+      device.publicKey,
+      spendPayload({ ...terms, previewHash: "e".repeat(64) }),
+      signature,
+    ),
+  ).toBe(false);
+  expect(
+    await verifySignature(
+      device.publicKey,
+      spendPayload({ ...terms, steps: ["Pay the invoice"] }),
       signature,
     ),
   ).toBe(false);
@@ -87,6 +114,9 @@ it("the native client's golden spend approval matches the server's payload and s
       counterparty: terms.counterparty,
       amount: { cents: terms.amountCents, currency: terms.currency },
       renewal: terms.renewal,
+      steps: terms.steps,
+      preview: terms.preview,
+      previewHash: terms.previewHash,
     },
     work_item_id: terms.workItem,
     conversation: `work:${terms.workItem}`,
@@ -94,6 +124,7 @@ it("the native client's golden spend approval matches the server's payload and s
     requested_at: "2026-10-21T09:30:00.000Z",
     expires_at: terms.expiresAt,
     signed_by: null,
+    answer: null,
   };
   if (process.env.DEVYS_WRITE_WIRE === "1") {
     const device = await deviceKey();

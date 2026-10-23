@@ -31,6 +31,67 @@ struct BrowserLine: View {
     }
 }
 
+/// While an employee drives the business's browser for this work item, a small live picture in its
+/// thread (a new one every 2 seconds while it shows), with Watch and Take over. It is gone once the
+/// browser is idle.
+struct BrowserThumbnail: View {
+    let store: StoreOf<Workspace>
+    let workID: String
+    @Dependency(\.browserClient) private var browser
+    @State private var status: BrowserStatus?
+    @State private var picture: BrowserPicture?
+
+    private var item: WorkItem? { store.work.value?.first { $0.id == workID } }
+    private var driving: Bool {
+        guard let status, let item else { return false }
+        return item.takenOverBy == nil && status.open && status.driving && status.driver == workID
+    }
+
+    var body: some View {
+        Group {
+            if driving {
+                HStack(spacing: 12) {
+                    Button(action: watch) {
+                        Group {
+                            if let data = picture?.data, let shown = PlatformImage(data: data) {
+                                Image(platformImage: shown).resizable().scaledToFill()
+                            } else {
+                                DevysColors.sheetTint
+                            }
+                        }
+                        .frame(width: 108, height: 68, alignment: .top)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Watch the browser")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Label("Browsing", systemImage: "globe").font(DevysTypography.control.weight(.semibold)).foregroundStyle(DevysColors.ink)
+                        Text(status?.title ?? status?.url ?? "").font(DevysTypography.caption).foregroundStyle(DevysColors.ink3).lineLimit(1)
+                    }
+                    Spacer(minLength: 4)
+                    Button("Watch", action: watch).buttonStyle(DevysButtonStyle(.quiet, compact: true))
+                    Button("Take over", systemImage: "hand.raised") { store.send(.takeOverTapped(workID)) }
+                        .buttonStyle(DevysButtonStyle(.raised, compact: true))
+                }
+                .devysCard(padding: 8)
+                .frame(maxWidth: 520)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 10)
+            } else {
+                // Something to hang the poll on while there is nothing to show.
+                Color.clear.frame(height: 0)
+            }
+        }
+        .poll(id: workID, every: .seconds(2)) {
+            let businessID = store.businessID
+            status = try? await browser.status(businessID)
+            picture = driving ? try? await browser.picture(businessID) : nil
+        }
+    }
+
+    private func watch() { store.send(.layerOpened(.browser(workID: workID))) }
+}
+
 /// The live picture of the business's browser, as a layer. Take over stops employees acting on
 /// this work item; while it's yours, a tap on the picture clicks there and typed text goes to the
 /// page. Closing the layer doesn't stop the browser.

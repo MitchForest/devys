@@ -10,12 +10,12 @@ import { memoryCapabilities } from "../memory/capabilities.ts";
 import { googleConnection } from "../connections/google.ts";
 import { workspaceCapabilities } from "../workspace/capabilities.ts";
 import { artifactCapabilities, driveCapabilities } from "../apps/documents/capabilities.ts";
-import { postEvent } from "./conversations.ts";
+import { postEvent, showWorkCard } from "./conversations.ts";
 import { conversationCapabilities } from "../conversations/capabilities.ts";
 import { conversationKey } from "../conversations/contract.ts";
 import { publicCapabilities } from "../egress/capabilities.ts";
 import { workCapabilities } from "../work/capabilities.ts";
-import { activeEmployee, employeesOf } from "../identity/service.ts";
+import { activeEmployee, employeesOf, membersOf } from "../identity/service.ts";
 import { Effect } from "effect";
 import { codingCapabilities } from "../apps/code/capabilities.ts";
 import { codingIncomplete, codingDependencies } from "./coding.ts";
@@ -41,7 +41,23 @@ export function capabilities(
     ...conversationCapabilities(env.HYPERDRIVE, (businessId) =>
       Effect.runPromise(employeesOf(env.HYPERDRIVE, businessId)),
     ),
-    ...workspaceCapabilities(runner, (businessId) => appSkills(env.HYPERDRIVE, businessId)),
+    ...workspaceCapabilities(
+      runner,
+      (businessId) => appSkills(env.HYPERDRIVE, businessId),
+      async (businessId) => {
+        const [saved, members] = await Promise.all([
+          modeOf(env).secrets.list(businessId),
+          Effect.runPromise(membersOf(env.HYPERDRIVE, businessId)),
+        ]);
+        return saved.map((secret) => ({
+          name: secret.name,
+          kind: secret.kind,
+          addedBy:
+            members.find((member) => member.id === secret.added_by)?.display_name ?? "the owner",
+          addedAt: new Date(secret.added_at).toISOString(),
+        }));
+      },
+    ),
     ...artifactCapabilities(
       env,
       runner,
@@ -63,6 +79,7 @@ export function capabilities(
       (businessId, ref) => keepable(env, businessId, ref),
       (businessId, work) => codingIncomplete(env, businessId, work),
       (businessId, employeeId) => coordinates(env.HYPERDRIVE, { businessId, employeeId }),
+      (businessId, work) => showWorkCard(env, businessId, work),
       (asking, request) => askOwnerConnecting(env, asking, request, appCatalog),
     ),
     ...appSearchCapabilities(async (businessId, query) =>

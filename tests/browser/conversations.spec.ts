@@ -151,6 +151,42 @@ test("an employee's suggested replies show under its question; a tap answers it 
   }
 });
 
+test("a turn that stopped is Devys's notice, not the employee's words, with Ask again", async ({
+  page,
+}) => {
+  const stores = await localStores();
+  const { sql } = stores;
+  const owner = await stores.owner("Drew", "Acme");
+  const sent = await stubPosting(page, () => [owner.operations]);
+  const direct = `direct:${owner.operations}`;
+  await insertMessage(sql, owner.business, direct, {
+    author: `person:${owner.person}`,
+    text: "Find a venue",
+  });
+  await insertMessage(sql, owner.business, direct, {
+    author: "system",
+    kind: "event",
+    text: "Head of Operations stopped: it took too long.",
+    replies: ["Ask again"],
+  });
+  try {
+    await signIn(page, sql, owner.person);
+    await sidebar(page).getByRole("link", { name: "Head of Operations" }).click();
+    await expect(page.getByText("Head of Operations stopped: it took too long.")).toBeVisible();
+    // An event, not a message: no speaker line or bubble of the employee's.
+    await expect(page.getByTestId("speaker")).toHaveCount(0);
+    const replies = page.getByRole("group", { name: "Suggested replies" });
+    await replies.getByRole("button", { name: "Ask again" }).click();
+    await expect.poll(() => sent.length).toBe(1);
+    expect(sent[0]!.body).toMatchObject({ text: "Ask again" });
+    await expect(replies).toHaveCount(0);
+  } finally {
+    await page.close();
+    await stores.remove([owner]);
+    await stores.dispose();
+  }
+});
+
 test("a project opens on its channel; a hand-off card opens the thread; Back and Start a thread", async ({
   page,
 }) => {

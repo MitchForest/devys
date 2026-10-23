@@ -135,6 +135,8 @@ const RuntimeState = Schema.Struct({
       id: Schema.String,
       chat_id: Schema.String,
       text: Schema.String,
+      /** Devys answered for the employee: the turn took too long, failed, or found it paused. */
+      notice: Schema.optionalKey(Schema.Literals(["too_long", "failed", "paused", "unreadable"])),
       reply_to: Schema.optionalKey(Schema.String),
       attempts: Schema.Number,
       status: Schema.Literals(["pending", "sent", "uncertain", "cancelled"]),
@@ -313,6 +315,8 @@ const WorkCard = Schema.Struct({
   wait_condition: Schema.NullOr(Schema.String),
   due_at: Schema.NullOr(Timestamp),
   updated_at: Timestamp,
+  /** Where its steps stand, "2 of 5 · Setting up email"; null without steps. */
+  progress: Schema.NullOr(Schema.String),
 });
 export type WorkCard = typeof WorkCard.Type;
 /** A remote app as Needs you names it: its id (for its card and review), name and logo. */

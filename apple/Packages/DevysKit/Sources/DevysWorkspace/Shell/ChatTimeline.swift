@@ -42,6 +42,10 @@ package struct ChatTimeline: Equatable {
         package let id: String
         package let text: String
         package let ref: Ref?
+        /// Devys's notice offers "Ask again" while it is the latest word.
+        package var replies: [String] = []
+        /// A card: drawn from its record as it is now (a work item's steps and results).
+        package var isCard = false
     }
 
     package enum Item: Equatable, Identifiable {
@@ -64,11 +68,13 @@ package struct ChatTimeline: Equatable {
     static let groupGap: TimeInterval = 5 * 60
     static let headingGap: TimeInterval = 60 * 60
 
-    /// The message whose suggested replies show: the latest message, skipping events, when an
-    /// employee wrote it and nothing has been sent from this device since.
+    /// The message whose suggested replies show: the latest message (or Devys's notice offering
+    /// "Ask again"), skipping other events, when an employee wrote it and nothing has been sent
+    /// from this device since.
     package static func offering(_ messages: [ConversationMessage], pending: [PendingMessage]) -> ConversationMessage? {
-        guard pending.isEmpty, let latest = messages.last(where: { !$0.isEvent }),
-              latest.employeeID != nil, !latest.replies.isEmpty else { return nil }
+        func notice(_ message: ConversationMessage) -> Bool { message.isEvent && !message.replies.isEmpty }
+        guard pending.isEmpty, let latest = messages.last(where: { !$0.isEvent || notice($0) }),
+              notice(latest) || latest.employeeID != nil, !latest.replies.isEmpty else { return nil }
         return latest
     }
 
@@ -81,7 +87,11 @@ package struct ChatTimeline: Equatable {
         // A reply to the message right above it needs no quote; the order already says it.
         var entries: [(date: Date?, item: Item)] = messages.enumerated().map { index, message in
             if message.isEvent {
-                return (message.date, .event(Event(id: message.id, text: message.text, ref: message.ref)))
+                return (message.date, .event(Event(
+                    id: message.id, text: message.text, ref: message.ref,
+                    replies: message.id == offered ? message.replies : [],
+                    isCard: message.kind == .card
+                )))
             }
             return (message.date, .bubble(Bubble(
                 id: message.id,

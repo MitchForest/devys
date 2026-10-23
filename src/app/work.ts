@@ -9,7 +9,15 @@ import {
   pendingDecisions,
 } from "../authority/service.ts";
 import { spendOf } from "../authority/contract.ts";
-import { answerText, handedBack, signedSpend, tellEmployee, tookOver } from "./asking.ts";
+import {
+  answerText,
+  answerWithFile,
+  draftUnchanged,
+  handedBack,
+  signedSpend,
+  tellEmployee,
+  tookOver,
+} from "./asking.ts";
 import {
   workItem,
   workItems,
@@ -156,9 +164,20 @@ export async function decisionRoute(
       ),
     });
   }
-  const answer = /^\/decisions\/([A-Za-z0-9-]{1,64})\/(approve|reject)$/.exec(path);
+  const answer = /^\/decisions\/([A-Za-z0-9-]{1,64})\/(approve|reject|file)$/.exec(path);
   if (!answer || request.method !== "POST") return notFound();
   if (!trusted) return forbidden();
+  if (answer[2] === "file") {
+    const asked = await Effect.runPromise(findDecision(env.HYPERDRIVE, business.id, answer[1]!));
+    if (!asked) return notFound();
+    const answered = await answerWithFile(
+      request,
+      env,
+      { personId: person.id, businessId: business.id },
+      asked,
+    );
+    return answered instanceof Response ? answered : respond(Answered, { status: answered.status });
+  }
   const approve = answer[2] === "approve";
   const asked = await Effect.runPromise(findDecision(env.HYPERDRIVE, business.id, answer[1]!));
   if (!asked) return notFound();
@@ -174,6 +193,13 @@ export async function decisionRoute(
     });
   if (approve && asked.kind === "connect")
     return new Response("Connect the app and turn it on to answer this.", { status: 409 });
+  if (approve && asked.kind === "file")
+    return new Response("Choose the file to answer this.", { status: 409 });
+  // A draft that changed since it was asked is not what the owner is approving now.
+  if (approve && !(await draftUnchanged(env, business.id, person.id, asked)))
+    return new Response("That draft changed after it was asked; it will be asked again.", {
+      status: 409,
+    });
   // A spend is approved only with a device signature over exactly this request.
   const signed =
     approve && spendOf(asked)

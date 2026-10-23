@@ -41,6 +41,13 @@ private actor AskServer {
         return [SecretEntry(name: secret.name, kind: .spend)]
     }
 
+    var files: [(decision: String, file: ChosenFile)] = []
+
+    func send(_ decision: String, _ file: ChosenFile) {
+        files.append((decision, file))
+        home = home.answering(decision)
+    }
+
     func refuse(_ error: any Error & Sendable) { refusal = error }
     func takeOver(_ id: String, _ taking: Bool) { takeovers.append((id, taking)) }
 }
@@ -84,6 +91,35 @@ private let cardRequest = Decision(
     workItemID: "c1"
 )
 
+private let logoRequest = Decision(
+    id: "d-logo",
+    kind: .file,
+    employeeID: "growth",
+    capability: "askOwner",
+    input: .object([
+        "kind": .string("file"),
+        "purpose": .string("Your logo, for the site"),
+        "accept": .array([.string("image/*")])
+    ]),
+    workItemID: "c1"
+)
+
+private let shipRequest = Decision(
+    id: "d-ship",
+    kind: .approve,
+    employeeID: "growth",
+    capability: "askOwner",
+    input: .object([
+        "kind": .string("approve"),
+        "action": .string("Merge and ship the waitlist page"),
+        "counterparty": .string("github.com/acme/site"),
+        "steps": .array([.string("Merge PR #12 at a1b2c3"), .string("Deploy a1b2c3 of site to production")]),
+        "preview": .string("devys:documents/artifact/00000000-0000-4000-8000-000000000005"),
+        "previewHash": .string(String(repeating: "d", count: 64))
+    ]),
+    workItemID: "c1"
+)
+
 @MainActor
 @Suite("Asking the owner")
 struct AskingFeatureTests {
@@ -98,6 +134,7 @@ struct AskingFeatureTests {
                 memory: { _ in [] },
                 work: { _ in [WorkItem(id: "c1", ownerEmployeeID: "growth", title: "Register the domain", state: .inProgress)] },
                 setTakeover: { _, id, taking in await server.takeOver(id, taking) },
+                sendFile: { _, decision, file in await server.send(decision, file) },
                 home: { _ in await server.home },
                 addSecret: { id, secret in try await server.add(id, secret) }
             )
@@ -176,7 +213,9 @@ struct AskingFeatureTests {
         let server = AskServer(home: Home(needsYou: [NeedsYouItem(cardRequest, title: "Register the domain")]))
         let store = makeStore(server)
         await settle("home", until: { store.home.value?.needsYou.first?.kind == .secret })
-        #expect(DecisionText.title(cardRequest) == "Card: RAMP_CARD")
+        // The owner reads what it is; the name is the employee's.
+        #expect(DecisionText.title(cardRequest) == "Your card")
+        #expect(!DecisionText.fields(cardRequest).contains { $0.value.contains("RAMP_CARD") })
         store.send(.secretTapped("d-card"))
         let sheet = store.secretEntry
         #expect(sheet?.name == "RAMP_CARD" && sheet?.isCard == true && sheet?.isFixed == true && sheet?.why == "The company card, for the domain")
@@ -191,6 +230,29 @@ struct AskingFeatureTests {
         #expect(added.count == 1 && added.first?.business == store.businessID && added.first?.secret.value == .card(card))
         #expect(store.state.decisions.isEmpty)
         #expect(!String(describing: store.state).contains("4242424242424242"))
+    }
+
+    @Test("A take over reads its reason once; a combined approval lists its steps and its draft")
+    func readsRequests() {
+        #expect(DecisionText.title(signIn) == "Sign in to the registrar (2FA)")
+        #expect(DecisionText.fields(signIn).isEmpty)
+        #expect(shipRequest.steps == ["Merge PR #12 at a1b2c3", "Deploy a1b2c3 of site to production"])
+        #expect(shipRequest.preview == .artifact("00000000-0000-4000-8000-000000000005"))
+        #expect(logoRequest.request == .file(purpose: "Your logo, for the site", accept: ["image/*"]))
+        #expect(DecisionText.title(logoRequest) == "Your logo, for the site")
+    }
+
+    @Test("A file request is answered with the chosen file, once, and leaves Needs you")
+    func sendsFile() async {
+        let server = AskServer(home: Home(needsYou: [NeedsYouItem(logoRequest, title: "Register the domain")]))
+        let store = makeStore(server)
+        await settle("home", until: { store.home.value?.needsYou.first?.kind == .file })
+        let logo = ChosenFile(name: "logo.png", type: "image/png", data: Data([1, 2, 3]))
+        store.send(.fileChosen("d-logo", logo))
+        #expect(store.state.decisions.isEmpty)
+        for _ in 0..<2_000 where await server.files.isEmpty { await Task.yield() }
+        let files = await server.files
+        #expect(files.count == 1 && files.first?.decision == "d-logo" && files.first?.file == logo)
     }
 
     @Test("A refused secret keeps the sheet open with the server's reason")

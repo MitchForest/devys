@@ -177,7 +177,7 @@ public struct AppEntry: Equatable, Sendable, Decodable, Identifiable {
 /// the whole request, so Needs you is answered from Home alone), or work that needs one.
 public struct NeedsYouItem: Equatable, Sendable, Decodable, Identifiable {
     public enum Kind: String, Equatable, Sendable, WireEnum {
-        case decision, approve, secret, connect
+        case decision, approve, secret, connect, file
         case takeOver = "take_over"
         case work, reconnect, unknown
     }
@@ -215,6 +215,7 @@ public struct NeedsYouItem: Equatable, Sendable, Decodable, Identifiable {
         case .takeOver: .takeOver
         case .secret: .secret
         case .connect: .connect
+        case .file: .file
         case .decision, .unknown: .decision
         }
         self.id = decision.id
@@ -254,7 +255,7 @@ public struct NeedsYouItem: Equatable, Sendable, Decodable, Identifiable {
         employeeID = try container.decodeIfPresent(String.self, forKey: .employeeID)
         workID = try container.decodeIfPresent(String.self, forKey: .workID)
         projectID = try container.decodeIfPresent(String.self, forKey: .projectID)
-        decision = [.decision, .approve, .takeOver, .secret, .connect].contains(kind) ? try Decision(from: decoder) : nil
+        decision = [.decision, .approve, .takeOver, .secret, .connect, .file].contains(kind) ? try Decision(from: decoder) : nil
         routine = try container.decodeIfPresent(Routine.self, forKey: .routine)
     }
 
@@ -276,6 +277,8 @@ public struct GlanceItem: Equatable, Sendable, Decodable, Identifiable {
     public let waitCondition: String?
     public let dueAt: String?
     public let updatedAt: String
+    /// Where its steps stand, "2 of 5 · Setting up email"; nil without steps.
+    public let progress: String?
 
     public init(
         id: String,
@@ -285,7 +288,8 @@ public struct GlanceItem: Equatable, Sendable, Decodable, Identifiable {
         state: WorkItemState = .inProgress,
         waitCondition: String? = nil,
         dueAt: String? = nil,
-        updatedAt: String = "2026-10-19T00:00:00.000Z"
+        updatedAt: String = "2026-10-19T00:00:00.000Z",
+        progress: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -295,10 +299,11 @@ public struct GlanceItem: Equatable, Sendable, Decodable, Identifiable {
         self.waitCondition = waitCondition
         self.dueAt = dueAt
         self.updatedAt = updatedAt
+        self.progress = progress
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, title, state
+        case id, title, state, progress
         case employeeID = "employee_id"
         case projectID = "project_id"
         case waitCondition = "wait_condition"

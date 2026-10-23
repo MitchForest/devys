@@ -38,7 +38,7 @@ export function unavailableBrowser(): Browser {
     call: refuse,
     events: refuse,
     tabs: refuse,
-    status: async () => ({ open: false, url: null, title: null, driver: null }),
+    status: async () => ({ open: false, url: null, title: null, driver: null, driving: false }),
     screenshot: refuse,
     input: refuse,
     fill: refuse,

@@ -1,4 +1,6 @@
 import { defineApp } from "../../protocol/app.ts";
+import { bundledSkill } from "../../protocol/skill.ts";
+import shippingCode from "./skills/shipping-code/SKILL.md?raw";
 
 const coding = [
   "codingStart",
@@ -19,7 +21,7 @@ export const code = defineApp({
   kind: "business",
   records: [{ kind: "session", title: "Coding session" }],
   capabilities: coding,
-  skills: [],
+  skills: [bundledSkill("shipping-code", shippingCode)],
   // The owner's own GitHub login on the Mac until the broker holds a GitHub connection.
   connections: [{ provider: "github", scopes: [] }],
   appears: "records",

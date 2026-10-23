@@ -33,6 +33,8 @@ public enum OwnerRequest: Equatable, Sendable {
     case secret(name: String, why: String, spend: Bool)
     /// An app to connect (its id, registry name or address), and why, in one line.
     case connect(app: String, why: String)
+    /// A file only the owner has: what it is for, and the media types it may be (any when empty).
+    case file(purpose: String, accept: [String])
 }
 
 extension JSONValue {
@@ -46,6 +48,10 @@ extension JSONValue {
 
     fileprivate var bool: Bool? {
         if case .bool(let value) = self { value } else { nil }
+    }
+
+    fileprivate var strings: [String]? {
+        if case .array(let values) = self { values.compactMap(\.string) } else { nil }
     }
 
     fileprivate var integer: Int? {
@@ -73,14 +79,48 @@ extension Decision {
         case .connect:
             guard let app = input["app"]?.string, let why = input["why"]?.string else { return nil }
             return .connect(app: app, why: why)
+        case .file:
+            guard let purpose = input["purpose"]?.string else { return nil }
+            return .file(purpose: purpose, accept: input["accept"]?.strings ?? [])
         case .decision, .unknown:
             return nil
         }
     }
 
+    /// The exact steps an approve covers; approving covers those and nothing else.
+    public var steps: [String] {
+        guard kind == .approve else { return [] }
+        return input["steps"]?.strings ?? []
+    }
+
+    /// The draft an approve shows (a page or a file), as it was when asked.
+    public var preview: Ref? {
+        guard kind == .approve, let value = input["preview"]?.string else { return nil }
+        return Ref(value)
+    }
+
+    /// The hash of the draft's content when it was asked, which the server binds; nil without one.
+    public var previewHash: String? {
+        guard kind == .approve else { return nil }
+        return input["previewHash"]?.string
+    }
+
     /// An approve with an amount: only a signature from one of the owner's devices answers it.
     public var isSpend: Bool {
         if case .approve(_, _, .some, _) = request { true } else { false }
+    }
+}
+
+/// A file the owner chose to answer a file request: its name, media type and bytes.
+public struct ChosenFile: Equatable, Sendable {
+    public let name: String
+    public let type: String
+    public let data: Data
+
+    public init(name: String, type: String, data: Data) {
+        self.name = name
+        self.type = type
+        self.data = data
     }
 }
 
@@ -92,6 +132,7 @@ enum CanonicalJSON {
     enum Value {
         case string(String)
         case integer(Int)
+        case strings([String])
         case null
     }
 
@@ -101,6 +142,7 @@ enum CanonicalJSON {
                 switch fields[key]! {
                 case .string(let text): quote(text)
                 case .integer(let number): String(number)
+                case .strings(let texts): "[" + texts.map(quote).joined(separator: ",") + "]"
                 case .null: "null"
                 }
             }()
@@ -135,6 +177,11 @@ public struct SpendApproval: Equatable, Sendable {
     public let counterparty: String
     public let amount: Amount
     public let renewal: String?
+    /// The exact steps it covers, in order.
+    public let steps: [String]
+    /// The draft it shows (its ref, as text) and the hash of its content when asked.
+    public let preview: String?
+    public let previewHash: String?
     public let expiresAt: String
 
     /// The spend a decision asks the owner to sign; nil for anything else.
@@ -149,6 +196,10 @@ public struct SpendApproval: Equatable, Sendable {
         self.counterparty = counterparty
         self.amount = amount
         self.renewal = renewal
+        self.steps = decision.steps
+        // The ref exactly as stored: the bytes the server signs.
+        self.preview = decision.input["preview"]?.string
+        self.previewHash = decision.previewHash
         self.expiresAt = decision.expiresAt
     }
 
@@ -161,7 +212,10 @@ public struct SpendApproval: Equatable, Sendable {
             "currency": .string(amount.currency),
             "decision": .string(decisionID),
             "expires_at": .string(expiresAt),
+            "preview": preview.map(CanonicalJSON.Value.string) ?? .null,
+            "preview_hash": previewHash.map(CanonicalJSON.Value.string) ?? .null,
             "renewal": renewal.map(CanonicalJSON.Value.string) ?? .null,
+            "steps": .strings(steps),
             "type": .string("spend_approval"),
             "work_item": .string(workItemID)
         ])

@@ -1,7 +1,7 @@
 {
   "grants": [
     {
-      "id": "00000000-0000-4000-8000-000000000021",
+      "id": "00000000-0000-4000-8000-000000000024",
       "capability": "appSearch",
       "mode": "auto",
       "constraints": {},
@@ -12,7 +12,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000022",
+      "id": "00000000-0000-4000-8000-000000000025",
       "capability": "artifactEdit",
       "mode": "auto",
       "constraints": {},
@@ -23,7 +23,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000023",
+      "id": "00000000-0000-4000-8000-000000000026",
       "capability": "artifactPage",
       "mode": "auto",
       "constraints": {},
@@ -34,7 +34,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000024",
+      "id": "00000000-0000-4000-8000-000000000027",
       "capability": "artifactRead",
       "mode": "auto",
       "constraints": {},
@@ -45,18 +45,18 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000025",
+      "id": "00000000-0000-4000-8000-000000000028",
       "capability": "askOwner",
       "mode": "auto",
       "constraints": {},
       "responsibility": null,
       "created_at": "2026-01-01T00:00:00.000Z",
-      "description": "Bring the owner in, from a work item's thread; a turn in a direct chat or channel can't ask: workCreate the work, say you will ask there, and ask when you continue in its thread. {kind: \"approve\", action, counterparty, amount?, renewal?}: before a consequential action you will take anywhere (browser, shell, an app), state it exactly: action is what you will do, counterparty who or where (merchant, site, person; for a card payment, the merchant's site such as namecheap.com, where the card will be filled); any spend has amount {cents, currency}, which the owner signs with Face ID or Touch ID, and renewal says what recurs. {kind: \"take_over\", reason, url?}: something only the owner can do in the business's browser (sign in, 2FA, CAPTCHA); they take the work over, do it and hand it back. {kind: \"secret\", name, why, spend?}: a secret the business lacks (an API key, a password; spend: true for a card), named as you will use it (STRIPE_KEY); the owner enters it in a secure sheet and you use it by name (run's secrets, browserFill), never seeing it. {kind: \"connect\", app, why}: an app the business doesn't have yet (an id or registry name from appSearch, or an MCP server's https address); the owner connects it with its own sign-in and chooses what you may do with it; why is one line on the card. It returns at once: carry on with other work or wait; the answer arrives in this thread. Asking again with exactly the same input tells you where it stands (asked, approved, declined, taken_over, done). A changed amount, merchant or action is a new request. Never ask for passwords, codes or card numbers in chat.",
+      "description": "Bring the owner in, from a work item's thread; a turn in a direct chat or channel can't ask: workCreate the work, say you will ask there, and ask when you continue in its thread. {kind: \"approve\", action, counterparty, amount?, renewal?}: before a consequential action you will take anywhere (browser, shell, an app), state it exactly: action is what you will do, counterparty who or where (merchant, site, person; for a card payment, the merchant's site such as namecheap.com, where the card will be filled); any spend has amount {cents, currency}, which the owner signs with Face ID or Touch ID, and renewal says what recurs. To ask once for several actions that go together, list each exactly in steps ([\"Merge PR #12 at a1b2c3\", \"Deploy a1b2c3 of site to production\"]): the approval covers those steps and nothing else. To show the owner what goes out (an email draft, a post, an invoice, a page), pass it as preview: the ref of a page or a file; changing it afterwards voids the approval, so ask again. {kind: \"take_over\", reason, url?}: something only the owner can do in the business's browser (sign in, 2FA, CAPTCHA); they take the work over, do it and hand it back. {kind: \"secret\", name, why, spend?}: a secret the business lacks (an API key, a password; spend: true for a card), named as you will use it (STRIPE_KEY); the owner enters it in a secure sheet and you use it by name (run's secrets, browserFill), never seeing it. {kind: \"connect\", app, why}: an app the business doesn't have yet (an id or registry name from appSearch, or an MCP server's https address); the owner connects it with its own sign-in and chooses what you may do with it; why is one line on the card. {kind: \"file\", purpose, accept?}: a file only the owner has (a logo, a signed contract, an ID scan); purpose is one line on the card, accept the media types it may be ([\"image/*\", \"application/pdf\"]); their file arrives in the business folder and its ref in this thread. It returns at once: carry on with other work or wait; the answer arrives in this thread. Asking again with exactly the same input tells you where it stands (asked, approved, declined, taken_over, done). A changed amount, merchant or action is a new request. Never ask for passwords, codes or card numbers in chat.",
       "effect": "change",
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000026",
+      "id": "00000000-0000-4000-8000-000000000029",
       "capability": "browserFill",
       "mode": "auto",
       "constraints": {},
@@ -67,7 +67,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000027",
+      "id": "00000000-0000-4000-8000-000000000030",
       "capability": "browserScreenshot",
       "mode": "auto",
       "constraints": {},
@@ -78,7 +78,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000028",
+      "id": "00000000-0000-4000-8000-000000000031",
       "capability": "browserScript",
       "mode": "auto",
       "constraints": {},
@@ -89,7 +89,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000029",
+      "id": "00000000-0000-4000-8000-000000000032",
       "capability": "browserTabs",
       "mode": "auto",
       "constraints": {},
@@ -100,7 +100,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000030",
+      "id": "00000000-0000-4000-8000-000000000033",
       "capability": "codingAccept",
       "mode": "auto",
       "constraints": {},
@@ -111,7 +111,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000031",
+      "id": "00000000-0000-4000-8000-000000000034",
       "capability": "codingPublish",
       "mode": "auto",
       "constraints": {},
@@ -122,7 +122,7 @@
       "limits": true
     },
     {
-      "id": "00000000-0000-4000-8000-000000000032",
+      "id": "00000000-0000-4000-8000-000000000035",
       "capability": "codingSend",
       "mode": "auto",
       "constraints": {},
@@ -133,7 +133,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000033",
+      "id": "00000000-0000-4000-8000-000000000036",
       "capability": "codingStart",
       "mode": "auto",
       "constraints": {},
@@ -144,7 +144,7 @@
       "limits": true
     },
     {
-      "id": "00000000-0000-4000-8000-000000000034",
+      "id": "00000000-0000-4000-8000-000000000037",
       "capability": "codingStatus",
       "mode": "auto",
       "constraints": {},
@@ -155,7 +155,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000035",
+      "id": "00000000-0000-4000-8000-000000000038",
       "capability": "codingStop",
       "mode": "auto",
       "constraints": {},
@@ -166,7 +166,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000036",
+      "id": "00000000-0000-4000-8000-000000000039",
       "capability": "conversationHistory",
       "mode": "auto",
       "constraints": {},
@@ -177,7 +177,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000037",
+      "id": "00000000-0000-4000-8000-000000000040",
       "capability": "deployPreview",
       "mode": "auto",
       "constraints": {},
@@ -188,18 +188,18 @@
       "limits": true
     },
     {
-      "id": "00000000-0000-4000-8000-000000000038",
+      "id": "00000000-0000-4000-8000-000000000041",
       "capability": "deployProduction",
       "mode": "ask",
       "constraints": {},
       "responsibility": null,
       "created_at": "2026-01-01T00:00:00.000Z",
-      "description": "Deploy a coding session's accepted, checked commit (name the session by its ref) to production with the repository's own production deploy command, then check its URL answers. `secrets` names the business's secrets the command needs (each set as the variable of its name, redacted from the output). The owner approves each production deploy. To roll back, name an earlier commit this work item accepted or deployed.",
+      "description": "Deploy a coding session's accepted, checked commit (name the session by its ref) to production with the repository's own production deploy command, then check its URL answers. `secrets` names the business's secrets the command needs (each set as the variable of its name, redacted from the output). The owner approves each production deploy. To ask once for several steps (merge, then deploy), list this deploy in an askOwner approve's steps exactly as `Deploy <commit> of <repository> to production` (repository: the last part of its folder's path) and pass that commit here: that approval covers this deploy, once. To roll back, name an earlier commit this work item accepted or deployed.",
       "effect": "external",
       "limits": true
     },
     {
-      "id": "00000000-0000-4000-8000-000000000039",
+      "id": "00000000-0000-4000-8000-000000000042",
       "capability": "forget",
       "mode": "auto",
       "constraints": {},
@@ -210,7 +210,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000040",
+      "id": "00000000-0000-4000-8000-000000000043",
       "capability": "importAttachment",
       "mode": "auto",
       "constraints": {},
@@ -221,7 +221,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000041",
+      "id": "00000000-0000-4000-8000-000000000044",
       "capability": "printPdf",
       "mode": "auto",
       "constraints": {},
@@ -232,18 +232,18 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000042",
+      "id": "00000000-0000-4000-8000-000000000045",
       "capability": "projectAdd",
       "mode": "auto",
       "constraints": {},
       "responsibility": null,
       "created_at": "2026-01-01T00:00:00.000Z",
-      "description": "Show a saved artifact (devys:documents/artifact/<id>), a file in the business folder (devys:documents/file/<percent-encoded absolute path>) or a coding session (devys:code/session/<id>) on a project (its ref), by the record's ref. It's a reference: the record keeps one home and can appear in several projects. Work items join a project when created with its ref as project.",
+      "description": "Show a record on a project (its ref): record is a saved artifact (devys:documents/artifact/<id>), a file in the business folder (devys:documents/file/<percent-encoded absolute path>) or a coding session (devys:code/session/<id>). It's a reference: the record keeps one home and can appear in several projects. Returns the project. Work items join a project when created with its ref as project.",
       "effect": "change",
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000043",
+      "id": "00000000-0000-4000-8000-000000000046",
       "capability": "projectCreate",
       "mode": "auto",
       "constraints": {},
@@ -254,7 +254,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000044",
+      "id": "00000000-0000-4000-8000-000000000047",
       "capability": "projectList",
       "mode": "auto",
       "constraints": {},
@@ -265,7 +265,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000045",
+      "id": "00000000-0000-4000-8000-000000000048",
       "capability": "projectUpdate",
       "mode": "auto",
       "constraints": {},
@@ -276,7 +276,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000046",
+      "id": "00000000-0000-4000-8000-000000000049",
       "capability": "publishArtifact",
       "mode": "auto",
       "constraints": {},
@@ -287,7 +287,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000047",
+      "id": "00000000-0000-4000-8000-000000000050",
       "capability": "read",
       "mode": "auto",
       "constraints": {},
@@ -298,7 +298,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000048",
+      "id": "00000000-0000-4000-8000-000000000051",
       "capability": "readPublicUrl",
       "mode": "auto",
       "constraints": {},
@@ -309,7 +309,7 @@
       "limits": true
     },
     {
-      "id": "00000000-0000-4000-8000-000000000049",
+      "id": "00000000-0000-4000-8000-000000000052",
       "capability": "readSkill",
       "mode": "auto",
       "constraints": {},
@@ -320,7 +320,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000050",
+      "id": "00000000-0000-4000-8000-000000000053",
       "capability": "recall",
       "mode": "auto",
       "constraints": {},
@@ -331,7 +331,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000051",
+      "id": "00000000-0000-4000-8000-000000000054",
       "capability": "remember",
       "mode": "auto",
       "constraints": {},
@@ -342,7 +342,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000052",
+      "id": "00000000-0000-4000-8000-000000000055",
       "capability": "routineActivate",
       "mode": "ask",
       "constraints": {},
@@ -353,7 +353,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000053",
+      "id": "00000000-0000-4000-8000-000000000056",
       "capability": "routineList",
       "mode": "auto",
       "constraints": {},
@@ -364,7 +364,7 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000054",
+      "id": "00000000-0000-4000-8000-000000000057",
       "capability": "routinePause",
       "mode": "auto",
       "constraints": {},
@@ -375,18 +375,18 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000055",
+      "id": "00000000-0000-4000-8000-000000000058",
       "capability": "routinePropose",
       "mode": "auto",
       "constraints": {},
       "responsibility": null,
       "created_at": "2026-01-01T00:00:00.000Z",
-      "description": "Propose a routine: work you (or, for Operations, another employee) run on a schedule or when an event happens, for a responsibility or a project (its ref; runs then speak in its channel, else in the employee's direct chat). trigger is {kind: \"cron\", expression: five-field cron like \"0 9 * * 1\", timezone: the owner's IANA zone, hours?: {start: \"09:00\", end: \"18:00\", days?: [\"mon\", …]}} or {kind: \"event\", source, type, filters: {field: exact value}}. notify when_found makes a quiet check-in: a run that finds nothing posts nothing. To change a routine, pass its ref and current revision: that is a new proposal and it stops running until approved. Proposing activates nothing: then call routineActivate with its ref and revision, which asks the owner. For a one-off look later, use workUpdate with wakeAt instead.",
+      "description": "Propose a routine: work you (or, for Operations, another employee) run on a schedule or when an event happens, for a responsibility or a project (its ref; runs then speak in its channel, else in the employee's direct chat). trigger is {kind: \"cron\", expression: five-field cron like \"0 9 * * 1\", timezone: the owner's IANA zone, hours?: {start: \"09:00\", end: \"18:00\", days?: [\"mon\", …]}} or {kind: \"event\", source, type, filters: {field: exact value}}. notify when_found makes a quiet check-in: a run that finds nothing posts nothing. To change a routine, pass its ref and revision as returned: that is a new proposal and it stops running until approved. Proposing activates nothing: then call routineActivate with the ref and revision it returns, which asks the owner. For a one-off look later, use workUpdate with wakeAt instead.",
       "effect": "change",
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000056",
+      "id": "00000000-0000-4000-8000-000000000059",
       "capability": "run",
       "mode": "auto",
       "constraints": {},
@@ -397,62 +397,73 @@
       "limits": false
     },
     {
-      "id": "00000000-0000-4000-8000-000000000057",
-      "capability": "suggestReplies",
-      "mode": "auto",
-      "constraints": {},
-      "responsibility": null,
-      "created_at": "2026-01-01T00:00:00.000Z",
-      "description": "Offer the owner up to 4 short replies (each at most 40 characters) to the reply you are writing in this conversation. They show as buttons under your reply, and one tap sends that one. They add nothing on their own: after calling this, still write your reply, with the question, as your final text. When you need the owner to choose, ask one question and offer its answers this way, each a concrete choice (a name, not a category), your recommendation first. Calling again replaces the options.",
-      "effect": "change",
-      "limits": false
-    },
-    {
-      "id": "00000000-0000-4000-8000-000000000058",
-      "capability": "workComplete",
-      "mode": "auto",
-      "constraints": {},
-      "responsibility": null,
-      "created_at": "2026-01-01T00:00:00.000Z",
-      "description": "Mark a work item (its ref) completed, at its current revision, in its own thread, with evidence: what was done and where to see it. Saying 'done' in chat does not complete work.",
-      "effect": "change",
-      "limits": false
-    },
-    {
-      "id": "00000000-0000-4000-8000-000000000059",
-      "capability": "workCreate",
-      "mode": "auto",
-      "constraints": {},
-      "responsibility": null,
-      "created_at": "2026-01-01T00:00:00.000Z",
-      "description": "Record something the business owes: a title, objective and next action, accountable to you or another employee, optionally in a project. Use for work that outlives this conversation.",
-      "effect": "change",
-      "limits": false
-    },
-    {
       "id": "00000000-0000-4000-8000-000000000060",
-      "capability": "workList",
+      "capability": "secretList",
       "mode": "auto",
       "constraints": {},
       "responsibility": null,
       "created_at": "2026-01-01T00:00:00.000Z",
-      "description": "List the business's work items: what is owed, who is accountable, the next action and state, each with its ref. Read before changing one; changes name it by its ref and need its current revision.",
+      "description": "List the secrets and cards the owner has saved for this business: each one's name (what run's `secrets` and browserFill take), whether it is a secret or a card, who added it and when. Never a value. Check here before asking the owner for a key or a card.",
       "effect": "read",
       "limits": false
     },
     {
       "id": "00000000-0000-4000-8000-000000000061",
-      "capability": "workUpdate",
+      "capability": "suggestReplies",
       "mode": "auto",
       "constraints": {},
       "responsibility": null,
       "created_at": "2026-01-01T00:00:00.000Z",
-      "description": "Update a work item (its ref) at its current revision, from any conversation: the next action, its state (ready, in_progress, waiting, needs_decision, cancelled), what it waits on, or its due date (a deadline only). To follow up later (\"look again Thursday\"), set state waiting with wakeAt: at that time it becomes ready and is handed back to you in its thread, once. A routine (routinePropose) is for work that recurs.",
+      "description": "Offer the owner up to 4 short replies (each at most 40 characters) to the reply you are writing in this conversation. They show as buttons under your reply, and one tap sends that one. They add nothing on their own: after calling this, still write your reply, with the question, as your final text. When you need the owner to choose, ask one question and offer its answers this way, each a concrete choice (a name, not a category), your recommendation first. After asking, end your turn and wait for the owner's answer; don't go ahead with your recommendation. Calling again replaces the options.",
       "effect": "change",
       "limits": false
     },
     {
       "id": "00000000-0000-4000-8000-000000000062",
+      "capability": "workComplete",
+      "mode": "auto",
+      "constraints": {},
+      "responsibility": null,
+      "created_at": "2026-01-01T00:00:00.000Z",
+      "description": "Mark a work item (ref and revision, as returned) completed, in its own thread, with evidence: what was done and where to see it, and results: the whole list of what it achieved, as in workUpdate, each checked from outside first. Saying 'done' in chat does not complete work.",
+      "effect": "change",
+      "limits": false
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000063",
+      "capability": "workCreate",
+      "mode": "auto",
+      "constraints": {},
+      "responsibility": null,
+      "created_at": "2026-01-01T00:00:00.000Z",
+      "description": "Record something the business owes: a title, objective and next action, accountable to you or another employee, optionally in a project. Use for work that outlives this conversation. Returns its ref and revision, which workUpdate and workComplete take as they are.",
+      "effect": "change",
+      "limits": false
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000064",
+      "capability": "workList",
+      "mode": "auto",
+      "constraints": {},
+      "responsibility": null,
+      "created_at": "2026-01-01T00:00:00.000Z",
+      "description": "List the business's work items: what is owed, who is accountable, the next action and state, its steps and results, each with its ref and revision. Read before changing one; a change passes its ref and revision as they are.",
+      "effect": "read",
+      "limits": false
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000065",
+      "capability": "workUpdate",
+      "mode": "auto",
+      "constraints": {},
+      "responsibility": null,
+      "created_at": "2026-01-01T00:00:00.000Z",
+      "description": "Update a work item (ref and revision, as workList or the last change returned them), from any conversation: the next action, its state (ready, in_progress, waiting, needs_decision, cancelled), what it waits on, or its due date (a deadline only). steps is the whole plan the owner watches in the thread for anything that takes more than a minute (at most 10, each {title, state: todo, doing, done or blocked}); send it again as each step moves. results is the whole list of what it achieved, each checked from outside (at most 12, each {label, value?, url? (https), ok?: true held, false failed, null uncertain}), such as {label: \"Live at\", url} or {label: \"MX records\", ok: true}. Each replaces the last. To follow up later (\"look again Thursday\"), set state waiting with wakeAt: at that time it becomes ready and is handed back to you in its thread, once. A routine (routinePropose) is for work that recurs.",
+      "effect": "change",
+      "limits": false
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000066",
       "capability": "write",
       "mode": "auto",
       "constraints": {},

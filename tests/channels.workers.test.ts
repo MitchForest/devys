@@ -28,6 +28,7 @@ const cases: Case[] = [
     channel: appChannel({
       allowed: async (senderId, target) => senderId === person && target.businessId === "b1",
       post: async () => {},
+      notice: async () => {},
     }),
     bound: { messageId: "m-1", senderId: person, chatId: appChat(scope), text: "Hello" },
     stranger: { messageId: "m-1", senderId: "intruder", chatId: appChat(scope), text: "Hello" },
@@ -37,6 +38,7 @@ const cases: Case[] = [
     channel: workChannel({
       open: async (target, id) => target.employeeId === "e1" && id === "c1",
       post: async () => {},
+      notice: async () => {},
     }),
     bound: {
       messageId: "c1:1",

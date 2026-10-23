@@ -69,6 +69,8 @@ interface Running {
   /** The tab the live view shows and scripts start on, and its DevTools session. */
   tab: { id: string; session: string } | null;
   driver: string | null;
+  /** When an employee last acted on it (ms since the epoch). */
+  drivenAt: number;
   /** The latest events, oldest first, for scripts that wait on one. */
   events: BrowserEvent[];
   seq: number;
@@ -82,6 +84,8 @@ interface Running {
 
 const keptEvents = 500;
 const commandMs = 60_000;
+/** How long after an employee's last action its browser still counts as driven. */
+const drivingMs = 30_000;
 const pausedMessage =
   "The page holds a card or password the host just filled: it is hidden from you until the page moves on (at most two minutes). Wait, then look again.";
 
@@ -237,6 +241,7 @@ export function browsersHost(options: BrowsersHostOptions): HostRoutes {
       session,
       tab: null,
       driver: null,
+      drivenAt: 0,
       events: [],
       seq: 0,
       wake: new Set(),
@@ -693,7 +698,9 @@ export function browsersHost(options: BrowsersHostOptions): HostRoutes {
   };
 
   function drive(running: Running, driver: unknown) {
-    if (typeof driver === "string") running.driver = driver.slice(0, 200);
+    if (typeof driver !== "string") return;
+    running.driver = driver.slice(0, 200);
+    running.drivenAt = Date.now();
   }
 
   /** The visible part of the current tab as a JPEG in CSS pixels. */
@@ -767,11 +774,18 @@ export function browsersHost(options: BrowsersHostOptions): HostRoutes {
       if (path === "/browser/status") {
         const running = open.get(business);
         if (!running)
-          return { open: false, url: null, title: null, driver: null } satisfies BrowserStatus;
+          return {
+            open: false,
+            url: null,
+            title: null,
+            driver: null,
+            driving: false,
+          } satisfies BrowserStatus;
         return act(async () => ({
           open: true,
           ...(await pageState(running)),
           driver: running.driver,
+          driving: Date.now() - running.drivenAt < drivingMs,
         })) satisfies Promise<BrowserStatus>;
       }
       const running = await runningFor(business);

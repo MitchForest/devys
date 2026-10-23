@@ -33,9 +33,10 @@ public struct ConversationKey: Hashable, Sendable, CustomStringConvertible {
     }
 }
 
-/// One message in a shared conversation. Events are hand-off cards written by the system.
+/// One message in a shared conversation. Events are hand-off cards written by the system; a card
+/// shows its record (`ref`) as it is now, so it is updated in place.
 public struct ConversationMessage: Equatable, Sendable, Decodable, Identifiable {
-    public enum Kind: String, Equatable, Sendable { case message, event }
+    public enum Kind: String, Equatable, Sendable { case message, event, card }
 
     public let id: String
     public let conversation: String
@@ -113,7 +114,8 @@ public struct ConversationMessage: Equatable, Sendable, Decodable, Identifiable 
     }
 
     public var isFromPerson: Bool { author.hasPrefix("person:") }
-    public var isEvent: Bool { kind == .event }
+    /// Written by the system rather than said: an event or a card.
+    public var isEvent: Bool { kind != .message }
     public var date: Date? { ServerDate.parse(createdAt) }
 }
 

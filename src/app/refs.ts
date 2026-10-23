@@ -1,7 +1,9 @@
 import { Effect } from "effect";
 import type { Env } from "./env.ts";
 import { codingSession } from "../apps/code/service.ts";
-import { artifactLocation } from "../apps/documents/service.ts";
+import { artifactLocation, artifactRecord } from "../apps/documents/service.ts";
+import { sha256Bytes } from "../protocol/bytes.ts";
+import { modeOf } from "./mode.ts";
 import { parseRef, type Ref } from "../protocol/ref.ts";
 import { project } from "../work/projects.ts";
 import { workItem } from "../work/service.ts";
@@ -46,4 +48,37 @@ export async function businessRef(
     }
   };
   return (await found()) ? (value as Ref) : undefined;
+}
+
+/**
+ * The hash of what a page or file says now, or undefined when it is not one of the business's: a
+ * page is its latest version (publishing again under its name changes it), a file its bytes.
+ */
+export async function contentHash(env: Env, businessId: string, value: Ref) {
+  const parts = parseRef(value);
+  if (parts?.app !== "documents") return undefined;
+  if (parts.kind === "artifact") {
+    const record = await Effect.runPromise(artifactRecord(env.HYPERDRIVE, businessId, parts.id));
+    const latest =
+      record &&
+      (await Effect.runPromise(artifactLocation(env.HYPERDRIVE, businessId, record.latest_id)));
+    const object = latest && (await env.FILES.get(latest.object_key));
+    return object ? sha256Bytes(await object.arrayBuffer()) : undefined;
+  }
+  const file = businessFile(env, businessId, parts.id);
+  const root = modeOf(env).businessFolder(businessId);
+  if (!file || !root) return undefined;
+  // The runner moves bytes through R2; this copy exists only to be hashed.
+  const key = `${businessId}/file-hashes/${crypto.randomUUID()}`;
+  try {
+    await modeOf(env)
+      .runner(root)({ businessId, employeeId: "owner" })
+      .exportFile(file, key, 20_000_000);
+    const object = await env.FILES.get(key);
+    return object ? sha256Bytes(await object.arrayBuffer()) : undefined;
+  } catch {
+    return undefined;
+  } finally {
+    await env.FILES.delete(key).catch(() => undefined);
+  }
 }

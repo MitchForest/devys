@@ -24,13 +24,16 @@ export const kindOf = (key: ConversationKey) => key.slice(0, key.indexOf(":")) a
 /** The id a key names: the employee, project or work item. */
 export const idOf = (key: ConversationKey) => key.slice(key.indexOf(":") + 1);
 
-/** One entry in a conversation: something someone said, or an event such as a hand-off. */
+/**
+ * One entry in a conversation: something someone said, an event such as a hand-off, or a card,
+ * which shows its record (`ref`) as it is now and so is updated in place, never reposted.
+ */
 export const Message = Schema.Struct({
   id: Schema.String,
   conversation: ConversationKey,
   /** `person:<id>`, `employee:<id>` or `system`. */
   author: Schema.String,
-  kind: Schema.Literals(["message", "event"]),
+  kind: Schema.Literals(["message", "event", "card"]),
   text: Schema.String,
   reply_to: Schema.NullOr(Schema.String),
   /** Employee ids this message addresses. */

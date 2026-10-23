@@ -17,6 +17,8 @@ export const BrowserStatus = Schema.Struct({
   title: Schema.NullOr(Schema.String),
   /** The work item (or conversation) the last employee action served. */
   driver: Schema.NullOr(Schema.String),
+  /** An employee acted on it in the last 30 seconds: it is being driven, not idle. */
+  driving: Schema.Boolean,
 });
 export type BrowserStatus = typeof BrowserStatus.Type;
 

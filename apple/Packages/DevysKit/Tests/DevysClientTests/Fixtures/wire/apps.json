@@ -13,9 +13,15 @@
         "write",
         "printPdf",
         "importAttachment",
-        "readSkill"
+        "readSkill",
+        "secretList"
       ],
-      "skills": [],
+      "skills": [
+        {
+          "name": "checking-your-work",
+          "description": "Prove each effect from outside (DNS, a live URL, an email delivered, a pull request's checks, a receipt) before saying it is done, then record it as the work item's results. Load before finishing any work that changed something outside Devys."
+        }
+      ],
       "connections": [],
       "appears": "never",
       "default_grants": {
@@ -25,7 +31,8 @@
           "write",
           "printPdf",
           "importAttachment",
-          "readSkill"
+          "readSkill",
+          "secretList"
         ],
         "engineering": [
           "run",
@@ -33,7 +40,8 @@
           "write",
           "printPdf",
           "importAttachment",
-          "readSkill"
+          "readSkill",
+          "secretList"
         ],
         "growth": [
           "run",
@@ -41,7 +49,8 @@
           "write",
           "printPdf",
           "importAttachment",
-          "readSkill"
+          "readSkill",
+          "secretList"
         ],
         "business-operations": [
           "run",
@@ -49,13 +58,15 @@
           "write",
           "printPdf",
           "importAttachment",
-          "readSkill"
+          "readSkill",
+          "secretList"
         ],
         "custom": [
           "run",
           "read",
           "write",
-          "readSkill"
+          "readSkill",
+          "secretList"
         ]
       },
       "installed": true,
@@ -81,6 +92,10 @@
         {
           "name": "using-the-browser",
           "description": "Drive the business's own browser with browserScript (DevTools Protocol commands), browserScreenshot and browserTabs to open and read pages, click and type by coordinates, upload files, and work in frames and tabs; fill passwords and cards with browserFill."
+        },
+        {
+          "name": "accounts-and-sign-ins",
+          "description": "Create and use accounts (registrars, hosting, email, suppliers) in the business's name, hand sign-ins, 2FA and identity checks to the owner, and keep passwords out of notes. Load before signing up for or into any service."
         }
       ],
       "connections": [],
@@ -512,7 +527,12 @@
         "deployPreview",
         "deployProduction"
       ],
-      "skills": [],
+      "skills": [
+        {
+          "name": "shipping-code",
+          "description": "Take a coding session's work from accepted to live, verified on its URL. Load before publishing, merging or deploying code."
+        }
+      ],
       "connections": [
         {
           "provider": "github",

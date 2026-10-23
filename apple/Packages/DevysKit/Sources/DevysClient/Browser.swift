@@ -8,12 +8,15 @@ public struct BrowserStatus: Equatable, Sendable, Decodable {
     public let title: String?
     /// The work item (or conversation) the last employee action served.
     public let driver: String?
+    /// An employee acted on it in the last 30 seconds: it is being driven, not idle.
+    public let driving: Bool
 
-    public init(open: Bool, url: String? = nil, title: String? = nil, driver: String? = nil) {
+    public init(open: Bool, url: String? = nil, title: String? = nil, driver: String? = nil, driving: Bool = false) {
         self.open = open
         self.url = url
         self.title = title
         self.driver = driver
+        self.driving = driving
     }
 }
 

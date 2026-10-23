@@ -147,6 +147,15 @@ public struct DevysHTTPClient: Sendable {
         ))
     }
 
+    /// Answers a file request with the file the owner chose; the server puts it in the business folder.
+    public func sendFile(_ session: DeviceSession, businessID: String, decisionID: String, _ file: ChosenFile) async throws {
+        var request = authorized(session, path: "api/businesses/\(businessID)/decisions/\(decisionID)/file", method: "POST")
+        request.url?.append(queryItems: [URLQueryItem(name: "name", value: file.name)])
+        request.setValue(file.type, forHTTPHeaderField: "content-type")
+        request.httpBody = file.data
+        _ = try await raw(request)
+    }
+
     /// A saved text artifact's whole contents, such as an employee's HTML page.
     public func artifactText(_ session: DeviceSession, businessID: String, artifactID: String) async throws -> String {
         let data = try await raw(authorized(session, path: "api/businesses/\(businessID)/artifacts/\(artifactID)"))

@@ -41,9 +41,12 @@ import { InlineMarkdown } from "../design/markdown.tsx";
 import { EmployeePortrait } from "../design/portrait.tsx";
 import { Spinner } from "../design/spinner.tsx";
 import { DecisionCard } from "../panel/work.tsx";
+import { BrowserThumbnail } from "../panel/layers/browser.tsx";
 import { RecordCard, ViewedRecord } from "../panel/layers/registry.tsx";
 import { useRecordTitle } from "../panel/layers/titles.ts";
 import { PausedBanner } from "../panel/desk.tsx";
+import { WorkProgressCard } from "../panel/work-progress.tsx";
+import { parseRef } from "../../protocol/ref.ts";
 import { Bubble, BubbleContent, BubbleReactions } from "@/components/ui/bubble";
 import {
   ContextMenu,
@@ -180,8 +183,22 @@ export function ConversationView({
                       scrollAnchor={item.bubble.mine && index === lastMine}
                       className={startsGroup(item.bubble) ? "pt-2.5" : "pt-0.5"}
                     >
-                      {item.bubble.kind === "event" ? (
-                        <RecordCard value={item.bubble.ref} text={item.bubble.text} />
+                      {item.bubble.kind === "card" ? (
+                        <WorkProgressCard
+                          id={parseRef(item.bubble.ref)?.id ?? ""}
+                          text={item.bubble.text}
+                        />
+                      ) : item.bubble.kind === "event" ? (
+                        <>
+                          <RecordCard value={item.bubble.ref} text={item.bubble.text} />
+                          {item.bubble.replies.length > 0 && (
+                            <SuggestedReplies
+                              replies={item.bubble.replies}
+                              send={(text) => conversation.send(text)}
+                              centered
+                            />
+                          )}
+                        </>
                       ) : (
                         <MessageRow bubble={item.bubble} conversation={conversation} />
                       )}
@@ -203,6 +220,11 @@ export function ConversationView({
                     <DecisionCard decision={decision} />
                   </MessageScrollerItem>
                 ))}
+                {key?.startsWith("work:") && ref && (
+                  <MessageScrollerItem>
+                    <BrowserThumbnail workId={ref} />
+                  </MessageScrollerItem>
+                )}
               </>
             )}
           </MessageScrollerContent>
@@ -449,16 +471,19 @@ function MessageRow({
 function SuggestedReplies({
   replies,
   send,
+  centered,
 }: {
   replies: readonly string[];
   send: (text: string) => void;
+  /** Under an event (Devys's notice), centered with it rather than under an avatar. */
+  centered?: boolean;
 }) {
   return (
     <div
       role="group"
       aria-label="Suggested replies"
-      className="flex flex-wrap gap-1.5 pt-1.5"
-      style={{ paddingLeft: avatarSize + 8 }}
+      className={`flex flex-wrap gap-1.5 pt-1.5 ${centered ? "justify-center" : ""}`}
+      style={centered ? undefined : { paddingLeft: avatarSize + 8 }}
     >
       {replies.map((reply) => (
         <button

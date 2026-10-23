@@ -62,6 +62,11 @@ export interface Capability {
    * server validates the rest and is authoritative.
    */
   readonly remoteSchema?: Record<string, unknown>;
+  /**
+   * For a capability held in `ask` mode: this call as one exact step ("Deploy a1b2c3 of site to
+   * production"), so an owner's approval listing that step in the same work item covers it.
+   */
+  readonly step?: (input: unknown, businessId: string) => Promise<string | undefined>;
   readonly execute: (args: unknown) => Effect.Effect<unknown, CapabilityError, Invocation>;
 }
 
@@ -77,10 +82,12 @@ export function capability<I, O, C = never>(definition: {
   output: Schema.Codec<O, unknown>;
   core?: true;
   remoteSchema?: Record<string, unknown>;
+  step?: (input: I, businessId: string) => Promise<string | undefined>;
   execute: (input: I) => Effect.Effect<O, CapabilityError, Invocation>;
 }): Capability {
   const contract: Capability = {
     ...definition,
+    step: definition.step && ((input, businessId) => definition.step!(input as I, businessId)),
     constraints: definition.constraints && {
       schema: definition.constraints.schema,
       allows: (constraints, input) => definition.constraints!.allows(constraints as C, input as I),
