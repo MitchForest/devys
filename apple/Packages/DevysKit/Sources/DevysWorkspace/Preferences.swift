@@ -348,7 +348,6 @@ extension Preferences.Action {
     package static var browserLinkOpened: Self { Self(.device(.browserLinkOpened)) }
     package static var appsRequested: Self { Self(.app(.requested)) }
     package static func appInstallToggled(_ id: String, _ install: Bool) -> Self { Self(.app(.installToggled(appID: id, install))) }
-    package static func appPinToggled(_ id: String, _ pinned: Bool) -> Self { Self(.app(.pinToggled(appID: id, pinned))) }
     package static var secretsRequested: Self { Self(.secret(.requested)) }
     package static var addSecretTapped: Self { Self(.secret(.addTapped)) }
     package static func secretEdited(_ sheet: SecretEntrySheet) -> Self { Self(.secret(.edited(sheet))) }

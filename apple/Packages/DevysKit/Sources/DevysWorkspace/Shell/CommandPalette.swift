@@ -3,7 +3,7 @@ import DevysClient
 import DevysDesignSystem
 import SwiftUI
 
-/// ⌘K: jump to Home, a project, an employee, a thread or an app in the current business by typing.
+/// ⌘K: jump to an employee, a project, a thread or a page in the current business by typing.
 struct CommandPalette: View {
     let store: StoreOf<Workspace>
     @State private var query = ""
@@ -25,7 +25,7 @@ struct CommandPalette: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 10) {
                     Image(systemName: "magnifyingglass").foregroundStyle(DevysColors.ink3).accessibilityHidden(true)
-                    TextField("Jump to a project, an employee, a thread or an app", text: $query)
+                    TextField("Search people, projects, threads and pages", text: $query)
                         .textFieldStyle(.plain)
                         .font(DevysTypography.heading.weight(.regular))
                         .focused($focused)
@@ -59,7 +59,8 @@ struct CommandPalette: View {
                 }
                 .frame(maxHeight: 320)
             }
-            .frame(width: 520)
+            .frame(maxWidth: 520)
+            .padding(.horizontal, DevysSpacing.regular)
             .background(DevysColors.sheet, in: RoundedRectangle(cornerRadius: DevysRadius.card, style: .continuous))
             .devysElevation(.raised)
             .padding(.top, 90)
@@ -72,11 +73,14 @@ struct CommandPalette: View {
     }
 
     private var targets: [Target] {
-        var all = [Target(id: "home", title: "Home", detail: store.chiefOfStaff?.name ?? "Chief of Staff", symbol: "house", action: .placeSelected(.home))]
+        var all = store.snapshot.employees.map { employee in
+            Target(id: "dm-\(employee.id)", title: employee.name, detail: RoleTemplate.displayName(employee.template), symbol: "bubble.left", action: .message(employee.id))
+        }
         all += (store.projects.value ?? []).map { Target(id: $0.id, title: $0.name, detail: "Project", symbol: "square.grid.2x2", action: .placeSelected(.project($0.id))) }
-        all += store.snapshot.employees.map { Target(id: "dm-\($0.id)", title: $0.name, detail: "Team", symbol: "bubble.left", action: .message($0.id)) }
         all += (store.work.value ?? []).filter(\.state.isOpen).map { Target(id: $0.id, title: $0.title, detail: "Thread", symbol: "checklist", action: .threadOpened($0.id)) }
-        all += (store.apps.value ?? []).filter(\.visible).map { Target(id: "app-\($0.id)", title: $0.name, detail: "App", symbol: "square.grid.2x2", action: .layerOpened(.app($0.id))) }
+        all += store.artifacts.filter { $0.contentType == "text/html" && $0.latestID == $0.id }.map { page in
+            Target(id: "page-\(page.id)", title: store.state.artifactName(page.id), detail: "Page", symbol: "doc.richtext", action: .layerOpened(.artifact(page.id)))
+        }
         return all
     }
 

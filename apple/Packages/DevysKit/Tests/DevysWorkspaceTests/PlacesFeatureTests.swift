@@ -80,7 +80,7 @@ private actor PlacesServer {
 @MainActor
 @Suite("Places, layers and the right panel")
 struct PlacesFeatureTests {
-    private func makeStore(_ server: PlacesServer, panels: LockIsolated<[[String: Bool]]> = LockIsolated([]), remembered: [String: Bool] = [:]) async -> StoreOf<Workspace> {
+    private func makeStore(_ server: PlacesServer) async -> StoreOf<Workspace> {
         let store: StoreOf<Workspace> = withDependencies {
             $0.sessionClient = .unimplemented
             $0.runtimeClient = RuntimeClient(
@@ -97,7 +97,6 @@ struct PlacesFeatureTests {
                 createProject: { _, change in await server.createProject(change) },
                 home: { _ in await server.home }
             )
-            $0.panelsClient = PanelsClient(load: { remembered }, save: { value in panels.withValue { $0.append(value) } })
             $0.continuousClock = InstantClock()
             $0.uuid = .incrementing
         } operation: {
@@ -141,18 +140,18 @@ struct PlacesFeatureTests {
         #expect(store.history.isEmpty && store.main?.key == .direct("growth"))
     }
 
-    @Test("Layers stack over the permanent view: ‹ goes back one, × closes them all, a new place closes them")
+    @Test("Layers stack in the right panel: ‹ goes back one, × closes them all, a new place closes them")
     func layerStack() async {
         let store = await makeStore(PlacesServer())
         store.send(.placeSelected(.project("p1")))
-        store.send(.layerOpened(.app("documents")))
+        store.send(.layerOpened(.artifact("a1")))
         store.send(.layerOpened(.file("/acme/plan.md")))
         store.send(.layerOpened(.file("/acme/plan.md")))
-        #expect(store.layers.map(\.layer) == [.app("documents"), .file("/acme/plan.md")])
+        #expect(store.layers.map(\.layer) == [.artifact("a1"), .file("/acme/plan.md")])
         store.send(.layerReplaced(.file("/acme/brief.md")))
-        #expect(store.layers.map(\.layer) == [.app("documents"), .file("/acme/brief.md")])
+        #expect(store.layers.map(\.layer) == [.artifact("a1"), .file("/acme/brief.md")])
         store.send(.layerPopped)
-        #expect(store.state.topLayer == .app("documents"))
+        #expect(store.state.topLayer == .artifact("a1"))
         store.send(.wideToggled)
         #expect(store.state.isWideShown)
         store.send(.layersClosed)
@@ -160,69 +159,11 @@ struct PlacesFeatureTests {
         store.send(.layerOpened(.browser(workID: "c1")))
         store.send(.threadOpened("c1"))
         #expect(store.layers.isEmpty)
-        // With a layer open, the panel toggle goes back to the permanent view; a thread has none.
+        // The panel is there only for layers.
         store.send(.layerOpened(.session(workID: "c1", sessionID: "s1")))
-        store.send(.panelToggled)
-        #expect(store.layers.isEmpty && !store.state.isPanelOpen)
-    }
-
-    @Test("A project's overview is open by default, a desk on request (Home's is the Chief of Staff's), remembered per kind; threads have none")
-    func panelPreferences() async {
-        let server = PlacesServer()
-        let panels = LockIsolated<[[String: Bool]]>([])
-        let store = await makeStore(server, panels: panels)
-        #expect(store.place == .home && store.state.hasPermanent && !store.state.isPanelOpen)
-        await server.setHome(Home(needsYou: [NeedsYouItem(kind: .work, id: "c1", title: "Fix sitemap", workID: "c1")]))
-        await settle("Home has something") { store.home.value?.isEmpty == false }
-        #expect(!store.state.isPanelOpen, "what waits on the owner is in its card in the chat")
-        store.send(.message("growth"))
-        #expect(!store.state.isPanelOpen)
-        store.send(.placeSelected(.project("p1")))
-        #expect(store.state.isPanelOpen)
-        store.send(.panelToggled)
-        #expect(!store.state.isPanelOpen)
-        #expect(panels.value.last == ["home": false, "direct": false, "project": false, "thread": false])
-        store.send(.threadOpened("c1"))
-        #expect(!store.state.isPanelOpen)
-        store.send(.backTapped)
-        #expect(!store.state.isPanelOpen)
-        // A layer shows the panel whatever was chosen.
-        store.send(.layerOpened(.app("code")))
-        #expect(store.state.isPanelOpen)
-
-        let reopened = await makeStore(PlacesServer(), remembered: ["direct": true, "project": false])
-        reopened.send(.message("growth"))
-        #expect(reopened.state.isPanelOpen)
-        reopened.send(.placeSelected(.project("p1")))
-        #expect(!reopened.state.isPanelOpen)
-    }
-
-    @Test("Too narrow for both, the permanent view opens only when asked for; another place forgets that")
-    func narrowWindow() async {
-        let server = PlacesServer()
-        await server.setHome(Home(needsYou: [NeedsYouItem(kind: .work, id: "c1", title: "Fix sitemap", workID: "c1")]))
-        let panels = LockIsolated<[[String: Bool]]>([])
-        let store = await makeStore(server, panels: panels)
-        await settle("Home has something") { store.home.value?.isEmpty == false }
-        store.send(.narrowChanged(true))
-        #expect(!store.state.isPanelOpen)
-        store.send(.placeSelected(.project("p1")))
-        #expect(!store.state.isPanelOpen)
-        store.send(.panelToggled)
-        #expect(store.state.isPanelOpen)
-        #expect(panels.value.isEmpty)
-        store.send(.threadOpened("c1"))
-        #expect(!store.state.isPanelOpen, "a thread has no permanent view to lay over it")
-        store.send(.backTapped)
-        #expect(store.state.isPanelOpen, "back in the channel, the overview asked for is still over it")
-        store.send(.placeSelected(.project("p1")))
-        #expect(!store.state.isPanelOpen)
-        // Layers still open it, and wide again the remembered choice is back.
-        store.send(.layerOpened(.app("documents")))
         #expect(store.state.isPanelOpen)
         store.send(.layersClosed)
-        store.send(.narrowChanged(false))
-        #expect(store.state.isPanelOpen)
+        #expect(store.layers.isEmpty && !store.state.isPanelOpen)
     }
 
     @Test("A page that arrives in the conversation on screen opens on its own; its next version replaces it and says who")
@@ -278,9 +219,6 @@ struct PlacesFeatureTests {
         await settle("posted a third time") { await server.posts.count == 3 }
         #expect(await server.posts.last?.text == "Look")
         #expect(await server.posts.last?.ref == nil)
-        // An app's records are a list, not a thing to talk about.
-        store.send(.layerOpened(.app("documents")))
-        #expect(store.state.reference == nil)
         store.send(.askTapped("line one\nline two"))
         #expect(store.main?.draft == "> line one\n> line two\n\n")
     }

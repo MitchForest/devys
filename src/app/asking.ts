@@ -278,42 +278,34 @@ export const accepts = (accept: readonly string[] | undefined, type: string) =>
   );
 
 /**
- * `POST …/decisions/:id/file?name=`: the file the owner chose for a file request, its bytes as the
- * body. It goes into the business folder's Uploads (never over another file), answers the
- * request with its ref, and shows it in the thread.
+ * A file the owner gives the business, put in its folder's Uploads under its own name (never over
+ * another file: "logo.png", then "logo 2.png", …). Its ref, or the refusal to answer with.
  */
-export async function answerWithFile(
-  request: Request,
+export async function saveUpload(
   env: Env,
-  access: { personId: string; businessId: string },
-  decision: Decision,
+  businessId: string,
+  given: string,
+  body: ReadableStream<Uint8Array> | null,
 ) {
-  const asked = ownerRequest(decision);
-  if (asked?.kind !== "file" || decision.status !== "pending")
-    return new Response("That request was already answered or has expired", { status: 409 });
-  const type = (request.headers.get("content-type") ?? "").split(";")[0]!.trim().toLowerCase();
-  if (!accepts(asked.accept, type))
-    return new Response(`Choose a file of type ${asked.accept!.join(" or ")}`, { status: 415 });
   // A name, never a path: separators and control characters become "_".
-  const name = Array.from(new URL(request.url).searchParams.get("name") ?? "", (char) =>
+  const name = Array.from(given, (char) =>
     char === "/" || char === "\\" || char.charCodeAt(0) < 32 ? "_" : char,
   )
     .join("")
     .replace(/^\.+/, "")
     .slice(0, 200);
   if (!name) return new Response("Send the file's name", { status: 400 });
-  const root = modeOf(env).businessFolder(access.businessId);
+  const root = modeOf(env).businessFolder(businessId);
   if (!root) return new Response("Files run in local mode only for now.", { status: 503 });
-  const bytes = await readBounded(request.body, fileBytes).catch(() => undefined);
+  const bytes = await readBounded(body, fileBytes).catch(() => undefined);
   if (!bytes) return new Response("The file is too large", { status: 413 });
-  const key = `${access.businessId}/file-saves/${crypto.randomUUID()}`;
+  const key = `${businessId}/file-saves/${crypto.randomUUID()}`;
   await env.FILES.put(key, bytes);
-  const runner = modeOf(env).runner(root)({ businessId: access.businessId, employeeId: "owner" });
+  const runner = modeOf(env).runner(root)({ businessId, employeeId: "owner" });
   const dot = name.lastIndexOf(".");
   const [stem, extension] = dot > 0 ? [name.slice(0, dot), name.slice(dot)] : [name, ""];
   let path: string | undefined;
   try {
-    // Never over an existing file: "logo.png", then "logo 2.png", …
     for (let copy = 1; copy <= 20 && !path; copy++) {
       const candidate = `${root}/Uploads/${copy === 1 ? stem : `${stem} ${copy}`}${extension}`;
       path = await runner.importFile(candidate, key, null).then(
@@ -331,7 +323,34 @@ export async function answerWithFile(
     await env.FILES.delete(key);
   }
   if (!path) return new Response("The file couldn't be saved", { status: 409 });
-  const file = ref("documents", "file", path);
+  return ref("documents", "file", path);
+}
+
+/**
+ * `POST …/decisions/:id/file?name=`: the file the owner chose for a file request, its bytes as the
+ * body. It goes into the business folder's Uploads (never over another file), answers the
+ * request with its ref, and shows it in the thread.
+ */
+export async function answerWithFile(
+  request: Request,
+  env: Env,
+  access: { personId: string; businessId: string },
+  decision: Decision,
+) {
+  const asked = ownerRequest(decision);
+  if (asked?.kind !== "file" || decision.status !== "pending")
+    return new Response("That request was already answered or has expired", { status: 409 });
+  const type = (request.headers.get("content-type") ?? "").split(";")[0]!.trim().toLowerCase();
+  if (!accepts(asked.accept, type))
+    return new Response(`Choose a file of type ${asked.accept!.join(" or ")}`, { status: 415 });
+  const saved = await saveUpload(
+    env,
+    access.businessId,
+    new URL(request.url).searchParams.get("name") ?? "",
+    request.body,
+  );
+  if (saved instanceof Response) return saved;
+  const file = saved;
   const answered = await Effect.runPromise(
     fileProvided(env.HYPERDRIVE, access.businessId, decision.id, file, access.personId),
   );

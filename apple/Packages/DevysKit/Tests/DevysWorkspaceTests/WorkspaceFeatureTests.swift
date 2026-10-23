@@ -178,7 +178,7 @@ struct WorkspaceFeatureTests {
         let store = makeStore(calls: Calls())
         await settle("team") { store.chiefOfStaffScope != nil }
         store.send(.placeSelected(.project("launch")))
-        store.send(.layerOpened(.app("documents")))
+        store.send(.layerOpened(.artifact("a1")))
         store.send(.businessSelected("globex"))
         #expect(store.snapshot.businessName == "Globex")
         #expect(store.place == .home && store.layers.isEmpty && store.history.isEmpty)
@@ -369,14 +369,14 @@ struct WorkFeatureTests {
         }
     }
 
-    @Test("Real work, requests, projects and Home load with the team; Home's desk is closed, its requests are in the chat")
+    @Test("Real work, requests, projects and Home load with the team; its requests are in the chat, not a panel")
     func loads() async {
         let store = makeStore(WorkServer())
         await settle("work", until: { store.work.value != nil && store.home.value != nil })
         #expect(store.work.value?.filter { $0.state.group == .inProgress }.map(\.title) == ["Launch Acme"])
         #expect(store.projects.value?.map(\.name) == ["Launch"])
         #expect(store.home.value?.needsYou.map(\.id) == ["d1"] && store.state.decisions.first?.capability == "driveCreate")
-        #expect(store.state.hasPermanent && !store.state.isPanelOpen, "Home's desk is closed by default")
+        #expect(store.state.hasDetails && !store.state.isPanelOpen, "Home's desk opens from the header")
     }
 
     @Test("Answering a request removes it at once and tells the server exactly once")

@@ -18,13 +18,10 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { api, type StartingRole } from "../app/api.ts";
-import type { InstalledApp } from "../../apps/contract.ts";
+import { api } from "../app/api.ts";
 import type { Business, Device, Employee, Look, SettableLook } from "../../identity/contract.ts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  useApps,
-  useAppSearch,
   useBusinessId,
   useBusinesses,
   useEmployees,
@@ -32,12 +29,8 @@ import {
   usePerson,
 } from "../app/data.ts";
 import {
-  useAddApp,
-  useConnectApp,
   useCreateBusiness,
-  useInstallApp,
   useOwnerPhotoChange,
-  usePinApp,
   useRename,
   useSetBusinessLook,
   useSetEmployeeLook,
@@ -48,8 +41,8 @@ import {
 import { useNav, useSettingsSection } from "../app/navigation.ts";
 import { keys } from "../app/query.ts";
 import { DriveConnection } from "./drive-settings.tsx";
-import { AppLogo } from "../panel/layers/team-app.tsx";
-import { ref } from "../../protocol/ref.ts";
+import { ConnectedApps, useConnectedApps } from "./connect-apps.tsx";
+import { ui } from "../app/ui.ts";
 import { SecretEntrySheet } from "./secret-entry.tsx";
 import { useTheme, type Theme } from "../app/theme.ts";
 import {
@@ -59,7 +52,14 @@ import {
   speak,
   type VoiceSettings,
 } from "../app/voice.ts";
-import { Face, faceFor, PersonPortrait, tileGradients, tintFor } from "../design/face.tsx";
+import {
+  Face,
+  faceFor,
+  paletteInk,
+  PersonPortrait,
+  tileGradients,
+  tintFor,
+} from "../design/face.tsx";
 import { palettes, shapes, tints } from "../../identity/contract.ts";
 import { BusinessPortrait, EmployeePortrait } from "../design/portrait.tsx";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -279,197 +279,30 @@ function ListRow({
   );
 }
 
-/** The skills an app ships, by name: what employees can load from it. */
-function AppSkills({ app }: { app: InstalledApp }) {
-  return app.skills.length ? (
-    <span className="text-caption text-ink-3">
-      Skills: {app.skills.map((skill) => skill.name).join(", ")}
-    </span>
-  ) : null;
-}
-
-/**
- * The app directory for the current business: Devys apps to install, pin to the sidebar or
- * remove, the system apps every business has, and the accounts apps use.
- */
+/** The business's connected outside apps, Connect apps, and the accounts apps use. */
 function AppsPane() {
   const businessId = useBusinessId();
-  const list = useApps().data ?? [];
-  const pin = usePinApp();
-  const install = useInstallApp();
-  const available = list.filter((app) => app.kind === "business" && app.state === null);
-  const system = list.filter((app) => app.kind === "system");
-  const connected = list.filter((app) => app.state !== null);
+  const connected = useConnectedApps();
   return (
     <div className="flex flex-col gap-5 p-5">
-      <AddApp />
-      {connected.length > 0 && (
-        <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center">
           <span className="text-label font-medium text-ink-3">Connected apps</span>
-          {connected.map((app) => (
-            <RemoteAppRow key={app.id} app={app} />
-          ))}
+          <span className="ml-auto" />
+          <Button size="compact" onClick={() => ui.openConnect()}>
+            Connect apps…
+          </Button>
         </div>
-      )}
-      <div className="flex flex-col gap-1">
-        <span className="text-label font-medium text-ink-3">Devys apps</span>
-        {available.map((app) => (
-          <div key={app.id} className="flex items-center gap-3 py-1.5">
-            <div className="flex min-w-0 flex-col">
-              <span className="text-control font-semibold text-ink">{app.name}</span>
-              <span className="text-detail text-ink-2">{app.summary}</span>
-              <AppSkills app={app} />
-            </div>
-            <span className="ml-auto" />
-            {app.installed && (
-              <Switch
-                checked={app.pinned}
-                onCheckedChange={(on) => pin.mutate({ app: app.id, pinned: on })}
-              >
-                <span className="text-caption text-ink-3">Sidebar</span>
-              </Switch>
-            )}
-            <Button
-              size="compact"
-              variant={app.installed ? "quiet" : "raised"}
-              onClick={() => install.mutate({ app: app.id, on: !app.installed })}
-            >
-              {app.installed ? "Remove" : "Install"}
-            </Button>
-          </div>
-        ))}
-      </div>
-      <div className="flex flex-col gap-1">
-        <span className="text-label font-medium text-ink-3">Built in</span>
-        {system.map((app) => (
-          <div key={app.id} className="flex flex-col py-1">
-            <span className="text-control text-ink">{app.name}</span>
-            <span className="text-detail text-ink-3">{app.summary}</span>
-            <AppSkills app={app} />
-          </div>
-        ))}
+        {connected.length ? (
+          <ConnectedApps />
+        ) : (
+          <span className="text-detail text-ink-3">Nothing connected yet.</span>
+        )}
       </div>
       <div className="flex flex-col gap-2">
         <span className="text-label font-medium text-ink-3">Connections</span>
         {businessId && <DriveConnection businessId={businessId} />}
       </div>
-    </div>
-  );
-}
-
-/**
- * Add app: search by name or what it does (the business's apps and the MCP Registry), or paste an
- * app's address; choosing one connects it with its own sign-in, then its review opens.
- */
-function AddApp() {
-  const [query, setQuery] = useState("");
-  const [typed, setTyped] = useState("");
-  useEffect(() => {
-    const timer = window.setTimeout(() => setTyped(query.trim()), 300);
-    return () => window.clearTimeout(timer);
-  }, [query]);
-  const found = useAppSearch(typed);
-  const add = useAddApp();
-  const connect = useConnectApp();
-  const choose = (app: string) =>
-    add.mutate(app, {
-      onSuccess: ({ app: added }) => {
-        setQuery("");
-        if (added.state === "connecting" || added.state === "lapsed") connect(added.id);
-      },
-    });
-  return (
-    <div className="flex flex-col gap-2">
-      <span className="text-label font-medium text-ink-3">Add app</span>
-      <Input
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder="Search apps, or paste an app's address"
-        aria-label="Add app"
-      />
-      {typed.length > 1 && (
-        <div className="flex flex-col gap-0.5" data-testid="app-results">
-          {found.isFetching && !found.data && (
-            <span className="text-detail text-ink-3">Searching…</span>
-          )}
-          {found.data?.length === 0 && (
-            <span className="text-detail text-ink-3">No apps found.</span>
-          )}
-          {found.data?.map((app) => (
-            <div key={app.app} className="flex items-center gap-3 rounded-control px-1.5 py-1.5">
-              <AppLogo logo={app.logo} name={app.name} size={28} />
-              <div className="flex min-w-0 flex-col">
-                <span className="truncate text-control font-semibold text-ink">{app.name}</span>
-                {app.description && (
-                  <span className="line-clamp-1 text-detail text-ink-2">{app.description}</span>
-                )}
-              </div>
-              <span className="ml-auto" />
-              {app.installed ? (
-                <span className="text-caption text-ink-3">Added</span>
-              ) : (
-                <Button size="compact" onClick={() => choose(app.app)} disabled={add.isPending}>
-                  Add
-                </Button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** A connected (or connecting) remote app: its logo, where it stands, and what to do next. */
-function RemoteAppRow({ app }: { app: InstalledApp }) {
-  const nav = useNav();
-  const connect = useConnectApp();
-  const install = useInstallApp();
-  const pin = usePinApp();
-  const review = () => {
-    nav.closeSettings();
-    nav.openLayer({ kind: "record", ref: ref("team", "app", app.id) });
-  };
-  return (
-    <div className="flex items-center gap-3 py-1.5">
-      <AppLogo logo={app.logo} name={app.name} size={28} />
-      <div className="flex min-w-0 flex-col">
-        <span className="truncate text-control font-semibold text-ink">{app.name}</span>
-        <span className="text-detail text-ink-2">
-          {app.state === "on"
-            ? "On"
-            : app.state === "review"
-              ? "Connected · waiting for you to turn it on"
-              : app.state === "lapsed"
-                ? "Its sign-in stopped working"
-                : "Not connected yet"}
-        </span>
-      </div>
-      <span className="ml-auto" />
-      {app.state === "on" && (
-        <Switch
-          checked={app.pinned}
-          onCheckedChange={(on) => pin.mutate({ app: app.id, pinned: on })}
-        >
-          <span className="text-caption text-ink-3">Sidebar</span>
-        </Switch>
-      )}
-      {app.state === "connecting" || app.state === "lapsed" ? (
-        <Button size="compact" variant="raised" onClick={() => connect(app.id)}>
-          {app.state === "lapsed" ? "Reconnect" : "Connect"}
-        </Button>
-      ) : (
-        <Button size="compact" variant="raised" onClick={review}>
-          {app.state === "review" ? "Review" : "Change"}
-        </Button>
-      )}
-      <Button
-        size="compact"
-        variant="quiet"
-        onClick={() => install.mutate({ app: app.id, on: false })}
-      >
-        Remove
-      </Button>
     </div>
   );
 }
@@ -514,13 +347,6 @@ function TeamPane() {
   );
 }
 
-const startingRoles: { value: StartingRole; title: string; summary: string }[] = [
-  { value: "admin", title: "Admin", summary: "Accounts, domains, email, suppliers and documents" },
-  { value: "finance", title: "Finance", summary: "Paying for things, budgets and the books" },
-  { value: "growth", title: "Growth", summary: "Marketing, analytics and outreach" },
-  { value: "engineering", title: "Engineering", summary: "Builds, fixes and ships software" },
-];
-
 /** Every business you belong to: its name, brief and look, and a way to start another. */
 function BusinessesPane() {
   const businesses = useBusinesses();
@@ -557,12 +383,11 @@ function BusinessesPane() {
   );
 }
 
-/** A business starts with a Chief of Staff and, if you like, a starting team. */
+/** A business starts with its Chief of Staff alone, who proposes hires as work comes. */
 export function NewBusiness({ created }: { created: () => void }) {
   const createBusiness = useCreateBusiness();
   const [name, setName] = useState("");
   const [brief, setBrief] = useState("");
-  const [team, setTeam] = useState<StartingRole[]>(startingRoles.map((r) => r.value));
   const [error, setError] = useState<string>();
   const busy = createBusiness.isPending;
   return (
@@ -574,7 +399,7 @@ export function NewBusiness({ created }: { created: () => void }) {
         if (!name.trim()) return;
         setError(undefined);
         createBusiness.mutate(
-          { name, brief, team },
+          { name, brief },
           {
             onSuccess: created,
             onError: () => setError("The business couldn't be created. Try again."),
@@ -599,30 +424,6 @@ export function NewBusiness({ created }: { created: () => void }) {
           onChange={(event) => setBrief(event.target.value)}
         />
       </Field>
-      <div className="flex flex-col gap-2.5">
-        <span className="text-label font-medium text-ink-3">Starting team</span>
-        <span className="text-detail text-ink-2">A Chief of Staff always, and:</span>
-        {startingRoles.map((role) => (
-          <Switch
-            key={role.value}
-            checked={team.includes(role.value)}
-            onCheckedChange={(on) =>
-              setTeam((current) =>
-                on
-                  ? startingRoles
-                      .map((r) => r.value)
-                      .filter((v) => v === role.value || current.includes(v))
-                  : current.filter((v) => v !== role.value),
-              )
-            }
-          >
-            <span className="flex flex-col">
-              <span>{role.title}</span>
-              <span className="text-detail text-ink-3">{role.summary}</span>
-            </span>
-          </Switch>
-        ))}
-      </div>
       {error && (
         <p role="alert" className="text-detail text-red">
           {error}
@@ -846,18 +647,6 @@ function DevicesPane() {
 }
 
 /** Native palette dot colors (`AvatarPalette.eyeInk`). */
-const paletteInk: Record<string, string> = {
-  brown: "rgb(138 102 69)",
-  red: "rgb(217 79 87)",
-  orange: "rgb(224 107 46)",
-  amber: "rgb(217 153 38)",
-  green: "rgb(64 153 79)",
-  teal: "rgb(46 158 140)",
-  blue: "rgb(54 120 217)",
-  purple: "rgb(122 99 217)",
-  pink: "rgb(217 74 138)",
-  gray: "rgb(110 115 125)",
-};
 const emojiGroups: { title: string; emoji: string[] }[] = [
   {
     title: "Work",

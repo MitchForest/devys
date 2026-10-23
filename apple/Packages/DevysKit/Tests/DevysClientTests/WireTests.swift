@@ -18,6 +18,7 @@ struct WireTests {
         "app-review": { try await $0.appReview($1, businessID: "b1", appID: "ledger") },
         "app-search": { try await $0.searchApps($1, businessID: "b1", query: "books") },
         "apps": { try await $0.apps($1, businessID: "b1") },
+        "apps-listed": { try await $0.listedApps($1, businessID: "b1") },
         "browser": { try await $0.browserStatus($1, businessID: "b1") },
         "browser-front": { try await $0.browserFront($1, businessID: "b1") },
         "business-created": { try await $0.createBusiness($1, NewBusiness(name: "Acme Roofing")) },
@@ -56,6 +57,7 @@ struct WireTests {
         "routine": { try await $0.setRoutinePaused($1, businessID: "b1", id: "r1", paused: true) },
         "routines": { try await $0.routines($1, businessID: "b1", employeeID: "e1") },
         "secrets": { try await $0.addSecret($1, businessID: "b1", NewSecret(name: "STRIPE_KEY", value: .secret("sk_test"))) },
+        "sidebar-mark": { try await $0.markSidebar($1, businessID: "b1", key: .direct("e1"), SidebarMark(pinned: true)) },
         "screenshot": { try await $0.browserPicture($1, businessID: "b1") },
         "status": { try await $0.status($1, scope) },
         "terminals": { try await $0.terminals($1, businessID: "b1") },
@@ -215,6 +217,22 @@ struct WireTests {
 
         let direct = try await Self.answering("conversation").conversation(Self.session, businessID: "b1", key: .direct("e1"))
         #expect(direct.messages.last?.replies == ["Ship it", "Wait"] && direct.messages.first?.replies.isEmpty == true)
+        #expect(direct.messages.last?.question == "Ship the preview now?" && direct.messages.last?.pickMany == false)
+        #expect(direct.messages.first?.question == nil)
+
+        let summaries = try await Self.answering("conversations").conversations(Self.session, businessID: "b1")
+        #expect(summaries.map(\.pinned) == [true, false] && summaries.map(\.hidden) == [false, false])
+        #expect(summaries.first?.last?.question == "Ship the preview now?")
+
+        let mark = try await Self.answering("sidebar-mark").markSidebar(Self.session, businessID: "b1", key: .direct("e1"), SidebarMark(pinned: true))
+        #expect(mark == SidebarMark(pinned: true))
+
+        let listed = try await Self.answering("apps-listed").listedApps(Self.session, businessID: "b1")
+        #expect(listed.first == ListedApp(
+            app: "https://mcp.ramp.com/mcp", name: "Ramp", description: "Cards, spend and bills", category: "Payments and finance",
+            logo: "/api/businesses/00000000-0000-4000-8000-000000000002/apps/listed/ramp/logo"
+        ))
+        #expect(listed.count == 21 && Set(listed.map(\.category)).count == 6 && !listed.contains { ["Documents", "Code"].contains($0.name) })
 
         let projects = try await Self.answering("projects").projects(Self.session, businessID: "b1")
         #expect(projects.first?.items.first?.ref == .artifact("00000000-0000-4000-8000-000000000006"))
@@ -262,6 +280,9 @@ struct WireTests {
             == #"{"emoji":"👍","on":true,"target_id":"m","target_text":"t"}"#)
         #expect(try json(NewMessage(id: "m", text: "t", replyTo: "r", viaVoice: true))
             == #"{"id":"m","reply_to":"r","text":"t","via_voice":true}"#)
+        #expect(try json(SidebarMark(hidden: true)) == #"{"hidden":true}"#)
+        #expect(try json(SidebarMark(pinned: false, unread: true)) == #"{"pinned":false,"unread":true}"#)
+        #expect(try json(NewBusiness(name: "Acme", brief: "Roofs")) == #"{"brief":"Roofs","name":"Acme"}"#)
         let coding = try json(NewCodingSession(employee: "e", provider: "codex", objective: "o", repository: nil, newRepository: "site"))
         #expect(coding.contains(#""client_id":"#) && coding.contains(#""new_repository":"site""#))
     }

@@ -57,8 +57,8 @@ struct WorkspaceScreen: View {
     }
 }
 
-/// Signed in with no business yet: its name, a line about it if you like, and Start. The starting
-/// team (everyone, with the Chief of Staff) is the default; Settings changes it later.
+/// Signed in with no business yet: its name, a line about it if you like, and Start. It starts
+/// with its Chief of Staff, pinned, who proposes hires as work needs them.
 private struct FirstBusiness: View {
     let store: StoreOf<Workspace>
 

@@ -4,8 +4,8 @@
  * - `/$business` is Home, the direct chat with the Chief of Staff
  * - `/$business/chat/$employee`, `/$business/project/$project`, `/$business/thread/$work`
  * - `/$business/settings/$section`, over the place it was opened from
- * - `?app=code` opens an app beside the conversation (`?app=browser` the live browser of the
- *   thread's work), and each `?layer=<ref>` stacks a record over it, in order.
+ * - `?app=browser` opens the live browser of the thread's work beside the conversation, and each
+ *   `?layer=<ref>` stacks a record over it, in order.
  *
  * The history entry carries what a URL cannot: the places a thread was opened from (for the
  * toolbar's Back) and whether the top layer opened on its own.
@@ -27,13 +27,10 @@ export type Place =
   | { kind: "thread"; workId: string };
 
 /**
- * A temporary view stacked over the right panel's permanent view: a record (by its ref, shown
- * by the layer registry for its kind), an app's records, or the live browser of a thread's work.
+ * A view beside the conversation: a record (by its ref, shown by the layer registry for its
+ * kind) or the live browser of a thread's work. The right panel shows only these.
  */
-export type Layer =
-  | { kind: "record"; ref: Ref }
-  | { kind: "app"; app: string }
-  | { kind: "browser"; workId: string };
+export type Layer = { kind: "record"; ref: Ref } | { kind: "browser"; workId: string };
 
 declare module "@tanstack/history" {
   interface HistoryState {
@@ -98,7 +95,7 @@ export const conversationOf = (
         ? `project:${place.id}`
         : `work:${place.workId}`;
 
-/** The record a layer shows; an app or the browser is not a record. */
+/** The record a layer shows; the browser is not a record. */
 export const refOfLayer = (layer: Layer): Ref | undefined =>
   layer.kind === "record" ? layer.ref : undefined;
 
@@ -109,23 +106,16 @@ export const layerOfRef = (value: string): Layer | undefined =>
 /** The stack a URL describes. The browser belongs to the thread's work. */
 function layersOf(search: LayerSearch, place: Place): Layer[] {
   const work = place.kind === "thread" ? place.workId : undefined;
-  const base: Layer[] =
-    search.app === "browser"
-      ? work
-        ? [{ kind: "browser", workId: work }]
-        : []
-      : search.app
-        ? [{ kind: "app", app: search.app }]
-        : [];
+  const base: Layer[] = search.app === "browser" && work ? [{ kind: "browser", workId: work }] : [];
   return [...base, ...(search.layer ?? []).flatMap((value) => layerOfRef(value) ?? [])];
 }
 
-/** The URL's form of a stack: its app (always at the bottom), then each record's ref. */
+/** The URL's form of a stack: the browser (always at the bottom), then each record's ref. */
 function searchOf(layers: readonly Layer[]): LayerSearch {
-  const app = layers.find((layer) => layer.kind === "app" || layer.kind === "browser");
+  const browser = layers.some((layer) => layer.kind === "browser");
   const refs = layers.flatMap((layer) => refOfLayer(layer) ?? []);
   return {
-    ...(app ? { app: app.kind === "app" ? app.app : "browser" } : {}),
+    ...(browser ? { app: "browser" } : {}),
     ...(refs.length ? { layer: refs } : {}),
   };
 }
@@ -188,7 +178,7 @@ export const useSettingsSection = () =>
     },
   });
 
-/** The layer stack over the right panel, and how its top layer came to be there. */
+/** The layer stack in the right panel, and how its top layer came to be there. */
 export function useLayers() {
   const place = usePlace();
   const key = useRouterState({
@@ -313,19 +303,19 @@ function makeNav(router: Router) {
       const previous = trail.at(-1);
       if (previous) go(previous, { trail: trail.slice(0, -1) });
     },
-    /** Stacks a layer; an app starts a new stack, and opening what is on top does nothing. */
+    /** Stacks a layer; the browser starts a new stack, and opening what is on top does nothing. */
     openLayer: (layer: Layer) => {
       ui.openedLayer();
       const { layers } = now();
       if (JSON.stringify(layers.at(-1)) === JSON.stringify(layer)) return;
-      setLayers(layer.kind === "app" || layer.kind === "browser" ? [layer] : [...layers, layer]);
+      setLayers(layer.kind === "browser" ? [layer] : [...layers, layer]);
     },
     /** Replaces the top layer, as stepping through a page's versions does. */
     replaceLayer: (layer: Layer) =>
       setLayers([...now().layers.slice(0, -1), layer], { replace: true }),
     /** Back one layer. */
     popLayer: () => setLayers(now().layers.slice(0, -1)),
-    /** Back to the permanent view. */
+    /** Closes the panel. */
     closeLayers: () => {
       ui.closedLayers();
       if (now().layers.length) setLayers([]);

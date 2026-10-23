@@ -19,8 +19,6 @@ package enum PlaceIntent {
     case layerPopped
     /// ×: back to the permanent view.
     case layersClosed
-    /// Shows or hides the right panel for this kind of place, remembered across visits.
-    case panelToggled
     case wideToggled
     /// The window became too narrow for the panel beside the conversation, or wide enough again.
     case narrowChanged(Bool)
@@ -37,19 +35,8 @@ extension Workspace.State {
     /// The conversation the place shows; Home waits for the Chief of Staff to load.
     package var mainKey: ConversationKey? { place.conversation(chiefOfStaff: chiefOfStaff?.id) }
 
-    /// Whether the place has a permanent view: a desk (Home's is the Chief of Staff's) or a
-    /// project's overview. A thread's work is its card in the conversation.
-    package var hasPermanent: Bool {
-        place.kind == .direct || place.kind == .project || (place.kind == .home && chiefOfStaff != nil)
-    }
-
-    package func panelPreferred(_ kind: Place.Kind) -> Bool { panels[kind] ?? kind.panelByDefault }
-
-    /// A layer always shows the panel; otherwise, when it has something, the place's remembered
-    /// choice, or while narrow only what the owner asked for.
-    package var isPanelOpen: Bool {
-        !layers.isEmpty || (hasPermanent && (isNarrow ? isOverlayOpen : panelPreferred(place.kind)))
-    }
+    /// The right panel opens only for a layer; a desk or a project's details open from the header.
+    package var isPanelOpen: Bool { !layers.isEmpty }
 
     /// Widening applies only while a layer is open.
     package var isWideShown: Bool { isWide && !layers.isEmpty }
@@ -65,7 +52,6 @@ extension Workspace.State {
         let title = switch layer {
         case .artifact(let id, _): artifactName(id)
         case .file(let path): (path as NSString).lastPathComponent
-        case .app(let id): appTitle(id)
         case .session: "Coding session"
         case .browser: "Browser"
         case .routine(let id): routine(id)?.title ?? "Routine"
@@ -74,11 +60,9 @@ extension Workspace.State {
         return LayerReference(title: title, ref: layer.ref)
     }
 
-    /// The open layer, sent with the next message unless the owner removed it. An app's
-    /// records are a list, not a thing to talk about.
+    /// The open layer, sent with the next message unless the owner removed it.
     package var reference: LayerReference? {
         guard isReferencing, let top = topLayer else { return nil }
-        if case .app = top { return nil }
         return reference(for: top)
     }
 
@@ -97,14 +81,9 @@ extension Workspace.State {
 }
 
 extension Workspace {
-    static func panels(from saved: [String: Bool]) -> [Place.Kind: Bool] {
-        Dictionary(uniqueKeysWithValues: Place.Kind.allCases.map { ($0, saved[$0.rawValue] ?? $0.panelByDefault) })
-    }
-
     func reducePlace(_ intent: PlaceIntent, state: inout State) {
         switch intent {
         case .selected(let place):
-            state.isOverlayOpen = false
             state.history = []
             state.layers = []
             state.isWide = false
@@ -129,8 +108,6 @@ extension Workspace {
         case .layersClosed:
             state.layers = []
             state.isWide = false
-        case .panelToggled:
-            togglePanel(&state)
         case .wideToggled:
             state.isWide.toggle()
         case .narrowChanged(let isNarrow):
@@ -152,21 +129,6 @@ extension Workspace {
         // The Chief of Staff's direct chat is Home.
         state.place = place == .direct(state.chiefOfStaff?.id ?? "") ? .home : place
         openConversation(&state)
-    }
-
-    func togglePanel(_ state: inout State) {
-        if !state.layers.isEmpty {
-            state.layers = []
-            state.isWide = false
-            return
-        }
-        if state.isNarrow {
-            state.isOverlayOpen.toggle()
-            return
-        }
-        let kind = state.place.kind
-        state.panels[kind] = !state.panelPreferred(kind)
-        panelsClient.save(Dictionary(uniqueKeysWithValues: state.panels.map { ($0.key.rawValue, $0.value) }))
     }
 
     /// A page published in the conversation on screen opens on its own unless the owner opened a

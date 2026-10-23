@@ -4,7 +4,7 @@ import { bearer, insertMessage, signIn, stubPosting } from "./helpers.ts";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
-test("on a phone: tabs of Home, Projects, Team and Apps; the conversation full screen; details in a sheet", async ({
+test("on a phone: the list, then one conversation full screen; Back to the list; details from the pill", async ({
   page,
 }) => {
   const stores = await localStores();
@@ -32,74 +32,40 @@ test("on a phone: tabs of Home, Projects, Team and Apps; the conversation full s
   const sent = await stubPosting(page);
   try {
     await signIn(page, sql, owner.person, { phone: true });
-    const tabs = page.getByRole("navigation", { name: "Tabs" });
-    for (const name of ["Home", "Projects", "Team", "Apps"])
-      await expect(tabs.getByRole("button", { name })).toBeVisible();
-    await expect(tabs.getByRole("button", { name: "Home" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
     await expect(page.getByRole("navigation", { name: "Sidebar" })).toHaveCount(0);
 
-    // The business menu holds what the desktop's header and New menu hold.
-    await page.getByRole("button", { name: /^Switch business/ }).click();
-    for (const name of ["New project", "Hire", "Settings"])
-      await expect(page.getByRole("menuitem", { name, exact: true })).toBeVisible();
-    await page.keyboard.press("Escape");
-
-    // Projects lists each project; opening one fills the screen with its channel.
-    await tabs.getByRole("button", { name: "Projects" }).click();
-    await expect(tabs.getByRole("button", { name: "Projects" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
-    // Each tab shows its own list: Projects has no team rows.
-    await expect(page.getByRole("link", { name: "Growth", exact: true })).toHaveCount(0);
+    // Back from a conversation is the list, as in Messages: tiles, Projects and Chats.
+    await page.getByRole("button", { name: "Back", exact: true }).click();
+    await expect(
+      page.getByTestId("pinned").getByRole("link", { name: "Chief of Staff" }),
+    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Projects" })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Growth/ })).toBeVisible();
     await page.getByRole("link", { name: /^Launch/ }).click();
     await expect(page.getByLabel("Message Launch")).toBeVisible();
-    await expect(tabs).toHaveCount(0);
 
-    // Its overview opens as a sheet over the conversation.
-    await page.getByRole("button", { name: "Details" }).click();
-    const details = page.getByRole("dialog", { name: "Details" });
-    await expect(details.getByRole("region", { name: "Launch overview" })).toBeVisible();
-    await expect(details.getByText("Ship Acme v1")).toBeVisible();
+    // The header's pill opens the project's details over the conversation.
+    await page.getByRole("button", { name: "About Launch" }).click();
+    await expect(page.getByRole("region", { name: "Launch overview" })).toBeVisible();
+    await expect(page.getByText("Ship Acme v1")).toBeVisible();
     await page.keyboard.press("Escape");
-    await expect(details).toBeHidden();
+    await expect(page.getByRole("region", { name: "Launch overview" })).toHaveCount(0);
 
-    // The work's card opens the thread full screen, its card pinned above the reply; a thread
-    // has no details sheet.
+    // The work's card opens the thread full screen, its card pinned above the reply.
     await page.getByTestId("work-card").getByText("Write a tagline").click();
     await expect(page.getByRole("textbox", { name: "Reply" })).toBeVisible();
     await expect(page.getByTestId("work-card").getByText("Growth", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Details" })).toHaveCount(0);
     await page.getByRole("textbox", { name: "Reply" }).fill("Under six words.");
     await page.getByRole("button", { name: "Send" }).click();
     await expect.poll(() => sent.length).toBe(1);
     expect(sent[0]!.key).toBe(`work:${workItem.id}`);
 
-    // Back returns to the channel, then to the list it was opened from.
+    // Back returns to the channel, then to the list.
     await page.getByRole("button", { name: "Back", exact: true }).click();
     await expect(page.getByLabel("Message Launch")).toBeVisible();
     await page.getByRole("button", { name: "Back", exact: true }).click();
-    await expect(tabs.getByRole("button", { name: "Projects" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
-
-    // Team opens a direct chat.
-    await tabs.getByRole("button", { name: "Team" }).click();
-    await expect(page.getByRole("link", { name: /^Launch/ })).toHaveCount(0);
-    await page.getByRole("link", { name: "Growth", exact: true }).click();
+    await page.getByRole("link", { name: /^Growth/ }).click();
     await expect(page.getByLabel("Message Growth")).toBeVisible();
-    await page.getByRole("button", { name: "Back", exact: true }).click();
-
-    // Apps open as a sheet over the conversation.
-    await tabs.getByRole("button", { name: "Apps" }).click();
-    await page.getByRole("button", { name: /^Documents/ }).click();
-    await expect(details.getByRole("region", { name: "Documents" })).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(details).toBeHidden();
 
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),

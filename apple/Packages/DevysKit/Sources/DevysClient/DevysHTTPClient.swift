@@ -40,7 +40,7 @@ public struct DevysHTTPClient: Sendable {
         try await send(authorized(session, path: "api/businesses/\(id)"))
     }
 
-    /// Creates a business owned by the signed-in person: a Chief of Staff plus the starting team.
+    /// Creates a business owned by the signed-in person, with its Chief of Staff pinned for them.
     public func createBusiness(_ session: DeviceSession, _ business: NewBusiness) async throws -> Business {
         struct Created: Decodable { let business: Business }
         let created: Created = try await send(json(session, path: "api/businesses", method: "POST", body: business))
@@ -144,6 +144,23 @@ public struct DevysHTTPClient: Sendable {
         request.setValue(file.type, forHTTPHeaderField: "content-type")
         request.httpBody = file.data
         _ = try await raw(request)
+    }
+
+    /// Uploads a file of the owner's into the business folder's Uploads; answers its ref.
+    public func uploadFile(_ session: DeviceSession, businessID: String, _ file: ChosenFile) async throws -> Ref {
+        struct Uploaded: Decodable { let ref: Ref }
+        var request = authorized(session, path: "api/businesses/\(businessID)/files/upload", method: "POST")
+        request.url?.append(queryItems: [URLQueryItem(name: "name", value: file.name)])
+        request.setValue(file.type, forHTTPHeaderField: "content-type")
+        request.httpBody = file.data
+        let uploaded: Uploaded = try await send(request)
+        return uploaded.ref
+    }
+
+    /// Asks the Chief of Staff of a new business to greet the owner in its empty chat (once).
+    public func welcome(_ session: DeviceSession, businessID: String) async throws {
+        struct Empty: Encodable {}
+        _ = try await raw(json(session, path: "api/businesses/\(businessID)/welcome", method: "POST", body: Empty()))
     }
 
     /// A saved text artifact's whole contents, such as an employee's HTML page.

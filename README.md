@@ -102,10 +102,14 @@ also verified live. No public product has launched.
   iMessage through Photon. iMessage messages and the employee's iMessage replies are
   recorded in that employee's DM conversation. iMessage is optional and has not been
   tested against a real Photon account.
-- **Clients.** One sidebar of Home (with what needs the owner), Projects (threads that
-  need the owner or that they follow nested under each), Team (status and unread) and the
-  business's apps. The middle is always a conversation: Home is the direct chat with
-  the Chief of Staff, then a project's channel, a direct chat or a work item's thread, with the
+- **Clients.** A sidebar like Messages: pinned tiles (the Chief of Staff by default), Projects
+  while any exist, then Chats (face, name, last line, unread), each with Pin, Mark as unread,
+  Rename, Pause, Hide and Retire; the owner's face and **Connect apps** (21 listed services with
+  logos, categories and search, then the MCP Registry) at the bottom. A business starts with its
+  Chief of Staff alone, who greets the owner and proposes hires. Documents, code and the browser
+  are what employees do, never sidebar entries. The middle is always a conversation (the Chief of
+  Staff's chat first), a project's channel, a direct chat or a work item's thread, under a
+  centred pill that opens the desk or project details, with the
   face of whoever answers inside the field (tap to choose someone else), a placeholder
   naming them, @-autocomplete, a mic that dictates and, in an empty field, a button that
   starts a hands-free conversation. A work item is one live card (its plan with the owner's

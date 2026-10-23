@@ -1,8 +1,8 @@
 /**
- * What the right panel shows over its permanent view, keyed by what is shown: each record kind
- * the app manifests declare (`<app>/<kind>`, the kinds a `Ref` can name) has one view, which
- * draws both its layer and its card in a conversation; an app's records (`?app=`) and the live
- * browser are the layers that are not records. A ref of a kind nobody knows is an inert pill.
+ * What the right panel shows, keyed by what is shown: each record kind the app manifests declare
+ * (`<app>/<kind>`, the kinds a `Ref` can name) has one view, which draws both its layer and its
+ * card in a conversation; the live browser is the one layer that is not a record. A ref of a kind
+ * nobody knows is an inert pill.
  */
 import {
   Code2,
@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { useRef, useState, type ComponentType, type ReactNode } from "react";
 import { ref, type RecordKind, type Ref } from "../../../protocol/ref.ts";
-import { useApps, useBusinessId, usePerson, useProjects, useWork } from "../../app/data.ts";
+import { useBusinessId, usePerson, useProjects, useWork } from "../../app/data.ts";
 import { isOpen } from "../../app/names.ts";
 import { useNav, usePlace, type Layer } from "../../app/navigation.ts";
 import { useUi } from "../../app/ui.ts";
@@ -25,7 +25,6 @@ import { EmptyNote } from "../../design/primitives.tsx";
 import { ProjectSummary } from "../overview.tsx";
 import { RoutineLayer } from "../routines.tsx";
 import { WorkCard } from "../work-card.tsx";
-import { CodeApp, DocumentsApp } from "./apps.tsx";
 import { BrowserLayer } from "./browser.tsx";
 import { CodeSessionLayer } from "./code-session.tsx";
 import { ArtifactLayer } from "./documents-artifact.tsx";
@@ -87,9 +86,6 @@ export const records: Record<RecordKind, RecordView> = {
   },
 };
 
-/** The apps whose records open as a layer, by app id. */
-const apps: Record<string, ComponentType> = { documents: DocumentsApp, code: CodeApp };
-
 /** A record's view, names and id, or undefined for a ref of a kind nobody knows. */
 export function viewOf(value: Ref | null | undefined) {
   const parsed = kindOf(value);
@@ -102,10 +98,8 @@ export const isKeepable = (value: Ref) => viewOf(value)?.view.keepable === true;
 /** A layer's name, for its header and the reference chip. */
 export function useLayerTitle(layer: Layer | undefined) {
   const names = useNames();
-  const installed = useApps().data;
   if (!layer) return undefined;
   if (layer.kind === "browser") return "Browser";
-  if (layer.kind === "app") return installed?.find((app) => app.id === layer.app)?.name ?? "App";
   const found = viewOf(layer.ref);
   return found ? found.named.title(found.id, names) : "Record";
 }
@@ -113,10 +107,6 @@ export function useLayerTitle(layer: Layer | undefined) {
 /** The layer on top of the right panel. Records are read-only, with Ask on a selection. */
 export function LayerView({ layer }: { layer: Layer }) {
   if (layer.kind === "browser") return <BrowserLayer workId={layer.workId} />;
-  if (layer.kind === "app") {
-    const App = apps[layer.app];
-    return App ? <App /> : null;
-  }
   const found = viewOf(layer.ref);
   if (!found) return null;
   const { Layer: View } = found.view;

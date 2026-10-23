@@ -1,14 +1,23 @@
+import { useQuery } from "@tanstack/react-query";
 import {
-  Code2,
   FileText,
-  House,
   LayoutGrid,
   ListChecks,
   MessageCircle,
   Search,
   type LucideIcon,
 } from "lucide-react";
-import { useApps, useEmployees, useProjects, useWork } from "../app/data.ts";
+import { ref } from "../../protocol/ref.ts";
+import { api } from "../app/api.ts";
+import {
+  useArtifacts,
+  useBusinessId,
+  useChiefOfStaff,
+  useEmployees,
+  useProjects,
+  useWork,
+} from "../app/data.ts";
+import { keys } from "../app/query.ts";
 import { useNav, type Layer, type Place } from "../app/navigation.ts";
 import { ui, useUi } from "../app/ui.ts";
 import { Command, CommandEmpty, CommandItem, CommandList } from "@/components/ui/command";
@@ -20,26 +29,40 @@ interface Target {
   title: string;
   detail: string;
   icon: LucideIcon;
-  /** A conversation to go to, a thread to open, or an app to open beside the conversation. */
+  /** A conversation to go to, a thread to open, or a page or file to open beside it. */
   go: { place: Place } | { thread: string } | { layer: Layer };
 }
 
-/** ⌘K: jump to any conversation, thread or app in the current business by typing. */
+/** ⌘K: jump to any conversation, thread, page or file in the current business by typing. */
 export function CommandPalette() {
   const paletteOpen = useUi((state) => state.paletteOpen);
   const nav = useNav();
   const projects = useProjects().data;
   const employees = useEmployees();
   const work = useWork().data;
-  const apps = useApps().data;
+  const chiefOfStaff = useChiefOfStaff();
+  const artifacts = useArtifacts();
+  const businessId = useBusinessId();
+  // The business folder's top level: what the owner and employees keep there.
+  const files =
+    useQuery({
+      queryKey: keys.folder(businessId, null),
+      queryFn: () => api.files(businessId),
+      enabled: paletteOpen && Boolean(businessId),
+    }).data?.entries ?? [];
+  const pages = artifacts.filter((a) => a.content_type === "text/html" && a.version === a.versions);
   const targets: Target[] = [
-    {
-      id: "home",
-      title: "Home",
-      detail: "Chief of Staff",
-      icon: House,
-      go: { place: { kind: "home" } },
-    },
+    ...employees.map((e) => ({
+      id: `direct-${e.id}`,
+      title: e.name,
+      detail: "Chat",
+      icon: MessageCircle,
+      go: {
+        place: (e.id === chiefOfStaff?.id
+          ? { kind: "home" }
+          : { kind: "direct", employeeId: e.id }) as Place,
+      },
+    })),
     ...(projects ?? []).map((p) => ({
       id: p.id,
       title: p.name,
@@ -47,21 +70,21 @@ export function CommandPalette() {
       icon: LayoutGrid,
       go: { place: { kind: "project", id: p.id } as Place },
     })),
-    ...employees.map((e) => ({
-      id: `direct-${e.id}`,
-      title: e.name,
-      detail: "Team",
-      icon: MessageCircle,
-      go: { place: { kind: "direct", employeeId: e.id } as Place },
+    ...pages.map((page) => ({
+      id: `page-${page.id}`,
+      title: page.title,
+      detail: "Page",
+      icon: FileText,
+      go: { layer: { kind: "record", ref: ref("documents", "artifact", page.id) } as Layer },
     })),
-    ...(apps ?? [])
-      .filter((app) => app.installed && app.kind === "business")
-      .map((app) => ({
-        id: `app-${app.id}`,
-        title: app.name,
-        detail: "App",
-        icon: app.id === "code" ? Code2 : FileText,
-        go: { layer: { kind: "app", app: app.id } as Layer },
+    ...files
+      .filter((entry) => entry.kind === "file" && !entry.name.startsWith("."))
+      .map((entry) => ({
+        id: `file-${entry.path}`,
+        title: entry.name,
+        detail: "File",
+        icon: FileText,
+        go: { layer: { kind: "record", ref: ref("documents", "file", entry.path) } as Layer },
       })),
     ...(work ?? []).map((item) => ({
       id: item.id,
@@ -89,7 +112,7 @@ export function CommandPalette() {
             <Search className="size-4 text-ink-3" />
             <CommandPrimitive.Input
               autoFocus
-              placeholder="Jump to a project, person, thread or app"
+              placeholder="Jump to a chat, project, thread or file"
               className="flex-1 bg-transparent text-heading text-ink outline-none placeholder:text-ink-3"
             />
           </div>

@@ -10,7 +10,7 @@ struct ChatTimelineTests {
 
     private func message(
         _ id: Int, _ author: String, after seconds: TimeInterval, kind: ConversationMessage.Kind = .message,
-        replyTo: String? = nil, replies: [String] = []
+        replyTo: String? = nil, replies: [String] = [], question: String? = nil, pickMany: Bool = false
     ) -> ConversationMessage {
         ConversationMessage(
             id: "m\(id)",
@@ -21,6 +21,8 @@ struct ChatTimelineTests {
             replyTo: replyTo,
             ref: kind == .event ? .workItem("c1") : nil,
             replies: replies,
+            question: question,
+            pickMany: pickMany,
             createdAt: ServerDate.format(start.addingTimeInterval(seconds))
         )
     }
@@ -29,14 +31,14 @@ struct ChatTimelineTests {
         timeline.items.compactMap { if case .bubble(let bubble) = $0 { bubble } else { nil } }
     }
 
-    @Test("Suggested replies show on the latest employee message, past events, until the owner speaks")
-    func suggestedReplies() {
+    @Test("A question card shows on the latest employee message, past events, until the owner speaks")
+    func questionCards() {
         let asked = [
             message(1, "employee:ops", after: 0, replies: ["Old"]),
             message(2, "employee:growth", after: 10, replies: ["Bold", "Calm"]),
             message(3, "system", after: 20, kind: .event)
         ]
-        let offered = { (timeline: ChatTimeline) in self.bubbles(timeline).filter { !$0.replies.isEmpty }.map(\.id) }
+        let offered = { (timeline: ChatTimeline) in self.bubbles(timeline).filter { $0.question != nil }.map(\.id) }
         #expect(offered(ChatTimeline(messages: asked, pending: [], now: start)) == ["m2"])
         #expect(offered(ChatTimeline(messages: asked + [message(4, "person:p1", after: 30)], pending: [], now: start)).isEmpty)
         #expect(offered(ChatTimeline(messages: asked, pending: [PendingMessage(id: "x", text: "Calm")], now: start)).isEmpty)
@@ -47,7 +49,7 @@ struct ChatTimelineTests {
     func noticeReplies() {
         let stopped = message(6, "system", after: 50, kind: .event, replies: ["Ask again"])
         let events = { (timeline: ChatTimeline) in
-            timeline.items.compactMap { if case .event(let event) = $0, !event.replies.isEmpty { event.id } else { nil } }
+            timeline.items.compactMap { if case .event(let event) = $0, event.question != nil { event.id } else { nil } }
         }
         let base = [message(2, "employee:growth", after: 10, replies: ["Bold"])]
         #expect(events(ChatTimeline(messages: base + [stopped], pending: [], now: start)) == ["m6"])
@@ -63,7 +65,20 @@ struct ChatTimelineTests {
         let timeline = ChatTimeline(messages: [message(2, "employee:growth", after: 10, replies: ["Bold"]), card], pending: [], now: start)
         let events = timeline.items.compactMap { if case .event(let event) = $0 { event } else { nil } }
         #expect(events.map(\.id) == ["m9"] && events.first?.isCard == true && events.first?.ref == .workItem("c1"))
-        #expect(bubbles(timeline).first?.replies == ["Bold"])
+        #expect(bubbles(timeline).first?.question?.answers == ["Bold"])
+    }
+
+    @Test("A question card carries its title, at most six answers lettered A to F, and whether several may be picked")
+    func questionLetters() {
+        let asked = message(2, "employee:growth", after: 10, replies: ["One", "Two", "Three", "Four", "Five", "Six", "Seven"], question: "Which ones?", pickMany: true)
+        let question = bubbles(ChatTimeline(messages: [asked], pending: [], now: start)).first?.question
+        #expect(question?.title == "Which ones?" && question?.pickMany == true)
+        #expect(question?.answers.count == 6)
+        #expect(question?.answer(forLetter: "b") == "Two" && question?.answer(forLetter: "F") == "Six")
+        #expect(question?.answer(forLetter: "G") == nil && question?.answer(forLetter: "ab") == nil)
+        #expect(ChatTimeline.Question.letter(0) == "A" && ChatTimeline.Question.letter(2) == "C")
+        let untitled = bubbles(ChatTimeline(messages: [message(3, "employee:ops", after: 10, replies: ["Yes"], question: "  ")], pending: [], now: start)).first?.question
+        #expect(untitled?.title == nil && untitled?.pickMany == false)
     }
 
     @Test("Results and steps read the same words as the web")

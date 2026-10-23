@@ -6,7 +6,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { api, type StartingRole } from "./api.ts";
+import { api } from "./api.ts";
 import { useCreateBusiness } from "./mutations.ts";
 import { keys } from "./query.ts";
 import { Face } from "../design/face.tsx";
@@ -219,9 +219,6 @@ export function JoinPrompt() {
   );
 }
 
-/** Hired with the Chief of Staff when a business starts; changed later in Settings. */
-const startingTeam: StartingRole[] = ["admin", "finance", "growth", "engineering"];
-
 /** Signed in with no business yet: its name, a line about it if you like, and start. */
 export function FirstBusiness() {
   const createBusiness = useCreateBusiness();
@@ -245,7 +242,7 @@ export function FirstBusiness() {
           if (!name.trim()) return;
           setProblem(undefined);
           createBusiness.mutate(
-            { name, brief, team: startingTeam },
+            { name, brief },
             { onError: () => setProblem("That didn't work. Try again.") },
           );
         }}

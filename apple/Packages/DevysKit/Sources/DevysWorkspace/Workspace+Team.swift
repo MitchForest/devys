@@ -1,14 +1,17 @@
 import ComposableArchitecture2
 import Dependencies
+package import DevysCharacter
 package import DevysClient
 import Foundation
 
 // MARK: - Hiring, editing and retiring employees
 
-/// The hire being set up in the Hire sheet: a template first, then the details.
+/// The hire being set up in the New employee sheet: a face, a name and a role.
 package struct HireDraft: Equatable {
-    /// nil while the owner is choosing a template.
+    /// nil until the owner picks a role.
     package var template: String?
+    /// The Face they will have: one of the Face's shapes and colors.
+    package var look = AvatarSpec(palette: AvatarPalette.allCases.randomElement() ?? .blue, shape: AvatarShape.allCases.randomElement() ?? .roundedSquare, seed: Int.random(in: 1...9_999))
     package var name = ""
     package var responsibilities = ""
     /// Empty uses the server's default model.
@@ -44,6 +47,8 @@ package enum TeamIntent {
     case hireFailed(String)
     case hireCancelled
     case profileSaved(employeeID: String, name: String, responsibilities: String)
+    /// Rename… from the sidebar: the name alone.
+    case renamed(employeeID: String, name: String)
     case retireConfirmed(employeeID: String, successorID: String)
     case retired(employeeID: String, successorID: String)
 }
@@ -65,8 +70,12 @@ extension Workspace {
         case .hireConfirmed:
             hire(state: &state)
         case .hired(let employee):
+            let look = state.team.hiring?.look
             state.team.hiring = nil
-            if !state.snapshot.employees.contains(where: { $0.id == employee.id }) { state.snapshot.employees.append(employee) }
+            var hired = employee
+            if let look { hired.look = .face(look) }
+            if !state.snapshot.employees.contains(where: { $0.id == employee.id }) { state.snapshot.employees.append(hired) }
+            if let look { setLook(.face(look), of: employee.id, state: state) }
             // A new hire opens in its direct chat.
             reducePlace(.selected(.direct(employee.id)), state: &state)
             refreshTeam(state)
@@ -78,6 +87,9 @@ extension Workspace {
             state.team.hiring = nil
         case .profileSaved(let employeeID, let name, let responsibilities):
             saveProfile(employeeID, name: name, responsibilities: responsibilities, state: &state)
+        case .renamed(let employeeID, let name):
+            guard let employee = state.employee(employeeID) else { return }
+            saveProfile(employeeID, name: name, responsibilities: employee.responsibilities, state: &state)
         case .retireConfirmed(let employeeID, let successorID):
             retire(employeeID, successorID: successorID, state: state)
         case .retired(let employeeID, let successorID):
@@ -101,12 +113,17 @@ extension Workspace {
         }
     }
 
-    /// A template fills in its name, responsibilities and the default model; all stay editable.
+    /// A role fills in its responsibilities, the default model and (unless typed) the name.
     func chooseTemplate(_ id: String, state: inout State) {
         guard var draft = state.team.hiring else { return }
-        let role = state.team.roles.value?.first { $0.id == id }
+        let roles = state.team.roles.value ?? []
+        let role = roles.first { $0.id == id }
+        // A name the owner typed stays; one a role filled in follows the role.
+        let filled = draft.template.map { previous in roles.first { $0.id == previous }?.name ?? RoleTemplate.displayName(previous) }
+        if draft.name.trimmingCharacters(in: .whitespaces).isEmpty || draft.name == filled {
+            draft.name = id == "custom" ? "" : role?.name ?? RoleTemplate.displayName(id)
+        }
         draft.template = id
-        draft.name = id == "custom" ? "" : role?.name ?? RoleTemplate.displayName(id)
         draft.responsibilities = role?.responsibilities ?? ""
         draft.model = state.models.catalog?.defaults.employee ?? ""
         draft.error = nil
@@ -134,6 +151,18 @@ extension Workspace {
             } catch {
                 try store.send(Action(.team(.hireFailed("The hire didn't go through. Try again."))))
             }
+        }
+    }
+
+    /// The Face chosen in the New employee sheet, saved once the hire exists.
+    func setLook(_ look: Look, of employeeID: String, state: State) {
+        let target = LookTarget.employee(business: state.businessID, employee: employeeID)
+        let lookClient = lookClient
+        let runtime = runtime
+        let businessID = state.businessID
+        store.addTask {
+            try? await lookClient.set(target, look)
+            if let detail = try? await runtime.business(businessID) { try store.send(Action(.teamRefreshed(detail))) }
         }
     }
 

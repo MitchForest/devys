@@ -201,6 +201,7 @@ private actor DeviceServer {
     ]
     var revoked: [String] = []
     var created: [NewBusiness] = []
+    var welcomed: [String] = []
     var updates: [BusinessUpdate] = []
     var names: [String] = []
 
@@ -212,6 +213,7 @@ private actor DeviceServer {
         created.append(business)
         return Business(id: "new", name: business.name, brief: business.brief)
     }
+    func welcome(_ id: String) { welcomed.append(id) }
     func rename(_ name: String) -> Account {
         names.append(name)
         return Account(person: Person(id: "person-preview", displayName: name), businesses: Account.fixture.businesses)
@@ -240,7 +242,8 @@ struct DevicesAndBusinessesTests {
                 hello: { Hello(name: "Sam's Mac mini", url: URL(string: "http://mac-mini:8787")!) },
                 status: { _ in .fixture },
                 stop: { _ in true },
-                memory: { _ in [] }
+                memory: { _ in [] },
+                welcome: { await server.welcome($0) }
             )
         } operation: {
             Store(initialState: Preferences.State()) { Preferences() }
@@ -269,20 +272,19 @@ struct DevicesAndBusinessesTests {
         #expect(store.connectLink == nil)
     }
 
-    @Test("A new business sends its brief and the starting team that stays switched on")
+    @Test("A new business sends its name and brief alone, then asks its Chief of Staff to greet once")
     func createsBusiness() async {
         let server = DeviceServer()
         let store = makeStore(server)
         store.send(.newBusinessTapped)
         guard var draft = store.newBusiness else { return #expect(Bool(false), "the sheet opens") }
-        #expect(draft.team == Set(RoleTemplate.startingTeam))
         draft.name = " Globex "
         draft.brief = "Shared notes for families"
-        draft.team.remove("growth")
         store.send(.newBusinessEdited(draft))
         store.send(.createBusinessTapped)
         await settle("created", until: { store.newBusiness == nil })
-        #expect(await server.created == [NewBusiness(name: "Globex", brief: "Shared notes for families", team: ["admin", "finance", "engineering"])])
+        #expect(await server.created == [NewBusiness(name: "Globex", brief: "Shared notes for families")])
+        #expect(await server.welcomed == ["new"], "its Chief of Staff is asked to greet, once")
     }
 
     @Test("The owner's name saves trimmed; a blank one is refused here")

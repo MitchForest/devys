@@ -1,71 +1,45 @@
 import { ChevronLeft, Maximize2, Minimize2, X } from "lucide-react";
 import type { ReactNode } from "react";
-import { refOfLayer, useLayers, useNav, usePlace, type Place } from "../app/navigation.ts";
-import { useChiefOfStaff } from "../app/data.ts";
+import { refOfLayer, useLayers, useNav } from "../app/navigation.ts";
 import { ui, useUi } from "../app/ui.ts";
-import { usePanel } from "../shell/panel-state.ts";
-import { Desk } from "./desk.tsx";
 import { KeepInProject } from "./keep.tsx";
 import { isKeepable, LayerView, useLayerTitle } from "./layers/registry.tsx";
-import { Overview } from "./overview.tsx";
 import { ToolbarIconButton } from "@/components/ui/button";
 
 /**
- * Whether a place has a permanent view: an employee's desk (Home's is the Chief of Staff's) and
- * a project's overview. A thread has none; its work is its card in the conversation.
- */
-export const hasPermanentView = (
-  place: Place,
-): place is Extract<Place, { kind: "home" | "direct" | "project" }> =>
-  place.kind === "home" || place.kind === "direct" || place.kind === "project";
-
-/**
- * The right panel: the permanent view of what the conversation is about (a desk or an
- * overview), with temporary layers stacked over it. ‹ and Esc go back one layer; × returns to
- * the permanent view, or closes the panel where there is none.
+ * The right panel: what the owner opened to look at (a page, a file, the live browser, a diff),
+ * as a stack of layers. ‹ and Esc go back one layer; × closes the panel.
  */
 export function RightPanel({ onClose }: { onClose?: () => void }) {
   const { layers, top } = useLayers();
-  const place = usePlace();
   const nav = useNav();
-  const panel = usePanel();
   const wide = useUi((state) => state.wide);
   const title = useLayerTitle(top);
-  const chiefOfStaff = useChiefOfStaff();
-  if (top) {
-    const ref = refOfLayer(top);
-    return (
-      <section aria-label={title} className="flex h-full flex-col">
-        <PanelHeader
-          title={title}
-          {...(layers.length > 1 ? { back: nav.popLayer } : {})}
-          close={() => {
-            nav.closeLayers();
-            onClose?.();
-          }}
-          closeLabel="Close (back to the panel)"
-        >
-          {ref && isKeepable(ref) && <KeepInProject record={ref} />}
-          {!onClose && (
-            <ToolbarIconButton label={wide ? "Narrow" : "Widen"} onClick={ui.toggleWide}>
-              {wide ? <Minimize2 /> : <Maximize2 />}
-            </ToolbarIconButton>
-          )}
-        </PanelHeader>
-        <div className="min-h-0 flex-1">
-          <LayerView layer={top} />
-        </div>
-      </section>
-    );
-  }
-  const close = onClose ?? panel.toggle;
-  return place.kind === "home" ? (
-    chiefOfStaff && <Desk key={chiefOfStaff.id} employeeId={chiefOfStaff.id} close={close} />
-  ) : place.kind === "direct" ? (
-    <Desk key={place.employeeId} employeeId={place.employeeId} close={close} />
-  ) : place.kind === "project" ? (
-    <Overview key={place.id} projectId={place.id} close={close} />
-  ) : null;
+  if (!top) return null;
+  const ref = refOfLayer(top);
+  return (
+    <section aria-label={title} className="flex h-full flex-col">
+      <PanelHeader
+        title={title}
+        {...(layers.length > 1 ? { back: nav.popLayer } : {})}
+        close={() => {
+          nav.closeLayers();
+          onClose?.();
+        }}
+        closeLabel="Close"
+      >
+        {ref && isKeepable(ref) && <KeepInProject record={ref} />}
+        {!onClose && (
+          <ToolbarIconButton label={wide ? "Narrow" : "Widen"} onClick={ui.toggleWide}>
+            {wide ? <Minimize2 /> : <Maximize2 />}
+          </ToolbarIconButton>
+        )}
+      </PanelHeader>
+      <div className="min-h-0 flex-1">
+        <LayerView layer={top} />
+      </div>
+    </section>
+  );
 }
 
 /** A panel's header: Back (when layered), the title, its own buttons and ×. */
@@ -74,7 +48,7 @@ export function PanelHeader({
   detail,
   back,
   close,
-  closeLabel = "Hide side panel",
+  closeLabel = "Close",
   children,
 }: {
   title: ReactNode;

@@ -430,3 +430,18 @@ it("the owner pins, hides until something new is said, and marks unread until re
   });
   expect((await summary()).unread).toBe(0);
 });
+
+it("a new business's Chief of Staff is asked once to greet the owner in its empty chat", async () => {
+  const { acme, received, as, say } = await owner();
+  const chief = acme.chiefOfStaff.id;
+  const welcome = async () =>
+    ((await (await as("/welcome", { method: "POST", body: "{}" })).json()) as { welcomed: boolean })
+      .welcomed;
+  expect(await welcome()).toBe(true);
+  const greeting = received.find((item) => item.input.messageId === `welcome-${acme.business.id}`)!;
+  expect(greeting.employee).toBe(chief);
+  expect(greeting.input.chatId).toBe(`app:${acme.business.id}:${chief}`);
+  // Once something is said there, it is the conversation's; nobody is asked to greet again.
+  await say(`direct:${chief}`, { id: crypto.randomUUID(), text: "Hi" });
+  expect(await welcome()).toBe(false);
+});

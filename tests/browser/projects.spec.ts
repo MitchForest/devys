@@ -1,7 +1,7 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { localStores } from "../fixtures/local.ts";
-import { bearer, insertMessage, sidebar, signIn, stubPosting } from "./helpers.ts";
+import { bearer, insertMessage, openAbout, sidebar, signIn, stubPosting } from "./helpers.ts";
 
 type Stores = Awaited<ReturnType<typeof localStores>>;
 
@@ -18,12 +18,7 @@ async function publish(stores: Stores, business: string, filename: string, html:
   return { id, key };
 }
 
-const toolbarPanel = (page: Page, shown: boolean) =>
-  page.getByRole("button", {
-    name: shown ? "Hide side panel (⌥⌘0)" : "Show side panel (⌥⌘0)",
-  });
-
-test("New project with goal, deadline, budget, lead and team opens its channel and overview", async ({
+test("New project with goal, deadline, budget, lead and team opens its channel; its pill shows the details", async ({
   page,
 }) => {
   const stores = await localStores();
@@ -55,7 +50,7 @@ test("New project with goal, deadline, budget, lead and team opens its channel a
     await dialog.getByRole("button", { name: "Create project" }).click();
     await expect(dialog).toBeHidden();
 
-    // Its channel is the middle; its overview is the permanent view, open by default.
+    // Its channel is the middle; its details open from the header's pill.
     await expect(page.getByTestId("place-title")).toHaveText("Launch");
     await expect(page.getByLabel("Message Launch")).toBeVisible();
     await expect(sidebar(page).getByRole("heading", { name: "Projects" })).toBeVisible();
@@ -63,6 +58,7 @@ test("New project with goal, deadline, budget, lead and team opens its channel a
       "aria-current",
       "page",
     );
+    await openAbout(page);
     const overview = page.getByRole("region", { name: "Launch overview" });
     await expect(overview.getByTestId("panel-title")).toHaveText("Overview");
     await expect(overview.getByText("Ship Acme v1 to the first ten customers")).toBeVisible();
@@ -138,13 +134,13 @@ test("a page card opens a layer, is kept in the project, and a new version repla
       .click();
     await expect(page.getByTestId("place-title")).toHaveText("Launch");
     const overview = page.getByRole("region", { name: "Launch overview" });
-    await expect(overview).toBeVisible();
+    // Nothing is open beside the channel until the owner opens something to look at.
+    await expect(page.getByTestId("panel-title")).toHaveCount(0);
 
-    // The card opens the page as a layer over the overview; it goes with the next message.
+    // The card opens the page as a layer beside the channel; it goes with the next message.
     await page.getByTestId("page-card").click();
     const layer = page.getByRole("region", { name: "Pricing" });
     await expect(layer.getByTestId("panel-title")).toHaveText("Pricing");
-    await expect(overview).toHaveCount(0);
     await expect(
       layer.frameLocator('[data-testid="artifact-frame"]').getByRole("heading", {
         name: "Pricing v1",
@@ -165,7 +161,7 @@ test("a page card opens a layer, is kept in the project, and a new version repla
     expect(sent[0]!.body.text).toBe("Make it shorter");
     expect(sent[0]!.body.ref).toBe(`devys:documents/artifact/${first.id}`);
 
-    // Keep puts it on the project's overview: a reference, so the page stays in Documents.
+    // Keep pins it in the project: a reference, so the page stays where it was made.
     await layer.getByRole("button", { name: "Keep" }).click();
     await page.getByRole("menuitem", { name: "Keep in Launch" }).click();
     await expect(layer.getByRole("button", { name: "Launch" })).toBeVisible();
@@ -200,11 +196,19 @@ test("a page card opens a layer, is kept in the project, and a new version repla
     await expect(layer.getByText("v1 of 2")).toBeVisible();
     await expect(layer.getByRole("button", { name: "Launch" })).toBeVisible();
 
-    // × returns to the overview, which lists the kept page once and opens it as it is now.
-    await layer.getByRole("button", { name: "Close (back to the panel)" }).click();
-    await expect(overview).toBeVisible();
+    // × closes the panel; the kept page is pinned under the channel's header, once, and opens
+    // as it is now. The details list it too.
+    await layer.getByRole("button", { name: "Close" }).click();
+    await expect(layer).toHaveCount(0);
+    const pins = page.getByLabel("Pinned");
+    await expect(pins.getByRole("button", { name: "Pricing" })).toHaveCount(1);
+    // Animations settle (popovers zoom in, faces draw) before the picture.
+    await page.waitForTimeout(600);
+    await page.screenshot({ path: "/tmp/g-project-pins.png" });
+    await openAbout(page);
     await expect(overview.getByRole("button", { name: "Pricing" })).toHaveCount(1);
-    await overview.getByRole("button", { name: "Pricing" }).click();
+    await page.keyboard.press("Escape");
+    await pins.getByRole("button", { name: "Pricing" }).click();
     await expect(page.getByRole("region", { name: "Pricing" })).toBeVisible();
     await expect(layer.getByText("v2 of 2")).toBeVisible();
     await expect(
@@ -220,81 +224,48 @@ test("a page card opens a layer, is kept in the project, and a new version repla
   }
 });
 
-test("the Documents app opens as a layer; Esc goes back one layer; the panel is remembered per kind", async ({
+test("the right panel opens only for a layer; a further layer stacks; Esc goes back one at a time", async ({
   page,
 }) => {
   const stores = await localStores();
   const { sql } = stores;
   const owner = await stores.owner("Rowan", "Acme");
-  const post = await bearer(sql, owner.person);
-  const path = `/api/businesses/${owner.business}`;
-  const growth = await post<{ id: string }>(`${path}/employees`, { template: "growth" });
-  await post(`${path}/projects`, { name: "Launch", lead: growth.id });
-  const page1 = await publish(stores, owner.business, "Roadmap.html", "<h1>Roadmap</h1>");
+  const roadmap = await publish(stores, owner.business, "Roadmap.html", "<h1>Roadmap</h1>");
+  const pricing = await publish(stores, owner.business, "Pricing.html", "<h1>Pricing</h1>");
   await stubPosting(page);
+  const jump = async (title: string) => {
+    // Keys go to the workspace, not to a page open in its frame.
+    await page.getByLabel("Message Chief of Staff").click();
+    await page.keyboard.press("Meta+k");
+    await page.keyboard.type(title);
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("dialog", { name: "Jump to" })).toBeHidden();
+  };
   try {
     await signIn(page, sql, owner.person);
-    // Home's permanent view is the Chief of Staff's desk, closed by default: the conversation
-    // has the full width.
+    // The conversation has the full width: nothing beside it.
     await expect(page.getByRole("region", { name: "Needs you" })).toHaveCount(0);
-    await expect(toolbarPanel(page, false)).toHaveCount(1);
-
-    // An app opens beside the conversation without leaving it.
-    await sidebar(page).getByRole("button", { name: "Documents" }).click();
-    const documents = page.getByRole("region", { name: "Documents" });
-    await expect(documents.getByTestId("panel-title")).toHaveText("Documents");
-    await expect(page.getByTestId("place-title")).toHaveText("Chief of Staff");
-    await expect(page.getByLabel("Message Chief of Staff")).toBeVisible();
-
-    // A record opens as a further layer; Esc goes back one layer at a time.
-    await documents.getByRole("button", { name: /^Roadmap/ }).click();
-    const roadmap = page.getByRole("region", { name: "Roadmap" });
-    await expect(roadmap.getByTestId("panel-title")).toHaveText("Roadmap");
-    await expect(roadmap.getByRole("button", { name: "Back", exact: true })).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(documents).toBeVisible();
-    await expect(roadmap).toHaveCount(0);
-    await documents.getByRole("button", { name: /^Roadmap/ }).click();
-    await roadmap.getByRole("button", { name: "Back", exact: true }).click();
-    await expect(documents).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(documents).toHaveCount(0);
     await expect(page.getByTestId("panel-title")).toHaveCount(0);
 
-    // A project's overview is open by default; hiding it is remembered for projects only.
-    await sidebar(page).getByRole("link", { name: "Launch" }).click();
-    const overview = page.getByRole("region", { name: "Launch overview" });
-    await expect(overview).toBeVisible();
-    await toolbarPanel(page, true).click();
-    await expect(overview).toHaveCount(0);
-
-    // A direct chat's desk is closed by default; opening it is remembered for direct chats.
-    await sidebar(page).getByRole("link", { name: "Growth" }).click();
-    const desk = page.getByRole("region", { name: "Growth's desk" });
-    await expect(desk).toHaveCount(0);
-    await toolbarPanel(page, false).click();
-    await expect(desk).toBeVisible();
-
-    await sidebar(page).getByRole("link", { name: "Launch" }).click();
-    await expect(overview).toHaveCount(0);
-    // Home (the Chief of Staff) keeps its own choice: its desk stays closed.
-    await sidebar(page).getByRole("link", { name: "Chief of Staff" }).click();
-    await expect(page.getByRole("region", { name: "Chief of Staff's desk" })).toHaveCount(0);
-
-    // Remembered across visits, on this device.
-    await page.reload();
-    await sidebar(page).getByRole("link", { name: "Growth" }).click();
-    await expect(desk).toBeVisible();
-    await desk.getByRole("button", { name: "Hide side panel", exact: true }).click();
-    await expect(desk).toHaveCount(0);
-    await sidebar(page).getByRole("link", { name: "Launch" }).click();
-    await expect(overview).toHaveCount(0);
-    await toolbarPanel(page, false).click();
-    await expect(overview).toBeVisible();
+    // A page opens beside the conversation without leaving it; another stacks over it.
+    await jump("Roadmap");
+    const first = page.getByRole("region", { name: "Roadmap" });
+    await expect(first.getByTestId("panel-title")).toHaveText("Roadmap");
+    await expect(page.getByTestId("place-title")).toHaveText("Chief of Staff");
+    await expect(page.getByLabel("Message Chief of Staff")).toBeVisible();
+    await jump("Pricing");
+    const second = page.getByRole("region", { name: "Pricing" });
+    await expect(second.getByRole("button", { name: "Back", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(first).toBeVisible();
+    await expect(second).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("panel-title")).toHaveCount(0);
   } finally {
     await page.close();
     await stores.remove([owner]);
-    await stores.files.delete(page1.key);
+    await stores.files.delete(roadmap.key);
+    await stores.files.delete(pricing.key);
     await stores.dispose();
   }
 });

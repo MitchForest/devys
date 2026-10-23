@@ -57,6 +57,33 @@ struct ConversationsAPITests {
         #expect(request.value(forHTTPHeaderField: "authorization") == "Bearer tok")
     }
 
+    @Test("A sidebar mark posts only the marks it changes, to the conversation's sidebar")
+    func sidebarMark() async throws {
+        let recorder = Recorder()
+        _ = try await api(body: #"{"hidden":true}"#, recorder: recorder)
+            .markSidebar(Self.session, businessID: "b1", key: .direct("ops"), SidebarMark(hidden: true))
+        let request = try #require(await recorder.requests.last)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.absoluteString == "https://devys.test/api/businesses/b1/conversations/direct%3Aops/sidebar")
+        let body = try await lastBody(recorder)
+        #expect(body.count == 1 && body["hidden"] as? Bool == true)
+    }
+
+    @Test("An upload posts the file's bytes with its name and type and answers its ref; welcome posts an empty body")
+    func uploadAndWelcome() async throws {
+        let recorder = Recorder()
+        let ref = try await api(body: #"{"ref":"devys:documents/file/%2Facme%2FUploads%2Flogo.png"}"#, recorder: recorder)
+            .uploadFile(Self.session, businessID: "b1", ChosenFile(name: "logo.png", type: "image/png", data: Data([1, 2])))
+        let request = try #require(await recorder.requests.last)
+        #expect(request.httpMethod == "POST" && request.url?.absoluteString == "https://devys.test/api/businesses/b1/files/upload?name=logo.png")
+        #expect(request.value(forHTTPHeaderField: "content-type") == "image/png" && request.httpBody == Data([1, 2]))
+        #expect(ref.recordKind == "documents/file")
+        try await api(body: #"{"welcomed":true}"#, recorder: recorder).welcome(Self.session, businessID: "b1")
+        let welcome = try #require(await recorder.requests.last)
+        #expect(welcome.httpMethod == "POST" && welcome.url?.path() == "/api/businesses/b1/welcome")
+        #expect(try await lastBody(recorder).isEmpty)
+    }
+
     @Test("A page decodes messages with reactions, events and the respondent; the key is encoded and `before` pages back")
     func page() async throws {
         let recorder = Recorder()

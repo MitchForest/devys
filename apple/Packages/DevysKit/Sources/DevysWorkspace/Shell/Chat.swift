@@ -54,10 +54,10 @@ struct MessageRow: View {
                 if !isOwner { Spacer(minLength: Self.actionsRoom) }
             }
             viewed
-            if !bubble.replies.isEmpty {
-                SuggestedReplies(replies: bubble.replies) { store.send(.suggestedReplyTapped(key, bubble.id, $0)) }
+            if let question = bubble.question {
+                QuestionCard(store: store, key: key, question: question)
                     .padding(.leading, Self.avatarSize + 8)
-                    .padding(.top, 3)
+                    .padding(.top, 6)
             }
             footer
         }
@@ -189,36 +189,6 @@ struct MessageRow: View {
                     .foregroundStyle(DevysColors.ink3)
                     .labelStyle(VoiceMarkStyle())
             }
-        }
-    }
-}
-
-/// Answers the employee offered: one tap sends that answer as the owner's reply. In a row when
-/// they fit, else one under another.
-struct SuggestedReplies: View {
-    let replies: [String]
-    let send: (String) -> Void
-
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 6) { chips }
-            VStack(alignment: .leading, spacing: 6) { chips }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Suggested replies")
-    }
-
-    private var chips: some View {
-        ForEach(replies, id: \.self) { reply in
-            Button(reply) { send(reply) }
-                .font(DevysTypography.secondary)
-                .foregroundStyle(DevysColors.indigo)
-                .lineLimit(1)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 5)
-                .overlay(Capsule().strokeBorder(DevysColors.indigo.opacity(0.35)))
-                .contentShape(Capsule())
-                .buttonStyle(.plain)
         }
     }
 }

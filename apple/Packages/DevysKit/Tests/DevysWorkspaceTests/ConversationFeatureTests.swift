@@ -20,7 +20,7 @@ private actor ConversationServer {
     @discardableResult
     func add(
         _ key: ConversationKey, _ author: String, _ text: String, kind: ConversationMessage.Kind = .message,
-        ref: Ref? = nil, replyTo: String? = nil, replies: [String] = []
+        ref: Ref? = nil, replyTo: String? = nil, replies: [String] = [], question: String? = nil, pickMany: Bool = false
     ) -> ConversationMessage {
         count += 1
         let message = ConversationMessage(
@@ -32,6 +32,8 @@ private actor ConversationServer {
             replyTo: replyTo,
             ref: ref,
             replies: replies,
+            question: question,
+            pickMany: pickMany,
             createdAt: ServerDate.format(Date(timeIntervalSince1970: 1_792_400_000 + Double(count)))
         )
         messages[key.rawValue, default: []].append(message)
@@ -96,6 +98,10 @@ struct ConversationFeatureTests {
                 postMessage: { _, key, message in try await server.post(key, message) },
                 markRead: { _, key, seen in await server.read(key, seen) },
                 work: { _ in await server.workItems },
+                uploadFile: { _, file in
+                    guard file.name != "broken.pdf" else { throw DevysHTTPError.invalidResponse }
+                    return .file("/acme/Uploads/\(file.name)")
+                },
                 projects: { _ in await server.projects }
             )
             $0.continuousClock = InstantClock()
@@ -140,24 +146,24 @@ struct ConversationFeatureTests {
         #expect(store.state.recipients(in: key) == ["engineering"])
     }
 
-    @Test("A suggested reply answers its message and leaves the draft; the replies go once the owner speaks")
-    func suggestedReply() async {
+    private func offered(_ store: StoreOf<Workspace>) -> [ChatTimeline.Question] {
+        ChatTimeline(messages: store.main?.messages.value ?? [], pending: store.main?.pending ?? [], now: .now)
+            .items.compactMap { item in if case .bubble(let bubble) = item { bubble.question } else { nil } }
+    }
+
+    @Test("A question card's answer is sent as the reply to it and leaves the draft; the card goes once the owner speaks")
+    func questionCardSingle() async {
         let server = ConversationServer()
         let key = ConversationKey.direct("growth")
         await server.add(key, "person:person-preview", "We need a tagline.")
-        let question = await server.add(key, "employee:growth", "Bold or calm?", replies: ["Bold", "Calm"])
+        let question = await server.add(key, "employee:growth", "Which way?", replies: ["Bold", "Calm"], question: "Bold or calm?")
         let store = await makeStore(server)
         await open(.direct("growth"), in: store)
-        let offered = {
-            ChatTimeline(messages: store.main?.messages.value ?? [], pending: store.main?.pending ?? [], now: .now)
-                .items.compactMap { item -> [String]? in
-                    if case .bubble(let bubble) = item, !bubble.replies.isEmpty { bubble.replies } else { nil }
-                }
-        }
-        #expect(offered() == [["Bold", "Calm"]])
+        #expect(offered(store).map(\.answers) == [["Bold", "Calm"]] && offered(store).first?.title == "Bold or calm?")
+        #expect(store.state.offeredQuestion(in: key)?.answer(forLetter: "b") == "Calm")
         store.send(.draftChanged(key, "Also the logo"))
-        store.send(.suggestedReplyTapped(key, question.id, "Calm"))
-        #expect(offered().isEmpty)
+        store.send(.answerPicked(key, question.id, "Calm"))
+        #expect(offered(store).isEmpty)
         await settle("posted") { await server.posts.count == 1 }
         let sent = await server.posts.first?.message
         #expect(sent?.text == "Calm")
@@ -165,7 +171,53 @@ struct ConversationFeatureTests {
         #expect(sent?.mentions.isEmpty == true)
         #expect(store.main?.draft == "Also the logo")
         await settle("shown") { store.main?.pending.isEmpty == true }
-        #expect(offered().isEmpty)
+        #expect(offered(store).isEmpty)
+    }
+
+    @Test("Several answers are ticked and unticked, then Done sends them in the card's order as one reply")
+    func questionCardMany() async {
+        let server = ConversationServer()
+        let key = ConversationKey.direct("growth")
+        let question = await server.add(key, "employee:growth", "Which channels?", replies: ["Email", "Ads", "Posts"], question: "Which channels?", pickMany: true)
+        let store = await makeStore(server)
+        await open(.direct("growth"), in: store)
+        store.send(.answersDone(key, question.id))
+        #expect(await server.posts.isEmpty, "Done does nothing until something is ticked")
+        store.send(.answerPicked(key, question.id, "Posts"))
+        store.send(.answerPicked(key, question.id, "Email"))
+        store.send(.answerPicked(key, question.id, "Ads"))
+        store.send(.answerPicked(key, question.id, "Ads"))
+        store.send(.answerPicked(key, question.id, "Not offered"))
+        #expect(store.state.picked(in: key, for: question.id) == ["Posts", "Email"])
+        #expect(await server.posts.isEmpty, "ticking sends nothing")
+        store.send(.answersDone(key, question.id))
+        await settle("posted") { await server.posts.count == 1 }
+        let sent = await server.posts.first?.message
+        #expect(sent?.text == "Email, Posts" && sent?.replyTo == question.id)
+        #expect(store.state.picked(in: key, for: question.id).isEmpty)
+        // "Something else" puts the cursor in the composer.
+        let focus = store.composerFocus
+        store.send(.somethingElseTapped(key))
+        #expect(store.composerFocus == focus + 1)
+    }
+
+    @Test("Upload a file: it goes up, is attached, and goes with the next message as its ref; a failure says so")
+    func uploadAttaches() async {
+        let server = ConversationServer()
+        let key = ConversationKey.direct("growth")
+        let store = await makeStore(server)
+        await open(.direct("growth"), in: store)
+        store.send(.uploadChosen(key, ChosenFile(name: "broken.pdf", type: "application/pdf", data: Data([1]))))
+        await settle("failed") { store.main?.error != nil }
+        #expect(store.main?.isUploading == false && store.main?.attachment == nil)
+        store.send(.uploadChosen(key, ChosenFile(name: "logo.png", type: "image/png", data: Data([1, 2]))))
+        await settle("attached") { store.main?.attachment != nil }
+        #expect(store.main?.attachment == .file("/acme/Uploads/logo.png") && store.main?.isUploading == false)
+        store.send(.draftChanged(key, "Use this logo"))
+        store.send(.sendTapped(key))
+        await settle("posted") { await server.posts.count == 1 }
+        #expect(await server.posts.first?.message.ref == .file("/acme/Uploads/logo.png"))
+        #expect(store.main?.attachment == nil)
     }
 
     @Test("Before anyone speaks, the conversation's default answers: the direct chat's employee, the project's lead")

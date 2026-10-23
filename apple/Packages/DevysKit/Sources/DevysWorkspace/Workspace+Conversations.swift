@@ -22,6 +22,18 @@ extension Workspace.State {
         summaries[ConversationKey.work(workItemID).rawValue]?.following ?? false
     }
 
+    /// The question card offered in the conversation now: on its latest word, until the owner speaks.
+    package func offeredQuestion(in key: ConversationKey) -> ChatTimeline.Question? {
+        guard let open = conversation(key), let messages = open.messages.value else { return nil }
+        return ChatTimeline.offering(messages, pending: open.pending).flatMap(ChatTimeline.Question.init)
+    }
+
+    /// The answers ticked on a pick-many card.
+    package func picked(in key: ConversationKey, for messageID: String) -> [String] {
+        guard let open = conversation(key), open.pickedFor == messageID else { return [] }
+        return open.picked
+    }
+
     /// Who answers when nobody has spoken yet: a direct chat's employee, a project's lead, a work item's owner.
     package func defaultResponder(for key: ConversationKey) -> String? {
         switch key.kind {
@@ -78,11 +90,12 @@ extension Workspace {
             if state.voice.mode == .dictation { cancelCapture(&state) }
             // The record the owner is looking at goes with the message as its ref, so "this" means
             // what is on screen.
-            send(open.draft, viaVoice: open.draftUsedVoice, ref: state.reference?.ref, in: key, state: &state)
+            // An attached business file goes as the ref instead of what is on screen.
+            send(open.draft, viaVoice: open.draftUsedVoice, ref: open.attachment ?? state.reference?.ref, in: key, state: &state)
+            update(key, &state) { $0.attachment = nil }
             state.isReferencing = false
-        case .suggestedReplyTapped(let key, let messageID, let text):
-            // Answers the message it was offered on, so its author answers; the draft stays.
-            send(text, viaVoice: false, replyTo: messageID, in: key, state: &state)
+        case .answerPicked, .answersDone, .somethingElseTapped, .attachmentSet, .uploadChosen, .uploadFailed:
+            reduceQuestion(intent, state: &state)
         case .posted(let key, let clientID, let message):
             posted(message, clientID: clientID, in: key, state: &state)
         case .sendFailed(let key, let clientID, let refusal):
@@ -103,7 +116,71 @@ extension Workspace {
     func loadedSummaries(_ summaries: [ConversationSummary], state: inout State) {
         state.summaries = Dictionary(summaries.map { ($0.key, $0) }) { first, _ in first }
         guard let open = state.main, let seen = state.summaries[open.key.rawValue], seen.last?.createdAt == open.readAt else { return }
-        state.summaries[open.key.rawValue] = ConversationSummary(key: seen.key, last: seen.last, unread: 0, following: seen.following)
+        state.summaries[open.key.rawValue] = seen.with(unread: 0)
+    }
+
+    /// A question card's answers: one sends at once (replying to its message, so its author
+    /// answers, and the draft stays); several are ticked and sent together with Done.
+    func reduceQuestion(_ intent: ConversationIntent, state: inout State) {
+        switch intent {
+        case .answerPicked(let key, let messageID, let answer):
+            guard let question = state.offeredQuestion(in: key), question.messageID == messageID, question.answers.contains(answer) else { return }
+            guard question.pickMany else {
+                send(answer, viaVoice: false, replyTo: messageID, in: key, state: &state)
+                return
+            }
+            update(key, &state) { conversation in
+                if conversation.pickedFor != messageID {
+                    conversation.picked = []
+                    conversation.pickedFor = messageID
+                }
+                if let index = conversation.picked.firstIndex(of: answer) {
+                    conversation.picked.remove(at: index)
+                } else {
+                    conversation.picked.append(answer)
+                }
+            }
+        case .answersDone(let key, let messageID):
+            guard let question = state.offeredQuestion(in: key), question.messageID == messageID, question.pickMany else { return }
+            let picked = Set(state.picked(in: key, for: messageID))
+            let answers = question.answers.filter(picked.contains)
+            guard !answers.isEmpty else { return }
+            update(key, &state) { conversation in
+                conversation.picked = []
+                conversation.pickedFor = nil
+            }
+            send(answers.joined(separator: ", "), viaVoice: false, replyTo: messageID, in: key, state: &state)
+        case .somethingElseTapped:
+            state.composerFocus += 1
+        case .attachmentSet(let key, let ref):
+            update(key, &state) { conversation in
+                conversation.attachment = ref
+                conversation.isUploading = false
+            }
+        case .uploadChosen(let key, let file):
+            guard !state.businessID.isEmpty else { return }
+            update(key, &state) { conversation in
+                conversation.isUploading = true
+                conversation.error = nil
+            }
+            let businessID = state.businessID
+            let runtime = runtime
+            store.addTask {
+                do {
+                    let ref = try await runtime.uploadFile(businessID, file)
+                    try store.send(Action(.conversation(.attachmentSet(key, ref))))
+                } catch {
+                    try store.send(Action(.conversation(.uploadFailed(key))))
+                }
+            }
+        case .uploadFailed(let key):
+            update(key, &state) { conversation in
+                conversation.isUploading = false
+                conversation.error = "That file couldn't be uploaded. Try again."
+            }
+        default:
+            break
+        }
     }
 
     /// Posts a failed message again with the same client id.
@@ -216,7 +293,7 @@ extension Workspace {
         let key = ConversationKey.work(workItemID)
         let following = !state.isFollowing(workItemID)
         let summary = state.summaries[key.rawValue]
-        state.summaries[key.rawValue] = ConversationSummary(key: key.rawValue, last: summary?.last, unread: summary?.unread ?? 0, following: following)
+        state.summaries[key.rawValue] = summary?.with(following: following) ?? ConversationSummary(key: key.rawValue, last: nil, unread: 0, following: following)
         let businessID = state.businessID
         let runtime = runtime
         store.addTask { try? await runtime.follow(businessID, key, following) }
@@ -227,7 +304,7 @@ extension Workspace {
         guard let open = state.conversation(key), let newest = open.messages.value?.last, newest.createdAt != open.readAt else { return }
         update(key, &state) { $0.readAt = newest.createdAt }
         if let summary = state.summaries[key.rawValue] {
-            state.summaries[key.rawValue] = ConversationSummary(key: summary.key, last: summary.last, unread: 0, following: summary.following)
+            state.summaries[key.rawValue] = summary.with(unread: 0)
         }
         let businessID = state.businessID
         let runtime = runtime
@@ -250,7 +327,7 @@ extension Workspace {
     }
 
     /// Shows the message at once and posts it; returns its client id. The draft is sent unless
-    /// `replyTo` names the message a suggested reply answers, which leaves the draft as it was.
+    /// `replyTo` names the message a question card's answer answers, which leaves the draft as it was.
     @discardableResult
     func send(
         _ text: String, viaVoice: Bool, ref: Ref? = nil, replyTo: String? = nil, in key: ConversationKey, state: inout State

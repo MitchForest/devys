@@ -311,11 +311,31 @@ function ResponsibilitiesPane({ employee }: { employee: Employee }) {
 
 /** Retiring hands the employee's open work to a colleague; their history stays readable. */
 function RetireButton({ employee }: { employee: Employee }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button variant="quiet" size="compact" onClick={() => setOpen(true)}>
+        <UserMinus /> Retire…
+      </Button>
+      <RetireDialog employee={employee} open={open} onOpenChange={setOpen} />
+    </>
+  );
+}
+
+/** Retire an employee: who takes their open work, then Retire. */
+export function RetireDialog({
+  employee,
+  open,
+  onOpenChange,
+}: {
+  employee: Employee;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const employees = useEmployees();
   const chiefOfStaff = useChiefOfStaff();
   const work = useWork().data;
   const retire = useRetire();
-  const [open, setOpen] = useState(false);
   const others = employees.filter((e) => e.id !== employee.id);
   const [successor, setSuccessor] = useState("");
   const busy = retire.isPending;
@@ -324,49 +344,47 @@ function RetireButton({ employee }: { employee: Employee }) {
     (item) => item.owner_employee_id === employee.id && isOpen(item.state),
   ).length;
   return (
-    <>
-      <Button variant="quiet" size="compact" onClick={() => setOpen(true)}>
-        <UserMinus /> Retire…
-      </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[420px] max-w-[calc(100%-2rem)] gap-0 rounded-card! bg-sheet p-0 shadow-raised sm:max-w-[420px]">
-          <form
-            className="flex flex-col gap-4 p-6"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!chosen) return;
-              retire.mutate({ employee, successor: chosen }, { onSuccess: () => setOpen(false) });
-            }}
-          >
-            <DialogTitle className="text-heading font-semibold text-ink">
-              Retire {employee.name}?
-            </DialogTitle>
-            <p className="text-body text-ink-2">
-              {openWork === 0
-                ? `${employee.name} has no open work.`
-                : `${employee.name}'s ${openWork} open ${openWork === 1 ? "work item moves" : "work items move"} to the colleague you choose.`}
-            </p>
-            <Field label="Hand open work to">
-              <NativeSelect value={chosen} onChange={(event) => setSuccessor(event.target.value)}>
-                {others.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.name}
-                  </option>
-                ))}
-              </NativeSelect>
-            </Field>
-            <div className="flex justify-end gap-2">
-              <Button variant="quiet" onClick={() => setOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={busy || !chosen} className="text-red">
-                {busy ? "Retiring…" : "Retire"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="w-[420px] max-w-[calc(100%-2rem)] gap-0 rounded-card! bg-sheet p-0 shadow-raised sm:max-w-[420px]">
+        <form
+          className="flex flex-col gap-4 p-6"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!chosen) return;
+            retire.mutate(
+              { employee, successor: chosen },
+              { onSuccess: () => onOpenChange(false) },
+            );
+          }}
+        >
+          <DialogTitle className="text-heading font-semibold text-ink">
+            Retire {employee.name}?
+          </DialogTitle>
+          <p className="text-body text-ink-2">
+            {openWork === 0
+              ? `${employee.name} has no open work.`
+              : `${employee.name}'s ${openWork} open ${openWork === 1 ? "work item moves" : "work items move"} to the colleague you choose.`}
+          </p>
+          <Field label="Hand open work to">
+            <NativeSelect value={chosen} onChange={(event) => setSuccessor(event.target.value)}>
+              {others.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.name}
+                </option>
+              ))}
+            </NativeSelect>
+          </Field>
+          <div className="flex justify-end gap-2">
+            <Button variant="quiet" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={busy || !chosen} className="text-red">
+              {busy ? "Retiring…" : "Retire"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

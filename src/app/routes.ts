@@ -135,7 +135,7 @@ export async function businessRoute(
     return routinesRoute(request, env, access);
   if (path === "/apps" || path.startsWith("/apps/")) return appsRoute(request, env, access);
   if (path === "/home" && method === "GET") return homeRoute(env, access);
-  if (path === "/conversations" || path.startsWith("/conversations/"))
+  if (path === "/conversations" || path.startsWith("/conversations/") || path === "/welcome")
     return conversationRoute(request, env, access);
   const artifactId = artifactPath.exec(path)?.[1];
   if (artifactId && method === "GET") return artifactDownload(env, business.id, artifactId);

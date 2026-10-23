@@ -1,7 +1,7 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { localStores } from "../fixtures/local.ts";
-import { bearer, sidebar, signIn, stubPosting, type Sql } from "./helpers.ts";
+import { bearer, openAbout, sidebar, signIn, stubPosting, type Sql } from "./helpers.ts";
 
 /** A routine stored as the work component stores one. */
 async function insertRoutine(
@@ -43,12 +43,7 @@ async function insertRoutine(
   return id;
 }
 
-const showPanel = async (page: Page) => {
-  const show = page.getByRole("button", { name: /^Show side panel/ });
-  if (await show.isVisible()) await show.click();
-};
-
-test("routines show on the desk and overview, open read-only, pause and resume, and are proposed in the chat where asked", async ({
+test("routines show on the desk and project details, open read-only, pause and resume, and are proposed in the chat where asked", async ({
   page,
 }) => {
   const stores = await localStores();
@@ -119,7 +114,7 @@ test("routines show on the desk and overview, open read-only, pause and resume, 
 
     // The desk lists Growth's routines: state, schedule, next run, last result; Pause on the active.
     await sidebar(page).getByRole("link", { name: "Growth" }).click();
-    await showPanel(page);
+    await openAbout(page);
     const desk = page.getByRole("region", { name: "Growth's desk" });
     await expect(desk.getByRole("heading", { name: "Routines · 2" })).toBeVisible();
     const row = desk.getByTestId("routine-row").filter({ hasText: "Weekly signups report" });
@@ -168,7 +163,7 @@ test("routines show on the desk and overview, open read-only, pause and resume, 
 
     // The project's overview lists only its own routine.
     await sidebar(page).getByRole("link", { name: "Launch" }).click();
-    await showPanel(page);
+    await openAbout(page);
     const overview = page.getByRole("region", { name: "Launch overview" });
     await expect(overview.getByRole("heading", { name: "Routines · 1" })).toBeVisible();
     await expect(overview.getByText("Weekly signups report")).toBeVisible();

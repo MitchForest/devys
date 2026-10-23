@@ -136,6 +136,30 @@ describe("conversation timeline, as native ChatTimeline", () => {
     expect(offered([...asked, stopped])).toEqual([["m6", "Ask again"]]);
     expect(offered([...asked, stopped, message(7, me, "2026-10-19T10:06:00Z")])).toEqual([]);
   });
+
+  it("carries a question card's title and pick-many only on the offered message", () => {
+    const now = new Date("2026-10-19T10:10:00Z");
+    const history = [
+      {
+        ...message(1, "employee:e1", "2026-10-19T10:00:00Z"),
+        replies: ["Old"],
+        question: "An older question?",
+      },
+      {
+        ...message(2, "employee:e1", "2026-10-19T10:01:00Z"),
+        replies: ["Stripe", "Ramp", "Mercury"],
+        question: "Which should I connect?",
+        pick_many: true,
+      },
+    ];
+    const cards = timeline(history, [], me, now).flatMap((i) =>
+      i.kind === "bubble" ? [[i.bubble.id, i.bubble.question, i.bubble.pickMany]] : [],
+    );
+    expect(cards).toEqual([
+      ["m1", null, false],
+      ["m2", "Which should I connect?", true],
+    ]);
+  });
 });
 
 describe("@-mentions in a draft, as the server reads them", () => {

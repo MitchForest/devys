@@ -18,8 +18,13 @@ export interface Bubble {
   reactions: readonly string[];
   /** What an event or card opens: a work item, a page, a coding session. */
   ref: Ref | null;
-  /** Answers to tap, offered on the latest employee message until the owner says anything. */
+  /**
+   * A question card's answers, offered on the latest employee message until the owner says
+   * anything; its title, and whether several may be picked.
+   */
   replies: readonly string[];
+  question: string | null;
+  pickMany: boolean;
   sentAt?: Date;
   position: Position;
   /** Set for messages sent from this browser that the conversation doesn't show yet. */
@@ -53,7 +58,7 @@ const headingGap = 60 * 60_000;
 const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
 
 /**
- * The message whose suggested replies show: the latest message (or Devys's notice offering
+ * The message whose question card shows: the latest message (or Devys's notice offering
  * "Ask again"), skipping other events, when an employee wrote it and nothing has been sent from
  * here since.
  */
@@ -88,6 +93,8 @@ export function timeline(
       reactions: m.reactions,
       ref: m.ref,
       replies: m === offered ? m.replies : [],
+      question: m === offered ? m.question : null,
+      pickMany: m === offered && m.pick_many,
       sentAt: new Date(m.created_at),
       position: "single" as const,
     })),
@@ -102,6 +109,8 @@ export function timeline(
       reactions: [],
       ref: p.ref ?? null,
       replies: [],
+      question: null,
+      pickMany: false,
       sentAt: now,
       position: "single" as const,
       delivery: p.delivery,

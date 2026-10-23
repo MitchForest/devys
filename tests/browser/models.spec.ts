@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { localStores } from "../fixtures/local.ts";
-import { sidebar, signIn } from "./helpers.ts";
+import { openAbout, sidebar, signIn } from "./helpers.ts";
 
 test("the owner sees and changes an employee's model on its desk", async ({ page }) => {
   const stores = await localStores();
@@ -47,7 +47,7 @@ test("the owner sees and changes an employee's model on its desk", async ({ page
   try {
     await signIn(page, sql, owner.person);
     await sidebar(page).getByRole("link", { name: "Chief of Staff" }).click();
-    await page.getByRole("button", { name: /^Show side panel/ }).click();
+    await openAbout(page);
     const desk = page.getByRole("region", {
       name: "Chief of Staff's desk",
     });

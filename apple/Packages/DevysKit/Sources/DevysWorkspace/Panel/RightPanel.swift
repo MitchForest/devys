@@ -3,9 +3,9 @@ import DevysClient
 import DevysDesignSystem
 import SwiftUI
 
-/// The right panel: a direct chat's desk or a channel's overview, with temporary layers (the live
-/// browser, a page, a record, a diff) stacked over it. Home and threads have no permanent view. ‹ and Esc go back one layer; × returns to the permanent view.
-/// On iPhone it is a sheet, which `onClose` dismisses.
+/// The right panel, open only for a layer: the live browser, a page, a record, a diff, stacked
+/// with the top one shown. ‹ and Esc go back one layer; × closes them all. On iPhone it is a
+/// sheet, which `onClose` dismisses.
 struct RightPanel: View {
     let store: StoreOf<Workspace>
     var onClose: (() -> Void)?
@@ -16,7 +16,7 @@ struct RightPanel: View {
                 PanelHeader(
                     title: store.state.reference(for: top).title,
                     back: store.layers.count > 1 ? { store.send(.layerPopped) } : nil,
-                    closeLabel: "Close (back to the panel)",
+                    closeLabel: "Close",
                     close: {
                         store.send(.layersClosed)
                         onClose?()
@@ -33,25 +33,12 @@ struct RightPanel: View {
                 LayerView(store: store, layer: top)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-        } else {
-            permanent
         }
     }
 
     private var widen: some View {
         ToolbarIconButton(store.isWide ? "Narrow" : "Widen", symbol: store.isWide ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right") {
             store.send(.wideToggled)
-        }
-    }
-
-    @ViewBuilder private var permanent: some View {
-        let close = onClose ?? { store.send(.panelToggled) }
-        switch store.place {
-        case .home:
-            if let chief = store.chiefOfStaff { Desk(store: store, employeeID: chief.id, close: close).id(chief.id) }
-        case .thread: EmptyView()
-        case .direct(let id): Desk(store: store, employeeID: id, close: close).id(id)
-        case .project(let id): Overview(store: store, projectID: id, close: close).id(id)
         }
     }
 }

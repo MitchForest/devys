@@ -1,16 +1,15 @@
-import { ChevronDown, ChevronLeft, KeyRound, UserPlus } from "lucide-react";
 import { useState } from "react";
-import { ApiError } from "../app/api.ts";
-import type { RoleTemplate } from "../../identity/contract.ts";
-import { useEmployees, useModels, useChiefOfStaff, useProjects, useRoles } from "../app/data.ts";
-import { useCreateProject, useCreateWorkItem, useHire } from "../app/mutations.ts";
-import { accessTitle } from "../app/names.ts";
-import { problemOf } from "../app/query.ts";
+import { palettes, shapes } from "../../identity/contract.ts";
+import { useEmployees, useChiefOfStaff, useProjects, useRoles } from "../app/data.ts";
+import {
+  useCreateProject,
+  useCreateWorkItem,
+  useHire,
+  useSetEmployeeLook,
+} from "../app/mutations.ts";
 import { ui, useUi, type WorkItemDefaults } from "../app/ui.ts";
-import { ModelPicker, perTurn } from "../design/model-picker.tsx";
-import { Spinner } from "../design/spinner.tsx";
+import { Face, paletteInk } from "../design/face.tsx";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { EmployeePortrait } from "../design/portrait.tsx";
 import type { ProjectChange } from "../../work/contract.ts";
@@ -21,197 +20,158 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 
 /**
- * Hiring: choose a role template, adjust its name, responsibilities and model, see the
- * access it starts with, then hire. The template is copied; later edits stay on the employee.
+ * New employee: their face large, a name, a role, and the Face's own looks (shape and color).
+ * The role's template is copied; later edits stay on the employee.
  */
-export function HireSheet() {
+export function NewEmployeeSheet() {
   const hireOpen = useUi((state) => state.hireOpen);
-  // Each opening starts from the roles again.
+  // Each opening starts a fresh form.
   const opening = useUi((state) => state.hireOpenings);
   return (
-    <Sheet open={hireOpen} onOpenChange={ui.setHireOpen}>
-      <SheetContent
-        side="right"
-        className="w-[460px] max-w-full gap-0 bg-sheet p-0 sm:max-w-[460px]"
+    <Dialog open={hireOpen} onOpenChange={ui.setHireOpen}>
+      <DialogContent
+        showCloseButton={false}
+        className="w-[440px] max-w-[calc(100%-2rem)] gap-0 rounded-card! bg-sheet p-0 shadow-raised sm:max-w-[440px]"
       >
-        <HireForm key={opening} />
-      </SheetContent>
-    </Sheet>
+        <NewEmployeeForm key={opening} />
+      </DialogContent>
+    </Dialog>
   );
 }
 
-function HireForm() {
+const randomFace = () => ({
+  palette: palettes[Math.floor(Math.random() * palettes.length)]!,
+  shape: shapes[Math.floor(Math.random() * shapes.length)]!,
+  seed: Math.floor(Math.random() * 97),
+});
+
+function NewEmployeeForm() {
   const roles = useRoles();
-  const catalog = useModels().data;
   const hireEmployee = useHire();
-  const [template, setTemplate] = useState<RoleTemplate>();
-  const [name, setName] = useState("");
-  const [responsibilities, setResponsibilities] = useState("");
-  const [model, setModel] = useState<string>();
+  const setLook = useSetEmployeeLook();
+  const [face, setFace] = useState(randomFace);
+  const [roleId, setRoleId] = useState<string>();
+  const [name, setName] = useState<string>();
+  const [duties, setDuties] = useState("");
   const [error, setError] = useState<string>();
+  const role = roles.data?.find((r) => r.id === roleId) ?? roles.data?.[0];
+  const custom = role?.id === "custom";
+  const shownName = name ?? role?.name ?? "";
+  const responsibilities = custom ? duties.trim() : (role?.responsibilities ?? "");
   const busy = hireEmployee.isPending;
-  const chosenModel = model ?? catalog?.defaults.employee;
-  const option = catalog?.models.find((m) => m.id === chosenModel);
-  const choose = (role: RoleTemplate) => {
-    setTemplate(role);
-    setName(role.name);
-    setResponsibilities(role.responsibilities);
-    setModel(undefined);
-    setError(undefined);
-  };
-  const hire = () => {
-    if (!template) return;
+  const create = () => {
+    if (!role || !shownName.trim() || !responsibilities) return;
     setError(undefined);
     hireEmployee.mutate(
+      { template: role.id, name: shownName.trim(), responsibilities },
       {
-        template: template.id,
-        name: name.trim(),
-        responsibilities: responsibilities.trim(),
-        ...(chosenModel ? { model: chosenModel } : {}),
-      },
-      {
-        onSuccess: () => ui.setHireOpen(false),
-        onError: (failure) =>
-          setError(
-            failure instanceof ApiError && failure.status === 400
-              ? "Give the employee a name and responsibilities."
-              : "The hire didn't go through. Try again.",
-          ),
+        onSuccess: (hired) => {
+          setLook.mutate({ employee: hired, look: { kind: "face", ...face } });
+          ui.setHireOpen(false);
+        },
+        onError: () => setError("That didn't work. Try again."),
       },
     );
   };
   return (
-    <>
-      <div className="flex items-center gap-2 px-5 pt-5 pb-3">
-        {template && (
+    <form
+      aria-label="New employee"
+      className="flex flex-col items-center gap-5 p-6"
+      onSubmit={(event) => {
+        event.preventDefault();
+        create();
+      }}
+    >
+      <DialogTitle className="sr-only">New employee</DialogTitle>
+      <Face spec={face} size={112} mood={busy ? "thinking" : "idle"} />
+      <Input
+        autoFocus
+        aria-label="Name"
+        placeholder="Name your employee"
+        value={shownName}
+        maxLength={80}
+        onChange={(event) => setName(event.target.value)}
+        className="h-11 rounded-row text-center text-[15px]"
+      />
+      <div className="flex w-full flex-col gap-1.5">
+        <NativeSelect
+          aria-label="Role"
+          value={role?.id ?? ""}
+          onChange={(event) => {
+            setRoleId(event.target.value);
+            setName(undefined);
+          }}
+        >
+          {(roles.data ?? []).map((each) => (
+            <option key={each.id} value={each.id}>
+              {each.name || "Custom"}
+            </option>
+          ))}
+        </NativeSelect>
+        {role && !custom && <span className="px-1 text-detail text-ink-3">{role.summary}</span>}
+        {custom && (
+          <Textarea
+            aria-label="What they do"
+            placeholder="What they do, and how they work"
+            className="min-h-20 resize-y leading-[1.4]"
+            value={duties}
+            maxLength={2000}
+            onChange={(event) => setDuties(event.target.value)}
+          />
+        )}
+      </div>
+      <div className="grid grid-cols-8 gap-1.5" role="group" aria-label="Shape">
+        {shapes.map((shape) => (
           <button
+            key={shape}
             type="button"
-            aria-label="Back to roles"
-            className="text-ink-3 hover:text-ink-2"
-            onClick={() => setTemplate(undefined)}
+            aria-label={shape}
+            aria-pressed={face.shape === shape}
+            onClick={() => setFace({ ...face, shape })}
+            className={cn(
+              "grid size-11 place-items-center rounded-control border-[1.5px] transition-colors",
+              face.shape === shape ? "border-ink/70 bg-well" : "border-transparent hover:bg-well",
+            )}
           >
-            <ChevronLeft className="size-4" />
+            <Face spec={{ ...face, shape }} size={34} />
           </button>
-        )}
-        <SheetTitle className="text-heading font-semibold text-ink">
-          {template ? `Hire ${template.name || "a custom role"}` : "Hire"}
-        </SheetTitle>
+        ))}
       </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 pb-6">
-        {!template ? (
-          <>
-            <p className="text-body text-ink-2">
-              Start from a role. You can change everything before and after hiring.
-            </p>
-            {roles.isPending ? (
-              <Spinner />
-            ) : roles.isError ? (
-              <p role="alert" className="text-body text-ink-3">
-                {problemOf(roles.error, "Roles are unavailable.")}
-              </p>
-            ) : (
-              <div className="flex flex-col gap-2.5">
-                {roles.data.map((role) => (
-                  <button
-                    key={role.id}
-                    type="button"
-                    aria-label={role.name || "Custom"}
-                    onClick={() => choose(role)}
-                    className="flex flex-col items-start gap-1 rounded-card bg-sheet-tint p-4 text-left transition duration-150 hover:-translate-y-px hover:bg-sheet hover:shadow-raised"
-                  >
-                    <span className="text-heading font-semibold text-ink">
-                      {role.name || "Custom"}
-                    </span>
-                    <span className="text-detail text-ink-2">{role.summary}</span>
-                  </button>
-                ))}
-              </div>
+      <div className="flex flex-wrap justify-center gap-2.5" role="group" aria-label="Color">
+        {palettes.map((palette) => (
+          <button
+            key={palette}
+            type="button"
+            aria-label={palette.charAt(0).toUpperCase() + palette.slice(1)}
+            aria-pressed={face.palette === palette}
+            onClick={() => setFace({ ...face, palette })}
+            className={cn(
+              "size-6 rounded-full",
+              face.palette === palette &&
+                "outline outline-1 outline-offset-2 outline-ink ring-[2.5px] ring-sheet ring-inset",
             )}
-          </>
-        ) : (
-          <form
-            className="flex flex-col gap-5"
-            onSubmit={(event) => {
-              event.preventDefault();
-              hire();
-            }}
-          >
-            <Field label="Name">
-              <Input
-                value={name}
-                maxLength={80}
-                placeholder="What they're called"
-                onChange={(event) => setName(event.target.value)}
-              />
-            </Field>
-            <Field label="Responsibilities" hint="Every turn starts from these.">
-              <Textarea
-                className="min-h-36 resize-y leading-[1.4]"
-                value={responsibilities}
-                maxLength={2000}
-                placeholder="What they're accountable for, and how they work"
-                onChange={(event) => setResponsibilities(event.target.value)}
-              />
-            </Field>
-            <div className="flex flex-col gap-1.5">
-              <span className="text-label font-medium text-ink-3">Model</span>
-              <div className="flex items-center gap-3 rounded-control bg-well px-2.5 py-2">
-                <div className="flex min-w-0 flex-col">
-                  <span className="text-body font-semibold text-ink" data-testid="hire-model">
-                    {option?.label ?? chosenModel ?? "Default"}
-                  </span>
-                  {option && (
-                    <span className="text-detail text-ink-3">
-                      {option.provider} · {perTurn(option)}
-                    </span>
-                  )}
-                </div>
-                <span className="ml-auto" />
-                {catalog && chosenModel && (
-                  <ModelPicker
-                    catalog={catalog}
-                    value={chosenModel}
-                    onChange={setModel}
-                    trigger={
-                      <Button variant="quiet" size="compact" aria-label="Choose model">
-                        Change <ChevronDown />
-                      </Button>
-                    }
-                  />
-                )}
-              </div>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <span className="text-label font-medium text-ink-3">Starts with access to</span>
-              <ul aria-label="Starting access" className="flex flex-col gap-1">
-                {template.capabilities.map((capability) => (
-                  <li key={capability} className="flex items-center gap-2 text-body text-ink-2">
-                    <KeyRound className="size-3.5 shrink-0 text-ink-3" aria-hidden />
-                    {accessTitle(capability)}
-                  </li>
-                ))}
-              </ul>
-              <span className="text-detail text-ink-3">
-                Change it on their Access tab at any time.
-              </span>
-            </div>
-            {error && (
-              <p role="alert" className="text-detail text-red">
-                {error}
-              </p>
-            )}
-            <Button
-              variant="aurora"
-              type="submit"
-              disabled={busy || !name.trim() || !responsibilities.trim()}
-              className="self-start"
-            >
-              <UserPlus /> {busy ? "Hiring…" : "Hire"}
-            </Button>
-          </form>
-        )}
+            style={{ background: paletteInk[palette] }}
+          />
+        ))}
       </div>
-    </>
+      {error && (
+        <p role="alert" className="text-detail text-red">
+          {error}
+        </p>
+      )}
+      <div className="flex w-full justify-end gap-2 pt-1">
+        <Button variant="quiet" onClick={() => ui.setHireOpen(false)}>
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          disabled={busy || !role || !shownName.trim() || !responsibilities}
+          className="bg-ink! text-sheet!"
+        >
+          {busy ? "Creating…" : "Create"}
+        </Button>
+      </div>
+    </form>
   );
 }
 

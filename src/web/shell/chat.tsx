@@ -9,8 +9,12 @@ import {
   Eye,
   MessageSquarePlus,
   Mic,
+  Paperclip,
+  Pencil,
+  Plus,
   Reply,
   Smile,
+  Upload,
   X,
 } from "lucide-react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
@@ -21,6 +25,7 @@ import { employeeOf } from "../../conversations/contract.ts";
 import { capturing, loadVoiceSettings, modeOf } from "../app/voice.ts";
 import {
   endsGroup,
+  offering,
   startsGroup,
   timeline,
   type Bubble as TimelineBubble,
@@ -33,9 +38,9 @@ import {
   usePerson,
   useWork,
 } from "../app/data.ts";
-import { useStartThread } from "../app/mutations.ts";
+import { useStartThread, useUpload } from "../app/mutations.ts";
 import { usePlace } from "../app/navigation.ts";
-import { ui } from "../app/ui.ts";
+import { ui, useUi } from "../app/ui.ts";
 import {
   useMicLevel,
   useReference,
@@ -54,6 +59,7 @@ import { RecordCard, ViewedRecord } from "../panel/layers/registry.tsx";
 import { useRecordTitle } from "../panel/layers/titles.ts";
 import { PausedBanner } from "../panel/desk.tsx";
 import { WorkCard } from "../panel/work-card.tsx";
+import { AttachDialog } from "./attach.tsx";
 import { parseRef } from "../../protocol/ref.ts";
 import { Bubble, BubbleContent, BubbleReactions } from "@/components/ui/bubble";
 import {
@@ -207,8 +213,8 @@ export function ConversationView({
                         <>
                           <RecordCard value={item.bubble.ref} text={item.bubble.text} />
                           {item.bubble.replies.length > 0 && (
-                            <SuggestedReplies
-                              replies={item.bubble.replies}
+                            <QuestionCard
+                              bubble={item.bubble}
                               send={(text) => conversation.send(text)}
                               centered
                             />
@@ -471,8 +477,8 @@ function MessageRow({
         </MessageContent>
       </Message>
       {bubble.replies.length > 0 && (
-        <SuggestedReplies
-          replies={bubble.replies}
+        <QuestionCard
+          bubble={bubble}
           send={(text) =>
             conversation.send(text, {
               replyTo: bubble.id,
@@ -485,34 +491,120 @@ function MessageRow({
   );
 }
 
-/** Answers the employee offered: one tap sends that answer as the owner's reply. */
-function SuggestedReplies({
-  replies,
+const letters = ["A", "B", "C", "D", "E", "F"];
+
+/** Whether a key press may choose an answer: nothing is being typed and no sheet is open. */
+function choosesAnswer(event: KeyboardEvent) {
+  if (event.metaKey || event.ctrlKey || event.altKey || event.isComposing) return false;
+  if (document.querySelector("[role=dialog]")) return false;
+  const target = event.target;
+  if (target instanceof HTMLTextAreaElement)
+    return target.dataset.composer !== undefined && target.value === "";
+  return !(
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLSelectElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
+  );
+}
+
+/**
+ * A question card: the employee's question and its lettered answers (A–F, keys too). One answer
+ * sends at once; with several allowed, each toggles and Done sends them together. "Something
+ * else" puts the cursor in the composer.
+ */
+function QuestionCard({
+  bubble,
   send,
   centered,
 }: {
-  replies: readonly string[];
+  bubble: TimelineBubble;
   send: (text: string) => void;
   /** Under an event (Devys's notice), centered with it rather than under an avatar. */
   centered?: boolean;
 }) {
+  const { replies, question, pickMany } = bubble;
+  const [picked, setPicked] = useState<readonly string[]>([]);
+  const choose = (answer: string) => {
+    if (!pickMany) return send(answer);
+    setPicked((current) =>
+      current.includes(answer) ? current.filter((a) => a !== answer) : [...current, answer],
+    );
+  };
+  const done = () => {
+    if (picked.length) send(replies.filter((reply) => picked.includes(reply)).join(", "));
+  };
+  const latest = useRef(choose);
+  latest.current = choose;
+  useEffect(() => {
+    const keys = (event: KeyboardEvent) => {
+      const index = letters.indexOf(event.key.toUpperCase());
+      if (index < 0 || index >= replies.length || !choosesAnswer(event)) return;
+      event.preventDefault();
+      latest.current(replies[index]!);
+    };
+    window.addEventListener("keydown", keys);
+    return () => window.removeEventListener("keydown", keys);
+  }, [replies]);
   return (
     <div
-      role="group"
-      aria-label="Suggested replies"
-      className={`flex flex-wrap gap-1.5 pt-1.5 ${centered ? "justify-center" : ""}`}
+      className={cn("flex pt-2", centered && "justify-center")}
       style={centered ? undefined : { paddingLeft: avatarSize + 8 }}
     >
-      {replies.map((reply) => (
-        <button
-          key={reply}
-          type="button"
-          className="rounded-full border border-indigo/35 px-3 py-[5px] text-detail text-indigo transition-colors hover:bg-indigo/10 focus-visible:ring-2 focus-visible:ring-indigo/40 focus-visible:outline-none"
-          onClick={() => send(reply)}
-        >
-          {reply}
-        </button>
-      ))}
+      <div
+        role="group"
+        aria-label={question ?? "Answers"}
+        data-testid="question-card"
+        className="flex w-full max-w-[440px] flex-col rounded-card border border-hairline bg-sheet p-2 shadow-resting"
+      >
+        {question && (
+          <p className="px-2.5 pt-1.5 pb-2 text-body font-semibold text-ink">{question}</p>
+        )}
+        {replies.map((reply, index) => {
+          const on = picked.includes(reply);
+          return (
+            <button
+              key={reply}
+              type="button"
+              aria-pressed={pickMany ? on : undefined}
+              onClick={() => choose(reply)}
+              className="flex items-center gap-3 rounded-control px-2.5 py-2 text-left text-body text-ink transition-colors hover:bg-sheet-tint focus-visible:bg-sheet-tint focus-visible:outline-none"
+            >
+              <span
+                aria-hidden
+                className={cn(
+                  "grid size-6 shrink-0 place-items-center rounded-[7px] text-caption font-semibold transition-colors",
+                  on ? "bg-ink text-sheet" : "bg-well text-ink-2",
+                )}
+              >
+                {on ? <Check className="size-3.5" strokeWidth={3} /> : letters[index]}
+              </span>
+              <span className="min-w-0 flex-1">{reply}</span>
+            </button>
+          );
+        })}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={ui.focusComposer}
+            className="flex flex-1 items-center gap-3 rounded-control px-2.5 py-2 text-left text-body text-ink-3 transition-colors hover:bg-sheet-tint hover:text-ink-2"
+          >
+            <span aria-hidden className="grid size-6 shrink-0 place-items-center">
+              <Pencil className="size-3.5" />
+            </span>
+            Something else
+          </button>
+          {pickMany && (
+            <button
+              type="button"
+              disabled={picked.length === 0}
+              onClick={done}
+              className="mr-1 rounded-full bg-ink px-4 py-1.5 text-control font-medium text-sheet transition-opacity disabled:opacity-35"
+            >
+              Done
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -601,6 +693,7 @@ export function Composer({
   const voiceError = useVoice((state) => state.error);
   const voiceActions = useVoiceActions();
   const reference = useReference();
+  const attached = useUi((state) => state.attached);
   const recordTitle = useRecordTitle();
   const sendDraft = useSendDraft();
   const nameOf = useAuthorName();
@@ -609,9 +702,16 @@ export function Composer({
   const text = useDraft(conversation.key);
   const setDraft = (next: string) => draft.set(conversation.key, next);
   const { mentions, to } = answerersOf(conversation, text, employees);
+  const [attaching, setAttaching] = useState(false);
   useEffect(() => {
     if (replyingTo) field.current?.focus();
   }, [replyingTo]);
+  // "Something else" on a question card puts the cursor here.
+  const focusing = useUi((state) => state.composerFocus);
+  useEffect(() => {
+    if (focusing) field.current?.focus();
+  }, [focusing]);
+  const asked = offering(conversation.messages ?? [], conversation.pending);
   const served = true;
   const listening = served && modeOf(voice) === "dictation";
   // Typing "@name" at the end of the draft offers matching employees, as in Slack.
@@ -644,11 +744,13 @@ export function Composer({
   const answerer = to.length === 1 ? employees.find((e) => e.id === to[0]) : undefined;
   // The field names who answers, so no separate "To" row is needed.
   const answering = to.flatMap((id) => employees.find((e) => e.id === id)?.name ?? []).join(", ");
-  const placeholder = !answering
-    ? label
-    : label === "Reply"
-      ? `Reply to ${answering}`
-      : `Message ${answering}`;
+  const placeholder = asked
+    ? "Type your answer, or talk about something else"
+    : !answering
+      ? label
+      : label === "Reply"
+        ? `Reply to ${answering}`
+        : `Message ${answering}`;
   return (
     <div className={cn("mx-auto flex w-full flex-col gap-2 p-2.5", className)}>
       {served && voiceError && (
@@ -675,9 +777,26 @@ export function Composer({
       {matches.length > 0 && (
         <MentionPicker id={pickerId} matches={matches} active={highlighted?.id} choose={choose} />
       )}
-      {reference && (
-        <div className="flex items-center px-1">
-          {reference && (
+      {(attached || reference) && (
+        <div className="flex items-center gap-1.5 px-1">
+          {attached && (
+            <span
+              className="flex min-w-0 items-center gap-1 rounded-full bg-sheet-tint py-0.5 pr-1 pl-2 text-caption text-ink-2"
+              data-testid="attached-chip"
+            >
+              <Paperclip className="size-3 shrink-0 text-ink-3" />
+              <span className="truncate">{recordTitle(attached)}</span>
+              <button
+                type="button"
+                aria-label="Remove attachment"
+                onClick={() => ui.attach(undefined)}
+                className="grid size-4 place-items-center rounded-full text-ink-3 hover:text-ink-2"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          )}
+          {reference && !attached && (
             <span
               className="flex min-w-0 items-center gap-1 rounded-full bg-sheet-tint py-0.5 pr-1 pl-2 text-caption text-ink-2"
               data-testid="reference-chip"
@@ -698,6 +817,7 @@ export function Composer({
         </div>
       )}
       {answerer?.paused && <PausedBanner employee={answerer} />}
+      <AttachDialog open={attaching} close={() => setAttaching(false)} />
       {served && conversationMode ? (
         <ConversationStrip />
       ) : (
@@ -716,11 +836,13 @@ export function Composer({
               listening ? "border-indigo/45" : "border-transparent focus-within:border-indigo/30",
             )}
           >
-            <InputGroupAddon align="inline-start" className="p-0">
+            <InputGroupAddon align="inline-start" className="gap-0.5 p-0">
+              <AttachMenu choose={() => setAttaching(true)} />
               <AnswererPicker conversation={conversation} to={to} />
             </InputGroupAddon>
             <InputGroupTextarea
               ref={field}
+              data-composer=""
               aria-label={label}
               placeholder={listening ? "Listening…" : placeholder}
               rows={1}
@@ -763,6 +885,44 @@ export function Composer({
         </div>
       )}
     </div>
+  );
+}
+
+/** The composer's +: upload a file into the business, or choose one it already has. */
+function AttachMenu({ choose }: { choose: () => void }) {
+  const upload = useUpload();
+  const input = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          aria-label="Attach a file"
+          title="Attach a file"
+          className="grid size-7 place-items-center rounded-full bg-sheet text-ink-2 shadow-resting transition-colors hover:text-ink"
+        >
+          {upload.isPending ? <Spinner /> : <Plus className="size-4" strokeWidth={2.2} />}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="top" align="start" className="w-auto min-w-52">
+          <DropdownMenuItem onClick={() => input.current?.click()}>
+            <Upload /> Upload a file…
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={choose}>
+            <Paperclip /> Choose a business file…
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <input
+        ref={input}
+        type="file"
+        hidden
+        aria-label="Upload a file"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) upload.mutate(file);
+        }}
+      />
+    </>
   );
 }
 

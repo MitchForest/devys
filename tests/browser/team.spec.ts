@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { localStores } from "../fixtures/local.ts";
-import { hash, hex, sidebar, signIn, stubPosting } from "./helpers.ts";
+import { hash, hex, openAbout, openSettings, sidebar, signIn, stubPosting } from "./helpers.ts";
 
 test("the owner hires from a template, edits and retires, and talks to any employee", async ({
   page,
@@ -12,17 +12,13 @@ test("the owner hires from a template, edits and retires, and talks to any emplo
   try {
     await signIn(page, sql, owner.person);
 
-    // Hire Growth from its template: name and responsibilities come prefilled.
+    // Hire Growth from its template: the name comes prefilled, its responsibilities with it.
     await sidebar(page).getByRole("button", { name: "New", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Hire" }).click();
-    const sheet = page.getByRole("dialog", { name: "Hire" });
-    await sheet.getByRole("button", { name: "Growth" }).click();
+    await page.getByRole("menuitem", { name: "New employee" }).click();
+    const sheet = page.getByRole("dialog", { name: "New employee" });
+    await sheet.getByLabel("Role").selectOption({ label: "Growth" });
     await expect(sheet.getByLabel("Name")).toHaveValue("Growth");
-    await expect(sheet.getByLabel("Responsibilities")).toHaveValue(/^Grow the business\./);
-    await expect(sheet.getByRole("list", { name: "Starting access" })).toContainText(
-      "Read public websites",
-    );
-    await sheet.getByRole("button", { name: "Hire", exact: true }).click();
+    await sheet.getByRole("button", { name: "Create", exact: true }).click();
     await expect(sheet).toBeHidden();
 
     // The new hire's direct chat opens; its desk is closed until the owner opens it.
@@ -35,7 +31,7 @@ test("the owner hires from a template, edits and retires, and talks to any emplo
     expect(growth.responsibilities).toMatch(/^Grow the business\./);
 
     // The template's responsibilities show on the desk, and edits are saved.
-    await page.getByRole("button", { name: /^Show side panel/ }).click();
+    await openAbout(page);
     const desk = page.getByRole("region", { name: "Growth's desk" });
     await desk.getByText("Responsibilities", { exact: true }).click();
     const responsibilities = desk.getByLabel("Responsibilities");
@@ -60,17 +56,19 @@ test("the owner hires from a template, edits and retires, and talks to any emplo
       text: "Draft three launch headlines.",
     });
 
-    // The Chief of Staff is Home; their desk is Home's side panel, and they can't be retired.
+    // The Chief of Staff is Home; the pill opens their desk, and they can't be retired.
+    await page.keyboard.press("Escape");
     await sidebar(page).getByRole("link", { name: "Chief of Staff" }).click();
     await expect(page.getByTestId("place-title")).toHaveText("Chief of Staff");
-    await page.getByRole("button", { name: /^Show side panel/ }).click();
+    await openAbout(page);
     const chiefOfStaffDesk = page.getByRole("region", {
       name: "Chief of Staff's desk",
     });
     await expect(chiefOfStaffDesk).toBeVisible();
     await expect(chiefOfStaffDesk.getByRole("button", { name: "Retire…" })).toHaveCount(0);
 
-    // A project's overview starts a thread in it, owned by whoever the owner picks.
+    // A project's details start a thread in it, owned by whoever the owner picks.
+    await page.keyboard.press("Escape");
     await sidebar(page).getByRole("button", { name: "New", exact: true }).click();
     await page.getByRole("menuitem", { name: "New project" }).click();
     const create = page.getByRole("dialog", { name: "New project" });
@@ -81,6 +79,7 @@ test("the owner hires from a template, edits and retires, and talks to any emplo
       "SELECT id FROM projects WHERE business_id = $1 AND name = 'Launch'",
       [owner.business],
     ))!;
+    await openAbout(page);
     const overview = page.getByRole("region", { name: "Launch overview" });
     await overview.getByRole("button", { name: "Thread" }).click();
     const dialog = page.getByRole("dialog", { name: "New work item" });
@@ -110,15 +109,16 @@ test("the owner hires from a template, edits and retires, and talks to any emplo
     await page.getByRole("button", { name: "Send" }).click();
     await expect.poll(() => sent.length).toBe(2);
     expect(sent[1]!.key).toBe(`work:${workItem.id}`);
-    await page.getByRole("button", { name: "Back (⌘[)" }).click();
+    await page.getByRole("button", { name: "Back" }).click();
+    await openAbout(page);
     await expect(overview.getByText("Write the launch post")).toBeVisible();
+    await page.keyboard.press("Escape");
 
-    // Retiring Growth hands its open work to the chosen successor.
-    await sidebar(page).getByRole("link", { name: "Growth" }).click();
-    await page
-      .getByRole("region", { name: "Growth's desk" })
-      .getByRole("button", { name: "Retire…" })
-      .click();
+    // Retiring Growth, from its row's menu, hands its open work to the chosen successor.
+    await sidebar(page)
+      .getByRole("link", { name: /^Growth/ })
+      .click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Retire…" }).click();
     const retire = page.getByRole("dialog", { name: "Retire Growth?" });
     await expect(retire).toContainText("1 open work item moves");
     await retire.getByLabel("Hand open work to").selectOption({ label: "Chief of Staff" });
@@ -156,8 +156,7 @@ test("Settings → Devices lists signed-in devices and signs one out", async ({ 
   );
   try {
     await signIn(page, sql, owner.person);
-    await page.getByRole("button", { name: "Account" }).click();
-    await page.getByRole("menuitem", { name: "Settings…" }).click();
+    await openSettings(page);
     const settings = page.getByRole("dialog", { name: "Settings" });
     await settings.getByRole("button", { name: "Devices", exact: true }).click();
 

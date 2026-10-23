@@ -17,8 +17,8 @@ extension Workspace {
 extension Workspace {
     #if DEBUG
         /// QA only, for screenshots: DEVYS_PLACE=direct:<id>|project:<id>|thread:<id> opens there
-        /// at launch (or `palette` opens ⌘K); DEVYS_LAYER=app:<id>|artifact:<id>|file:<path>
-        /// stacks a layer; DEVYS_PANEL=open asks for the panel; DEVYS_SIDEBAR=hidden hides it;
+        /// at launch (or `palette` opens ⌘K); DEVYS_LAYER=artifact:<id>|file:<path>
+        /// stacks a layer; DEVYS_SIDEBAR=hidden hides the sidebar;
         /// DEVYS_SETTINGS=<section> opens Settings.
         static func applyQAPlace(to state: inout State) {
             let environment = ProcessInfo.processInfo.environment
@@ -34,12 +34,10 @@ extension Workspace {
             default: break
             }
             switch parts("DEVYS_LAYER") {
-            case ("app", let id)?: state.layers = [OpenLayer(.app(id))]
             case ("artifact", let id)?: state.layers = [OpenLayer(.artifact(id))]
             case ("file", let path)?: state.layers = [OpenLayer(.file(path))]
             default: break
             }
-            if environment["DEVYS_PANEL"] == "open" { state.isOverlayOpen = true }
             if environment["DEVYS_SIDEBAR"] == "hidden" { state.isSidebarVisible = false }
             // DEVYS_SETTINGS=<section> opens Settings there, as the Mac's Settings window does.
             if let section = PreferencesSection.allCases.first(where: { $0.rawValue.lowercased() == environment["DEVYS_SETTINGS"] }) {
@@ -99,9 +97,17 @@ extension Workspace.Action {
         Self(.conversation(.responderPicked(key, employeeID: employeeID)))
     }
     package static func sendTapped(_ key: ConversationKey) -> Self { Self(.conversation(.sendTapped(key))) }
-    package static func suggestedReplyTapped(_ key: ConversationKey, _ messageID: String, _ text: String) -> Self {
-        Self(.conversation(.suggestedReplyTapped(key, messageID: messageID, text: text)))
+    package static func answerPicked(_ key: ConversationKey, _ messageID: String, _ answer: String) -> Self {
+        Self(.conversation(.answerPicked(key, messageID: messageID, answer: answer)))
     }
+    package static func answersDone(_ key: ConversationKey, _ messageID: String) -> Self { Self(.conversation(.answersDone(key, messageID: messageID))) }
+    package static func somethingElseTapped(_ key: ConversationKey) -> Self { Self(.conversation(.somethingElseTapped(key))) }
+    package static func uploadChosen(_ key: ConversationKey, _ file: ChosenFile) -> Self { Self(.conversation(.uploadChosen(key, file))) }
+    package static func attachmentSet(_ key: ConversationKey, _ ref: Ref?) -> Self { Self(.conversation(.attachmentSet(key, ref))) }
+    package static func sidebarMarked(_ key: ConversationKey, _ mark: SidebarMark) -> Self { Self(.sidebar(.marked(key, mark))) }
+    package static func connectAppsToggled(_ open: Bool) -> Self { Self(.sidebar(.connectAppsToggled(open))) }
+    package static var listedAppsRequested: Self { Self(.sidebar(.listedRequested)) }
+    package static func employeeRenamed(_ id: String, _ name: String) -> Self { Self(.team(.renamed(employeeID: id, name: name))) }
     package static func followToggled(_ workItemID: String) -> Self { Self(.conversation(.followToggled(workItemID: workItemID))) }
     package static func retryTapped(_ key: ConversationKey, _ clientID: String) -> Self { Self(.conversation(.retryTapped(key, clientID: clientID))) }
     package static func replyTapped(_ key: ConversationKey, _ messageID: String) -> Self { Self(.conversation(.replyTapped(key, messageID: messageID))) }
@@ -119,7 +125,6 @@ extension Workspace.Action {
     package static func layerReplaced(_ layer: Layer) -> Self { Self(.place(.layerReplaced(layer))) }
     package static var layerPopped: Self { Self(.place(.layerPopped)) }
     package static var layersClosed: Self { Self(.place(.layersClosed)) }
-    package static var panelToggled: Self { Self(.place(.panelToggled)) }
     package static var wideToggled: Self { Self(.place(.wideToggled)) }
     package static func narrowChanged(_ isNarrow: Bool) -> Self { Self(.place(.narrowChanged(isNarrow))) }
     package static func referencingSet(_ isOn: Bool) -> Self { Self(.place(.referencingSet(isOn))) }

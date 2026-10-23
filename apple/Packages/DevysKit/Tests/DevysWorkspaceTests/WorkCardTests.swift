@@ -96,24 +96,21 @@ struct WorkCardTests {
         return store
     }
 
-    @Test("Home's permanent view is the Chief of Staff's desk, closed by default; a thread has none")
-    func noPermanentForHomeOrThreads() async {
+    @Test("The right panel opens only for a layer; the header opens a desk or a project's details")
+    func panelOnlyForLayers() async {
         let server = CardServer()
         await server.setHome(Home(needsYou: [NeedsYouItem(connect, title: "Ramp")]))
         let store = await makeStore(server)
         await settle("Home has a request", until: { store.home.value?.isEmpty == false })
-        #expect(store.place == .home && store.state.hasPermanent && !store.state.isPanelOpen)
-        store.send(.panelToggled)
-        #expect(store.state.isPanelOpen, "Home's panel is the Chief of Staff's desk")
-        store.send(.panelToggled)
+        #expect(store.place == .home && store.state.hasDetails && !store.state.isPanelOpen)
         store.send(.threadOpened("c1"))
-        #expect(!store.state.hasPermanent && !store.state.isPanelOpen)
+        #expect(!store.state.hasDetails && !store.state.isPanelOpen)
         store.send(.layerOpened(.browser(workID: "c1")))
-        #expect(store.state.isPanelOpen, "a layer still opens the panel")
+        #expect(store.state.isPanelOpen, "a layer opens the panel")
         store.send(.placeSelected(.project("p1")))
-        #expect(store.state.hasPermanent && store.state.isPanelOpen)
+        #expect(store.state.hasDetails && !store.state.isPanelOpen)
         store.send(.placeSelected(.direct("growth")))
-        #expect(store.state.hasPermanent)
+        #expect(store.state.hasDetails)
     }
 
     @Test("The card's one line: done, yours, your turn, ready, working, waiting, up next")

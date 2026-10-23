@@ -207,7 +207,7 @@ private struct MemoryList: View {
 }
 
 /// Retiring hands the employee's open work to a colleague; their history stays readable.
-private struct RetireSheet: View {
+struct RetireSheet: View {
     let store: StoreOf<Workspace>
     let employee: Employee
     let dismiss: () -> Void

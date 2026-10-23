@@ -74,6 +74,20 @@ export function Face({
   );
 }
 
+/** Each Face palette's ink, for the color dots that choose one. */
+export const paletteInk: Record<string, string> = {
+  brown: "rgb(138 102 69)",
+  red: "rgb(217 79 87)",
+  orange: "rgb(224 107 46)",
+  amber: "rgb(217 153 38)",
+  green: "rgb(64 153 79)",
+  teal: "rgb(46 158 140)",
+  blue: "rgb(54 120 217)",
+  purple: "rgb(122 99 217)",
+  pink: "rgb(217 74 138)",
+  gray: "rgb(110 115 125)",
+};
+
 export const tileGradients: Record<string, [string, string]> = {
   blue: ["#5a89f5", "#2f55c9"],
   orange: ["#f59a58", "#d9603a"],

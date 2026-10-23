@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { localStores } from "../fixtures/local.ts";
-import { sidebar, signIn } from "./helpers.ts";
+import { insertMessage, openSettings, sidebar, signIn } from "./helpers.ts";
 
 test("Home asks once, inline, and approves an exact request; new work opens its thread with its card pinned", async ({
   page,
@@ -47,13 +47,13 @@ test("Home asks once, inline, and approves an exact request; new work opens its 
       )
       .toBe("approved");
 
-    // New → New work item opens the work item's thread with its card pinned above the reply.
-    await sidebar(page).getByRole("button", { name: "New", exact: true }).click();
-    await page.getByRole("menuitem", { name: "New work item" }).click();
-    const dialog = page.getByRole("dialog", { name: "New work item" });
-    await dialog.getByLabel("Title").fill("Draft the PR inquiry");
-    await dialog.getByRole("button", { name: "Create work item" }).click();
-    await expect(dialog).toBeHidden();
+    // Start a thread on a message: the work item's thread opens with its card above the reply.
+    await insertMessage(sql, owner.business, `direct:${owner.chiefOfStaff}`, {
+      author: `employee:${owner.chiefOfStaff}`,
+      text: "Draft the PR inquiry",
+    });
+    await page.getByText("Draft the PR inquiry").click({ button: "right", timeout: 15_000 });
+    await page.getByRole("menuitem", { name: "Start a thread" }).click();
     await expect(page.getByTestId("place-title")).toHaveText("Draft the PR inquiry");
     const card = page.getByTestId("work-card");
     await expect(card.getByText("Chief of Staff", { exact: true })).toBeVisible();
@@ -92,7 +92,7 @@ test("Home asks once, inline, and approves an exact request; new work opens its 
   }
 });
 
-test("Settings → Businesses creates a business with its starting team and switches to it", async ({
+test("Settings → Businesses creates a business with its Chief of Staff alone and switches to it", async ({
   page,
 }) => {
   const stores = await localStores();
@@ -105,33 +105,36 @@ test("Settings → Businesses creates a business with its starting team and swit
         [owner.person, owner.business],
       )
     )?.business_id;
+  const welcomed: string[] = [];
+  await page.route(/\/api\/businesses\/[^/]+\/welcome$/, (route) => {
+    welcomed.push(route.request().method());
+    return route.fulfill({ json: { welcomed: true } });
+  });
   try {
     await signIn(page, sql, owner.person);
-    await page.getByRole("button", { name: "Account" }).click();
-    await page.getByRole("menuitem", { name: "Settings…" }).click();
+    await openSettings(page);
     const settings = page.getByRole("dialog", { name: "Settings" });
     await settings.getByRole("button", { name: "Businesses", exact: true }).click();
     await settings.getByRole("button", { name: "New business" }).click();
     const form = settings.getByRole("form", { name: "New business" });
     await form.getByLabel("Name").fill("Globex");
     await form.getByLabel("Brief").fill("Sells widgets online.");
-    // A Chief of Staff always; Growth is left out of this starting team.
-    await form.getByRole("switch", { name: /^Growth/ }).uncheck({ force: true });
     await form.getByRole("button", { name: "Create business" }).click();
     await expect.poll(created).toBeTruthy();
+    await expect.poll(() => welcomed).toEqual(["POST"]);
     await page.keyboard.press("Escape");
     await expect(settings).toBeHidden();
 
-    // The new business is selected: its own Home, sidebar and team.
+    // The new business is selected: its own Home, and a team of one, pinned.
     await expect(page.getByRole("link", { name: "Switch to Globex" })).toHaveAttribute(
       "aria-current",
       "page",
     );
     await expect(page.getByTestId("place-title")).toHaveText("Chief of Staff");
-    await expect(sidebar(page).getByRole("heading", { name: "Globex" })).toBeVisible();
-    for (const name of ["Chief of Staff", "Engineering", "Admin"])
-      await expect(sidebar(page).getByRole("link", { name, exact: true })).toBeVisible();
-    await expect(sidebar(page).getByRole("link", { name: "Growth", exact: true })).toHaveCount(0);
+    await expect(sidebar(page).getByRole("link")).toHaveCount(1);
+    await expect(
+      sidebar(page).getByTestId("pinned").getByRole("link", { name: "Chief of Staff" }),
+    ).toBeVisible();
     expect(
       (await sql.row<{ brief: string }>("SELECT brief FROM businesses WHERE id = $1", [
         await created(),
@@ -140,10 +143,11 @@ test("Settings → Businesses creates a business with its starting team and swit
 
     // Switching back shows Acme's own team, nothing shared.
     await page.getByRole("link", { name: "Switch to Acme" }).click();
-    await expect(sidebar(page).getByRole("heading", { name: "Acme" })).toBeVisible();
-    await expect(sidebar(page).getByRole("link", { name: "Engineering", exact: true })).toHaveCount(
-      0,
+    await expect(page.getByRole("link", { name: "Switch to Acme" })).toHaveAttribute(
+      "aria-current",
+      "page",
     );
+    await expect(sidebar(page).getByRole("link")).toHaveCount(1);
   } finally {
     await page.close();
     const other = await created();

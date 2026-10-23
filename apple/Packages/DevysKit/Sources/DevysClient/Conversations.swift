@@ -50,8 +50,12 @@ public struct ConversationMessage: Equatable, Sendable, Decodable, Identifiable 
     public let viaVoice: Bool
     /// The record an event is about: a work item's hand-off card, a page, a coding session.
     public let ref: Ref?
-    /// Short answers its employee offers; shown while it is the latest word.
+    /// Short answers its employee offers (at most six); shown while it is the latest word.
     public let replies: [String]
+    /// The question card's title, when the answers answer a question.
+    public let question: String?
+    /// The owner may pick several answers, then Done.
+    public let pickMany: Bool
     public let createdAt: String
     public var reactions: [String]
 
@@ -66,6 +70,8 @@ public struct ConversationMessage: Equatable, Sendable, Decodable, Identifiable 
         viaVoice: Bool = false,
         ref: Ref? = nil,
         replies: [String] = [],
+        question: String? = nil,
+        pickMany: Bool = false,
         createdAt: String,
         reactions: [String] = []
     ) {
@@ -79,6 +85,8 @@ public struct ConversationMessage: Equatable, Sendable, Decodable, Identifiable 
         self.viaVoice = viaVoice
         self.ref = ref
         self.replies = replies
+        self.question = question
+        self.pickMany = pickMany
         self.createdAt = createdAt
         self.reactions = reactions
     }
@@ -96,13 +104,16 @@ public struct ConversationMessage: Equatable, Sendable, Decodable, Identifiable 
             viaVoice: try container.decodeIfPresent(Bool.self, forKey: .viaVoice) ?? false,
             ref: try container.decodeIfPresent(Ref.self, forKey: .ref),
             replies: try container.decodeIfPresent([String].self, forKey: .replies) ?? [],
+            question: try container.decodeIfPresent(String.self, forKey: .question),
+            pickMany: try container.decodeIfPresent(Bool.self, forKey: .pickMany) ?? false,
             createdAt: try container.decode(String.self, forKey: .createdAt),
             reactions: try container.decodeIfPresent([String].self, forKey: .reactions) ?? []
         )
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, conversation, author, kind, text, mentions, ref, replies, reactions
+        case id, conversation, author, kind, text, mentions, ref, replies, reactions, question
+        case pickMany = "pick_many"
         case replyTo = "reply_to"
         case viaVoice = "via_voice"
         case createdAt = "created_at"
@@ -119,20 +130,72 @@ public struct ConversationMessage: Equatable, Sendable, Decodable, Identifiable 
     public var date: Date? { ServerDate.parse(createdAt) }
 }
 
-/// `GET …/conversations`: a started conversation, its newest message and how many are unread.
+/// `GET …/conversations`: a started conversation, its newest message and how many are unread
+/// (at least one while the signed-in person marked it unread), and how they keep it in the sidebar.
 public struct ConversationSummary: Equatable, Sendable, Decodable {
     public let key: String
     public let last: ConversationMessage?
     public let unread: Int
     /// The signed-in person follows it: a work thread they hear each milestone of.
     public let following: Bool
+    /// Pinned by the signed-in person: a tile at the top of their sidebar.
+    public let pinned: Bool
+    /// Hidden from their sidebar until something new is said.
+    public let hidden: Bool
 
-    public init(key: String, last: ConversationMessage?, unread: Int, following: Bool = false) {
+    public init(key: String, last: ConversationMessage?, unread: Int, following: Bool = false, pinned: Bool = false, hidden: Bool = false) {
         self.key = key
         self.last = last
         self.unread = unread
         self.following = following
+        self.pinned = pinned
+        self.hidden = hidden
     }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            key: try container.decode(String.self, forKey: .key),
+            last: try container.decodeIfPresent(ConversationMessage.self, forKey: .last),
+            unread: try container.decodeIfPresent(Int.self, forKey: .unread) ?? 0,
+            following: try container.decodeIfPresent(Bool.self, forKey: .following) ?? false,
+            pinned: try container.decodeIfPresent(Bool.self, forKey: .pinned) ?? false,
+            hidden: try container.decodeIfPresent(Bool.self, forKey: .hidden) ?? false
+        )
+    }
+
+    enum CodingKeys: String, CodingKey { case key, last, unread, following, pinned, hidden }
+
+    /// The same summary with some marks changed.
+    public func with(unread: Int? = nil, following: Bool? = nil, pinned: Bool? = nil, hidden: Bool? = nil) -> Self {
+        Self(
+            key: key, last: last, unread: unread ?? self.unread, following: following ?? self.following,
+            pinned: pinned ?? self.pinned, hidden: hidden ?? self.hidden
+        )
+    }
+}
+
+/// How the signed-in person keeps a conversation in their sidebar; nil leaves a mark as it is.
+/// Hidden lasts until something new is said; unread until they read it.
+public struct SidebarMark: Equatable, Sendable, Codable {
+    public var pinned: Bool?
+    public var hidden: Bool?
+    public var unread: Bool?
+
+    public init(pinned: Bool? = nil, hidden: Bool? = nil, unread: Bool? = nil) {
+        self.pinned = pinned
+        self.hidden = hidden
+        self.unread = unread
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(pinned, forKey: .pinned)
+        try container.encodeIfPresent(hidden, forKey: .hidden)
+        try container.encodeIfPresent(unread, forKey: .unread)
+    }
+
+    enum CodingKeys: String, CodingKey { case pinned, hidden, unread }
 }
 
 /// `GET …/conversations/:key`: up to 50 messages, oldest first, and who answers next.
@@ -229,6 +292,11 @@ extension DevysHTTPClient {
     /// Starts or stops following a conversation.
     public func follow(_ session: DeviceSession, businessID: String, key: ConversationKey, following: Bool) async throws {
         _ = try await raw(withJSON(conversationRequest(session, businessID: businessID, key: key, action: "follow", method: "POST"), FollowBody(following: following)))
+    }
+
+    /// Pins, hides or marks a conversation unread in the signed-in person's sidebar.
+    public func markSidebar(_ session: DeviceSession, businessID: String, key: ConversationKey, _ mark: SidebarMark) async throws -> SidebarMark {
+        try await send(withJSON(conversationRequest(session, businessID: businessID, key: key, action: "sidebar", method: "POST"), mark))
     }
 
     /// The key goes in the path percent-encoded, so ":" survives every proxy.

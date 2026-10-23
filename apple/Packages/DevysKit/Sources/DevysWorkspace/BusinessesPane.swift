@@ -168,7 +168,7 @@ private struct ExportFile: FileDocument {
     }
 }
 
-/// New business: a name, a brief, and the starting team hired with the Chief of Staff.
+/// New business: a name and a brief. It starts with its Chief of Staff, who proposes hires.
 struct NewBusinessSheet: View {
     let store: StoreOf<Preferences>
 
@@ -179,19 +179,6 @@ struct NewBusinessSheet: View {
                 FieldBox { TextField("Name", text: binding(\.name)) }
                 FieldBox {
                     TextField("Brief: what it does, its goals and constraints", text: binding(\.brief), axis: .vertical).lineLimit(3...8)
-                }
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Starting team").font(DevysTypography.label).foregroundStyle(DevysColors.ink3)
-                    Text("A Chief of Staff always joins. Hire the others now or later.")
-                        .font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3)
-                    ForEach(RoleTemplate.startingTeam, id: \.self) { template in
-                        Toggle(RoleTemplate.displayName(template), isOn: Binding(
-                            get: { draft.team.contains(template) },
-                            set: { isOn in edit { if isOn { $0.team.insert(template) } else { $0.team.remove(template) } } }
-                        ))
-                        .toggleStyle(.switch)
-                        .font(DevysTypography.control)
-                    }
                 }
                 if let error = draft.error {
                     Label(error, systemImage: "exclamationmark.circle.fill").font(DevysTypography.secondary).foregroundStyle(DevysColors.red)
@@ -207,7 +194,7 @@ struct NewBusinessSheet: View {
                 }
             }
             .padding(DevysSpacing.roomy)
-            .sheetFrame(width: 420, height: 440)
+            .sheetFrame(width: 420, height: 300)
             .background(DevysColors.sheet)
         }
     }

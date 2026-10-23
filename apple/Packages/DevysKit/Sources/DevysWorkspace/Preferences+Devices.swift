@@ -5,12 +5,10 @@ package import Foundation
 
 // MARK: - New businesses, business details and devices
 
-/// A business being set up: its name, brief and starting team.
+/// A business being set up: its name and brief.
 package struct NewBusinessDraft: Equatable {
     package var name = ""
     package var brief = ""
-    /// Starting-team templates hired alongside the Chief of Staff; all on by default.
-    package var team = Set(RoleTemplate.startingTeam)
     package var isSubmitting = false
     package var error: String?
 
@@ -24,8 +22,7 @@ package struct NewBusinessDraft: Equatable {
     package var request: NewBusiness {
         NewBusiness(
             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-            brief: String(brief.trimmingCharacters(in: .whitespacesAndNewlines).prefix(4000)),
-            team: RoleTemplate.startingTeam.filter(team.contains)
+            brief: String(brief.trimmingCharacters(in: .whitespacesAndNewlines).prefix(4000))
         )
     }
 }
@@ -73,7 +70,9 @@ extension Preferences {
             let runtime = runtime
             store.addTask {
                 do {
-                    _ = try await runtime.createBusiness(request)
+                    let created = try await runtime.createBusiness(request)
+                    // Its Chief of Staff greets the owner on their own, in the chat that opens.
+                    try? await runtime.welcome(created.id)
                 } catch {
                     try store.send(Action(.business(.createFailed("The business couldn't be created. Try again."))))
                     return

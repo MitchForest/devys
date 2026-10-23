@@ -99,6 +99,9 @@ public struct Composer: View {
     let onMicTap: (() -> Void)?
     let onHandsFree: (() -> Void)?
     let leading: AnyView?
+    let focus: FocusState<Bool>.Binding?
+    /// A key typed while the field is empty; true when it was used (a question card's letter).
+    let onEmptyKey: ((String) -> Bool)?
 
     public init(
         _ placeholder: String,
@@ -111,6 +114,8 @@ public struct Composer: View {
         onMicTap: (() -> Void)? = nil,
         onHandsFree: (() -> Void)? = nil,
         leading: AnyView? = nil,
+        focus: FocusState<Bool>.Binding? = nil,
+        onEmptyKey: ((String) -> Bool)? = nil,
         onSend: @escaping () -> Void
     ) {
         self.placeholder = placeholder
@@ -123,6 +128,8 @@ public struct Composer: View {
         self.onMicTap = onMicTap
         self.onHandsFree = onHandsFree
         self.leading = leading
+        self.focus = focus
+        self.onEmptyKey = onEmptyKey
         self.onSend = onSend
     }
 
@@ -146,6 +153,11 @@ public struct Composer: View {
                     .font(DevysTypography.body)
                     .lineLimit(1...6)
                     .disabled(!isEnabled)
+                    .modifier(ComposerFocus(focus: focus))
+                    .onKeyPress(phases: .down) { press in
+                        guard text.isEmpty, press.modifiers.isEmpty, let onEmptyKey, onEmptyKey(press.characters) else { return .ignored }
+                        return .handled
+                    }
                     .onSubmit(onSend)
                 if let onMicTap {
                     MicButton(isListening: isListening, level: level, dictate: onMicTap)
@@ -178,6 +190,15 @@ public struct Composer: View {
         }
         .animation(DevysMotion.quick, value: isListening)
         .animation(DevysMotion.quick, value: volatileText)
+    }
+}
+
+/// Ties the field to a caller's focus, when given one.
+private struct ComposerFocus: ViewModifier {
+    let focus: FocusState<Bool>.Binding?
+
+    func body(content: Content) -> some View {
+        if let focus { content.focused(focus) } else { content }
     }
 }
 

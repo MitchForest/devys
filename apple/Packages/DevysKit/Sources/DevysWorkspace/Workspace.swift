@@ -30,21 +30,19 @@ package struct Workspace {
         package var place: Place = .home
         /// Places the owner came from, for Back (a thread opened from a channel).
         package var history: [Place] = []
-        /// Temporary views over the right panel's permanent view, the top one last.
+        /// Temporary views in the right panel, the top one last; the panel shows only for them.
         package var layers: [OpenLayer] = []
-        /// Whether each kind of place shows its permanent view, as the owner left it.
-        package var panels: [Place.Kind: Bool] = [:]
         /// ⤢: the panel takes everything but the conversation's minimum while a layer is open.
         package var isWide = false
-        /// Too narrow for the conversation and the panel side by side: the panel lies over the
-        /// conversation, so its permanent view opens only when asked for, never by itself.
+        /// Too narrow for the conversation and the panel side by side: a layer lies over the
+        /// conversation.
         package var isNarrow = false
-        /// Asked for while narrow (⌥⌘0); going to another place clears it.
-        package var isOverlayOpen = false
         /// Whether the open layer goes with the next message as a reference.
         package var isReferencing = true
         /// Counts answered turns in the conversation, so open layers read their records again.
         package var turns = 0
+        /// Counts "Something else" taps: each one puts the cursor in the composer.
+        package var composerFocus = 0
         /// The app is in front; the 5 s refresh runs only then.
         package var isActive = true
         package var isSidebarVisible = true
@@ -73,8 +71,12 @@ package struct Workspace {
         package var projects: Loadable<[Project]> = .loading
         /// The business's routines: each employee's desk and each project's overview list theirs.
         package var routines: Loadable<[Routine]> = .loading
-        /// The app directory; installed apps with something to show are in the sidebar.
+        /// The app directory: the business's remote apps (Connect apps) and the built-in ones.
         package var apps: Loadable<[AppEntry]> = .loading
+        /// The Connect apps list: outside services with their categories and logos.
+        package var listedApps: Loadable<[ListedApp]> = .loading
+        /// The Connect apps sheet is open.
+        package var isConnectingApps = false
         /// What needs the owner: each request shows in its work item's card, or where it was asked.
         package var home: Loadable<Home> = .loading
         /// The business's saved files, newest first.
@@ -111,7 +113,8 @@ package struct Workspace {
         }
 
         package var isRunning: Bool { status.value?.isRunning ?? false }
-        /// Every business starts with its Chief of Staff: Home, found by its role.
+        /// Every business starts with its Chief of Staff alone: their chat is where the workspace
+        /// opens (Home), found by its role.
         package var chiefOfStaff: Employee? { snapshot.employees.first(where: \.isChiefOfStaff) }
         /// Where the Chief of Staff's runtime and conversation live, once the team has loaded.
         package var chiefOfStaffScope: EmployeeScope? {
@@ -147,6 +150,7 @@ package struct Workspace {
         case revokeTapped(employeeID: String, grantID: String)
         case pauseToggled(employeeID: String)
         case model(ModelIntent)
+        case sidebar(SidebarIntent)
         case team(TeamIntent)
         case conversation(ConversationIntent)
         case workItem(WorkItemIntent)
@@ -196,7 +200,6 @@ package struct Workspace {
     @Dependency(\.voiceSettingsClient) var voiceSettings: VoiceSettingsClient
     @Dependency(\.uuid) var uuid
     @Dependency(\.profileClient) var profileClient: ProfileClient
-    @Dependency(\.panelsClient) var panelsClient: PanelsClient
     @Dependency(\.signingClient) var signing: SigningClient
     @Dependency(\.browserClient) var browser: BrowserClient
 
@@ -239,6 +242,7 @@ package struct Workspace {
                 loadMemory(state)
                 loadWork(state)
                 loadSummaries(state)
+                loadListedApps(state)
                 // Home's conversation is the Chief of Staff's, known once the team has loaded.
                 openConversation(&state)
 
@@ -276,6 +280,8 @@ package struct Workspace {
             case .join(let intent): reduceJoin(intent, state: &state)
 
             case .team(let intent): reduceTeam(intent, state: &state)
+
+            case .sidebar(let intent): reduceSidebar(intent, state: &state)
 
             case .conversation(let intent): reduceConversation(intent, state: &state)
 
@@ -387,8 +393,7 @@ package struct Workspace {
         .ifLet(\.preferences) {
             Preferences()
         }
-        .onMount { state in
-            state.panels = Self.panels(from: panelsClient.load())
+        .onMount { _ in
             loadAccount()
             let clock = clock
             store.addTask {
@@ -464,6 +469,8 @@ extension Workspace {
         state.projects = .loading
         state.routines = .loading
         state.apps = .loading
+        state.listedApps = .loading
+        state.isConnectingApps = false
         state.home = .loading
         state.artifacts = []
         state.repliesToSpeak = []

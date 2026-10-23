@@ -1,6 +1,7 @@
+import { randomUUID } from "node:crypto";
 import { test, expect } from "@playwright/test";
 import { localStores } from "../fixtures/local.ts";
-import { sidebar, signIn } from "./helpers.ts";
+import { openSettings, sidebar, signIn } from "./helpers.ts";
 
 /** A recognizer that hears one sentence, so dictation runs without a microphone. */
 const fakeSpeech = () => {
@@ -39,12 +40,19 @@ test("looks, the owner's photo, voice and settings work on the web as on native"
   const { sql } = stores;
   const owner = await stores.owner("Riley", "Acme");
   await page.addInitScript(fakeSpeech);
+  // A page an employee published, which ⌘K finds.
+  const priceList = randomUUID();
+  await stores.files.put(`${owner.business}/artifacts/${priceList}`, "<h1>Price list</h1>");
+  await sql.run(
+    `INSERT INTO artifacts (id, business_id, operation_id, object_key, filename, content_type, byte_length)
+     VALUES ($1, $2, $3, $4, 'Price list.html', 'text/html', 19)`,
+    [priceList, owner.business, `fixture-${priceList}`, `${owner.business}/artifacts/${priceList}`],
+  );
   try {
     await signIn(page, sql, owner.person);
 
     // Settings has the same panes as the native Settings window.
-    await page.getByRole("button", { name: "Account" }).click();
-    await page.getByRole("menuitem", { name: "Settings…" }).click();
+    await openSettings(page);
     const settings = page.getByRole("dialog", { name: "Settings" });
     for (const section of [
       "Account",
@@ -57,11 +65,12 @@ test("looks, the owner's photo, voice and settings work on the web as on native"
     ])
       await expect(settings.getByRole("button", { name: section, exact: true })).toBeVisible();
 
-    // Apps lists each app's skills; the system apps every business has are built in.
+    // Apps are the outside services connected; what employees do themselves is never listed.
     await settings.getByRole("button", { name: "Apps", exact: true }).click();
-    await expect(settings.getByText("Skills: writing-pages")).toBeVisible();
-    await expect(settings.getByText("Built in")).toBeVisible();
-    await expect(settings.getByText("Computer", { exact: true })).toBeVisible();
+    await expect(settings.getByText("Connected apps")).toBeVisible();
+    await expect(settings.getByRole("button", { name: "Connect apps…" })).toBeVisible();
+    await expect(settings.getByText("Computer", { exact: true })).toHaveCount(0);
+    await expect(settings.getByText("Documents", { exact: true })).toHaveCount(0);
     await settings.getByRole("button", { name: "Account", exact: true }).click();
 
     // The owner's photo uploads to the server.
@@ -155,21 +164,22 @@ test("looks, the owner's photo, voice and settings work on the web as on native"
     });
     await expect(page.getByText("What is due today?")).toBeVisible();
 
-    // ⌘K jumps to any conversation, or opens an app beside the one on screen.
+    // ⌘K jumps to any conversation, or opens a page or file beside the one on screen.
     await page.keyboard.press("Meta+k");
-    await page.keyboard.type("Home");
+    await page.keyboard.type("Chief");
     await page.keyboard.press("Enter");
     await expect(page.getByTestId("place-title")).toHaveText("Chief of Staff");
     await expect(page.getByRole("dialog", { name: "Jump to" })).toBeHidden();
     await page.keyboard.press("Meta+k");
-    await page.keyboard.type("Documents");
+    await page.keyboard.type("Price list");
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("region", { name: "Documents" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Price list" })).toBeVisible();
     await expect(page.getByTestId("place-title")).toHaveText("Chief of Staff");
   } finally {
     // Stop the page's polling and read receipts before its business is removed.
     await page.close();
     await stores.remove([owner]);
+    await stores.files.delete(`${owner.business}/artifacts/${priceList}`);
     await stores.dispose();
   }
 });

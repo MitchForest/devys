@@ -15,6 +15,40 @@ package struct ChatTimeline: Equatable {
         package let employeeID: String?
     }
 
+    /// A question card under the latest word: lettered answers, several with Done, and
+    /// "Something else".
+    package struct Question: Equatable {
+        package let messageID: String
+        /// The card's title; nil shows the answers alone.
+        package let title: String?
+        package let answers: [String]
+        package let pickMany: Bool
+
+        package init(messageID: String, title: String?, answers: [String], pickMany: Bool) {
+            self.messageID = messageID
+            self.title = title
+            self.answers = answers
+            self.pickMany = pickMany
+        }
+
+        init?(_ message: ConversationMessage) {
+            guard !message.replies.isEmpty else { return nil }
+            let title = message.question?.trimmingCharacters(in: .whitespacesAndNewlines)
+            self.init(messageID: message.id, title: title?.isEmpty == false ? title : nil, answers: Array(message.replies.prefix(6)), pickMany: message.pickMany)
+        }
+
+        /// The letter an answer goes by: A, B, C…
+        package static func letter(_ index: Int) -> String {
+            String(UnicodeScalar(UInt8(65 + index)))
+        }
+
+        /// The answer a typed letter picks, if the card has one by it.
+        package func answer(forLetter typed: String) -> String? {
+            guard typed.count == 1, let index = answers.indices.first(where: { Self.letter($0) == typed.uppercased() }) else { return nil }
+            return answers[index]
+        }
+    }
+
     package struct Bubble: Equatable, Identifiable {
         package let id: String
         /// The employee who wrote it; nil for the owner.
@@ -27,8 +61,8 @@ package struct ChatTimeline: Equatable {
         package let sentAt: Date?
         /// The record the message was about ("Viewing …"), which opens it.
         package var ref: Ref?
-        /// Answers to tap, offered on the latest employee message until the owner says anything.
-        package var replies: [String] = []
+        /// The question card offered on the latest employee message until the owner says anything.
+        package var question: Question?
         package var position: Position
         /// Set for messages sent from this device that the server hasn't posted yet.
         package var delivery: PendingMessage.Delivery?
@@ -43,7 +77,7 @@ package struct ChatTimeline: Equatable {
         package let text: String
         package let ref: Ref?
         /// Devys's notice offers "Ask again" while it is the latest word.
-        package var replies: [String] = []
+        package var question: Question?
         /// A card: drawn from its record as it is now (a work item's steps and results).
         package var isCard = false
     }
@@ -68,7 +102,7 @@ package struct ChatTimeline: Equatable {
     static let groupGap: TimeInterval = 5 * 60
     static let headingGap: TimeInterval = 60 * 60
 
-    /// The message whose suggested replies show: the latest message (or Devys's notice offering
+    /// The message whose question card shows: the latest message (or Devys's notice offering
     /// "Ask again"), skipping other events, when an employee wrote it and nothing has been sent
     /// from this device since.
     package static func offering(_ messages: [ConversationMessage], pending: [PendingMessage]) -> ConversationMessage? {
@@ -89,7 +123,7 @@ package struct ChatTimeline: Equatable {
             if message.isEvent {
                 return (message.date, .event(Event(
                     id: message.id, text: message.text, ref: message.ref,
-                    replies: message.id == offered ? message.replies : [],
+                    question: message.id == offered ? Question(message) : nil,
                     isCard: message.kind == .card
                 )))
             }
@@ -103,7 +137,7 @@ package struct ChatTimeline: Equatable {
                 reactions: message.reactions,
                 sentAt: message.date,
                 ref: message.ref,
-                replies: message.id == offered ? message.replies : [],
+                question: message.id == offered ? Question(message) : nil,
                 position: .single
             )))
         }

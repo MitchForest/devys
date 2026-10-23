@@ -111,7 +111,7 @@ test("a direct chat is the middle; who answers follows replies and @mentions; re
   }
 });
 
-test("an employee's suggested replies show under its question; a tap answers it and they go", async ({
+test("an employee's answers show as a card under its latest message; a tap answers it and it goes", async ({
   page,
 }) => {
   const stores = await localStores();
@@ -134,11 +134,11 @@ test("an employee's suggested replies show under its question; a tap answers it 
     await sidebar(page).getByRole("link", { name: "Chief of Staff" }).click();
     const field = page.getByLabel("Message Chief of Staff");
     await field.fill("Half-written thought");
-    // Only the latest employee message offers its replies.
-    const replies = page.getByRole("group", { name: "Suggested replies" });
+    // Only the latest employee message offers its answers.
+    const replies = page.getByTestId("question-card");
     await expect(replies).toHaveCount(1);
-    await expect(replies.getByRole("button")).toHaveText(["Today", "Tomorrow"]);
-    await replies.getByRole("button", { name: "Tomorrow" }).click();
+    await expect(replies.getByRole("button")).toHaveText(["AToday", "BTomorrow", "Something else"]);
+    await replies.getByRole("button", { name: /Tomorrow/ }).click();
     await expect.poll(() => sent.length).toBe(1);
     expect(sent[0]!.body).toMatchObject({ text: "Tomorrow", reply_to: question });
     // Sent: the replies go, and what the owner was writing stays.
@@ -175,8 +175,8 @@ test("a turn that stopped is Devys's notice, not the employee's words, with Ask 
     await expect(page.getByText("Chief of Staff stopped: it took too long.")).toBeVisible();
     // An event, not a message: no speaker line or bubble of the employee's.
     await expect(page.getByTestId("speaker")).toHaveCount(0);
-    const replies = page.getByRole("group", { name: "Suggested replies" });
-    await replies.getByRole("button", { name: "Ask again" }).click();
+    const replies = page.getByTestId("question-card");
+    await replies.getByRole("button", { name: /Ask again/ }).click();
     await expect.poll(() => sent.length).toBe(1);
     expect(sent[0]!.body).toMatchObject({ text: "Ask again" });
     await expect(replies).toHaveCount(0);
@@ -223,15 +223,16 @@ test("a project opens on its channel; the work's card opens the thread; Back and
   try {
     await signIn(page, sql, owner.person);
 
-    // Unread messages show on the project in the sidebar.
+    // Unread messages show on the project in the sidebar, under Projects.
+    await expect(sidebar(page).getByRole("heading", { name: "Projects" })).toBeVisible();
     const row = sidebar(page).getByRole("link", { name: /^Launch/ });
     await expect(row).toHaveAccessibleName("Launch, 2 unread");
-    await expect(row.getByTestId("unread")).toHaveText("2");
+    await expect(row.getByTestId("unread")).toBeVisible();
 
-    // The project opens on its channel, with its overview beside it.
+    // The project opens on its channel; its details are the header's pill.
     await row.click();
     await expect(page.getByTestId("place-title")).toHaveText("Launch");
-    await expect(page.getByRole("region", { name: "Launch overview" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Launch overview" })).toHaveCount(0);
     await expect(page.getByText("Growth, can you write the tagline?")).toBeVisible();
     await expect(page.getByLabel("Message Launch")).toBeVisible();
 
@@ -261,9 +262,6 @@ test("a project opens on its channel; the work's card opens the thread; Back and
       .click();
     await page.getByTestId("work-card").getByText("Write a tagline").click();
     await expect(page.getByTestId("place-title")).toHaveText("Write a tagline");
-    await expect(
-      page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Launch" }),
-    ).toBeVisible();
     const card = page.getByTestId("work-card");
     await expect(card).toHaveCount(1);
     await expect(card.getByText("Growth", { exact: true })).toBeVisible();
@@ -275,7 +273,7 @@ test("a project opens on its channel; the work's card opens the thread; Back and
     await expect(page.getByTestId("place-title")).toHaveText("Launch");
     await page.goForward();
     await expect(page.getByTestId("place-title")).toHaveText("Write a tagline");
-    await expect(page.getByRole("button", { name: "Back (⌘[)" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Back" })).toBeVisible();
     await expect(page.getByText("Growth, can you write the tagline?")).toHaveCount(0);
     await insertMessage(sql, owner.business, `work:${workItem.id}`, {
       author: `employee:${growth.id}`,
@@ -290,11 +288,10 @@ test("a project opens on its channel; the work's card opens the thread; Back and
     await expect.poll(() => sent.length).toBe(1);
     expect(sent[0]!.key).toBe(`work:${workItem.id}`);
 
-    // Back returns to the channel and its overview.
-    await page.getByRole("button", { name: "Back (⌘[)" }).click();
+    // Back returns to the channel.
+    await page.getByRole("button", { name: "Back" }).click();
     await expect(page.getByTestId("place-title")).toHaveText("Launch");
     await expect(page.getByText("Growth, can you write the tagline?")).toBeVisible();
-    await expect(page.getByRole("region", { name: "Launch overview" })).toBeVisible();
 
     // Start a thread on a message: a work item owned by its author, in this project.
     await page.getByText("Growth, can you write the tagline?").click({ button: "right" });
@@ -309,7 +306,7 @@ test("a project opens on its channel; the work's card opens the thread; Back and
         [owner.business, "Growth, can you write the tagline?"],
       ),
     ).toEqual({ owner_employee_id: owner.chiefOfStaff, project_id: project.id });
-    await page.getByRole("button", { name: "Back (⌘[)" }).click();
+    await page.getByRole("button", { name: "Back" }).click();
     await expect(page.getByTestId("place-title")).toHaveText("Launch");
   } finally {
     // Stop the page's polling and read receipts before its business is removed.

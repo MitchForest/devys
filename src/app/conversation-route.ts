@@ -13,7 +13,41 @@ import { conversationExists, conversationPage, postFromPerson } from "./conversa
 import { businessRef } from "./refs.ts";
 import { body, decodedBody, forbidden, notFound } from "./request.ts";
 import { respond } from "../protocol/http.ts";
-import { ConversationPage, Conversations, Following, Posted, Read, SidebarMark } from "./wire.ts";
+import {
+  ConversationPage,
+  Conversations,
+  Following,
+  Posted,
+  Read,
+  SidebarMark,
+  Welcomed,
+} from "./wire.ts";
+import { appChat } from "../channels/app.ts";
+import { employeesOf } from "../identity/service.ts";
+import { messages } from "../conversations/service.ts";
+import { scopeName } from "../identity/contract.ts";
+
+/**
+ * `POST …/welcome`, once a business is created: its Chief of Staff greets the owner in their
+ * chat, in its own words, and asks one question. Once: a chat with anything said is left alone.
+ */
+async function welcome(env: Env, businessId: string, personId: string) {
+  const chief = (await Effect.runPromise(employeesOf(env.HYPERDRIVE, businessId))).find(
+    (employee) => employee.template === "chief-of-staff",
+  );
+  if (!chief) return false;
+  const key = `direct:${chief.id}` as const;
+  if ((await Effect.runPromise(messages(env.HYPERDRIVE, businessId, key, { limit: 1 }))).length)
+    return false;
+  const scope = { businessId, employeeId: chief.id };
+  await env.AGENT.getByName(scopeName(scope)).receive(scope, {
+    messageId: `welcome-${businessId}`,
+    senderId: `person:${personId}`,
+    chatId: appChat(scope),
+    text: "(Devys: the owner just created this business and opened your chat; they have not written yet.) Greet them in two short lines: who you are and what you can take off their plate, from the business's brief. Then ask one question card about where to start (suggestReplies with a question), each answer a concrete first task or an app to connect.",
+  });
+  return true;
+}
 
 /**
  * The business's shared conversations: DMs (`direct:<employee>`), project channels
@@ -26,6 +60,10 @@ export async function conversationRoute(
   access: { person: Person; business: Business; trusted: boolean; path: string },
 ) {
   const { person, business, trusted, path } = access;
+  if (path === "/welcome" && request.method === "POST") {
+    if (!trusted) return forbidden();
+    return respond(Welcomed, { welcomed: await welcome(env, business.id, person.id) });
+  }
   if (path === "/conversations" && request.method === "GET")
     return respond(Conversations, {
       conversations: await Effect.runPromise(

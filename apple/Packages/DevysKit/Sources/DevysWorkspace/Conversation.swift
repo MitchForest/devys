@@ -49,6 +49,13 @@ package struct OpenConversation {
     package var stoppedPolling = false
     /// The newest created_at this device marked read.
     package var readAt: String?
+    /// Answers ticked on a pick-many question card, and the message they answer.
+    package var picked: [String] = []
+    package var pickedFor: String?
+    /// A business file attached with the composer's +: the next message's ref.
+    package var attachment: Ref?
+    /// A file from this device going up to the business folder, to be attached.
+    package var isUploading = false
 
     package init(key: ConversationKey) {
         self.key = key
@@ -157,8 +164,17 @@ package enum ConversationIntent {
     case replyTapped(ConversationKey, messageID: String)
     case replyCancelled(ConversationKey)
     case sendTapped(ConversationKey)
-    /// One of the answers an employee offered under its message: sent as the reply to it.
-    case suggestedReplyTapped(ConversationKey, messageID: String, text: String)
+    /// An answer on a question card: sent as the reply to it, or ticked when several may be picked.
+    case answerPicked(ConversationKey, messageID: String, answer: String)
+    /// Done on a pick-many card: the ticked answers, in the card's order, as one reply.
+    case answersDone(ConversationKey, messageID: String)
+    /// "Something else": the composer takes the answer.
+    case somethingElseTapped(ConversationKey)
+    /// The composer's +: a business file to go with the next message, or nil to remove it.
+    case attachmentSet(ConversationKey, Ref?)
+    /// The composer's + › Upload a file…: it goes into the business folder's Uploads, then is attached.
+    case uploadChosen(ConversationKey, ChosenFile)
+    case uploadFailed(ConversationKey)
     case posted(ConversationKey, clientID: String, PostedMessage)
     /// `refusal` is the server's own words when it declined the message (409).
     case sendFailed(ConversationKey, clientID: String, refusal: String?)

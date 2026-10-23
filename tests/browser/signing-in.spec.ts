@@ -66,7 +66,9 @@ test("another browser connects with one button and is let in from a signed-in on
   }
 });
 
-test("signed in with no business: name it, and start", async ({ page }) => {
+test("signed in with no business: name it, and start with the Chief of Staff alone", async ({
+  page,
+}) => {
   const stores = await localStores();
   const { sql } = stores;
   const person = crypto.randomUUID();
@@ -85,6 +87,12 @@ test("signed in with no business: name it, and start", async ({ page }) => {
       "INSERT INTO sign_in_links (token_hash, person_id, expires_at) VALUES ($1, $2, now() + interval '1 hour')",
       [hash, person],
     );
+    // The Chief of Staff's greeting runs a model: stood in for, and counted.
+    const welcomed: string[] = [];
+    await page.route(/\/api\/businesses\/[^/]+\/welcome$/, (route) => {
+      welcomed.push(route.request().method());
+      return route.fulfill({ json: { welcomed: true } });
+    });
     await page.goto(`/#signin=${token}`);
     const form = page.getByRole("form", { name: "Name your business" });
     await expect(form).toBeVisible();
@@ -97,13 +105,20 @@ test("signed in with no business: name it, and start", async ({ page }) => {
       "SELECT business_id FROM memberships WHERE person_id = $1",
       [person],
     ))!.business_id;
-    // The starting team is hired with the Chief of Staff: Admin, Finance, Growth and Engineering.
+    // Starting asks the Chief of Staff to greet, once.
+    await expect.poll(() => welcomed).toEqual(["POST"]);
+    // A team of one: the Chief of Staff, pinned; they propose hires as work comes.
     expect(
       (await sql.row<{ n: number }>(
         "SELECT count(*)::int AS n FROM employees WHERE business_id = $1",
         [business],
       ))!.n,
-    ).toBe(5);
+    ).toBe(1);
+    const sidebar = page.getByRole("navigation", { name: "Sidebar" });
+    await expect(sidebar.getByRole("link")).toHaveCount(1);
+    await expect(
+      sidebar.getByTestId("pinned").getByRole("link", { name: "Chief of Staff" }),
+    ).toBeVisible();
   } finally {
     await stores.remove(business ? [{ person, business }] : []);
     if (!business) {

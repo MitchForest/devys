@@ -68,6 +68,8 @@ public struct RuntimeClient: Sendable {
     public var postMessage: @Sendable (_ businessID: String, ConversationKey, NewMessage) async throws -> PostedMessage
     public var markRead: @Sendable (_ businessID: String, ConversationKey, _ seenAt: String) async throws -> Void
     public var follow: @Sendable (_ businessID: String, ConversationKey, _ on: Bool) async throws -> Void
+    /// Pins, hides or marks a conversation unread in the signed-in person's sidebar.
+    public var markSidebar: @Sendable (_ businessID: String, ConversationKey, SidebarMark) async throws -> Void
     /// A tapback on a message, addressed to the employee who wrote it.
     public var react: @Sendable (EmployeeScope, Reaction) async throws -> Void
     public var access: @Sendable (EmployeeScope) async throws -> AccessList
@@ -86,14 +88,17 @@ public struct RuntimeClient: Sendable {
     public var answer: @Sendable (_ businessID: String, _ decisionID: String, _ approve: Bool) async throws -> Void
     /// Answers a file request with the file the owner chose; it goes into the business folder.
     public var sendFile: @Sendable (_ businessID: String, _ decisionID: String, ChosenFile) async throws -> Void
+    /// Uploads one of the owner's files into the business folder's Uploads; answers its ref.
+    public var uploadFile: @Sendable (_ businessID: String, ChosenFile) async throws -> Ref
+    /// A new business's Chief of Staff greets the owner on its own.
+    public var welcome: @Sendable (_ businessID: String) async throws -> Void
     public var projects: @Sendable (_ businessID: String) async throws -> [Project]
     public var createProject: @Sendable (_ businessID: String, ProjectChange) async throws -> Project
     public var addToProject: @Sendable (_ businessID: String, _ projectID: String, _ ref: Ref) async throws -> Void
     public var removeFromProject: @Sendable (_ businessID: String, _ projectID: String, _ itemID: String) async throws -> Void
-    /// The app directory, and what this business has installed and pinned.
+    /// The app directory: the business's remote apps and the built-in ones.
     public var apps: @Sendable (_ businessID: String) async throws -> [AppEntry]
     public var installApp: @Sendable (_ businessID: String, _ appID: String, _ install: Bool) async throws -> Void
-    public var pinApp: @Sendable (_ businessID: String, _ appID: String, _ pinned: Bool) async throws -> Void
     /// What needs the owner, and work at a glance.
     public var home: @Sendable (_ businessID: String) async throws -> Home
     /// The business's routines; desks and overviews filter them.
@@ -108,6 +113,8 @@ public struct RuntimeClient: Sendable {
     public var removeSecret: @Sendable (_ businessID: String, _ name: String) async throws -> [SecretEntry]
     /// Apps for a query: the business's own and the MCP Registry's.
     public var searchApps: @Sendable (_ businessID: String, _ query: String) async throws -> [FoundApp]
+    /// The Connect apps list: outside services with their categories and logos.
+    public var listedApps: @Sendable (_ businessID: String) async throws -> [ListedApp]
     /// Adds a remote app (by what search found, or its address), not yet connected.
     public var addApp: @Sendable (_ businessID: String, _ app: String) async throws -> AppEntry
     /// Starts connecting a remote app: its provider's sign-in page, or nil when it needs none.
@@ -152,6 +159,7 @@ public struct RuntimeClient: Sendable {
         },
         markRead: @escaping @Sendable (String, ConversationKey, String) async throws -> Void = { _, _, _ in },
         follow: @escaping @Sendable (String, ConversationKey, Bool) async throws -> Void = { _, _, _ in },
+        markSidebar: @escaping @Sendable (String, ConversationKey, SidebarMark) async throws -> Void = { _, _, _ in },
         react: @escaping @Sendable (EmployeeScope, Reaction) async throws -> Void = { _, _ in },
         access: @escaping @Sendable (EmployeeScope) async throws -> AccessList = { _ in AccessList(grants: [], available: []) },
         grant: @escaping @Sendable (EmployeeScope, String, AccessMode) async throws -> Void = { _, _, _ in },
@@ -170,6 +178,8 @@ public struct RuntimeClient: Sendable {
         startWork: @escaping @Sendable (String, String) async throws -> WorkItem = { _, _ in throw DevysHTTPError.unauthorized },
         answer: @escaping @Sendable (String, String, Bool) async throws -> Void = { _, _, _ in },
         sendFile: @escaping @Sendable (String, String, ChosenFile) async throws -> Void = { _, _, _ in },
+        uploadFile: @escaping @Sendable (String, ChosenFile) async throws -> Ref = { _, _ in throw DevysHTTPError.unauthorized },
+        welcome: @escaping @Sendable (String) async throws -> Void = { _ in },
         projects: @escaping @Sendable (String) async throws -> [Project] = { _ in [] },
         createProject: @escaping @Sendable (String, ProjectChange) async throws -> Project = { _, project in
             Project(id: UUID().uuidString, name: project.name, leadEmployeeID: project.lead, memberIDs: project.members)
@@ -178,7 +188,6 @@ public struct RuntimeClient: Sendable {
         removeFromProject: @escaping @Sendable (String, String, String) async throws -> Void = { _, _, _ in },
         apps: @escaping @Sendable (String) async throws -> [AppEntry] = { _ in [] },
         installApp: @escaping @Sendable (String, String, Bool) async throws -> Void = { _, _, _ in },
-        pinApp: @escaping @Sendable (String, String, Bool) async throws -> Void = { _, _, _ in },
         home: @escaping @Sendable (String) async throws -> Home = { _ in Home() },
         routines: @escaping @Sendable (String) async throws -> [Routine] = { _ in [] },
         setRoutinePaused: @escaping @Sendable (String, String, Bool) async throws -> Routine = { _, _, _ in throw DevysHTTPError.unauthorized },
@@ -190,6 +199,7 @@ public struct RuntimeClient: Sendable {
         },
         removeSecret: @escaping @Sendable (String, String) async throws -> [SecretEntry] = { _, _ in [] },
         searchApps: @escaping @Sendable (String, String) async throws -> [FoundApp] = { _, _ in [] },
+        listedApps: @escaping @Sendable (String) async throws -> [ListedApp] = { _ in [] },
         addApp: @escaping @Sendable (String, String) async throws -> AppEntry = { _, _ in throw DevysHTTPError.unauthorized },
         connectApp: @escaping @Sendable (String, String) async throws -> Connecting = { _, _ in throw DevysHTTPError.unauthorized },
         appReview: @escaping @Sendable (String, String) async throws -> AppReview = { _, _ in throw DevysHTTPError.unauthorized },
@@ -220,6 +230,7 @@ public struct RuntimeClient: Sendable {
         self.postMessage = postMessage
         self.markRead = markRead
         self.follow = follow
+        self.markSidebar = markSidebar
         self.react = react
         self.access = access
         self.grant = grant
@@ -234,13 +245,14 @@ public struct RuntimeClient: Sendable {
         self.startWork = startWork
         self.answer = answer
         self.sendFile = sendFile
+        self.uploadFile = uploadFile
+        self.welcome = welcome
         self.projects = projects
         self.createProject = createProject
         self.addToProject = addToProject
         self.removeFromProject = removeFromProject
         self.apps = apps
         self.installApp = installApp
-        self.pinApp = pinApp
         self.home = home
         self.routines = routines
         self.setRoutinePaused = setRoutinePaused
@@ -250,6 +262,7 @@ public struct RuntimeClient: Sendable {
         self.addSecret = addSecret
         self.removeSecret = removeSecret
         self.searchApps = searchApps
+        self.listedApps = listedApps
         self.addApp = addApp
         self.connectApp = connectApp
         self.appReview = appReview
@@ -455,6 +468,9 @@ extension RuntimeClient {
             follow: { id, key, following in
                 try await hub.call { api, session in try await api.follow(session, businessID: id, key: key, following: following) }
             },
+            markSidebar: { id, key, mark in
+                _ = try await hub.call { api, session in try await api.markSidebar(session, businessID: id, key: key, mark) }
+            },
             react: { scope, reaction in try await hub.call { api, session in try await api.react(session, scope, reaction) } },
             access: { scope in try await hub.call { api, session in try await api.access(session, scope) } },
             grant: { scope, capability, mode in
@@ -481,6 +497,8 @@ extension RuntimeClient {
             sendFile: { id, decision, file in
                 try await hub.call { api, session in try await api.sendFile(session, businessID: id, decisionID: decision, file) }
             },
+            uploadFile: { id, file in try await hub.call { api, session in try await api.uploadFile(session, businessID: id, file) } },
+            welcome: { id in try await hub.call { api, session in try await api.welcome(session, businessID: id) } },
             projects: { id in try await hub.call { api, session in try await api.projects(session, businessID: id) } },
             createProject: { id, project in try await hub.call { api, session in try await api.createProject(session, businessID: id, project) } },
             addToProject: { id, project, ref in
@@ -493,7 +511,6 @@ extension RuntimeClient {
             installApp: { id, app, install in
                 try await hub.call { api, session in try await api.installApp(session, businessID: id, appID: app, install: install) }
             },
-            pinApp: { id, app, pinned in try await hub.call { api, session in try await api.pinApp(session, businessID: id, appID: app, pinned: pinned) } },
             home: { id in try await hub.call { api, session in try await api.home(session, businessID: id) } },
             routines: { id in try await hub.call { api, session in try await api.routines(session, businessID: id) } },
             setRoutinePaused: { id, routine, paused in
@@ -507,6 +524,7 @@ extension RuntimeClient {
             addSecret: { id, secret in try await hub.call { api, session in try await api.addSecret(session, businessID: id, secret) } },
             removeSecret: { id, name in try await hub.call { api, session in try await api.removeSecret(session, businessID: id, name: name) } },
             searchApps: { id, query in try await hub.call { api, session in try await api.searchApps(session, businessID: id, query: query) } },
+            listedApps: { id in try await hub.call { api, session in try await api.listedApps(session, businessID: id) } },
             addApp: { id, app in try await hub.call { api, session in try await api.addApp(session, businessID: id, app: app) } },
             connectApp: { id, app in try await hub.call { api, session in try await api.connectApp(session, businessID: id, appID: app) } },
             appReview: { id, app in try await hub.call { api, session in try await api.appReview(session, businessID: id, appID: app) } },

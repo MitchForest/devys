@@ -297,24 +297,28 @@ export function useReference() {
 }
 
 /**
- * Sends the draft, marking it dictated if it was. The record the owner is looking at goes with
- * it as the message's ref, so "this" means what is on screen.
+ * Sends the draft, marking it dictated if it was. The record the owner attached, or else the one
+ * they are looking at, goes with it as the message's ref, so "this" means that record.
  */
 export function useSendDraft() {
   const main = useMain();
   const reference = useReference();
+  const attached = useUi((state) => state.attached);
   const voice = useVoiceActions();
   return () => {
     const current = draft.get(main.key);
     if (!current.text.trim()) return;
     voice.draftSent();
+    // What the owner attached with + goes first; otherwise what they are looking at.
+    const record = attached ?? reference;
     main.send(current.text, {
       viaVoice: current.voiced,
       speak: loadVoiceSettings().speaksReplies,
-      ...(reference ? { ref: reference } : {}),
+      ...(record ? { ref: record } : {}),
     });
     draft.set(main.key, "", false);
     ui.setReferencing(false);
+    ui.attach(undefined);
   };
 }
 

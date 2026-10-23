@@ -10,9 +10,6 @@ package enum Place: Hashable, Sendable {
 
     package enum Kind: String, CaseIterable, Hashable, Sendable {
         case home, direct, project, thread
-
-        /// Whether the right panel shows by default; the owner's choice is remembered.
-        package var panelByDefault: Bool { self == .project }
     }
 
     package var kind: Kind {
@@ -35,12 +32,11 @@ package enum Place: Hashable, Sendable {
     }
 }
 
-/// A temporary view stacked over the right panel's permanent view.
+/// A temporary view in the right panel, which opens only for one.
 package enum Layer: Hashable, Sendable {
     /// A page an employee published; `updatedBy` names who replaced it while it was open.
     case artifact(String, updatedBy: String? = nil)
     case file(String)
-    case app(String)
     case session(workID: String, sessionID: String)
     case browser(workID: String)
     /// A routine, read-only: what it does, when, and what its last run said.
@@ -68,8 +64,8 @@ extension Ref {
 }
 
 extension Layer {
-    /// The record a layer shows, as a ref: a page, a file or a coding session. An app's list
-    /// and the browser are not records.
+    /// The record a layer shows, as a ref: a page, a file or a coding session. The browser is
+    /// not a record.
     package var ref: Ref? {
         switch self {
         case .artifact(let id, _): .artifact(id)
@@ -77,7 +73,7 @@ extension Layer {
         case .session(_, let sessionID): .codeSession(sessionID)
         case .routine(let id): .workRoutine(id)
         case .remoteApp(let id): .teamApp(id)
-        case .app, .browser: nil
+        case .browser: nil
         }
     }
 

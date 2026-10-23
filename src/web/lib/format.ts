@@ -84,3 +84,15 @@ export function bytes(count: number) {
   }
   return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`;
 }
+
+/** A sidebar row's time, as Messages shows it: `2:21 PM`, `Yesterday`, `Tue` or `10/21/26`. */
+export function listTime(at: string | Date, now = new Date()) {
+  const date = new Date(at);
+  if (sameDay(date, now)) return clock(date);
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (sameDay(date, yesterday)) return "Yesterday";
+  if (now.getTime() - date.getTime() < 6 * day)
+    return date.toLocaleDateString(undefined, { weekday: "short" });
+  return date.toLocaleDateString(undefined, { month: "numeric", day: "numeric", year: "2-digit" });
+}

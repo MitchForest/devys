@@ -1,60 +1,29 @@
-import {
-  ChevronLeft,
-  CircleCheck,
-  FolderKanban,
-  House,
-  LayoutGrid,
-  PanelLeft,
-  PanelRight,
-  Users,
-  type LucideIcon,
-} from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   useBusiness,
   useBusinesses,
   useBusinessId,
-  useEmployees,
   useChiefOfStaff,
-  useOwnerPhoto,
-  usePerson,
-  usePlaceTitle,
   useWork,
 } from "../app/data.ts";
-import { useRefresh, useSignOut, useStop } from "../app/mutations.ts";
-import {
-  routeOf,
-  useCanGoBack,
-  useLayers,
-  useNav,
-  usePlace,
-  type Place,
-} from "../app/navigation.ts";
+import { useRefresh, useStop } from "../app/mutations.ts";
+import { useCanGoBack, useLayers, useNav, usePlace } from "../app/navigation.ts";
 import { ui, uiState, useUi } from "../app/ui.ts";
 import { useStatus, isRunning } from "../app/data.ts";
-import { PersonPortrait } from "../design/face.tsx";
-import { BusinessPortrait, EmployeePortrait } from "../design/portrait.tsx";
-import { hasPermanentView, RightPanel } from "../panel/panel.tsx";
+import { BusinessPortrait } from "../design/portrait.tsx";
+import { RightPanel } from "../panel/panel.tsx";
 import { ConversationPane } from "./conversation.tsx";
-import { PanelContext, usePanel } from "./panel-state.ts";
+import { ConnectAppsSheet } from "./connect-apps.tsx";
+import { PlacePill } from "./header.tsx";
 import { compactQuery, defaultPanel, layout, panelRange, sidebarWidth } from "./layout.ts";
-import { HireSheet, NewProjectDialog, NewWorkItemDialog } from "./dialogs.tsx";
+import { NewEmployeeSheet, NewProjectDialog, NewWorkItemDialog } from "./dialogs.tsx";
 import { CommandPalette } from "./palette.tsx";
 import { Settings } from "./settings.tsx";
-import { Sidebar, SidebarSections, useShownApps } from "./sidebar.tsx";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Sidebar } from "./sidebar.tsx";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { ToolbarIconButton } from "@/components/ui/button";
 
 function useWidth<T extends HTMLElement>() {
   const ref = useRef<T>(null);
@@ -90,21 +59,6 @@ const savedWidth = () => {
   }
 };
 
-/** The panel's state for a layout; `narrow`: it lies over the conversation. */
-function usePanelState(narrow: boolean) {
-  const place = usePlace();
-  const { layers } = useLayers();
-  const nav = useNav();
-  const hasPermanent = hasPermanentView(place);
-  const chosen = useUi((state) =>
-    narrow ? state.overlay : hasPermanentView(place) && state.panels[place.kind],
-  );
-  const layered = layers.length > 0;
-  const toggle = () =>
-    layered ? nav.closeLayers() : hasPermanentView(place) && ui.togglePermanent(place.kind, narrow);
-  return { open: layered || (hasPermanent && chosen), hasPermanent, toggle };
-}
-
 export function Shell() {
   const compact = useCompact();
   return (
@@ -112,86 +66,83 @@ export function Shell() {
       {compact ? <CompactShell /> : <RegularShell />}
       <CommandPalette />
       <Settings />
-      <HireSheet />
+      <NewEmployeeSheet />
       <NewProjectDialog />
       <NewWorkItemDialog />
+      <ConnectAppsSheet />
     </>
   );
 }
 
 /**
- * One gray frame (toolbar and business strip) around one rounded workspace: the sidebar, the
- * conversation in the middle, and the right panel showing what the conversation is about.
+ * The business strip and one rounded workspace: the sidebar, the conversation in the middle,
+ * and the right panel only while the owner looks at something (a layer).
  */
 function RegularShell() {
   const sidebarVisible = useUi((state) => state.sidebarVisible);
   const widened = useUi((state) => state.wide);
   const { layers } = useLayers();
+  const nav = useNav();
   const [ref, width] = useWidth<HTMLDivElement>();
   const [preferred, setPreferred] = useState(savedWidth);
-  const narrow = layout(width, sidebarVisible, true, false, preferred).overlay;
-  const panel = usePanelState(narrow);
-  const panelOpen = panel.open;
-  const wide = widened && layers.length > 0;
+  const panelOpen = layers.length > 0;
+  const wide = widened && panelOpen;
   const columns = layout(width, sidebarVisible, panelOpen, wide, preferred);
   const motion =
     "transition-[width,opacity] duration-300 ease-[cubic-bezier(.3,1.1,.4,1)] motion-reduce:duration-150";
   return (
-    <PanelContext.Provider value={panel}>
-      <Shortcuts togglePanel={panel.toggle} />
-      <div className="flex h-dvh flex-col bg-frame">
-        <Toolbar />
-        <div className="flex min-h-0 flex-1">
-          <BusinessStrip />
-          <div className="mr-2 mb-2 min-w-0 flex-1 overflow-hidden rounded-workspace border border-hairline bg-sheet shadow-resting">
-            <div ref={ref} className="relative flex h-full">
-              <div
-                className={cn("flex shrink-0 justify-end overflow-hidden bg-sheet-tint", motion)}
-                style={{ width: columns.sidebar }}
-              >
-                <div className="h-full shrink-0" style={{ width: sidebarWidth }}>
-                  <StableSidebar />
-                </div>
+    <>
+      <Shortcuts closePanel={nav.closeLayers} />
+      <div className="flex h-dvh bg-frame pt-2">
+        <BusinessStrip />
+        <div className="mr-2 mb-2 min-w-0 flex-1 overflow-hidden rounded-workspace border border-hairline bg-sheet shadow-resting">
+          <div ref={ref} className="relative flex h-full">
+            <div
+              className={cn("flex shrink-0 justify-end overflow-hidden bg-sheet-tint", motion)}
+              style={{ width: columns.sidebar }}
+            >
+              <div className="h-full shrink-0" style={{ width: sidebarWidth }}>
+                <StableSidebar />
               </div>
-              <div className={cn("shrink-0 bg-hairline", columns.sidebar ? "w-px" : "w-0")} />
-              <main
-                className={cn("relative min-w-0 shrink-0 overflow-hidden bg-sheet", motion)}
-                style={{ width: columns.conversation }}
-              >
-                <StableConversation />
-              </main>
-              <ResizeHandle
-                visible={columns.handle}
-                width={preferred}
-                onChange={(next) => {
-                  setPreferred(next);
-                  try {
-                    localStorage.setItem("panelWidth", String(next));
-                  } catch {
-                    // A remembered width is a convenience only.
-                  }
-                }}
-              />
-              <aside
-                className={cn(
-                  "shrink-0 overflow-hidden bg-sheet",
-                  motion,
-                  columns.overlay &&
-                    "absolute inset-y-0 right-0 z-10 border-l border-hairline shadow-raised",
-                )}
-                style={{ width: columns.panel }}
-                aria-label="Side panel"
-                aria-hidden={columns.panel === 0}
-              >
-                <div className="h-full" style={{ width: Math.max(columns.panel, panelRange[0]) }}>
-                  {panelOpen && <RightPanel />}
-                </div>
-              </aside>
             </div>
+            <div className={cn("shrink-0 bg-hairline", columns.sidebar ? "w-px" : "w-0")} />
+            <main
+              className={cn("relative min-w-0 shrink-0 overflow-hidden bg-sheet", motion)}
+              style={{ width: columns.conversation }}
+            >
+              <StableConversation />
+            </main>
+            <ResizeHandle
+              visible={columns.handle}
+              width={preferred}
+              onChange={(next) => {
+                setPreferred(next);
+                try {
+                  localStorage.setItem("panelWidth", String(next));
+                } catch {
+                  // A remembered width is a convenience only.
+                }
+              }}
+            />
+            <aside
+              className={cn(
+                "shrink-0 overflow-hidden bg-sheet",
+                motion,
+                columns.overlay &&
+                  "absolute inset-y-0 right-0 z-10 border-l border-hairline shadow-raised",
+              )}
+              style={{ width: columns.panel }}
+              aria-label="Side panel"
+              aria-hidden={columns.panel === 0}
+            >
+              <div className="h-full" style={{ width: Math.max(columns.panel, panelRange[0]) }}>
+                {panelOpen && <RightPanel />}
+              </div>
+            </aside>
           </div>
         </div>
       </div>
-    </PanelContext.Provider>
+    </>
   );
 }
 
@@ -260,73 +211,10 @@ function ResizeHandle({
   );
 }
 
-/**
- * The business, the place and, in a thread, the work item. Back returns from a thread to
- * where it was opened; the place's name shows or hides the right panel.
- */
-function Toolbar() {
-  const nav = useNav();
-  const sidebarVisible = useUi((state) => state.sidebarVisible);
-  const panel = usePanel();
-  const { layers } = useLayers();
-  const business = useBusiness();
-  const place = usePlace();
-  const canGoBack = useCanGoBack();
-  const trail = usePlaceTitle(place);
-  return (
-    <header className="flex h-[52px] shrink-0 items-center gap-1.5 pr-2.5 pl-[18px]">
-      <ToolbarIconButton
-        label={sidebarVisible ? "Hide sidebar (⌃⌘S)" : "Show sidebar (⌃⌘S)"}
-        onClick={ui.toggleSidebar}
-      >
-        <PanelLeft />
-      </ToolbarIconButton>
-      {canGoBack && (
-        <ToolbarIconButton label="Back (⌘[)" onClick={nav.back}>
-          <ChevronLeft />
-        </ToolbarIconButton>
-      )}
-      <nav
-        aria-label="Breadcrumb"
-        className="flex min-w-0 items-center gap-1.5 pl-1.5 text-control whitespace-nowrap"
-      >
-        <span className="text-ink-3">{business?.name}</span>
-        <span className="text-ink-3">/</span>
-        {trail.parent && business && (
-          <>
-            <Link
-              {...routeOf(business.id, trail.parent.place)}
-              onClick={ui.leftPlace}
-              className="truncate text-ink-2 hover:text-ink"
-            >
-              {trail.parent.title}
-            </Link>
-            <span className="text-ink-3">›</span>
-          </>
-        )}
-        <span className="truncate font-semibold text-ink" data-testid="place-title">
-          {trail.title}
-        </span>
-      </nav>
-      <span className="ml-auto" />
-      {(panel.hasPermanent || layers.length > 0) && (
-        <ToolbarIconButton
-          label={panel.open ? "Hide side panel (⌥⌘0)" : "Show side panel (⌥⌘0)"}
-          onClick={panel.toggle}
-        >
-          <PanelRight />
-        </ToolbarIconButton>
-      )}
-    </header>
-  );
-}
-
-/** Tiles that switch businesses, and the account at the bottom. */
+/** Tiles that switch businesses. */
 function BusinessStrip() {
   const businesses = useBusinesses();
   const businessId = useBusinessId();
-  const person = usePerson();
-  const photo = useOwnerPhoto();
   return (
     <nav
       aria-label="Businesses"
@@ -359,44 +247,7 @@ function BusinessStrip() {
           </Link>
         );
       })}
-      <span className="mt-auto" />
-      <AccountMenu side="right">
-        <PersonPortrait name={person?.display_name ?? ""} {...(photo ? { photo } : {})} size={30} />
-      </AccountMenu>
     </nav>
-  );
-}
-
-function AccountMenu({ side, children }: { side: "right" | "bottom"; children: React.ReactNode }) {
-  const person = usePerson();
-  const nav = useNav();
-  const signOut = useSignOut();
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger aria-label="Account" className="rounded-full">
-        {children}
-      </DropdownMenuTrigger>
-      <DropdownMenuContent side={side} align="end" className="w-auto min-w-48">
-        <DropdownMenuGroup>
-          {person && (
-            <DropdownMenuLabel className="text-control text-ink">
-              {person.display_name}
-            </DropdownMenuLabel>
-          )}
-          <DropdownMenuLabel className="text-detail font-normal text-ink-3">
-            {location.host}
-          </DropdownMenuLabel>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => nav.openSettings()}>Settings…</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => nav.openSettings("apps")}>
-          Apps & connections…
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => signOut.mutate()}>
-          Sign out of this device
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }
 
@@ -421,16 +272,16 @@ function useSpeaking() {
  * Hardware-keyboard shortcuts, as on macOS and iPad. The listener is attached once; it reads
  * what it needs when a key is pressed.
  */
-function Shortcuts({ togglePanel }: { togglePanel: () => void }) {
+function Shortcuts({ closePanel }: { closePanel: () => void }) {
   const nav = useNav();
   const refresh = useRefresh();
   const stop = useStop();
   const speaking = useSpeaking();
   const running = isRunning(useStatus(speaking).data);
   const { layers } = useLayers();
-  const latest = useRef({ togglePanel, refresh, stop, speaking, running, layered: false });
+  const latest = useRef({ closePanel, refresh, stop, speaking, running, layered: false });
   latest.current = {
-    togglePanel,
+    closePanel,
     refresh,
     stop,
     speaking,
@@ -458,9 +309,9 @@ function Shortcuts({ togglePanel }: { togglePanel: () => void }) {
       } else if (event.ctrlKey && event.key.toLowerCase() === "s") {
         event.preventDefault();
         ui.toggleSidebar();
-      } else if (event.altKey && event.code === "Digit0") {
+      } else if (event.altKey && event.code === "Digit0" && now.layered) {
         event.preventDefault();
-        now.togglePanel();
+        now.closePanel();
       } else if (event.key === "r" && !event.shiftKey && !event.altKey) {
         event.preventDefault();
         void now.refresh();
@@ -475,193 +326,70 @@ function Shortcuts({ togglePanel }: { togglePanel: () => void }) {
   return null;
 }
 
-type Tab = "home" | "projects" | "team" | "apps";
-const tabs: { value: Tab; title: string; icon: LucideIcon }[] = [
-  { value: "home", title: "Home", icon: House },
-  { value: "projects", title: "Projects", icon: FolderKanban },
-  { value: "team", title: "Team", icon: Users },
-  { value: "apps", title: "Apps", icon: LayoutGrid },
-];
-const tabOf = (place: Place): Tab =>
-  place.kind === "home" ? "home" : place.kind === "direct" ? "team" : "projects";
-
 /**
- * Phones, as native `CompactShell`: tabs of Home, Projects, Team and Apps. The conversation is
- * always full screen; the permanent view and layers open as sheets over it.
+ * Phones, as Messages on iPhone: the list of conversations, or one conversation full screen with
+ * Back to the list. The desk or project details and any layer open as sheets over it.
  */
 function CompactShell() {
   const nav = useNav();
   const business = useBusiness();
-  const businesses = useBusinesses();
-  const businessId = useBusinessId();
-  const chiefOfStaff = useChiefOfStaff();
   const place = usePlace();
   const { layers } = useLayers();
   const canGoBack = useCanGoBack();
-  const signOut = useSignOut();
-  const panel = usePanelState(true);
-  // A tab's list shows until the owner opens something from it.
-  const [list, setList] = useState<Tab | null>(null);
-  const [sheet, setSheet] = useState(false);
-  const selected = list ?? tabOf(place);
-  const shownApps = useShownApps();
-  const showsSheet = sheet || layers.length > 0;
-  const trail = usePlaceTitle(place);
+  // The list shows until the owner opens something from it.
+  const [list, setList] = useState(false);
   return (
-    <PanelContext.Provider value={panel}>
-      <Shortcuts togglePanel={panel.toggle} />
+    <>
+      <Shortcuts closePanel={nav.closeLayers} />
       <div className="flex h-dvh flex-col bg-sheet">
-        <header className="flex h-12 shrink-0 items-center gap-2 px-4 pt-[env(safe-area-inset-top)]">
-          {list === null && place.kind !== "home" ? (
-            <button
-              type="button"
-              aria-label="Back"
-              onClick={() => (canGoBack ? nav.back() : setList(tabOf(place)))}
-              className="-ml-1.5 flex items-center gap-0.5 text-control text-indigo"
-            >
-              <ChevronLeft className="size-5" />
-            </button>
+        <header className="relative flex h-12 shrink-0 items-center justify-center px-4 pt-[env(safe-area-inset-top)]">
+          {list ? (
+            <span className="flex items-center gap-2">
+              {business && <BusinessPortrait business={business} size={26} />}
+              <span className="text-heading font-semibold text-ink">{business?.name}</span>
+            </span>
           ) : (
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                className="flex items-center gap-2"
-                aria-label={`Switch business, currently ${business?.name ?? ""}`}
+            <>
+              <button
+                type="button"
+                aria-label="Back"
+                onClick={() => (canGoBack ? nav.back() : setList(true))}
+                className="absolute left-3 grid size-8 place-items-center rounded-full text-indigo"
               >
-                {business && <BusinessPortrait business={business} size={26} />}
-                <span className="text-heading font-semibold text-ink">{business?.name}</span>
-                <span className="text-[11px] text-ink-3">▾</span>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-auto min-w-56">
-                {businesses.map((b) => (
-                  <DropdownMenuItem key={b.id} onClick={() => nav.selectBusiness(b.id)}>
-                    {b.id === businessId ? <CircleCheck /> : <span className="w-4" />} {b.name}
-                  </DropdownMenuItem>
-                ))}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => ui.setProjectOpen(true)}>
-                  New project
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => ui.setHireOpen(true)}>Hire</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => nav.openSettings()}>Settings</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem variant="destructive" onClick={() => signOut.mutate()}>
-                  Sign out of this device
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-          {list === null && place.kind !== "home" && (
-            <button
-              type="button"
-              disabled={!hasPermanentView(place)}
-              onClick={() => setSheet(true)}
-              className="flex min-w-0 items-center gap-2 text-left"
-            >
-              {place.kind === "direct" && <PlaceFace employeeId={place.employeeId} />}
-              <span className="truncate text-heading font-semibold text-ink">{trail.title}</span>
-            </button>
-          )}
-          <span className="ml-auto" />
-          {list === null && hasPermanentView(place) && (
-            <button
-              type="button"
-              aria-label="Details"
-              onClick={() => setSheet(true)}
-              className="grid size-8 place-items-center rounded-full text-ink-2"
-            >
-              <PanelRight className="size-[18px]" />
-            </button>
-          )}
-          {list === null && place.kind === "home" && chiefOfStaff && (
-            <EmployeePortrait employee={chiefOfStaff} size={28} />
+                <ChevronLeft className="size-5" />
+              </button>
+              <PlacePill key={JSON.stringify(place)} place={place} />
+            </>
           )}
         </header>
-        <main className={cn("min-h-0 flex-1", list !== null && "overflow-y-auto px-2.5 pb-24")}>
-          {list === "apps" ? (
-            <CompactApps />
-          ) : list !== null ? (
-            <div onClickCapture={() => setTimeout(() => setList(null))}>
-              <SidebarSections only={list === "team" ? "team" : "projects"} />
+        <main
+          className={cn("min-h-0 flex-1", list && "bg-sheet-tint pb-[env(safe-area-inset-bottom)]")}
+        >
+          {list ? (
+            <div
+              className="h-full"
+              // Opening a conversation from the list shows it full screen.
+              onClickCapture={(event) => {
+                if ((event.target as Element).closest("a")) setTimeout(() => setList(false));
+              }}
+            >
+              <Sidebar compact />
             </div>
           ) : (
-            <StableConversation />
+            <ConversationPane header={false} />
           )}
         </main>
-        {(list !== null || place.kind === "home") && (
-          <nav
-            aria-label="Tabs"
-            className="mx-4 mb-[calc(12px+env(safe-area-inset-bottom))] flex h-[54px] shrink-0 items-center justify-around rounded-full border border-hairline bg-sheet/80 shadow-raised backdrop-blur-xl"
-          >
-            {tabs
-              .filter(({ value }) => value !== "apps" || shownApps.length > 0)
-              .map(({ value, title, icon: Icon }) => {
-                const active = value === selected;
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    aria-current={active ? "page" : undefined}
-                    onClick={() => {
-                      if (value !== "home") return setList(value);
-                      setList(null);
-                      nav.selectPlace({ kind: "home" });
-                    }}
-                    className={cn(
-                      "flex flex-col items-center gap-0.5 px-3 text-[10px] font-medium",
-                      active ? "text-indigo" : "text-ink-2",
-                    )}
-                  >
-                    <Icon className="size-5" strokeWidth={active ? 2.2 : 1.8} />
-                    {title}
-                  </button>
-                );
-              })}
-          </nav>
-        )}
-        <Sheet
-          open={showsSheet}
-          onOpenChange={(next) => {
-            if (next) return;
-            setSheet(false);
-            nav.closeLayers();
-          }}
-        >
+        <Sheet open={layers.length > 0} onOpenChange={(next) => !next && nav.closeLayers()}>
           <SheetContent
             side="bottom"
             className="rounded-t-sheet bg-sheet p-0 data-[side=bottom]:h-[92dvh]"
             showCloseButton={false}
           >
             <SheetTitle className="sr-only">Details</SheetTitle>
-            <RightPanel onClose={() => setSheet(false)} />
+            <RightPanel onClose={nav.closeLayers} />
           </SheetContent>
         </Sheet>
       </div>
-    </PanelContext.Provider>
-  );
-}
-
-function PlaceFace({ employeeId }: { employeeId: string }) {
-  const employee = useEmployees().find((e) => e.id === employeeId);
-  return employee ? <EmployeePortrait employee={employee} size={26} /> : null;
-}
-
-/** The phone's Apps tab: the sidebar's apps, each opening as a sheet over the conversation. */
-function CompactApps() {
-  const apps = useShownApps();
-  const nav = useNav();
-  return (
-    <div className="flex flex-col gap-0.5 pt-2">
-      {apps.map((app) => (
-        <button
-          key={app.id}
-          type="button"
-          onClick={() => nav.openLayer({ kind: "app", app: app.id })}
-          className="flex items-center gap-3 rounded-control px-2.5 py-2.5 text-left text-control text-ink hover:bg-sheet-tint"
-        >
-          <span className="font-medium">{app.name}</span>
-          <span className="truncate text-detail text-ink-3">{app.summary}</span>
-        </button>
-      ))}
-    </div>
+    </>
   );
 }

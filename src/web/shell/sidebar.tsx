@@ -1,406 +1,550 @@
-import { tints } from "../../identity/contract.ts";
 import {
-  Code2,
-  FileText,
+  CirclePause,
+  CirclePlay,
+  EyeOff,
   LayoutGrid,
-  ListChecks,
+  MessageCircle,
+  MoreHorizontal,
+  PanelLeft,
+  Pencil,
+  Pin,
+  PinOff,
   Plus,
   Search,
+  Star,
+  UserMinus,
   UserPlus,
   type LucideIcon,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState } from "react";
+import { tints } from "../../identity/contract.ts";
 import type { Employee } from "../../identity/contract.ts";
-import type { WorkItem } from "../../work/contract.ts";
 import {
-  useApps,
-  useBusiness,
-  useDecisions,
-  useEmployees,
-  useFollowed,
-  useHome,
   useChiefOfStaff,
-  useProjects,
-  useUnread,
-  useWork,
+  useDecisions,
+  useHome,
+  useOwnerPhoto,
+  usePerson,
+  useSidebar,
+  type SidebarRow,
 } from "../app/data.ts";
-import {
-  samePlace,
-  useLayers,
-  useNav,
-  usePlace,
-  type Layer,
-  type Place,
-} from "../app/navigation.ts";
+import { useSetProfile, useSidebarMark, useTogglePause } from "../app/mutations.ts";
+import { conversationOf, useNav, usePlace } from "../app/navigation.ts";
+import { templateTitle } from "../app/names.ts";
 import { ui } from "../app/ui.ts";
-import { useMood, useWorking } from "../app/workspace.tsx";
-import { PlaceLink, ThreadLink } from "./links.tsx";
-import { BusinessTile } from "../design/face.tsx";
+import { useMood } from "../app/workspace.tsx";
+import { BusinessTile, PersonPortrait } from "../design/face.tsx";
 import { EmployeePortrait } from "../design/portrait.tsx";
-import { AppLogo } from "../panel/layers/team-app.tsx";
-import { ref } from "../../protocol/ref.ts";
+import { RetireDialog } from "../panel/desk.tsx";
+import { listTime } from "../lib/format.ts";
+import { PlaceLink } from "./links.tsx";
+import { ConnectAppsButton } from "./connect-apps.tsx";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 /** A project's tile color, from its place in the list, the same everywhere it shows. */
-const projectTint = (index: number) => tints[(index + 1) % tints.length]!;
-/** The icon an app names in its manifest. */
-const appIcons: Record<string, LucideIcon> = {
-  documents: FileText,
-  code: Code2,
-};
-
-type Trailing = "none" | "working" | "needsYou" | "paused";
+export const projectTint = (index: number) => tints[(index + 1) % tints.length]!;
 
 /**
- * One sidebar: Home, Projects, Team and the business's apps. Each row but an app opens a
- * conversation; an app opens as a layer beside the conversation on screen.
+ * The sidebar, as Messages lays one out: pinned tiles, then Projects (only while there are
+ * any), then Chats with everyone else, most recent first. At the bottom, the owner (Settings)
+ * and Connect apps. On a phone it is the list a conversation goes back to.
  */
-export function Sidebar() {
-  const business = useBusiness();
+export function Sidebar({ compact = false }: { compact?: boolean }) {
   return (
-    <nav aria-label="Sidebar" className="h-full overflow-y-auto px-2.5 pb-4 [scrollbar-width:none]">
-      <div className="flex items-center gap-1 px-1 pt-2.5 pb-2">
-        <h2 className="min-w-0 flex-1 truncate px-1.5 text-heading font-semibold text-ink">
-          {business?.name}
-        </h2>
-        <button
-          type="button"
-          aria-label="Search"
-          title="Search (⌘K)"
-          onClick={() => ui.setPaletteOpen(true)}
-          className="grid size-7 place-items-center rounded-small text-ink-2 hover:bg-track hover:text-ink"
-        >
-          <Search className="size-[15px]" strokeWidth={2} />
-        </button>
+    <nav aria-label="Sidebar" className="flex h-full flex-col">
+      <div className="flex items-center gap-1 px-3 pt-2.5 pb-1.5">
+        {!compact && (
+          <SidebarButton label="Hide sidebar (⌃⌘S)" onClick={ui.toggleSidebar}>
+            <PanelLeft className="size-[15px]" />
+          </SidebarButton>
+        )}
+        <span className="ml-auto" />
+        <SidebarButton label="Search (⌘K)" onClick={() => ui.setPaletteOpen(true)}>
+          <Search className="size-[15px]" strokeWidth={2.1} />
+        </SidebarButton>
         <NewMenu />
       </div>
-      <SidebarSections />
+      <div className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-3 [scrollbar-width:none]">
+        <SidebarList />
+      </div>
+      <SidebarFooter />
     </nav>
   );
 }
 
-/** **New**: a project, a hire or a work item. A message needs nothing: the composer is always there. */
+function SidebarButton({
+  label,
+  children,
+  ...props
+}: React.ComponentProps<"button"> & { label: string }) {
+  return (
+    <button
+      type="button"
+      aria-label={label.replace(/ \(.*\)$/, "")}
+      title={label}
+      className="grid size-8 place-items-center rounded-full bg-sheet text-ink-2 shadow-resting transition hover:text-ink"
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** **+**: a new employee or a new project. A message needs nothing: the composer is there. */
 function NewMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label="New"
         title="New"
-        className="grid size-7 place-items-center rounded-small text-ink-2 hover:bg-track hover:text-ink"
+        className="grid size-8 place-items-center rounded-full bg-sheet text-ink-2 shadow-resting transition hover:text-ink"
       >
-        <Plus className="size-4" strokeWidth={2} />
+        <Plus className="size-4" strokeWidth={2.1} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-auto min-w-44">
+        <DropdownMenuItem onClick={() => ui.setHireOpen(true)}>
+          <UserPlus /> New employee
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={() => ui.setProjectOpen(true)}>
           <LayoutGrid /> New project
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => ui.newWorkItem()}>
-          <ListChecks /> New work item
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => ui.setHireOpen(true)}>
-          <UserPlus /> Hire
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
 
-/** The apps the sidebar lists: installed ones that have something, pinned by the owner. */
-export const useShownApps = () => (useApps().data ?? []).filter((app) => app.visible && app.pinned);
+/** The owner's face (Settings) and Connect apps. */
+function SidebarFooter() {
+  const nav = useNav();
+  const person = usePerson();
+  const photo = useOwnerPhoto();
+  return (
+    <div className="flex shrink-0 items-center gap-2.5 px-3 pt-1.5 pb-3">
+      <button
+        type="button"
+        aria-label="Settings"
+        title="Settings"
+        onClick={() => nav.openSettings()}
+        className="shrink-0 rounded-full transition hover:opacity-85"
+      >
+        <PersonPortrait name={person?.display_name ?? ""} {...(photo ? { photo } : {})} size={34} />
+      </button>
+      <ConnectAppsButton />
+    </div>
+  );
+}
 
-/**
- * The sections, also the phone's lists: the sidebar shows all of them; a phone tab shows one
- * (`only`). Headings appear only when they have rows.
- */
-export function SidebarSections({ only }: { only?: "projects" | "team" }) {
-  const employees = useEmployees();
-  const chiefOfStaff = useChiefOfStaff();
-  const projects = useProjects().data ?? [];
-  const needsYou = useHome().data?.needs_you.length ?? 0;
-  const homeUnread = useUnread(chiefOfStaff ? `direct:${chiefOfStaff.id}` : undefined);
-  const threads = useNestedThreads();
-  const shownApps = useShownApps();
-  const all = only === undefined;
+/** Tiles, Projects and Chats: the sidebar's body. */
+function SidebarList() {
+  const { pinned, projects, chats } = useSidebar();
   return (
     <div className="flex flex-col gap-0.5">
-      {(all || only === "team") && (
-        <SectionLabel action={{ label: "Hire", run: () => ui.setHireOpen(true) }}>
-          Team
-        </SectionLabel>
+      {pinned.length > 0 && <Tiles rows={pinned} />}
+      {projects.length > 0 && <SectionLabel>Projects</SectionLabel>}
+      {projects.map((row) => (
+        <ChatRow key={row.key} row={row} />
+      ))}
+      {chats.length > 0 && (pinned.length > 0 || projects.length > 0) && (
+        <SectionLabel>Chats</SectionLabel>
       )}
-      {/* The Chief of Staff leads the team: their chat is Home, where the workspace opens. */}
-      {(all || only === "team") && chiefOfStaff && (
-        <HomeRow chiefOfStaff={chiefOfStaff} count={needsYou} unread={homeUnread} />
-      )}
-      {all && threads(null).map((item) => <ThreadRow key={item.id} item={item} />)}
-      {(all || only === "team") &&
-        employees
-          .filter((employee) => employee.id !== chiefOfStaff?.id)
-          .map((employee) => <TeamRow key={employee.id} employee={employee} />)}
-      {(all || only === "projects") && projects.length > 0 && (
-        <SectionLabel action={{ label: "New project", run: () => ui.setProjectOpen(true) }}>
-          Projects
-        </SectionLabel>
-      )}
-      {(all || only === "projects") &&
-        projects.map((project, index) => (
-          <div key={project.id} className="flex flex-col gap-0.5">
-            <PlaceRow place={{ kind: "project", id: project.id }} title={project.name}>
-              <BusinessTile name={project.name} tint={projectTint(index)} size={20} />
-            </PlaceRow>
-            {threads(project.id).map((item) => (
-              <ThreadRow key={item.id} item={item} />
-            ))}
-          </div>
-        ))}
-      {all && shownApps.length > 0 && <SectionLabel>Apps</SectionLabel>}
-      {all &&
-        shownApps.map((app) =>
-          app.state ? (
-            // A remote app: its logo, and its card as a layer.
-            <LayerRow
-              key={app.id}
-              layer={{ kind: "record", ref: ref("team", "app", app.id) }}
-              title={app.name}
-              icon={LayoutGrid}
-              logo={<AppLogo logo={app.logo} name={app.name} size={18} />}
-            />
-          ) : (
-            <LayerRow
-              key={app.id}
-              layer={{ kind: "app", app: app.id }}
-              title={app.name}
-              icon={appIcons[app.id] ?? LayoutGrid}
-            />
-          ),
+      {chats.map((row) => (
+        <ChatRow key={row.key} row={row} />
+      ))}
+    </div>
+  );
+}
+
+function SectionLabel({ children }: { children: string }) {
+  return <h3 className="px-2.5 pt-3 pb-1 text-label font-medium text-ink-3">{children}</h3>;
+}
+
+/** Whether the row's conversation is the one on screen. */
+function useSelected(row: SidebarRow) {
+  const place = usePlace();
+  const chiefOfStaff = useChiefOfStaff();
+  return conversationOf(place, chiefOfStaff?.id) === row.key;
+}
+
+/** What waits on the owner from this row: everything for the Chief of Staff (Home), else theirs. */
+function useWaiting(row: SidebarRow) {
+  const decisions = useDecisions().data ?? [];
+  const all = useHome().data?.needs_you.length ?? 0;
+  if (row.kind !== "employee") return 0;
+  return row.place.kind === "home"
+    ? all
+    : decisions.filter((d) => d.employee_id === row.employee.id).length;
+}
+
+const labelOf = (row: SidebarRow, waiting: number) =>
+  waiting
+    ? `${row.title}, ${waiting}`
+    : row.unread
+      ? `${row.title}, ${row.unread} unread`
+      : row.title;
+
+/** Pinned conversations as tiles: a big face (or project tile) and the name under it. */
+function Tiles({ rows }: { rows: readonly SidebarRow[] }) {
+  const columns = Math.min(rows.length, 3);
+  const size = columns === 1 ? 88 : columns === 2 ? 64 : 52;
+  return (
+    <div
+      data-testid="pinned"
+      className="grid gap-1.5 pb-1"
+      style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+    >
+      {rows.map((row) => (
+        <Tile key={row.key} row={row} size={size} />
+      ))}
+    </div>
+  );
+}
+
+function Tile({ row, size }: { row: SidebarRow; size: number }) {
+  const selected = useSelected(row);
+  const waiting = useWaiting(row);
+  return (
+    <RowMenus row={row}>
+      <PlaceLink
+        place={row.place}
+        aria-label={labelOf(row, waiting)}
+        aria-current={selected ? "page" : undefined}
+        className={cn(
+          "relative flex flex-col items-center gap-1.5 rounded-card px-1.5 pt-3 pb-2 transition-[background-color,box-shadow] duration-200",
+          selected ? "bg-sheet shadow-resting" : "hover:bg-sheet/60",
         )}
-    </div>
-  );
-}
-
-/**
- * Threads the owner follows or that need the owner, under their project (or under Home when
- * they have none). Everything else stays in its channel.
- */
-function useNestedThreads() {
-  const work = useWork().data;
-  const followed = useFollowed();
-  const decisions = useDecisions().data;
-  const waiting = new Set((decisions ?? []).map((d) => d.work_item_id));
-  const shown = (work ?? []).filter(
-    (item) =>
-      item.state !== "completed" &&
-      item.state !== "cancelled" &&
-      (followed.includes(item.id) || item.state === "needs_decision" || waiting.has(item.id)),
-  );
-  return (project: string | null) => shown.filter((item) => item.project_id === project);
-}
-
-/** Home's row: the Chief of Staff's face and name, what waits on the owner, and unread. */
-function HomeRow({
-  chiefOfStaff,
-  count,
-  unread,
-}: {
-  chiefOfStaff: Employee;
-  count: number;
-  unread: number;
-}) {
-  const working = useWorking(chiefOfStaff.id);
-  const mood = useMood(chiefOfStaff);
-  return (
-    <PlaceRow
-      place={{ kind: "home" }}
-      title={chiefOfStaff.name}
-      count={count}
-      unread={unread}
-      trailing={chiefOfStaff.paused ? "paused" : working && !count ? "working" : "none"}
-    >
-      <EmployeePortrait employee={chiefOfStaff} size={20} mood={mood} />
-    </PlaceRow>
-  );
-}
-
-/** An employee's row: their face, and whether they are working, paused or waiting on you. */
-function TeamRow({ employee }: { employee: Employee }) {
-  const working = useWorking(employee.id);
-  const mood = useMood(employee);
-  const asks = (useDecisions().data ?? []).some((d) => d.employee_id === employee.id);
-  const trailing: Trailing = employee.paused
-    ? "paused"
-    : working
-      ? "working"
-      : asks
-        ? "needsYou"
-        : "none";
-  return (
-    <PlaceRow
-      place={{ kind: "direct", employeeId: employee.id }}
-      title={employee.name}
-      trailing={trailing}
-    >
-      <EmployeePortrait employee={employee} size={20} mood={mood} />
-    </PlaceRow>
-  );
-}
-
-function SectionLabel({
-  children,
-  action,
-}: {
-  children: ReactNode;
-  action?: { label: string; run: () => void };
-}) {
-  return (
-    <div className="group/label flex items-center">
-      <h3 className="px-2.5 pt-3.5 pb-1 text-label font-medium text-ink-3">{children}</h3>
-      {action && (
-        <button
-          type="button"
-          aria-label={action.label}
-          title={action.label}
-          onClick={action.run}
-          className="mr-2 ml-auto grid place-items-center pt-2.5 text-ink-3 opacity-0 transition-opacity group-hover/label:opacity-100 hover:text-ink-2 focus-visible:opacity-100"
-        >
-          <Plus className="size-3.5" />
-        </button>
-      )}
-    </div>
-  );
-}
-
-const rowClass = (selected: boolean, unread: boolean) =>
-  cn(
-    "flex w-full items-center gap-2.5 rounded-small px-2.5 py-[7px] text-left text-control transition-[color,background-color,box-shadow] duration-200",
-    selected ? "bg-sheet text-ink shadow-resting" : "text-ink-2 hover:text-ink",
-    unread && !selected && "font-semibold text-ink",
-  );
-
-function PlaceRow({
-  place,
-  title,
-  icon: Icon,
-  count = 0,
-  unread: given,
-  trailing = "none",
-  children,
-}: {
-  place: Place;
-  title: string;
-  icon?: LucideIcon;
-  /** Things waiting on the owner: an amber count. */
-  count?: number;
-  /** Messages the owner hasn't read: a filled badge. */
-  unread?: number;
-  trailing?: Trailing;
-  children?: ReactNode;
-}) {
-  const current = usePlace();
-  const selected = samePlace(current, place);
-  const own = useUnread(
-    place.kind === "project"
-      ? `project:${place.id}`
-      : place.kind === "direct"
-        ? `direct:${place.employeeId}`
-        : undefined,
-  );
-  const unread = given ?? own;
-  return (
-    <PlaceLink
-      place={place}
-      aria-label={unread ? `${title}, ${unread} unread` : count ? `${title}, ${count}` : title}
-      aria-current={selected ? "page" : undefined}
-      className={rowClass(selected, unread > 0)}
-    >
-      {Icon ? <Icon className="size-[15px] w-5 shrink-0" strokeWidth={1.9} /> : children}
-      <span className="truncate">{title}</span>
-      <span className="ml-auto" />
-      {trailing === "working" && (
-        <span className="size-1.5 shrink-0 rounded-full bg-indigo" aria-label="working" />
-      )}
-      {trailing === "needsYou" && (
-        <span className="size-1.5 shrink-0 rounded-full bg-amber" aria-label="needs you" />
-      )}
-      {trailing === "paused" && <span className="text-caption text-ink-3">Paused</span>}
-      {count > 0 && (
-        <span className="grid h-[17px] min-w-[17px] shrink-0 place-items-center rounded-full bg-amber px-1 text-[10.5px] font-bold text-white tabular-nums">
-          {count}
+      >
+        <span className="relative">
+          <RowFace row={row} size={size} />
+          {row.kind === "employee" && row.place.kind === "home" && <StarBadge size={size} />}
         </span>
-      )}
-      {unread > 0 && <UnreadBadge count={unread} />}
-    </PlaceLink>
+        <span
+          className={cn(
+            "max-w-full truncate text-detail text-ink",
+            (row.unread > 0 || waiting > 0) && "font-semibold",
+          )}
+        >
+          {row.title}
+        </span>
+        <Mark unread={row.unread} waiting={waiting} className="absolute top-2 left-2" />
+      </PlaceLink>
+    </RowMenus>
   );
 }
 
-function UnreadBadge({ count }: { count: number }) {
+/** The Chief of Staff's mark: a small orange star at the face's corner. */
+function StarBadge({ size }: { size: number }) {
+  const badge = Math.max(16, Math.round(size * 0.26));
   return (
     <span
-      data-testid="unread"
-      className="grid h-[17px] min-w-[17px] shrink-0 place-items-center rounded-full bg-indigo px-1 text-[10.5px] font-bold text-white tabular-nums"
+      aria-hidden
+      data-testid="star"
+      className="absolute grid place-items-center rounded-full bg-sheet shadow-resting"
+      style={{ width: badge, height: badge, right: -badge * 0.15, bottom: -badge * 0.15 }}
     >
-      {count}
+      <Star
+        className="fill-[#f59a58] text-[#f59a58]"
+        style={{ width: badge * 0.62, height: badge * 0.62 }}
+      />
     </span>
   );
 }
 
-/** A thread nested under its project: indented, opening the thread. */
-function ThreadRow({ item }: { item: WorkItem }) {
-  const place = usePlace();
-  const selected = place.kind === "thread" && place.workId === item.id;
-  const unread = useUnread(`work:${item.id}`);
-  return (
-    <ThreadLink
-      workId={item.id}
-      aria-label={unread ? `${item.title}, ${unread} unread` : item.title}
-      aria-current={selected ? "page" : undefined}
-      className={cn(rowClass(selected, unread > 0), "py-[5px] pl-[38px]")}
+/** A row's face: the employee's, with their mood, or the project's tile. */
+function RowFace({ row, size }: { row: SidebarRow; size: number }) {
+  return row.kind === "employee" ? (
+    <EmployeeFace employee={row.employee} size={size} />
+  ) : (
+    <span
+      className="grid place-items-center rounded-[30%] bg-sheet"
+      style={{ width: size, height: size }}
     >
-      <span className="truncate text-detail">{item.title}</span>
-      <span className="ml-auto" />
-      {item.state === "needs_decision" && (
-        <span className="size-1.5 shrink-0 rounded-full bg-amber" aria-label="needs you" />
-      )}
-      {unread > 0 && <UnreadBadge count={unread} />}
-    </ThreadLink>
+      <BusinessTile name={row.title} tint={projectTint(row.index)} size={size} />
+    </span>
   );
 }
 
-/** An app: opens its records as a layer beside the conversation. */
-function LayerRow({
-  layer,
-  title,
-  icon: Icon,
-  logo,
-}: {
-  layer: Layer;
-  title: string;
-  icon: LucideIcon;
-  logo?: ReactNode;
-}) {
-  const { top } = useLayers();
-  const nav = useNav();
-  const selected =
-    (top?.kind === "app" && layer.kind === "app" && top.app === layer.app) ||
-    (top?.kind === "record" && layer.kind === "record" && top.ref === layer.ref);
+function EmployeeFace({ employee, size }: { employee: Employee; size: number }) {
+  const mood = useMood(employee);
   return (
-    <button
-      type="button"
-      aria-current={selected ? "true" : undefined}
-      onClick={() => (selected ? nav.closeLayers() : nav.openLayer(layer))}
-      className={rowClass(selected, false)}
-    >
-      {logo ? (
-        <span className="grid w-5 shrink-0 place-items-center">{logo}</span>
-      ) : (
-        <Icon className="size-[15px] w-5 shrink-0" strokeWidth={1.9} />
+    <EmployeePortrait employee={employee} size={size} mood={employee.paused ? "asleep" : mood} />
+  );
+}
+
+/** Unread is a blue dot; something waiting on the owner an amber count. */
+function Mark({
+  unread,
+  waiting,
+  className,
+}: {
+  unread: number;
+  waiting: number;
+  className?: string;
+}) {
+  if (waiting)
+    return (
+      <span
+        className={cn(
+          "grid h-[17px] min-w-[17px] shrink-0 place-items-center rounded-full bg-amber px-1 text-[10.5px] font-bold text-white tabular-nums",
+          className,
+        )}
+      >
+        {waiting}
+      </span>
+    );
+  if (unread)
+    return (
+      <span
+        data-testid="unread"
+        className={cn("size-2.5 shrink-0 rounded-full bg-indigo", className)}
+      />
+    );
+  return null;
+}
+
+/** Markdown's marks and links, reduced to the words a one-line preview shows. */
+const plain = (text: string) =>
+  text
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/[*_`#>]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+/** One conversation: face, name, time, its last line and an unread dot, as in Messages. */
+function ChatRow({ row }: { row: SidebarRow }) {
+  const selected = useSelected(row);
+  const waiting = useWaiting(row);
+  const person = usePerson();
+  const bold = row.unread > 0 || waiting > 0;
+  const preview =
+    row.kind === "employee" && row.employee.paused
+      ? "Paused"
+      : row.last
+        ? `${row.last.author === `person:${person?.id}` ? "You: " : ""}${plain(row.last.text)}`
+        : row.kind === "employee" && templateTitle(row.employee.template) !== row.title
+          ? templateTitle(row.employee.template)
+          : "";
+  return (
+    <RowMenus row={row}>
+      <PlaceLink
+        place={row.place}
+        aria-label={labelOf(row, waiting)}
+        aria-current={selected ? "page" : undefined}
+        className={cn(
+          "flex w-full items-center gap-2.5 rounded-card px-2 py-[7px] text-left transition-[background-color,box-shadow] duration-200",
+          selected ? "bg-sheet shadow-resting" : "hover:bg-sheet/60",
+        )}
+      >
+        <RowFace row={row} size={40} />
+        <span className="flex min-w-0 flex-1 flex-col gap-px">
+          <span className="flex items-baseline gap-2">
+            <span
+              className={cn(
+                "truncate text-control text-ink",
+                bold ? "font-semibold" : "font-medium",
+              )}
+            >
+              {row.title}
+            </span>
+            {row.last && (
+              <span className="ml-auto shrink-0 text-caption text-ink-3 group-hover/row:invisible">
+                {listTime(row.last.created_at)}
+              </span>
+            )}
+          </span>
+          <span className="flex items-center gap-2">
+            <span className={cn("truncate text-detail", bold ? "text-ink-2" : "text-ink-3")}>
+              {preview}
+            </span>
+            <Mark unread={row.unread} waiting={waiting} className="ml-auto" />
+          </span>
+        </span>
+      </PlaceLink>
+    </RowMenus>
+  );
+}
+
+interface RowAction {
+  label: string;
+  icon: LucideIcon;
+  run: () => void;
+  destructive?: boolean;
+}
+
+/** A row's actions: Pin, Mark as unread, Rename, Pause, Hide from sidebar, and Retire. */
+function useRowActions(row: SidebarRow, open: (dialog: "rename" | "retire") => void) {
+  const mark = useSidebarMark();
+  const togglePause = useTogglePause();
+  const actions: RowAction[][] = [
+    [
+      row.pinned
+        ? {
+            label: "Unpin",
+            icon: PinOff,
+            run: () => mark.mutate({ key: row.key, mark: { pinned: false } }),
+          }
+        : {
+            label: "Pin",
+            icon: Pin,
+            run: () => mark.mutate({ key: row.key, mark: { pinned: true } }),
+          },
+      ...(row.unread === 0
+        ? [
+            {
+              label: "Mark as unread",
+              icon: MessageCircle,
+              run: () => mark.mutate({ key: row.key, mark: { unread: true } }),
+            },
+          ]
+        : []),
+      ...(row.kind === "employee"
+        ? [
+            { label: "Rename…", icon: Pencil, run: () => open("rename") },
+            row.employee.paused
+              ? {
+                  label: "Resume",
+                  icon: CirclePlay,
+                  run: () => togglePause.mutate(row.employee),
+                }
+              : {
+                  label: "Pause",
+                  icon: CirclePause,
+                  run: () => togglePause.mutate(row.employee),
+                },
+          ]
+        : []),
+      {
+        label: "Hide from sidebar",
+        icon: EyeOff,
+        run: () => mark.mutate({ key: row.key, mark: { hidden: true } }),
+      },
+    ],
+    // The Chief of Staff stays; anyone else can be retired.
+    row.kind === "employee" && row.place.kind !== "home"
+      ? [{ label: "Retire…", icon: UserMinus, run: () => open("retire"), destructive: true }]
+      : [],
+  ];
+  return actions.filter((group) => group.length > 0);
+}
+
+/** The same actions on right-click and behind the hover "…" button. */
+function RowMenus({ row, children }: { row: SidebarRow; children: React.ReactNode }) {
+  const [dialog, setDialog] = useState<"rename" | "retire">();
+  const groups = useRowActions(row, setDialog);
+  return (
+    <div className="group/row relative">
+      <ContextMenu>
+        <ContextMenuTrigger render={<div />}>{children}</ContextMenuTrigger>
+        <ContextMenuContent className="min-w-48">
+          {groups.map((group, index) => (
+            <div key={index}>
+              {index > 0 && <ContextMenuSeparator />}
+              {group.map((action) => (
+                <ContextMenuItem
+                  key={action.label}
+                  onClick={action.run}
+                  {...(action.destructive ? { variant: "destructive" as const } : {})}
+                >
+                  <action.icon /> {action.label}
+                </ContextMenuItem>
+              ))}
+            </div>
+          ))}
+        </ContextMenuContent>
+      </ContextMenu>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          aria-label={`More for ${row.title}`}
+          className="absolute top-1.5 right-1.5 grid size-6 place-items-center rounded-full bg-sheet text-ink-2 opacity-0 shadow-resting transition-opacity group-hover/row:opacity-100 hover:text-ink focus-visible:opacity-100 data-[popup-open]:opacity-100"
+        >
+          <MoreHorizontal className="size-3.5" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-auto min-w-48">
+          {groups.map((group, index) => (
+            <div key={index}>
+              {index > 0 && <DropdownMenuSeparator />}
+              {group.map((action) => (
+                <DropdownMenuItem
+                  key={action.label}
+                  onClick={action.run}
+                  {...(action.destructive ? { variant: "destructive" as const } : {})}
+                >
+                  <action.icon /> {action.label}
+                </DropdownMenuItem>
+              ))}
+            </div>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {row.kind === "employee" && dialog === "rename" && (
+        <RenameDialog employee={row.employee} close={() => setDialog(undefined)} />
       )}
-      <span className="truncate">{title}</span>
-    </button>
+      {row.kind === "employee" && (
+        <RetireDialog
+          employee={row.employee}
+          open={dialog === "retire"}
+          onOpenChange={(open) => setDialog(open ? "retire" : undefined)}
+        />
+      )}
+    </div>
+  );
+}
+
+function RenameDialog({ employee, close }: { employee: Employee; close: () => void }) {
+  const setProfile = useSetProfile();
+  const [name, setName] = useState(employee.name);
+  return (
+    <Dialog open onOpenChange={(open) => !open && close()}>
+      <DialogContent
+        showCloseButton={false}
+        className="w-[360px] max-w-[calc(100%-2rem)] gap-0 rounded-card! bg-sheet p-0 shadow-raised sm:max-w-[360px]"
+      >
+        <form
+          className="flex flex-col gap-4 p-5"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const next = name.trim();
+            if (next && next !== employee.name)
+              setProfile.mutate({ employee, change: { name: next } });
+            close();
+          }}
+        >
+          <DialogTitle className="text-heading font-semibold text-ink">
+            Rename {employee.name}
+          </DialogTitle>
+          <Input
+            autoFocus
+            aria-label="Name"
+            value={name}
+            maxLength={80}
+            onChange={(event) => setName(event.target.value)}
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="quiet" onClick={close}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={!name.trim()} className="bg-ink! text-sheet!">
+              Rename
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

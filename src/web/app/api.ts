@@ -6,7 +6,6 @@
  */
 import { Schema } from "effect";
 import type { Ref } from "../../protocol/ref.ts";
-import type { RoleTemplateId } from "../../protocol/roles.ts";
 import { Transcript, WorkingDiff } from "../../apps/code/contract.ts";
 import type { RemotePolicy } from "../../apps/contract.ts";
 import { Grant } from "../../authority/contract.ts";
@@ -42,6 +41,7 @@ import {
   AppReview,
   Apps,
   AppSearch,
+  AppsListed,
   Connecting,
   BusinessCreated,
   BusinessDetail,
@@ -50,7 +50,6 @@ import {
   Closed,
   CodedWork,
   CodingSessions,
-  CodingStarted,
   ConversationPage,
   Conversations,
   DrivePicker,
@@ -73,6 +72,7 @@ import {
   Routines,
   Retired,
   Secrets,
+  SidebarMark,
   Revoked,
   Roles,
   RuntimeStatus,
@@ -80,13 +80,13 @@ import {
   Stopped,
   Terminals,
   TextConflict,
+  Uploaded,
+  Welcomed,
   WorkItems,
   type FileComments,
   type TextSave,
 } from "../../app/wire.ts";
 
-/** The templates a new business can start its team with, beside the Chief of Staff. */
-export type StartingRole = Exclude<RoleTemplateId, "chief-of-staff" | "custom">;
 interface OutgoingMessage {
   /** The sender's own id, so a retried post is stored once. */
   id: string;
@@ -96,14 +96,6 @@ interface OutgoingMessage {
   via_voice?: boolean;
   /** The record the owner is viewing beside the conversation. */
   ref?: Ref;
-}
-export interface NewCodingSession {
-  client_id: string;
-  employee: string;
-  provider: "codex" | "claude";
-  objective: string;
-  repository?: string;
-  new_repository?: string;
 }
 
 export class ApiError extends Error {
@@ -193,8 +185,10 @@ export const api = {
   logout: () => send("/api/logout", { method: "POST", body: "{}" }),
   me: () => get(Me, "/api/me"),
   rename: (displayName: string) => put(Me, "/api/me", { display_name: displayName }),
-  createBusiness: (input: { name: string; brief: string; team: StartingRole[] }) =>
+  createBusiness: (input: { name: string; brief: string }) =>
     post(BusinessCreated, "/api/businesses", input),
+  /** A new business's first moment: its Chief of Staff greets the owner, once. */
+  welcome: (id: string) => post(Welcomed, `${business(id)}/welcome`),
   updateBusiness: (id: string, change: { name?: string; brief?: string }) =>
     put(BusinessUpdated, business(id), change),
   business: (id: string) => get(BusinessDetail, business(id)),
@@ -240,6 +234,12 @@ export const api = {
     post(Posted, `${conversation(b, key)}/messages`, message),
   markRead: (b: string, key: ConversationKey, at: string) =>
     post(Read, `${conversation(b, key)}/read`, { at }),
+  /** How the signed-in person keeps a conversation in their sidebar: pinned, hidden, unread. */
+  markSidebar: (
+    b: string,
+    key: ConversationKey,
+    mark: { pinned?: boolean; hidden?: boolean; unread?: boolean },
+  ) => post(SidebarMark, `${conversation(b, key)}/sidebar`, mark),
   memory: (b: string) => get(ClaimPage, `${business(b)}/memory`),
   work: (b: string) => get(WorkItems, `${business(b)}/work`),
   createWorkItem: (b: string, workItem: NewWorkItem) =>
@@ -275,8 +275,6 @@ export const api = {
     post(Interrupted, `${business(b)}/work/${work}/sessions/${session}/interrupt`),
   /** Work items that have coding sessions, newest first. */
   codingWork: (b: string) => get(CodedWork, `${business(b)}/coding`),
-  startCoding: (b: string, session: NewCodingSession) =>
-    post(CodingStarted, `${business(b)}/coding`, session),
   files: (b: string, path?: string) =>
     get(Folder, `${business(b)}/files${path ? `?path=${encodeURIComponent(path)}` : ""}`),
   fileText: (b: string, path: string) =>
@@ -343,6 +341,18 @@ export const api = {
     `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${business(b)}/terminals/${id}/socket?offset=${offset}`,
   answer: (b: string, id: string, approve: boolean) =>
     post(Answered, `${business(b)}/decisions/${id}/${approve ? "approve" : "reject"}`),
+  /** A file the owner gives the business (the composer's +): into its folder's Uploads. */
+  uploadFile: async (b: string, file: File) => {
+    const url = `${business(b)}/files/upload?name=${encodeURIComponent(file.name)}`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": file.type || "application/octet-stream" },
+      body: file,
+    });
+    if (!response.ok)
+      throw new ApiError(response.status, (await response.text()) || "The file wasn't uploaded.");
+    return decode(Uploaded, url, await response.json());
+  },
   /** Answers a file request with the file the owner chose; it goes into the business folder. */
   sendFile: async (b: string, id: string, file: File) => {
     const url = `${business(b)}/decisions/${id}/file?name=${encodeURIComponent(file.name)}`;
@@ -375,10 +385,10 @@ export const api = {
   removeFromProject: (b: string, project: string, item: string) =>
     post(Removed, `${business(b)}/projects/${project}/items/${item}/remove`),
   apps: (b: string) => get(Apps, `${business(b)}/apps`),
-  installApp: (b: string, app: string, on: boolean) =>
-    post(AppChanged, `${business(b)}/apps/${app}/${on ? "install" : "uninstall"}`),
-  pinApp: (b: string, app: string, pinned: boolean) =>
-    post(AppChanged, `${business(b)}/apps/${app}/pin`, { pinned }),
+  /** Removes a connected app from the business. */
+  removeApp: (b: string, app: string) => post(AppChanged, `${business(b)}/apps/${app}/uninstall`),
+  /** The Connect apps sheet's list: official remote apps, by category, with logos. */
+  listedApps: (b: string) => get(AppsListed, `${business(b)}/apps/listed`),
   searchApps: (b: string, query: string) =>
     get(AppSearch, `${business(b)}/apps/search?q=${encodeURIComponent(query)}`),
   addApp: (b: string, app: string) => post(AppChanged, `${business(b)}/apps/add`, { app }),

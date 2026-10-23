@@ -110,7 +110,7 @@ struct TeamAPITests {
         for raw in refused { #expect(ConnectLink(url: URL(string: raw)!) == nil, "\(raw)") }
     }
 
-    @Test("Roles decode; a new business sends its brief and starting team; editing PUTs name and brief")
+    @Test("Roles decode; a new business sends its name and brief alone; editing PUTs name and brief")
     func businesses() async throws {
         let recorder = Recorder()
         let roles = try await api(
@@ -124,14 +124,14 @@ struct TeamAPITests {
 
         let business = try await api(
             status: 201,
-            body: #"{"business":{"id":"b2","name":"Globex","look":null,"brief":"Notes app"},"chief_of_staff":{},"team":[]}"#,
+            body: #"{"business":{"id":"b2","name":"Globex","look":null,"brief":"Notes app"},"chief_of_staff":{}}"#,
             recorder: recorder
-        ).createBusiness(Self.session, NewBusiness(name: "Globex", brief: "Notes app", team: ["engineering", "growth"]))
+        ).createBusiness(Self.session, NewBusiness(name: "Globex", brief: "Notes app"))
         #expect(business.brief == "Notes app")
         var (request, body) = try await sent(recorder)
         #expect(request.url?.path() == "/api/businesses" && request.httpMethod == "POST")
         #expect(body["brief"] as? String == "Notes app")
-        #expect(body["team"] as? [String] == ["engineering", "growth"])
+        #expect(body["team"] == nil && body["name"] as? String == "Globex")
 
         let saved = try await api(body: #"{"business":{"id":"b2","name":"Globex","brief":"Shared notes"}}"#, recorder: recorder)
             .updateBusiness(Self.session, id: "b2", name: nil, brief: "Shared notes")
@@ -242,9 +242,6 @@ struct TeamAPITests {
 
         try await api(body: "{}", recorder: recorder).installApp(Self.session, businessID: "b1", appID: "code", install: false)
         #expect(await recorder.requests.last?.url?.path() == "/api/businesses/b1/apps/code/uninstall")
-        try await api(body: "{}", recorder: recorder).pinApp(Self.session, businessID: "b1", appID: "code", pinned: false)
-        let (request, body) = try await sent(recorder)
-        #expect(request.url?.path() == "/api/businesses/b1/apps/code/pin" && body["pinned"] as? Bool == false)
     }
 
     @Test("Home decodes what needs the owner and work at a glance")

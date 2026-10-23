@@ -7,6 +7,7 @@
  * Imported by the web client, so it imports only contracts, the shared kernel and Effect.
  */
 import { Schema } from "effect";
+import { Ref } from "../protocol/ref.ts";
 import { FoundApp, InstalledApp, Line, ListedApp } from "../apps/contract.ts";
 import { LiveCodingSession } from "../apps/code/contract.ts";
 import { Artifact } from "../apps/documents/contract.ts";
@@ -204,6 +205,10 @@ export const ConversationPage = Schema.Struct({
 });
 /** `POST …/conversations/:key/messages` and `POST …/files/comments`: the message and who answers. */
 export const Posted = Schema.Struct({ message: Message, to: Schema.Array(Schema.String) });
+/** `POST …/files/upload?name=`: the file the owner gave, in the business folder's Uploads. */
+export const Uploaded = Schema.Struct({ ref: Ref });
+/** `POST …/welcome`: whether the Chief of Staff was asked to greet (once, in an empty chat). */
+export const Welcomed = Schema.Struct({ welcomed: Schema.Boolean });
 /** `POST …/conversations/:key/read`. */
 export const Read = Schema.Struct({ read: Schema.Literal(true) });
 /** `POST …/conversations/:key/follow`. */

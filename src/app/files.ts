@@ -6,6 +6,7 @@ import { activeEmployee } from "../identity/service.ts";
 import { readBounded, sha256Bytes } from "../protocol/bytes.ts";
 import { workItem } from "../work/service.ts";
 import { postFromPerson } from "./conversations.ts";
+import { saveUpload } from "./asking.ts";
 import { modeOf } from "./mode.ts";
 import { body, decodedBody } from "./request.ts";
 import { respond } from "../protocol/http.ts";
@@ -17,6 +18,7 @@ import {
   Posted,
   TextConflict,
   TextSave,
+  Uploaded,
   type FileAnchor,
 } from "./wire.ts";
 
@@ -156,6 +158,17 @@ export async function filesRoute(request: Request, env: Env, access: Access) {
       }
       return failure(error);
     }
+  }
+  // The owner gives the business a file (the composer's +): into Uploads, never over another.
+  if (path === "/files/upload" && request.method === "POST") {
+    if (!trusted) return new Response("Forbidden", { status: 403 });
+    const saved = await saveUpload(
+      env,
+      business.id,
+      url.searchParams.get("name") ?? "",
+      request.body,
+    );
+    return saved instanceof Response ? saved : respond(Uploaded, { ref: saved });
   }
   if (path === "/files/raw" && request.method === "PUT") {
     const file = inside(url.searchParams.get("path"));

@@ -21,7 +21,7 @@ import type {
   WorkItem,
   WorkItemState,
 } from "../../work/contract.ts";
-import { api, ApiError, type StartingRole } from "./api.ts";
+import { api, ApiError } from "./api.ts";
 import { useBusinessId } from "./data.ts";
 import { downscale } from "./images.ts";
 import { useNav } from "./navigation.ts";
@@ -107,6 +107,21 @@ export function useAnswer() {
       },
     },
   );
+}
+
+/** A file the owner gives the business; it goes with their next message. */
+export function useUpload() {
+  return useChange((b, file: File) => api.uploadFile(b, file), {
+    failure: (_file, error) =>
+      error instanceof ApiError && error.status < 500 && error.message
+        ? error.message
+        : "That file wasn't uploaded.",
+    settles: (b) => [keys.business(b)],
+    succeeded: ({ ref }) => {
+      ui.attach(ref);
+      ui.focusComposer();
+    },
+  });
 }
 
 /** A file request answered with the file the owner chose. */
@@ -227,6 +242,47 @@ export function useFollow() {
   );
 }
 
+type SidebarChange = { pinned?: boolean; hidden?: boolean; unread?: boolean };
+/** Pins, hides or marks unread a conversation in the signed-in person's sidebar. */
+export function useSidebarMark() {
+  return useChange(
+    (b, { key, mark }: { key: ConversationKey; mark: SidebarChange }) =>
+      api.markSidebar(b, key, mark),
+    {
+      failure: "Your sidebar couldn't be changed.",
+      settles: (b) => [keys.summaries(b)],
+      optimistic: (client, b, { key, mark }) => {
+        const before = client.getQueryData<typeof Conversations.Type>(keys.summaries(b));
+        const apply = <T extends { pinned: boolean; hidden: boolean; unread: number }>(c: T) => ({
+          ...c,
+          ...(mark.pinned !== undefined ? { pinned: mark.pinned } : {}),
+          ...(mark.hidden !== undefined ? { hidden: mark.hidden } : {}),
+          ...(mark.unread !== undefined ? { unread: mark.unread ? Math.max(1, c.unread) : 0 } : {}),
+        });
+        client.setQueryData<typeof Conversations.Type>(keys.summaries(b), (all) => {
+          const list = all?.conversations ?? [];
+          return {
+            conversations: list.some((c) => c.key === key)
+              ? list.map((c) => (c.key === key ? apply(c) : c))
+              : [
+                  ...list,
+                  apply({
+                    key,
+                    last: null,
+                    unread: 0,
+                    following: false,
+                    pinned: false,
+                    hidden: false,
+                  }),
+                ],
+          };
+        });
+        return () => client.setQueryData(keys.summaries(b), before);
+      },
+    },
+  );
+}
+
 /** A work item the owner started: they follow it, and its thread opens. */
 export function useCreateWorkItem() {
   const nav = useNav();
@@ -300,28 +356,12 @@ export function useKeep() {
   );
 }
 
-export function useInstallApp() {
-  return useChange((b, { app, on }: { app: string; on: boolean }) => api.installApp(b, app, on), {
-    failure: ({ on }) => (on ? "That app couldn't be installed." : "That app couldn't be removed."),
-    settles: (b) => [keys.apps(b)],
+/** Removes a connected app; its employees lose what it could do. */
+export function useRemoveApp() {
+  return useChange((b, app: string) => api.removeApp(b, app), {
+    failure: "That app couldn't be removed.",
+    settles: (b) => [keys.apps(b), keys.listed(b)],
   });
-}
-export function usePinApp() {
-  return useChange(
-    (b, { app, pinned }: { app: string; pinned: boolean }) => api.pinApp(b, app, pinned),
-    {
-      settles: (b) => [keys.apps(b)],
-      optimistic: (client, b, { app, pinned }) => {
-        type Apps = Awaited<ReturnType<typeof api.apps>>;
-        const before = client.getQueryData<Apps>(keys.apps(b));
-        client.setQueryData<Apps>(
-          keys.apps(b),
-          (all) => all && { apps: all.apps.map((a) => (a.id === app ? { ...a, pinned } : a)) },
-        );
-        return () => client.setQueryData(keys.apps(b), before);
-      },
-    },
-  );
 }
 
 export function useGrant() {
@@ -533,14 +573,16 @@ export function useRename() {
   });
 }
 
-/** Creates a business with its brief and starting team, then switches to it. */
+/** Creates a business with its brief (its Chief of Staff comes with it), then switches to it. */
 export function useCreateBusiness() {
   const client = useQueryClient();
   const nav = useNav();
   return useMutation({
-    mutationFn: (input: { name: string; brief: string; team: StartingRole[] }) =>
-      api.createBusiness({ name: input.name.trim(), brief: input.brief.trim(), team: input.team }),
+    mutationFn: (input: { name: string; brief: string }) =>
+      api.createBusiness({ name: input.name.trim(), brief: input.brief.trim() }),
     onSuccess: async (created) => {
+      // The Chief of Staff greets on its own; a greeting that didn't start is not the owner's problem.
+      void api.welcome(created.business.id).catch(() => undefined);
       await client.refetchQueries({ queryKey: keys.me });
       nav.selectBusiness(created.business.id);
     },
@@ -587,7 +629,7 @@ export function useAddApp() {
       error instanceof ApiError && error.status < 500 && error.message
         ? error.message
         : "That app couldn't be added.",
-    settles: (b) => appSettles(b),
+    settles: (b) => [...appSettles(b), keys.listed(b)],
   });
 }
 

@@ -49,7 +49,7 @@ test("a connect request is the work card's one ask; the review turns the app on"
     await expect(sidebar(page).getByRole("link", { name: /^Chief of Staff/ })).toHaveAccessibleName(
       "Chief of Staff, 1",
     );
-    await sidebar(page).getByRole("link", { name: "Pay the paper supplier" }).click();
+    await page.goto(`/${owner.business}/thread/${work.id}`);
     const card = page.getByTestId("work-card");
     await expect(card.getByTestId("work-state")).toHaveText("Your turn: Connect Ledger");
     await expect(card.getByRole("button", { name: "Connect" })).toBeVisible();

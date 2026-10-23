@@ -1,10 +1,18 @@
 import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { localStores } from "../fixtures/local.ts";
-import { bearer, insertMessage, sidebar, signIn, stubPosting, type Sql } from "./helpers.ts";
+import {
+  bearer,
+  insertMessage,
+  openAbout,
+  sidebar,
+  signIn,
+  stubPosting,
+  type Sql,
+} from "./helpers.ts";
 
-// F1: a work item is one live card with one line of state and at most one ask; Home has no
-// side panel but the Chief of Staff's desk, and a thread's card is pinned right above the reply.
+// F1: a work item is one live card with one line of state and at most one ask; Home's pill opens
+// the Chief of Staff's desk, and a thread's card is pinned right above the reply.
 
 /** What an employee asked with askOwner on a work item, in its thread. */
 async function ask(
@@ -61,7 +69,7 @@ async function stubRuntime(page: Page, running: () => string | null) {
   return stops;
 }
 
-test("Home is the Chief of Staff, its desk the side panel; work made there is one live card: Ready when you are, Start, then Working with Stop and Watch", async ({
+test("Home is the Chief of Staff, its desk the header's popover; work made there is one live card: Ready when you are, Start, then Working with Stop and Watch", async ({
   page,
 }) => {
   const stores = await localStores();
@@ -135,16 +143,14 @@ test("Home is the Chief of Staff, its desk the side panel; work made there is on
   );
   try {
     await signIn(page, sql, owner.person);
-    // Home is the Chief of Staff: no Needs you; their desk is its side panel, closed by
-    // default; the badge still counts.
+    // Home is the Chief of Staff: no Needs you; their desk opens from the header's pill; the
+    // badge still counts.
     await expect(page.getByRole("region", { name: "Needs you" })).toHaveCount(0);
     await expect(page.getByRole("region", { name: "Chief of Staff's desk" })).toHaveCount(0);
-    await page.getByRole("button", { name: /^Show side panel/ }).click();
+    await openAbout(page);
     await expect(page.getByRole("region", { name: "Chief of Staff's desk" })).toBeVisible();
-    await page
-      .getByRole("button", { name: /^Hide side panel/ })
-      .first()
-      .click();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("region", { name: "Chief of Staff's desk" })).toHaveCount(0);
     await expect(sidebar(page).getByRole("link", { name: /^Chief of Staff/ })).toHaveAccessibleName(
       "Chief of Staff, 1",
     );

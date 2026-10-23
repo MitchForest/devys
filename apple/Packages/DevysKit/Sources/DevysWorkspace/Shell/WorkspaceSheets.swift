@@ -1,4 +1,5 @@
 import ComposableArchitecture2
+import DevysCharacter
 import DevysClient
 import DevysDesignSystem
 import SwiftUI
@@ -30,115 +31,121 @@ struct WorkspaceSheets: ViewModifier {
     }
 }
 
-/// Hire: choose a role, then name, responsibilities and model; the role brings its access.
+/// New employee: the face large, a name, the Face's shapes and colors, and a role. The role
+/// brings its responsibilities and access; a custom role asks for responsibilities.
 struct HireSheet: View {
     let store: StoreOf<Workspace>
 
     var body: some View {
         if let draft = store.team.hiring {
-            VStack(alignment: .leading, spacing: DevysSpacing.regular) {
-                HStack {
-                    if draft.template != nil {
-                        Button("Roles", systemImage: "chevron.left") { edit { $0.template = nil } }
-                            .buttonStyle(DevysButtonStyle(.quiet, compact: true))
-                    }
-                    Text(draft.template == nil ? "Hire" : "Hire \(RoleTemplate.displayName(draft.template ?? ""))")
-                        .font(DevysTypography.title).foregroundStyle(DevysColors.ink)
-                    Spacer()
-                }
-                ScrollView {
-                    VStack(alignment: .leading, spacing: DevysSpacing.regular) {
-                        if let template = draft.template {
-                            details(draft, template: template)
-                        } else {
-                            roles
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(spacing: DevysSpacing.regular) {
+                DevysAvatar(draft.look, size: 104, mood: draft.isSubmitting ? .thinking : .idle, label: draft.name)
+                    .padding(.top, DevysSpacing.small)
+                TextField("Name", text: binding(\.name), prompt: Text("Name").foregroundStyle(DevysColors.ink3))
+                    .textFieldStyle(.plain)
+                    .font(DevysTypography.heading)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 12)
+                    .frame(height: 38)
+                    .background(DevysColors.well, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .frame(maxWidth: 260)
+                shapes(draft)
+                colors(draft)
+                role(draft)
+                if draft.template == "custom" {
+                    FieldBox { TextField("What they're accountable for", text: binding(\.responsibilities), axis: .vertical).lineLimit(3...6) }
                 }
                 if let error = draft.error {
                     Label(error, systemImage: "exclamationmark.circle.fill").font(DevysTypography.secondary).foregroundStyle(DevysColors.red)
                 }
+                Spacer(minLength: 0)
                 HStack {
                     Spacer()
                     Button("Cancel") { store.send(.hireCancelled) }.buttonStyle(.quiet)
-                    if draft.template != nil {
-                        Button(draft.isSubmitting ? "Hiring…" : "Hire") { store.send(.hireConfirmed) }
-                            .buttonStyle(.aurora)
-                            .disabled(!draft.canHire)
-                            .keyboardShortcut(.defaultAction)
-                    }
+                    Button(draft.isSubmitting ? "Creating…" : "Create") { store.send(.hireConfirmed) }
+                        .buttonStyle(.aurora)
+                        .disabled(!draft.canHire)
+                        .keyboardShortcut(.defaultAction)
                 }
             }
             .padding(DevysSpacing.roomy)
-            .sheetFrame(width: 460, height: 520)
+            .sheetFrame(width: 420, height: 560)
             .background(DevysColors.sheet)
         }
     }
 
-    @ViewBuilder private var roles: some View {
+    private func shapes(_ draft: HireDraft) -> some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 44, maximum: 44), spacing: 10)], spacing: 10) {
+            ForEach(AvatarShape.allCases, id: \.self) { shape in
+                let spec = AvatarSpec(palette: draft.look.palette, shape: shape, seed: draft.look.seed)
+                Button { edit { $0.look = spec } } label: {
+                    DevysAvatar(spec, size: 38, isAnimated: false)
+                        .padding(3)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(draft.look.shape == shape ? DevysColors.ink : .clear, lineWidth: 1.5)
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(shape.rawValue)
+                .accessibilityAddTraits(draft.look.shape == shape ? .isSelected : [])
+            }
+        }
+        .frame(maxWidth: 330)
+    }
+
+    private func colors(_ draft: HireDraft) -> some View {
+        HStack(spacing: 10) {
+            ForEach(AvatarPalette.allCases, id: \.self) { palette in
+                let rgb = palette.eyeInk
+                let selected = draft.look.palette == palette
+                Button { edit { $0.look = AvatarSpec(palette: palette, shape: $0.look.shape, seed: $0.look.seed) } } label: {
+                    Circle()
+                        .fill(Color(red: rgb.red, green: rgb.green, blue: rgb.blue))
+                        .frame(width: 22, height: 22)
+                        .overlay { Circle().strokeBorder(DevysColors.sheet, lineWidth: selected ? 2.5 : 0) }
+                        .overlay { Circle().strokeBorder(DevysColors.ink, lineWidth: selected ? 1 : 0).padding(-2) }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(palette.rawValue.capitalized)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+    }
+
+    @ViewBuilder private func role(_ draft: HireDraft) -> some View {
         switch store.team.roles {
         case .loading:
-            ProgressView().frame(maxWidth: .infinity)
+            ProgressView().controlSize(.small)
         case .failed(let message):
-            EmptyNote(text: message)
+            Text(message).font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3)
         case .loaded(let roles):
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: DevysSpacing.compact)], spacing: DevysSpacing.compact) {
-                ForEach(roles) { role in
-                    Button { store.send(.templateChosen(role.id)) } label: {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(role.name).font(DevysTypography.heading).foregroundStyle(DevysColors.ink)
-                            Text(role.summary).font(DevysTypography.secondary).foregroundStyle(DevysColors.ink2).multilineTextAlignment(.leading)
-                            Text(role.capabilities.isEmpty ? "No access to start" : "\(role.capabilities.count) kinds of access")
-                                .font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 96, alignment: .topLeading)
-                        .devysCard()
-                        .contentShape(Rectangle())
+            let hireable = roles.filter { $0.id != "chief-of-staff" }
+            let chosen = hireable.first { $0.id == draft.template }
+            VStack(spacing: 4) {
+                Menu {
+                    ForEach(hireable) { role in
+                        Button(role.name) { store.send(.templateChosen(role.id)) }
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityHint(role.summary)
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(chosen?.name ?? "Choose a role").font(DevysTypography.control)
+                        Image(systemName: "chevron.up.chevron.down").font(.system(size: 9, weight: .semibold))
+                    }
+                    .foregroundStyle(chosen == nil ? DevysColors.ink2 : DevysColors.ink)
+                    .padding(.horizontal, 14)
+                    .frame(height: 30)
+                    .background(DevysColors.well, in: Capsule())
+                }
+                .menuIndicator(.hidden)
+                .buttonStyle(.plain)
+                .fixedSize()
+                if let chosen, !chosen.summary.isEmpty {
+                    Text(chosen.summary).font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3).multilineTextAlignment(.center)
+                        .frame(maxWidth: 320)
                 }
             }
         }
-    }
-
-    @ViewBuilder private func details(_ draft: HireDraft, template: String) -> some View {
-        let role = store.team.roles.value?.first { $0.id == template }
-        label("Name")
-        FieldBox { TextField("Name", text: binding(\.name)) }
-        label("Responsibilities")
-        FieldBox { TextField("What they're accountable for", text: binding(\.responsibilities), axis: .vertical).lineLimit(4...10) }
-        label("Model")
-        HStack {
-            let model = store.models.catalog?.model(draft.model)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(model?.label ?? "Server default").font(DevysTypography.body.weight(.semibold)).foregroundStyle(DevysColors.ink)
-                if let model {
-                    Text("\(model.provider) · \(ModelText.perTurn(model))").font(DevysTypography.secondary).foregroundStyle(DevysColors.ink2)
-                }
-            }
-            Spacer()
-            if let catalog = store.models.catalog {
-                ModelChooser(catalog: catalog, selection: draft.model, label: "Choose the new employee's model") { id in edit { $0.model = id } }
-            }
-        }
-        .devysCard()
-        label("Access")
-        VStack(alignment: .leading, spacing: 4) {
-            let capabilities = role?.capabilities ?? []
-            if capabilities.isEmpty {
-                Text("Starts with no access. Grant some on its desk after hiring.").font(DevysTypography.body).foregroundStyle(DevysColors.ink2)
-            } else {
-                Text(capabilities.map(AccessNames.title).joined(separator: " · "))
-                    .font(DevysTypography.body).foregroundStyle(DevysColors.ink2)
-                Text("From the role. Change it on its desk after hiring.").font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3)
-            }
-        }
-    }
-
-    private func label(_ text: String) -> some View {
-        Text(text).font(DevysTypography.label).foregroundStyle(DevysColors.ink3)
     }
 
     private func binding(_ keyPath: WritableKeyPath<HireDraft, String>) -> Binding<String> {

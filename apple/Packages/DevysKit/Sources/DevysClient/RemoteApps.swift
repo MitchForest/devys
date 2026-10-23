@@ -38,6 +38,29 @@ public struct FoundApp: Equatable, Sendable, Decodable, Identifiable {
     public var id: String { app }
 }
 
+/// An app in the Connect apps list (outside services Devys knows well), its category and logo,
+/// and whether the business has it on.
+public struct ListedApp: Equatable, Sendable, Decodable, Identifiable {
+    /// What adding it takes (its address), or the business's app id once added.
+    public let app: String
+    public let name: String
+    public let description: String
+    public let category: String
+    /// A path on the server, loaded with this device's sign-in.
+    public let logo: String
+    public let installed: Bool
+    public var id: String { app }
+
+    public init(app: String, name: String, description: String, category: String, logo: String, installed: Bool = false) {
+        self.app = app
+        self.name = name
+        self.description = description
+        self.category = category
+        self.logo = logo
+        self.installed = installed
+    }
+}
+
 /// The one review card: each tool's line and who uses the app.
 public struct AppReview: Equatable, Sendable, Decodable {
     public struct Tool: Equatable, Sendable, Decodable, Identifiable {
@@ -84,6 +107,13 @@ extension DevysHTTPClient {
         var request = authorized(session, path: "api/businesses/\(businessID)/apps/search")
         request.url?.append(queryItems: [URLQueryItem(name: "q", value: query)])
         let page: Page = try await send(request)
+        return page.apps
+    }
+
+    /// The Connect apps list, in its order.
+    public func listedApps(_ session: DeviceSession, businessID: String) async throws -> [ListedApp] {
+        struct Page: Decodable { let apps: [ListedApp] }
+        let page: Page = try await send(authorized(session, path: "api/businesses/\(businessID)/apps/listed"))
         return page.apps
     }
 

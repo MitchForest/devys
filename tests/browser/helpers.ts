@@ -29,8 +29,33 @@ export async function bearer(sql: Sql, person: string) {
   };
 }
 
-/** The sidebar, where every place but an app is a conversation. */
+/** The sidebar: pinned tiles, Projects and Chats, each a conversation. */
 export const sidebar = (page: Page) => page.getByRole("navigation", { name: "Sidebar" });
+
+/** Hires an employee from a role template, as the owner's other client would. */
+export async function hire(
+  sql: Sql,
+  owner: { person: string; business: string },
+  template: string,
+) {
+  const post = await bearer(sql, owner.person);
+  return await post<{ id: string; name: string }>(`/api/businesses/${owner.business}/employees`, {
+    template,
+  });
+}
+
+/** Settings, from the owner's face at the bottom of the sidebar. */
+export async function openSettings(page: Page) {
+  await sidebar(page).getByRole("button", { name: "Settings" }).click();
+  const settings = page.getByRole("dialog", { name: "Settings" });
+  await expect(settings).toBeVisible();
+  return settings;
+}
+
+/** The header's pill opens who or what the conversation is with: a desk, a project's details. */
+export async function openAbout(page: Page) {
+  await page.getByRole("button", { name: /^About / }).click();
+}
 
 /** Signs in with a one-time link, as the Mac app opens one; the workspace opens on Home. */
 export async function signIn(page: Page, sql: Sql, person: string, { phone = false } = {}) {
@@ -60,6 +85,8 @@ export async function insertMessage(
     kind?: "message" | "event" | "card";
     ref?: string;
     replies?: string[];
+    question?: string;
+    pickMany?: boolean;
   },
 ) {
   const id = randomUUID();
@@ -68,8 +95,9 @@ export async function insertMessage(
     [business, key],
   );
   await sql.run(
-    `INSERT INTO messages (id, business_id, conversation, author, kind, text, ref, client_id, replies)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    `INSERT INTO messages (id, business_id, conversation, author, kind, text, ref, client_id, replies,
+       question, pick_many)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
     [
       id,
       business,
@@ -80,6 +108,8 @@ export async function insertMessage(
       message.ref ?? null,
       randomUUID(),
       message.replies ?? [],
+      message.question ?? null,
+      message.pickMany ?? false,
     ],
   );
   // Times are stored to the millisecond; the next message must come strictly after.
@@ -116,6 +146,8 @@ export async function stubPosting(page: Page, to: () => string[] = () => []) {
           via_voice: false,
           ref: null,
           replies: [],
+          question: null,
+          pick_many: false,
           created_at: new Date().toISOString(),
         },
         to: to(),

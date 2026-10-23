@@ -32,6 +32,7 @@ export const keys = {
   apps: (b: string) => ["business", b, "apps"] as const,
   appReview: (b: string, app: string) => ["business", b, "apps", app, "review"] as const,
   appSearch: (b: string, query: string) => ["business", b, "apps", "search", query] as const,
+  listed: (b: string) => ["business", b, "apps", "listed"] as const,
   memory: (b: string) => ["business", b, "memory"] as const,
   summaries: (b: string) => ["business", b, "summaries"] as const,
   conversation: (b: string, key: ConversationKey) => ["business", b, "conversation", key] as const,
@@ -151,6 +152,8 @@ export const queries = {
       enabled: query.trim().length > 1,
       staleTime: 60_000,
     }),
+  listed: (b: string) =>
+    queryOptions({ queryKey: keys.listed(b), queryFn: () => api.listedApps(b), staleTime: 60_000 }),
   memory: (b: string) => queryOptions({ queryKey: keys.memory(b), queryFn: () => api.memory(b) }),
   models: queryOptions({ queryKey: keys.models, queryFn: api.models, staleTime: Infinity }),
   roles: queryOptions({ queryKey: keys.roles, queryFn: api.roles, staleTime: Infinity }),

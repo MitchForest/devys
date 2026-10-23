@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { localStores } from "../fixtures/local.ts";
+import { openSettings } from "./helpers.ts";
 import { randomUUID, randomBytes, createHash } from "node:crypto";
 
 test("a sign-in link is single-use; downloads and sessions enforce business isolation and revocation", async ({
@@ -41,20 +42,17 @@ test("a sign-in link is single-use; downloads and sessions enforce business isol
         .getByRole("link", { name: /^Chief of Staff/ }),
     ).toBeVisible();
     await expect(page.getByLabel("Message Chief of Staff")).toBeVisible();
-    await page.getByRole("button", { name: "Account" }).click();
-    await page.getByRole("menuitem", { name: "Apps & connections…" }).click();
-    const settings = page.getByRole("dialog", { name: "Settings" });
+    const settings = await openSettings(page);
+    await settings.getByRole("button", { name: "Apps", exact: true }).click();
     await expect(settings.getByRole("region", { name: "Google Drive" })).toBeVisible();
     await expect(settings.getByText("Google Drive setup is pending.")).toBeVisible();
     await expect(page.getByText("private.txt")).toHaveCount(0);
     await page.keyboard.press("Escape");
-    // Another business's records never show, in its Documents app either.
-    await page
-      .getByRole("navigation", { name: "Sidebar" })
-      .getByRole("button", { name: "Documents" })
-      .click();
-    await expect(page.getByRole("region", { name: "Documents" })).toBeVisible();
-    await expect(page.getByText("private.txt")).toHaveCount(0);
+    // Another business's records never show, among the files ⌘K finds either.
+    await page.keyboard.press("Meta+k");
+    await page.keyboard.type("private");
+    await expect(page.getByRole("option", { name: /private\.txt/ })).toHaveCount(0);
+    await page.keyboard.press("Escape");
     const status = (path: string) =>
       page.evaluate(async (target) => (await fetch(target)).status, path);
     expect(await status(`${mine}/artifacts/${artifact}`)).toBe(404);

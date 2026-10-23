@@ -381,11 +381,6 @@ extension DevysHTTPClient {
         _ = try await raw(authorized(session, path: "api/businesses/\(businessID)/apps/\(appID)/\(install ? "install" : "uninstall")", method: "POST"))
     }
 
-    public func pinApp(_ session: DeviceSession, businessID: String, appID: String, pinned: Bool) async throws {
-        struct Body: Encodable { let pinned: Bool }
-        _ = try await raw(json(session, path: "api/businesses/\(businessID)/apps/\(appID)/pin", method: "POST", body: Body(pinned: pinned)))
-    }
-
     public func home(_ session: DeviceSession, businessID: String) async throws -> Home {
         try await send(authorized(session, path: "api/businesses/\(businessID)/home"))
     }

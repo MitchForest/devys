@@ -9,11 +9,14 @@ import SwiftUI
 /// It also takes dictation and hands-free voice.
 struct ConversationPane: View {
     let store: StoreOf<Workspace>
+    /// The centred pill over the conversation; the phone draws it in its navigation bar instead.
+    var showsHeader = true
 
     var body: some View {
         ZStack(alignment: .top) {
             if let key = store.main?.key {
                 VStack(spacing: 0) {
+                    if showsHeader { ConversationHeader(store: store) }
                     ScrollView {
                         ConversationMessages(store: store, key: key)
                             .padding(.horizontal, DevysSpacing.regular)
@@ -110,8 +113,8 @@ struct ConversationMessages: View {
                     } else {
                         EventCard(store: store, event: event)
                     }
-                    if !event.replies.isEmpty {
-                        SuggestedReplies(replies: event.replies) { store.send(.suggestedReplyTapped(key, event.id, $0)) }
+                    if let question = event.question {
+                        QuestionCard(store: store, key: key, question: question)
                             .frame(maxWidth: .infinity)
                             .padding(.top, 3)
                     }
@@ -169,6 +172,7 @@ struct ConversationMessages: View {
 struct ConversationComposer: View {
     let store: StoreOf<Workspace>
     let key: ConversationKey
+    @FocusState private var focused: Bool
 
     var body: some View {
         if let open = store.state.conversation(key) {
@@ -186,7 +190,11 @@ struct ConversationComposer: View {
                     }
                 }
                 MentionSuggestions(store: store, key: key, draft: open.draft)
-                if let reference = store.state.reference { ReferenceChip(store: store, reference: reference) }
+                if let attachment = open.attachment {
+                    AttachmentChip(title: store.state.recordTitle(attachment)) { store.send(.attachmentSet(key, nil)) }
+                } else if let reference = store.state.reference {
+                    ReferenceChip(store: store, reference: reference)
+                }
                 if recipients.count == 1, let answerer = store.state.employee(recipients.first), answerer.paused {
                     PausedBanner(store: store, employee: answerer)
                 }
@@ -201,22 +209,60 @@ struct ConversationComposer: View {
                         level: store.level,
                         onMicTap: { store.send(.micTapped) },
                         onHandsFree: { store.send(.conversationToggled) },
-                        leading: AnyView(AnswererPicker(store: store, key: key)),
+                        leading: AnyView(HStack(spacing: 2) {
+                            AttachButton(store: store, key: key)
+                            AnswererPicker(store: store, key: key)
+                        }),
+                        focus: $focused,
+                        onEmptyKey: pickByLetter,
                         onSend: { store.send(.sendTapped(key)) }
                     )
                 }
             }
             .animation(DevysMotion.quick, value: open.replyingTo)
             .animation(DevysMotion.quick, value: open.error)
+            .animation(DevysMotion.quick, value: open.attachment)
+            .onChange(of: store.composerFocus) { focused = true }
         }
     }
 
-    /// The field names who answers, so no separate "To" row is needed.
+    /// A question card's letter, typed in the empty composer, picks that answer.
+    private func pickByLetter(_ typed: String) -> Bool {
+        guard let question = store.state.offeredQuestion(in: key), let answer = question.answer(forLetter: typed) else { return false }
+        store.send(.answerPicked(key, question.messageID, answer))
+        return true
+    }
+
+    /// While a question card is offered the field invites an answer; otherwise it names who answers.
     private var placeholder: String {
+        if store.state.offeredQuestion(in: key) != nil { return "Type your answer, or talk about something else" }
         let answering = store.state.recipients(in: key).map(store.state.employeeName).joined(separator: ", ")
         if key.kind == .work { return answering.isEmpty ? "Reply" : "Reply to \(answering)" }
         if !answering.isEmpty { return "Message \(answering)" }
         return key.kind == .project ? "Message \(store.state.project(key.ref)?.name ?? "the team")" : "Message"
+    }
+}
+
+/// A business file attached with +: it goes with the next message as its ref.
+private struct AttachmentChip: View {
+    let title: String
+    let remove: () -> Void
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "paperclip").imageScale(.small).foregroundStyle(DevysColors.ink3).accessibilityHidden(true)
+            Text(title).lineLimit(1)
+            Button("Remove the attachment", systemImage: "xmark", action: remove)
+                .labelStyle(.iconOnly)
+                .buttonStyle(.plain)
+                .foregroundStyle(DevysColors.ink3)
+        }
+        .font(DevysTypography.caption)
+        .foregroundStyle(DevysColors.ink2)
+        .padding(.leading, 8)
+        .padding(.trailing, 6)
+        .padding(.vertical, 4)
+        .background(DevysColors.sheetTint, in: Capsule())
     }
 }
 

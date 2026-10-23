@@ -74,21 +74,16 @@ public struct RoleTemplate: Equatable, Sendable, Decodable, Identifiable {
         default: id
         }
     }
-
-    /// The optional starting team a new business suggests.
-    public static let startingTeam = ["admin", "finance", "growth", "engineering"]
 }
 
-/// A new business: its brief and the starting team hired alongside the Chief of Staff.
+/// A new business: its name and brief. It starts with its Chief of Staff alone, who proposes hires.
 public struct NewBusiness: Equatable, Sendable, Encodable {
     public let name: String
     public let brief: String
-    public let team: [String]
 
-    public init(name: String, brief: String = "", team: [String] = []) {
+    public init(name: String, brief: String = "") {
         self.name = name
         self.brief = brief
-        self.team = team
     }
 }
 

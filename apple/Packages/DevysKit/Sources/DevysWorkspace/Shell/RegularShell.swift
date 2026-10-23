@@ -4,9 +4,9 @@ import DevysClient
 import DevysDesignSystem
 import SwiftUI
 
-/// One gray frame (toolbar and business strip) around one rounded workspace: the sidebar, the
-/// conversation in the middle, and the right panel showing what the conversation is about,
-/// divided by hairlines.
+/// One gray frame around one rounded workspace: the sidebar, the conversation in the middle, and
+/// the right panel while a layer is open, divided by hairlines. With several businesses, their
+/// tiles sit in the frame on the left.
 struct RegularShell: View {
     #if os(macOS)
         static let sidebarWidth: CGFloat = 236
@@ -24,7 +24,11 @@ struct RegularShell: View {
                 ShellToolbar(store: store)
             #endif
             HStack(spacing: 0) {
-                BusinessStrip(store: store)
+                if store.businesses.count > 1 {
+                    BusinessStrip(store: store)
+                } else {
+                    Spacer().frame(width: DevysSpacing.small)
+                }
                 workspace
             }
         }
@@ -45,6 +49,9 @@ struct RegularShell: View {
         .animation(reduceMotion ? .easeInOut(duration: 0.15) : DevysMotion.panel, value: store.state.isPanelOpen)
         .animation(reduceMotion ? .easeInOut(duration: 0.15) : DevysMotion.panel, value: store.state.isWideShown)
         .animation(DevysMotion.quick, value: store.isPaletteOpen)
+        .sheet(isPresented: Binding(get: { store.isConnectingApps }, set: { if !$0 { store.send(.connectAppsToggled(false)) } })) {
+            ConnectAppsSheet(store: store)
+        }
         .background { Shortcuts(store: store) }
         #if os(iOS)
             .sheet(isPresented: Binding(get: { store.preferences != nil }, set: { if !$0 { store.send(.preferencesToggled(false)) } })) {
@@ -180,13 +187,7 @@ private struct ResizeHandle: View {
                 HStack(spacing: 6) {
                     SidebarToggle(store: store)
                     BackButton(store: store)
-                    Breadcrumb(store: store).padding(.leading, 6)
                 }
-            }
-            .sharedBackgroundVisibility(.hidden)
-            ToolbarSpacer(.flexible)
-            ToolbarItem(placement: .primaryAction) {
-                PanelToggle(store: store)
             }
             .sharedBackgroundVisibility(.hidden)
         }
@@ -201,9 +202,7 @@ private struct ShellToolbar: View {
         HStack(spacing: 6) {
             SidebarToggle(store: store)
             BackButton(store: store)
-            Breadcrumb(store: store).padding(.leading, 6)
             Spacer(minLength: DevysSpacing.regular)
-            PanelToggle(store: store)
         }
         .padding(.leading, 12)
         .padding(.trailing, 10)
@@ -232,43 +231,7 @@ private struct BackButton: View {
     }
 }
 
-/// Shows or hides the right panel; only when there is something to show.
-private struct PanelToggle: View {
-    let store: StoreOf<Workspace>
-
-    var body: some View {
-        if store.state.hasPermanent || !store.layers.isEmpty {
-            ToolbarIconButton(store.state.isPanelOpen ? "Hide side panel (⌥⌘0)" : "Show side panel (⌥⌘0)", symbol: "sidebar.right") {
-                store.send(.panelToggled)
-            }
-        }
-    }
-}
-
-/// The business, the place and, in a thread, its project: "Acme / Launch › Fix sitemap".
-private struct Breadcrumb: View {
-    let store: StoreOf<Workspace>
-
-    var body: some View {
-        let trail = store.state.title(of: store.place)
-        HStack(spacing: 6) {
-            Text(store.snapshot.businessName).foregroundStyle(DevysColors.ink3)
-            Text("/").foregroundStyle(DevysColors.ink3)
-            if let parent = trail.parent {
-                Button(parent.title) { store.send(.placeSelected(parent.place)) }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(DevysColors.ink2)
-                Text("›").foregroundStyle(DevysColors.ink3)
-            }
-            Text(trail.title).foregroundStyle(DevysColors.ink).fontWeight(.semibold).lineLimit(1)
-                .contentTransition(.opacity)
-        }
-        .font(DevysTypography.control)
-        .fixedSize()
-    }
-}
-
-/// Tiles that switch businesses, and the account at the bottom.
+/// Tiles that switch businesses, shown when there are several.
 private struct BusinessStrip: View {
     let store: StoreOf<Workspace>
 
@@ -294,26 +257,6 @@ private struct BusinessStrip: View {
                 .accessibilityAddTraits(selected ? .isSelected : [])
             }
             Spacer()
-            Menu {
-                if let name = store.account?.person.displayName { Text(name) }
-                Text(store.server.host() ?? store.server.absoluteString)
-                Divider()
-                #if os(macOS)
-                    SettingsLink { Text("Settings…") }
-                #else
-                    Button("Settings…") { store.send(.preferencesToggled(true)) }
-                    Button("Apps & connections…") { store.send(.settingsOpened(.apps)) }
-                #endif
-                Button("Sign out of this device") { store.send(.signOutTapped) }
-            } label: {
-                Portrait(store.state.ownerPortrait, size: 30, isAnimated: false)
-                    .clipShape(Circle())
-            }
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .accessibilityLabel("Account")
         }
         .padding(.top, 4)
         .padding(.bottom, 12)
@@ -330,7 +273,6 @@ private struct Shortcuts: View {
             Button("Search") { store.send(.paletteToggled(!store.isPaletteOpen)) }.keyboardShortcut("k", modifiers: .command)
             Button("Back") { store.send(.backTapped) }.keyboardShortcut("[", modifiers: .command).disabled(store.history.isEmpty)
             Button("Sidebar") { store.send(.sidebarToggled) }.keyboardShortcut("s", modifiers: [.command, .control])
-            Button("Side panel") { store.send(.panelToggled) }.keyboardShortcut("0", modifiers: [.command, .option])
             // Esc goes back one layer, unless the palette has it.
             Button("Back one layer") { store.send(.layerPopped) }.keyboardShortcut(.escape, modifiers: []).disabled(store.layers.isEmpty || store.isPaletteOpen)
             Button("Refresh") { store.send(.refreshTapped) }.keyboardShortcut("r", modifiers: .command)
