@@ -88,7 +88,9 @@ export const employeesOf = (db: Database, businessId: string) =>
     sql.rows<Employee>(
       `SELECT id, business_id, name, responsibilities, model, template, paused_at IS NOT NULL AS paused, look FROM employees
        WHERE business_id = $1 AND revoked_at IS NULL
-       ORDER BY template = 'chief-of-staff' DESC, created_at, id`,
+       ORDER BY array_position(
+         ARRAY['chief-of-staff', 'admin', 'finance', 'growth', 'engineering', 'custom'], template
+       ), created_at, id`,
       [businessId],
     ),
   );

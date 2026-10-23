@@ -2,7 +2,6 @@ import { tints } from "../../identity/contract.ts";
 import {
   Code2,
   FileText,
-  House,
   LayoutGrid,
   ListChecks,
   Plus,
@@ -130,14 +129,20 @@ export function SidebarSections({ only }: { only?: "projects" | "team" }) {
   const all = only === undefined;
   return (
     <div className="flex flex-col gap-0.5">
-      {/* Home is the Chief of Staff: the one the owner talks to and who delegates. */}
-      {all &&
-        (chiefOfStaff ? (
-          <HomeRow chiefOfStaff={chiefOfStaff} count={needsYou} unread={homeUnread} />
-        ) : (
-          <PlaceRow place={{ kind: "home" }} title="Home" icon={House} count={needsYou} />
-        ))}
+      {(all || only === "team") && (
+        <SectionLabel action={{ label: "Hire", run: () => ui.setHireOpen(true) }}>
+          Team
+        </SectionLabel>
+      )}
+      {/* The Chief of Staff leads the team: their chat is Home, where the workspace opens. */}
+      {(all || only === "team") && chiefOfStaff && (
+        <HomeRow chiefOfStaff={chiefOfStaff} count={needsYou} unread={homeUnread} />
+      )}
       {all && threads(null).map((item) => <ThreadRow key={item.id} item={item} />)}
+      {(all || only === "team") &&
+        employees
+          .filter((employee) => employee.id !== chiefOfStaff?.id)
+          .map((employee) => <TeamRow key={employee.id} employee={employee} />)}
       {(all || only === "projects") && projects.length > 0 && (
         <SectionLabel action={{ label: "New project", run: () => ui.setProjectOpen(true) }}>
           Projects
@@ -154,15 +159,6 @@ export function SidebarSections({ only }: { only?: "projects" | "team" }) {
             ))}
           </div>
         ))}
-      {(all || only === "team") && (
-        <SectionLabel action={{ label: "Hire", run: () => ui.setHireOpen(true) }}>
-          Team
-        </SectionLabel>
-      )}
-      {(all || only === "team") &&
-        employees
-          .filter((employee) => employee.id !== chiefOfStaff?.id)
-          .map((employee) => <TeamRow key={employee.id} employee={employee} />)}
       {all && shownApps.length > 0 && <SectionLabel>Apps</SectionLabel>}
       {all &&
         shownApps.map((app) =>
