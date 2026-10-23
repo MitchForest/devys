@@ -45,6 +45,10 @@ export const providerName = (provider: Provider) =>
 
 const Text = (max: number) => Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(max));
 const CodingSessionRef = RefOf("code", "session");
+/** An absolute path on the owner's Mac that walks nowhere (no `.` or `..` parts). */
+const RepositoryPath = Schema.String.check(
+  Schema.isPattern(/^\/(?!.*(?:^|\/)\.\.?(?:\/|$)).{0,1023}$/),
+);
 const ProviderInput = Schema.Literals(providers);
 const GitHubName = Schema.String.check(
   Schema.isPattern(/^[A-Za-z0-9-]{1,39}\/(?!.*\.\.)[A-Za-z0-9._-]{1,100}$/),
@@ -160,9 +164,7 @@ export function codingCapabilities(dependencies: CodingDependencies) {
       input: Schema.Struct({
         provider: ProviderInput,
         objective: Text(8000),
-        repository: Schema.optional(
-          Schema.String.check(Schema.isPattern(/^\/(?!.*(?:^|\/)\.\.?(?:\/|$)).{0,1023}$/)),
-        ),
+        repository: Schema.optional(RepositoryPath),
         newRepository: Schema.optional(
           Schema.String.check(Schema.isPattern(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/)),
         ),
@@ -262,7 +264,8 @@ export function codingCapabilities(dependencies: CodingDependencies) {
           yield* rpc(() =>
             dependencies.note(scope, workItemId, {
               clientId: `coding-send:${invocation.operationId}`,
-              text: `→ ${providerName(found.provider)}: ${text}`,
+              // The instruction itself is in the session layer.
+              text: `Sent ${providerName(found.provider)} a follow-up`,
               ref: ref("code", "session", id),
             }),
           );
@@ -299,20 +302,22 @@ export function codingCapabilities(dependencies: CodingDependencies) {
       output: Schema.Struct({ commit: Schema.String, diffStat: Schema.String }),
       execute: ({ session: id, message, check }) =>
         Effect.gen(function* () {
-          const { invocation, workItemId, found } = yield* owned(id);
+          const { invocation, workItemId } = yield* owned(id);
           const scope = { businessId: invocation.businessId, employeeId: invocation.employeeId };
           const accepted = yield* rpc(() =>
             dependencies.coding(scope).accept(id, { message, check }),
           );
+          const changes =
+            accepted.diffStat
+              .split("\n")
+              .find((line) => /files? changed/.test(line))
+              ?.trim() ?? "";
+          // The owner reads the note: what happened in words, no paths or ids.
           yield* rpc(() =>
             dependencies.evidence(scope, workItemId, {
               commit: accepted.commit,
-              changes:
-                accepted.diffStat
-                  .split("\n")
-                  .find((line) => /files? changed/.test(line))
-                  ?.trim() ?? "",
-              note: `Committed ${accepted.commit.slice(0, 12)} on ${found.branch} in ${found.repository}: ${message}\n${accepted.diffStat}`.slice(
+              changes,
+              note: `Committed ${accepted.commit.slice(0, 7)} on its branch${changes ? ` (${changes})` : ""}: ${message}`.slice(
                 0,
                 2000,
               ),
@@ -357,7 +362,7 @@ export function codingCapabilities(dependencies: CodingDependencies) {
             dependencies.evidence(scope, workItemId, {
               commit: published.commit,
               pull_request: published.pullRequest,
-              note: `Published ${published.commit.slice(0, 12)} to ${published.branch} on github.com/${published.repository} (repository ${published.repositoryId}), pull request into ${published.base}: ${published.pullRequest}`,
+              note: `Opened a pull request for ${published.commit.slice(0, 7)} into ${published.base} on GitHub: ${published.pullRequest}`,
             }),
           );
           return {
@@ -376,12 +381,22 @@ export function codingCapabilities(dependencies: CodingDependencies) {
    * Engineering deploys previews on its own and asks for production.
    */
   function deployTo(stage: Stage) {
+    const how =
+      stage === "preview"
+        ? "the repository's own deploy command (for example `bunx wrangler deploy --env preview`)"
+        : "the repository's own production deploy command";
     return capability({
       name: stage === "preview" ? "deployPreview" : "deployProduction",
-      description:
-        stage === "preview"
-          ? "Deploy a coding session's accepted, checked commit (name the session by its ref) to a preview with the repository's own deploy command (for example `bunx wrangler deploy --env preview`), then check the URL it prints (or the one you give) answers. `secrets` names the business's secrets the command needs (each set as the variable of its name, redacted from the output). The result arrives in this work item. To roll back, name an earlier commit this work item accepted or deployed."
-          : "Deploy a coding session's accepted, checked commit (name the session by its ref) to production with the repository's own production deploy command, then check its URL answers. `secrets` names the business's secrets the command needs (each set as the variable of its name, redacted from the output). The owner approves each production deploy. To ask once for several steps (merge, then deploy), list this deploy in an askOwner approve's steps exactly as `Deploy <commit> of <repository> to production` (repository: the last part of its folder's path) and pass that commit here: that approval covers this deploy, once. To roll back, name an earlier commit this work item accepted or deployed.",
+      description: [
+        `Deploy to ${stage} with ${how}, then check the URL it prints (or the one you give) answers. Deploy either a coding session's accepted, checked commit (name the session by its ref), or, when the repository needs no change, the repository itself (repository: its absolute path) at its current commit: its worktree must be clean, and a repository this work item has a coding session on deploys through that session.`,
+        "`secrets` names the business's secrets the command needs (each set as the variable of its name, redacted from the output). The result arrives in this work item.",
+        stage === "production"
+          ? "The owner approves each production deploy. To ask once for several steps (merge, then deploy), list this deploy in an askOwner approve's steps exactly as `Deploy <commit> of <repository> to production` (repository: the last part of its folder's path) and pass that commit here: that approval covers this deploy, once."
+          : "",
+        "To roll back a session's deploy, name an earlier commit this work item accepted or deployed.",
+      ]
+        .filter(Boolean)
+        .join(" "),
       effect: "external",
       replay: "reconcile",
       constraints: {
@@ -391,7 +406,8 @@ export function codingCapabilities(dependencies: CodingDependencies) {
         allows: ({ commands }, input) => !commands || commands.includes(input.command),
       },
       input: Schema.Struct({
-        session: CodingSessionRef,
+        session: Schema.optional(CodingSessionRef),
+        repository: Schema.optional(RepositoryPath),
         command: Text(500),
         commit: Schema.optional(Schema.String.check(Schema.isPattern(/^[0-9a-f]{7,40}$/))),
         url: Schema.optional(Schema.String.check(Schema.isPattern(/^https:\/\/\S{1,500}$/))),
@@ -402,18 +418,61 @@ export function codingCapabilities(dependencies: CodingDependencies) {
       ...(stage === "production"
         ? {
             step: async (
-              { session: id, commit }: { session: string; commit?: string },
+              input: { session?: string; repository?: string; commit?: string },
               businessId: string,
             ) => {
-              const found = await Effect.runPromise(codingSession(db, businessId, id));
-              const repository = found?.repository?.split("/").filter(Boolean).at(-1);
-              return commit && repository ? deployStep(commit, repository, stage) : undefined;
+              const path = input.session
+                ? (await Effect.runPromise(codingSession(db, businessId, input.session)))
+                    ?.repository
+                : input.repository;
+              const repository = path?.split("/").filter(Boolean).at(-1);
+              return input.commit && repository
+                ? deployStep(input.commit, repository, stage)
+                : undefined;
             },
           }
         : {}),
-      execute: ({ session: id, command, commit, url, secrets }) =>
+      execute: ({ session: id, repository, command, commit, url, secrets }) =>
         Effect.gen(function* () {
-          const { invocation, workItemId } = yield* owned(id);
+          if (!id === !repository)
+            return yield* new CapabilityError({
+              code: "invalid_input",
+              message:
+                "Name a coding session (its ref) or a repository (its absolute path), not both.",
+            });
+          const request = {
+            stage,
+            command,
+            ...(commit ? { commit } : {}),
+            ...(url ? { url } : {}),
+            ...(secrets?.length ? { secrets } : {}),
+          };
+          if (repository) {
+            const { invocation, workItemId } = yield* workItem;
+            const scope = { businessId: invocation.businessId, employeeId: invocation.employeeId };
+            // Work a session changed is deployed as accepted and checked, through that session.
+            const sessions = yield* stored(
+              codingSessionsFor(db, invocation.businessId, workItemId),
+            );
+            const own = sessions.find(
+              (item) => item.purpose === "build" && item.repository === repository,
+            );
+            if (own)
+              return yield* new CapabilityError({
+                code: "conflict",
+                message: `This work item has a coding session on that repository: deploy its accepted, checked commit by the session's ref (${ref("code", "session", own.id)}).`,
+              });
+            const id = yield* Effect.promise(() =>
+              stableId(`${invocation.businessId}:${invocation.operationId}`),
+            );
+            const started = yield* rpc(() =>
+              dependencies
+                .coding(scope)
+                .deployRepository({ ...request, id, repository, workItemId }),
+            );
+            return { deploying: started.commit };
+          }
+          const { invocation, workItemId } = yield* owned(id!);
           const scope = { businessId: invocation.businessId, employeeId: invocation.employeeId };
           if (commit) {
             const known = yield* rpc(() => dependencies.knownCommits(scope, workItemId));
@@ -424,15 +483,7 @@ export function codingCapabilities(dependencies: CodingDependencies) {
                   "Roll back only to a commit this work item accepted or deployed (see its evidence).",
               });
           }
-          const started = yield* rpc(() =>
-            dependencies.coding(scope).deploy(id, {
-              stage,
-              command,
-              ...(commit ? { commit } : {}),
-              ...(url ? { url } : {}),
-              ...(secrets?.length ? { secrets } : {}),
-            }),
-          );
+          const started = yield* rpc(() => dependencies.coding(scope).deploy(id!, request));
           return { deploying: started.commit };
         }),
     });

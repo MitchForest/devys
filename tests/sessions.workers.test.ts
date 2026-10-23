@@ -150,16 +150,33 @@ it("stop aborts work running in a work session", async () => {
   expect(status.inbox).toEqual([expect.objectContaining({ id, status: "failed" })]);
 });
 
-it("a turn without words posts nothing; a failed one is Devys's notice, not the employee's", async () => {
+it("a turn without words is asked once for its reply; a failed one is Devys's notice", async () => {
   const target = employee();
+  // The follow-up asks for the reply in the same session, and its words answer the message.
   await send(target, "m-quiet", target.app, "Do it quietly");
-  const id = await target.agent.idOf("m-quiet");
+  expect(await answered(target, "m-quiet")).toMatchObject({
+    text: "Re: Your reply wasn't written: nobody saw anything from that turn. Write your reply now, as plain text.",
+  });
+  expect((await turns(target)).map((turn) => turn.role)).toEqual(["owner", "owner", "agent"]);
+
+  // Still without words after it: nothing is posted, and nothing stands in for the employee.
+  const chat = `${target.app}:project:mute`;
+  await send(target, "m-mute", chat, "Stay mute");
+  const id = await target.agent.idOf("m-mute");
+  await until(
+    async () => target.agent.history(target.scope, undefined, "project:mute"),
+    (history) =>
+      (JSON.parse(history) as { entries: Entry[] }).entries.filter(
+        (entry) => entry.kind === "pi.assistant",
+      ).length === 2,
+  );
   await until(
     async () => JSON.parse(await target.agent.inspect(target.scope)).inbox,
     (inbox: { id: string; status: string }[]) =>
       inbox.some((item) => item.id === id && item.status === "done"),
   );
-  expect(await target.agent.outbox("m-quiet")).toBeNull();
+  await new Promise((resolve) => setTimeout(resolve, 1_500));
+  expect(await target.agent.outbox("m-mute")).toBeNull();
 
   await send(target, "m-broken", target.app, "This is broken");
   expect(await answered(target, "m-broken")).toMatchObject({ notice: "failed", text: "" });

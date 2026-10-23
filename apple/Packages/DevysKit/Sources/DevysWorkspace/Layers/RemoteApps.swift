@@ -107,7 +107,7 @@ struct RemoteAppCard: View {
 
     var body: some View {
         if let app = store.state.remoteApp(appID) {
-            let why = text.hasPrefix("\(app.name): ") ? String(text.dropFirst(app.name.count + 2)) : app.summary
+            let why = text.isEmpty ? app.summary : text
             HStack(spacing: 10) {
                 Button { store.send(.layerOpened(.remoteApp(app.id))) } label: {
                     HStack(spacing: 10) {

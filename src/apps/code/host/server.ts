@@ -416,19 +416,9 @@ export function codingHost(options: CodingHostOptions): HostRoutes {
     };
   }
 
-  /**
-   * Deploys one commit (the accepted, checked one unless an earlier one is named) in its own
-   * detached worktree, so uncommitted edits never ship; the outcome arrives as an event.
-   */
-  async function deploy(job: Job, input: Record<string, unknown>) {
-    const { stage, command, url } = input;
+  /** A session's deploy: the accepted, checked commit unless an earlier one is named. */
+  function deploySession(job: Job, input: Record<string, unknown>) {
     if (job.readOnly) throw new HostRefusal(409, "A review session has nothing to deploy");
-    if (stage !== "preview" && stage !== "production")
-      throw new HostRefusal(400, "Deploy to preview or production");
-    if (typeof command !== "string" || !command.trim())
-      throw new HostRefusal(400, "Give the repository's deploy command");
-    if (url !== undefined && (typeof url !== "string" || !url.startsWith("https://")))
-      throw new HostRefusal(400, "The URL to check must be https");
     if (job.deploying) throw new HostRefusal(409, "A deploy is already running");
     const commit =
       typeof input.commit === "string"
@@ -438,28 +428,108 @@ export function codingHost(options: CodingHostOptions): HostRoutes {
           : undefined;
     if (!commit)
       throw new HostRefusal(409, "Nothing accepted with a passing check yet: accept it first");
+    return deploy(
+      {
+        id: job.id,
+        scope: job.scope,
+        repository: job.repository,
+        commit,
+        about: { codingSessionId: job.id },
+        running: (deploying) => save({ ...jobs.get(job.id)!, deploying }),
+      },
+      input,
+    );
+  }
+
+  /** Repositories deploying as they are, without a session (a host restart ends their deploys). */
+  const deployingRepositories = new Set<string>();
+
+  /**
+   * A repository deployed as it is, without a coding session: its committed HEAD, and only from
+   * a clean worktree, so nothing unreviewed or uncommitted ships. A named commit must be HEAD.
+   */
+  async function deployRepository(input: Record<string, unknown>) {
+    const scope = scopeOf(input.scope);
+    const { id, repository: path, workItemId } = input;
+    if (typeof id !== "string" || !hostId.test(id) || typeof workItemId !== "string")
+      throw new HostRefusal(400, "Invalid deploy");
+    if (typeof path !== "string" || !path.startsWith("/"))
+      throw new HostRefusal(400, "Give the repository's absolute path");
+    await ownRepository(path, options.work, scope.businessId);
+    const top = await repository(folderOf(scope.businessId), { path }).catch(() => {
+      throw new HostRefusal(400, "Not a repository");
+    });
+    if ((await realpath(top)) !== (await realpath(path)))
+      throw new HostRefusal(400, "Give the repository's top folder");
+    if (await git(top, "status", "--porcelain"))
+      throw new HostRefusal(
+        409,
+        "The repository has uncommitted changes: deploy a coding session's accepted work instead",
+      );
+    const head = await git(top, "rev-parse", "HEAD");
+    if (typeof input.commit === "string" && !head.startsWith(input.commit))
+      throw new HostRefusal(409, `The repository is at ${head.slice(0, 12)}, not ${input.commit}`);
+    if (deployingRepositories.has(top)) throw new HostRefusal(409, "A deploy is already running");
+    return deploy(
+      {
+        id,
+        scope,
+        repository: top,
+        commit: head,
+        about: { deployedFor: { scope, workItemId } },
+        running: (deploying) =>
+          deploying ? deployingRepositories.add(top) : deployingRepositories.delete(top),
+      },
+      input,
+    );
+  }
+
+  /**
+   * Deploys one commit in its own detached worktree, so uncommitted edits never ship; the
+   * outcome arrives as an event about its session (or its work item, without one).
+   */
+  async function deploy(
+    target: {
+      id: string;
+      scope: Scope;
+      repository: string;
+      commit: string;
+      about: Pick<CodingEvent, "codingSessionId" | "deployedFor">;
+      /** Marks the deploy running (with what) or finished (undefined). */
+      running: (deploying?: { stage: Stage; commit: string }) => void;
+    },
+    input: Record<string, unknown>,
+  ) {
+    const { stage, command, url } = input;
+    if (stage !== "preview" && stage !== "production")
+      throw new HostRefusal(400, "Deploy to preview or production");
+    if (typeof command !== "string" || !command.trim())
+      throw new HostRefusal(400, "Give the repository's deploy command");
+    if (url !== undefined && (typeof url !== "string" || !url.startsWith("https://")))
+      throw new HostRefusal(400, "The URL to check must be https");
+    const { commit } = target;
     if (input.secrets !== undefined && !options.open)
       throw new HostRefusal(503, "Secrets are not available on this host");
     const secrets = options.open
-      ? Object.fromEntries(await options.open(job.scope.businessId, input.secrets, ["secret"]))
+      ? Object.fromEntries(await options.open(target.scope.businessId, input.secrets, ["secret"]))
       : {};
-    const full = await git(job.repository, "rev-parse", "--verify", `${commit}^{commit}`).catch(
+    const full = await git(target.repository, "rev-parse", "--verify", `${commit}^{commit}`).catch(
       () => {
         throw new HostRefusal(400, "That commit isn't in this repository");
       },
     );
     const place = join(
       options.work,
-      job.scope.businessId,
+      target.scope.businessId,
       "deploys",
-      `${job.id}-${full.slice(0, 12)}`,
+      `${target.id}-${full.slice(0, 12)}`,
     );
     await rm(place, { recursive: true, force: true });
-    await git(job.repository, "worktree", "prune");
-    await git(job.repository, "worktree", "add", "--detach", place, full);
-    save({ ...job, deploying: { stage, commit: full } });
+    await git(target.repository, "worktree", "prune");
+    await git(target.repository, "worktree", "add", "--detach", place, full);
+    target.running({ stage, commit: full });
     const child = spawn(
-      ...options.confine(folderOf(job.scope.businessId), false)(options.shell ?? "/bin/zsh", [
+      ...options.confine(folderOf(target.scope.businessId), false)(options.shell ?? "/bin/zsh", [
         "-lc",
         command,
       ]),
@@ -493,11 +563,11 @@ export function codingHost(options: CodingHostOptions): HostRoutes {
       const checked = exitCode === 0 ? ((url as string | undefined) ?? urlIn(shown)) : null;
       const status = checked ? await (options.smoke ?? smoke)(checked) : null;
       const live = exitCode === 0 && status !== null && status < 400;
-      await git(job.repository, "worktree", "remove", "--force", place).catch(() => undefined);
-      save({ ...jobs.get(job.id)!, deploying: undefined });
+      await git(target.repository, "worktree", "remove", "--force", place).catch(() => undefined);
+      target.running();
       emit({
-        id: `${job.id}:deployed:${stage}:${full}:${Date.now()}`,
-        codingSessionId: job.id,
+        id: `${target.id}:deployed:${stage}:${full}:${Date.now()}`,
+        ...target.about,
         kind: "deployed",
         text:
           exitCode !== 0
@@ -614,7 +684,9 @@ export function codingHost(options: CodingHostOptions): HostRoutes {
         case "/coding/publish":
           return publish(jobOf(input), input);
         case "/coding/deploy":
-          return deploy(jobOf(input), input);
+          return deploySession(jobOf(input), input);
+        case "/coding/deploy-repository":
+          return deployRepository(input);
         case "/coding/diff": {
           const job = jobOf(input);
           return workingDiff(job.worktree, job.baseCommit);

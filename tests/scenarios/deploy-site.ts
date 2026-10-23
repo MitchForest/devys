@@ -1,10 +1,10 @@
 /**
  * Deploying the business's website (a small static site already in its folder, no remote, no
- * hosting yet) to its domain: Operations should use the Code app's shipping path (a coding
- * session makes it deployable, accepted with its check), ask in whose hosting account (the
- * Mac's own login is the owner's, not automatically the business's), say so when the domain
- * can't be used and offer a way on, ask about publishing without a GitHub repository, and then
- * ask once for the production deploy with its exact steps. The persona keeps the Mac's account
+ * hosting yet) to its domain: Operations should use the Code app's shipping path (the
+ * repository deployed as it is, or a coding session first if it needs a change), ask in whose
+ * hosting account (the Mac's own login is the owner's, not automatically the business's), say
+ * so when the domain can't be used and offer a way on, ask about publishing without a GitHub
+ * repository, and then ask once for the production deploy with its exact steps. The persona keeps the Mac's account
  * and the hosting provider's free address (the sample domain is not registered anywhere). The
  * run never approves a production deploy.
  */

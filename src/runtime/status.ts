@@ -2,7 +2,7 @@ import type { Usage } from "@earendil-works/pi-ai";
 import type { PiHarness } from "agents/harness/pi";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { defaultLimits } from "../protocol/limits.ts";
-import { messageKey, outboxKey, type ChannelMessage, type Outbox } from "./delivery.ts";
+import { messageKey, messageOf, outboxKey, type ChannelMessage, type Outbox } from "./delivery.ts";
 import { conversationOf, type Sessions } from "./sessions.ts";
 
 /** What the employee is doing: its run, the last 100 inputs and replies, checkpoint and usage. */
@@ -37,7 +37,8 @@ export async function employeeStatus(
               (tx) => tx.submissionByRequest(conversationOf(session), message.id),
               BACKGROUND_CONTEXT,
             );
-      const state = pending.find((item) => item.operationId === message.id)?.status;
+      // A reply follow-up still pending is the message's own turn.
+      const state = pending.find((item) => messageOf(item.operationId) === message.id)?.status;
       return {
         id: message.id,
         text: message.text,
@@ -53,11 +54,12 @@ export async function employeeStatus(
     }),
   );
   const running = pending.find((item) => item.status === "running");
-  const current = running && (await storage.get<ChannelMessage>(messageKey(running.operationId)));
+  const current =
+    running && (await storage.get<ChannelMessage>(messageKey(messageOf(running.operationId))));
   return {
     run: running
       ? {
-          id: running.operationId,
+          id: messageOf(running.operationId),
           stopped: Boolean(current?.cancelled),
           deadline: current ? current.receivedAt + defaultLimits.maxDurationMs : null,
         }

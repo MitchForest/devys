@@ -97,7 +97,7 @@ export function AppCard({ id, text }: { id: string; text: string }) {
         <span className="min-w-0 truncate text-detail text-ink-2">{text}</span>
       </div>
     );
-  const why = text.startsWith(`${app.name}: `) ? text.slice(app.name.length + 2) : app.summary;
+  const why = text || app.summary;
   return (
     <div className={card} data-testid="app-card">
       <button

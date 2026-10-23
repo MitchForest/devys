@@ -85,11 +85,14 @@ export const LiveCodingSession = Schema.Struct({
 });
 export type LiveCodingSession = typeof LiveCodingSession.Type;
 
-/** A change in a session the supervising employee should hear about. */
+/** A change in a session (or a repository's deploy) the supervising employee should hear about. */
 export interface CodingEvent {
   /** Stable, so delivering it twice is harmless. */
   id: string;
-  codingSessionId: string;
+  /** The coding session it is about; absent for a repository deployed without one. */
+  codingSessionId?: string;
+  /** For a repository deployed without a coding session: who deployed it, for which work item. */
+  deployedFor?: { scope: Scope; workItemId: string };
   kind: "started" | "finished" | "failed" | "interrupted" | "checked" | "deployed";
   /** The provider's reply, an error, or the check's or deploy's outcome. */
   text: string;
@@ -108,13 +111,25 @@ export type Stage = "preview" | "production";
  * (to roll back) an earlier one. `url` is checked afterwards; without it, the last https URL
  * the command printed is.
  */
-interface DeployRequest {
+export interface DeployRequest {
   stage: Stage;
   command: string;
   commit?: string;
   url?: string;
   /** The business's secrets the deploy command needs, by name (set in its environment only). */
   secrets?: readonly string[];
+}
+
+/**
+ * Deploys a repository as it is, with no coding session: its committed HEAD, in a clean
+ * worktree. `commit`, when given, must be that HEAD (what the owner approved).
+ */
+export interface RepositoryDeployRequest extends DeployRequest {
+  /** Names the deploy: stable for one call, so a repeated call reuses its place. */
+  id: string;
+  /** The repository's top folder, an absolute path on the owner's Mac. */
+  repository: string;
+  workItemId: string;
 }
 
 /** A finished deploy: its exit, the URL checked, and that URL's answer. */
@@ -207,4 +222,6 @@ export interface CodingHost {
   publish(codingSessionId: string, request: PublishRequest): Promise<Published>;
   /** Starts a deploy; its outcome arrives as a `deployed` event. */
   deploy(codingSessionId: string, request: DeployRequest): Promise<{ commit: string }>;
+  /** Starts a deploy of a repository's committed HEAD without a coding session. */
+  deployRepository(request: RepositoryDeployRequest): Promise<{ commit: string }>;
 }

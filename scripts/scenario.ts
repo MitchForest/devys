@@ -12,8 +12,8 @@
  * Results go to `.scratch/scenarios/<name>/<timestamp>/`: `summary.md` (steps and rubric),
  * `transcript.md` (what the owner reads), `wire.json` (every message, request and work item as
  * the clients receive them) and screenshots at each owner touch (1440×900 and 390×844). The
- * owner's local install (:8787, Postgres 54330) is never touched: this uses the development
- * Postgres and ports 5190 (app) and 8798 (host), or `DEVYS_SCENARIO_APP_PORT` and
+ * owner's local install (:8787, Postgres 54330) is never touched: this uses its own database in
+ * the development Postgres and ports 5190 (app) and 8798 (host), or `DEVYS_SCENARIO_APP_PORT` and
  * `DEVYS_SCENARIO_HOST_PORT` beside another run.
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
@@ -42,7 +42,7 @@ import { web } from "../src/apps/web/app.ts";
 import { work } from "../src/apps/work/app.ts";
 import type { HireableRoleId } from "../src/protocol/roles.ts";
 import type { NewSecret } from "../src/vault/contract.ts";
-import { databaseUrl } from "./db.ts";
+import { createDatabase, databaseUrl, dropDatabase, migrate } from "./db.ts";
 import { hostEnvironment } from "./local.ts";
 
 /** An `askOwner` request's kind, or `spend` for an approve with an amount. */
@@ -105,6 +105,11 @@ const ports = {
   host: Number(process.env.DEVYS_SCENARIO_HOST_PORT ?? 8798),
 };
 const base = `http://127.0.0.1:${ports.app}`;
+/**
+ * The run's own database, made fresh and dropped afterwards: a dev server's minute tick hands
+ * every business's ready work to its own employees and host, so runs must not share one.
+ */
+const database = `devys_scenario_${ports.app}`;
 const hex = () => Buffer.from(randomBytes(32)).toString("hex");
 const sha = (value: string) => createHash("sha256").update(value).digest("hex");
 const sleep = (ms: number) => new Promise((done) => setTimeout(done, ms));
@@ -300,9 +305,13 @@ const requestText = (decision: Decision) =>
     )
     .concat(Array.isArray(decision.input.steps) ? decision.input.steps.map(String) : []);
 
-/** A work item's words the owner reads, without ids, times or states. */
+/** A work item's words the owner reads: no ids, times, states, authors or commands. */
 function workText(value: unknown, key = ""): string[] {
-  if (/(^id$|_id$|_at$|^ref$|^state$|^status$|^kind$|^source$|^created_by$|^conditions$)/.test(key))
+  if (
+    /(^id$|_id$|_at$|^ref$|^state$|^status$|^kind$|^source$|^created_by$|^by$|^conditions$|^command$)/.test(
+      key,
+    )
+  )
     return [];
   if (typeof value === "string") return [value];
   if (Array.isArray(value)) return value.flatMap((each) => workText(each));
@@ -499,7 +508,7 @@ function placeOf(business: string, key: string, operations: string) {
 type Step = { turn: string; outcome: "ok" | "failed" | "stopped"; note: string; seconds: number };
 
 async function play(scenario: Scenario, out: string) {
-  const db = new pg.Client({ connectionString: databaseUrl() });
+  const db = new pg.Client({ connectionString: databaseUrl(database) });
   await db.connect();
   const seeded = await seed(db, scenario);
   const { api, business, operations, person } = seeded;
@@ -852,6 +861,8 @@ async function main(file: string) {
       .status
   )
     throw new Error("The development Postgres did not start");
+  await createDatabase(database, true);
+  await migrate(database);
   const token = hex();
   const dotenv = join(checkout, ".env");
   // The owner's real HOME (Chrome and its keychain, the owner's CLI logins); its own host data.
@@ -881,6 +892,7 @@ async function main(file: string) {
     {
       ...process.env,
       DEVYS_DEV_STATE: join(run, "state"),
+      DEVYS_DEV_DATABASE: databaseUrl(database),
       DEVYS_DEV_VARS: JSON.stringify({
         PUBLIC_URL: base,
         DEVYS_HOST_URL: `http://127.0.0.1:${ports.host}`,
@@ -910,6 +922,7 @@ async function main(file: string) {
     clearInterval(minute);
     await Promise.all([stop(app), stop(host)]);
     rmSync(run, { recursive: true, force: true });
+    await dropDatabase(database);
   }
 }
 

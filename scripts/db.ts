@@ -83,6 +83,12 @@ export async function createDatabase(name: string, recreate = false) {
   });
 }
 
+export async function dropDatabase(name: string) {
+  await withClient("postgres", (client) =>
+    client.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`),
+  );
+}
+
 type AlchemyMigrations = {
   applyMigrations: (options: {
     resolved: { dir: string; table: string };

@@ -12,6 +12,7 @@ import {
   type CodingEvent,
   type CodingHost,
   type CodingSession,
+  type Deployed,
   type Provider,
 } from "../apps/code/contract.ts";
 import {
@@ -316,6 +317,20 @@ export async function interruptCodingSessions(env: Env, scope: Scope) {
   await Promise.allSettled(started.map((item) => coding.interrupt(item.id)));
 }
 
+/** A check's outcome in words, with the short commit: "The check passed on 1a2b3c4". */
+const checkedLine = (check: NonNullable<CodingEvent["check"]>) =>
+  `The check ${check.exitCode === 0 ? "passed" : check.exitCode === null ? "didn't finish" : "failed"} on ${check.commit.slice(0, 7)}`;
+
+/** A deploy's outcome in words: where it went and whether its address answers. */
+const deployedLine = ({ stage, commit, exitCode, url, live }: Deployed) =>
+  exitCode !== 0
+    ? `The deploy of ${commit.slice(0, 7)} to ${stage} failed`
+    : live
+      ? `Deployed ${commit.slice(0, 7)} to ${stage} · live at ${url}`
+      : url
+        ? `Deployed ${commit.slice(0, 7)} to ${stage}, but ${url} isn't answering`
+        : `Deployed ${commit.slice(0, 7)} to ${stage}; there was no address to check`;
+
 /** The "3 files changed, …" line of a diff stat, or how many files are new. */
 const changeSummary = (diffStat: string) => {
   const lines = diffStat.split("\n");
@@ -345,19 +360,22 @@ export async function codingEventsRoute(request: Request, env: Env) {
 }
 
 async function deliverEvent(env: Env, event: CodingEvent) {
+  if (!event.codingSessionId) return deliverRepositoryDeploy(env, event);
   const item = await Effect.runPromise(codingSessionById(env.HYPERDRIVE, event.codingSessionId));
   if (!item) return;
   const scope = { businessId: item.business_id, employeeId: item.employee_id };
   const employee = await Effect.runPromise(activeEmployee(env.HYPERDRIVE, scope));
   const who = providerName(item.provider);
   const changed = event.diffStat ? changeSummary(event.diffStat) : "";
+  // What the owner reads: a short line in words; the provider's and host's own text (commands,
+  // paths, output) stays in the session layer and goes to the employee below.
   const card = {
-    started: `${employee?.name ?? "An employee"} started ${who}${item.purpose === "review" ? " (review)" : ""}${item.branch ? ` · ${item.branch}` : ""}: ${item.objective.slice(0, 200)}`,
-    finished: `${who} finished${changed ? ` · ${changed}` : ""}: ${event.text.slice(0, 600)}`,
-    failed: `${who} failed: ${event.text.slice(0, 600)}`,
-    interrupted: `${who} was interrupted: ${event.text.slice(0, 600)}`,
-    checked: event.text.slice(0, 2000),
-    deployed: event.text.slice(0, 2000),
+    started: `${employee?.name ?? "An employee"} started ${who}${item.purpose === "review" ? " to review the change" : ""}`,
+    finished: `${who} finished${changed ? ` · ${changed}` : ""}`,
+    failed: `${who} stopped with an error`,
+    interrupted: `${who} was interrupted`,
+    checked: event.check ? checkedLine(event.check) : "The check ended",
+    deployed: event.deploy ? deployedLine(event.deploy) : "The deploy ended",
   }[event.kind];
   await postEvent(env, item.business_id, `work:${item.work_item_id}`, {
     clientId: `coding:${event.id}`,
@@ -368,22 +386,14 @@ async function deliverEvent(env: Env, event: CodingEvent) {
     await Effect.runPromise(
       addEvidence(env.HYPERDRIVE, item.business_id, item.work_item_id, {
         by: "devys",
-        note: `\`${event.check.command}\` ${event.check.exitCode === 0 ? "passed" : `failed (exit ${event.check.exitCode ?? "killed"})`} on ${event.check.commit.slice(0, 12)}.`,
+        note: card,
         commit: event.check.commit,
         check: { command: event.check.command, exit_code: event.check.exitCode },
         source: `coding:${event.id}`,
       }),
     );
   if (event.kind === "deployed" && event.deploy)
-    await Effect.runPromise(
-      addEvidence(env.HYPERDRIVE, item.business_id, item.work_item_id, {
-        by: "devys",
-        note: event.text,
-        commit: event.deploy.commit,
-        deploy: { stage: event.deploy.stage, url: event.deploy.url, live: event.deploy.live },
-        source: `coding:${event.id}`,
-      }),
-    );
+    await recordDeploy(env, item.business_id, item.work_item_id, event.id, event.deploy);
   if (event.kind === "started") return;
   // While a person holds the work they drive the session; its employee is briefed once, on
   // hand-back, rather than woken by every turn it may not act on.
@@ -392,7 +402,9 @@ async function deliverEvent(env: Env, event: CodingEvent) {
   );
   if (work?.taken_over_by) return;
   const text = [
-    `Your ${who} session ${ref("code", "session", item.id)} (${item.purpose}) on this work item: ${card}`,
+    `Your ${who} session ${ref("code", "session", item.id)} (${item.purpose}) on this work item: ${card}.`,
+    event.text &&
+      `${event.kind === "finished" ? "Its reply" : "What the Mac host reported"}:\n${event.text.slice(0, 8000)}`,
     event.diffStat &&
       `Changes in its worktree ${item.worktree}:\n${event.diffStat.length > 8000 ? `${event.diffStat.slice(0, 8000)}\n… (run git diff --stat in the worktree for the rest)` : event.diffStat}`,
     event.check?.output && `Check output (end):\n${event.check.output.slice(-6000)}`,
@@ -416,6 +428,60 @@ async function deliverEvent(env: Env, event: CodingEvent) {
     chatId: workChat(scope, item.work_item_id),
     text,
   });
+}
+
+/**
+ * A repository deployed as it is, without a coding session: the line in its work item's thread,
+ * the evidence, and the employee that deployed it told how it went.
+ */
+async function deliverRepositoryDeploy(env: Env, event: CodingEvent) {
+  if (event.kind !== "deployed" || !event.deploy || !event.deployedFor) return;
+  const { scope, workItemId } = event.deployedFor;
+  const card = await recordDeploy(env, scope.businessId, workItemId, event.id, event.deploy);
+  await postEvent(env, scope.businessId, `work:${workItemId}`, {
+    clientId: `coding:${event.id}`,
+    text: card,
+  });
+  const work = await Effect.runPromise(workItem(env.HYPERDRIVE, scope.businessId, workItemId));
+  if (!work || work.taken_over_by) return;
+  const text = [
+    `Your deploy on this work item: ${card}.`,
+    `What the Mac host reported:\n${event.text.slice(0, 8000)}`,
+    event.deploy.output &&
+      `Deploy output (end, secrets redacted):\n${event.deploy.output.slice(-6000)}`,
+    event.deploy.live
+      ? "It is live and recorded as evidence. If the work item is done, complete it."
+      : "It isn't working: read the output, then fix the repository in a coding session and deploy its accepted work, or deploy again once the cause is fixed.",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  await env.AGENT.getByName(scopeName(scope)).receive(scope, {
+    messageId: `coding:${event.id}`.slice(0, 512),
+    senderId: "coding",
+    chatId: workChat(scope, workItemId),
+    text,
+  });
+}
+
+/** A deploy as the work item's evidence; returns its line in words. */
+async function recordDeploy(
+  env: Env,
+  businessId: string,
+  workItemId: string,
+  eventId: string,
+  deploy: Deployed,
+) {
+  const note = deployedLine(deploy);
+  await Effect.runPromise(
+    addEvidence(env.HYPERDRIVE, businessId, workItemId, {
+      by: "devys",
+      note,
+      commit: deploy.commit,
+      deploy: { stage: deploy.stage, url: deploy.url, live: deploy.live },
+      source: `coding:${eventId}`,
+    }),
+  );
+  return note;
 }
 
 const notFound = () => new Response("Not found", { status: 404 });

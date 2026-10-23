@@ -602,6 +602,7 @@ it("every route the clients read answers in its wire schema; the golden files ma
       throw new Error("not published here");
     },
     deploy: async () => ({ commit: "c".repeat(40) }),
+    deployRepository: async () => ({ commit: "c".repeat(40) }),
   };
   const owner = { id: person, display_name: "Owner" };
   const access = (path: string) => ({ person: owner, business: acme, trusted: true, path });

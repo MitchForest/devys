@@ -409,6 +409,19 @@ struct EventCard: View {
                 handoff(item)
             } else if case .layer(.remoteApp(let appID)) = target {
                 RemoteAppCard(store: store, appID: appID, text: event.text)
+            } else if let target, let ref = event.ref, ref.recordKind == "code/session" {
+                // A coding session's milestone in words; View opens the session's own record.
+                ConversationCard(help: "View the coding session") { open(target) } label: {
+                    Image(systemName: Self.symbol(ref))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(DevysColors.indigo)
+                        .frame(width: 22, height: 22)
+                        .background(DevysColors.indigo.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        .accessibilityHidden(true)
+                    Text(event.text).font(DevysTypography.control.weight(.semibold)).foregroundStyle(DevysColors.ink).lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text("View").font(DevysTypography.caption.weight(.medium)).foregroundStyle(DevysColors.ink3)
+                }
             } else if let target, let ref = event.ref {
                 // Named as the web names it: the record's title over its kind.
                 ConversationCard(help: "Open") { open(target) } label: {

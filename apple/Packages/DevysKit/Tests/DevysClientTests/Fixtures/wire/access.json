@@ -183,7 +183,7 @@
       "constraints": {},
       "responsibility": null,
       "created_at": "2026-01-01T00:00:00.000Z",
-      "description": "Deploy a coding session's accepted, checked commit (name the session by its ref) to a preview with the repository's own deploy command (for example `bunx wrangler deploy --env preview`), then check the URL it prints (or the one you give) answers. `secrets` names the business's secrets the command needs (each set as the variable of its name, redacted from the output). The result arrives in this work item. To roll back, name an earlier commit this work item accepted or deployed.",
+      "description": "Deploy to preview with the repository's own deploy command (for example `bunx wrangler deploy --env preview`), then check the URL it prints (or the one you give) answers. Deploy either a coding session's accepted, checked commit (name the session by its ref), or, when the repository needs no change, the repository itself (repository: its absolute path) at its current commit: its worktree must be clean, and a repository this work item has a coding session on deploys through that session. `secrets` names the business's secrets the command needs (each set as the variable of its name, redacted from the output). The result arrives in this work item. To roll back a session's deploy, name an earlier commit this work item accepted or deployed.",
       "effect": "external",
       "limits": true
     },
@@ -194,7 +194,7 @@
       "constraints": {},
       "responsibility": null,
       "created_at": "2026-01-01T00:00:00.000Z",
-      "description": "Deploy a coding session's accepted, checked commit (name the session by its ref) to production with the repository's own production deploy command, then check its URL answers. `secrets` names the business's secrets the command needs (each set as the variable of its name, redacted from the output). The owner approves each production deploy. To ask once for several steps (merge, then deploy), list this deploy in an askOwner approve's steps exactly as `Deploy <commit> of <repository> to production` (repository: the last part of its folder's path) and pass that commit here: that approval covers this deploy, once. To roll back, name an earlier commit this work item accepted or deployed.",
+      "description": "Deploy to production with the repository's own production deploy command, then check the URL it prints (or the one you give) answers. Deploy either a coding session's accepted, checked commit (name the session by its ref), or, when the repository needs no change, the repository itself (repository: its absolute path) at its current commit: its worktree must be clean, and a repository this work item has a coding session on deploys through that session. `secrets` names the business's secrets the command needs (each set as the variable of its name, redacted from the output). The result arrives in this work item. The owner approves each production deploy. To ask once for several steps (merge, then deploy), list this deploy in an askOwner approve's steps exactly as `Deploy <commit> of <repository> to production` (repository: the last part of its folder's path) and pass that commit here: that approval covers this deploy, once. To roll back a session's deploy, name an earlier commit this work item accepted or deployed.",
       "effect": "external",
       "limits": true
     },

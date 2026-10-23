@@ -7,7 +7,15 @@ import type { Scope } from "../identity/contract.ts";
 import { defaultLimits } from "../protocol/limits.ts";
 import { sha256 } from "../protocol/bytes.ts";
 import type { WorkspacePort } from "../workspace/contract.ts";
-import { messageKey, outboxKey, recentKey, type ChannelMessage, type Outbox } from "./delivery.ts";
+import {
+  messageKey,
+  messageOf,
+  outboxKey,
+  recentKey,
+  replyTurn,
+  type ChannelMessage,
+  type Outbox,
+} from "./delivery.ts";
 import { withMemory } from "./memory.ts";
 import type { MemoryUpkeep } from "./memory-upkeep.ts";
 import { deliver, queueReply, reaches } from "./outbox.ts";
@@ -15,10 +23,21 @@ import { conversationIn, conversationOf, type Sessions } from "./sessions.ts";
 
 type Later = { rescheduleAt: number };
 /**
- * What answers a message: the employee's words, Devys's notice when the turn ended without them,
- * or nothing when the employee finished without saying anything (its cards carry the turn).
+ * What answers a message: the employee's words, Devys's notice when the turn failed, or nothing
+ * when the employee finished without saying anything even when asked once more for its reply.
  */
 type Answer = string | { notice: Notice } | null;
+
+/** The Pi operations a message has: its turn and, once asked, its reply follow-up. */
+const operationsOf = (message: ChannelMessage) =>
+  message.replyAsked ? [message.id, replyTurn(message.id)] : [message.id];
+
+/**
+ * Devys's own inputs (dispatched work, coding events): their turns may end in cards and
+ * records alone, so a turn without words is not a missing reply.
+ */
+const fromDevys = (message: ChannelMessage) =>
+  message.input.senderId === "dispatcher" || message.input.senderId === "coding";
 
 const expired = (message: ChannelMessage) =>
   Date.now() >= message.receivedAt + defaultLimits.maxDurationMs;
@@ -122,7 +141,8 @@ export function channelInbox(deps: {
     try {
       const targets: { operationId: string; session: string }[] = [];
       for (const id of selected) {
-        const message = await storage.get<ChannelMessage>(messageKey(id));
+        // A reply follow-up is cancelled as the message it answers.
+        const message = await storage.get<ChannelMessage>(messageKey(messageOf(id)));
         const session =
           pending.find((item) => item.operationId === id)?.session ??
           (message ? sessions.sessionIn(known, message.input.chatId) : undefined);
@@ -136,9 +156,9 @@ export function channelInbox(deps: {
               );
         if (submission?.status === "done" || submission?.status === "unanswered") continue;
         await storage.transaction(async (tx) => {
-          const latest = await tx.get<ChannelMessage>(messageKey(id));
+          const latest = await tx.get<ChannelMessage>(messageKey(messageOf(id)));
           if (latest && !latest.control)
-            await tx.put(messageKey(id), { ...latest, cancelled: true });
+            await tx.put(messageKey(latest.id), { ...latest, cancelled: true });
         });
       }
       const active = pending.some(
@@ -249,11 +269,14 @@ export function channelInbox(deps: {
     }
     if (message.cancelled || expired(message)) {
       const session = await sessions.known(conversation);
+      const operations = operationsOf(message);
       const active = (await harness.pending()).some(
-        (item) => item.operationId === message.id && item.status === "running",
+        (item) => operations.includes(item.operationId) && item.status === "running",
       );
       await Promise.all([
-        ...(session === undefined ? [] : [harness.abort({ operationId: message.id, session })]),
+        ...(session === undefined
+          ? []
+          : operations.map((operationId) => harness.abort({ operationId, session }))),
         ...(active ? [deps.runner().cancel()] : []),
       ]);
       // A stop the owner sent is answered by the stop itself; the rest are Devys's to say.
@@ -286,14 +309,17 @@ export function channelInbox(deps: {
         if (latest) await tx.put(messageKey(message.id), { ...latest, submitted: true });
       });
     }
-    if ((await storage.get<ChannelMessage>(messageKey(message.id)))?.cancelled)
-      await harness.abort({ operationId: message.id, session });
+    // After a turn without words, the one follow-up asking for the reply is what answers.
+    const asked = (await storage.get<ChannelMessage>(messageKey(message.id))) ?? message;
+    const operationId = asked.replyAsked ? replyTurn(message.id) : message.id;
+    if (asked.cancelled) await harness.abort({ operationId, session });
     const signal = AbortSignal.timeout(5_000);
     let answer: Answer;
     try {
-      const result = await harness.wait(message.id, { session, signal });
+      const result = await harness.wait(operationId, { session, signal });
       if (result.status !== "done") answer = { notice: "failed" };
       else if (result.text?.trim()) answer = result.text;
+      else if (!asked.replyAsked && !fromDevys(message)) return askForReply(message, session);
       else {
         silent(message);
         answer = null;
@@ -307,7 +333,23 @@ export function channelInbox(deps: {
     return answer;
   }
 
-  /** A turn that ended without words: its cards (suggested replies, asks) carry it, if any. */
+  /**
+   * A turn that ended without words (often the reply was written only in its thinking): one
+   * follow-up in the same session asks for it, admitted once by its stable operation id.
+   */
+  async function askForReply(message: ChannelMessage, session: string): Promise<Later> {
+    await harness.submit(
+      "Your reply wasn't written: nobody saw anything from that turn. Write your reply now, as plain text.",
+      { session, operationId: replyTurn(message.id), whenBusy: "followUp" },
+    );
+    await storage.transaction(async (tx) => {
+      const latest = await tx.get<ChannelMessage>(messageKey(message.id));
+      if (latest) await tx.put(messageKey(message.id), { ...latest, replyAsked: true });
+    });
+    return { rescheduleAt: Date.now() + 1_000 };
+  }
+
+  /** Still no words after the follow-up. Logged; no stand-in text is posted. */
   function silent(message: ChannelMessage) {
     console.info(
       JSON.stringify({

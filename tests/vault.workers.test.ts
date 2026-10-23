@@ -394,7 +394,7 @@ it("a card is filled only against a signed, unused spend approval of this work i
   expect(JSON.stringify(filled)).not.toContain(card.number);
   const item = (await Effect.runPromise(workItem(db, scope.businessId, work.id)))!;
   expect(item.evidence.map((entry) => entry.note)).toContain(
-    `Card RAMP_CARD ending 4242 filled at https://shop.example and submitted, against spend approval ${asked.request}.`,
+    "The card ending 4242 filled at https://shop.example and submitted, against the signed spend approval.",
   );
   expect(
     (

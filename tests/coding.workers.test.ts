@@ -87,6 +87,14 @@ function harness() {
       });
       return { commit: request.commit ?? "b".repeat(40) };
     },
+    deployRepository: async (request) => {
+      deploys.push({
+        id: request.repository,
+        stage: request.stage,
+        ...(request.commit ? { commit: request.commit } : {}),
+      });
+      return { commit: "d".repeat(40) };
+    },
     publish: async (id, request) => {
       published.push({ id, ...request });
       return {
@@ -247,8 +255,8 @@ it("coding clones the business's GitHub repository and publishes accepted work a
     { id: session, repository: "acme/site", title: "Fix the footer", body: "Checked." },
   ]);
   const evidence = (await Effect.runPromise(workItem(db, scope.businessId, work.id)))!.evidence;
-  expect(evidence.at(-1)!.note).toContain(
-    "to devys/" + session.slice(0, 12) + " on github.com/acme/site (repository R_kgDOtest)",
+  expect(evidence.at(-1)!.note).toBe(
+    "Opened a pull request for bbbbbbb into main on GitHub: https://github.com/acme/site/pull/7",
   );
   // A grant limited to other repositories refuses this one.
   await Effect.runPromise(
@@ -347,11 +355,12 @@ it("host events become thread cards, wake the employee under a stable id, and re
   const thread = await Effect.runPromise(
     messages(db, scope.businessId, `work:${work.id}`, { limit: 50 }),
   );
+  // The owner reads each milestone in words; the reply and the commands go to the employee.
   expect(thread.map((message) => message.text)).toEqual([
-    expect.stringMatching(/started Codex · devys\/.*: Build the waitlist page/),
-    "Codex finished · 1 file changed, 40 insertions(+): Built the page and its tests.",
-    "→ Codex: Add an empty state",
-    "`bun test` passed.",
+    expect.stringMatching(/ started Codex$/),
+    "Codex finished · 1 file changed, 40 insertions(+)",
+    "Sent Codex a follow-up",
+    "The check passed on bbbbbbb",
   ]);
   const evidence = (await Effect.runPromise(workItem(db, scope.businessId, work.id)))!.evidence;
   expect(
@@ -359,6 +368,11 @@ it("host events become thread cards, wake the employee under a stable id, and re
   ).toEqual([
     ["b", null],
     ["b", 0],
+  ]);
+  // Evidence says what happened in words: no paths, ids or commands.
+  expect(evidence.map((entry) => entry.note)).toEqual([
+    expect.stringMatching(/^Committed bbbbbbb on its branch.*: Add the waitlist page$/),
+    "The check passed on bbbbbbb",
   ]);
   expect(received).toHaveLength(4);
   // A later acceptance needs its own check: the earlier commit's pass does not cover it.
@@ -425,7 +439,8 @@ it("the owner steers a session only after taking the work over; handing back wak
     messages(db, scope.businessId, `work:${work.id}`, { limit: 50 }),
   );
   expect(thread.at(-1)?.text).toBe("Owner → Claude Code: Use a grid");
-  // While the owner holds the work, the session's turns post cards but wake no one.
+  // While the owner holds the work, the session's turns post cards (its reply is in the
+  // session layer) but wake no one.
   const woken = received.length;
   await event(bindings, [
     {
@@ -441,7 +456,7 @@ it("the owner steers a session only after taking the work over; handing back wak
     (await Effect.runPromise(messages(db, scope.businessId, `work:${work.id}`, { limit: 50 }))).at(
       -1,
     )?.text,
-  ).toContain("Used a grid.");
+  ).toBe("Claude Code finished");
 
   const before = received.length;
   await Effect.runPromise(setTakeover(db, scope.businessId, work.id, null));
@@ -632,7 +647,11 @@ it("previews deploy on their own, production asks, rollbacks name a known commit
       deploy: { stage: "preview", url: "https://site.example.workers.dev", live: true },
     }),
   ]);
+  expect(evidence.find((entry) => entry.deploy)?.note).toBe(
+    "Deployed bbbbbbb to preview · live at https://site.example.workers.dev",
+  );
   expect(received.at(-1)!.input.text).toContain("It is live");
+  expect(received.at(-1)!.input.text).toContain("answers (200)");
   // Now that commit is a rollback target.
   expect(
     await Effect.runPromise(
@@ -699,4 +718,93 @@ it("one approval of several steps covers the production deploy it names exactly,
     (await sql.row<{ status: string }>("SELECT status FROM decisions WHERE id = $1", [asked.id]))
       ?.status,
   ).toBe("used");
+});
+
+it("a repository that needs no change deploys at its commit without a session, on the same approval; one with a session deploys through it", async () => {
+  const { bindings, scope, work, deploys, received, named } = await setup();
+  const askOwner = capabilities(bindings).find((item) => item.name === "askOwner")!;
+  await Effect.runPromise(grant(db, scope, { capability: askOwner, mode: "auto" }));
+  const repository = "/Users/owner/Devys/acme/repos/site";
+  const deploy = (input: Record<string, unknown>) =>
+    Effect.runPromiseExit(
+      named("deployProduction")
+        .execute({ command: "bunx wrangler deploy", ...input })
+        .pipe(as(bindings, scope, work.id)),
+    );
+  // A session or a repository, not both.
+  expect((await deploy({}))._tag).toBe("Failure");
+  // Production still asks: nothing deploys before the owner approves the exact step.
+  expect((await deploy({ repository, commit: "dddddddddddd" }))._tag).toBe("Failure");
+  expect(deploys).toEqual([]);
+  const asked = await askOwnerFor(
+    bindings,
+    { ...scope, workItemId: work.id, conversation: `work:${work.id}` },
+    {
+      kind: "approve",
+      action: "Put the website live",
+      counterparty: "Cloudflare",
+      steps: ["Deploy dddddddddddd of site to production"],
+    },
+  );
+  const owner = (await ownerOf(scope.businessId))!;
+  await Effect.runPromise(
+    answerDecision(db, scope.businessId, asked.id, { approve: true, by: owner }),
+  );
+  expect(await deploy({ repository, commit: "dddddddddddd" })).toMatchObject({
+    _tag: "Success",
+    value: { deploying: "d".repeat(40) },
+  });
+  expect(deploys).toEqual([{ id: repository, stage: "production", commit: "dddddddddddd" }]);
+
+  // Its outcome lands on the work item: a line in words, evidence, and the employee told.
+  const deployed = {
+    id: `repo-1:deployed:production:${"d".repeat(40)}:1`,
+    deployedFor: { scope, workItemId: work.id },
+    kind: "deployed",
+    text: "Deployed ddddddd to production: https://site.example.workers.dev answers (200).",
+    deploy: {
+      stage: "production",
+      commit: "d".repeat(40),
+      command: "bunx wrangler deploy",
+      exitCode: 0,
+      url: "https://site.example.workers.dev",
+      status: 200,
+      live: true,
+      output: "Deployed",
+    },
+  };
+  expect(await (await event(bindings, [deployed])).json()).toEqual({ delivered: [deployed.id] });
+  const thread = await Effect.runPromise(
+    messages(db, scope.businessId, `work:${work.id}`, { limit: 50 }),
+  );
+  expect(thread.map((message) => message.text)).toContain(
+    "Deployed ddddddd to production · live at https://site.example.workers.dev",
+  );
+  const evidence = (await Effect.runPromise(workItem(db, scope.businessId, work.id)))!.evidence;
+  expect(evidence.find((entry) => entry.deploy)).toMatchObject({
+    commit: "d".repeat(40),
+    deploy: { stage: "production", live: true },
+  });
+  expect(received.at(-1)!.input).toMatchObject({
+    senderId: "coding",
+    chatId: workChat(scope, work.id),
+  });
+
+  // Once this work item has a coding session on the repository, its work deploys through it.
+  await Effect.runPromise(
+    named("codingStart")
+      .execute({ provider: "codex", objective: "Change it", repository })
+      .pipe(as(bindings, scope, work.id)),
+  );
+  // (The stand-in host reports another path; the session's recorded repository is this one.)
+  await sql.run("UPDATE coding_sessions SET repository = $2 WHERE work_item_id = $1", [
+    work.id,
+    repository,
+  ]);
+  const refused = await Effect.runPromise(
+    named("deployPreview")
+      .execute({ command: "bunx wrangler deploy", repository })
+      .pipe(as(bindings, scope, work.id), Effect.flip),
+  );
+  expect(refused).toMatchObject({ code: "conflict" });
 });

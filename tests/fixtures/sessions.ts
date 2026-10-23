@@ -55,7 +55,11 @@ export class SessionsProbe extends AgentRuntime {
           stream.push({ type: "error", reason: "aborted", error: message("", "aborted") });
         if (options?.signal?.aborted) aborted();
         else options?.signal?.addEventListener("abort", aborted, { once: true });
-      } else if (owner.includes("quietly")) {
+      } else if (
+        owner.includes("quietly") ||
+        // "mute" stays without words even when asked again for its reply.
+        transcript.messages.some((each) => textOf(each).includes("mute"))
+      ) {
         stream.push({ type: "done", reason: "stop", message: message("", "stop") });
       } else if (owner.includes("broken")) {
         stream.push({ type: "error", reason: "error", error: message("", "error") });

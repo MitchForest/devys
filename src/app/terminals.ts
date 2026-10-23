@@ -102,7 +102,7 @@ export async function terminalRoute(request: Request, env: Env, access: Access) 
       business.id,
       work.id,
       person,
-      `${person.display_name} opened a terminal in the worktree.`,
+      `${person.display_name} opened a terminal on its code.`,
       build.id,
     );
     return respond(

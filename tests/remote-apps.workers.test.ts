@@ -240,7 +240,7 @@ it("an employee finds an app, asks to connect it; the owner signs in, reviews an
   const card = (await thread()).find((message) => message.ref?.startsWith("devys:team/app/"));
   expect(card).toMatchObject({
     kind: "event",
-    text: "Acme Books: To read and draft bills",
+    text: "To read and draft bills",
     ref: "devys:team/app/acmebooks",
   });
   const home = await json<{ needs_you: Record<string, unknown>[] }>("/home");
@@ -568,7 +568,7 @@ it("a card from a card app: only against a signed approval, for its exact amount
   });
   const item = (await Effect.runPromise(workItem(db, scope.businessId, work.id)))!;
   expect(item.evidence.map((entry) => entry.note)).toContain(
-    `One-time card from ${id} ending 4242 (its reference ramp-token-77) filled at https://shop.example and submitted, against spend approval ${asked.request}.`,
+    "A one-time card ending 4242 filled at https://shop.example and submitted, against the signed spend approval.",
   );
   // One approval, one card.
   expect(await failure(fill({ approval: asked.request }))).toContain("No approved, signed");

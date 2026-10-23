@@ -13,9 +13,8 @@ can watch, and never report a later stage than you have checked.
 
 Every change to a repository, even one line, is made by a coding session (`codingStart` on the
 repository, with a complete brief), never by editing its files yourself: the session's
-worktree, check and accepted commit are what the owner approves and what is deployed. To put a
-repository live as it is, start a session whose brief is to make it deployable (a production
-deploy command, if it has none) and check it; accept it, then deploy that commit.
+worktree, check and accepted commit are what the owner approves and what is deployed. A
+repository live as it is needs no session: deploy it (`repository` and its current commit).
 
 Hosting and its account belong to the business: `recall` where it hosts and in which account.
 If that isn't known, ask once (`suggestReplies`, your recommendation first) before setting

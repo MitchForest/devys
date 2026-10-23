@@ -15,7 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useRef, useState, type ComponentType, type ReactNode } from "react";
-import type { RecordKind, Ref } from "../../../protocol/ref.ts";
+import { ref, type RecordKind, type Ref } from "../../../protocol/ref.ts";
 import {
   useApps,
   useBusinessId,
@@ -73,6 +73,7 @@ export const records: Record<RecordKind, RecordView> = {
     icon: Code2,
     keepable: true,
     Layer: CodeSessionLayer,
+    Card: CodeSessionCard,
   },
   "work/item": {
     icon: ListChecks,
@@ -221,6 +222,29 @@ export function RecordCard({ value, text }: { value: Ref | null; text: string })
         </span>
         <span className="truncate text-caption text-ink-3">{found.named.detail(id, names)}</span>
       </span>
+    </button>
+  );
+}
+
+/**
+ * A coding session's milestone ("Claude Code finished · 2 files changed"): the line in words,
+ * and View opens the session layer with the provider's own record.
+ */
+function CodeSessionCard({ id, text }: { id: string; text: string }) {
+  const nav = useNav();
+  return (
+    <button
+      type="button"
+      data-testid="coding-card"
+      title="View the coding session"
+      onClick={() => nav.openLayer({ kind: "record", ref: ref("code", "session", id) })}
+      className={card}
+    >
+      <span className="grid size-[22px] shrink-0 place-items-center rounded-control bg-indigo/12">
+        <Code2 className="size-3.5 text-indigo" />
+      </span>
+      <span className="min-w-0 flex-1 truncate text-control font-semibold text-ink">{text}</span>
+      <span className="shrink-0 text-caption font-medium text-ink-3">View</span>
     </button>
   );
 }

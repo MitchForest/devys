@@ -736,7 +736,10 @@ export async function removeApp(env: Env, businessId: string, app: RemoteApp) {
   await Effect.runPromise(removeRemoteApp(env.HYPERDRIVE, businessId, app.id));
 }
 
-/** The connect card an `askOwner` connect posts in its thread: the app's ref. */
+/**
+ * The connect card an `askOwner` connect posts in its thread: the app's ref, which clients draw
+ * with its name and logo, and why it's needed as the text.
+ */
 export async function postConnectCard(
   env: Env,
   businessId: string,
@@ -747,7 +750,7 @@ export async function postConnectCard(
 ) {
   await postEvent(env, businessId, `work:${workItemId}`, {
     clientId: `connect:${decisionId}`,
-    text: `${app.name}: ${why}`,
+    text: why,
     ref: ref("team", "app", app.id),
   });
 }

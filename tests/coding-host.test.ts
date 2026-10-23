@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readFileSync,
   realpathSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -351,6 +352,41 @@ it("deploys run the accepted commit with the business's secrets, check the URL, 
   await expect(deploy("true", { commit: "0".repeat(40) })).rejects.toThrow(
     /isn't in this repository/,
   );
+});
+
+it("a repository with nothing to change deploys at its committed HEAD, only when clean", async () => {
+  const state = await host();
+  const head = execFileSync("git", ["-C", state.repository, "rev-parse", "HEAD"], {
+    encoding: "utf8",
+  }).trim();
+  const deploy = (extra: { commit?: string; repository?: string } = {}) =>
+    state.client().deployRepository({
+      id: "repo-deploy-1",
+      repository: state.repository,
+      workItemId: "w1",
+      stage: "production",
+      command: 'echo "at $(git rev-parse HEAD)" && echo https://acme.example.com',
+      ...extra,
+    });
+  // Only the repository's top folder, and only the HEAD the approval named.
+  await expect(deploy({ repository: join(state.repository, "nowhere") })).rejects.toThrow();
+  await expect(deploy({ commit: "0".repeat(12) })).rejects.toThrow(/is at /);
+  // Uncommitted changes never ship this way.
+  writeFileSync(join(state.repository, "draft.txt"), "draft\n");
+  await expect(deploy()).rejects.toThrow(/uncommitted changes/);
+  rmSync(join(state.repository, "draft.txt"));
+  expect(await deploy({ commit: head.slice(0, 12) })).toEqual({ commit: head });
+  const [event] = await until(
+    () => state.delivered.filter((each) => each.kind === "deployed"),
+    (events) => events.length === 1,
+  );
+  // About its work item, with no coding session.
+  expect(event).toMatchObject({
+    deployedFor: { scope, workItemId: "w1" },
+    deploy: { stage: "production", commit: head, live: true },
+  });
+  expect(event!.codingSessionId).toBeUndefined();
+  expect(event!.deploy!.output).toContain(`at ${head}`);
 });
 
 it("an event the Worker cannot deliver is retried without holding up later events", async () => {

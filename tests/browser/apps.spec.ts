@@ -46,7 +46,7 @@ test("a connect card in the thread and Needs you; the review turns the app on", 
   await insertMessage(sql, owner.business, `work:${work.id}`, {
     author: "system",
     kind: "event",
-    text: `Ledger: ${ask.why}`,
+    text: ask.why,
     ref: "devys:team/app/ledger",
   });
   try {

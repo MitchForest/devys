@@ -302,9 +302,8 @@ export function browserCapabilities(
               filling.record(
                 businessId,
                 workItemId,
-                issue
-                  ? `One-time card from ${issue.app} ending ${filled.last4}${filled.reference ? ` (its reference ${filled.reference})` : ""} filled at ${filled.origin}${filled.submitted ? " and submitted" : ""}, against spend approval ${approval}.`
-                  : `Card ${secret} ending ${filled.last4} filled at ${filled.origin}${filled.submitted ? " and submitted" : ""}, against spend approval ${approval}.`,
+                // In words for the owner; the approval it spent is the evidence's source.
+                `${issue ? "A one-time card" : "The card"} ending ${filled.last4} filled at ${filled.origin}${filled.submitted ? " and submitted" : ""}, against the signed spend approval.`,
                 `fill:${approval}`,
               ),
             );

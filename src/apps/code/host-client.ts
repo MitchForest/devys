@@ -30,6 +30,17 @@ export function hostCoding(
     if (!response.ok) throw await hostFailure(response);
     return (await response.json()) as T;
   }
+  /** A deploy request with the secrets it names sealed for the host. */
+  async function sealing<T extends { secrets?: readonly string[] }>({
+    secrets = [],
+    ...request
+  }: T) {
+    if (secrets.length && !host.sealed) throw new Error("Secrets are not available here");
+    return {
+      ...request,
+      ...(secrets.length ? { secrets: await host.sealed!(scope.businessId, secrets) } : {}),
+    };
+  }
   return {
     start: (request) => call("start", { request }),
     inspect: (id) => call("inspect", { id }),
@@ -41,14 +52,8 @@ export function hostCoding(
     },
     accept: (id, request) => call("accept", { id, ...request }),
     publish: (id, request) => call("publish", { id, ...request }),
-    async deploy(id, { secrets = [], ...request }) {
-      if (secrets.length && !host.sealed) throw new Error("Secrets are not available here");
-      return call("deploy", {
-        id,
-        ...request,
-        ...(secrets.length ? { secrets: await host.sealed!(scope.businessId, secrets) } : {}),
-      });
-    },
+    deploy: async (id, request) => call("deploy", { id, ...(await sealing(request)) }),
+    deployRepository: async (request) => call("deploy-repository", await sealing(request)),
   };
 }
 
@@ -70,5 +75,6 @@ export function unavailableCoding(): CodingHost {
     accept: refuse,
     publish: refuse,
     deploy: refuse,
+    deployRepository: refuse,
   };
 }
