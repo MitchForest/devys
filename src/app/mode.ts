@@ -28,6 +28,8 @@ export interface Mode {
   mayUseMachine(personId: string): Promise<boolean>;
   /** Whether a request carries the Mac host's token (the host's own reports); never in cloud. */
   fromHost(request: Request): Promise<boolean>;
+  /** Whether this is the Mac owner's key (`owner.json`), which signs the Mac app in; never in cloud. */
+  isOwnerKey(key: string): Promise<boolean>;
   /** Commands and files. `within` confines file access to a folder (the owner's file views). */
   runner(within?: string): Runner;
   coding: (scope: Scope) => CodingHost;
@@ -86,6 +88,9 @@ export function modeOf(env: Env): Mode {
           Boolean(token) &&
           (await sha256(request.headers.get("authorization") ?? "")) ===
             (await sha256(`Bearer ${token}`)),
+        isOwnerKey: async (key) =>
+          Boolean(env.DEVYS_OWNER_KEY) &&
+          (await sha256(key)) === (await sha256(env.DEVYS_OWNER_KEY!)),
         // Checked per call so a missing host breaks only file, command and coding tools.
         runner: (within) => (scope) =>
           host ? hostRunner({ ...host, files: env.FILES, within, sealed }, scope) : notConfigured(),
@@ -110,6 +115,7 @@ export function modeOf(env: Env): Mode {
       return {
         mayUseMachine: async () => true,
         fromHost: async () => false,
+        isOwnerKey: async () => false,
         runner: () => (scope) => env.WORKSPACE.getByName(scopeName(scope)),
         coding: () => unavailableCoding(),
         terminals: () => unavailableTerminals(),

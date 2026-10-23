@@ -24,9 +24,6 @@ struct DevysIOSApp: App {
         WindowGroup {
             root
             .preferredColorScheme(scheme)
-                #if DEBUG
-                    .task { await DevysComposition.enrollFromEnvironment() }
-                #endif
         }
         // On iPad a terminal gets a window of its own; iPhone shows it full screen instead.
         WindowGroup("Terminal", for: TerminalRef.self) { $ref in

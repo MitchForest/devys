@@ -15,18 +15,15 @@ private func settle(_ what: String, until condition: @MainActor () -> Bool) asyn
 }
 
 private actor Calls {
-    var signIns: [(URL, String)] = []
     var signedOut = 0
     var stops = 0
     var statusLoads = 0
 
-    func signIn(_ server: URL, _ code: String) { signIns.append((server, code)) }
     func signOut() { signedOut += 1 }
     func stop() { stops += 1 }
     func loadedStatus() { statusLoads += 1 }
 }
 
-private let code = String(repeating: "ab", count: 32)
 private let server = URL(string: "http://127.0.0.1:5173")!
 
 @MainActor
@@ -38,7 +35,6 @@ struct RootRoutingTests {
         let store = withDependencies {
             $0.sessionClient = SessionClient(
                 phases: { phases },
-                signIn: { _, _ in },
                 signOut: {}
             )
             $0.runtimeClient = .fixture
@@ -83,62 +79,6 @@ struct RootRoutingTests {
 }
 
 @MainActor
-@Suite("Sign in")
-struct SignInFeatureTests {
-    private func makeStore(calls: Calls, fails: Bool = false) -> StoreOf<SignIn> {
-        withDependencies {
-            $0.sessionClient = SessionClient(
-                phases: { AsyncStream { $0.finish() } },
-                signIn: { server, code in
-                    await calls.signIn(server, code)
-                    if fails { throw DevysHTTPError.rejected(status: 401, message: "used") }
-                },
-                signOut: {}
-            )
-        } operation: {
-            Store(initialState: SignIn.State()) { SignIn() }
-        }
-    }
-
-    @Test("Only a valid server and a 64-hex code can submit")
-    func validation() {
-        let store = makeStore(calls: Calls())
-        #expect(!store.canSubmit)
-        store.send(.codeChanged("not-a-code"))
-        #expect(!store.canSubmit)
-        store.send(.codeChanged("  \(code.uppercased())\n"))
-        #expect(store.canSubmit)
-        store.send(.serverChanged("ftp://example.com"))
-        #expect(!store.canSubmit)
-    }
-
-    @Test("Submitting sends the normalized code to the chosen server")
-    func submits() async {
-        let calls = Calls()
-        let store = makeStore(calls: calls)
-        store.send(.codeChanged(" \(code.uppercased()) "))
-        store.send(.submitTapped)
-        #expect(store.isSubmitting)
-        for _ in 0..<1_000 where await calls.signIns.isEmpty { await Task.yield() }
-        let sent = await calls.signIns
-        #expect(sent.count == 1)
-        // Debug builds default to the local install on this Mac.
-        #expect(sent.first?.0 == URL(string: "http://127.0.0.1:8787")!)
-        #expect(sent.first?.1 == code)
-    }
-
-    @Test("A used code shows how to get a new one")
-    func failureCopy() async {
-        let store = makeStore(calls: Calls(), fails: true)
-        store.send(.codeChanged(code))
-        store.send(.submitTapped)
-        await settle("failure") { store.errorText != nil }
-        #expect(!store.isSubmitting)
-        #expect(store.errorText?.contains("Settings › Devices") == true)
-    }
-}
-
-@MainActor
 @Suite("Workspace")
 struct WorkspaceFeatureTests {
     private func makeStore(
@@ -148,7 +88,6 @@ struct WorkspaceFeatureTests {
         withDependencies {
             $0.sessionClient = SessionClient(
                 phases: { AsyncStream { $0.finish() } },
-                signIn: { _, _ in },
                 signOut: { await calls.signOut() }
             )
             $0.runtimeClient = RuntimeClient(

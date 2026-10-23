@@ -56,9 +56,11 @@ public struct Preferences {
         /// Their devices' signing keys: which approve spending, and which wait to be allowed.
         package var keys: [DeviceKey] = []
         package var ownerID: String?
-        /// A code for adding a device, shown as a QR code until it expires.
-        package var deviceCode: DeviceCode?
-        package var isIssuingCode = false
+        /// Add a device: this Mac's connect link, shown as a QR code for a device the local
+        /// network can't show it to (Tailscale only). It carries no secret: the device still asks.
+        package var connectLink: ConnectLink?
+        /// A one-time link that signs the browser in as you, to open once (Open in browser).
+        package var browserLink: URL?
         /// The selected business's app directory and its Google Drive connection, loaded when Apps opens.
         package var apps: Loadable<[AppEntry]> = .loading
         package var google: Loadable<GoogleConnection>?
@@ -341,7 +343,9 @@ extension Preferences.Action {
     package static func deviceRevoked(_ id: String) -> Self { Self(.device(.revokeTapped(id))) }
     package static func keyAllowed(_ id: String) -> Self { Self(.device(.allowTapped(keyID: id))) }
     package static var addDeviceTapped: Self { Self(.device(.addTapped)) }
-    package static var deviceCodeDismissed: Self { Self(.device(.codeDismissed)) }
+    package static var connectLinkDismissed: Self { Self(.device(.connectDismissed)) }
+    package static var openInBrowserTapped: Self { Self(.device(.openInBrowserTapped)) }
+    package static var browserLinkOpened: Self { Self(.device(.browserLinkOpened)) }
     package static var appsRequested: Self { Self(.app(.requested)) }
     package static func appInstallToggled(_ id: String, _ install: Bool) -> Self { Self(.app(.installToggled(appID: id, install))) }
     package static func appPinToggled(_ id: String, _ pinned: Bool) -> Self { Self(.app(.pinToggled(appID: id, pinned))) }

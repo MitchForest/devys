@@ -369,8 +369,9 @@ async function remove(db: pg.Client, person: string, business: string) {
     left = failed;
   }
   await run("DELETE FROM businesses WHERE id = $1", [business]);
-  for (const table of ["device_keys", "web_sessions", "enrollment_tokens"])
+  for (const table of ["device_keys", "web_sessions", "sign_in_links"])
     await run(`DELETE FROM ${table} WHERE person_id = $1`, [person]);
+  await run("DELETE FROM join_requests WHERE allowed_by = $1", [person]);
   await run("DELETE FROM people WHERE id = $1", [person]);
   if (/^[0-9a-f-]{36}$/.test(business))
     rmSync(join(homedir(), "Devys", business), { recursive: true, force: true });
@@ -380,16 +381,14 @@ async function remove(db: pg.Client, person: string, business: string) {
 
 async function screens(db: pg.Client, person: string) {
   const browser: Browser = await chromium.launch({ channel: "chrome" });
-  const enrollment = hex();
+  const link = hex();
   await db.query(
-    "INSERT INTO enrollment_tokens (token_hash, person_id, expires_at) VALUES ($1, $2, now() + interval '1 hour')",
-    [sha(enrollment), person],
+    "INSERT INTO sign_in_links (token_hash, person_id, expires_at) VALUES ($1, $2, now() + interval '1 hour')",
+    [sha(link), person],
   );
   const desk = await browser.newContext({ viewport: { width: 1440, height: 900 }, baseURL: base });
   const page = await desk.newPage();
-  await page.goto("/");
-  await page.getByLabel("Enrollment code").fill(enrollment);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.goto(`/#signin=${link}`);
   await page.getByTestId("place-title").waitFor({ timeout: 60_000 });
   const state = await desk.storageState();
   const phone: BrowserContext = await browser.newContext({

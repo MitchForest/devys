@@ -1,7 +1,7 @@
 import ComposableArchitecture2
 import Dependencies
 package import DevysClient
-import Foundation
+package import Foundation
 
 // MARK: - New businesses, business details and devices
 
@@ -46,9 +46,11 @@ package enum DeviceIntent {
     case loaded(Loadable<[Device]>)
     case revokeTapped(String)
     case addTapped
-    case codeIssued(DeviceCode)
-    case codeFailed
-    case codeDismissed
+    case connectLinkLoaded(ConnectLink)
+    case connectDismissed
+    case openInBrowserTapped
+    case browserLinkLoaded(URL)
+    case browserLinkOpened
     case keysLoaded([DeviceKey])
     /// Lets another device's pending key sign, with this device's signature (Face ID or Touch ID).
     case allowTapped(keyID: String)
@@ -138,26 +140,34 @@ extension Preferences {
                 try await loadDevices(runtime)
             }
         case .addTapped:
-            guard !state.isIssuingCode else { return }
-            state.isIssuingCode = true
             state.errorText = nil
             let runtime = runtime
             store.addTask {
                 do {
-                    try store.send(Action(.device(.codeIssued(try await runtime.issueDeviceCode()))))
+                    let hello = try await runtime.hello()
+                    try store.send(Action(.device(.connectLinkLoaded(ConnectLink(mac: FoundMac(name: hello.name, server: hello.url))))))
                 } catch {
-                    try store.send(Action(.device(.codeFailed)))
+                    try store.send(Action(.failed("Couldn't reach Devys. Try again.")))
                 }
             }
-        case .codeIssued(let code):
-            state.isIssuingCode = false
-            state.deviceCode = code
-        case .codeFailed:
-            state.isIssuingCode = false
-            state.errorText = "A code couldn't be issued. Check the connection and try again."
-        case .codeDismissed:
-            state.deviceCode = nil
+        case .connectLinkLoaded(let link):
+            state.connectLink = link
+        case .connectDismissed:
+            state.connectLink = nil
             loadDevices()
+        case .openInBrowserTapped:
+            let runtime = runtime
+            store.addTask {
+                do {
+                    try store.send(Action(.device(.browserLinkLoaded(try await runtime.signInLink()))))
+                } catch {
+                    try store.send(Action(.failed("Couldn't open the browser. Try again.")))
+                }
+            }
+        case .browserLinkLoaded(let url):
+            state.browserLink = url
+        case .browserLinkOpened:
+            state.browserLink = nil
         case .keysLoaded(let keys):
             state.keys = keys
         case .allowTapped(let keyID):

@@ -169,15 +169,13 @@ private struct ExportFile: FileDocument {
 }
 
 /// New business: a name, a brief, and the starting team hired with the Head of Operations.
-/// The first business (`isFirst`) cannot be cancelled: there is nothing to go back to.
 struct NewBusinessSheet: View {
     let store: StoreOf<Preferences>
-    var isFirst = false
 
     var body: some View {
         if let draft = store.newBusiness {
             VStack(alignment: .leading, spacing: DevysSpacing.regular) {
-                Text(isFirst ? "Start your business" : "New business").font(DevysTypography.title).foregroundStyle(DevysColors.ink)
+                Text("New business").font(DevysTypography.title).foregroundStyle(DevysColors.ink)
                 FieldBox { TextField("Name", text: binding(\.name)) }
                 FieldBox {
                     TextField("Brief: what it does, its goals and constraints", text: binding(\.brief), axis: .vertical).lineLimit(3...8)
@@ -201,9 +199,7 @@ struct NewBusinessSheet: View {
                 Spacer(minLength: 0)
                 HStack {
                     Spacer()
-                    if !isFirst {
-                        Button("Cancel") { store.send(.newBusinessCancelled) }.buttonStyle(.quiet)
-                    }
+                    Button("Cancel") { store.send(.newBusinessCancelled) }.buttonStyle(.quiet)
                     Button(draft.isSubmitting ? "Creating…" : "Create") { store.send(.createBusinessTapped) }
                         .buttonStyle(.aurora)
                         .disabled(!draft.canCreate)

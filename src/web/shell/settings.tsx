@@ -3,7 +3,6 @@ import {
   Building2,
   CircleUserRound,
   Check,
-  Copy,
   Download,
   Image,
   KeyRound,
@@ -736,33 +735,6 @@ function BusinessDetails({ business }: { business: Business }) {
   );
 }
 
-const countdown = (ms: number) => {
-  const seconds = Math.max(0, Math.ceil(ms / 1000));
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
-};
-
-/** Copies text and says so briefly. */
-function CopyButton({ text, label }: { text: string; label: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <Button
-      size="compact"
-      aria-label={label}
-      onClick={() =>
-        void navigator.clipboard
-          .writeText(text)
-          .then(() => {
-            setCopied(true);
-            setTimeout(() => setCopied(false), 1500);
-          })
-          .catch(() => undefined)
-      }
-    >
-      {copied ? <Check /> : <Copy />} {copied ? "Copied" : "Copy"}
-    </Button>
-  );
-}
-
 /**
  * The current business's secrets by name: a card or a secret, when it was added and last used.
  * Values are never shown or read back; a new one goes in through the secure entry sheet.
@@ -824,135 +796,54 @@ function SecretsPane() {
 }
 
 /**
- * Signed-in devices, and a single-use code that signs an iPhone or iPad in as you. The
- * link opens the app with this server; the code works for ten minutes.
+ * Signed-in devices; any can be signed out. A device joins by asking from its own sign-in screen
+ * and being allowed here or on the Mac (no codes).
  */
 function DevicesPane() {
   const client = useQueryClient();
-  const [code, setCode] = useState<{ code: string; expires_at: string }>();
-  const [now, setNow] = useState(Date.now());
-  // While a code is showing, watch for the new device to appear.
   const devices = useQuery({
     queryKey: keys.devices,
     queryFn: api.devices,
     select: (result) => result.devices,
-    refetchInterval: code ? 5_000 : false,
   });
   const list: readonly Device[] | undefined = devices.data;
-  const issuing = useMutation({
-    mutationFn: api.issueDeviceCode,
-    onSuccess: (issued) => {
-      setCode(issued);
-      setNow(Date.now());
-    },
-  });
   const revoke = useMutation({
     mutationFn: (id: string) => api.revokeDevice(id),
     onSettled: () => client.invalidateQueries({ queryKey: keys.devices }),
   });
-  const failed = devices.isError || issuing.isError || revoke.isError;
-  // While a code is showing, count down.
-  useEffect(() => {
-    if (!code) return;
-    const tick = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(tick);
-  }, [code]);
-  const issue = () => issuing.mutate();
-  const remaining = code ? Date.parse(code.expires_at) - now : 0;
-  const link = code
-    ? `devys://enroll?server=${encodeURIComponent(location.origin)}&code=${code.code}`
-    : "";
+  const failed = devices.isError || revoke.isError;
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center">
-          <span className="text-heading font-semibold text-ink">Add a device</span>
-          <span className="ml-auto" />
-          <Button size="compact" onClick={issue} disabled={issuing.isPending}>
-            <Plus /> {code ? "New code" : "Add a device"}
-          </Button>
-        </div>
-        {code ? (
-          <div
-            className="flex flex-col gap-3 rounded-card bg-sheet-tint p-4"
-            aria-label="Device code"
-          >
-            {remaining > 0 ? (
-              <>
-                <p className="text-body text-ink-2">
-                  On your iPhone or iPad, open this link, or paste the code into Devys. It works
-                  once.
-                </p>
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-label font-medium text-ink-3">Link</span>
-                  <div className="flex items-center gap-2">
-                    <code
-                      className="min-w-0 flex-1 truncate rounded-control bg-well px-2.5 py-[7px] font-mono text-[12px] text-ink select-all"
-                      data-testid="device-link"
-                    >
-                      {link}
-                    </code>
-                    <CopyButton text={link} label="Copy link" />
-                  </div>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-label font-medium text-ink-3">Code</span>
-                  <div className="flex items-center gap-2">
-                    <code
-                      className="min-w-0 flex-1 rounded-control bg-well px-2.5 py-[7px] font-mono text-[12px] break-all text-ink select-all"
-                      data-testid="device-code"
-                    >
-                      {code.code}
-                    </code>
-                    <CopyButton text={code.code} label="Copy code" />
-                  </div>
-                </div>
-                <span className="text-detail tabular-nums text-ink-3" role="timer">
-                  Expires in {countdown(remaining)}
+    <div className="flex flex-col gap-2 p-6">
+      <span className="text-heading font-semibold text-ink">Signed in</span>
+      {failed && <p className="text-detail text-red">Devices couldn't be loaded.</p>}
+      {!list && !failed && <Spinner />}
+      <ul aria-label="Devices" className="flex flex-col">
+        {list?.map((device) => {
+          const name = device.label ?? "Web browser";
+          return (
+            <li key={device.id} className="flex items-center gap-3 py-2">
+              <Laptop className="size-4 shrink-0 text-ink-3" aria-hidden />
+              <div className="flex min-w-0 flex-col gap-px">
+                <span className="truncate text-body font-semibold text-ink">{name}</span>
+                <span className="text-detail text-ink-3">
+                  {device.current ? "This device · " : ""}Added {shortDate(device.created_at)}
                 </span>
-              </>
-            ) : (
-              <p className="text-body text-ink-3">That code expired. Make a new one.</p>
-            )}
-          </div>
-        ) : (
-          <p className="text-detail text-ink-3">
-            Sign in an iPhone or iPad as you with a single-use code.
-          </p>
-        )}
-      </div>
-      <div className="flex flex-col gap-2">
-        <span className="text-heading font-semibold text-ink">Signed in</span>
-        {failed && <p className="text-detail text-red">Devices couldn't be loaded.</p>}
-        {!list && !failed && <Spinner />}
-        <ul aria-label="Devices" className="flex flex-col">
-          {list?.map((device) => {
-            const name = device.label ?? "Web browser";
-            return (
-              <li key={device.id} className="flex items-center gap-3 py-2">
-                <Laptop className="size-4 shrink-0 text-ink-3" aria-hidden />
-                <div className="flex min-w-0 flex-col gap-px">
-                  <span className="truncate text-body font-semibold text-ink">{name}</span>
-                  <span className="text-detail text-ink-3">
-                    {device.current ? "This device · " : ""}Added {shortDate(device.created_at)}
-                  </span>
-                </div>
-                <span className="ml-auto" />
-                {!device.current && (
-                  <Button
-                    variant="quiet"
-                    size="compact"
-                    aria-label={`Revoke ${name}`}
-                    onClick={() => revoke.mutate(device.id)}
-                  >
-                    Revoke
-                  </Button>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      </div>
+              </div>
+              <span className="ml-auto" />
+              {!device.current && (
+                <Button
+                  variant="quiet"
+                  size="compact"
+                  aria-label={`Sign out ${name}`}
+                  onClick={() => revoke.mutate(device.id)}
+                >
+                  Sign out
+                </Button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

@@ -24,18 +24,11 @@ public enum DevysComposition {
     }
 
     #if DEBUG
-        /// QA only: `DEVYS_ENROLL_SERVER` and `DEVYS_ENROLL_CODE` sign in at launch
-        /// through the real enrollment exchange, so screenshots need no UI scripting.
+        /// QA: `DEVYS_SETTINGS=<section>` opens Settings at launch. `DEVYS_SESSION=memory` starts
+        /// signed out with nothing kept, and `DEVYS_LOCAL_SERVER` with `DEVYS_LOCAL_KEY` signs in
+        /// as a development server's owner (`OwnerFile`), so screenshots need no UI scripting.
         public static var opensSettingsAtLaunch: Bool {
             ProcessInfo.processInfo.environment["DEVYS_SETTINGS"] != nil
-        }
-
-        public static func enrollFromEnvironment() async {
-            let environment = ProcessInfo.processInfo.environment
-            guard let raw = environment["DEVYS_ENROLL_SERVER"], let server = URL(string: raw),
-                  let code = environment["DEVYS_ENROLL_CODE"]
-            else { return }
-            try? await SessionHub.shared.signIn(server: server, code: code)
         }
     #endif
 }

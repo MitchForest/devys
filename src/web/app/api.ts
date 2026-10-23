@@ -12,7 +12,15 @@ import type { RemotePolicy } from "../../apps/contract.ts";
 import { Grant } from "../../authority/contract.ts";
 import { BrowserStatus, PageState, Screenshot, type OwnerInput } from "../../browser/contract.ts";
 import type { ConversationKey } from "../../conversations/contract.ts";
-import { DeviceCode, DeviceList, Employee, type SettableLook } from "../../identity/contract.ts";
+import {
+  DeviceList,
+  Employee,
+  Hello,
+  JoinRequest,
+  JoinRequests,
+  JoinStatus,
+  type SettableLook,
+} from "../../identity/contract.ts";
 import { ClaimPage } from "../../memory/contract.ts";
 import { Authorization, Disconnected } from "../../connections/contract.ts";
 import { TerminalSession } from "../../terminal/contract.ts";
@@ -168,8 +176,21 @@ const conversation = (b: string, key: ConversationKey) =>
   `${business(b)}/conversations/${encodeURIComponent(key)}`;
 
 export const api = {
-  enroll: (token: string) =>
-    send("/api/enroll", { method: "POST", body: JSON.stringify({ token }) }),
+  /** Signs this browser in with a one-time link's token (`/#signin=<token>`). */
+  redeemLink: (token: string) =>
+    send("/api/link", { method: "POST", body: JSON.stringify({ token }) }),
+  hello: () => get(Hello, "/api/hello"),
+  /** Asks to join with the hash of a session token this browser chose. */
+  askToJoin: (name: string, sessionHash: string) =>
+    post(JoinRequest, "/api/joins", { name, session_hash: sessionHash }),
+  joinStatus: (id: string, token: string) =>
+    request(JoinStatus, `/api/joins/${id}`, { headers: { authorization: `Bearer ${token}` } }),
+  /** Allowed: the chosen token becomes this browser's session cookie. */
+  joinCookie: (id: string, token: string) =>
+    send(`/api/joins/${id}/cookie`, { method: "POST", body: JSON.stringify({ token }) }),
+  joins: () => get(JoinRequests, "/api/joins"),
+  answerJoin: (id: string, allow: boolean) =>
+    send(`/api/joins/${id}/${allow ? "allow" : "deny"}`, { method: "POST", body: "{}" }),
   logout: () => send("/api/logout", { method: "POST", body: "{}" }),
   me: () => get(Me, "/api/me"),
   rename: (displayName: string) => put(Me, "/api/me", { display_name: displayName }),
@@ -188,7 +209,6 @@ export const api = {
   retire: (b: string, e: string, reassignTo: string) =>
     post(Retired, `${employee(b, e)}/retire`, { reassign_to: reassignTo }),
   devices: () => get(DeviceList, "/api/devices"),
-  issueDeviceCode: () => post(DeviceCode, "/api/devices/codes"),
   revokeDevice: (id: string) => post(Revoked, `/api/devices/${id}/revoke`),
   models: () => get(ModelCatalog, "/api/models"),
   setEmployeeModel: (b: string, e: string, model: string) =>

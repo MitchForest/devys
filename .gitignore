@@ -20,3 +20,4 @@ apple/Packages/DevysKit/Sources/DevysSurfaces/Resources/surfaces/
 # Design documents and the delivery plan stay local (not published).
 .docs/
 xcuserdata/
+.claude/

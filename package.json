@@ -5,7 +5,7 @@
   "scripts": {
     "check": "tsc --noEmit",
     "lint": "vp lint src tests scripts infra *.ts --deny-warnings",
-    "fmt:check": "vp fmt . .docs '!src/web/routeTree.gen.ts' '!src/apps/code/host/codex-protocol' '!apple/Packages/DevysKit/Tests/DevysClientTests/Fixtures' --check",
+    "fmt:check": "vp fmt . .docs '!.claude' '!src/web/routeTree.gen.ts' '!src/apps/code/host/codex-protocol' '!apple/Packages/DevysKit/Tests/DevysClientTests/Fixtures' --check",
     "test": "vitest run",
     "test:host": "bun test tests/bun",
     "dev": "alchemy dev",
@@ -13,7 +13,7 @@
     "test:workers": "vitest run --config vitest.workers.config.ts",
     "wire:write": "DEVYS_WRITE_WIRE=1 vitest run --config vitest.workers.config.ts tests/wire.workers.test.ts",
     "build": "vp build",
-    "fmt": "vp fmt . .docs '!src/web/routeTree.gen.ts' '!src/apps/code/host/codex-protocol' '!apple/Packages/DevysKit/Tests/DevysClientTests/Fixtures'",
+    "fmt": "vp fmt . .docs '!.claude' '!src/web/routeTree.gen.ts' '!src/apps/code/host/codex-protocol' '!apple/Packages/DevysKit/Tests/DevysClientTests/Fixtures'",
     "dev:local": "bun scripts/db.ts ensure && vp dev",
     "verify": "bun run fmt:check && bun run lint && bun run check && bun run test && bun run test:host && bun run test:workers && bun run build",
     "closeout": "bun run verify && bun run test:browser && bun run test:channel && bun run test:workspace",

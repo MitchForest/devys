@@ -143,15 +143,11 @@ test("the owner hires from a template, edits and retires, and talks to any emplo
   }
 });
 
-test("Settings → Devices issues a code with its link and lists and revokes devices", async ({
-  page,
-  context,
-}) => {
+test("Settings → Devices lists signed-in devices and signs one out", async ({ page }) => {
   const stores = await localStores();
   const { sql } = stores;
   const owner = await stores.owner("Quinn", "Acme");
   await stubPosting(page);
-  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   // Another device already signed in as Quinn.
   await sql.run(
     "INSERT INTO web_sessions (token_hash, person_id, expires_at, label) VALUES ($1, $2, now() + interval '1 day', $3)",
@@ -168,30 +164,11 @@ test("Settings → Devices issues a code with its link and lists and revokes dev
     await expect(devices.getByRole("listitem")).toHaveCount(3);
     await expect(devices.getByText(/^This device · Added/)).toHaveCount(1);
     await expect(devices.getByText("Quinn's iPad")).toBeVisible();
+    // No codes: devices join from their own sign-in screen.
+    await expect(settings.getByText(/code/i)).toHaveCount(0);
 
-    const before = (await sql.row<{ n: number }>(
-      "SELECT count(*)::int AS n FROM enrollment_tokens WHERE person_id = $1",
-      [owner.person],
-    ))!.n;
-    await settings.getByRole("button", { name: "Add a device" }).click();
-    const code = settings.getByTestId("device-code");
-    await expect(code).toHaveText(/^[0-9a-f]{64}$/);
-    const issued = (await code.textContent())!;
-    await expect(settings.getByTestId("device-link")).toHaveText(
-      `devys://enroll?server=${encodeURIComponent("http://127.0.0.1:5173")}&code=${issued}`,
-    );
-    await expect(settings.getByRole("timer")).toHaveText(/^Expires in (10:00|9:5\d)$/);
-    expect(
-      (await sql.row<{ n: number }>(
-        "SELECT count(*)::int AS n FROM enrollment_tokens WHERE person_id = $1",
-        [owner.person],
-      ))!.n,
-    ).toBe(before + 1);
-    await settings.getByRole("button", { name: "Copy code" }).click();
-    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(issued);
-
-    // Revoking signs only that device out.
-    await settings.getByRole("button", { name: "Revoke Quinn's iPad" }).click();
+    // Signing out one device signs only that device out.
+    await settings.getByRole("button", { name: "Sign out Quinn's iPad" }).click();
     await expect(devices.getByText("Quinn's iPad")).toHaveCount(0);
     expect(
       (await sql.row<{ n: number }>(

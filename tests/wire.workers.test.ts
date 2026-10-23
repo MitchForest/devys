@@ -19,8 +19,14 @@ import { secretsRoute } from "../src/app/vault.ts";
 import { DeviceKey } from "../src/authority/contract.ts";
 import { grant } from "../src/authority/service.ts";
 import { BrowserStatus, PageState, Screenshot } from "../src/browser/contract.ts";
-import { DeviceCode, DeviceList, Employee } from "../src/identity/contract.ts";
-import { DeviceSession } from "../src/identity/http.ts";
+import {
+  DeviceList,
+  Employee,
+  Hello,
+  JoinRequest,
+  JoinRequests,
+} from "../src/identity/contract.ts";
+import { DeviceSession, SignInLink } from "../src/identity/http.ts";
 import { ClaimPage } from "../src/memory/contract.ts";
 import { sha256 } from "../src/protocol/bytes.ts";
 import { ref } from "../src/protocol/ref.ts";
@@ -136,7 +142,8 @@ it("every route the clients read answers in its wire schema; the golden files ma
   await keep("roles", wire.Roles, await call("/api/roles"));
   await keep("models", wire.ModelCatalog, await call("/api/models"));
   await keep("devices", DeviceList, await call("/api/devices"));
-  await keep("device-code", DeviceCode, await call("/api/devices/codes", "POST", {}));
+  await keep("hello", Hello, await call("/api/hello"));
+  await keep("device-link", SignInLink, await call("/api/devices/link", "POST", {}));
   const engineer = await keep(
     "employee",
     Employee,
@@ -713,6 +720,26 @@ it("every route the clients read answers in its wire schema; the golden files ma
     }),
   );
   await keep("device-keys", wire.DeviceKeys, await call("/api/device-keys"));
+  // A device asking to join, and this one allowing it with the new device's key. The two emoji
+  // come from the request's random id, so the golden files show a fixed pair.
+  const asked = Schema.decodeUnknownSync(JoinRequest)(
+    await (
+      await call("/api/joins", "POST", {
+        name: "Wire iPhone",
+        session_hash: await sha256(crypto.randomUUID()),
+        public_key:
+          "BM1xO69bs1+PCo25ktirivFF9T8AbiTyaPZED9nLJ5xzNn3ibtusfSsIF4TvlNU9E6G+eXxQ+e0NzXRnpyTQxuo=",
+      })
+    ).json(),
+  );
+  const joining = { ...asked, match: ["🦊", "🌵"] };
+  await keep("join", JoinRequest, Response.json(joining));
+  await keep("joins", JoinRequests, Response.json({ joins: [joining] }));
+  await keep(
+    "join-answered",
+    wire.JoinAnswered,
+    await call(`/api/joins/${asked.id}/allow`, "POST", {}),
+  );
 
   // Also decoded, not kept: shapes whose values are random or the browser's own.
   expect(Schema.decodeUnknownSync(PageState)({ url: "https://a.test", title: "A" })).toBeTruthy();

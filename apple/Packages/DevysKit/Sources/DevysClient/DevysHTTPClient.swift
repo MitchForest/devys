@@ -1,7 +1,7 @@
 public import Foundation
 
 public enum DevysHTTPError: Error, Equatable, Sendable {
-    /// The session is missing, expired or revoked; the device must enroll again.
+    /// The session is missing, expired or revoked; the device must sign in again.
     case unauthorized
     case rejected(status: Int, message: String)
     case unreachable(String)
@@ -21,21 +21,6 @@ public struct DevysHTTPClient: Sendable {
 
     public static let live = DevysHTTPClient { request in
         try await URLSession.shared.data(for: request)
-    }
-
-    /// Exchanges a one-time enrollment code for a device session; `name` labels the device.
-    public func enroll(server: URL, code: String, name: String? = nil) async throws -> DeviceSession {
-        struct Body: Encodable { let token: String; let name: String? }
-        struct Issued: Decodable {
-            let sessionToken: String
-            enum CodingKeys: String, CodingKey { case sessionToken = "session_token" }
-        }
-        var request = URLRequest(url: server.appending(path: "api/native/session"))
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.httpBody = try Wire.encoder().encode(Body(token: code, name: name.map { String($0.prefix(80)) }))
-        let issued: Issued = try await send(request)
-        return DeviceSession(server: server, token: issued.sessionToken)
     }
 
     public func account(_ session: DeviceSession) async throws -> Account {

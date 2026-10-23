@@ -57,10 +57,14 @@ targets:
             ts.net:
               NSIncludesSubdomains: true
               NSExceptionAllowsInsecureHTTPLoads: true
-        # devys://enroll?server=…&code=… signs this device in from a QR code or link.
+        # devys://connect?server=…&name=… (the QR code in Settings › Devices) opens the app on its
+        # one button, "Connect to <Mac>"; it carries no secret.
         CFBundleURLTypes:
-          - CFBundleURLName: com.mitchwhite.DevysBusiness.enroll
+          - CFBundleURLName: com.mitchwhite.DevysBusiness.connect
             CFBundleURLSchemes: [devys]
+        # The Mac running Devys announces itself on the local network; the app finds it there.
+        NSBonjourServices: [_devys._tcp]
+        NSLocalNetworkUsageDescription: Devys looks for your Mac on this network.
   Devys-macOS:
     type: application
     platform: macOS
@@ -78,6 +82,10 @@ targets:
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
         com.apple.security.device.audio-input: true
+        # On the Mac running Devys the app reads one file to sign in as the Mac's owner: the key
+        # `bun run local install` keeps (0600) in the server folder (.docs/AUTHORITY.md "Signing in").
+        com.apple.security.temporary-exception.files.home-relative-path.read-only:
+          - /Library/Application Support/Devys Server/owner.json
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mitchwhite.DevysBusiness
@@ -98,10 +106,14 @@ targets:
             ts.net:
               NSIncludesSubdomains: true
               NSExceptionAllowsInsecureHTTPLoads: true
-        # devys://enroll?server=…&code=… signs this device in from a QR code or link.
+        # devys://connect?server=…&name=… (the QR code in Settings › Devices) opens the app on its
+        # one button, "Connect to <Mac>"; it carries no secret.
         CFBundleURLTypes:
-          - CFBundleURLName: com.mitchwhite.DevysBusiness.enroll
+          - CFBundleURLName: com.mitchwhite.DevysBusiness.connect
             CFBundleURLSchemes: [devys]
+        # The Mac running Devys announces itself on the local network; the app finds it there.
+        NSBonjourServices: [_devys._tcp]
+        NSLocalNetworkUsageDescription: Devys looks for your Mac on this network.
 schemes:
   Devys-iOS:
     build:

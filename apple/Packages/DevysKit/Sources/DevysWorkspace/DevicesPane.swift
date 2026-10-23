@@ -3,22 +3,28 @@ import DevysClient
 import DevysDesignSystem
 import SwiftUI
 
-/// Settings → Devices: every signed-in device, signing others out, and adding one by QR code or link.
+/// Settings → Devices: every signed-in device and signing others out. A new device joins by
+/// itself (its one button, allowed here); the QR code is for one that can't find this Mac.
 struct DevicesPane: View {
     let store: StoreOf<Preferences>
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         PaneScroll {
             VStack(alignment: .leading, spacing: DevysSpacing.roomy) {
-                if let code = store.deviceCode {
-                    AddDeviceCard(code: code) { store.send(.addDeviceTapped) } done: { store.send(.deviceCodeDismissed) }
-                } else {
-                    HStack {
-                        Text("Signed-in devices").font(DevysTypography.heading).foregroundStyle(DevysColors.ink)
-                        Spacer()
-                        Button(store.isIssuingCode ? "Issuing…" : "Add a device", systemImage: "qrcode") { store.send(.addDeviceTapped) }
+                if let link = store.connectLink {
+                    ConnectCard(link: link) { store.send(.connectLinkDismissed) }
+                }
+                HStack {
+                    Text("Signed in").font(DevysTypography.heading).foregroundStyle(DevysColors.ink)
+                    Spacer()
+                    #if os(macOS)
+                        Button("Open in browser", systemImage: "safari") { store.send(.openInBrowserTapped) }
+                            .buttonStyle(DevysButtonStyle(.quiet, compact: true))
+                    #endif
+                    if store.connectLink == nil {
+                        Button("Add a device", systemImage: "qrcode") { store.send(.addDeviceTapped) }
                             .buttonStyle(DevysButtonStyle(.raised, compact: true))
-                            .disabled(store.isIssuingCode)
                     }
                 }
                 if let error = store.errorText {
@@ -30,6 +36,11 @@ struct DevicesPane: View {
             .padding(DevysSpacing.roomy)
         }
         .onAppear { store.send(.devicesRequested) }
+        .onChange(of: store.browserLink) { _, link in
+            guard let link else { return }
+            openURL(link)
+            store.send(.browserLinkOpened)
+        }
     }
 
     @ViewBuilder private var list: some View {
@@ -108,63 +119,20 @@ private struct DeviceRow: View {
     }
 }
 
-/// The code as a QR code the iPhone or iPad camera opens, plus the code and link to copy,
-/// counting down its ten minutes.
-private struct AddDeviceCard: View {
-    let code: DeviceCode
-    let renew: () -> Void
+/// This Mac as a QR code the iPhone or iPad camera opens: the app, on its one button.
+private struct ConnectCard: View {
+    let link: ConnectLink
     let done: () -> Void
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
-            let remaining = max(0, Int(code.expiresAt.timeIntervalSince(context.date)))
-            VStack(alignment: .leading, spacing: DevysSpacing.regular) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Add a device").font(DevysTypography.heading).foregroundStyle(DevysColors.ink)
-                        Text("Point the iPhone or iPad camera at the code, or open the link on the device. It signs in as you, once.")
-                            .font(DevysTypography.secondary).foregroundStyle(DevysColors.ink2)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer()
-                    Button("Done", action: done).buttonStyle(DevysButtonStyle(.quiet, compact: true))
-                }
-                HStack(alignment: .top, spacing: DevysSpacing.roomy) {
-                    QRCode(code.link.url.absoluteString, size: 168)
-                        .opacity(remaining > 0 ? 1 : 0.2)
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(remaining > 0 ? "Expires in \(remaining / 60):\(String(format: "%02d", remaining % 60))" : "Expired")
-                            .font(DevysTypography.body.weight(.semibold).monospacedDigit())
-                            .foregroundStyle(remaining > 0 ? DevysColors.ink : DevysColors.red)
-                        copyRow("Code", value: code.code)
-                        copyRow("Link", value: code.link.url.absoluteString)
-                        if remaining == 0 {
-                            Button("New code", systemImage: "arrow.clockwise", action: renew)
-                                .buttonStyle(DevysButtonStyle(.raised, compact: true))
-                        }
-                    }
-                }
-            }
-            .devysCard()
-        }
-    }
-
-    private func copyRow(_ label: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(DevysTypography.label).foregroundStyle(DevysColors.ink3)
-            HStack(spacing: 6) {
-                Text(value)
-                    .font(DevysTypography.secondary.monospaced())
-                    .foregroundStyle(DevysColors.ink2)
-                    .lineLimit(2)
-                    .truncationMode(.middle)
-                    .textSelection(.enabled)
-                Button("Copy \(label.lowercased())", systemImage: "doc.on.doc") { DevysPasteboard.copy(value) }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(DevysColors.ink3)
-                    .help("Copy")
+        HStack(alignment: .center, spacing: DevysSpacing.roomy) {
+            QRCode(link.url.absoluteString, size: 156)
+                .accessibilityLabel("QR code for \(link.mac.name)")
+            VStack(alignment: .leading, spacing: DevysSpacing.compact) {
+                Text("Scan with your iPhone or iPad").font(DevysTypography.body).foregroundStyle(DevysColors.ink2)
+                Button("Done", action: done).buttonStyle(DevysButtonStyle(.quiet, compact: true))
             }
         }
+        .devysCard()
     }
 }

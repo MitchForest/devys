@@ -1,12 +1,11 @@
 import { createMemory } from "../src/memory/service.ts";
 import { expect, it } from "vitest";
 import { business, db, sql } from "./fixtures/postgres.ts";
-import { redeemEnrollment } from "../src/identity/sessions.ts";
+import { issueLink, redeemLink } from "../src/identity/sessions.ts";
 import type { Env } from "../infra/api.ts";
 import { capabilities } from "../src/app/capabilities.ts";
 import { Invocation } from "../src/protocol/capability.ts";
 import { exportBusiness } from "../src/app/export.ts";
-import { issueEnrollment } from "../src/identity/enrollment.ts";
 import { Effect } from "effect";
 import { bindChannel, channelBinding } from "../src/identity/service.ts";
 import { postMessage } from "../src/conversations/service.ts";
@@ -101,7 +100,7 @@ it("a chat bound to one business cannot be moved to another, and binding needs m
   ).rejects.toThrow();
 });
 
-it("concurrent redemption creates exactly one session; expired and revoked codes create none", async () => {
+it("concurrent redemption creates exactly one session; expired and revoked links create none", async () => {
   const person = crypto.randomUUID();
   await sql.run("INSERT INTO people(id, display_name) VALUES ($1, 'Enrollment')", [person]);
   for (const [token, expiry] of [
@@ -110,12 +109,12 @@ it("concurrent redemption creates exactly one session; expired and revoked codes
     ["revoked", "2999-01-01T00:00:00.000Z"],
   ])
     await sql.run(
-      "INSERT INTO enrollment_tokens(token_hash, person_id, expires_at) VALUES ($1, $2, $3)",
+      "INSERT INTO sign_in_links(token_hash, person_id, expires_at) VALUES ($1, $2, $3)",
       [token, person, expiry],
     );
   const results = await Promise.all(
     Array.from({ length: 8 }, (_, i) =>
-      Effect.runPromise(redeemEnrollment(db, "race", `session-${i}`, "Test device")),
+      Effect.runPromise(redeemLink(db, "race", `session-${i}`, "Test device")),
     ),
   );
   expect(results.filter(Boolean)).toHaveLength(1);
@@ -127,23 +126,23 @@ it("concurrent redemption creates exactly one session; expired and revoked codes
       )
     )?.count,
   ).toBe(1);
-  expect(
-    await Effect.runPromise(redeemEnrollment(db, "expired", "expired-session", "Test device")),
-  ).toBe(false);
-  expect(
-    await Effect.runPromise(redeemEnrollment(db, "missing", "missing-session", "Test device")),
-  ).toBe(false);
+  expect(await Effect.runPromise(redeemLink(db, "expired", "expired-session", "Test device"))).toBe(
+    false,
+  );
+  expect(await Effect.runPromise(redeemLink(db, "missing", "missing-session", "Test device"))).toBe(
+    false,
+  );
   await sql.run("UPDATE people SET revoked_at = '2026-01-01' WHERE id = $1", [person]);
-  expect(
-    await Effect.runPromise(redeemEnrollment(db, "revoked", "revoked-session", "Test device")),
-  ).toBe(false);
+  expect(await Effect.runPromise(redeemLink(db, "revoked", "revoked-session", "Test device"))).toBe(
+    false,
+  );
 });
 
-it("a failure while creating the session rolls back consumption and leaves the code usable", async () => {
+it("a failure while creating the session rolls back consumption and leaves the link usable", async () => {
   const person = crypto.randomUUID();
   await sql.run("INSERT INTO people(id, display_name) VALUES ($1, 'Rollback')", [person]);
   await sql.run(
-    "INSERT INTO enrollment_tokens(token_hash, person_id, expires_at) VALUES ('rollback', $1, '2999-01-01T00:00:00.000Z')",
+    "INSERT INTO sign_in_links(token_hash, person_id, expires_at) VALUES ('rollback', $1, '2999-01-01T00:00:00.000Z')",
     [person],
   );
   await sql.run(`CREATE FUNCTION reject_session() RETURNS trigger LANGUAGE plpgsql AS $$
@@ -152,7 +151,7 @@ it("a failure while creating the session rolls back consumption and leaves the c
     FOR EACH ROW WHEN (NEW.token_hash = 'rollback-session') EXECUTE FUNCTION reject_session()`);
   try {
     await expect(
-      Effect.runPromise(redeemEnrollment(db, "rollback", "rollback-session", "Test device")),
+      Effect.runPromise(redeemLink(db, "rollback", "rollback-session", "Test device")),
     ).rejects.toThrow();
     expect(
       await sql.row("SELECT token_hash FROM web_sessions WHERE token_hash='rollback-session'"),
@@ -160,7 +159,7 @@ it("a failure while creating the session rolls back consumption and leaves the c
     expect(
       (
         await sql.row<{ consumed_at: string | null }>(
-          "SELECT consumed_at FROM enrollment_tokens WHERE token_hash='rollback'",
+          "SELECT consumed_at FROM sign_in_links WHERE token_hash='rollback'",
         )
       )?.consumed_at,
     ).toBeNull();
@@ -169,19 +168,19 @@ it("a failure while creating the session rolls back consumption and leaves the c
     await sql.run("DROP FUNCTION reject_session");
   }
   expect(
-    await Effect.runPromise(redeemEnrollment(db, "rollback", "rollback-session", "Test device")),
+    await Effect.runPromise(redeemLink(db, "rollback", "rollback-session", "Test device")),
   ).toBe(true);
 });
 
-it("issuing access cannot reactivate a revoked person", async () => {
+it("a revoked person gets no sign-in link", async () => {
   const personId = crypto.randomUUID();
-  await Effect.runPromise(issueEnrollment(db, { personId, name: "Owner", tokenHash: "issued" }));
-  await sql.run("UPDATE people SET revoked_at='2026-01-01' WHERE id=$1", [personId]);
-  await expect(
-    Effect.runPromise(issueEnrollment(db, { personId, name: "Owner", tokenHash: "revived" })),
-  ).rejects.toThrow();
+  await sql.run(
+    "INSERT INTO people(id, display_name, revoked_at) VALUES ($1, 'Gone', '2026-01-01')",
+    [personId],
+  );
+  expect(await Effect.runPromise(issueLink(db, personId, "revived"))).toBe(0);
   expect(
-    await sql.row("SELECT token_hash FROM enrollment_tokens WHERE token_hash='revived'"),
+    await sql.row("SELECT token_hash FROM sign_in_links WHERE token_hash='revived'"),
   ).toBeUndefined();
 });
 

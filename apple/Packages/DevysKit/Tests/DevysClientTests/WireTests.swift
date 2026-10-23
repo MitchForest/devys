@@ -29,7 +29,7 @@ struct WireTests {
         "conversation": { try await $0.conversation($1, businessID: "b1", key: .direct("e1")) },
         "conversations": { try await $0.conversations($1, businessID: "b1") },
         "decisions": { try await $0.decisions($1, businessID: "b1", workItemID: "w1") },
-        "device-code": { try await $0.issueDeviceCode($1) },
+        "device-link": { try await $0.signInLink($1) },
         "device-key": { try await $0.enrollKey($1, publicKey: Data(repeating: 4, count: 65)) },
         "device-keys": { try await $0.deviceKeys($1) },
         "devices": { try await $0.devices($1) },
@@ -38,6 +38,10 @@ struct WireTests {
         "file-text": { try await $0.fileText($1, businessID: "b1", path: "/brief.md") },
         "files": { try await $0.files($1, businessID: "b1", path: nil).entries },
         "google": { try await $0.googleConnection($1, businessID: "b1") },
+        "hello": { try await $0.hello(server: $1.server) },
+        "join": { try await $0.askToJoin(server: $1.server, name: "iPhone", sessionHash: "h", publicKey: nil) },
+        "join-answered": { try await $0.answerJoin($1, id: "j1", allow: true) },
+        "joins": { try await $0.joins($1) },
         "home": { try await $0.home($1, businessID: "b1") },
         "look": { _, _ in try Wire.decoder().decode(LookChanged.self, from: golden("look")) },
         "me": { try await $0.account($1) },
@@ -195,8 +199,10 @@ struct WireTests {
         let terminals = try await Self.answering("terminals").terminals(Self.session, businessID: "b1")
         #expect(terminals.first?.codingSessionID != nil)
 
-        let code = try await Self.answering("device-code").issueDeviceCode(Self.session)
-        #expect(code.expiresAt == ServerDate.parse("2026-01-01T00:00:00.000Z"))
+        let joins = try await Self.answering("joins").joins(Self.session)
+        #expect(joins.first?.match == ["🦊", "🌵"] && joins.first?.name == "Wire iPhone")
+        let allowed = try await Self.answering("join-answered").answerJoin(Self.session, id: "j1", allow: true)
+        #expect(allowed?.status == .pending && allowed?.label == "Wire iPhone")
 
         let thread = try await Self.answering("conversation-work").conversation(Self.session, businessID: "b1", key: .work("w1"))
         #expect(thread.messages.first?.ref == .workItem("00000000-0000-4000-8000-000000000008") && thread.messages.first?.isEvent == true)

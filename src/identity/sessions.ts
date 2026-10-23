@@ -1,4 +1,7 @@
-import { database, type Database } from "../data/database.ts";
+import { database, type Database, type Sql } from "../data/database.ts";
+
+/** How long a device stays signed in, in days. */
+export const sessionDays = 7;
 
 export const sessionPerson = (db: Database, hash: string) =>
   database(db, (sql) =>
@@ -12,18 +15,78 @@ export const sessionPerson = (db: Database, hash: string) =>
 export const deleteSession = (db: Database, hash: string) =>
   database(db, (sql) => sql.run("DELETE FROM web_sessions WHERE token_hash = $1", [hash]));
 
-/** Claiming the token row first means concurrent attempts create only one session. */
-export const redeemEnrollment = (
+const insertSession = (sql: Sql, hash: string, personId: string, label: string | null) =>
+  sql.run(
+    `INSERT INTO web_sessions (token_hash, person_id, expires_at, label)
+     VALUES ($1, $2, now() + interval '${sessionDays} days', $3)`,
+    [hash, personId, label],
+  );
+
+/**
+ * The Mac's owner in local mode: the earliest active person, created with `name` when there is
+ * no one yet. Locked so two first sign-ins cannot create two owners.
+ */
+async function machineOwner(sql: Sql, name: string) {
+  await sql.run("SELECT pg_advisory_xact_lock(hashtext('people:machine-owner'))");
+  const first = await sql.row<{ id: string }>(
+    "SELECT id FROM people WHERE revoked_at IS NULL ORDER BY created_at, id LIMIT 1",
+  );
+  if (first) return first.id;
+  const id = crypto.randomUUID();
+  await sql.run("INSERT INTO people (id, display_name) VALUES ($1, $2)", [id, name]);
+  return id;
+}
+
+/**
+ * A session for the Mac's owner, asked for by the Mac app with the key only the owner's macOS
+ * user can read (`POST /api/local/session`; .docs/AUTHORITY.md "Signing in").
+ */
+export const ownerSession = (
   db: Database,
-  tokenHash: string,
-  sessionHash: string,
-  label: string,
+  input: { sessionHash: string; name: string; label: string | null },
 ) =>
   database(
     db,
     async (sql) => {
+      const owner = await machineOwner(sql, input.name);
+      await insertSession(sql, input.sessionHash, owner, input.label);
+      return owner;
+    },
+    { transaction: true },
+  );
+
+/** A one-time link that signs a browser in as the Mac's owner, from `bun run local install`. */
+export const issueOwnerLink = (db: Database, input: { tokenHash: string; name: string }) =>
+  database(
+    db,
+    async (sql) => {
+      const owner = await machineOwner(sql, input.name);
+      await sql.run(
+        `INSERT INTO sign_in_links (token_hash, person_id, expires_at)
+         VALUES ($1, $2, now() + interval '10 minutes')`,
+        [input.tokenHash, owner],
+      );
+    },
+    { transaction: true },
+  );
+
+/** A one-time link that signs a browser in as this person, valid for ten minutes. */
+export const issueLink = (db: Database, personId: string, tokenHash: string) =>
+  database(db, (sql) =>
+    sql.run(
+      `INSERT INTO sign_in_links (token_hash, person_id, expires_at)
+       SELECT $1, id, now() + interval '10 minutes' FROM people WHERE id = $2 AND revoked_at IS NULL`,
+      [tokenHash, personId],
+    ),
+  );
+
+/** Claiming the link first means concurrent attempts create only one session. */
+export const redeemLink = (db: Database, tokenHash: string, sessionHash: string, label: string) =>
+  database(
+    db,
+    async (sql) => {
       const claimed = await sql.row<{ person_id: string }>(
-        `UPDATE enrollment_tokens t SET consumed_at = now()
+        `UPDATE sign_in_links t SET consumed_at = now()
          FROM people o
          WHERE t.token_hash = $1 AND t.consumed_at IS NULL AND t.expires_at > now()
            AND o.id = t.person_id AND o.revoked_at IS NULL
@@ -31,24 +94,10 @@ export const redeemEnrollment = (
         [tokenHash],
       );
       if (!claimed) return false;
-      await sql.run(
-        `INSERT INTO web_sessions (token_hash, person_id, expires_at, label)
-         VALUES ($1, $2, now() + interval '7 days', $3)`,
-        [sessionHash, claimed.person_id, label],
-      );
+      await insertSession(sql, sessionHash, claimed.person_id, label);
       return true;
     },
     { transaction: true },
-  );
-
-/** A single-use code that signs another device in as this person, valid for ten minutes. */
-export const issueDeviceCode = (db: Database, personId: string, tokenHash: string) =>
-  database(db, (sql) =>
-    sql.run(
-      `INSERT INTO enrollment_tokens (token_hash, person_id, expires_at)
-       SELECT $1, id, now() + interval '10 minutes' FROM people WHERE id = $2 AND revoked_at IS NULL`,
-      [tokenHash, personId],
-    ),
   );
 
 /** This person's signed-in devices; a device is named by the start of its session hash. */
@@ -69,3 +118,8 @@ export const revokeDevice = (db: Database, personId: string, id: string) =>
       id,
     ]),
   );
+
+/** The device id of a session: the start of its hash, as `devices` lists it. */
+export const deviceOf = (sessionHash: string) => sessionHash.slice(0, 16);
+
+export { insertSession };

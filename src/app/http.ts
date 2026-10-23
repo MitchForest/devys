@@ -4,7 +4,17 @@ import { addressOf } from "../channels/contract.ts";
 import { authenticatePhoton } from "../channels/photon.ts";
 import { finishGoogle } from "../connections/google.ts";
 import { NameChange, scopeName } from "../identity/contract.ts";
-import { devicesRoute, enroll, enrollDevice, logout, requestPerson } from "../identity/http.ts";
+import {
+  devicesRoute,
+  hello,
+  joinRoute,
+  localSession,
+  logout,
+  redeemSignInLink,
+  requestPerson,
+  waitingJoinsRoute,
+} from "../identity/http.ts";
+import { answerJoinRoute } from "./joining.ts";
 import { profilePhoto } from "../identity/profile.ts";
 import {
   businessesFor,
@@ -61,9 +71,15 @@ async function route(request: Request, env: Env): Promise<Response | undefined> 
   }
   if (path === "/internal/coding/events" && request.method === "POST")
     return codingEventsRoute(request, env);
-  if (path === "/api/enroll" && request.method === "POST") return enroll(request, env);
-  if (path === "/api/native/session" && request.method === "POST")
-    return enrollDevice(request, env);
+  // Signing in (.docs/AUTHORITY.md "Signing in"): the Mac app as the Mac's owner, a browser with
+  // a one-time link, and any other device by asking to join.
+  if (path === "/api/hello" && request.method === "GET")
+    return hello(env.DEVYS_MACHINE_NAME || "Devys", env.PUBLIC_URL || new URL(request.url).origin);
+  if (path === "/api/local/session" && request.method === "POST")
+    return localSession(request, env, (key) => modeOf(env).isOwnerKey(key));
+  if (path === "/api/link" && request.method === "POST") return redeemSignInLink(request, env);
+  const joining = await joinRoute(request, env, path);
+  if (joining) return joining;
   if (path === "/api/logout" && request.method === "POST") {
     // A signed-out device's signing key stops signing.
     const leaving = await requestPerson(request, env);
@@ -96,6 +112,9 @@ async function route(request: Request, env: Env): Promise<Response | undefined> 
         };
       }),
     });
+  if (path === "/api/joins" && request.method === "GET") return waitingJoinsRoute(env);
+  if (path.startsWith("/api/joins/"))
+    return answerJoinRoute(request, env, { personId: person.id, trusted, path });
   if (path === "/api/devices" || path.startsWith("/api/devices/")) {
     const response = await devicesRoute(request, env, {
       personId: person.id,

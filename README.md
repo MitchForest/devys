@@ -330,12 +330,17 @@ desktop control and the app directory are built when a run shows the need.
 package (design system, the Face, HTTP client, TCA26 features) and two app
 targets, macOS and universal iOS. They need Xcode 27, `xcodegen` and `swiftlint`.
 
-Everything the apps show is real server data; there is no sample data. Sign-in
-exchanges a one-time code at `POST /api/native/session` for a bearer session kept in
-the Keychain. The first code comes from `bun run local code` (local mode) or
-`bun scripts/enroll.ts`; Settings → Devices then issues a ten-minute code as a QR code
-and a `devys://enroll?server=…&code=…` link, which the iPhone and iPad open directly.
-The device list signs any device out.
+Everything the apps show is real server data; there is no sample data. There is nothing
+to type to sign in. On the Mac running Devys the Mac app signs itself in as the Mac's owner
+with the key in `~/Library/Application Support/Devys Server/owner.json` (0600; the app's
+sandbox may read that one file). Any other device finds the Mac (it is announced on the
+local network as `_devys._tcp`, the last Mac used is remembered, and Settings › Devices on
+the Mac shows a QR code with a `devys://connect` link for a device that only reaches it over
+Tailscale) and shows one button, "Connect to <Mac>". Tapping it asks to join; every
+signed-in device asks "<device> wants to join" with the two emoji both screens show, and
+Allow signs it in (from a Mac or iPhone that approves spending, it also lets the new
+device's key approve spending). The session is kept in the Keychain; the device list signs
+any device out.
 
 Settings (⌘, on macOS; the account or business menu on iPhone and iPad):
 
@@ -344,7 +349,8 @@ Settings (⌘, on macOS; the account or business menu on iPhone and iPad):
 - **Team and Businesses:** looks, which can be the Face (shape and color), an
   emoji on a tile, or a photo, stored on the server. Photos can be dropped onto the
   preview or chosen from Photos or a file.
-- **Devices:** sign another device in; sign devices out.
+- **Devices:** the signed-in devices, signing one out, the QR code, and (on the Mac) Open in
+  browser, which opens the web app signed in with a one-time link.
 - **Appearance:** system, light or dark.
 
 The design system (`DevysDesignSystem`) follows
@@ -357,14 +363,14 @@ open a screen at launch, and `DEVYS_SETTINGS` (`account`, `apps`, `team`, `busin
 
 ```sh
 bun run dev:local                     # development server on 127.0.0.1:5173
-bun scripts/enroll.ts --name 'Your name' --out /tmp/devys-code.txt
 cd apple && xcodegen generate && open Devys.xcodeproj
 bun run test:apple                    # package tests, both builds, strict lint
 ```
 
-Debug builds accept `DEVYS_ENROLL_SERVER` and `DEVYS_ENROLL_CODE` to sign in at
-launch through the same exchange, for screenshots without UI scripting
-(`SIMCTL_CHILD_` prefix for simulators).
+Debug builds accept `DEVYS_SESSION=memory` (start signed out, keep nothing),
+`DEVYS_LOCAL_SERVER` with `DEVYS_LOCAL_KEY` (sign in as a development server's owner, whose
+`DEVYS_OWNER_KEY` var matches) and `DEVYS_CONNECT=1` (tap Connect once a Mac is found), for
+screenshots without UI scripting (`SIMCTL_CHILD_` prefix for simulators).
 
 Signing: put `DEVELOPMENT_TEAM = <your team>` in `apple/Local.xcconfig`
 (gitignored). Without an Xcode account the Mac build has no keychain access
@@ -457,9 +463,8 @@ tools and logins, starting in `~/Devys/<business>`, and can use any of the owner
 
 ```sh
 bun install --frozen-lockfile
-bun run local install    # build, copy the app, publish on the tailnet, start at login
+bun run local install    # build, copy, publish on the tailnet, start at login, open the app
 bun run local status     # shows the address other devices use
-bun run local code       # a one-hour sign-in code and devys:// link for the owner
 bun run local webhooks   # only when a provider must reach /webhooks/ (Tailscale Funnel)
 bun run local backup     # also runs nightly at 03:00
 bun run local uninstall  # stops it; data is kept
@@ -476,13 +481,16 @@ to the Worker's vars file, not its command line. The host's environment excludes
 so employees' shells, coding sessions and terminals see neither. The launcher calls the
 scheduled handler every minute so unanswered decisions expire, follow-ups wake, ready work is dispatched and due routines run.
 
-Because employees work as the Mac's owner, only that person (the earliest active person,
-the one `bun run local code` signs in) can create businesses and open coding sessions,
+`install` ends by opening the Mac app, which signs itself in; without a built Mac app it
+opens the web app with a one-time link instead. Because employees work as the Mac's owner,
+only that person (the earliest active person, the one the Mac app signs in as) can create businesses and open coding sessions,
 terminals and files on the Mac from the apps. The owner's file views stay inside the
 business folder, with symbolic links resolved.
 
-Other devices on the tailnet sign in to `http://<this Mac>:8787` (a Tailscale TCP
-forward, encrypted by WireGuard, no admin step). When the tailnet admin enables Serve,
+Other devices reach the Mac on the tailnet at `http://<this Mac>:8787` (a Tailscale TCP
+forward, encrypted by WireGuard, no admin step); Devys is never served on the LAN itself.
+The launcher announces that address on the local network (`dns-sd`, `_devys._tcp`, the
+address in its TXT record), so the apps find the Mac by themselves. When the tailnet admin enables Serve,
 the launcher switches to the HTTPS name within ten minutes (it retries Serve every ten minutes); browsers need that, because
 the web session cookie is `Secure`.
 
@@ -520,17 +528,16 @@ message, sender, and chat identifiers expected by the Advanced iMessage HTTP cli
 simulated channel test does not prove compatibility with the provisioned Photon
 service. See the iMessage acceptance guide.
 
-Enroll the owner through the maintenance script:
+A deployed stage has no Mac to sign in from; the first person opens a one-time link:
 
 ```sh
-bun scripts/enroll.ts --name 'Your name' --owner --out /private/path/devys-access-code
+bun scripts/sign-in-link.ts --name 'Your name' --url https://<stage> --database-url <url>
 ```
 
-For a deployed stage, add `--database-url` with a PlanetScale connection string for
-a role that may write identity records. The script writes a single-use access code
-with mode `0600`, valid for one hour, and refuses to overwrite a file. `--owner` signs
-in as the earliest active person; `--person UUID` issues a fresh code for an existing
-active person.
+`--database-url` is a PlanetScale connection string for a role that may write identity
+records. The link signs a browser in as the earliest active person (created with `--name`
+when there is none) and works once, for ten minutes. Other devices then connect and are
+allowed from that browser.
 
 After signing in, create a business from the apps or `POST /api/businesses` with a
 `name`, optional `brief` and optional starting `team` (`engineering`, `growth`,
@@ -538,15 +545,16 @@ After signing in, create a business from the apps or `POST /api/businesses` with
 grants. Bind an iMessage chat to an employee with
 `POST /api/businesses/:id/employees/:employee/channels` and
 `{"channel": "imessage", "sender": "+15551234567", "chat": "any;-;+15551234567"}`.
-A chat already bound elsewhere is never transferred. Web enrollment creates a secure
-HttpOnly same-site session lasting seven days.
+A chat already bound elsewhere is never transferred. A browser's session is a secure
+HttpOnly same-site cookie lasting seven days.
 
 ## HTTP API
 
 Everything under `/api/` needs a web session or a device bearer token; business routes
 404 for non-members. Main routes:
 
-- `/api/me`, `/api/models`, `/api/roles`, `/api/devices` (`/codes` issues a code),
+- `/api/me`, `/api/models`, `/api/roles`, `/api/devices` (`/link`: a one-time browser
+  link), `/api/joins` (devices asking to join; `/:id/allow`, `/:id/deny`),
   `/api/device-keys` (an app enrolls its signing key; `/:id/endorse`, `/:id/revoke`),
   `/api/profile/photo`, `POST /api/businesses`.
 - `/api/businesses/:id`: `GET` (the business, its employees, `members` and artifacts)/`PUT`
@@ -563,7 +571,9 @@ Everything under `/api/` needs a web session or a device bearer token; business 
   posts; `POST …/:key/read` marks it read.
 - `/api/businesses/:id/employees/:employee`: `/profile`, `/look`, `/model`, `/retire`,
   `/status`, `/stop`, `/pause`, `/resume`, `/access`, `/channels`, `/reactions`.
-- Unauthenticated: `/health`, `/api/enroll`, `/api/native/session`, `/api/logout`,
+- Unauthenticated: `/health`, `/api/hello`, `/api/local/session` (the owner key),
+  `/api/link` (a one-time link), `POST /api/joins` and `/api/joins/:id` (asking to join,
+  with the token the device chose), `/api/joins/:id/cookie`, `/api/logout`,
   `/webhooks/photon`.
 
 ## Google Drive setup

@@ -24,7 +24,6 @@ struct DevysMacApp: App {
         WindowGroup {
             root
                 #if DEBUG
-                    .task { await DevysComposition.enrollFromEnvironment() }
                     .modifier(OpenSettingsForQA())
                 #endif
                 .frame(minWidth: 760, minHeight: 560)

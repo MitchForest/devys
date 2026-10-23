@@ -19,8 +19,8 @@ export const renamePerson = (db: Database, personId: string, name: string) =>
   );
 
 /**
- * Whether this person owns the machine in local mode: the earliest active person, the one
- * `bun run local code` and `enroll.ts --owner` sign in. Employees' shells, files and coding run
+ * Whether this person owns the machine in local mode: the earliest active person, the one the
+ * Mac app on the Mac running Devys signs in as (`ownerSession`). Employees' shells, files and coding run
  * as the Mac's owner, so where the Mac host is configured only they may create businesses or
  * open those surfaces.
  */

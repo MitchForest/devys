@@ -114,8 +114,29 @@ export const Device = Schema.Struct({
 /** `GET /api/devices`. */
 export type Device = typeof Device.Type;
 export const DeviceList = Schema.Struct({ devices: Schema.Array(Device) });
-/** `POST /api/devices/codes`: a one-time code that signs in another device. */
-export const DeviceCode = Schema.Struct({ code: Schema.String, expires_at: Timestamp });
+/**
+ * `GET /api/hello`: what a device about to connect calls this Devys (the Mac's name), and the
+ * address other devices reach it at (the QR code in Settings › Devices carries both).
+ */
+export const Hello = Schema.Struct({ name: Schema.String, url: Schema.String });
+
+/**
+ * A device asking to join: what it calls itself and the two emoji both screens show, so the
+ * owner allows the device in their hand and not a stranger's asking at the same moment.
+ */
+export const JoinRequest = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  match: Schema.Tuple([Schema.String, Schema.String]),
+  expires_at: Timestamp,
+});
+export type JoinRequest = typeof JoinRequest.Type;
+/** `GET /api/joins`: requests waiting for an answer, for every signed-in device. */
+export const JoinRequests = Schema.Struct({ joins: Schema.Array(JoinRequest) });
+/** `GET /api/joins/:id`: the asking device's view of its request. */
+export const JoinStatus = Schema.Struct({
+  status: Schema.Literals(["pending", "allowed", "denied", "expired"]),
+});
 
 /** One employee of one business: names its agent runtime and its workspace. */
 export interface Scope {

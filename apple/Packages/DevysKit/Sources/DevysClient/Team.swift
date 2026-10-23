@@ -31,61 +31,6 @@ public struct Device: Equatable, Sendable, Decodable, Identifiable {
     public var addedDate: Date? { ServerDate.parse(createdAt) }
 }
 
-/// A single-use code that signs another device in as the same person, valid ten minutes.
-public struct DeviceCode: Equatable, Sendable {
-    public let code: String
-    public let expiresAt: Date
-    /// The server the code belongs to, so the link opens the right one.
-    public let server: URL
-
-    public init(code: String, expiresAt: Date, server: URL) {
-        self.code = code
-        self.expiresAt = expiresAt
-        self.server = server
-    }
-
-    public var link: EnrollLink { EnrollLink(server: server, code: code) }
-}
-
-/// `devys://enroll?server=<url>&code=<64 hex>`: opens the app signed in on another device.
-public struct EnrollLink: Equatable, Sendable {
-    public let server: URL
-    public let code: String
-
-    public init(server: URL, code: String) {
-        self.server = server
-        self.code = code
-    }
-
-    /// Only an http(s) server and a 64-character hex code are accepted.
-    public init?(url: URL) {
-        guard url.scheme?.lowercased() == "devys", url.host()?.lowercased() == "enroll",
-              let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
-              let raw = items.first(where: { $0.name == "server" })?.value,
-              let server = URL(string: raw), let scheme = server.scheme?.lowercased(),
-              ["http", "https"].contains(scheme), server.host() != nil,
-              let code = items.first(where: { $0.name == "code" })?.value?.lowercased(),
-              code.wholeMatch(of: /[a-f0-9]{64}/) != nil
-        else { return nil }
-        self.init(server: server, code: code)
-    }
-
-    public var url: URL {
-        var components = URLComponents()
-        components.scheme = "devys"
-        components.host = "enroll"
-        components.queryItems = [
-            URLQueryItem(name: "server", value: server.absoluteString),
-            URLQueryItem(name: "code", value: code)
-        ]
-        // A server URL carries ":" and "/"; encode them so the link survives cameras and chat apps.
-        components.percentEncodedQuery = components.percentEncodedQuery?
-            .replacingOccurrences(of: ":", with: "%3A")
-            .replacingOccurrences(of: "/", with: "%2F")
-        return components.url!
-    }
-}
-
 /// The name this device shows in the owner's device list.
 public enum DeviceName {
     public static func current() async -> String? {

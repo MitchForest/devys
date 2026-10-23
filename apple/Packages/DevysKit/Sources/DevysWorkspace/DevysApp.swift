@@ -3,9 +3,9 @@ import Dependencies
 package import DevysClient
 package import Foundation
 
-/// Root route. The session phase stream owns it: signing in or out changes the
-/// session, and the route follows. A `devys://enroll` link signs this device in,
-/// replacing the current session only after the owner confirms.
+/// Root route. The session phase stream owns it: signing in or out changes the session, and the
+/// route follows. A `devys://connect` link (the QR code in Settings › Devices) shows its Mac on
+/// the sign-in screen's one button; a signed-in device has nothing to connect.
 @Feature
 public struct DevysApp {
     public init() {}
@@ -14,10 +14,8 @@ public struct DevysApp {
         package var route: Route = .launching
         package var signIn: Spawn<SignIn>?
         package var workspace: Spawn<Workspace>?
-        /// A sign-in link opened while signed in, waiting for the owner to confirm the switch.
-        package var pendingLink: EnrollLink?
-        package var isEnrolling = false
-        package var linkError: String?
+        /// A Mac from a link opened before the sign-in screen existed.
+        package var linkedMac: FoundMac?
 
         public init() {}
     }
@@ -39,15 +37,7 @@ public struct DevysApp {
     package enum Intent {
         case phaseChanged(SessionPhase)
         case linkOpened(URL)
-        case linkConfirmed
-        case linkCancelled
-        case linkFinished(server: URL, replaced: Bool)
-        case linkFailed(String)
-        case linkErrorDismissed
     }
-
-    /// Declared here (not by the macro) so effect helpers can live in an extension.
-    @FeatureBindable var store = FeatureStore<Self.State, Self.Action>()
 
     @Dependency(\.sessionClient) var sessionClient: SessionClient
 
@@ -57,43 +47,26 @@ public struct DevysApp {
             case .phaseChanged(.signedOut):
                 state.route = .signedOut
                 state.workspace = nil
-                if state.signIn == nil { state.signIn = Spawn(SignIn.State()) }
+                if state.signIn == nil {
+                    var signIn = SignIn.State()
+                    if let mac = state.linkedMac { signIn.phase = .found(mac) }
+                    state.signIn = Spawn(signIn)
+                }
 
             case .phaseChanged(.signedIn(let server)):
                 state.route = .signedIn
                 state.signIn = nil
+                state.linkedMac = nil
                 if state.workspace == nil { state.workspace = Spawn(Workspace.State(server: server)) }
 
             case .linkOpened(let url):
-                guard let link = EnrollLink(url: url) else {
-                    state.linkError = "That isn't a Devys sign-in link."
-                    return
+                guard state.route != .signedIn, let link = ConnectLink(url: url) else { return }
+                state.linkedMac = link.mac
+                // Asking already: the link changes nothing until that is answered.
+                switch state.signIn?.phase {
+                case .looking, .found: state.signIn?.phase = .found(link.mac)
+                default: break
                 }
-                if state.route == .signedIn {
-                    state.pendingLink = link
-                } else {
-                    enroll(link, replacing: false, state: &state)
-                }
-
-            case .linkConfirmed:
-                guard let link = state.pendingLink else { return }
-                state.pendingLink = nil
-                enroll(link, replacing: true, state: &state)
-
-            case .linkCancelled:
-                state.pendingLink = nil
-
-            case .linkFinished(let server, let replaced):
-                state.isEnrolling = false
-                // A new session means a new person or server: start the workspace fresh.
-                if replaced { state.workspace = Spawn(Workspace.State(server: server)) }
-
-            case .linkFailed(let message):
-                state.isEnrolling = false
-                state.linkError = message
-
-            case .linkErrorDismissed:
-                state.linkError = nil
             }
         }
         .ifLet(\.signIn) {
@@ -113,27 +86,6 @@ public struct DevysApp {
     }
 }
 
-extension DevysApp {
-    /// Signs in with the link's server and code; the device name labels this device.
-    func enroll(_ link: EnrollLink, replacing: Bool, state: inout State) {
-        guard !state.isEnrolling else { return }
-        state.isEnrolling = true
-        state.linkError = nil
-        let session = sessionClient
-        store.addTask {
-            do {
-                try await session.signIn(link.server, link.code)
-                try store.send(Action(.linkFinished(server: link.server, replaced: replacing)))
-            } catch {
-                try store.send(Action(.linkFailed(SignIn.message(for: error))))
-            }
-        }
-    }
-}
-
 extension DevysApp.Action {
     package static func linkOpened(_ url: URL) -> Self { Self(.linkOpened(url)) }
-    package static var linkConfirmed: Self { Self(.linkConfirmed) }
-    package static var linkCancelled: Self { Self(.linkCancelled) }
-    package static var linkErrorDismissed: Self { Self(.linkErrorDismissed) }
 }

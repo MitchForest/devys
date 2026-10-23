@@ -32,16 +32,14 @@ export async function bearer(sql: Sql, person: string) {
 /** The sidebar, where every place but an app is a conversation. */
 export const sidebar = (page: Page) => page.getByRole("navigation", { name: "Sidebar" });
 
-/** Signs in with a single-use enrollment code; the workspace opens on Home. */
+/** Signs in with a one-time link, as the Mac app opens one; the workspace opens on Home. */
 export async function signIn(page: Page, sql: Sql, person: string, { phone = false } = {}) {
   const token = hex();
   await sql.run(
-    "INSERT INTO enrollment_tokens (token_hash, person_id, expires_at) VALUES ($1, $2, now() + interval '1 hour')",
+    "INSERT INTO sign_in_links (token_hash, person_id, expires_at) VALUES ($1, $2, now() + interval '1 hour')",
     [hash(token), person],
   );
-  await page.goto("/");
-  await page.getByLabel("Enrollment code").fill(token);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.goto(`/#signin=${token}`);
   if (phone) {
     // A phone has no sidebar: Home is the conversation with Operations, full screen.
     await expect(page.getByLabel("Message Head of Operations")).toBeVisible();

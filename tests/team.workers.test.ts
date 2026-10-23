@@ -197,25 +197,25 @@ it("members hire from templates, edit employees and the brief, and retire with a
   expect(stopped.some((name) => name.includes(growth.id))).toBe(true);
 });
 
-it("a signed-in person adds a device with a code, sees their devices and signs one out", async () => {
+it("a signed-in person opens a browser with a one-time link, sees their devices and signs one out", async () => {
   const { person } = await business("Devices");
   const as = await session(person);
-  const issued = await json<{ code: string }>(as("/api/devices/codes", { method: "POST" }));
-  const exchanged = await apiRoute(
-    new Request(`${origin}/api/native/session`, {
+  const issued = await json<{ token: string }>(as("/api/devices/link", { method: "POST" }));
+  const redeemed = await apiRoute(
+    new Request(`${origin}/api/link`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ token: issued.code, name: "Mitch's iPad" }),
+      headers: { "content-type": "application/json", origin },
+      body: JSON.stringify({ token: issued.token }),
     }),
     env as unknown as Env,
   );
-  expect(exchanged?.status).toBe(200);
+  expect(redeemed?.status).toBe(200);
   const list = await json<{ devices: { id: string; label: string; current: boolean }[] }>(
     as("/api/devices"),
   );
   expect(list.devices.map((device) => [device.label, device.current]).sort()).toEqual([
-    ["Mitch's iPad", false],
     ["Test", true],
+    ["Web browser", false],
   ]);
   const ipad = list.devices.find((device) => !device.current)!;
   const stranger = await session((await business("Elsewhere")).person);

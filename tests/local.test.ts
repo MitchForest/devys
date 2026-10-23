@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { appPort, hostEnvironment, launchAgent, tailnetUrl, withVar } from "../scripts/local.ts";
+import { mkdtempSync, readFileSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  advertisement,
+  appPort,
+  hostEnvironment,
+  launchAgent,
+  ownerKey,
+  tailnetUrl,
+  withVar,
+} from "../scripts/local.ts";
 
 describe("local mode launcher", () => {
   it("prefers HTTPS Serve, then the TCP forward, and only when they reach the app", () => {
@@ -59,5 +70,33 @@ describe("local mode launcher", () => {
       "A=1\nDEVYS_HOST_TOKEN=new\n",
     );
     expect(withVar("", "X", "1")).toBe("X=1\n");
+  });
+
+  it("announces this Mac on the local network with its tailnet address, never its loopback", () => {
+    expect(advertisement("Sam's Mac mini", `http://mini:${appPort}`)).toMatchObject({
+      command: "/usr/bin/dns-sd",
+      args: [
+        "-R",
+        "Sam's Mac mini",
+        "_devys._tcp",
+        "local",
+        String(appPort),
+        `url=http://mini:${appPort}`,
+      ],
+    });
+    expect(advertisement("Mini", "https://mini.example.ts.net")?.args).toContain("443");
+    expect(advertisement("Mini", `http://127.0.0.1:${appPort}`)).toBeUndefined();
+  });
+
+  it("keeps the owner key in a file only the owner's user reads, made once", () => {
+    const file = join(mkdtempSync(join(tmpdir(), "devys-owner-")), "owner.json");
+    const key = ownerKey(file, "http://127.0.0.1:8787");
+    expect(key).toMatch(/^[a-f0-9]{64}$/);
+    expect(statSync(file).mode & 0o777).toBe(0o600);
+    expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({
+      server: "http://127.0.0.1:8787",
+      key,
+    });
+    expect(ownerKey(file)).toBe(key);
   });
 });

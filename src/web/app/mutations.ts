@@ -510,14 +510,6 @@ export function useCreateBusiness() {
   });
 }
 
-export function useSignIn() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: (token: string) => api.enroll(token),
-    onSuccess: () => client.refetchQueries({ queryKey: keys.me }),
-  });
-}
-
 /** Signs this browser out; everything read for the last person is dropped. */
 export function useSignOut() {
   const client = useQueryClient();

@@ -104,6 +104,9 @@ package struct Workspace {
         package var voiceError: String?
         /// Messages sent from this device in this session whose answers are read aloud.
         package var repliesToSpeak: Set<String> = []
+        /// A device asking to join, shown as an alert until it is answered or expires.
+        package var joinRequest: JoinRequest?
+        package var isAnsweringJoin = false
 
         package init(server: URL) {
             self.server = server
@@ -152,6 +155,7 @@ package struct Workspace {
         case project(ProjectIntent)
         case routine(RoutineIntent)
         case asking(AskingIntent)
+        case join(JoinIntent)
         case workLoaded(businessID: String, WorkRecords)
         case decisionAnswered(decisionID: String, approve: Bool)
         case workItemStateSet(workItemID: String, WorkItemState)
@@ -268,6 +272,8 @@ package struct Workspace {
             case .routine(let intent): reduceRoutine(intent, state: &state)
 
             case .asking(let intent): reduceAsking(intent, state: &state)
+
+            case .join(let intent): reduceJoin(intent, state: &state)
 
             case .team(let intent): reduceTeam(intent, state: &state)
 
@@ -390,6 +396,7 @@ package struct Workspace {
                     try store.send(Action(.tick))
                 }
             }
+            watchJoins()
             let profile = profileClient
             store.addTask {
                 let photo = try? await profile.photo()

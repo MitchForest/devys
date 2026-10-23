@@ -24,20 +24,6 @@ struct DevysHTTPClientTests {
         }
     }
 
-    @Test("Enrollment posts the one-time code and returns a device session")
-    func enroll() async throws {
-        let recorder = Recorder()
-        let session = try await api(body: #"{"session_token":"abc","expires_in_seconds":604800}"#, recorder: recorder)
-            .enroll(server: Self.server, code: "f00d")
-        #expect(session == DeviceSession(server: Self.server, token: "abc"))
-        let request = try #require(await recorder.requests.first)
-        #expect(request.url?.absoluteString == "https://devys.test/api/native/session")
-        #expect(request.httpMethod == "POST")
-        #expect(request.value(forHTTPHeaderField: "authorization") == nil)
-        let body = try JSONSerialization.jsonObject(with: try #require(request.httpBody)) as? [String: String]
-        #expect(body == ["token": "f00d"])
-    }
-
     @Test("Account lists the person's businesses; a business lists its team")
     func directory() async throws {
         let session = DeviceSession(server: Self.server, token: "tok")
@@ -163,23 +149,42 @@ struct DevysHTTPClientTests {
     }
 }
 
+private actor Sent {
+    var requests: [URLRequest] = []
+    func record(_ request: URLRequest) { requests.append(request) }
+}
+
 @Suite("Session hub")
 struct SessionHubTests {
     private static let server = URL(string: "https://devys.test")!
 
-    @Test("Signing in stores the session and publishes the phase; expiry clears both")
+    @Test("Allowed to join, the token this device chose is its session: stored and published; expiry clears both")
     func lifecycle() async throws {
         let store = DeviceSessionStore.inMemory()
+        let sent = Sent()
         let api = DevysHTTPClient { request in
+            await sent.record(request)
+            let body = request.url?.path() == "/api/joins"
+                ? #"{"id":"j1","name":"iPad","match":["🦊","🌵"],"expires_at":"2026-10-19T15:10:00.000Z"}"#
+                : #"{"status":"allowed"}"#
             let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-            return (Data(#"{"session_token":"issued"}"#.utf8), response)
+            return (Data(body.utf8), response)
         }
         let hub = SessionHub(api: api, store: store)
-        var phases = SessionClient.live(hub).phases().makeAsyncIterator()
+        var phases = SessionClient.live(hub, signer: .software()).phases().makeAsyncIterator()
         #expect(await phases.next() == .signedOut)
-        try await hub.signIn(server: Self.server, code: "code")
+        let mac = FoundMac(name: "Mini", server: Self.server)
+        let ticket = try await hub.requestJoin(mac, publicKey: nil)
+        #expect(ticket == JoinTicket(id: "j1", mac: mac, match: ["🦊", "🌵"]))
+        #expect(try await hub.awaitJoin(ticket) == .allowed)
         #expect(await phases.next() == .signedIn(server: Self.server))
-        #expect(store.load() == DeviceSession(server: Self.server, token: "issued"))
+        // The token asked with (its status) is the session now; only its hash was sent to ask.
+        let requests = await sent.requests
+        let asked = try JSONSerialization.jsonObject(with: try #require(requests.first?.httpBody)) as? [String: Any]
+        let token = try #require(requests.last?.value(forHTTPHeaderField: "authorization")?.replacingOccurrences(of: "Bearer ", with: ""))
+        #expect(store.load() == DeviceSession(server: Self.server, token: token))
+        #expect((asked?["session_hash"] as? String)?.count == 64 && asked?["session_hash"] as? String != token)
+        #expect(try await hub.awaitJoin(ticket) == .expired)
         await hub.expire()
         #expect(await phases.next() == .signedOut)
         #expect(store.load() == nil)
@@ -190,7 +195,7 @@ struct SessionHubTests {
     func expiresOnUnauthorized() async throws {
         let store = DeviceSessionStore.inMemory(DeviceSession(server: Self.server, token: "kept"))
         let hub = SessionHub(api: DevysHTTPClient { _ in throw URLError(.badURL) }, store: store)
-        var phases = SessionClient.live(hub).phases().makeAsyncIterator()
+        var phases = SessionClient.live(hub, signer: .software()).phases().makeAsyncIterator()
         #expect(await phases.next() == .signedIn(server: Self.server))
         await #expect(throws: DevysHTTPError.rejected(status: 503, message: "busy")) {
             try await hub.call { _, _ in throw DevysHTTPError.rejected(status: 503, message: "busy") }
@@ -209,7 +214,7 @@ struct SessionHubTests {
             api: DevysHTTPClient { _ in throw URLError(.badURL) },
             store: .inMemory(DeviceSession(server: Self.server, token: "kept"))
         )
-        var phases = SessionClient.live(hub).phases().makeAsyncIterator()
+        var phases = SessionClient.live(hub, signer: .software()).phases().makeAsyncIterator()
         #expect(await phases.next() == .signedIn(server: Self.server))
     }
 }

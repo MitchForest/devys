@@ -6,20 +6,29 @@ public enum SessionPhase: Equatable, Sendable {
     case signedIn(server: URL)
 }
 
-/// Device sign-in. The root feature routes on `phases`; sign-in and sign-out
+/// Device sign-in, with nothing to type. The root feature routes on `phases`; signing in and out
 /// only change the session, never the route directly.
 public struct SessionClient: Sendable {
     public var phases: @Sendable () -> AsyncStream<SessionPhase>
-    public var signIn: @Sendable (_ server: URL, _ code: String) async throws -> Void
+    /// On the Mac running Devys, signs in as the Mac's owner and returns true; false elsewhere.
+    public var signInAsOwner: @Sendable () async throws -> Bool
+    /// Asks a Mac to let this device join; the token it chose stays in the session hub.
+    public var requestJoin: @Sendable (FoundMac) async throws -> JoinTicket
+    /// Waits for the answer; allowed signs this device in.
+    public var awaitJoin: @Sendable (JoinTicket) async throws -> JoinOutcome
     public var signOut: @Sendable () async -> Void
 
     public init(
         phases: @escaping @Sendable () -> AsyncStream<SessionPhase>,
-        signIn: @escaping @Sendable (URL, String) async throws -> Void,
+        signInAsOwner: @escaping @Sendable () async throws -> Bool = { false },
+        requestJoin: @escaping @Sendable (FoundMac) async throws -> JoinTicket = { _ in throw DevysHTTPError.unauthorized },
+        awaitJoin: @escaping @Sendable (JoinTicket) async throws -> JoinOutcome = { _ in .expired },
         signOut: @escaping @Sendable () async -> Void
     ) {
         self.phases = phases
-        self.signIn = signIn
+        self.signInAsOwner = signInAsOwner
+        self.requestJoin = requestJoin
+        self.awaitJoin = awaitJoin
         self.signOut = signOut
     }
 }
@@ -36,8 +45,15 @@ public struct RuntimeClient: Sendable {
     /// The business's export, newline-delimited JSON.
     public var exportBusiness: @Sendable (_ id: String) async throws -> Data
     public var devices: @Sendable () async throws -> [Device]
-    public var issueDeviceCode: @Sendable () async throws -> DeviceCode
     public var revokeDevice: @Sendable (_ id: String) async throws -> Void
+    /// What this Devys calls itself and where other devices reach it (the QR code).
+    public var hello: @Sendable () async throws -> Hello
+    /// A one-time link that signs a browser in as this person.
+    public var signInLink: @Sendable () async throws -> URL
+    /// Devices asking to join now.
+    public var joins: @Sendable () async throws -> [JoinRequest]
+    /// Allows or denies a device; allowed with an app's key, that key to endorse.
+    public var answerJoin: @Sendable (_ id: String, _ allow: Bool) async throws -> DeviceKey?
     public var roles: @Sendable () async throws -> [RoleTemplate]
     public var hire: @Sendable (_ businessID: String, Hire) async throws -> Employee
     public var updateProfile: @Sendable (EmployeeScope, ProfileChange) async throws -> Void
@@ -112,8 +128,11 @@ public struct RuntimeClient: Sendable {
         },
         exportBusiness: @escaping @Sendable (String) async throws -> Data = { _ in Data() },
         devices: @escaping @Sendable () async throws -> [Device] = { [] },
-        issueDeviceCode: @escaping @Sendable () async throws -> DeviceCode = { throw DevysHTTPError.unauthorized },
         revokeDevice: @escaping @Sendable (String) async throws -> Void = { _ in },
+        hello: @escaping @Sendable () async throws -> Hello = { throw DevysHTTPError.unauthorized },
+        signInLink: @escaping @Sendable () async throws -> URL = { throw DevysHTTPError.unauthorized },
+        joins: @escaping @Sendable () async throws -> [JoinRequest] = { [] },
+        answerJoin: @escaping @Sendable (String, Bool) async throws -> DeviceKey? = { _, _ in nil },
         roles: @escaping @Sendable () async throws -> [RoleTemplate] = { [] },
         hire: @escaping @Sendable (String, Hire) async throws -> Employee = { _, _ in throw DevysHTTPError.unauthorized },
         updateProfile: @escaping @Sendable (EmployeeScope, ProfileChange) async throws -> Void = { _, _ in },
@@ -184,8 +203,11 @@ public struct RuntimeClient: Sendable {
         self.updateBusiness = updateBusiness
         self.exportBusiness = exportBusiness
         self.devices = devices
-        self.issueDeviceCode = issueDeviceCode
         self.revokeDevice = revokeDevice
+        self.hello = hello
+        self.signInLink = signInLink
+        self.joins = joins
+        self.answerJoin = answerJoin
         self.roles = roles
         self.hire = hire
         self.updateProfile = updateProfile
@@ -238,12 +260,22 @@ public struct RuntimeClient: Sendable {
 
 /// One owner of the device session for every live client.
 public actor SessionHub {
-    public static let shared = SessionHub(api: .live, store: .keychain())
+    #if DEBUG
+        /// QA: `DEVYS_SESSION=memory` starts signed out with nothing kept (a first run).
+        public static let shared = SessionHub(
+            api: .live,
+            store: ProcessInfo.processInfo.environment["DEVYS_SESSION"] == "memory" ? .inMemory() : .keychain()
+        )
+    #else
+        public static let shared = SessionHub(api: .live, store: .keychain())
+    #endif
 
     private let api: DevysHTTPClient
     private let store: DeviceSessionStore
     private var stored: DeviceSession??
     private var subscribers: [UUID: AsyncStream<SessionPhase>.Continuation] = [:]
+    /// The tokens this device chose for its requests to join, by request; used once allowed.
+    private var joining: [String: ChosenToken] = [:]
 
     public init(api: DevysHTTPClient, store: DeviceSessionStore) {
         self.api = api
@@ -262,10 +294,50 @@ public actor SessionHub {
         set { stored = .some(newValue) }
     }
 
-    public func signIn(server: URL, code: String) async throws {
-        let issued = try await api.enroll(server: server, code: code, name: await DeviceName.current())
+    /// The Mac app on the Mac running Devys signs in as the Mac's owner, proving it with the owner
+    /// file only that macOS user can read. False on every other device.
+    public func signInAsOwner() async throws -> Bool {
+        guard let owner = OwnerFile.read() else { return false }
+        let issued = try await api.localSession(owner, name: NSFullUserName(), label: await DeviceName.current())
         try store.save(issued)
         publish(issued)
+        return true
+    }
+
+    /// Asks the Mac to let this device join, with the hash of a session token chosen here.
+    public func requestJoin(_ mac: FoundMac, publicKey: String?) async throws -> JoinTicket {
+        let chosen = ChosenToken()
+        let asked = try await api.askToJoin(
+            server: mac.server,
+            name: await DeviceName.current() ?? "A device",
+            sessionHash: chosen.hash,
+            publicKey: publicKey
+        )
+        joining[asked.id] = chosen
+        return JoinTicket(id: asked.id, mac: mac, match: asked.match)
+    }
+
+    /// Asks how the request went until it is answered or expires (two minutes). Allowed, the
+    /// chosen token is this device's session.
+    public func awaitJoin(_ ticket: JoinTicket) async throws -> JoinOutcome {
+        guard let chosen = joining[ticket.id] else { return .expired }
+        defer { joining[ticket.id] = nil }
+        let giveUp = Date.now.addingTimeInterval(150)
+        while Date.now < giveUp {
+            try await Task.sleep(for: .milliseconds(1500))
+            // A missed answer is asked again.
+            switch try? await api.joinStatus(server: ticket.mac.server, id: ticket.id, token: chosen.token) {
+            case "allowed":
+                let session = DeviceSession(server: ticket.mac.server, token: chosen.token)
+                try store.save(session)
+                publish(session)
+                return .allowed
+            case "denied": return .denied
+            case "expired": return .expired
+            default: continue
+            }
+        }
+        return .expired
     }
 
     public func signOut() async {
@@ -320,27 +392,30 @@ public actor SessionHub {
 }
 
 extension SessionClient {
-    public static func live(_ hub: SessionHub) -> Self {
+    public static func live(_ hub: SessionHub, signer: DeviceSigner) -> Self {
         Self(
             phases: {
                 AsyncStream { continuation in
                     Task { await hub.subscribe(continuation) }
                 }
             },
-            signIn: { server, code in try await hub.signIn(server: server, code: code) },
+            signInAsOwner: { try await hub.signInAsOwner() },
+            requestJoin: { mac in
+                // The app's signing key goes with the request, to be enrolled for it when allowed.
+                try await hub.requestJoin(mac, publicKey: try? signer.publicKey().base64EncodedString())
+            },
+            awaitJoin: { ticket in try await hub.awaitJoin(ticket) },
             signOut: { await hub.signOut() }
         )
     }
 
     public static let unimplemented = Self(
         phases: { AsyncStream { $0.finish() } },
-        signIn: { _, _ in throw DevysHTTPError.unauthorized },
         signOut: {}
     )
 
     public static let signedInPreview = Self(
         phases: { AsyncStream { $0.yield(.signedIn(server: URL(string: "http://127.0.0.1:5173")!)) } },
-        signIn: { _, _ in },
         signOut: {}
     )
 }
@@ -357,8 +432,11 @@ extension RuntimeClient {
             },
             exportBusiness: { id in try await hub.call { api, session in try await api.exportBusiness(session, id: id) } },
             devices: { try await hub.call { api, session in try await api.devices(session) } },
-            issueDeviceCode: { try await hub.call { api, session in try await api.issueDeviceCode(session) } },
             revokeDevice: { id in try await hub.call { api, session in try await api.revokeDevice(session, id: id) } },
+            hello: { try await hub.call { api, session in try await api.hello(server: session.server) } },
+            signInLink: { try await hub.call { api, session in try await api.signInLink(session) } },
+            joins: { try await hub.call { api, session in try await api.joins(session) } },
+            answerJoin: { id, allow in try await hub.call { api, session in try await api.answerJoin(session, id: id, allow: allow) } },
             roles: { try await hub.call { api, session in try await api.roles(session) } },
             hire: { id, hire in try await hub.call { api, session in try await api.hire(session, businessID: id, hire) } },
             updateProfile: { scope, change in try await hub.call { api, session in try await api.updateProfile(session, scope, change) } },
@@ -449,9 +527,15 @@ extension RuntimeClient {
 }
 
 nonisolated enum SessionClientKey: DependencyKey {
-    static let liveValue = SessionClient.live(.shared)
+    static let liveValue = SessionClient.live(.shared, signer: .secureEnclave())
     static let testValue = SessionClient.unimplemented
     static let previewValue = SessionClient.signedInPreview
+}
+
+nonisolated enum DiscoveryClientKey: DependencyKey {
+    static let liveValue = DiscoveryClient.live
+    static let testValue = DiscoveryClient.none
+    static let previewValue = DiscoveryClient.none
 }
 
 nonisolated enum RuntimeClientKey: DependencyKey {
@@ -497,6 +581,12 @@ extension DependencyValues {
     public var signingClient: SigningClient {
         get { self[SigningClientKey.self] }
         set { self[SigningClientKey.self] = newValue }
+    }
+
+    /// Macs running Devys on the local network, and the last one this device used.
+    public var discoveryClient: DiscoveryClient {
+        get { self[DiscoveryClientKey.self] }
+        set { self[DiscoveryClientKey.self] = newValue }
     }
 
     public var sessionClient: SessionClient {

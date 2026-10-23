@@ -284,7 +284,7 @@ struct VoiceFeatureTests {
 }
 
 /// Sleeps return at once so reply polling runs without real delays.
-private struct ImmediateClockStandIn: Clock {
+struct ImmediateClockStandIn: Clock {
     typealias Duration = Swift.Duration
     struct Instant: InstantProtocol {
         var offset: Duration = .zero

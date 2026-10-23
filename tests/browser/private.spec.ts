@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { localStores } from "../fixtures/local.ts";
 import { randomUUID, randomBytes, createHash } from "node:crypto";
 
-test("enrollment is single-use; downloads and sessions enforce business isolation and revocation", async ({
+test("a sign-in link is single-use; downloads and sessions enforce business isolation and revocation", async ({
   page,
   browser,
   request,
@@ -16,7 +16,7 @@ test("enrollment is single-use; downloads and sessions enforce business isolatio
   const token = Array.from(randomBytes(32), (byte) => byte.toString(16).padStart(2, "0")).join("");
   const hash = createHash("sha256").update(token).digest("hex");
   await sql.run(
-    "INSERT INTO enrollment_tokens (token_hash,person_id,expires_at) VALUES ($1,$2,now() + interval '1 hour')",
+    "INSERT INTO sign_in_links (token_hash,person_id,expires_at) VALUES ($1,$2,now() + interval '1 hour')",
     [hash, alex.person],
   );
   await sql.run(
@@ -32,10 +32,9 @@ test("enrollment is single-use; downloads and sessions enforce business isolatio
   const theirs = `/api/businesses/${other.business}`;
   try {
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Welcome to Devys" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Connect to / })).toBeVisible();
     expect((await request.get("/api/me")).status()).toBe(401);
-    await page.getByLabel("Enrollment code").fill(token);
-    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.goto(`/#signin=${token}`);
     await expect(
       page.getByRole("navigation", { name: "Sidebar" }).getByRole("link", { name: /^Home/ }),
     ).toBeVisible();
@@ -83,7 +82,7 @@ test("enrollment is single-use; downloads and sessions enforce business isolatio
       ).status(),
     ).toBe(403);
     const other = await browser.newContext();
-    const consumed = await other.request.post("http://127.0.0.1:5173/api/enroll", {
+    const consumed = await other.request.post("http://127.0.0.1:5173/api/link", {
       headers: { origin: "http://127.0.0.1:5173" },
       data: { token },
     });

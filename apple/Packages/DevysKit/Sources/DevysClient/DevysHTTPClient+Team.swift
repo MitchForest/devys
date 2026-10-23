@@ -8,12 +8,6 @@ extension DevysHTTPClient {
         return page.devices
     }
 
-    /// Issues a ten-minute, single-use code that signs another device in as this person.
-    public func issueDeviceCode(_ session: DeviceSession) async throws -> DeviceCode {
-        let issued: IssuedCode = try await send(authorized(session, path: "api/devices/codes", method: "POST"))
-        return DeviceCode(code: issued.code, expiresAt: issued.expiresAt, server: session.server)
-    }
-
     /// Signs one of the person's devices out.
     public func revokeDevice(_ session: DeviceSession, id: String) async throws {
         _ = try await raw(authorized(session, path: "api/devices/\(id)/revoke", method: "POST"))
@@ -63,16 +57,5 @@ extension DevysHTTPClient {
 
     public func googleConnection(_ session: DeviceSession, businessID: String) async throws -> GoogleConnection {
         try await send(authorized(session, path: "api/businesses/\(businessID)/connections/google"))
-    }
-}
-
-/// `POST /api/devices/codes`.
-struct IssuedCode: Decodable {
-    let code: String
-    let expiresAt: Date
-
-    enum CodingKeys: String, CodingKey {
-        case code
-        case expiresAt = "expires_at"
     }
 }

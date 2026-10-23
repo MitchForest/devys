@@ -19,6 +19,7 @@ import { startHost } from "../src/workspace/host/server.ts";
 import { hostKeyring, openFor } from "../src/vault/host/server.ts";
 import { memorySecrets } from "./fixtures/vault.ts";
 import { readFileSync } from "node:fs";
+import { ownerKey } from "../scripts/local.ts";
 
 const token = "test-token";
 const fakeCodex = join(import.meta.dirname, "fixtures/fake-codex.mjs");
@@ -348,6 +349,42 @@ it("no confined process obtains the vault's master key: commands, coding harness
   ).text;
   expect(reply).toContain("Operation not permitted");
   expect(reply).not.toContain(master);
+});
+
+it("no confined process obtains the owner key, so none can sign in as the Mac's owner", async () => {
+  const state = await host();
+  // As installed: the server folder's owner.json, the one file the Mac app reads to sign in.
+  const file = join(state.data, "..", "owner.json");
+  const key = ownerKey(file, "http://127.0.0.1:8787");
+  // The owner's own processes (a terminal, the Mac app) read it.
+  expect(execFileSync("/bin/cat", [file], { encoding: "utf8" })).toContain(key);
+  const tried = await run(
+    state,
+    a,
+    [
+      `cat '${file}'`,
+      `cp '${file}' ./owner.json; cat ./owner.json`,
+      `/usr/bin/python3 -c "print(open('${file}').read())"`,
+      `find '${join(state.data, "..")}' -name 'owner.json' -exec cat {} \\;`,
+      `ln '${file}' ./linked.json; cat ./linked.json`,
+      `grep -r key '${join(state.data, "..")}'`,
+    ].join("; ") + " 2>&1",
+  );
+  expect(tried).toContain("Operation not permitted");
+  expect(tried).not.toContain(key);
+  expect(existsSync(join(state.work, a.businessId, "owner.json"))).toBe(false);
+  // A coding harness's shell is held the same way.
+  await state.coding(a).start({ ...build("owner-key", "claude"), objective: `cat '${file}'` });
+  const reply = (
+    await until(() =>
+      state.delivered.find(
+        (event) =>
+          event.codingSessionId === "owner-key" && ["finished", "failed"].includes(event.kind),
+      ),
+    )
+  ).text;
+  expect(reply).toContain("Operation not permitted");
+  expect(reply).not.toContain(key);
 });
 
 const build = (id: string, provider: StartRequest["provider"]): StartRequest => ({

@@ -235,6 +235,11 @@ export const DeviceKeys = Schema.Struct({
 export const KeyEnrollment = Schema.Struct({ public_key: Base64(100) });
 /** `POST /api/device-keys/:id/endorse`: an active key's signature letting another device sign. */
 export const KeyEndorsement = SpendSignature;
+/**
+ * `POST /api/joins/:id/allow` (or `deny`): the joined device's key when it sent one, pending
+ * until an active key signs it (the allowing app does so at once) unless it is the person's first.
+ */
+export const JoinAnswered = Schema.Struct({ key: Schema.NullOr(DeviceKey) });
 /** `GET …/projects`. */
 export const Projects = Schema.Struct({ projects: Schema.Array(Project) });
 /** `POST …/projects/:id/items/:item/remove`. */

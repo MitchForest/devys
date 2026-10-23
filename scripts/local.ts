@@ -5,18 +5,18 @@
  * development resets never touch it.
  *
  *   bun scripts/local.ts install    build, copy the app, serve it on the tailnet, start at login,
- *                                   then print and open a sign-in link
+ *                                   then open the Mac app (signed in as you), or the web app
+ *                                   with a one-time link when the Mac app isn't built
  *   bun scripts/local.ts uninstall  stop and remove the LaunchAgent (data is kept)
  *   bun scripts/local.ts run        what launchd runs: Postgres, the Worker, the minute tick
  *   bun scripts/local.ts backup     dump Postgres and archive the Workers state now
  *   bun scripts/local.ts webhooks   publish only /webhooks/ to the internet with Funnel
- *   bun scripts/local.ts code       a sign-in code for the owner, as a code and a devys:// link
  *   bun scripts/local.ts clear-keys revoke every device signing key (spend approvals need a
  *                                   device enrolled again)
  *   bun scripts/local.ts status
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
   cpSync,
   existsSync,
@@ -30,6 +30,7 @@ import { homedir, userInfo } from "node:os";
 import { join, resolve } from "node:path";
 import { Effect } from "effect";
 import { revokeAllKeys } from "../src/authority/keys.ts";
+import { issueOwnerLink } from "../src/identity/sessions.ts";
 import { bin } from "./db.ts";
 
 const checkout = resolve(import.meta.dirname, "..");
@@ -53,6 +54,17 @@ const agentPath = join(homedir(), "Library/LaunchAgents", `${label}.plist`);
 const keepBackups = 14;
 const database = `postgres://devys:devys@127.0.0.1:${postgresPort}/devys`;
 const postgresEnv = { DEVYS_PG_DATA: paths.postgres, DEVYS_PG_PORT: String(postgresPort) };
+/**
+ * What the Mac app reads to sign in as the Mac's owner: this server's address and a key only the
+ * owner's macOS user can read (0600, in the server folder, which every process an employee starts
+ * is denied; .docs/AUTHORITY.md "Signing in"). The Mac app's sandbox may read this one file.
+ */
+export const ownerFile = join(home, "owner.json");
+/** Where a built Mac app is found: installed, or built from this checkout. */
+const macApps = [
+  "/Applications/Devys.app",
+  join(checkout, "apple/DerivedData/Build/Products/Debug/Devys.app"),
+];
 
 type ServeStatus = {
   TCP?: Record<string, { TCPForward?: string }>;
@@ -211,8 +223,54 @@ async function install() {
     spawnSync("sleep", ["1"]);
   }
   log(`Devys is starting at ${publicUrl()}. Logs: ${paths.logs}`);
-  log("Sign in with this (or run `bun run local code` for another):");
-  code(true);
+  await opened();
+}
+
+/**
+ * Once Devys answers, opens the Mac app, which signs itself in as the Mac's owner; without a
+ * built Mac app, the web app with a one-time link instead. Nothing to type.
+ */
+async function opened() {
+  for (let attempt = 0; attempt < 90; attempt++) {
+    try {
+      if ((await fetch(`http://127.0.0.1:${appPort}/health`)).ok) break;
+    } catch {}
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
+  const app = macApps.find((path) => existsSync(path));
+  if (app) {
+    spawnSync("open", [app]);
+    return log(`Opened ${app}.`);
+  }
+  const token = Buffer.from(randomBytes(32)).toString("hex");
+  await Effect.runPromise(
+    issueOwnerLink(
+      { connectionString: database },
+      { tokenHash: createHash("sha256").update(token).digest("hex"), name: ownerName() },
+    ),
+  );
+  spawnSync("open", [`http://127.0.0.1:${appPort}/#signin=${token}`]);
+  log("Opened Devys in your browser.");
+}
+
+/** The owner's full name on this Mac, for the first person Devys signs in. */
+function ownerName() {
+  const result = spawnSync("id", ["-F"], { encoding: "utf8" });
+  return (result.status === 0 && result.stdout.trim()) || userInfo().username;
+}
+
+/** This Mac's name ("Sam's Mac mini"), on the one button other devices show. */
+function computerName() {
+  const result = spawnSync("scutil", ["--get", "ComputerName"], { encoding: "utf8" });
+  return (result.status === 0 && result.stdout.trim()) || "Devys";
+}
+
+/** The owner file's key, created once. */
+export function ownerKey(file = ownerFile, server = `http://127.0.0.1:${appPort}`) {
+  if (existsSync(file)) return (JSON.parse(readFileSync(file, "utf8")) as { key: string }).key;
+  const key = Buffer.from(randomBytes(32)).toString("hex");
+  writeFileSync(file, `${JSON.stringify({ server, key })}\n`, { mode: 0o600 });
+  return key;
 }
 
 function uninstall() {
@@ -234,26 +292,6 @@ function webhooks() {
   log(
     `Webhooks: ${base}:${webhookPort}/webhooks/… (for example ${base}:${webhookPort}/webhooks/photon)`,
   );
-}
-
-/**
- * A one-hour sign-in code for the owner, printed as a code and a link the apps open; `open`
- * also opens the link on this Mac (the Mac app asks before replacing a session it has).
- */
-function code(open = false) {
-  const file = join(home, `code-${Date.now()}`);
-  must(
-    process.execPath,
-    ["scripts/enroll.ts", "--name", "Owner", "--owner", "--out", file],
-    postgresEnv,
-  );
-  const value = readFileSync(file, "utf8").trim();
-  rmSync(file);
-  const server = publicUrl();
-  console.log(`Server: ${server}\nCode:   ${value}`);
-  const link = `devys://enroll?server=${encodeURIComponent(server)}&code=${value}`;
-  console.log(`Link:   ${link}`);
-  if (open && process.platform === "darwin") spawnSync("open", [link]);
 }
 
 function backup() {
@@ -358,6 +396,20 @@ export function hostEnvironment(
   };
 }
 
+/**
+ * The DNS-SD registration that announces this Mac as `_devys._tcp` with its tailnet address in the
+ * TXT record (`url=`); undefined when the address is this Mac's loopback, which no other device
+ * reaches.
+ */
+export function advertisement(name: string, url: string) {
+  if (new URL(url).hostname === "127.0.0.1") return undefined;
+  return {
+    command: "/usr/bin/dns-sd",
+    args: ["-R", name, "_devys._tcp", "local", String(new URL(url).port || 443), `url=${url}`],
+    env: process.env,
+  };
+}
+
 /** Puts `name=value` in a `.dev.vars` file's text, replacing an earlier value. */
 export function withVar(text: string, name: string, value: string) {
   const lines = text.split("\n").filter((line) => line && !line.startsWith(`${name}=`));
@@ -386,11 +438,13 @@ async function run() {
   // The Worker reads the token from its vars file rather than its command line, which any
   // process on the Mac can list.
   const vars = join(paths.app, "server/.dev.vars");
+  const existing = existsSync(vars) ? readFileSync(vars, "utf8") : "";
   writeFileSync(
     vars,
-    withVar(existsSync(vars) ? readFileSync(vars, "utf8") : "", "DEVYS_HOST_TOKEN", token),
+    withVar(withVar(existing, "DEVYS_HOST_TOKEN", token), "DEVYS_OWNER_KEY", ownerKey()),
     { mode: 0o600 },
   );
+  const name = computerName();
   let url = publicUrl();
   const dotenv = join(checkout, ".env");
   const host = supervise("Mac host", () => ({
@@ -417,6 +471,7 @@ async function run() {
       `--port=${appPort}`,
       `--var=PUBLIC_URL:${url}`,
       `--var=DEVYS_HOST_HOME:${homedir()}`,
+      `--var=DEVYS_MACHINE_NAME:${name}`,
       "--show-interactive-dev-session=false",
     ],
     env: {
@@ -426,6 +481,14 @@ async function run() {
     },
   }));
   log(`Devys local mode serving ${url}`);
+  // Announced on the local network so the owner's iPhone, iPad and other Macs find this Mac by
+  // itself; the record carries the tailnet address they connect over (Devys is never served on
+  // the LAN itself). Without a tailnet address there is nothing to reach, so nothing to announce.
+  const announce = () => {
+    const registration = advertisement(name, url);
+    return registration && supervise("Bonjour", () => registration);
+  };
+  let bonjour = announce();
 
   let lastBackupDay = "";
   const tick = setInterval(async () => {
@@ -446,6 +509,8 @@ async function run() {
         url = next;
         log(`Now reachable on the tailnet at ${url}`);
         worker.restart();
+        await bonjour?.stop();
+        bonjour = announce();
       }
     }
     const now = new Date();
@@ -463,7 +528,7 @@ async function run() {
   const stop = async () => {
     clearInterval(tick);
     setTimeout(() => process.exit(0), 10_000).unref();
-    await Promise.all([worker.stop(), host.stop()]);
+    await Promise.all([worker.stop(), host.stop(), bonjour?.stop()]);
     process.exit(0);
   };
   process.on("SIGTERM", stop);
@@ -502,7 +567,6 @@ if (import.meta.main) {
     run,
     backup,
     webhooks,
-    code: () => code(),
     status,
     "clear-keys": clearKeys,
   };

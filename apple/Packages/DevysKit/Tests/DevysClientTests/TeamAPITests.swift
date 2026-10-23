@@ -27,13 +27,38 @@ struct TeamAPITests {
         return (request, body ?? [:])
     }
 
-    @Test("Enrollment sends the device's name with the code")
-    func enrollWithName() async throws {
+    @Test("Signing in: the owner's key, asking to join with a chosen token's hash, its status, and the answer")
+    func signingIn() async throws {
         let recorder = Recorder()
-        _ = try await api(body: #"{"session_token":"abc"}"#, recorder: recorder).enroll(server: Self.server, code: "f00d", name: "Mitch's iPad")
-        let (_, body) = try await sent(recorder)
-        #expect(body["token"] as? String == "f00d")
-        #expect(body["name"] as? String == "Mitch's iPad")
+        let owner = OwnerFile(server: Self.server, key: String(repeating: "a", count: 64))
+        let session = try await api(body: #"{"session_token":"abc","expires_in_seconds":1}"#, recorder: recorder)
+            .localSession(owner, name: "Sam Rivera", label: "Sam's Mac mini")
+        #expect(session == DeviceSession(server: Self.server, token: "abc"))
+        var (request, body) = try await sent(recorder)
+        #expect(request.url?.path() == "/api/local/session" && request.httpMethod == "POST")
+        #expect(body["key"] as? String == owner.key && body["name"] as? String == "Sam Rivera" && body["label"] as? String == "Sam's Mac mini")
+
+        let hash = String(repeating: "b", count: 64)
+        let asked = try await api(status: 201, body: #"{"id":"j1","name":"iPad","match":["🦊","🌵"],"expires_at":"2026-10-19T15:10:00.000Z"}"#, recorder: recorder)
+            .askToJoin(server: Self.server, name: "iPad", sessionHash: hash, publicKey: "key")
+        #expect(asked == JoinRequest(id: "j1", name: "iPad", match: ["🦊", "🌵"]))
+        (request, body) = try await sent(recorder)
+        #expect(request.url?.path() == "/api/joins" && request.value(forHTTPHeaderField: "authorization") == nil)
+        #expect(body["session_hash"] as? String == hash && body["public_key"] as? String == "key")
+
+        let status = try await api(body: #"{"status":"pending"}"#, recorder: recorder).joinStatus(server: Self.server, id: "j1", token: "tok")
+        #expect(status == "pending")
+        (request, _) = try await sent(recorder)
+        #expect(request.url?.path() == "/api/joins/j1" && request.value(forHTTPHeaderField: "authorization") == "Bearer tok")
+
+        let key = try await api(body: #"{"key":null}"#, recorder: recorder).answerJoin(Self.session, id: "j1", allow: false)
+        #expect(key == nil)
+        (request, _) = try await sent(recorder)
+        #expect(request.url?.path() == "/api/joins/j1/deny" && request.httpMethod == "POST")
+
+        let link = try await api(status: 201, body: #"{"token":"\#(hash)","expires_at":"2026-10-19T15:10:00.000Z"}"#, recorder: recorder)
+            .signInLink(Self.session)
+        #expect(link.absoluteString == "https://devys.test/#signin=\(hash)")
     }
 
     @Test("Renaming the signed-in person puts their new name and reads the account back")
@@ -65,34 +90,24 @@ struct TeamAPITests {
         #expect(devices[0].addedDate != nil && devices[1].addedDate != nil)
         #expect(await recorder.requests.last?.url?.path() == "/api/devices")
 
-        let hex = String(repeating: "ab", count: 32)
-        let code = try await api(status: 201, body: #"{"code":"\#(hex)","expires_at":"2026-10-19T15:10:00.000Z"}"#, recorder: recorder)
-            .issueDeviceCode(Self.session)
-        #expect(code.code == hex && code.server == Self.server)
-        #expect(code.link == EnrollLink(server: Self.server, code: hex))
-        #expect(await recorder.requests.last?.httpMethod == "POST")
-        #expect(await recorder.requests.last?.url?.path() == "/api/devices/codes")
-
         try await api(body: #"{"revoked":true}"#, recorder: recorder).revokeDevice(Self.session, id: "fedcba9876543210")
         #expect(await recorder.requests.last?.url?.path() == "/api/devices/fedcba9876543210/revoke")
     }
 
-    @Test("An enroll link round-trips; anything else is refused")
-    func enrollLink() throws {
-        let hex = String(repeating: "0f", count: 32)
-        let link = EnrollLink(server: URL(string: "http://mac-mini.tail1234.ts.net:5173")!, code: hex)
-        #expect(link.url.absoluteString.hasPrefix("devys://enroll?server=http%3A%2F%2Fmac-mini"))
-        #expect(EnrollLink(url: link.url) == link)
-        let upper = try #require(URL(string: "devys://enroll?server=https%3A%2F%2Fdevys.test&code=\(hex.uppercased())"))
-        #expect(EnrollLink(url: upper)?.code == hex)
+    @Test("A connect link round-trips; anything else is refused")
+    func connectLink() throws {
+        let mac = FoundMac(name: "Sam's Mac mini", server: URL(string: "http://mac-mini.tail1234.ts.net:8787")!)
+        let link = ConnectLink(mac: mac)
+        #expect(link.url.absoluteString.hasPrefix("devys://connect?server=http%3A%2F%2Fmac-mini"))
+        #expect(ConnectLink(url: link.url) == link)
+        #expect(ConnectLink(url: URL(string: "devys://connect?server=https%3A%2F%2Fdevys.test")!)?.mac.name == "your Mac")
         let refused = [
-            "devys://enroll?server=https%3A%2F%2Fdevys.test&code=abc",
-            "devys://enroll?server=ftp%3A%2F%2Fdevys.test&code=\(hex)",
-            "devys://other?server=https%3A%2F%2Fdevys.test&code=\(hex)",
-            "https://enroll?server=https%3A%2F%2Fdevys.test&code=\(hex)",
-            "devys://enroll?code=\(hex)"
+            "devys://connect?server=ftp%3A%2F%2Fdevys.test",
+            "devys://other?server=https%3A%2F%2Fdevys.test",
+            "https://connect?server=https%3A%2F%2Fdevys.test",
+            "devys://connect?name=Mini"
         ]
-        for raw in refused { #expect(EnrollLink(url: URL(string: raw)!) == nil, "\(raw)") }
+        for raw in refused { #expect(ConnectLink(url: URL(string: raw)!) == nil, "\(raw)") }
     }
 
     @Test("Roles decode; a new business sends its brief and starting team; editing PUTs name and brief")
