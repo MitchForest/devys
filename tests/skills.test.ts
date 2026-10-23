@@ -174,14 +174,16 @@ it("readSkill loads the business's skill first, then an installed app's", async 
   expect(readSkill.core).toBe(true);
 });
 
-it("checking work, shipping code and accounts ship with their apps, short and general", async () => {
+it("checking work, shipping code, accounts and email ship with their apps, short and general", async () => {
   const { computer } = await import("../src/apps/computer/app.ts");
   const { code } = await import("../src/apps/code/app.ts");
   const { browser } = await import("../src/apps/browser/app.ts");
+  const { conversations } = await import("../src/apps/conversations/app.ts");
   const shipped = [
     [computer, "checking-your-work"],
     [code, "shipping-code"],
     [browser, "accounts-and-sign-ins"],
+    [conversations, "emailing-for-the-business"],
   ] as const;
   for (const [app, name] of shipped) {
     const skill = app.skills.find((each) => each.name === name);

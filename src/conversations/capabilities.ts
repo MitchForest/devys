@@ -85,7 +85,7 @@ export function conversationCapabilities(
       input: Schema.Struct({
         options: Schema.Array(Reply).check(Schema.isMinLength(1), Schema.isMaxLength(4)),
       }),
-      output: Schema.Struct({ options: Schema.Array(Schema.String) }),
+      output: Schema.Struct({ options: Schema.Array(Schema.String), next: Schema.String }),
       execute: ({ options }) =>
         Effect.gen(function* () {
           const { businessId, employeeId, key } = yield* answering;
@@ -96,7 +96,11 @@ export function conversationCapabilities(
               message: "Offer at least one reply",
             });
           yield* suggestReplies(db, businessId, key, employeeId, unique);
-          return { options: unique };
+          // Read last: a turn that ends without text posts nothing, and these buttons with it.
+          return {
+            options: unique,
+            next: "Now write your reply, with the question, as text: the owner sees nothing (and no buttons) until you do. Your thinking is never shown.",
+          };
         }),
     }),
   ];
