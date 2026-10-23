@@ -686,7 +686,7 @@ it("one approval of several steps covers the production deploy it names exactly,
       kind: "approve",
       action: "Merge and ship the waitlist page",
       counterparty: "github.com/acme/site",
-      steps: ["Merge PR #7 at bbbbbbbbbbbb", "Deploy bbbbbbbbbbbb of acme to production"],
+      steps: ["Merge PR #7 at bbbbbbbbbbbb", "Deploy bbbbbbb of acme to production"],
     },
   );
   const deploy = (commit: string) =>
@@ -743,7 +743,7 @@ it("a repository that needs no change deploys at its commit without a session, o
       kind: "approve",
       action: "Put the website live",
       counterparty: "Cloudflare",
-      steps: ["Deploy dddddddddddd of site to production"],
+      steps: ["Deploy ddddddd of site to production"],
     },
   );
   const owner = (await ownerOf(scope.businessId))!;

@@ -1,23 +1,11 @@
 import type { Scope } from "../identity/contract.ts";
-import { hostDown, hostFailure, Unavailable } from "../protocol/host.ts";
+import { hostPost, Unavailable } from "../protocol/host.ts";
 import type { ClientMessage, Terminals } from "./contract.ts";
 
 type Host = { url: string; token: string };
 
-async function call<T>(host: Host, path: string, body: Record<string, unknown>): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetch(`${host.url}/terminals/${path}`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${host.token}`, "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
-  } catch {
-    throw hostDown("terminals are");
-  }
-  if (!response.ok) throw await hostFailure(response);
-  return (await response.json()) as T;
-}
+const call = <T>(host: Host, path: string, body: Record<string, unknown>) =>
+  hostPost<T>(host, `/terminals/${path}`, body, "terminals are");
 
 /** Terminals on the trusted Mac host (local mode), always naming the business they serve. */
 export function hostTerminals(host: Host, scope: Scope): Terminals {

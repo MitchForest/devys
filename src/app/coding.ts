@@ -321,15 +321,26 @@ export async function interruptCodingSessions(env: Env, scope: Scope) {
 const checkedLine = (check: NonNullable<CodingEvent["check"]>) =>
   `The check ${check.exitCode === 0 ? "passed" : check.exitCode === null ? "didn't finish" : "failed"} on ${check.commit.slice(0, 7)}`;
 
+/**
+ * What an employee does about a deploy that didn't go live. One that didn't finish (stopped, or
+ * cut off by a host restart) may have reached the provider, so it is inspected before a retry.
+ */
+const notLive = (deploy: Deployed, fix: string) =>
+  deploy.exitCode === null
+    ? "It didn't finish, so whether it went live is unknown: check the site and the provider before deploying again."
+    : fix;
+
 /** A deploy's outcome in words: where it went and whether its address answers. */
 const deployedLine = ({ stage, commit, exitCode, url, live }: Deployed) =>
-  exitCode !== 0
-    ? `The deploy of ${commit.slice(0, 7)} to ${stage} failed`
-    : live
-      ? `Deployed ${commit.slice(0, 7)} to ${stage} · live at ${url}`
-      : url
-        ? `Deployed ${commit.slice(0, 7)} to ${stage}, but ${url} isn't answering`
-        : `Deployed ${commit.slice(0, 7)} to ${stage}; there was no address to check`;
+  exitCode === null
+    ? `The deploy of ${commit.slice(0, 7)} to ${stage} didn't finish; whether it went live is unknown`
+    : exitCode !== 0
+      ? `The deploy of ${commit.slice(0, 7)} to ${stage} failed`
+      : live
+        ? `Deployed ${commit.slice(0, 7)} to ${stage} · live at ${url}`
+        : url
+          ? `Deployed ${commit.slice(0, 7)} to ${stage}, but ${url} isn't answering`
+          : `Deployed ${commit.slice(0, 7)} to ${stage}; there was no address to check`;
 
 /** The "3 files changed, …" line of a diff stat, or how many files are new. */
 const changeSummary = (diffStat: string) => {
@@ -413,7 +424,10 @@ async function deliverEvent(env: Env, event: CodingEvent) {
     event.kind === "deployed"
       ? event.deploy?.live
         ? "It is live and recorded as evidence. If the work item is done, complete it; production needs its own deploy."
-        : "It isn't working: read the output, fix it in the session, accept again and redeploy, or roll back by deploying the last good commit."
+        : notLive(
+            event.deploy!,
+            "It isn't working: read the output, fix it in the session, accept again and redeploy, or roll back by deploying the last good commit.",
+          )
       : event.kind === "checked"
         ? event.check?.exitCode === 0
           ? "The check passed and is recorded as evidence. Decide whether the work item is done; publishing and deploying are separate."
@@ -451,7 +465,10 @@ async function deliverRepositoryDeploy(env: Env, event: CodingEvent) {
       `Deploy output (end, secrets redacted):\n${event.deploy.output.slice(-6000)}`,
     event.deploy.live
       ? "It is live and recorded as evidence. If the work item is done, complete it."
-      : "It isn't working: read the output, then fix the repository in a coding session and deploy its accepted work, or deploy again once the cause is fixed.",
+      : notLive(
+          event.deploy,
+          "It isn't working: read the output, then fix the repository in a coding session and deploy its accepted work, or deploy again once the cause is fixed.",
+        ),
   ]
     .filter(Boolean)
     .join("\n\n");

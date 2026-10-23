@@ -39,6 +39,10 @@ export async function employeeStatus(
             );
       // A reply follow-up still pending is the message's own turn.
       const state = pending.find((item) => messageOf(item.operationId) === message.id)?.status;
+      // Done once its reply is sent (or settled) or it was answered without words: a finished
+      // Pi turn whose reply isn't out yet is still being answered.
+      const reply = outbox.get(outboxKey(message.id));
+      const answered = message.control || message.silent || (reply && reply.status !== "pending");
       return {
         id: message.id,
         text: message.text,
@@ -47,9 +51,12 @@ export async function employeeStatus(
           state ??
           (submission?.status === "unanswered" || message.cancelled
             ? "failed"
-            : submission?.status === "done" || message.control || outbox.has(outboxKey(message.id))
+            : answered
               ? "done"
-              : "queued"),
+              : // Past its deadline nothing more is done for it but a notice.
+                Date.now() >= message.receivedAt + defaultLimits.maxDurationMs
+                ? "failed"
+                : "queued"),
       };
     }),
   );

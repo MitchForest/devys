@@ -57,6 +57,49 @@ export async function hostFailure(response: Response) {
 export const hostDown = (what: string) =>
   new Unavailable(`The Mac host is not running, so ${what} unavailable.`);
 
+/** How long a host call may take when it names no longer wait of its own. */
+export const hostCallMs = 60_000;
+
+/**
+ * What a host client throws when the Mac host took longer than the call allows (the host may
+ * still finish it), so a stalled host never holds an employee's turn indefinitely.
+ */
+export const hostSlow = (what: string) =>
+  new Unavailable(`The Mac host didn't answer in time, so ${what} may not have finished.`);
+
+/** A fetch to the host bounded by `ms`: no answer is `hostSlow`, no connection is `hostDown`. */
+export async function hostFetch(url: string, init: RequestInit, ms: number, what: string) {
+  try {
+    return await fetch(url, { ...init, signal: AbortSignal.timeout(ms) });
+  } catch (error) {
+    throw (error as { name?: string } | null)?.name === "TimeoutError"
+      ? hostSlow(what)
+      : hostDown(what);
+  }
+}
+
+/** One JSON POST to the host with its token, its answer parsed, its refusal kept (`hostFailure`). */
+export async function hostPost<T>(
+  host: { url: string; token: string },
+  path: string,
+  body: unknown,
+  what: string,
+  ms = hostCallMs,
+): Promise<T> {
+  const response = await hostFetch(
+    `${host.url}${path}`,
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${host.token}`, "content-type": "application/json" },
+      body: JSON.stringify(body),
+    },
+    ms,
+    what,
+  );
+  if (!response.ok) throw await hostFailure(response);
+  return (await response.json()) as T;
+}
+
 /** One component's routes on the host. */
 export interface HostRoutes {
   /** For example `/coding/`. */

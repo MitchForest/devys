@@ -73,7 +73,10 @@ export function channelInbox(deps: {
       payload: messageId,
       time: Date.now(),
       singleflight: true,
-      hungTimeoutSeconds: 180,
+      // Each run is short (prepare, submit once, wait 5s, reschedule), so a run still marked
+      // running this long was cut off by a restart or reload: it is reset rather than waited on.
+      // A rerun is safe: preparing is a rewrite, Pi's submit and the reply are keyed by message.
+      hungTimeoutSeconds: 45,
     });
 
   /** Records an input once (by its channel key) and schedules its answer. */
@@ -321,7 +324,7 @@ export function channelInbox(deps: {
       else if (result.text?.trim()) answer = result.text;
       else if (!asked.replyAsked && !fromDevys(message)) return askForReply(message, session);
       else {
-        silent(message);
+        await silent(message);
         answer = null;
       }
     } catch (error) {
@@ -350,7 +353,11 @@ export function channelInbox(deps: {
   }
 
   /** Still no words after the follow-up. Logged; no stand-in text is posted. */
-  function silent(message: ChannelMessage) {
+  async function silent(message: ChannelMessage) {
+    await storage.transaction(async (tx) => {
+      const latest = await tx.get<ChannelMessage>(messageKey(message.id));
+      if (latest) await tx.put(messageKey(message.id), { ...latest, silent: true });
+    });
     console.info(
       JSON.stringify({
         event: "turn_without_text",

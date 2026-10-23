@@ -13,6 +13,8 @@ export interface ChannelMessage {
   submitted?: boolean;
   /** The turn ended without words, so Pi has one follow-up asking for the reply (`replyTurn`). */
   replyAsked?: boolean;
+  /** Answered without words (its cards carry it, or it stayed empty even when asked). */
+  silent?: boolean;
 }
 export interface Outbox {
   id: string;

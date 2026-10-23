@@ -1,5 +1,5 @@
 import type { Scope } from "../../identity/contract.ts";
-import { hostDown, hostFailure, Unavailable } from "../../protocol/host.ts";
+import { hostCallMs, hostPost, Unavailable } from "../../protocol/host.ts";
 import type { Sealed } from "../../vault/contract.ts";
 import type { CodingHost } from "./contract.ts";
 
@@ -16,20 +16,9 @@ export function hostCoding(
   },
   scope: Scope,
 ): CodingHost {
-  async function call<T>(path: string, body: Record<string, unknown>): Promise<T> {
-    let response: Response;
-    try {
-      response = await fetch(`${host.url}/coding/${path}`, {
-        method: "POST",
-        headers: { authorization: `Bearer ${host.token}`, "content-type": "application/json" },
-        body: JSON.stringify({ scope, ...body }),
-      });
-    } catch {
-      throw hostDown("coding sessions are");
-    }
-    if (!response.ok) throw await hostFailure(response);
-    return (await response.json()) as T;
-  }
+  // Starting a provider's session or pushing a branch can take longer than a plain host call.
+  const call = <T>(path: string, body: Record<string, unknown>) =>
+    hostPost<T>(host, `/coding/${path}`, { scope, ...body }, "coding sessions are", 2 * hostCallMs);
   /** A deploy request with the secrets it names sealed for the host. */
   async function sealing<T extends { secrets?: readonly string[] }>({
     secrets = [],

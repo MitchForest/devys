@@ -354,6 +354,33 @@ it("deploys run the accepted commit with the business's secrets, check the URL, 
   );
 });
 
+it("a deploy cut off by a host restart is reported uncertain and doesn't block the next", async () => {
+  const state = await host();
+  const started = await state.client().start(request("a-r", { path: state.repository }));
+  state.provider.finish(started.providerSessionId, "Done.");
+  await until(
+    () => state.delivered,
+    (events) => events.some((event) => event.kind === "finished"),
+  );
+  await state.client().accept("a-r", { message: "Add it", check: "true" });
+  await until(
+    () => state.delivered,
+    (events) => events.some((event) => event.kind === "checked"),
+  );
+  const deploy = (command: string) =>
+    state.client().deploy("a-r", { stage: "production", command });
+  await deploy("sleep 2");
+  await expect(deploy("true")).rejects.toThrow(/already running/);
+  await state.restart();
+  const cut = await until(
+    () => state.delivered.filter((event) => event.kind === "deployed"),
+    (events) => events.length === 1,
+  );
+  expect(cut[0]!.deploy).toMatchObject({ stage: "production", exitCode: null, live: false });
+  expect(cut[0]!.text).toMatch(/whether it went live is unknown/);
+  expect(await deploy("echo https://acme.example.com")).toMatchObject({});
+});
+
 it("a repository with nothing to change deploys at its committed HEAD, only when clean", async () => {
   const state = await host();
   const head = execFileSync("git", ["-C", state.repository, "rev-parse", "HEAD"], {

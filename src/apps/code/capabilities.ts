@@ -36,9 +36,12 @@ export interface CodingDependencies {
   coordinates(scope: Scope): Promise<boolean>;
 }
 
-/** A deploy as the one step an owner's approval names: "Deploy a1b2c3 of site to production". */
+/**
+ * A deploy as the one step an owner's approval names: "Deploy a1b2c3d of site to production",
+ * the short commit as every card shows it. The host deploys only the accepted (or current) one.
+ */
 export const deployStep = (commit: string, repository: string, stage: Stage) =>
-  `Deploy ${commit} of ${repository} to ${stage}`;
+  `Deploy ${commit.slice(0, 7)} of ${repository} to ${stage}`;
 
 export const providerName = (provider: Provider) =>
   provider === "codex" ? "Codex" : "Claude Code";

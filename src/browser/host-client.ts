@@ -1,25 +1,14 @@
-import { hostDown, hostFailure, Unavailable } from "../protocol/host.ts";
+import { hostCallMs, hostPost, Unavailable } from "../protocol/host.ts";
 import type { Browser } from "./contract.ts";
 
 /** The business's browser on the trusted Mac host (local mode). */
 export function hostBrowser(host: { url: string; token: string }, businessId: string): Browser {
-  async function call<T>(path: string, body: Record<string, unknown> = {}): Promise<T> {
-    let response: Response;
-    try {
-      response = await fetch(`${host.url}/browser/${path}`, {
-        method: "POST",
-        headers: { authorization: `Bearer ${host.token}`, "content-type": "application/json" },
-        body: JSON.stringify({ business: businessId, ...body }),
-      });
-    } catch {
-      throw hostDown("the browser is");
-    }
-    if (!response.ok) throw await hostFailure(response);
-    return (await response.json()) as T;
-  }
+  const call = <T>(path: string, body: Record<string, unknown> = {}, ms?: number) =>
+    hostPost<T>(host, `/browser/${path}`, { business: businessId, ...body }, "the browser is", ms);
   return {
     call: (method, params, driver) => call("call", { method, params, driver }),
-    events: (after, method, waitMs) => call("events", { after, method, waitMs }),
+    events: (after, method, waitMs) =>
+      call("events", { after, method, waitMs }, waitMs + hostCallMs),
     tabs: (action, driver) => call("tabs", { ...action, driver }),
     status: () => call("status"),
     screenshot: (viewer) => call("screenshot", { viewer }),

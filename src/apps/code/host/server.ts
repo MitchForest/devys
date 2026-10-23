@@ -65,7 +65,7 @@ interface Job {
   /** The last accepted commit and whether its check passed (null while it runs). */
   accepted?: { commit: string; passed: boolean | null };
   /** A deploy running now: its stage and commit. */
-  deploying?: { stage: Stage; commit: string };
+  deploying?: { stage: Stage; commit: string; command: string };
 }
 
 interface CodingHostOptions {
@@ -274,6 +274,27 @@ export function codingHost(options: CodingHostOptions): HostRoutes {
         check: { commit: job.check.commit, command: job.check.command, exitCode: null, output: "" },
       });
       save({ ...jobs.get(job.id)!, check: null });
+    }
+    if (job.deploying) {
+      const { stage, commit, command } = job.deploying;
+      // The deploy may have reached the provider before the restart: uncertain, not failed.
+      emit({
+        id: `${job.id}:deployed:${stage}:${commit}:restart-${Date.now()}`,
+        codingSessionId: job.id,
+        kind: "deployed",
+        text: `The Mac host restarted during the deploy of ${commit.slice(0, 7)} to ${stage}; whether it went live is unknown. Check the site before deploying again.`,
+        deploy: {
+          stage,
+          commit,
+          command,
+          exitCode: null,
+          url: null,
+          status: null,
+          live: false,
+          output: "",
+        },
+      });
+      save({ ...jobs.get(job.id)!, deploying: undefined });
     }
   }
   void flush();
@@ -496,7 +517,7 @@ export function codingHost(options: CodingHostOptions): HostRoutes {
       commit: string;
       about: Pick<CodingEvent, "codingSessionId" | "deployedFor">;
       /** Marks the deploy running (with what) or finished (undefined). */
-      running: (deploying?: { stage: Stage; commit: string }) => void;
+      running: (deploying?: { stage: Stage; commit: string; command: string }) => void;
     },
     input: Record<string, unknown>,
   ) {
@@ -527,7 +548,7 @@ export function codingHost(options: CodingHostOptions): HostRoutes {
     await rm(place, { recursive: true, force: true });
     await git(target.repository, "worktree", "prune");
     await git(target.repository, "worktree", "add", "--detach", place, full);
-    target.running({ stage, commit: full });
+    target.running({ stage, commit: full, command });
     const child = spawn(
       ...options.confine(folderOf(target.scope.businessId), false)(options.shell ?? "/bin/zsh", [
         "-lc",

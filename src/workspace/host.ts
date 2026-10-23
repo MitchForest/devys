@@ -1,6 +1,6 @@
 import type { Scope } from "../identity/contract.ts";
 import type { Sealed } from "../vault/contract.ts";
-import { hostDown, hostFailure } from "../protocol/host.ts";
+import { hostCallMs, hostFailure, hostFetch, hostPost } from "../protocol/host.ts";
 import type {
   Checkpoint,
   CommandResult,
@@ -28,27 +28,18 @@ const inputBytes = 20_000_000;
  * the host never touches R2.
  */
 export function hostRunner(host: HostConnection, scope: Scope): WorkspacePort {
-  async function call(path: string, init: RequestInit = {}) {
-    let response: Response;
-    try {
-      response = await fetch(`${host.url}${path}`, {
-        ...init,
-        headers: { authorization: `Bearer ${host.token}`, ...init.headers },
-      });
-    } catch {
-      throw hostDown("files and commands are");
-    }
+  async function call(path: string, init: RequestInit = {}, ms = hostCallMs) {
+    const response = await hostFetch(
+      `${host.url}${path}`,
+      { ...init, headers: { authorization: `Bearer ${host.token}`, ...init.headers } },
+      ms,
+      "files and commands are",
+    );
     if (!response.ok) throw await hostFailure(response);
     return response;
   }
-  const post = async <T>(path: string, input: Record<string, unknown> = {}) =>
-    (await (
-      await call(path, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ scope, within: host.within, ...input }),
-      })
-    ).json()) as T;
+  const post = <T>(path: string, input: Record<string, unknown> = {}, ms?: number) =>
+    hostPost<T>(host, path, { scope, within: host.within, ...input }, "files and commands are", ms);
   const file = (path: string, maximum?: number) =>
     `/file?business=${encodeURIComponent(scope.businessId)}&path=${encodeURIComponent(path)}${maximum ? `&max=${maximum}` : ""}${host.within ? `&within=${encodeURIComponent(host.within)}` : ""}`;
 
@@ -56,13 +47,18 @@ export function hostRunner(host: HostConnection, scope: Scope): WorkspacePort {
     skills: () => post<SkillCatalog>("/skills"),
     async run(operationId, command, timeoutMs, maxBytes, secrets = []) {
       if (secrets.length && !host.sealed) throw new Error("Secrets are not available here");
-      return post<CommandResult>("/run", {
-        operationId,
-        command,
-        timeoutMs,
-        maxBytes,
-        ...(secrets.length ? { secrets: await host.sealed!(scope.businessId, secrets) } : {}),
-      });
+      // The command's own limit, plus time for the host to stop it and answer.
+      return post<CommandResult>(
+        "/run",
+        {
+          operationId,
+          command,
+          timeoutMs,
+          maxBytes,
+          ...(secrets.length ? { secrets: await host.sealed!(scope.businessId, secrets) } : {}),
+        },
+        timeoutMs + 30_000,
+      );
     },
     cancel: () => post<{ stopped: boolean }>("/cancel"),
     write: (path, content, expectedRevision) =>
