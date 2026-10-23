@@ -275,12 +275,11 @@ private struct ChatRow: View {
     private var paused: Bool { employeeID.flatMap { store.state.employee($0) }?.paused ?? false }
     private var working: Bool { employeeID.map(store.state.isWorking) ?? false }
 
-    /// The newest line; while working, that it is; with nothing said yet, what they do.
+    /// The newest line; while working, that it is; nothing yet when nothing has been said.
     private var line: String {
         if working { return "Working…" }
         if let preview = entry.preview { return preview }
-        if let employee = employeeID.flatMap({ store.state.employee($0) }) { return RoleTemplate.displayName(employee.template) }
-        return store.state.project(entry.key.ref)?.goal ?? ""
+        return employeeID == nil ? store.state.project(entry.key.ref)?.goal ?? "" : ""
     }
 }
 
@@ -392,6 +391,8 @@ struct ConnectAppsButton: View {
         Button { store.send(.connectAppsToggled(true)) } label: {
             HStack(spacing: 8) {
                 Text("Connect apps").font(DevysTypography.control).foregroundStyle(DevysColors.ink)
+                    .lineLimit(1)
+                    .fixedSize()
                 Spacer(minLength: 4)
                 HStack(spacing: -7) {
                     ForEach(Array(store.state.connectLogos.enumerated()), id: \.offset) { _, app in
