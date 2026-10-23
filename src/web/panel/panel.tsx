@@ -1,6 +1,7 @@
 import { ChevronLeft, Maximize2, Minimize2, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { refOfLayer, useLayers, useNav, usePlace, type Place } from "../app/navigation.ts";
+import { useChiefOfStaff } from "../app/data.ts";
 import { ui, useUi } from "../app/ui.ts";
 import { usePanel } from "../shell/panel-state.ts";
 import { Desk } from "./desk.tsx";
@@ -10,13 +11,13 @@ import { Overview } from "./overview.tsx";
 import { ToolbarIconButton } from "@/components/ui/button";
 
 /**
- * Whether a place has a permanent view: an employee's desk and a project's overview. Home and a
- * thread have none; their work is in cards in the conversation.
+ * Whether a place has a permanent view: an employee's desk (Home's is the Chief of Staff's) and
+ * a project's overview. A thread has none; its work is its card in the conversation.
  */
 export const hasPermanentView = (
   place: Place,
-): place is Extract<Place, { kind: "direct" | "project" }> =>
-  place.kind === "direct" || place.kind === "project";
+): place is Extract<Place, { kind: "home" | "direct" | "project" }> =>
+  place.kind === "home" || place.kind === "direct" || place.kind === "project";
 
 /**
  * The right panel: the permanent view of what the conversation is about (a desk or an
@@ -30,6 +31,7 @@ export function RightPanel({ onClose }: { onClose?: () => void }) {
   const panel = usePanel();
   const wide = useUi((state) => state.wide);
   const title = useLayerTitle(top);
+  const chiefOfStaff = useChiefOfStaff();
   if (top) {
     const ref = refOfLayer(top);
     return (
@@ -57,7 +59,9 @@ export function RightPanel({ onClose }: { onClose?: () => void }) {
     );
   }
   const close = onClose ?? panel.toggle;
-  return place.kind === "direct" ? (
+  return place.kind === "home" ? (
+    chiefOfStaff && <Desk key={chiefOfStaff.id} employeeId={chiefOfStaff.id} close={close} />
+  ) : place.kind === "direct" ? (
     <Desk key={place.employeeId} employeeId={place.employeeId} close={close} />
   ) : place.kind === "project" ? (
     <Overview key={place.id} projectId={place.id} close={close} />

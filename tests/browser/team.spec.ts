@@ -60,9 +60,10 @@ test("the owner hires from a template, edits and retires, and talks to any emplo
       text: "Draft three launch headlines.",
     });
 
-    // The Chief of Staff can't be retired. The desk stays open for every direct chat.
+    // The Chief of Staff is Home; their desk is Home's side panel, and they can't be retired.
     await sidebar(page).getByRole("link", { name: "Chief of Staff" }).click();
     await expect(page.getByTestId("place-title")).toHaveText("Chief of Staff");
+    await page.getByRole("button", { name: /^Show side panel/ }).click();
     const chiefOfStaffDesk = page.getByRole("region", {
       name: "Chief of Staff's desk",
     });

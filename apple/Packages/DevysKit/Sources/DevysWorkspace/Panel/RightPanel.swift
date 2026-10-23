@@ -47,7 +47,9 @@ struct RightPanel: View {
     @ViewBuilder private var permanent: some View {
         let close = onClose ?? { store.send(.panelToggled) }
         switch store.place {
-        case .home, .thread: EmptyView()
+        case .home:
+            if let chief = store.chiefOfStaff { Desk(store: store, employeeID: chief.id, close: close).id(chief.id) }
+        case .thread: EmptyView()
         case .direct(let id): Desk(store: store, employeeID: id, close: close).id(id)
         case .project(let id): Overview(store: store, projectID: id, close: close).id(id)
         }

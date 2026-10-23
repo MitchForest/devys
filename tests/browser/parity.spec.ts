@@ -159,13 +159,13 @@ test("looks, the owner's photo, voice and settings work on the web as on native"
     await page.keyboard.press("Meta+k");
     await page.keyboard.type("Home");
     await page.keyboard.press("Enter");
-    await expect(page.getByTestId("place-title")).toHaveText("Home");
+    await expect(page.getByTestId("place-title")).toHaveText("Chief of Staff");
     await expect(page.getByRole("dialog", { name: "Jump to" })).toBeHidden();
     await page.keyboard.press("Meta+k");
     await page.keyboard.type("Documents");
     await page.keyboard.press("Enter");
     await expect(page.getByRole("region", { name: "Documents" })).toBeVisible();
-    await expect(page.getByTestId("place-title")).toHaveText("Home");
+    await expect(page.getByTestId("place-title")).toHaveText("Chief of Staff");
   } finally {
     // Stop the page's polling and read receipts before its business is removed.
     await page.close();

@@ -136,8 +136,13 @@ struct CompactShell: View {
                     .background(DevysColors.amber.opacity(0.15), in: Capsule())
             }
             if let chief = store.chiefOfStaff {
-                Portrait(store.state.portrait(for: chief), size: 28, mood: store.state.voiceMood ?? store.chiefOfStaffMood, label: chief.name)
-                    .accessibilityLabel(chief.name)
+                // Their face opens their desk, Home's details.
+                Button { showsDetails = true } label: {
+                    Portrait(store.state.portrait(for: chief), size: 28, mood: store.state.voiceMood ?? store.chiefOfStaffMood, label: chief.name)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(chief.name)
+                .accessibilityHint("Shows the desk")
             }
         }
     }

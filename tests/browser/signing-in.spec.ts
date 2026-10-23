@@ -33,7 +33,9 @@ test("another browser connects with one button and is let in from a signed-in on
     await expect(prompt).toHaveCount(0);
 
     // Allowed: the other browser is in, as Sam, on Acme's Home.
-    await expect(phone.getByTestId("place-title")).toHaveText("Home", { timeout: 15_000 });
+    await expect(phone.getByTestId("place-title")).toHaveText("Chief of Staff", {
+      timeout: 15_000,
+    });
     expect(
       (await sql.row<{ n: number }>(
         "SELECT count(*)::int AS n FROM web_sessions WHERE person_id = $1 AND label LIKE 'Chrome on %'",
@@ -90,7 +92,7 @@ test("signed in with no business: name it, and start", async ({ page }) => {
     await form.getByLabel("Name").fill("Globex");
     await form.getByLabel("What it does").fill("Repairs and installs garage doors.");
     await form.getByRole("button", { name: "Start" }).click();
-    await expect(page.getByTestId("place-title")).toHaveText("Home", { timeout: 15_000 });
+    await expect(page.getByTestId("place-title")).toHaveText("Chief of Staff", { timeout: 15_000 });
     business = (await sql.row<{ business_id: string }>(
       "SELECT business_id FROM memberships WHERE person_id = $1",
       [person],

@@ -37,10 +37,10 @@ extension Workspace.State {
     /// The conversation the place shows; Home waits for the Chief of Staff to load.
     package var mainKey: ConversationKey? { place.conversation(chiefOfStaff: chiefOfStaff?.id) }
 
-    /// Whether the place has a permanent view: a desk or a project's overview. Home's work and a
-    /// thread's are in their cards in the conversation.
+    /// Whether the place has a permanent view: a desk (Home's is the Chief of Staff's) or a
+    /// project's overview. A thread's work is its card in the conversation.
     package var hasPermanent: Bool {
-        place.kind == .direct || place.kind == .project
+        place.kind == .direct || place.kind == .project || (place.kind == .home && chiefOfStaff != nil)
     }
 
     package func panelPreferred(_ kind: Place.Kind) -> Bool { panels[kind] ?? kind.panelByDefault }
@@ -149,7 +149,8 @@ extension Workspace {
     }
 
     func go(to place: Place, state: inout State) {
-        state.place = place
+        // The Chief of Staff's direct chat is Home.
+        state.place = place == .direct(state.chiefOfStaff?.id ?? "") ? .home : place
         openConversation(&state)
     }
 

@@ -234,15 +234,16 @@ test("the Documents app opens as a layer; Esc goes back one layer; the panel is 
   await stubPosting(page);
   try {
     await signIn(page, sql, owner.person);
-    // Home has no permanent view: no panel and no toggle; the conversation has the full width.
+    // Home's permanent view is the Chief of Staff's desk, closed by default: the conversation
+    // has the full width.
     await expect(page.getByRole("region", { name: "Needs you" })).toHaveCount(0);
-    await expect(toolbarPanel(page, false)).toHaveCount(0);
+    await expect(toolbarPanel(page, false)).toHaveCount(1);
 
     // An app opens beside the conversation without leaving it.
     await sidebar(page).getByRole("button", { name: "Documents" }).click();
     const documents = page.getByRole("region", { name: "Documents" });
     await expect(documents.getByTestId("panel-title")).toHaveText("Documents");
-    await expect(page.getByTestId("place-title")).toHaveText("Home");
+    await expect(page.getByTestId("place-title")).toHaveText("Chief of Staff");
     await expect(page.getByLabel("Message Chief of Staff")).toBeVisible();
 
     // A record opens as a further layer; Esc goes back one layer at a time.
@@ -276,8 +277,9 @@ test("the Documents app opens as a layer; Esc goes back one layer; the panel is 
 
     await sidebar(page).getByRole("link", { name: "Launch" }).click();
     await expect(overview).toHaveCount(0);
+    // Home (the Chief of Staff) keeps its own choice: its desk stays closed.
     await sidebar(page).getByRole("link", { name: "Chief of Staff" }).click();
-    await expect(page.getByRole("region", { name: "Chief of Staff's desk" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Chief of Staff's desk" })).toHaveCount(0);
 
     // Remembered across visits, on this device.
     await page.reload();

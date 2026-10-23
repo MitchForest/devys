@@ -38,7 +38,8 @@ extension Workspace.State {
     /// "Launch › Fix sitemap".
     package func title(of place: Place) -> (title: String, parent: (title: String, place: Place)?) {
         switch place {
-        case .home: return ("Home", nil)
+        // Home is the Chief of Staff's chat, named for them.
+        case .home: return (chiefOfStaff?.name ?? "Home", nil)
         case .direct(let id): return (snapshot.employees.first { $0.id == id }?.name ?? "Message", nil)
         case .project(let id): return (projects.value?.first { $0.id == id }?.name ?? "Project", nil)
         case .thread(let id):

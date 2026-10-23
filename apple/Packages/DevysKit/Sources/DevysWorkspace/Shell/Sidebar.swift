@@ -66,8 +66,16 @@ struct SidebarSections: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             if only == nil {
-                placeRow(.home, "Home", unread: store.chiefOfStaff.map { store.state.unread(.direct($0.id)) } ?? 0, needsYou: store.home.value?.needsYou.count ?? 0) {
-                    Image(systemName: "house").font(.system(size: 13, weight: .medium)).frame(width: 20).accessibilityHidden(true)
+                // Home is the Chief of Staff: the one the owner talks to and who delegates.
+                if let chief = store.chiefOfStaff {
+                    let trailing: SidebarTrailing = chief.paused ? .paused : store.state.isWorking(chief.id) ? .working : .none
+                    placeRow(.home, chief.name, unread: store.state.unread(.direct(chief.id)), needsYou: store.home.value?.needsYou.count ?? 0, trailing: trailing) {
+                        Portrait(store.state.portrait(for: chief), size: 20, mood: store.state.mood(for: chief), isAnimated: false)
+                    }
+                } else {
+                    placeRow(.home, "Home", unread: 0, needsYou: store.home.value?.needsYou.count ?? 0) {
+                        Image(systemName: "house").font(.system(size: 13, weight: .medium)).frame(width: 20).accessibilityHidden(true)
+                    }
                 }
                 ForEach(nestedThreads(nil)) { threadRow($0) }
             }
@@ -92,7 +100,7 @@ struct SidebarSections: View {
 
     @ViewBuilder private var team: some View {
         label("Team", add: ("Hire", { store.send(.hireTapped) }))
-        ForEach(store.snapshot.employees) { employee in
+        ForEach(store.snapshot.employees.filter { $0.id != store.chiefOfStaff?.id }) { employee in
             placeRow(.direct(employee.id), employee.name, unread: store.state.unread(.direct(employee.id)), trailing: trailing(for: employee)) {
                 Portrait(store.state.portrait(for: employee), size: 20, mood: store.state.mood(for: employee), isAnimated: false)
             }

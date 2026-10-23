@@ -4,7 +4,7 @@ import { localStores } from "../fixtures/local.ts";
 import { bearer, insertMessage, sidebar, signIn, stubPosting, type Sql } from "./helpers.ts";
 
 // F1: a work item is one live card with one line of state and at most one ask; Home has no
-// side panel, and a thread's card is pinned right above the reply.
+// side panel but the Chief of Staff's desk, and a thread's card is pinned right above the reply.
 
 /** What an employee asked with askOwner on a work item, in its thread. */
 async function ask(
@@ -61,7 +61,7 @@ async function stubRuntime(page: Page, running: () => string | null) {
   return stops;
 }
 
-test("Home has no side panel; work made there is one live card: Ready when you are, Start, then Working with Stop and Watch", async ({
+test("Home is the Chief of Staff, its desk the side panel; work made there is one live card: Ready when you are, Start, then Working with Stop and Watch", async ({
   page,
 }) => {
   const stores = await localStores();
@@ -135,11 +135,18 @@ test("Home has no side panel; work made there is one live card: Ready when you a
   );
   try {
     await signIn(page, sql, owner.person);
-    // Home has no permanent view: no Needs you, no panel toggle; the badge still counts.
+    // Home is the Chief of Staff: no Needs you; their desk is its side panel, closed by
+    // default; the badge still counts.
     await expect(page.getByRole("region", { name: "Needs you" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /side panel/ })).toHaveCount(0);
-    await expect(sidebar(page).getByRole("link", { name: /^Home/ })).toHaveAccessibleName(
-      "Home, 1",
+    await expect(page.getByRole("region", { name: "Chief of Staff's desk" })).toHaveCount(0);
+    await page.getByRole("button", { name: /^Show side panel/ }).click();
+    await expect(page.getByRole("region", { name: "Chief of Staff's desk" })).toBeVisible();
+    await page
+      .getByRole("button", { name: /^Hide side panel/ })
+      .first()
+      .click();
+    await expect(sidebar(page).getByRole("link", { name: /^Chief of Staff/ })).toHaveAccessibleName(
+      "Chief of Staff, 1",
     );
     // The request without work shows once, in the chat.
     await expect(page.getByTestId("request-card")).toHaveCount(1);

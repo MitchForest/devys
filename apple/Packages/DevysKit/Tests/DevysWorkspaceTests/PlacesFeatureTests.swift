@@ -166,12 +166,12 @@ struct PlacesFeatureTests {
         #expect(store.layers.isEmpty && !store.state.isPanelOpen)
     }
 
-    @Test("A project's overview is open by default, a desk on request, remembered per kind; Home and threads have none")
+    @Test("A project's overview is open by default, a desk on request (Home's is the Chief of Staff's), remembered per kind; threads have none")
     func panelPreferences() async {
         let server = PlacesServer()
         let panels = LockIsolated<[[String: Bool]]>([])
         let store = await makeStore(server, panels: panels)
-        #expect(store.place == .home && !store.state.hasPermanent && !store.state.isPanelOpen)
+        #expect(store.place == .home && store.state.hasPermanent && !store.state.isPanelOpen)
         await server.setHome(Home(needsYou: [NeedsYouItem(kind: .work, id: "c1", title: "Fix sitemap", workID: "c1")]))
         await settle("Home has something") { store.home.value?.isEmpty == false }
         #expect(!store.state.isPanelOpen, "what waits on the owner is in its card in the chat")
@@ -181,7 +181,7 @@ struct PlacesFeatureTests {
         #expect(store.state.isPanelOpen)
         store.send(.panelToggled)
         #expect(!store.state.isPanelOpen)
-        #expect(panels.value.last == ["home": true, "direct": false, "project": false, "thread": true])
+        #expect(panels.value.last == ["home": false, "direct": false, "project": false, "thread": false])
         store.send(.threadOpened("c1"))
         #expect(!store.state.isPanelOpen)
         store.send(.backTapped)

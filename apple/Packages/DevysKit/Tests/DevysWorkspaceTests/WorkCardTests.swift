@@ -96,15 +96,16 @@ struct WorkCardTests {
         return store
     }
 
-    @Test("Home and threads have no permanent view: their work is in cards; a desk and an overview remain")
+    @Test("Home's permanent view is the Chief of Staff's desk, closed by default; a thread has none")
     func noPermanentForHomeOrThreads() async {
         let server = CardServer()
         await server.setHome(Home(needsYou: [NeedsYouItem(connect, title: "Ramp")]))
         let store = await makeStore(server)
         await settle("Home has a request", until: { store.home.value?.isEmpty == false })
-        #expect(store.place == .home && !store.state.hasPermanent && !store.state.isPanelOpen)
+        #expect(store.place == .home && store.state.hasPermanent && !store.state.isPanelOpen)
         store.send(.panelToggled)
-        #expect(!store.state.isPanelOpen, "toggling the panel at Home has nothing to show")
+        #expect(store.state.isPanelOpen, "Home's panel is the Chief of Staff's desk")
+        store.send(.panelToggled)
         store.send(.threadOpened("c1"))
         #expect(!store.state.hasPermanent && !store.state.isPanelOpen)
         store.send(.layerOpened(.browser(workID: "c1")))

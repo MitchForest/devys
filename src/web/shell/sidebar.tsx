@@ -130,15 +130,13 @@ export function SidebarSections({ only }: { only?: "projects" | "team" }) {
   const all = only === undefined;
   return (
     <div className="flex flex-col gap-0.5">
-      {all && (
-        <PlaceRow
-          place={{ kind: "home" }}
-          title="Home"
-          icon={House}
-          count={needsYou}
-          unread={homeUnread}
-        />
-      )}
+      {/* Home is the Chief of Staff: the one the owner talks to and who delegates. */}
+      {all &&
+        (chiefOfStaff ? (
+          <HomeRow chiefOfStaff={chiefOfStaff} count={needsYou} unread={homeUnread} />
+        ) : (
+          <PlaceRow place={{ kind: "home" }} title="Home" icon={House} count={needsYou} />
+        ))}
       {all && threads(null).map((item) => <ThreadRow key={item.id} item={item} />)}
       {(all || only === "projects") && projects.length > 0 && (
         <SectionLabel action={{ label: "New project", run: () => ui.setProjectOpen(true) }}>
@@ -162,7 +160,9 @@ export function SidebarSections({ only }: { only?: "projects" | "team" }) {
         </SectionLabel>
       )}
       {(all || only === "team") &&
-        employees.map((employee) => <TeamRow key={employee.id} employee={employee} />)}
+        employees
+          .filter((employee) => employee.id !== chiefOfStaff?.id)
+          .map((employee) => <TeamRow key={employee.id} employee={employee} />)}
       {all && shownApps.length > 0 && <SectionLabel>Apps</SectionLabel>}
       {all &&
         shownApps.map((app) =>
@@ -204,6 +204,31 @@ function useNestedThreads() {
       (followed.includes(item.id) || item.state === "needs_decision" || waiting.has(item.id)),
   );
   return (project: string | null) => shown.filter((item) => item.project_id === project);
+}
+
+/** Home's row: the Chief of Staff's face and name, what waits on the owner, and unread. */
+function HomeRow({
+  chiefOfStaff,
+  count,
+  unread,
+}: {
+  chiefOfStaff: Employee;
+  count: number;
+  unread: number;
+}) {
+  const working = useWorking(chiefOfStaff.id);
+  const mood = useMood(chiefOfStaff);
+  return (
+    <PlaceRow
+      place={{ kind: "home" }}
+      title={chiefOfStaff.name}
+      count={count}
+      unread={unread}
+      trailing={chiefOfStaff.paused ? "paused" : working && !count ? "working" : "none"}
+    >
+      <EmployeePortrait employee={chiefOfStaff} size={20} mood={mood} />
+    </PlaceRow>
+  );
 }
 
 /** An employee's row: their face, and whether they are working, paused or waiting on you. */

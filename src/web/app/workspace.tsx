@@ -192,6 +192,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const key = conversationOf(place, chiefOfStaff?.id);
   const voiceRef = useRef<VoiceActions>(undefined);
 
+  // The Chief of Staff's direct chat is Home: opening it anywhere opens Home.
+  useEffect(() => {
+    if (place.kind === "direct" && place.employeeId === chiefOfStaff?.id)
+      nav.selectPlace({ kind: "home" });
+  }, [place, chiefOfStaff?.id, nav]);
+
   /** A page published in the conversation on screen opens beside it. */
   const arrived = async (_key: ConversationKey, news: readonly ShownMessage[]) => {
     const page = news

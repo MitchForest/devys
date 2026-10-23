@@ -46,8 +46,8 @@ test("a connect request is the work card's one ask; the review turns the app on"
   try {
     await signIn(page, sql, owner.person);
     // Home counts it; the thread's card asks it, with the app's name and Connect.
-    await expect(sidebar(page).getByRole("link", { name: /^Home/ })).toHaveAccessibleName(
-      "Home, 1",
+    await expect(sidebar(page).getByRole("link", { name: /^Chief of Staff/ })).toHaveAccessibleName(
+      "Chief of Staff, 1",
     );
     await sidebar(page).getByRole("link", { name: "Pay the paper supplier" }).click();
     const card = page.getByTestId("work-card");

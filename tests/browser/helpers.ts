@@ -45,8 +45,8 @@ export async function signIn(page: Page, sql: Sql, person: string, { phone = fal
     await expect(page.getByLabel("Message Chief of Staff")).toBeVisible();
     return;
   }
-  await expect(sidebar(page).getByRole("link", { name: /^Home/ })).toBeVisible();
-  await expect(page.getByTestId("place-title")).toHaveText("Home");
+  await expect(sidebar(page).getByRole("link", { name: /^Chief of Staff/ })).toBeVisible();
+  await expect(page.getByTestId("place-title")).toHaveText("Chief of Staff");
 }
 
 /** A message stored as the server stores one, for what employees and events say. */

@@ -145,7 +145,8 @@ export function usePlaceTitle(place: Place): {
   const work = useWork().data;
   switch (place.kind) {
     case "home":
-      return { title: "Home" };
+      // Home is the Chief of Staff's chat, named for them.
+      return { title: employees.find((e) => e.template === "chief-of-staff")?.name ?? "Home" };
     case "direct":
       return { title: employees.find((e) => e.id === place.employeeId)?.name ?? "Message" };
     case "project":

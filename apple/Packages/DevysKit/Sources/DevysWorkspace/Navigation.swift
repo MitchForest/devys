@@ -12,7 +12,7 @@ package enum Place: Hashable, Sendable {
         case home, direct, project, thread
 
         /// Whether the right panel shows by default; the owner's choice is remembered.
-        package var panelByDefault: Bool { self != .direct }
+        package var panelByDefault: Bool { self == .project }
     }
 
     package var kind: Kind {

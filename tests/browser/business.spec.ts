@@ -23,8 +23,8 @@ test("Home asks once, inline, and approves an exact request; new work opens its 
     await signIn(page, sql, owner.person);
 
     // The request waits on Home: counted on its row and shown once, inline in the chat.
-    await expect(sidebar(page).getByRole("link", { name: /^Home/ })).toHaveAccessibleName(
-      "Home, 1",
+    await expect(sidebar(page).getByRole("link", { name: /^Chief of Staff/ })).toHaveAccessibleName(
+      "Chief of Staff, 1",
     );
     await expect(page.getByRole("region", { name: "Needs you" })).toHaveCount(0);
     const request = page.getByTestId("request-card");
@@ -33,7 +33,9 @@ test("Home asks once, inline, and approves an exact request; new work opens its 
     await expect(request.getByText("https://example.com")).toBeVisible();
     await request.getByRole("button", { name: "Approve" }).click();
     await expect(request).toHaveCount(0);
-    await expect(sidebar(page).getByRole("link", { name: /^Home/ })).toHaveAccessibleName("Home");
+    await expect(sidebar(page).getByRole("link", { name: /^Chief of Staff/ })).toHaveAccessibleName(
+      "Chief of Staff",
+    );
     await expect
       .poll(
         async () =>
@@ -125,7 +127,7 @@ test("Settings → Businesses creates a business with its starting team and swit
       "aria-current",
       "page",
     );
-    await expect(page.getByTestId("place-title")).toHaveText("Home");
+    await expect(page.getByTestId("place-title")).toHaveText("Chief of Staff");
     await expect(sidebar(page).getByRole("heading", { name: "Globex" })).toBeVisible();
     for (const name of ["Chief of Staff", "Engineering", "Admin"])
       await expect(sidebar(page).getByRole("link", { name, exact: true })).toBeVisible();

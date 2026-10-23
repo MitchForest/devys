@@ -14,10 +14,10 @@ export interface WorkItemDefaults {
 }
 
 /** The places with a permanent view: an employee's desk, a project's overview. */
-type PermanentKind = Extract<PlaceKind, "direct" | "project">;
+type PermanentKind = Extract<PlaceKind, "home" | "direct" | "project">;
 
 /** Whether each kind of place shows its permanent view; the owner's choice is remembered. */
-const panelDefaults: Record<PermanentKind, boolean> = { direct: false, project: true };
+const panelDefaults: Record<PermanentKind, boolean> = { home: false, direct: false, project: true };
 const savedPanels = (): Record<PermanentKind, boolean> => {
   try {
     return { ...panelDefaults, ...JSON.parse(localStorage.getItem("panels") ?? "{}") };
