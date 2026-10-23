@@ -13,7 +13,8 @@
  * `transcript.md` (what the owner reads), `wire.json` (every message, request and work item as
  * the clients receive them) and screenshots at each owner touch (1440×900 and 390×844). The
  * owner's local install (:8787, Postgres 54330) is never touched: this uses the development
- * Postgres and ports 5190 (app) and 8798 (host).
+ * Postgres and ports 5190 (app) and 8798 (host), or `DEVYS_SCENARIO_APP_PORT` and
+ * `DEVYS_SCENARIO_HOST_PORT` beside another run.
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -27,7 +28,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { chromium, type Browser, type BrowserContext } from "@playwright/test";
 import pg from "pg";
 import { browser } from "../src/apps/browser/app.ts";
@@ -58,11 +59,15 @@ export type AskKind =
 export type Turn =
   /** Says this. `to`: an employee's name (their direct chat) or `thread` (the latest work thread); Operations by default. */
   | { say: string; to?: string }
-  /** Taps the suggested reply matching this persona fact (any other fact if none does). */
-  | { tap: string }
-  /** Ends the run, passing, at the first pending request of this kind. */
-  | { stop: AskKind }
-  /** Adds the secret a pending secret request asks for. */
+  /**
+   * Taps the suggested reply matching this persona fact (any other fact if none does), or the
+   * first one (the recommendation) for a key the persona lacks. `optional`: skipped when the
+   * team's latest message asks nothing, for a question that may or may not come.
+   */
+  | { tap: string; optional?: boolean }
+  /** Ends the run, passing, at the first pending request of this kind (or one of these). */
+  | { stop: AskKind | AskKind[] }
+  /** Adds the secret a pending secret request asks for, under the name it asks for. */
   | { answer: "secret"; secret: NewSecret }
   /** Answers a pending approve (not a spend: that needs a device signature) or decision. */
   | { answer: "approve" | "reject" };
@@ -81,6 +86,11 @@ export interface Scenario {
     memories?: string[];
     /** Business apps to install by id. */
     apps?: string[];
+    /**
+     * Git repositories already in the business folder (`repos/<name>`), each committed once on
+     * `main` with these files (path to contents) and no remote.
+     */
+    repositories?: { name: string; files: Record<string, string> }[];
   };
   /** What the owner knows, by key: the answers a tap looks for. */
   persona: Record<string, string>;
@@ -90,7 +100,10 @@ export interface Scenario {
 }
 
 const checkout = resolve(import.meta.dirname, "..");
-const ports = { app: 5190, host: 8798 };
+const ports = {
+  app: Number(process.env.DEVYS_SCENARIO_APP_PORT ?? 5190),
+  host: Number(process.env.DEVYS_SCENARIO_HOST_PORT ?? 8798),
+};
 const base = `http://127.0.0.1:${ports.app}`;
 const hex = () => Buffer.from(randomBytes(32)).toString("hex");
 const sha = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -188,6 +201,8 @@ function owner(token: string, businessId: string) {
     return (await response.json()) as T;
   };
   return {
+    business: businessId,
+    token,
     call,
     employees: async () => (await call<{ employees: Employee[] }>("")).employees,
     conversations: async () =>
@@ -211,8 +226,12 @@ type Owner = ReturnType<typeof owner>;
 
 const kindOf = (decision: Decision): AskKind =>
   decision.kind === "approve" && decision.input.amount ? "spend" : (decision.kind as AskKind);
-const matches = (wanted: AskKind, decision: Decision) =>
-  kindOf(decision) === wanted || (wanted === "approve" && decision.kind === "approve");
+const matches = (wanted: AskKind | AskKind[], decision: Decision) =>
+  [wanted]
+    .flat()
+    .some(
+      (kind) => kindOf(decision) === kind || (kind === "approve" && decision.kind === "approve"),
+    );
 
 /** The minute tick, as the local launcher fires it. */
 const tick = () =>
@@ -229,20 +248,39 @@ async function settle(api: Owner, minutes: number) {
   const deadline = Date.now() + minutes * 60_000;
   let quiet = 0;
   while (Date.now() < deadline) {
-    const employees = await api.employees();
-    const statuses = await Promise.all(employees.map((employee) => api.status(employee.id)));
-    const busy = statuses.some(
-      ({ state }) =>
-        (state.run && !state.run.stopped) ||
-        state.inbox.some((item) => item.status === "queued" || item.status === "running"),
-    );
-    const ready = (await api.work()).some((item) => item.state === "ready");
+    // A request failing while the Worker reloads counts as busy.
+    const looked = await look(api).catch(() => undefined);
+    const busy = looked?.busy ?? true;
+    const ready = looked?.ready ?? false;
     if (ready && !busy) await tick();
     quiet = busy || ready ? 0 : quiet + 1;
     if (quiet >= 3) return true;
     await sleep(2_000);
   }
   return false;
+}
+
+/** Whether anyone is working, and whether ready work waits for the minute tick. */
+async function look(api: Owner) {
+  const employees = await api.employees();
+  const statuses = await Promise.all(employees.map((employee) => api.status(employee.id)));
+  const items = await api.work();
+  // A coding session works outside the employee's run; its employee hears when its turn ends.
+  const coding = await Promise.all(
+    items.map((item) =>
+      api
+        .call<{ sessions: { state: string }[] }>(`/work/${item.id}/sessions`)
+        .then(({ sessions }) => sessions.some((session) => session.state === "working")),
+    ),
+  );
+  const busy =
+    coding.some(Boolean) ||
+    statuses.some(
+      ({ state }) =>
+        (state.run && !state.run.stopped) ||
+        state.inbox.some((item) => item.status === "queued" || item.status === "running"),
+    );
+  return { busy, ready: items.some((item) => item.state === "ready") };
 }
 
 // Reading what the owner reads.
@@ -287,8 +325,10 @@ export function internals(text: string) {
     const match = pattern.exec(text);
     if (match) found.push(`${what}: ${match[0].trim()}`);
   }
+  // A one-word name (run, write, recall) is also plain English: flagged only when called.
   for (const name of capabilityNames)
-    if (new RegExp(`\\b${name}\\b`).test(text)) found.push(`tool name: ${name}`);
+    if (new RegExp(/^[a-z]+$/.test(name) ? `\\b${name}\\(` : `\\b${name}\\b`).test(text))
+      found.push(`tool name: ${name}`);
   return found;
 }
 
@@ -316,13 +356,24 @@ async function seed(db: pg.Client, scenario: Scenario) {
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     body: JSON.stringify({ name: scenario.business.name }),
   });
-  if (!created.ok) throw new Error(`Creating the business failed: ${created.status}`);
+  if (!created.ok) {
+    await db.query("DELETE FROM web_sessions WHERE person_id = $1", [person]);
+    await db.query("DELETE FROM people WHERE id = $1", [person]);
+    throw new Error(`Creating the business failed: ${created.status}`);
+  }
   const { business, operations } = (await created.json()) as {
     business: { id: string };
     operations: Employee;
   };
   const api = owner(token, business.id);
-  const { brief, team = [], secrets = [], memories = [], apps = [] } = scenario.business;
+  const {
+    brief,
+    team = [],
+    secrets = [],
+    memories = [],
+    apps = [],
+    repositories = [],
+  } = scenario.business;
   if (brief) await api.call("", { method: "PUT", body: { brief } });
   for (const hire of team) await api.call("/employees", { body: hire });
   for (const secret of secrets) await api.call("/secrets", { body: secret });
@@ -339,7 +390,27 @@ async function seed(db: pg.Client, scenario: Scenario) {
     });
     if (!response.ok) throw new Error(`Remembering failed: ${response.status}`);
   }
+  for (const repository of repositories) seedRepository(business.id, repository);
   return { person, token, business: business.id, operations, api };
+}
+
+/** A repository already in the business folder, as the owner would have it: one commit, no remote. */
+function seedRepository(
+  business: string,
+  { name, files }: { name: string; files: Record<string, string> },
+) {
+  const folder = join(homedir(), "Devys", business, "repos", name);
+  for (const [path, contents] of Object.entries(files)) {
+    mkdirSync(dirname(join(folder, path)), { recursive: true });
+    writeFileSync(join(folder, path), contents);
+  }
+  const git = (...args: string[]) => {
+    const result = spawnSync("git", ["-C", folder, ...args], { encoding: "utf8" });
+    if (result.status) throw new Error(`git ${args[0]} failed: ${result.stderr}`);
+  };
+  git("init", "--initial-branch=main");
+  git("add", "--all");
+  git("-c", "user.name=Sam", "-c", "user.email=sam@example.com", "commit", "-m", "First version");
 }
 
 /** Removes the business and everything it owns, children first, and its folder on the Mac. */
@@ -468,9 +539,9 @@ async function play(scenario: Scenario, out: string) {
         const found = (await pending()).find((decision) => matches(turn.stop, decision));
         if (found) {
           step("stopped", `${kindOf(found)} request: ${requestText(found).join(" | ")}`);
-          status = `stopped as planned at ${turn.stop}`;
+          status = `stopped as planned at ${kindOf(found)}`;
         } else {
-          step("failed", `no pending ${turn.stop} request`);
+          step("failed", `no pending ${[turn.stop].flat().join(" or ")} request`);
           status = "failed";
         }
         break;
@@ -486,7 +557,14 @@ async function play(scenario: Scenario, out: string) {
           status = "failed";
           break;
         }
-        if (turn.answer === "secret") await api.call("/secrets", { body: turn.secret });
+        // Saved under the name the request asks for: the scenario can't know it in advance.
+        if (turn.answer === "secret")
+          await api.call("/secrets", {
+            body: {
+              ...turn.secret,
+              name: typeof found.input.name === "string" ? found.input.name : turn.secret.name,
+            },
+          });
         else await api.call(`/decisions/${found.id}/${turn.answer}`, { body: {} });
         step("ok", `answered ${kindOf(found)}`);
       } else if ("say" in turn) {
@@ -502,16 +580,34 @@ async function play(scenario: Scenario, out: string) {
         place = key;
         step("ok", "said");
       } else {
-        const latest = (await everything(api)).filter((m) => m.kind !== "card").at(-1);
+        // The owner answers the latest question still open since they last spoke: a later
+        // update ("the check passed") leaves it standing.
+        const spoken = (await everything(api)).filter((m) => m.kind !== "card");
+        const since = spoken.slice(
+          spoken.findLastIndex((m) => m.author === `person:${person}`) + 1,
+        );
+        const latest = since.findLast((m) => m.replies.length) ?? spoken.at(-1);
         const chips = latest?.replies ?? [];
-        const wanted = scenario.persona[turn.tap] ?? "";
-        const fits = (fact: string) =>
-          chips.find(
-            (chip) =>
-              chip.toLowerCase().includes(fact.toLowerCase()) ||
-              fact.toLowerCase().includes(chip.toLowerCase()),
-          );
+        const wanted = scenario.persona[turn.tap];
+        // A chip fits a fact when either contains the other, or the chip has all its words.
+        const words = (text: string): string[] =>
+          text.toLowerCase().match(/[\p{L}\p{N}@.'-]{3,}/gu) ?? [];
+        const fits = (fact: string | undefined) =>
+          fact === undefined
+            ? chips[0]
+            : chips.find(
+                (chip) =>
+                  chip.toLowerCase().includes(fact.toLowerCase()) ||
+                  fact.toLowerCase().includes(chip.toLowerCase()) ||
+                  (words(fact).length > 0 &&
+                    words(fact).every((word) => words(chip).includes(word))),
+              );
         const chosen = fits(wanted) ?? Object.values(scenario.persona).map(fits).find(Boolean);
+        const asked = latest?.author.startsWith("employee:") && questions(latest.text).length > 0;
+        if (turn.optional && !chips.length && !asked) {
+          step("ok", "nothing asked");
+          continue;
+        }
         if (!latest || !chosen) {
           step(
             "failed",
@@ -524,7 +620,10 @@ async function play(scenario: Scenario, out: string) {
         }
         await api.post(latest.conversation, chosen, latest.id);
         place = latest.conversation;
-        step("ok", `tapped "${chosen}"${fits(wanted) ? "" : " (another persona fact)"}`);
+        step(
+          "ok",
+          `tapped "${chosen}"${wanted === undefined ? " (the recommendation)" : fits(wanted) ? "" : " (another persona fact)"}`,
+        );
       }
       const settled = await settle(api, minutes);
       // A step takes as long as the team took to answer it.
@@ -573,13 +672,18 @@ async function play(scenario: Scenario, out: string) {
         }
       }
     }
+  } catch (error) {
+    // Still report and clean up: a run that broke is a failed run.
+    status = `failed: ${error instanceof Error ? error.message : String(error)}`;
   } finally {
     await shooter.close().catch(() => undefined);
   }
-  const report = await collect(api, scenario, steps, status, firstReply, out, person);
-  await remove(db, person, business);
-  await db.end();
-  return report;
+  try {
+    return await collect(api, scenario, steps, status, firstReply, out, person);
+  } finally {
+    await remove(db, person, business);
+    await db.end();
+  }
 }
 
 /** The transcript, every card's wire JSON, the rubric and the summary. */
@@ -626,17 +730,34 @@ async function collect(
     ]),
     "## Requests (askOwner and decisions)",
     "",
-    ...requests.flatMap((d) => [`- ${kindOf(d)} (${d.status}): ${requestText(d).join(" | ")}`]),
+    ...requests.flatMap((d) => [
+      `- ${kindOf(d)} (${d.status}): ${requestText(d).join(" | ")}${d.input.preview ? " (with a preview)" : ""}`,
+    ]),
     "",
     "## Work items",
     "",
     ...items.flatMap((item) => [
       `- ${item.title} (${item.state}): ${String(item.objective ?? "")}`,
+      ...(Array.isArray(item.steps) ? item.steps : []).map(
+        (step: { title: string; state: string }) => `  - step (${step.state}): ${step.title}`,
+      ),
+      ...(Array.isArray(item.results) ? item.results : []).map(
+        (result: { label: string; value?: string; url?: string; ok?: boolean | null }) =>
+          `  - result (${result.ok === undefined ? "fact" : String(result.ok)}): ${result.label}${result.value ? `: ${result.value}` : ""}${result.url ? ` ${result.url}` : ""}`,
+      ),
     ]),
   ].join("\n");
   writeFileSync(join(out, "transcript.md"), `${transcript}\n`);
   const wire = { messages, requests, work_items: items };
   writeFileSync(join(out, "wire.json"), `${JSON.stringify(wire, null, 2)}\n`);
+  // The employees' own reasoning in their direct chats (tool calls and results), for debugging.
+  const exported = await fetch(`${base}/api/businesses/${api.business}/export`, {
+    headers: { authorization: `Bearer ${api.token}` },
+  }).then(
+    (response) => (response.ok ? response.text() : `export failed: ${response.status}`),
+    (error: unknown) => `export failed: ${String(error)}`,
+  );
+  writeFileSync(join(out, "logs", "export.jsonl"), exported);
 
   // The rubric: mechanical checks of what the owner reads.
   const said = messages.filter((m) => m.author !== `person:${person}`);

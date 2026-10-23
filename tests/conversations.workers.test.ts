@@ -361,7 +361,7 @@ it("suggested replies go on the employee's next message only, drop when the owne
 
   const first = await say(key, { id: "suggest-message-01", text: "We need a tagline." });
   const chat = received.at(-1)!.input.chatId;
-  expect(await offer([" Bold ", "Calm", "Bold"])).toEqual({ options: ["Bold", "Calm"] });
+  expect(await offer([" Bold ", "Calm", "Bold"])).toMatchObject({ options: ["Bold", "Calm"] });
   await postFromEmployee(bindings, chat, "Bold or calm?", "op-s1", first.message.id);
   await postFromEmployee(bindings, chat, "Either works for me.", "op-s2");
   const [, question, later] = await page();

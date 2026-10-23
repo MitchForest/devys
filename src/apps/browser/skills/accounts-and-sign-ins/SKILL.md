@@ -13,6 +13,10 @@ description: Create and use accounts (registrars, hosting, email, suppliers) in 
 - Before creating one, check the business doesn't already have it: `recall`, then
   `secretList` for a saved password by the service's name. Ask the owner if unsure; two
   accounts for one service are hard to undo.
+- A command-line tool on the Mac may be signed in to the owner's own account (for a hosting
+  or cloud provider, say). That account is not automatically the business's: unless `recall`
+  says the business uses it, ask before putting anything of the business's in it, saying
+  which account it is.
 - Accepting a service's terms on the business's behalf is part of the work only when the work
   item says so; otherwise ask (`askOwner` approve, naming the service and its terms).
 

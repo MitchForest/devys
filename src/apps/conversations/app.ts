@@ -1,4 +1,6 @@
 import { defineApp } from "../../protocol/app.ts";
+import { bundledSkill } from "../../protocol/skill.ts";
+import emailingForTheBusiness from "./skills/emailing-for-the-business/SKILL.md?raw";
 
 export const conversations = defineApp({
   id: "conversations",
@@ -8,7 +10,7 @@ export const conversations = defineApp({
   kind: "system",
   records: [],
   capabilities: ["conversationHistory", "suggestReplies"],
-  skills: [],
+  skills: [bundledSkill("emailing-for-the-business", emailingForTheBusiness)],
   connections: [],
   appears: "never",
   // Every employee reads back in the conversation it is answering and offers replies to tap.
