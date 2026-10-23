@@ -415,7 +415,12 @@ it("every route the clients read answers in its wire schema; the golden files ma
   register(posted.message.id);
   // Ada answers with a question and the replies she offers for it.
   const direct = `direct:${chiefOfStaff.id}` as const;
-  await Effect.runPromise(suggestReplies(db, acme.id, direct, engineer.id, ["Ship it", "Wait"]));
+  await Effect.runPromise(
+    suggestReplies(db, acme.id, direct, engineer.id, {
+      question: "Ship the preview now?",
+      replies: ["Ship it", "Wait"],
+    }),
+  );
   const answered = await Effect.runPromise(
     postMessage(db, acme.id, direct, {
       author: `employee:${engineer.id}`,
@@ -443,6 +448,17 @@ it("every route the clients read answers in its wire schema; the golden files ma
     wire.ConversationPage,
     await call(`${at}/conversations/${encodeURIComponent(`work:${site.id}`)}`),
   );
+  // The owner pins the Chief of Staff and marks the work thread unread in their sidebar.
+  await keep(
+    "sidebar-mark",
+    wire.SidebarMark,
+    await call(`${at}/conversations/${encodeURIComponent(direct)}/sidebar`, "POST", {
+      pinned: true,
+    }),
+  );
+  await call(`${at}/conversations/${encodeURIComponent(`work:${site.id}`)}/sidebar`, "POST", {
+    unread: true,
+  });
   const summaries = await call(`${at}/conversations`);
   const listed = (await summaries.clone().json()) as {
     conversations: { key: string; last: { created_at: string } | null }[];
@@ -551,6 +567,7 @@ it("every route the clients read answers in its wire schema; the golden files ma
   await keep("home", wire.Home, await call(`${at}/home`));
   await keep("business", wire.BusinessDetail, await call(at));
   await keep("apps", wire.Apps, await call(`${at}/apps`));
+  await keep("apps-listed", wire.AppsListed, await call(`${at}/apps/listed`));
   await keep("access", wire.AccessList, await call(`${at}/employees/${engineer.id}/access`));
   await keep("status", wire.RuntimeStatus, await call(`${at}/employees/${engineer.id}/status`));
   const remembered = await call(
@@ -720,20 +737,16 @@ it("every route the clients read answers in its wire schema; the golden files ma
     fetching.mockRestore();
   }
 
-  // A second business: what creating one answers.
+  // A second business: what creating one answers (its Chief of Staff, alone).
   const created = await call("/api/businesses", "POST", {
     name: "Acme Roofing",
     brief: "Roof repairs.",
-    team: ["engineering"],
   });
   const body = (await created.clone().json()) as {
     business: { id: string };
     chief_of_staff: { id: string };
-    team: { id: string }[];
   };
-  [body.business.id, body.chief_of_staff.id, ...body.team.map((member) => member.id)].forEach(
-    register,
-  );
+  [body.business.id, body.chief_of_staff.id].forEach(register);
   await keep("business-created", wire.BusinessCreated, created);
 
   // This iPhone's signing key (a fixed public key, so the file is stable).

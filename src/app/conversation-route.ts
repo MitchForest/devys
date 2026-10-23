@@ -3,12 +3,17 @@ import type { Env } from "./env.ts";
 import { appReactions } from "../channels/app.ts";
 import { type Business, type Person } from "../identity/contract.ts";
 import { conversationKey, employeeOf } from "../conversations/contract.ts";
-import { conversationSummaries, markSeen, setFollowing } from "../conversations/service.ts";
+import {
+  conversationSummaries,
+  markConversation,
+  markSeen,
+  setFollowing,
+} from "../conversations/service.ts";
 import { conversationExists, conversationPage, postFromPerson } from "./conversations.ts";
 import { businessRef } from "./refs.ts";
-import { body, forbidden, notFound } from "./request.ts";
+import { body, decodedBody, forbidden, notFound } from "./request.ts";
 import { respond } from "../protocol/http.ts";
-import { ConversationPage, Conversations, Following, Posted, Read } from "./wire.ts";
+import { ConversationPage, Conversations, Following, Posted, Read, SidebarMark } from "./wire.ts";
 
 /**
  * The business's shared conversations: DMs (`direct:<employee>`), project channels
@@ -28,7 +33,7 @@ export async function conversationRoute(
       ),
     });
   const [, raw, action] =
-    /^\/conversations\/([^/]+)(?:\/(messages|read|follow))?$/.exec(path) ?? [];
+    /^\/conversations\/([^/]+)(?:\/(messages|read|follow|sidebar))?$/.exec(path) ?? [];
   const key = conversationKey(decodeURIComponent(raw ?? ""));
   if (!key || !(await conversationExists(env, business.id, key))) return notFound();
   if (!action && request.method === "GET") {
@@ -69,6 +74,11 @@ export async function conversationRoute(
     if (typeof on !== "boolean") return new Response("Send on: true or false", { status: 400 });
     await Effect.runPromise(setFollowing(env.HYPERDRIVE, business.id, key, person.id, on));
     return respond(Following, { following: on });
+  }
+  if (action === "sidebar") {
+    const mark = await decodedBody(request, 1_000, SidebarMark);
+    await Effect.runPromise(markConversation(env.HYPERDRIVE, business.id, key, person.id, mark));
+    return respond(SidebarMark, mark);
   }
   if (action !== "messages") return notFound();
   const input = await body<{

@@ -31,6 +31,7 @@ it("the migrations take an empty database to every component's tables, once", as
     "businesses",
     "channel_bindings",
     "coding_sessions",
+    "conversation_marks",
     "conversation_reads",
     "conversations",
     "decisions",

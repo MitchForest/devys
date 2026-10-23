@@ -32,9 +32,10 @@ import { Unavailable } from "../protocol/host.ts";
 import { respond, sameOrigin } from "../protocol/http.ts";
 import { BusinessCreated, Me, ModelCatalog, Roles } from "./wire.ts";
 import { grantAll } from "../authority/service.ts";
-import { hire, hireInput, roleTemplate } from "../identity/team.ts";
+import { roleTemplate } from "../identity/team.ts";
 import { hireableRoleIds } from "../protocol/roles.ts";
-import { hiring, templateGrants } from "./team.ts";
+import { templateGrants } from "./team.ts";
+import { markConversation } from "../conversations/service.ts";
 import { capabilities } from "./capabilities.ts";
 import { businessRoute } from "./routes.ts";
 import { codingEventsRoute } from "./coding.ts";
@@ -157,25 +158,15 @@ async function route(request: Request, env: Env): Promise<Response | undefined> 
       return new Response("On a Mac in local mode only its owner creates businesses", {
         status: 403,
       });
-    const input = await body<{ name: unknown; brief: unknown; team: unknown }>(request, 8_000);
+    const input = await body<{ name: unknown; brief: unknown }>(request, 8_000);
     const name = typeof input.name === "string" ? input.name.trim() : "";
     if (!name || name.length > 80) return new Response("Send a business name", { status: 400 });
     const brief = typeof input.brief === "string" ? input.brief.trim().slice(0, 4000) : "";
-    // The starting team: templates hired alongside the Chief of Staff.
-    const team = Array.isArray(input.team) ? input.team.map(roleTemplate) : [];
-    if (
-      team.some(
-        (template) => !template || template.id === "chief-of-staff" || template.id === "custom",
-      )
-    )
-      return new Response("The starting team takes admin, finance, growth or engineering", {
-        status: 400,
-      });
+    // A business starts with its Chief of Staff alone, pinned; they propose hires as work needs.
     const chiefOfStaff = roleTemplate("chief-of-staff")!;
     const catalog = capabilities(env);
-    const hirer = hiring(() => catalog);
-    // The business, its Chief of Staff, their grants and the starting team, or nothing.
-    const { created, hired } = await atomically(env.HYPERDRIVE, async (db) => {
+    // The business, its Chief of Staff, their grants and the pin, or nothing.
+    const created = await atomically(env.HYPERDRIVE, async (db) => {
       const created = await Effect.runPromise(
         createBusiness(db, person.id, {
           name,
@@ -195,17 +186,16 @@ async function route(request: Request, env: Env): Promise<Response | undefined> 
         ),
       );
       await Effect.runPromise(install(db, created.business.id, defaultApps));
-      const hired = [];
-      for (const template of team) {
-        const input = hireInput({ template: template!.id }, hirer);
-        if (typeof input !== "string")
-          hired.push(await hire(db, created.business.id, input, hirer));
-      }
-      return { created, hired };
+      await Effect.runPromise(
+        markConversation(db, created.business.id, `direct:${created.chiefOfStaff.id}`, person.id, {
+          pinned: true,
+        }),
+      );
+      return created;
     });
     return respond(
       BusinessCreated,
-      { business: created.business, chief_of_staff: created.chiefOfStaff, team: hired },
+      { business: created.business, chief_of_staff: created.chiefOfStaff },
       { status: 201 },
     );
   }

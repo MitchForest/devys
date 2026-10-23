@@ -103,6 +103,13 @@ export const FoundApp = Schema.Struct({
 });
 export type FoundApp = typeof FoundApp.Type;
 
+/** One app in the Connect apps sheet: a found app, in its category. */
+export const ListedApp = Schema.Struct({
+  ...FoundApp.fields,
+  category: Schema.String,
+});
+export type ListedApp = typeof ListedApp.Type;
+
 /**
  * How a remote app's MCP server describes itself (`serverInfo`): display only, never trusted for
  * a decision. `icons` are its logo candidates.

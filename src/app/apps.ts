@@ -8,6 +8,8 @@ import {
   accept,
   addApp,
   beginConnect,
+  listedFor,
+  listedLogo,
   logoResponse,
   remoteEntry,
   remoteNames,
@@ -31,7 +33,7 @@ import { type Business, type Person } from "../identity/contract.ts";
 import type { AppManifest } from "../protocol/app.ts";
 import { body, decodedBody, forbidden, notFound } from "./request.ts";
 import { respond } from "../protocol/http.ts";
-import { AddApp, AppChanged, AppReview, Apps, AppSearch, Connecting } from "./wire.ts";
+import { AddApp, AppChanged, AppReview, Apps, AppSearch, AppsListed, Connecting } from "./wire.ts";
 
 /** Every Devys app: the system apps, then the business apps. */
 export const appCatalog: readonly AppManifest[] = [
@@ -166,6 +168,10 @@ export async function appsRoute(
         : [],
     });
   }
+  if (path === "/apps/listed" && method === "GET")
+    return respond(AppsListed, { apps: await listedFor(env, business.id) });
+  const listed = /^\/apps\/listed\/([a-z0-9-]{1,40})\/logo$/.exec(path);
+  if (listed && method === "GET") return listedLogo(env, business.id, listed[1]!);
   const logo = /^\/apps\/logos\/([a-f0-9]{64})$/.exec(path);
   if (logo && method === "GET") return logoResponse(env, business.id, logo[1]!);
   const [, id, action] =

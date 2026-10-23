@@ -16,10 +16,14 @@
           "Ship it",
           "Wait"
         ],
+        "question": "Ship the preview now?",
+        "pick_many": false,
         "created_at": "2026-01-01T00:00:00.000Z"
       },
       "unread": 1,
-      "following": false
+      "following": false,
+      "pinned": true,
+      "hidden": false
     },
     {
       "key": "work:00000000-0000-4000-8000-000000000008",
@@ -34,10 +38,14 @@
         "via_voice": false,
         "ref": "devys:work/item/00000000-0000-4000-8000-000000000008",
         "replies": [],
+        "question": null,
+        "pick_many": false,
         "created_at": "2026-01-01T00:00:00.000Z"
       },
       "unread": 1,
-      "following": true
+      "following": true,
+      "pinned": false,
+      "hidden": false
     }
   ]
 }

@@ -16,7 +16,8 @@ import { capabilities } from "../src/app/capabilities.ts";
 import type { Inbound } from "../src/channels/contract.ts";
 import { Invocation } from "../src/protocol/capability.ts";
 import { sha256 } from "../src/protocol/bytes.ts";
-import { business, sql } from "./fixtures/postgres.ts";
+import { business, db, sql } from "./fixtures/postgres.ts";
+import { postMessage } from "../src/conversations/service.ts";
 
 /** Records what each employee runtime receives instead of running one. */
 function recording() {
@@ -382,4 +383,50 @@ it("suggested replies go on the employee's next message only, drop when the owne
     (await sql.rows("SELECT 1 FROM suggested_replies WHERE business_id = $1", [acme.business.id]))
       .length,
   ).toBe(0);
+});
+
+it("the owner pins, hides until something new is said, and marks unread until read", async () => {
+  const { acme, growth, as } = await owner();
+  const key = `direct:${growth.id}`;
+  const mark = (body: Record<string, boolean>) =>
+    as(`/conversations/${key}/sidebar`, { method: "POST", body: JSON.stringify(body) });
+  const summary = async () =>
+    (
+      (await (await as("/conversations")).json()) as {
+        conversations: { key: string; pinned: boolean; hidden: boolean; unread: number }[];
+      }
+    ).conversations.find((c) => c.key === key)!;
+  await Effect.runPromise(
+    postMessage(db, acme.business.id, key as `direct:${string}`, {
+      author: `employee:${growth.id}`,
+      text: "Here is the plan.",
+      clientId: crypto.randomUUID(),
+    }),
+  );
+  expect((await mark({ pinned: true })).status).toBe(200);
+  expect(await summary()).toMatchObject({ pinned: true, hidden: false });
+  await mark({ pinned: false, hidden: true });
+  expect(await summary()).toMatchObject({ pinned: false, hidden: true });
+  // Something new said there brings it back.
+  await Effect.runPromise(
+    postMessage(db, acme.business.id, key as `direct:${string}`, {
+      author: `employee:${growth.id}`,
+      text: "Done.",
+      clientId: crypto.randomUUID(),
+    }),
+  );
+  expect(await summary()).toMatchObject({ hidden: false });
+  // Read, then marked unread: it counts as unread until it is read again.
+  await as(`/conversations/${key}/read`, {
+    method: "POST",
+    body: JSON.stringify({ at: new Date().toISOString() }),
+  });
+  expect((await summary()).unread).toBe(0);
+  await mark({ unread: true });
+  expect((await summary()).unread).toBe(1);
+  await as(`/conversations/${key}/read`, {
+    method: "POST",
+    body: JSON.stringify({ at: new Date().toISOString() }),
+  });
+  expect((await summary()).unread).toBe(0);
 });

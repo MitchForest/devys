@@ -7,7 +7,7 @@
  * Imported by the web client, so it imports only contracts, the shared kernel and Effect.
  */
 import { Schema } from "effect";
-import { FoundApp, InstalledApp, Line } from "../apps/contract.ts";
+import { FoundApp, InstalledApp, Line, ListedApp } from "../apps/contract.ts";
 import { LiveCodingSession } from "../apps/code/contract.ts";
 import { Artifact } from "../apps/documents/contract.ts";
 import { Decision, DeviceKey, Grant } from "../authority/contract.ts";
@@ -28,11 +28,10 @@ import { SecretEntry } from "../vault/contract.ts";
 
 /** `GET /api/me`. */
 export const Me = Schema.Struct({ person: Person, businesses: Schema.Array(Business) });
-/** `POST /api/businesses`: the business, its Chief of Staff and the starting team. */
+/** `POST /api/businesses`: the business and its Chief of Staff, its only employee to start. */
 export const BusinessCreated = Schema.Struct({
   business: Business,
   chief_of_staff: Employee,
-  team: Schema.Array(Employee),
 });
 /** `PUT /api/businesses/:id`. */
 export const BusinessUpdated = Schema.Struct({ business: Business });
@@ -209,6 +208,12 @@ export const Posted = Schema.Struct({ message: Message, to: Schema.Array(Schema.
 export const Read = Schema.Struct({ read: Schema.Literal(true) });
 /** `POST …/conversations/:key/follow`. */
 export const Following = Schema.Struct({ following: Schema.Boolean });
+/** `POST …/conversations/:key/sidebar`: any of pinned, hidden, unread. */
+export const SidebarMark = Schema.Struct({
+  pinned: Schema.optionalKey(Schema.Boolean),
+  hidden: Schema.optionalKey(Schema.Boolean),
+  unread: Schema.optionalKey(Schema.Boolean),
+});
 
 // Work, decisions and projects.
 
@@ -259,6 +264,8 @@ export const Apps = Schema.Struct({ apps: Schema.Array(InstalledApp) });
 /** `POST …/apps/:id/install`, `…/uninstall` and `…/pin`. */
 export const AppChanged = Schema.Struct({ app: InstalledApp });
 /** `GET …/apps/search?q=`: the business's apps and the MCP Registry's that fit. */
+/** `GET …/apps/listed`: the Connect apps sheet's list, by category. */
+export const AppsListed = Schema.Struct({ apps: Schema.Array(ListedApp) });
 export const AppSearch = Schema.Struct({ apps: Schema.Array(FoundApp) });
 /** `POST …/apps/add`: an app as `appSearch` found it (id or registry name) or an MCP address. */
 export const AddApp = Schema.Struct({

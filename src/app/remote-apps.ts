@@ -10,6 +10,7 @@
 import { Effect, Schema } from "effect";
 import { parse } from "tldts";
 import type { Env } from "./env.ts";
+import { listedApps } from "../../config/apps.ts";
 import type { Database } from "../data/database.ts";
 import { modeOf } from "./mode.ts";
 import { answerText, askOwnerFor, tellEmployee } from "./asking.ts";
@@ -22,6 +23,7 @@ import {
   type FoundApp,
   type InstalledApp,
   type Line,
+  type ListedApp,
   type RemotePolicy,
   type RemoteServer,
   type RemoteTool,
@@ -431,6 +433,12 @@ export async function searchApps(
       logo: logoUrl(businessId, app.logo),
       installed: app.state === "on",
     }));
+  // The listed apps that fit, before anything the registry finds: known, and at once.
+  const fitting = (await listedFor(env, businessId)).filter(
+    (app) =>
+      !added.some((each) => each.app === app.app) &&
+      (matches(app.name) || matches(app.description) || matches(app.category)),
+  );
   const address = remoteUrl(query.trim());
   const typed: FoundApp[] =
     address && !added.length
@@ -450,12 +458,12 @@ export async function searchApps(
       app.registry_name,
     ]),
   );
-  const listedApps = address
+  const registryEntries = address
     ? []
     : await searchRegistry(env, query.trim()).catch(() => [] as Listed[]);
-  const registryAnswered = listedApps !== null;
+  const registryAnswered = registryEntries !== null;
   const fromRegistry = await Promise.all(
-    (listedApps ?? [])
+    (registryEntries ?? [])
       .filter((entry) => !known.has(entry.url) && !known.has(entry.name))
       .slice(0, 8)
       .map(async (entry) => ({
@@ -477,7 +485,74 @@ export async function searchApps(
         installed: false,
       })),
   );
-  return { apps: [...own, ...added, ...typed, ...fromRegistry].slice(0, 12), registryAnswered };
+  const listedUrls = new Set(listedApps.map((app) => app.url));
+  return {
+    apps: [
+      ...own,
+      ...added,
+      ...fitting.map((app) => ({
+        app: app.app,
+        name: app.name,
+        description: app.description,
+        logo: app.logo,
+        installed: app.installed,
+      })),
+      ...typed,
+      ...fromRegistry.filter((app) => !listedUrls.has(app.app)),
+    ].slice(0, 12),
+    registryAnswered,
+  };
+}
+
+/** A listed app's slug: its name, lower case (the logo's path). */
+const slugOf = (app: (typeof listedApps)[number]) =>
+  app.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+
+/**
+ * The Connect apps sheet's list (config/apps.ts), each with whether the business has it on, its
+ * logo (fetched once from the service's site) and its category.
+ */
+export async function listedFor(env: Env, businessId: string): Promise<ListedApp[]> {
+  const added = await Effect.runPromise(remoteApps(env.HYPERDRIVE, businessId));
+  return listedApps.map((app) => {
+    const mine = added.find((each) => each.url === app.url);
+    return {
+      app: mine?.id ?? app.url,
+      name: app.name,
+      description: app.summary,
+      category: app.category,
+      logo: `/api/businesses/${businessId}/apps/listed/${slugOf(app)}/logo`,
+      installed: mine?.state === "on",
+    };
+  });
+}
+
+/** `GET …/apps/listed/:slug/logo`: a listed app's logo, from its site the first time. */
+export async function listedLogo(env: Env, businessId: string, slug: string) {
+  const app = listedApps.find((each) => slugOf(each) === slug);
+  if (!app) return new Response("Not found", { status: 404 });
+  const key = `apps/${businessId}/listed/${slug}`;
+  let object = await env.FILES.get(key);
+  if (!object) {
+    const sha = await resolveLogo(env, businessId, {
+      icons: [],
+      website: app.website,
+      url: app.url,
+    }).catch(() => null);
+    const bytes = sha && (await env.FILES.get(logoKey(businessId, sha)));
+    if (!bytes) return new Response("Not found", { status: 404 });
+    await env.FILES.put(key, await bytes.arrayBuffer());
+    object = await env.FILES.get(key);
+  }
+  const image = new Uint8Array(await object!.arrayBuffer());
+  return new Response(image, {
+    headers: {
+      "content-type": imageType(image) ?? "application/octet-stream",
+      "cache-control": "private, max-age=604800",
+      "content-security-policy": "sandbox; default-src 'none'",
+      "x-content-type-options": "nosniff",
+    },
+  });
 }
 
 /**
@@ -509,12 +584,18 @@ export async function addApp(
       "Name an app as appSearch found it (its registry name) or give its MCP server's https address",
     );
   const at = url ?? entry!.url;
+  // A listed app brings its own name, line and site.
+  const listed = listedApps.find((app) => app.url === at);
   const host = new URL(at).hostname;
   const domain = parse(host).domainWithoutSuffix;
-  const name = entry?.title ?? (domain ? domain.charAt(0).toUpperCase() + domain.slice(1) : host);
+  const name =
+    listed?.name ??
+    entry?.title ??
+    (domain ? domain.charAt(0).toUpperCase() + domain.slice(1) : host);
+  const website = listed?.website ?? entry?.website ?? null;
   const logo = await resolveLogo(env, businessId, {
     icons: entry?.icons ?? [],
-    website: entry?.website ?? null,
+    website,
     url: at,
   }).catch(() => null);
   return Effect.runPromise(
@@ -523,10 +604,10 @@ export async function addApp(
       businessId,
       {
         name,
-        summary: entry?.description ?? "",
+        summary: listed?.summary ?? entry?.description ?? "",
         url: at,
         registryName: entry?.name ?? null,
-        website: entry?.website ?? null,
+        website,
         logo,
         addedBy,
       },

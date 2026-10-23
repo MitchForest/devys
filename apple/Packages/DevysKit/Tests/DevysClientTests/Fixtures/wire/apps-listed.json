@@ -1,0 +1,172 @@
+{
+  "apps": [
+    {
+      "app": "https://mcp.ramp.com/mcp",
+      "name": "Ramp",
+      "description": "Cards, spend and bills",
+      "logo": "/api/businesses/00000000-0000-4000-8000-000000000002/apps/listed/ramp/logo",
+      "installed": false,
+      "category": "Payments and finance"
+    },
+    {
+      "app": "https://mcp.stripe.com",
+      "name": "Stripe",
+      "description": "Payments, customers and invoices",
+      "logo": "/api/businesses/00000000-0000-4000-8000-000000000002/apps/listed/stripe/logo",
+      "installed": false,
+      "category": "Payments and finance"
+    },
+    {
+      "app": "https://mcp.mercury.com/mcp",
+      "name": "Mercury",
+      "description": "Business banking",
+      "logo": "/api/businesses/00000000-0000-4000-8000-000000000002/apps/listed/mercury/logo",
+      "installed": false,
+      "category": "Payments and finance"
+    },
+    {
+      "app": "https://api.brex.com/mcp",
+      "name": "Brex",
+      "description": "Cards, spend and expenses",
+      "logo": "/api/businesses/00000000-0000-4000-8000-000000000002/apps/listed/brex/logo",
+      "installed": false,
+      "category": "Payments and finance"
+    },
+    {
+      "app": "https://mcp.squareup.com/mcp",
+      "name": "Square",
+      "description": "Sales, payments and catalog",
+      "logo": "/api/businesses/00000000-0000-4000-8000-000000000002/apps/listed/square/logo",
+      "installed": false,
+      "category": "Payments and finance"
+    },
+    {
+      "app": "https://mcp.paypal.com/mcp",
+      "name": "PayPal",
+      "description": "Payments and invoices",
+      "logo": "/api/businesses/00000000-0000-4000-8000-000000000002/apps/listed/paypal/logo",
+      "installed": false,
+      "category": "Payments and finance"
+    },
+    {
+      "app": "https://mcp.notion.com/mcp",
+      "name": "Notion",
+      "description": "Pages and databases",
+      "logo": "/api/businesses/00000000-0000-4000-8000-000000000002/apps/listed/notion/logo",
+      "installed": false,
+      "category": "Productivity"
+    },
+    {
+      "app": "https://mcp.linear.app/mcp",
+      "name": "Linear",
+      "description": "Issues and projects",
+      "logo": "/api/businesses/00000000-0000-4000-8000-000000000002/apps/listed/linear/logo",
+      "installed": false,
+      "category": "Productivity"
+    },
+    {
+      "app": "https://mcp.atlassian.com/v2/mcp",
+      "name": "Atlassian",
+      "description": "Jira and Confluence",
+      "logo": "/api/businesses/00000000-0000-4000-8000-000000000002/apps/listed/atlassian/logo",
+      "installed": false,
+      "category": "Productivity"
+    },
+    {
+      "app": "https://mcp.airtable.com/mcp",
+      "name": "Airtable",
+      "description": "Bases and records",
+      "logo": "/api/businesses/00000000-0000-4000-8000-000000000002/apps/listed/airtable/logo",
+      "installed": false,
+      "category": "Productivity"
+    },
+    {
+      "app": "https://mcp.vercel.com",
+      "name": "Vercel",
+      "description": "Deploys and projects",
+      "logo": "/api/businesses/00000000-0000-4000-8000-000000000002/apps/listed/vercel/logo",
+      "installed": false,
+      "category": "Code and hosting"
+    },
+    {
+      "app": "https://mcp.cloudflare.com/mcp",
+      "name": "Cloudflare",
+      "description": "Domains, DNS, Workers and more",
+      "logo": "/api/businesses/00000000-0000-4000-8000-000000000002/apps/listed/cloudflare/logo",
+      "installed": false,
+      "category": "Code and hosting"
+    },
+    {
+      "app": "https://mcp.supabase.com/mcp",
+      "name": "Supabase",
+      "description": "Databases and auth",
+      "logo": "/api/businesses/00000000-0000-4000-8000-000000000002/apps/listed/supabase/logo",
+      "installed": false,
+      "category": "Code and hosting"
+    },
+    {
+      "app": "https://mcp.neon.tech/mcp",
+      "name": "Neon",
+      "description": "Postgres databases",
+      "logo": "/api/businesses/00000000-0000-4000-8000-000000000002/apps/listed/neon/logo",
+      "installed": false,
+      "category": "Code and hosting"
+    },
+    {
+      "app": "https://mcp.sentry.dev/mcp",
+      "name": "Sentry",
+      "description": "Errors and performance",
+      "logo": "/api/businesses/00000000-0000-4000-8000-000000000002/apps/listed/sentry/logo",
+      "installed": false,
+      "category": "Code and hosting"
+    },
+    {
+      "app": "https://mcp.figma.com/mcp",
+      "name": "Figma",
+      "description": "Designs and files",
+      "logo": "/api/businesses/00000000-0000-4000-8000-000000000002/apps/listed/figma/logo",
+      "installed": false,
+      "category": "Design and web"
+    },
+    {
+      "app": "https://mcp.canva.com/mcp",
+      "name": "Canva",
+      "description": "Designs and brand kits",
+      "logo": "/api/businesses/00000000-0000-4000-8000-000000000002/apps/listed/canva/logo",
+      "installed": false,
+      "category": "Design and web"
+    },
+    {
+      "app": "https://mcp.webflow.com/mcp",
+      "name": "Webflow",
+      "description": "Sites and CMS",
+      "logo": "/api/businesses/00000000-0000-4000-8000-000000000002/apps/listed/webflow/logo",
+      "installed": false,
+      "category": "Design and web"
+    },
+    {
+      "app": "https://mcp.intercom.com/mcp",
+      "name": "Intercom",
+      "description": "Conversations and help center",
+      "logo": "/api/businesses/00000000-0000-4000-8000-000000000002/apps/listed/intercom/logo",
+      "installed": false,
+      "category": "Sales and support"
+    },
+    {
+      "app": "https://mcp.posthog.com/mcp",
+      "name": "PostHog",
+      "description": "Product analytics",
+      "logo": "/api/businesses/00000000-0000-4000-8000-000000000002/apps/listed/posthog/logo",
+      "installed": false,
+      "category": "Analytics and automation"
+    },
+    {
+      "app": "https://mcp.zapier.com/api/v1/connect",
+      "name": "Zapier",
+      "description": "Automations across apps",
+      "logo": "/api/businesses/00000000-0000-4000-8000-000000000002/apps/listed/zapier/logo",
+      "installed": false,
+      "category": "Analytics and automation"
+    }
+  ]
+}

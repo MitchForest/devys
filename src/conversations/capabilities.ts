@@ -18,8 +18,8 @@ const answering = Effect.gen(function* () {
   return { businessId, employeeId, key };
 });
 
-/** One reply the owner can tap: a few words. */
-const Reply = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(40));
+/** One answer the owner can tap: a few words. */
+const Reply = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(60));
 
 /**
  * The Conversations app's capabilities, both about the conversation the running turn answers:
@@ -78,15 +78,19 @@ export function conversationCapabilities(
     capability({
       name: "suggestReplies",
       description:
-        "Offer the owner up to 4 short replies (each at most 40 characters) to the reply you are writing in this conversation. They show as buttons under your reply, and one tap sends that one. They add nothing on their own: after calling this, still write your reply, with the question, as your final text. When you need the owner to choose, ask one question and offer its answers this way, each a concrete choice (a name, not a category), your recommendation first. After asking, end your turn and wait for the owner's answer; don't go ahead with your recommendation. Calling again replaces the options.",
+        "Ask the owner one question with its answers as a card under the reply you are writing in this conversation: question is the card's title (a few words, e.g. \"Which should I connect?\"), options up to 6 answers of a few words each (at most 60 characters), each a concrete choice (a name, not a category), your recommendation first; the owner can always type something else instead. pickMany when several may apply (they tick some and tap Done). One tap (or Done) sends their answer. The card adds nothing on its own: after calling this, still write your reply as your final text, short, without repeating the answers. After asking, end your turn and wait for the owner's answer; don't go ahead with your recommendation. Calling again replaces the card.",
       effect: "change",
       replay: "idempotent",
       core: true,
       input: Schema.Struct({
-        options: Schema.Array(Reply).check(Schema.isMinLength(1), Schema.isMaxLength(4)),
+        question: Schema.optional(
+          Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(120)),
+        ),
+        options: Schema.Array(Reply).check(Schema.isMinLength(1), Schema.isMaxLength(6)),
+        pickMany: Schema.optional(Schema.Boolean),
       }),
       output: Schema.Struct({ options: Schema.Array(Schema.String), next: Schema.String }),
-      execute: ({ options }) =>
+      execute: ({ question, options, pickMany }) =>
         Effect.gen(function* () {
           const { businessId, employeeId, key } = yield* answering;
           const unique = [...new Set(options.map((option) => option.trim()).filter(Boolean))];
@@ -95,7 +99,11 @@ export function conversationCapabilities(
               code: "invalid_input",
               message: "Offer at least one reply",
             });
-          yield* suggestReplies(db, businessId, key, employeeId, unique);
+          yield* suggestReplies(db, businessId, key, employeeId, {
+            replies: unique,
+            ...(question?.trim() ? { question: question.trim() } : {}),
+            ...(pickMany ? { pickMany } : {}),
+          });
           // Read last: a turn that ends without text posts nothing, and these buttons with it.
           return {
             options: unique,

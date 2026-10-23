@@ -215,7 +215,10 @@ export function useFollow() {
           return {
             conversations: found
               ? list.map((c) => (c.key === key ? { ...c, following: on } : c))
-              : [...list, { key, last: null, unread: 0, following: on }],
+              : [
+                  ...list,
+                  { key, last: null, unread: 0, following: on, pinned: false, hidden: false },
+                ],
           };
         });
         return () => client.setQueryData(keys.summaries(b), before);

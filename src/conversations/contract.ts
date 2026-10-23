@@ -41,8 +41,15 @@ export const Message = Schema.Struct({
   via_voice: Schema.Boolean,
   /** The record an event is about: the work item a hand-off card opens, a page, a session. */
   ref: Schema.NullOr(Ref),
-  /** Short answers its employee offers; the owner's clients show them while it is the latest word. */
+  /**
+   * The answers its employee offers, as a question card (lettered, a few words each); the owner's
+   * clients show it while it is the latest word.
+   */
   replies: Schema.Array(Schema.String),
+  /** The card's title: the one question the answers are for. */
+  question: Schema.NullOr(Schema.String),
+  /** The owner may pick several answers, sent together with Done. */
+  pick_many: Schema.Boolean,
   created_at: Timestamp,
 });
 export type Message = typeof Message.Type;
@@ -61,6 +68,10 @@ export const ConversationSummary = Schema.Struct({
   unread: Schema.Int,
   /** The person follows it: a work thread they hear each milestone of. */
   following: Schema.Boolean,
+  /** Pinned to the top of their sidebar. */
+  pinned: Schema.Boolean,
+  /** Hidden from their sidebar until something new is said in it. */
+  hidden: Schema.Boolean,
 });
 export type ConversationSummary = typeof ConversationSummary.Type;
 

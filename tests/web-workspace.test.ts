@@ -22,6 +22,8 @@ const message = (
   via_voice: false,
   ref: null,
   replies: [],
+  question: null,
+  pick_many: false,
   created_at: at,
   reactions: [],
 });
