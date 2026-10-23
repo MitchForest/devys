@@ -3,8 +3,8 @@ import { randomUUID } from "node:crypto";
 import { localStores } from "../fixtures/local.ts";
 import { bearer, insertMessage, openAbout, sidebar, signIn, stubPosting } from "./helpers.ts";
 
-// G (2026-10-23): the sidebar after Grok Bot. Pinned tiles (the Chief of Staff pinned, with a
-// star), Projects only while there are any, Chats as Messages rows with a menu; the header's pill
+// G (2026-10-23): the sidebar after Grok Bot. Pinned tiles (the Chief of Staff pinned: face and
+// name, no card or mark), Projects only while there are any, Chats as Messages rows with a menu; the header's pill
 // opens a desk or a project's details; Connect apps; question cards; New employee.
 
 const pinned = (page: Page) => sidebar(page).getByTestId("pinned");
@@ -30,10 +30,10 @@ test("pinned tiles, chats as rows, and each row's menu: pin, unpin, mark unread,
   await stubPosting(page);
   try {
     await signIn(page, sql, owner.person);
-    // The Chief of Staff alone is pinned, with their star; nothing else heads the sidebar.
+    // The Chief of Staff alone is pinned, the face and name alone; nothing else heads the sidebar.
     await expect(pinned(page).getByRole("link")).toHaveCount(1);
     await expect(pinned(page).getByRole("link", { name: "Chief of Staff" })).toBeVisible();
-    await expect(pinned(page).getByTestId("star")).toBeVisible();
+    await expect(pinned(page).getByTestId("star")).toHaveCount(0);
     for (const name of ["Home", "Team", "Apps", "Documents", "Code"])
       await expect(sidebar(page).getByText(name, { exact: true })).toHaveCount(0);
     await expect(sidebar(page).getByRole("heading", { name: "Projects" })).toHaveCount(0);

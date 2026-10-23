@@ -153,7 +153,6 @@ private struct PinnedTile: View {
     let entry: SidebarEntry
     let faceSize: CGFloat
     let action: () -> Void
-    @State private var hovering = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -163,18 +162,6 @@ private struct PinnedTile: View {
         } label: {
             VStack(spacing: 8) {
                 SidebarFace(store: store, entry: entry, size: faceSize)
-                    .overlay(alignment: .bottomTrailing) {
-                        if case .employee(let id) = entry.subject, store.state.employee(id)?.isChiefOfStaff == true {
-                            Image(systemName: "star.fill")
-                                .font(.system(size: max(9, faceSize * 0.13), weight: .bold))
-                                .foregroundStyle(.white)
-                                .frame(width: max(18, faceSize * 0.26), height: max(18, faceSize * 0.26))
-                                .background(DevysColors.auroraPeach, in: Circle())
-                                .overlay { Circle().strokeBorder(DevysColors.sheet, lineWidth: 2) }
-                                .offset(x: 3, y: 3)
-                                .accessibilityHidden(true)
-                        }
-                    }
                     .overlay(alignment: .topTrailing) {
                         if needsYou > 0 {
                             NeedsYouBadge(count: needsYou).offset(x: 6, y: -6)
@@ -183,26 +170,17 @@ private struct PinnedTile: View {
                         }
                     }
                 Text(entry.title)
-                    .font(DevysTypography.control.weight(entry.unread > 0 ? .semibold : .medium))
+                    .font(DevysTypography.control.weight(entry.unread > 0 || selected ? .semibold : .medium))
                     .foregroundStyle(DevysColors.ink)
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, faceSize > 60 ? 16 : 12)
             .padding(.horizontal, 8)
-            // As in Messages: no card of its own, only the selection and hover rows have.
-            .background {
-                let tile = RoundedRectangle(cornerRadius: 16, style: .continuous)
-                if selected {
-                    tile.fill(DevysColors.sheet).devysElevation(.resting)
-                } else if hovering {
-                    tile.fill(DevysColors.track.opacity(0.45))
-                }
-            }
+            // As in Messages: the face and name alone; being pinned is the place and size.
             .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
-        .onHover { hovering = $0 }
         .accessibilityLabel(entry.unread > 0 ? "\(entry.title), unread" : entry.title)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }

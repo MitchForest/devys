@@ -11,7 +11,6 @@ import {
   PinOff,
   Plus,
   Search,
-  Star,
   UserMinus,
   UserPlus,
   type LucideIcon,
@@ -226,18 +225,17 @@ function Tile({ row, size }: { row: SidebarRow; size: number }) {
         aria-label={labelOf(row, waiting)}
         aria-current={selected ? "page" : undefined}
         className={cn(
-          "relative flex flex-col items-center gap-1.5 rounded-card px-1.5 pt-3 pb-2 transition-[background-color,box-shadow] duration-200",
-          selected ? "bg-sheet shadow-resting" : "hover:bg-sheet/60",
+          // As in Messages: the face and name alone; being pinned is the place and size.
+          "relative flex flex-col items-center gap-1.5 px-1.5 pt-3 pb-2",
         )}
       >
         <span className="relative">
           <RowFace row={row} size={size} />
-          {row.kind === "employee" && row.place.kind === "home" && <StarBadge size={size} />}
         </span>
         <span
           className={cn(
             "max-w-full truncate text-detail text-ink",
-            (row.unread > 0 || waiting > 0) && "font-semibold",
+            (row.unread > 0 || waiting > 0 || selected) && "font-semibold",
           )}
         >
           {row.title}
@@ -245,24 +243,6 @@ function Tile({ row, size }: { row: SidebarRow; size: number }) {
         <Mark unread={row.unread} waiting={waiting} className="absolute top-2 left-2" />
       </PlaceLink>
     </RowMenus>
-  );
-}
-
-/** The Chief of Staff's mark: a small orange star at the face's corner. */
-function StarBadge({ size }: { size: number }) {
-  const badge = Math.max(16, Math.round(size * 0.26));
-  return (
-    <span
-      aria-hidden
-      data-testid="star"
-      className="absolute grid place-items-center rounded-full bg-sheet shadow-resting"
-      style={{ width: badge, height: badge, right: -badge * 0.15, bottom: -badge * 0.15 }}
-    >
-      <Star
-        className="fill-[#f59a58] text-[#f59a58]"
-        style={{ width: badge * 0.62, height: badge * 0.62 }}
-      />
-    </span>
   );
 }
 
