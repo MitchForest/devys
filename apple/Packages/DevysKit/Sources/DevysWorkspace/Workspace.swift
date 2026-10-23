@@ -111,8 +111,8 @@ package struct Workspace {
         }
 
         package var isRunning: Bool { status.value?.isRunning ?? false }
-        /// Every business starts with its Chief of Staff; the server lists it first.
-        package var chiefOfStaff: Employee? { snapshot.employees.first }
+        /// Every business starts with its Chief of Staff: Home, found by its role.
+        package var chiefOfStaff: Employee? { snapshot.employees.first(where: \.isChiefOfStaff) }
         /// Where the Chief of Staff's runtime and conversation live, once the team has loaded.
         package var chiefOfStaffScope: EmployeeScope? {
             chiefOfStaff.map { EmployeeScope(businessID: businessID, employeeID: $0.id) }

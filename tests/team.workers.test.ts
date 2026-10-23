@@ -97,6 +97,11 @@ it("a new business starts with its brief and the chosen team, each with its temp
     ["Engineering", "engineering"],
     ["Growth", "growth"],
   ]);
+  // The business lists its Chief of Staff (Home) first, whoever was created with it.
+  const detail = await json<{ employees: Employee[] }>(
+    as(`/api/businesses/${created.business.id}`),
+  );
+  expect(detail.employees[0]!.template).toBe("chief-of-staff");
   const chiefOfStaff = await grantsOf(created.chief_of_staff.id);
   expect(chiefOfStaff.hireEmployee).toBe("ask");
   expect(chiefOfStaff.run).toBe("auto");
