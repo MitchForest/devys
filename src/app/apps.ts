@@ -171,7 +171,7 @@ export async function appsRoute(
   if (path === "/apps/listed" && method === "GET")
     return respond(AppsListed, { apps: await listedFor(env, business.id) });
   const listed = /^\/apps\/listed\/([a-z0-9-]{1,40})\/logo$/.exec(path);
-  if (listed && method === "GET") return listedLogo(env, business.id, listed[1]!);
+  if (listed && method === "GET") return listedLogo(env, listed[1]!);
   const logo = /^\/apps\/logos\/([a-f0-9]{64})$/.exec(path);
   if (logo && method === "GET") return logoResponse(env, business.id, logo[1]!);
   const [, id, action] =

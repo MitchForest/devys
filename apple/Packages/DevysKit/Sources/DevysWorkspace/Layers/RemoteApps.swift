@@ -8,12 +8,19 @@ import SwiftUI
 // MARK: - Remote apps (`devys:team/app/<id>`): Connect, a connect request, the review layer
 
 /// An app's logo as Devys serves it (loaded with this device's sign-in), or its first letter.
+/// Logos already loaded this run, by path, so a sheet or row shows them at once on every open.
+@MainActor private enum LogoCache {
+    static var images: [String: Image] = [:]
+}
+
 struct AppLogo: View {
     let path: String?
     let name: String
     var size: CGFloat = 22
     @Dependency(\.runtimeClient) private var runtime
-    @State private var image: Image?
+    @State private var loaded: Image?
+
+    private var image: Image? { loaded ?? path.flatMap { LogoCache.images[$0] } }
 
     var body: some View {
         Group {
@@ -32,12 +39,16 @@ struct AppLogo: View {
         .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
         .accessibilityHidden(true)
         .task(id: path) {
-            guard let path, let data = try? await runtime.appLogo(path) else { return }
+            guard let path, LogoCache.images[path] == nil, let data = try? await runtime.appLogo(path) else { return }
             #if os(macOS)
-                if let picture = NSImage(data: data) { image = Image(nsImage: picture) }
+                guard let picture = NSImage(data: data) else { return }
+                let shown = Image(nsImage: picture)
             #else
-                if let picture = UIImage(data: data) { image = Image(uiImage: picture) }
+                guard let picture = UIImage(data: data) else { return }
+                let shown = Image(uiImage: picture)
             #endif
+            LogoCache.images[path] = shown
+            loaded = shown
         }
     }
 }

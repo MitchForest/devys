@@ -190,12 +190,13 @@ private struct PinnedTile: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, faceSize > 60 ? 16 : 12)
             .padding(.horizontal, 8)
+            // As in Messages: no card of its own, only the selection and hover rows have.
             .background {
                 let tile = RoundedRectangle(cornerRadius: 16, style: .continuous)
                 if selected {
                     tile.fill(DevysColors.sheet).devysElevation(.resting)
-                } else {
-                    tile.fill(hovering ? DevysColors.sheet.opacity(0.7) : DevysColors.track.opacity(0.45))
+                } else if hovering {
+                    tile.fill(DevysColors.track.opacity(0.45))
                 }
             }
             .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))

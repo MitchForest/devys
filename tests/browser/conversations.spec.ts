@@ -8,10 +8,7 @@ test("a direct chat is the middle; who answers follows replies and @mentions; re
   const stores = await localStores();
   const { sql } = stores;
   const owner = await stores.owner("Avery", "Acme");
-  const post = await bearer(sql, owner.person);
-  const growth = await post<{ id: string }>(`/api/businesses/${owner.business}/employees`, {
-    template: "growth",
-  });
+  const growth = { id: owner.team.growth };
   const sent = await stubPosting(page, () => [owner.chiefOfStaff]);
   const direct = `direct:${owner.chiefOfStaff}`;
   try {
@@ -195,9 +192,7 @@ test("a project opens on its channel; the work's card opens the thread; Back and
   const owner = await stores.owner("Blake", "Acme");
   const post = await bearer(sql, owner.person);
   const path = `/api/businesses/${owner.business}`;
-  const growth = await post<{ id: string }>(`${path}/employees`, {
-    template: "growth",
-  });
+  const growth = { id: owner.team.growth };
   const project = await post<{ id: string }>(`${path}/projects`, {
     name: "Launch",
     goal: "Ship Acme v1",

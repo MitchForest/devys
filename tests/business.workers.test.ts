@@ -33,7 +33,7 @@ async function session(person: string) {
     ).then((response) => response ?? new Response(null, { status: 404 }));
 }
 
-it("a person sees only their businesses and can create one staffed with a Chief of Staff", async () => {
+it("a person sees only their businesses and can create one staffed with the standard team", async () => {
   const acme = await business("Acme");
   await business("Someone else's");
   const as = await session(acme.person);
@@ -54,7 +54,13 @@ it("a person sees only their businesses and can create one staffed with a Chief 
   const detail = (await (await as(`/api/businesses/${globex.id}`)).json()) as {
     employees: { name: string }[];
   };
-  expect(detail.employees.map((e) => e.name)).toEqual(["Chief of Staff"]);
+  expect(detail.employees.map((e) => e.name)).toEqual([
+    "Chief of Staff",
+    "Admin",
+    "Finance",
+    "Growth",
+    "Engineering",
+  ]);
 });
 
 it("a person changes the name they go by; a blank or long one is refused", async () => {

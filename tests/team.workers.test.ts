@@ -59,7 +59,7 @@ const grantsOf = async (employee: string) =>
     )
   ).reduce<Record<string, string>>((all, row) => ({ ...all, [row.capability]: row.mode }), {});
 
-it("a new business starts with its brief and its Chief of Staff alone, pinned; others are hired", async () => {
+it("a new business starts with the standard team; only its Chief of Staff is pinned", async () => {
   const { person } = await business("Owner's first");
   const as = await session(person);
   const roles = await json<{ roles: { id: string; capabilities: string[] }[] }>(as("/api/roles"));
@@ -83,38 +83,26 @@ it("a new business starts with its brief and its Chief of Staff alone, pinned; o
   const detail = await json<{ employees: Employee[] }>(
     as(`/api/businesses/${created.business.id}`),
   );
-  expect(detail.employees.map((employee) => employee.template)).toEqual(["chief-of-staff"]);
-  // Pinned to the top of the creator's sidebar.
+  expect(detail.employees.map((employee) => [employee.name, employee.template])).toEqual([
+    ["Chief of Staff", "chief-of-staff"],
+    ["Admin", "admin"],
+    ["Finance", "finance"],
+    ["Growth", "growth"],
+    ["Engineering", "engineering"],
+  ]);
+  // Pinned to the top of the creator's sidebar: the Chief of Staff only.
   const summaries = await json<{ conversations: { key: string; pinned: boolean }[] }>(
     as(`/api/businesses/${created.business.id}/conversations`),
   );
-  expect(summaries.conversations).toEqual([
-    expect.objectContaining({ key: `direct:${created.chief_of_staff.id}`, pinned: true }),
+  expect(summaries.conversations.filter((c) => c.pinned).map((c) => c.key)).toEqual([
+    `direct:${created.chief_of_staff.id}`,
   ]);
   const chiefOfStaff = await grantsOf(created.chief_of_staff.id);
   expect(chiefOfStaff.hireEmployee).toBe("ask");
   expect(chiefOfStaff.run).toBe("auto");
-  // Hired later, from a template, with its access; employees are listed in role order.
-  const engineering = await json<Employee>(
-    as(`/api/businesses/${created.business.id}/employees`, {
-      method: "POST",
-      body: JSON.stringify({ template: "engineering" }),
-    }),
-  );
-  const admin = await json<Employee>(
-    as(`/api/businesses/${created.business.id}/employees`, {
-      method: "POST",
-      body: JSON.stringify({ template: "admin" }),
-    }),
-  );
-  expect((await grantsOf(engineering.id)).run).toBe("auto");
-  expect((await grantsOf(engineering.id)).hireEmployee).toBeUndefined();
-  const team = await json<{ employees: Employee[] }>(as(`/api/businesses/${created.business.id}`));
-  expect(team.employees.map((employee) => employee.id)).toEqual([
-    created.chief_of_staff.id,
-    admin.id,
-    engineering.id,
-  ]);
+  const engineering = await grantsOf(detail.employees[4]!.id);
+  expect(engineering.run).toBe("auto");
+  expect(engineering.hireEmployee).toBeUndefined();
 });
 
 it("members hire from templates, edit employees and the brief, and retire with a handover", async () => {

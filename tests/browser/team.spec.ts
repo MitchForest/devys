@@ -8,6 +8,8 @@ test("the owner hires from a template, edits and retires, and talks to any emplo
   const stores = await localStores();
   const { sql } = stores;
   const owner = await stores.owner("Morgan", "Acme");
+  // This business has let its standard Growth go, so the owner hires one.
+  await sql.run("UPDATE employees SET revoked_at = now() WHERE id = $1", [owner.team.growth]);
   const sent = await stubPosting(page);
   try {
     await signIn(page, sql, owner.person);

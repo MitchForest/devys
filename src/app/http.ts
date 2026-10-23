@@ -32,9 +32,9 @@ import { Unavailable } from "../protocol/host.ts";
 import { respond, sameOrigin } from "../protocol/http.ts";
 import { BusinessCreated, Me, ModelCatalog, Roles } from "./wire.ts";
 import { grantAll } from "../authority/service.ts";
-import { roleTemplate } from "../identity/team.ts";
+import { hire, hireInput, roleTemplate, standardTeam } from "../identity/team.ts";
 import { hireableRoleIds } from "../protocol/roles.ts";
-import { templateGrants } from "./team.ts";
+import { hiring, templateGrants } from "./team.ts";
 import { markConversation } from "../conversations/service.ts";
 import { capabilities } from "./capabilities.ts";
 import { businessRoute } from "./routes.ts";
@@ -162,10 +162,12 @@ async function route(request: Request, env: Env): Promise<Response | undefined> 
     const name = typeof input.name === "string" ? input.name.trim() : "";
     if (!name || name.length > 80) return new Response("Send a business name", { status: 400 });
     const brief = typeof input.brief === "string" ? input.brief.trim().slice(0, 4000) : "";
-    // A business starts with its Chief of Staff alone, pinned; they propose hires as work needs.
+    // A business starts with the standard team: its Chief of Staff (pinned), then Admin, Finance,
+    // Growth and Engineering, each from its template.
     const chiefOfStaff = roleTemplate("chief-of-staff")!;
     const catalog = capabilities(env);
-    // The business, its Chief of Staff, their grants and the pin, or nothing.
+    const hirer = hiring(() => catalog);
+    // The business, its team, their grants and the pin, or nothing.
     const created = await atomically(env.HYPERDRIVE, async (db) => {
       const created = await Effect.runPromise(
         createBusiness(db, person.id, {
@@ -186,6 +188,11 @@ async function route(request: Request, env: Env): Promise<Response | undefined> 
         ),
       );
       await Effect.runPromise(install(db, created.business.id, defaultApps));
+      for (const template of standardTeam) {
+        const input = hireInput({ template }, hirer);
+        if (typeof input === "string") throw new Error(input);
+        await hire(db, created.business.id, input, hirer);
+      }
       await Effect.runPromise(
         markConversation(db, created.business.id, `direct:${created.chiefOfStaff.id}`, person.id, {
           pinned: true,

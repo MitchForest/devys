@@ -50,9 +50,7 @@ test("routines show on the desk and project details, open read-only, pause and r
   const { sql } = stores;
   const owner = await stores.owner("Riley", "Acme");
   const post = await bearer(sql, owner.person);
-  const growth = await post<{ id: string }>(`/api/businesses/${owner.business}/employees`, {
-    template: "growth",
-  });
+  const growth = { id: owner.team.growth };
   const project = await post<{ id: string }>(`/api/businesses/${owner.business}/projects`, {
     name: "Launch",
     lead: growth.id,

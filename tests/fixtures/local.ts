@@ -19,8 +19,8 @@ export async function localStores(channel = false) {
   return {
     files: proxy.env.FILES,
     /**
-     * A person who owns a new business, created through the API so its Head of
-     * The Chief of Staff gets the real operations preset of grants.
+     * A person who owns a new business, created through the API so its standard team gets the
+     * real grants of each template.
      */
     async owner(name: string, businessName = `${name}'s business`) {
       const person = randomUUID();
@@ -42,7 +42,21 @@ export async function localStores(channel = false) {
         business: { id: string };
         chief_of_staff: { id: string };
       };
-      return { person, business: created.business.id, chiefOfStaff: created.chief_of_staff.id };
+      // The standard team it starts with, by template.
+      const team = Object.fromEntries(
+        (
+          await client.query<{ id: string; template: string }>(
+            "SELECT id, template FROM employees WHERE business_id = $1",
+            [created.business.id],
+          )
+        ).rows.map((row) => [row.template, row.id]),
+      ) as Record<"admin" | "finance" | "growth" | "engineering", string>;
+      return {
+        person,
+        business: created.business.id,
+        chiefOfStaff: created.chief_of_staff.id,
+        team,
+      };
     },
     /** Removes fixtures and everything they own, children first. */
     async remove(owners: { person: string; business: string }[]) {

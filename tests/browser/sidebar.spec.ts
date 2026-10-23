@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { localStores } from "../fixtures/local.ts";
-import { bearer, hire, insertMessage, openAbout, sidebar, signIn, stubPosting } from "./helpers.ts";
+import { bearer, insertMessage, openAbout, sidebar, signIn, stubPosting } from "./helpers.ts";
 
 // G (2026-10-23): the sidebar after Grok Bot. Pinned tiles (the Chief of Staff pinned, with a
 // star), Projects only while there are any, Chats as Messages rows with a menu; the header's pill
@@ -21,8 +21,8 @@ test("pinned tiles, chats as rows, and each row's menu: pin, unpin, mark unread,
   const stores = await localStores();
   const { sql } = stores;
   const owner = await stores.owner("Rowan", "Acme");
-  const growth = await hire(sql, owner, "growth");
-  const finance = await hire(sql, owner, "finance");
+  const growth = { id: owner.team.growth };
+  const finance = { id: owner.team.finance };
   await insertMessage(sql, owner.business, `direct:${growth.id}`, {
     author: `employee:${growth.id}`,
     text: "Drafted three **launch** headlines for you.",

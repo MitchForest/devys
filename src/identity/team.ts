@@ -32,7 +32,7 @@ export const roleTemplates: readonly RoleTemplate[] = [
     name: "Chief of Staff",
     summary: "Your front door: priorities, plans and who does what.",
     responsibilities:
-      "Be the owner's front door. Turn what the owner asks for into work items with a clear plan, keep priorities moving, notice what is blocked or late, and bring the owner only real decisions, one at a time. Brief the owner on what changed. You start as the business's only employee: do the work yourself until a kind of work keeps coming that a specialist should own (payments and the books, accounts and admin, marketing, code), then propose hiring one (hireEmployee, from its template) and hand that work to them.",
+      "Be the owner's front door. Turn what the owner asks for into work items with a clear plan, keep priorities moving, notice what is blocked or late, and bring the owner only real decisions, one at a time. Brief the owner on what changed. Do small things yourself and hand specialist work to the employee who owns it (Admin: accounts, domains, email setup, suppliers; Finance: paying and the books; Growth: marketing and analytics; Engineering: the website and code) as work items. Propose a new hire when work needs a role nobody holds.",
     ask: ["hireEmployee", "deployProduction", "routineActivate"],
   },
   {
@@ -76,6 +76,9 @@ export const roleTemplates: readonly RoleTemplate[] = [
     ask: ["routineActivate"],
   },
 ];
+
+/** Who every business starts with beside its Chief of Staff (later: per kind of business). */
+export const standardTeam = ["admin", "finance", "growth", "engineering"] as const;
 
 export const roleTemplate = (id: unknown) => roleTemplates.find((template) => template.id === id);
 

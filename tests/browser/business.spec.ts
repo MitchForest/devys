@@ -92,7 +92,7 @@ test("Home asks once, inline, and approves an exact request; new work opens its 
   }
 });
 
-test("Settings → Businesses creates a business with its Chief of Staff alone and switches to it", async ({
+test("Settings → Businesses creates a business with the standard team and switches to it", async ({
   page,
 }) => {
   const stores = await localStores();
@@ -125,13 +125,13 @@ test("Settings → Businesses creates a business with its Chief of Staff alone a
     await page.keyboard.press("Escape");
     await expect(settings).toBeHidden();
 
-    // The new business is selected: its own Home, and a team of one, pinned.
+    // The new business is selected: its own Home, the standard team, the Chief of Staff pinned.
     await expect(page.getByRole("link", { name: "Switch to Globex" })).toHaveAttribute(
       "aria-current",
       "page",
     );
     await expect(page.getByTestId("place-title")).toHaveText("Chief of Staff");
-    await expect(sidebar(page).getByRole("link")).toHaveCount(1);
+    await expect(sidebar(page).getByRole("link")).toHaveCount(5);
     await expect(
       sidebar(page).getByTestId("pinned").getByRole("link", { name: "Chief of Staff" }),
     ).toBeVisible();
@@ -147,7 +147,7 @@ test("Settings → Businesses creates a business with its Chief of Staff alone a
       "aria-current",
       "page",
     );
-    await expect(sidebar(page).getByRole("link")).toHaveCount(1);
+    await expect(sidebar(page).getByRole("link")).toHaveCount(5);
   } finally {
     await page.close();
     const other = await created();

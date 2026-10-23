@@ -105,8 +105,9 @@ also verified live. No public product has launched.
 - **Clients.** A sidebar like Messages: pinned tiles (the Chief of Staff by default), Projects
   while any exist, then Chats (face, name, last line, unread), each with Pin, Mark as unread,
   Rename, Pause, Hide and Retire; the owner's face and **Connect apps** (21 listed services with
-  logos, categories and search, then the MCP Registry) at the bottom. A business starts with its
-  Chief of Staff alone, who greets the owner and proposes hires. Documents, code and the browser
+  logos, categories and search, then the MCP Registry) at the bottom. A business starts with the
+  standard team (Chief of Staff, Admin, Finance, Growth, Engineering); the Chief of Staff greets
+  the owner. Documents, code and the browser
   are what employees do, never sidebar entries. The middle is always a conversation (the Chief of
   Staff's chat first), a project's channel, a direct chat or a work item's thread, under a
   centred pill that opens the desk or project details, with the

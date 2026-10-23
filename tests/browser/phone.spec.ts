@@ -12,7 +12,7 @@ test("on a phone: the list, then one conversation full screen; Back to the list;
   const owner = await stores.owner("Sasha", "Acme");
   const post = await bearer(sql, owner.person);
   const path = `/api/businesses/${owner.business}`;
-  const growth = await post<{ id: string }>(`${path}/employees`, { template: "growth" });
+  const growth = { id: owner.team.growth };
   const project = await post<{ id: string }>(`${path}/projects`, {
     name: "Launch",
     goal: "Ship Acme v1",

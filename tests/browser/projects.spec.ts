@@ -24,10 +24,7 @@ test("New project with goal, deadline, budget, lead and team opens its channel; 
   const stores = await localStores();
   const { sql } = stores;
   const owner = await stores.owner("Emerson", "Acme");
-  const post = await bearer(sql, owner.person);
-  const growth = await post<{ id: string }>(`/api/businesses/${owner.business}/employees`, {
-    template: "growth",
-  });
+  const growth = { id: owner.team.growth };
   await stubPosting(page);
   try {
     await signIn(page, sql, owner.person);
@@ -112,7 +109,7 @@ test("a page card opens a layer, is kept in the project, and a new version repla
   const owner = await stores.owner("Finley", "Acme");
   const post = await bearer(sql, owner.person);
   const path = `/api/businesses/${owner.business}`;
-  const growth = await post<{ id: string }>(`${path}/employees`, { template: "growth" });
+  const growth = { id: owner.team.growth };
   const project = await post<{ id: string }>(`${path}/projects`, {
     name: "Launch",
     lead: growth.id,

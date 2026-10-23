@@ -527,28 +527,29 @@ export async function listedFor(env: Env, businessId: string): Promise<ListedApp
   });
 }
 
-/** `GET …/apps/listed/:slug/logo`: a listed app's logo, from its site the first time. */
-export async function listedLogo(env: Env, businessId: string, slug: string) {
+/**
+ * `GET …/apps/listed/:slug/logo`: a listed app's logo, fetched from its site once for this whole
+ * install (every business shows the same logo) and kept in R2; clients keep it a week.
+ */
+export async function listedLogo(env: Env, slug: string) {
   const app = listedApps.find((each) => slugOf(each) === slug);
   if (!app) return new Response("Not found", { status: 404 });
-  const key = `apps/${businessId}/listed/${slug}`;
-  let object = await env.FILES.get(key);
-  if (!object) {
-    const sha = await resolveLogo(env, businessId, {
-      icons: [],
-      website: app.website,
-      url: app.url,
-    }).catch(() => null);
-    const bytes = sha && (await env.FILES.get(logoKey(businessId, sha)));
-    if (!bytes) return new Response("Not found", { status: 404 });
-    await env.FILES.put(key, await bytes.arrayBuffer());
-    object = await env.FILES.get(key);
+  const key = `listed-logos/${slug}`;
+  let image = await env.FILES.get(key).then(async (object) =>
+    object ? new Uint8Array(await object.arrayBuffer()) : undefined,
+  );
+  if (!image) {
+    for (const src of (await siteIcons(env, app.website)).slice(0, 6)) {
+      image = await imageAt(env, src);
+      if (image) break;
+    }
+    if (!image) return new Response("Not found", { status: 404 });
+    await env.FILES.put(key, image);
   }
-  const image = new Uint8Array(await object!.arrayBuffer());
   return new Response(image, {
     headers: {
       "content-type": imageType(image) ?? "application/octet-stream",
-      "cache-control": "private, max-age=604800",
+      "cache-control": "private, max-age=604800, immutable",
       "content-security-policy": "sandbox; default-src 'none'",
       "x-content-type-options": "nosniff",
     },

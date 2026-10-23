@@ -66,9 +66,7 @@ test("another browser connects with one button and is let in from a signed-in on
   }
 });
 
-test("signed in with no business: name it, and start with the Chief of Staff alone", async ({
-  page,
-}) => {
+test("signed in with no business: name it, and start with the standard team", async ({ page }) => {
   const stores = await localStores();
   const { sql } = stores;
   const person = crypto.randomUUID();
@@ -107,15 +105,15 @@ test("signed in with no business: name it, and start with the Chief of Staff alo
     ))!.business_id;
     // Starting asks the Chief of Staff to greet, once.
     await expect.poll(() => welcomed).toEqual(["POST"]);
-    // A team of one: the Chief of Staff, pinned; they propose hires as work comes.
+    // The standard team, the Chief of Staff pinned.
     expect(
       (await sql.row<{ n: number }>(
         "SELECT count(*)::int AS n FROM employees WHERE business_id = $1",
         [business],
       ))!.n,
-    ).toBe(1);
+    ).toBe(5);
     const sidebar = page.getByRole("navigation", { name: "Sidebar" });
-    await expect(sidebar.getByRole("link")).toHaveCount(1);
+    await expect(sidebar.getByRole("link")).toHaveCount(5);
     await expect(
       sidebar.getByTestId("pinned").getByRole("link", { name: "Chief of Staff" }),
     ).toBeVisible();
