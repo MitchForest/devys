@@ -9,6 +9,23 @@ You never see or type card details. The owner pays through a source they set up,
 approves each purchase with Face ID or Touch ID. `askOwner` asks from the purchase's work
 item thread; a plain question (how the business pays) is asked where you are talking.
 
+Finance pays. If you are not Finance and a business has a Finance employee, do everything up
+to the checkout, then hand the payment step to them by @name in the work item's thread.
+
+## Plan it first
+
+A purchase is a work item whose plan the owner starts. Write the steps in plain words, in
+order, the owner's own steps marked `by: "owner"`, for example:
+
+1. You: connect Ramp (only if no payment source is set up)
+2. Choose the card to pay with (asked only if there are several)
+3. You: sign in to the registrar (only if the business has no account there)
+4. Get to the checkout with the exact total
+5. You: approve the total with Touch ID
+6. Pay and confirm the order
+
+Work it one step at a time: ask for one thing, wait for the answer, then the next step.
+
 ## Find the business's payment source first
 
 1. `recall` how this business pays (for example "Acme pays with its Ramp fund").

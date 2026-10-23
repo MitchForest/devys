@@ -10,7 +10,7 @@ import type { RoleTemplateId } from "../../protocol/roles.ts";
 import { Transcript, WorkingDiff } from "../../apps/code/contract.ts";
 import type { RemotePolicy } from "../../apps/contract.ts";
 import { Grant } from "../../authority/contract.ts";
-import { BrowserStatus, PageState, Screenshot, type OwnerInput } from "../../browser/contract.ts";
+import { BrowserStatus, Fronted, Screenshot } from "../../browser/contract.ts";
 import type { ConversationKey } from "../../conversations/contract.ts";
 import {
   DeviceList,
@@ -53,7 +53,6 @@ import {
   CodingStarted,
   ConversationPage,
   Conversations,
-  Decisions,
   DrivePicker,
   DriveSelected,
   Folder,
@@ -260,6 +259,8 @@ export const api = {
       expected_revision: item.revision,
       ...change,
     }),
+  /** A proposed plan's Start: the work becomes ready and is handed out at once. */
+  startWork: (b: string, id: string) => post(WorkItem, `${business(b)}/work/${id}/start`),
   setTakeover: (b: string, id: string, takeOver: boolean) =>
     post(WorkItem, `${business(b)}/work/${id}/${takeOver ? "takeover" : "release"}`),
   codingSessions: (b: string, work: string) =>
@@ -340,9 +341,6 @@ export const api = {
   closeTerminal: (b: string, id: string) => post(Closed, `${business(b)}/terminals/${id}/close`),
   terminalSocket: (b: string, id: string, offset: number) =>
     `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${business(b)}/terminals/${id}/socket?offset=${offset}`,
-  /** One work item's requests, answered ones included. */
-  workDecisions: (b: string, workItem: string) =>
-    get(Decisions, `${business(b)}/decisions?work_item=${encodeURIComponent(workItem)}`),
   answer: (b: string, id: string, approve: boolean) =>
     post(Answered, `${business(b)}/decisions/${id}/${approve ? "approve" : "reject"}`),
   /** Answers a file request with the file the owner chose; it goes into the business folder. */
@@ -399,8 +397,8 @@ export const api = {
   /** The business's browser: where it is and which work drives it. */
   browserStatus: (b: string) => get(BrowserStatus, `${business(b)}/browser`),
   browserScreenshot: (b: string) => get(Screenshot, `${business(b)}/browser/screenshot`),
-  browserInput: (b: string, action: OwnerInput) =>
-    post(PageState, `${business(b)}/browser/input`, action),
+  /** Brings the business's own Chrome window to the front on the Mac running the host. */
+  browserFront: (b: string) => post(Fronted, `${business(b)}/browser/front`),
   exportUrl: (b: string) => `${business(b)}/export`,
   /** Google Drive for Documents: the connection, connecting, the picker and picked files. */
   google: (b: string) => get(GoogleConnection, `${business(b)}/connections/google`),

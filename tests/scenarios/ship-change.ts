@@ -33,6 +33,7 @@ export default {
     { tap: "github", optional: true },
     { tap: "domain", optional: true },
     { tap: "github", optional: true },
+    { start: true, optional: true },
     { stop: ["approve", "connect", "take_over", "secret", "spend", "decision"] },
   ],
   turnMinutes: 20,

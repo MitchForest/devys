@@ -3,8 +3,8 @@ import DevysClient
 import DevysDesignSystem
 import SwiftUI
 
-/// The right panel: the permanent view of what the conversation is about, with temporary
-/// layers stacked over it. ‹ and Esc go back one layer; × returns to the permanent view.
+/// The right panel: a direct chat's desk or a channel's overview, with temporary layers (the live
+/// browser, a page, a record, a diff) stacked over it. Home and threads have no permanent view. ‹ and Esc go back one layer; × returns to the permanent view.
 /// On iPhone it is a sheet, which `onClose` dismisses.
 struct RightPanel: View {
     let store: StoreOf<Workspace>
@@ -47,10 +47,9 @@ struct RightPanel: View {
     @ViewBuilder private var permanent: some View {
         let close = onClose ?? { store.send(.panelToggled) }
         switch store.place {
-        case .home: NeedsYou(store: store, close: close)
+        case .home, .thread: EmptyView()
         case .direct(let id): Desk(store: store, employeeID: id, close: close).id(id)
         case .project(let id): Overview(store: store, projectID: id, close: close).id(id)
-        case .thread(let id): WorkCard(store: store, workItemID: id, close: close).id(id)
         }
     }
 }

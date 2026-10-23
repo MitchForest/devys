@@ -16,11 +16,11 @@ import {
   useBusinesses,
   useBusinessId,
   useEmployees,
-  useHome,
   useChiefOfStaff,
   useOwnerPhoto,
   usePerson,
   usePlaceTitle,
+  useWork,
 } from "../app/data.ts";
 import { useRefresh, useSignOut, useStop } from "../app/mutations.ts";
 import {
@@ -35,7 +35,7 @@ import { ui, uiState, useUi } from "../app/ui.ts";
 import { useStatus, isRunning } from "../app/data.ts";
 import { PersonPortrait } from "../design/face.tsx";
 import { BusinessPortrait, EmployeePortrait } from "../design/portrait.tsx";
-import { RightPanel } from "../panel/panel.tsx";
+import { hasPermanentView, RightPanel } from "../panel/panel.tsx";
 import { ConversationPane } from "./conversation.tsx";
 import { PanelContext, usePanel } from "./panel-state.ts";
 import { compactQuery, defaultPanel, layout, panelRange, sidebarWidth } from "./layout.ts";
@@ -90,26 +90,18 @@ const savedWidth = () => {
   }
 };
 
-/** Whether the place's permanent view has anything: an empty one is never shown. */
-function useHasPermanent(place: Place) {
-  const home = useHome().data;
-  return (
-    place.kind !== "home" ||
-    Boolean(
-      home && (home.needs_you.length || home.glance.moving.length || home.glance.stuck.length),
-    )
-  );
-}
-
 /** The panel's state for a layout; `narrow`: it lies over the conversation. */
 function usePanelState(narrow: boolean) {
   const place = usePlace();
   const { layers } = useLayers();
   const nav = useNav();
-  const hasPermanent = useHasPermanent(place);
-  const chosen = useUi((state) => (narrow ? state.overlay : state.panels[place.kind]));
+  const hasPermanent = hasPermanentView(place);
+  const chosen = useUi((state) =>
+    narrow ? state.overlay : hasPermanentView(place) && state.panels[place.kind],
+  );
   const layered = layers.length > 0;
-  const toggle = () => (layered ? nav.closeLayers() : ui.togglePermanent(place.kind, narrow));
+  const toggle = () =>
+    layered ? nav.closeLayers() : hasPermanentView(place) && ui.togglePermanent(place.kind, narrow);
   return { open: layered || (hasPermanent && chosen), hasPermanent, toggle };
 }
 
@@ -409,6 +401,23 @@ function AccountMenu({ side, children }: { side: "right" | "bottom"; children: R
 }
 
 /**
+ * The employee of the conversation in view, whom ⌘. stops: Home's Chief of Staff, a direct
+ * chat's employee, or the owner of a thread's work.
+ */
+function useSpeaking() {
+  const place = usePlace();
+  const chiefOfStaff = useChiefOfStaff();
+  const work = useWork().data;
+  return place.kind === "home"
+    ? chiefOfStaff?.id
+    : place.kind === "direct"
+      ? place.employeeId
+      : place.kind === "thread"
+        ? work?.find((item) => item.id === place.workId)?.owner_employee_id
+        : undefined;
+}
+
+/**
  * Hardware-keyboard shortcuts, as on macOS and iPad. The listener is attached once; it reads
  * what it needs when a key is pressed.
  */
@@ -416,15 +425,15 @@ function Shortcuts({ togglePanel }: { togglePanel: () => void }) {
   const nav = useNav();
   const refresh = useRefresh();
   const stop = useStop();
-  const chiefOfStaff = useChiefOfStaff();
-  const running = isRunning(useStatus(chiefOfStaff?.id).data);
+  const speaking = useSpeaking();
+  const running = isRunning(useStatus(speaking).data);
   const { layers } = useLayers();
-  const latest = useRef({ togglePanel, refresh, stop, chiefOfStaff, running, layered: false });
+  const latest = useRef({ togglePanel, refresh, stop, speaking, running, layered: false });
   latest.current = {
     togglePanel,
     refresh,
     stop,
-    chiefOfStaff,
+    speaking,
     running,
     layered: layers.length > 0,
   };
@@ -455,9 +464,9 @@ function Shortcuts({ togglePanel }: { togglePanel: () => void }) {
       } else if (event.key === "r" && !event.shiftKey && !event.altKey) {
         event.preventDefault();
         void now.refresh();
-      } else if (event.key === "." && now.running && now.chiefOfStaff) {
+      } else if (event.key === "." && now.running && now.speaking) {
         event.preventDefault();
-        now.stop.mutate(now.chiefOfStaff.id);
+        now.stop.mutate(now.speaking);
       }
     };
     window.addEventListener("keydown", keys);
@@ -495,7 +504,6 @@ function CompactShell() {
   const [list, setList] = useState<Tab | null>(null);
   const [sheet, setSheet] = useState(false);
   const selected = list ?? tabOf(place);
-  const needsYou = useHome().data?.needs_you.length ?? 0;
   const shownApps = useShownApps();
   const showsSheet = sheet || layers.length > 0;
   const trail = usePlaceTitle(place);
@@ -545,6 +553,7 @@ function CompactShell() {
           {list === null && place.kind !== "home" && (
             <button
               type="button"
+              disabled={!hasPermanentView(place)}
               onClick={() => setSheet(true)}
               className="flex min-w-0 items-center gap-2 text-left"
             >
@@ -553,7 +562,7 @@ function CompactShell() {
             </button>
           )}
           <span className="ml-auto" />
-          {list === null && place.kind !== "home" && (
+          {list === null && hasPermanentView(place) && (
             <button
               type="button"
               aria-label="Details"
@@ -563,19 +572,8 @@ function CompactShell() {
               <PanelRight className="size-[18px]" />
             </button>
           )}
-          {list === null && place.kind === "home" && needsYou > 0 && (
-            <button
-              type="button"
-              onClick={() => setSheet(true)}
-              className="rounded-full bg-amber/15 px-3 py-1 text-caption font-semibold text-amber"
-            >
-              {needsYou === 1 ? "1 needs you" : `${needsYou} need you`}
-            </button>
-          )}
           {list === null && place.kind === "home" && chiefOfStaff && (
-            <button type="button" aria-label={chiefOfStaff.name} onClick={() => setSheet(true)}>
-              <EmployeePortrait employee={chiefOfStaff} size={28} />
-            </button>
+            <EmployeePortrait employee={chiefOfStaff} size={28} />
           )}
         </header>
         <main className={cn("min-h-0 flex-1", list !== null && "overflow-y-auto px-2.5 pb-24")}>

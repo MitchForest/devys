@@ -234,7 +234,7 @@ test("the Documents app opens as a layer; Esc goes back one layer; the panel is 
   await stubPosting(page);
   try {
     await signIn(page, sql, owner.person);
-    // Home has nothing waiting: no panel and no toggle; the conversation has the full width.
+    // Home has no permanent view: no panel and no toggle; the conversation has the full width.
     await expect(page.getByRole("region", { name: "Needs you" })).toHaveCount(0);
     await expect(toolbarPanel(page, false)).toHaveCount(0);
 

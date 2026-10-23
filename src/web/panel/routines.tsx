@@ -1,6 +1,6 @@
 /**
  * Routines as the owner sees them: listed on an employee's desk and a project's overview, read
- * in their layer, and proposed in Needs you. A running routine changes only by a new decision,
+ * in their layer, and proposed in the chat where asked. A running routine changes only by a new decision,
  * so the owner pauses and resumes it here and changes it by asking its employee.
  */
 import { Check, MessageSquareQuote, Repeat } from "lucide-react";
@@ -167,7 +167,7 @@ export function RoutineLayer({ id }: { id: string }) {
         <span className={cn("text-detail", stateColor[routine.state])}>
           {routineStateTitle[routine.state]}
           {routine.state === "proposed" && (
-            <span className="text-ink-3"> · Waiting for your decision in Needs you</span>
+            <span className="text-ink-3"> · Waiting for your decision</span>
           )}
         </span>
       </div>
@@ -196,7 +196,7 @@ export function RoutineLayer({ id }: { id: string }) {
 const long = (text: string) => text.length > 240 || text.split("\n").length > 4;
 
 /**
- * An employee's proposed routine in Needs you, readable as a whole; approving activates exactly
+ * An employee's proposed routine where it was asked, readable as a whole; approving activates exactly
  * this revision.
  */
 export function RoutineProposal({ decision, routine }: { decision: Decision; routine: Routine }) {

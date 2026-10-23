@@ -37,9 +37,10 @@ extension Workspace.State {
     /// The conversation the place shows; Home waits for the Chief of Staff to load.
     package var mainKey: ConversationKey? { place.conversation(chiefOfStaff: chiefOfStaff?.id) }
 
-    /// Whether the place's permanent view has anything: an empty one is never shown.
+    /// Whether the place has a permanent view: a desk or a project's overview. Home's work and a
+    /// thread's are in their cards in the conversation.
     package var hasPermanent: Bool {
-        place.kind != .home || home.value.map { !$0.isEmpty } == true
+        place.kind == .direct || place.kind == .project
     }
 
     package func panelPreferred(_ kind: Place.Kind) -> Bool { panels[kind] ?? kind.panelByDefault }

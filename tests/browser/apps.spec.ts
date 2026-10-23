@@ -1,12 +1,12 @@
 import { test, expect } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { localStores } from "../fixtures/local.ts";
-import { bearer, insertMessage, signIn } from "./helpers.ts";
+import { bearer, sidebar, signIn } from "./helpers.ts";
 
-// LP6: a remote app an employee asks the owner to connect. The owner sees its card in the thread
-// and in Needs you (logo, name, why, Connect), then its one review (on its own, asks first,
-// never, who uses it), and turns it on; no address, scope or tool name shows.
-test("a connect card in the thread and Needs you; the review turns the app on", async ({
+// LP6: a remote app an employee asks the owner to connect. The owner sees the ask on the work's
+// card (logo, name, Connect), then its one review (on its own, asks first, never, who uses it),
+// and turns it on; no address, scope or tool name shows.
+test("a connect request is the work card's one ask; the review turns the app on", async ({
   page,
 }) => {
   const stores = await localStores();
@@ -43,28 +43,18 @@ test("a connect card in the thread and Needs you; the review turns the app on", 
       `work:${work.id}`,
     ],
   );
-  await insertMessage(sql, owner.business, `work:${work.id}`, {
-    author: "system",
-    kind: "event",
-    text: ask.why,
-    ref: "devys:team/app/ledger",
-  });
   try {
     await signIn(page, sql, owner.person);
-    // Needs you: the app's name, the one line why, and Connect.
-    const needsYou = page.getByRole("region", { name: "Needs you" });
-    const row = needsYou.getByTestId("connect-request");
-    await expect(row.getByText("Ledger", { exact: true })).toBeVisible();
-    await expect(row.getByText(`Chief of Staff: ${ask.why}`)).toBeVisible();
-    await expect(row.getByRole("button", { name: "Connect" })).toBeVisible();
-    await expect(row.getByText("ledger.example")).toHaveCount(0);
-
-    // The thread shows the same card.
-    await row.getByRole("button", { name: "Thread" }).click();
-    const card = page.getByTestId("app-card");
-    await expect(card.getByText("Ledger", { exact: true })).toBeVisible();
-    await expect(card.getByText(ask.why)).toBeVisible();
+    // Home counts it; the thread's card asks it, with the app's name and Connect.
+    await expect(sidebar(page).getByRole("link", { name: /^Home/ })).toHaveAccessibleName(
+      "Home, 1",
+    );
+    await sidebar(page).getByRole("link", { name: "Pay the paper supplier" }).click();
+    const card = page.getByTestId("work-card");
+    await expect(card.getByTestId("work-state")).toHaveText("Your turn: Connect Ledger");
     await expect(card.getByRole("button", { name: "Connect" })).toBeVisible();
+    await expect(card.getByRole("button", { name: "Approve" })).toHaveCount(0);
+    await expect(page.getByText("ledger.example")).toHaveCount(0);
 
     // Connected (the provider's sign-in happened): its tools wait for the owner's review.
     await sql.run(

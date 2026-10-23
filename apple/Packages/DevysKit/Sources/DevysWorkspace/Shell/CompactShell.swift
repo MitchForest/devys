@@ -31,7 +31,7 @@ struct CompactShell: View {
         .tint(DevysColors.indigo)
         #if DEBUG
             // DEVYS_PANEL=open: the phone shows the permanent view as its sheet.
-            .task(id: store.isOverlayOpen) { if store.isOverlayOpen { showsDetails = true } }
+            .task(id: store.isOverlayOpen) { if store.isOverlayOpen, store.state.hasPermanent { showsDetails = true } }
         #endif
         .sheet(isPresented: Binding(
             get: { showsDetails || !store.layers.isEmpty },
@@ -98,7 +98,7 @@ struct CompactShell: View {
                 }
             }
             ToolbarItem(placement: .principal) {
-                Button { showsDetails = true } label: {
+                Button { if store.state.hasPermanent { showsDetails = true } } label: {
                     HStack(spacing: 8) {
                         if case .direct(let id) = store.place, let employee = store.state.employee(id) {
                             Portrait(store.state.portrait(for: employee), size: 26, mood: store.state.mood(for: employee), isAnimated: false)
@@ -109,8 +109,10 @@ struct CompactShell: View {
                 .buttonStyle(.plain)
                 .accessibilityHint("Shows the details")
             }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Details", systemImage: "sidebar.right") { showsDetails = true }
+            if store.state.hasPermanent {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Details", systemImage: "sidebar.right") { showsDetails = true }
+                }
             }
         } else {
             ToolbarItem(placement: .topBarLeading) { BusinessMenu(store: store) }
@@ -120,27 +122,22 @@ struct CompactShell: View {
         }
     }
 
-    /// Home: how many things need the owner, and the Chief of Staff; either opens Needs you.
+    /// Home: how many things wait on the owner (each is in its card in the chat), and the Chief
+    /// of Staff.
     private var homeTrailing: some View {
         HStack(spacing: 8) {
             let count = store.home.value?.needsYou.count ?? 0
             if count > 0 {
-                Button { showsDetails = true } label: {
-                    Text(count == 1 ? "1 needs you" : "\(count) need you")
-                        .font(DevysTypography.caption.weight(.semibold))
-                        .foregroundStyle(DevysColors.amber)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(DevysColors.amber.opacity(0.15), in: Capsule())
-                }
-                .buttonStyle(.plain)
+                Text(count == 1 ? "1 needs you" : "\(count) need you")
+                    .font(DevysTypography.caption.weight(.semibold))
+                    .foregroundStyle(DevysColors.amber)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(DevysColors.amber.opacity(0.15), in: Capsule())
             }
-            if let ops = store.chiefOfStaff {
-                Button { showsDetails = true } label: {
-                    Portrait(store.state.portrait(for: ops), size: 28, mood: store.state.voiceMood ?? store.chiefOfStaffMood, label: ops.name)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(ops.name)
+            if let chief = store.chiefOfStaff {
+                Portrait(store.state.portrait(for: chief), size: 28, mood: store.state.voiceMood ?? store.chiefOfStaffMood, label: chief.name)
+                    .accessibilityLabel(chief.name)
             }
         }
     }

@@ -108,7 +108,7 @@ struct RoutineFeatureTests {
         #expect(await server.requests == ["r1:pause", "r1:resume"])
     }
 
-    @Test("A proposed routine is not resumed by hand; approving its proposal in Needs you activates it")
+    @Test("A proposed routine is not resumed by hand; approving its proposal activates it")
     func approvesProposal() async {
         let server = RoutineServer()
         let store = makeStore(server)

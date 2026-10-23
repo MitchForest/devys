@@ -1,19 +1,27 @@
 import { ChevronLeft, Maximize2, Minimize2, X } from "lucide-react";
 import type { ReactNode } from "react";
-import { refOfLayer, useLayers, useNav, usePlace } from "../app/navigation.ts";
+import { refOfLayer, useLayers, useNav, usePlace, type Place } from "../app/navigation.ts";
 import { ui, useUi } from "../app/ui.ts";
 import { usePanel } from "../shell/panel-state.ts";
 import { Desk } from "./desk.tsx";
-import { NeedsYou } from "./home.tsx";
 import { KeepInProject } from "./keep.tsx";
 import { isKeepable, LayerView, useLayerTitle } from "./layers/registry.tsx";
 import { Overview } from "./overview.tsx";
-import { WorkCard } from "./work-card.tsx";
 import { ToolbarIconButton } from "@/components/ui/button";
 
 /**
- * The right panel: the permanent view of what the conversation is about, with temporary
- * layers stacked over it. ‹ and Esc go back one layer; × returns to the permanent view.
+ * Whether a place has a permanent view: an employee's desk and a project's overview. Home and a
+ * thread have none; their work is in cards in the conversation.
+ */
+export const hasPermanentView = (
+  place: Place,
+): place is Extract<Place, { kind: "direct" | "project" }> =>
+  place.kind === "direct" || place.kind === "project";
+
+/**
+ * The right panel: the permanent view of what the conversation is about (a desk or an
+ * overview), with temporary layers stacked over it. ‹ and Esc go back one layer; × returns to
+ * the permanent view, or closes the panel where there is none.
  */
 export function RightPanel({ onClose }: { onClose?: () => void }) {
   const { layers, top } = useLayers();
@@ -49,15 +57,11 @@ export function RightPanel({ onClose }: { onClose?: () => void }) {
     );
   }
   const close = onClose ?? panel.toggle;
-  return place.kind === "home" ? (
-    <NeedsYou close={close} />
-  ) : place.kind === "direct" ? (
+  return place.kind === "direct" ? (
     <Desk key={place.employeeId} employeeId={place.employeeId} close={close} />
   ) : place.kind === "project" ? (
     <Overview key={place.id} projectId={place.id} close={close} />
-  ) : (
-    <WorkCard key={place.workId} workId={place.workId} close={close} />
-  );
+  ) : null;
 }
 
 /** A panel's header: Back (when layered), the title, its own buttons and ×. */

@@ -95,13 +95,13 @@ test("signed in with no business: name it, and start", async ({ page }) => {
       "SELECT business_id FROM memberships WHERE person_id = $1",
       [person],
     ))!.business_id;
-    // The starting team is hired with the Chief of Staff.
+    // The starting team is hired with the Chief of Staff: Admin, Finance, Growth and Engineering.
     expect(
       (await sql.row<{ n: number }>(
         "SELECT count(*)::int AS n FROM employees WHERE business_id = $1",
         [business],
       ))!.n,
-    ).toBe(4);
+    ).toBe(5);
   } finally {
     await stores.remove(business ? [{ person, business }] : []);
     if (!business) {

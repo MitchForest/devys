@@ -5,7 +5,8 @@ import DevysDesignSystem
 import SwiftUI
 
 /// The middle of the screen, always a conversation: Home's chat with the Chief of Staff, a direct
-/// chat, a project's channel or a work item's thread. It also takes dictation and hands-free voice.
+/// chat, a project's channel or a work item's thread, whose card is pinned above the composer.
+/// It also takes dictation and hands-free voice.
 struct ConversationPane: View {
     let store: StoreOf<Workspace>
 
@@ -23,6 +24,13 @@ struct ConversationPane: View {
                     // Opens at the newest message and follows new ones; a short conversation starts at the top.
                     .defaultScrollAnchor(.bottom, for: .initialOffset)
                     .defaultScrollAnchor(.bottom, for: .sizeChanges)
+                    if key.kind == .work {
+                        WorkProgressCard(store: store, workItemID: key.ref, text: "")
+                            .padding(.horizontal, DevysSpacing.regular)
+                            .padding(.bottom, 8)
+                            .frame(maxWidth: 780)
+                            .frame(maxWidth: .infinity)
+                    }
                     ConversationComposer(store: store, key: key)
                         .frame(maxWidth: 780)
                         .padding(.horizontal, 10)
@@ -62,8 +70,8 @@ private struct NoticeBanner: View {
     }
 }
 
-/// The messages of one conversation, oldest first, then who is working on an answer and
-/// any request waiting on the owner here.
+/// The messages of one conversation, oldest first, then who is working on an answer and any
+/// request not bound to a work item that was asked here. A work item shows only as its card.
 struct ConversationMessages: View {
     let store: StoreOf<Workspace>
     let key: ConversationKey
@@ -97,7 +105,8 @@ struct ConversationMessages: View {
                     TimeHeading(date: date)
                 case .event(let event):
                     if event.isCard, case .workItem(let id)? = event.ref {
-                        WorkProgressCard(store: store, workItemID: id, text: event.text, inThread: key.kind == .work)
+                        // In its own thread the card is pinned above the composer instead.
+                        if key != .work(id) { WorkProgressCard(store: store, workItemID: id, text: event.text, inThread: false) }
                     } else {
                         EventCard(store: store, event: event)
                     }
@@ -118,12 +127,11 @@ struct ConversationMessages: View {
             ForEach(store.snapshot.employees.filter { open.awaiting.contains($0.id) }) { employee in
                 WorkingIndicator(store: store, employee: employee).padding(.top, 10)
             }
-            ForEach(decisions) { decision in
-                DecisionCard(store: store, decision: decision)
+            ForEach(store.state.requests(in: key)) { request in
+                RequestCard(store: store, request: request)
                     .padding(.top, 10)
                     .transition(.opacity)
             }
-            if key.kind == .work { BrowserThumbnail(store: store, workID: key.ref) }
         }
         .animation(DevysMotion.arrive, value: timeline.items.map(\.id))
         .animation(DevysMotion.quick, value: open.awaiting)
@@ -151,19 +159,6 @@ struct ConversationMessages: View {
         case .direct: "Message \(name ?? "them"). @mention a colleague to bring them in."
         case .project(let id): "Tell the team what \(store.state.project(id)?.name ?? "the project") needs. Each piece of work gets its own thread."
         case .thread: "Nothing said about this yet."
-        }
-    }
-
-    /// Requests waiting on the owner stay inline at the bottom where they were asked: a work item's
-    /// in its thread, others in the employee's direct chat. Home's are in Needs you beside it.
-    private var decisions: [Decision] {
-        guard store.place != .home else { return [] }
-        // A connect request is its app's card, already in the conversation.
-        let all = store.state.decisions.filter { $0.kind != .connect }
-        return switch key.kind {
-        case .direct: all.filter { $0.employeeID == key.ref && $0.workItemID == nil }
-        case .work: all.filter { $0.workItemID == key.ref }
-        case .project: []
         }
     }
 }

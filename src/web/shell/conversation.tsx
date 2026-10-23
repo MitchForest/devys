@@ -3,6 +3,7 @@ import { usePlace } from "../app/navigation.ts";
 import { ui, useUi } from "../app/ui.ts";
 import { useMain } from "../app/workspace.tsx";
 import { EmployeePortrait } from "../design/portrait.tsx";
+import { WorkCard } from "../panel/work-card.tsx";
 import { Composer, ConversationView } from "./chat.tsx";
 
 /**
@@ -51,6 +52,12 @@ export function ConversationPane() {
       <div className="min-h-0 flex-1">
         <ConversationView conversation={main} className="max-w-[760px]" empty={empty} />
       </div>
+      {place.kind === "thread" && (
+        // The thread's work, pinned where the owner looks: right above the reply.
+        <div className="mx-auto w-full max-w-[780px] px-2.5 pt-1">
+          <WorkCard key={place.workId} id={place.workId} inThread />
+        </div>
+      )}
       <Composer conversation={main} label={label} className="max-w-[780px]" />
       {notice && (
         <div role="status" className="absolute inset-x-0 top-3 flex justify-center px-4">

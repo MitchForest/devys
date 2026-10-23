@@ -146,11 +146,6 @@ extension Workspace.State {
     /// The requests waiting on the owner, from Home: the one source of what needs them.
     var decisions: [Decision] { home.value?.decisions ?? [] }
 
-    /// The owner's decisions waiting on this work item.
-    func decisions(for item: WorkItem) -> [Decision] {
-        decisions.filter { $0.workItemID == item.id }
-    }
-
     func employeeName(_ id: String) -> String {
         snapshot.employees.first { $0.id == id }?.name ?? "A former employee"
     }

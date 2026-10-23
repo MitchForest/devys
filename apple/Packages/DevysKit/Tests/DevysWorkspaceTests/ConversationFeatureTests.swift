@@ -226,7 +226,7 @@ struct ConversationFeatureTests {
         #expect(Mentions.query(in: "@")?.isEmpty == true)
         let team = BusinessDetail.fixture("acme").employees
         #expect(Mentions.suggestions(for: "@", team: team).count == team.count)
-        #expect(Mentions.suggestions(for: "@Head of", team: team).map(\.id) == ["ops"])
+        #expect(Mentions.suggestions(for: "@Chief of", team: team).map(\.id) == ["ops"])
     }
 
     @Test("Sending shows the message at once, posts it, and shows who's working until they answer")
@@ -270,10 +270,10 @@ struct ConversationFeatureTests {
         await settle("waiting on the author") { store.main?.awaiting == ["growth"] }
     }
 
-    @Test("A hand-off card moves the middle into its thread under the project; Back returns to the channel")
-    func handOffCard() async throws {
+    @Test("A work item's card moves the middle into its thread under the project; Back returns to the channel")
+    func workCard() async throws {
         let server = ConversationServer()
-        await server.add(.project("p1"), "system", "Growth took on \"Write a tagline\".", kind: .event, ref: .workItem("c1"))
+        await server.add(.project("p1"), "system", "Write a tagline", kind: .card, ref: .workItem("c1"))
         await server.add(.work("c1"), "employee:growth", "Starting with three options.")
         let store = await makeStore(server)
         await open(.project("p1"), in: store)
@@ -287,7 +287,7 @@ struct ConversationFeatureTests {
         #expect(store.state.title(of: store.place).title == "Write a tagline")
         #expect(store.state.title(of: store.place).parent?.place == .project("p1"))
         await settle("work thread") { store.main?.key == .work("c1") && store.main?.messages.value?.count == 1 }
-        #expect(store.state.isPanelOpen)
+        #expect(!store.state.isPanelOpen, "the thread's card is pinned above its composer, not in the panel")
         store.send(.draftChanged(.work("c1"), "Make them shorter"))
         store.send(.sendTapped(.work("c1")))
         await settle("posted to the work thread") { await server.posts.count == 1 }

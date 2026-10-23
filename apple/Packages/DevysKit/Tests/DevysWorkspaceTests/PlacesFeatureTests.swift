@@ -160,13 +160,13 @@ struct PlacesFeatureTests {
         store.send(.layerOpened(.browser(workID: "c1")))
         store.send(.threadOpened("c1"))
         #expect(store.layers.isEmpty)
-        // With a layer open, the panel toggle goes back to the permanent view.
+        // With a layer open, the panel toggle goes back to the permanent view; a thread has none.
         store.send(.layerOpened(.session(workID: "c1", sessionID: "s1")))
         store.send(.panelToggled)
-        #expect(store.layers.isEmpty && store.state.isPanelOpen)
+        #expect(store.layers.isEmpty && !store.state.isPanelOpen)
     }
 
-    @Test("The panel is open by default except in a direct chat, hidden on an empty Home, and remembered per kind")
+    @Test("A project's overview is open by default, a desk on request, remembered per kind; Home and threads have none")
     func panelPreferences() async {
         let server = PlacesServer()
         let panels = LockIsolated<[[String: Bool]]>([])
@@ -174,7 +174,7 @@ struct PlacesFeatureTests {
         #expect(store.place == .home && !store.state.hasPermanent && !store.state.isPanelOpen)
         await server.setHome(Home(needsYou: [NeedsYouItem(kind: .work, id: "c1", title: "Fix sitemap", workID: "c1")]))
         await settle("Home has something") { store.home.value?.isEmpty == false }
-        #expect(store.state.isPanelOpen)
+        #expect(!store.state.isPanelOpen, "what waits on the owner is in its card in the chat")
         store.send(.message("growth"))
         #expect(!store.state.isPanelOpen)
         store.send(.placeSelected(.project("p1")))
@@ -183,7 +183,7 @@ struct PlacesFeatureTests {
         #expect(!store.state.isPanelOpen)
         #expect(panels.value.last == ["home": true, "direct": false, "project": false, "thread": true])
         store.send(.threadOpened("c1"))
-        #expect(store.state.isPanelOpen)
+        #expect(!store.state.isPanelOpen)
         store.send(.backTapped)
         #expect(!store.state.isPanelOpen)
         // A layer shows the panel whatever was chosen.
@@ -212,7 +212,9 @@ struct PlacesFeatureTests {
         #expect(store.state.isPanelOpen)
         #expect(panels.value.isEmpty)
         store.send(.threadOpened("c1"))
-        #expect(store.state.isPanelOpen)
+        #expect(!store.state.isPanelOpen, "a thread has no permanent view to lay over it")
+        store.send(.backTapped)
+        #expect(store.state.isPanelOpen, "back in the channel, the overview asked for is still over it")
         store.send(.placeSelected(.project("p1")))
         #expect(!store.state.isPanelOpen)
         // Layers still open it, and wide again the remembered choice is back.

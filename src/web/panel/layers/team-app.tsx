@@ -1,6 +1,6 @@
 /**
- * A remote app (`devys:team/app/<id>`): an MCP server the business connects. Its card in a
- * conversation and in Needs you shows its logo, name and why, and Connect; its layer is the one
+ * A remote app (`devys:team/app/<id>`): an MCP server the business connects. A request to
+ * connect it shows its logo, name and Connect where the request is; its layer is the one
  * review card (what it can do on its own, what asks first, what employees never get, and who uses
  * it), where Turn on makes the owner's choices its policy. No addresses, scopes or tool names show.
  */
@@ -56,7 +56,7 @@ export const useRemoteApp = (id: string) =>
   useApps().data?.find((app) => app.id === id && app.state !== null);
 
 /** Connect, Reconnect or Review, as the app's state calls for. */
-function AppAction({ app, compact }: { app: InstalledApp; compact?: boolean }) {
+export function AppAction({ app, compact }: { app: InstalledApp; compact?: boolean }) {
   const connect = useConnectApp();
   const nav = useNav();
   const size = compact ? "compact" : "regular";
@@ -80,40 +80,6 @@ function AppAction({ app, compact }: { app: InstalledApp; compact?: boolean }) {
     <StatusChip tone="done" small>
       On
     </StatusChip>
-  );
-}
-
-const card =
-  "mx-auto flex w-full max-w-[520px] items-center gap-2.5 rounded-card border border-hairline bg-sheet px-3 py-2 text-left shadow-resting";
-
-/** The connect card in a conversation: logo, name, the one line why, and Connect. */
-export function AppCard({ id, text }: { id: string; text: string }) {
-  const app = useRemoteApp(id);
-  const nav = useNav();
-  if (!app)
-    return (
-      <div className={card}>
-        <Plug className="size-4 text-indigo" />
-        <span className="min-w-0 truncate text-detail text-ink-2">{text}</span>
-      </div>
-    );
-  const why = text || app.summary;
-  return (
-    <div className={card} data-testid="app-card">
-      <button
-        type="button"
-        title="Open"
-        onClick={() => nav.openLayer({ kind: "record", ref: ref("team", "app", app.id) })}
-        className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
-      >
-        <AppLogo logo={app.logo} name={app.name} size={30} />
-        <span className="flex min-w-0 flex-col">
-          <span className="truncate text-control font-semibold text-ink">{app.name}</span>
-          {why && <span className="line-clamp-2 text-caption text-ink-3">{why}</span>}
-        </span>
-      </button>
-      <AppAction app={app} compact />
-    </div>
   );
 }
 
@@ -278,6 +244,23 @@ function AppDetail({ app }: { app: InstalledApp }) {
         </div>
       )}
       {reviewing && review.data && <Review key={`${app.state}`} app={app} review={review.data} />}
+    </div>
+  );
+}
+
+/** A remote app whose sign-in stopped working, on Home: its logo, name and Reconnect. */
+export function ReconnectCard({ app }: { app: { id: string; name: string; logo: string | null } }) {
+  const connect = useConnectApp();
+  return (
+    <div
+      className="mx-auto flex w-full max-w-[520px] items-center gap-2.5 rounded-card border border-hairline bg-sheet px-3 py-2.5 shadow-resting"
+      data-testid="reconnect"
+    >
+      <AppLogo logo={app.logo} name={app.name} size={26} />
+      <span className="min-w-0 flex-1 truncate text-control text-ink">Reconnect {app.name}</span>
+      <Button variant="aurora" size="compact" onClick={() => connect(app.id)}>
+        <Plug /> Reconnect
+      </Button>
     </div>
   );
 }

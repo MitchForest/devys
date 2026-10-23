@@ -334,7 +334,9 @@ private struct Shortcuts: View {
             // Esc goes back one layer, unless the palette has it.
             Button("Back one layer") { store.send(.layerPopped) }.keyboardShortcut(.escape, modifiers: []).disabled(store.layers.isEmpty || store.isPaletteOpen)
             Button("Refresh") { store.send(.refreshTapped) }.keyboardShortcut("r", modifiers: .command)
-            Button("Stop") { store.send(.stopTapped) }.keyboardShortcut(".", modifiers: .command).disabled(!store.isRunning)
+            // ⌘.: the employee of the conversation in view.
+            Button("Stop") { store.send(.stopTapped) }.keyboardShortcut(".", modifiers: .command)
+                .disabled(store.state.employeeInView.flatMap { store.statuses[$0] }?.isRunning != true)
         }
         .opacity(0)
         .allowsHitTesting(false)

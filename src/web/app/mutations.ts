@@ -153,15 +153,49 @@ export function useTakeover() {
 }
 
 /**
- * Answers a take-over request: the owner takes its work over (which fences its employee), and
- * the live browser opens beside the thread; Hand back says it is done.
+ * The owner takes the work over (which fences its employee) and the business's own Chrome comes
+ * to the front on the Mac; where it can't (no host here), the live browser opens beside the
+ * thread. Hand back returns it.
  */
-export function useTakeOverRequest() {
+export function useOpenChrome() {
   const nav = useNav();
-  return useChange((b, workId: string) => api.setTakeover(b, workId, true), {
-    failure: "Couldn't take that work over.",
+  return useChange(
+    async (b, workId: string) => {
+      await api.setTakeover(b, workId, true);
+      return api.browserFront(b).then(
+        () => true,
+        () => false,
+      );
+    },
+    {
+      failure: "Couldn't take that work over.",
+      settles: workSettles,
+      succeeded: (fronted, workId) => {
+        if (!fronted) nav.openBrowser(workId);
+      },
+    },
+  );
+}
+
+/** Start on a proposed plan: shown started at once, handed to its employee by the server. */
+export function useStartWork() {
+  return useChange((b, item: WorkItem) => api.startWork(b, item.id), {
+    failure: "That plan has already started.",
     settles: workSettles,
-    succeeded: (_, workId) => nav.openBrowser(workId),
+    optimistic: (client, b, item) => {
+      const before = client.getQueryData<{ work_items: WorkItem[] }>(keys.work(b));
+      client.setQueryData<{ work_items: WorkItem[] }>(
+        keys.work(b),
+        (work) =>
+          work && {
+            ...work,
+            work_items: work.work_items.map((each) =>
+              each.id === item.id ? { ...each, state: "ready" } : each,
+            ),
+          },
+      );
+      return () => client.setQueryData(keys.work(b), before);
+    },
   });
 }
 

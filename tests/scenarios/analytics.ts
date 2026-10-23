@@ -27,6 +27,7 @@ export default {
     { tap: "account", optional: true },
     { tap: "built", optional: true },
     { tap: "registrar", optional: true },
+    { start: true, optional: true },
     { stop: ["take_over", "connect", "secret", "approve", "decision"] },
   ],
 } satisfies Scenario;

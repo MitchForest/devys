@@ -106,11 +106,14 @@ public struct RuntimeState: Equatable, Sendable, Decodable {
         public let stopped: Bool
         /// Milliseconds since 1970, as the runtime reports it.
         public let deadline: Double?
+        /// The conversation it runs for: "work:<id>", "direct:<employee id>", "project:<id>".
+        public let conversation: String?
 
-        public init(id: String, stopped: Bool, deadline: Double?) {
+        public init(id: String, stopped: Bool, deadline: Double?, conversation: String? = nil) {
             self.id = id
             self.stopped = stopped
             self.deadline = deadline
+            self.conversation = conversation
         }
     }
 }
@@ -458,14 +461,26 @@ public struct CodingOutcome: Equatable, Sendable {
 /// One step of the plan an employee shows while work takes time.
 public struct WorkStep: Equatable, Sendable, Decodable {
     public enum State: String, Equatable, Sendable, WireEnum { case todo, doing, done, blocked, unknown }
+    /// Who does a step: the owner ("You: …"); absent, the work item's employee.
+    public enum Doer: String, Equatable, Sendable, WireEnum { case owner, unknown }
 
     public let title: String
     public let state: State
+    public let doer: Doer?
 
-    public init(title: String, state: State) {
+    public init(title: String, state: State, doer: Doer? = nil) {
         self.title = title
         self.state = state
+        self.doer = doer
     }
+
+    enum CodingKeys: String, CodingKey {
+        case title, state
+        case doer = "by"
+    }
+
+    /// The step as the owner reads it: their own steps start "You: ".
+    public var text: String { doer == .owner ? "You: \(title)" : title }
 
     /// Where the steps stand, as Home shows moving work: "2 of 5 · Setting up email" (the web's
     /// `progressText`); nil without steps.

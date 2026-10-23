@@ -5,61 +5,6 @@ import DevysDesignSystem
 import DevysSurfaces
 import SwiftUI
 
-/// A work item's Codex and Claude Code sessions, read from the provider while shown; each
-/// opens as a layer.
-struct CodingSessions: View {
-    let store: StoreOf<Workspace>
-    let item: WorkItem
-    @Dependency(\.codingClient) private var coding
-    @Dependency(\.terminalsClient) private var terminals
-    @State private var sessions: [CodingSession] = []
-    @State private var terminal: TerminalRef?
-    @State private var problem: String?
-
-    var body: some View {
-        Group {
-            if !sessions.isEmpty {
-                VStack(alignment: .leading, spacing: DevysSpacing.small) {
-                    HStack {
-                        SectionHeader("Coding", count: sessions.count)
-                        Spacer(minLength: 4)
-                        if sessions.contains(where: { $0.purpose == "build" }) {
-                            Button("Open terminal", systemImage: "terminal") {
-                                Task { await openTerminal(store.businessID, .work(item.id), terminals, presented: $terminal, problem: $problem) }
-                            }
-                            .buttonStyle(DevysButtonStyle(.quiet, compact: true))
-                        }
-                    }
-                    if let problem { Text(problem).font(DevysTypography.caption).foregroundStyle(DevysColors.ink2) }
-                    ForEach(sessions) { session in
-                        Button { store.send(.layerOpened(.session(workID: item.id, sessionID: session.id))) } label: { row(session) }
-                            .buttonStyle(.plain)
-                    }
-                }
-            }
-        }
-        .poll(id: item.id, every: .seconds(5)) {
-            if let loaded = try? await coding.sessions(store.businessID, item.id) { sessions = loaded }
-        }
-        .modifier(TerminalOpener(presented: $terminal))
-    }
-
-    private func row(_ session: CodingSession) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "chevron.left.forwardslash.chevron.right").foregroundStyle(DevysColors.ink3).accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(session.providerName + (session.purpose == "review" ? " · review" : ""))
-                    .font(DevysTypography.body).foregroundStyle(DevysColors.ink)
-                Text("\(session.branch ?? "") · \(session.changeLine)")
-                    .font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3).lineLimit(1)
-            }
-            Spacer(minLength: 6)
-            session.state.chip
-        }
-        .devysCard()
-    }
-}
-
 /// A coding session as a layer, read from the provider while it shows.
 struct SessionLayer: View {
     let store: StoreOf<Workspace>

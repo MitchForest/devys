@@ -19,6 +19,7 @@ struct WireTests {
         "app-search": { try await $0.searchApps($1, businessID: "b1", query: "books") },
         "apps": { try await $0.apps($1, businessID: "b1") },
         "browser": { try await $0.browserStatus($1, businessID: "b1") },
+        "browser-front": { try await $0.browserFront($1, businessID: "b1") },
         "business-created": { try await $0.createBusiness($1, NewBusiness(name: "Acme Roofing")) },
         "business-updated": { try await $0.updateBusiness($1, id: "b1", name: nil, brief: "Roof repairs.") },
         "business": { try await $0.business($1, id: "b1") },
@@ -113,7 +114,7 @@ struct WireTests {
         #expect(NewSecret.isName("RAMP_CARD") && !NewSecret.isName("ramp") && !NewSecret.isName("1KEY"))
     }
 
-    @Test("A work item's steps and results, its card in the thread and Home's progress decode in the web's words")
+    @Test("A work item's steps and results, its card where it was created and Home's progress decode in the web's words")
     func workProgress() async throws {
         let work = try await Self.answering("work").work(Self.session, businessID: "b1")
         let site = try #require(work.first { !$0.steps.isEmpty })
@@ -126,7 +127,9 @@ struct WireTests {
         ])
         #expect(WorkStep.progress(site.steps) == "1 of 4 · Blocked: Connect the calendar")
         let thread = try await Self.answering("conversation-work").conversation(Self.session, businessID: "b1", key: .work("w1"))
-        let cards = thread.messages.filter { $0.kind == .card }
+        #expect(!thread.messages.contains { $0.kind == .card }, "a thread pins its card; no card message in it")
+        let direct = try await Self.answering("conversation").conversation(Self.session, businessID: "b1", key: .direct("e1"))
+        let cards = direct.messages.filter { $0.kind == .card }
         #expect(cards.count == 1 && cards.first?.ref == .workItem(site.id) && cards.first?.isEvent == true)
         let home = try await Self.answering("home").home(Self.session, businessID: "b1")
         #expect(home.glance.moving.first { $0.id == site.id }?.progress == WorkStep.progress(site.steps))
@@ -177,7 +180,8 @@ struct WireTests {
         #expect(work.allSatisfy { $0.wakeAt == nil })
         let evidence = try #require(work.last?.evidence.first)
         #expect(evidence.check?.exitCode == 0 && evidence.deploy?.live == true && evidence.recordedAt.hasSuffix("Z"))
-        #expect(work.first?.waitCondition == "The supplier confirms the price" && work.first?.projectID != nil)
+        let waiting = try #require(work.first { $0.state == .waiting })
+        #expect(waiting.waitCondition == "The supplier confirms the price" && waiting.projectID != nil)
 
         let detail = try await Self.answering("business").business(Self.session, id: "b1")
         #expect(detail.employees.last?.responsibilities.hasPrefix("Build, fix") == true && detail.employees.last?.look != nil)
@@ -185,6 +189,8 @@ struct WireTests {
         #expect(detail.artifacts.first?.latestID == "00000000-0000-4000-8000-000000000006")
 
         let status = try await Self.answering("status").status(Self.session, Self.scope)
+        #expect(status.state.run?.conversation == "work:00000000-0000-4000-8000-000000000072")
+        #expect(try await Self.answering("browser-front").browserFront(Self.session, businessID: "b1") == 4242)
         #expect(status.state.inbox.map(\.status) == [.done, .running] && status.state.inbox.first?.receivedAt == 1_800_000_000_000)
         #expect(status.state.outbox.first?.status == .sent)
         let usage = try #require(status.state.usage?.models.values.first)

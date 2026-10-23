@@ -590,7 +590,7 @@ export function workCapabilities(
     capability({
       name: "routineActivate",
       description:
-        "Ask the owner to activate a proposed routine (its ref) at exactly this revision. It is the owner's decision each time: the request waits in Needs you, and once approved, calling it again with the same input activates it. A later revision needs a new decision.",
+        "Ask the owner to activate a proposed routine (its ref) at exactly this revision. It is the owner's decision each time: the request waits for the owner, and once approved, calling it again with the same input activates it. A later revision needs a new decision.",
       effect: "change",
       replay: "idempotent",
       input: Schema.Struct({ ref: RoutineRef, revision: Schema.Int }),

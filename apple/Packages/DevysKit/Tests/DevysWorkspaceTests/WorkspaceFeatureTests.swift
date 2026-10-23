@@ -369,14 +369,14 @@ struct WorkFeatureTests {
         }
     }
 
-    @Test("Real work, requests, projects and Home load with the team; Home's panel shows what needs the owner")
+    @Test("Real work, requests, projects and Home load with the team; Home has no panel, its requests are in the chat")
     func loads() async {
         let store = makeStore(WorkServer())
         await settle("work", until: { store.work.value != nil && store.home.value != nil })
         #expect(store.work.value?.filter { $0.state.group == .inProgress }.map(\.title) == ["Launch Acme"])
         #expect(store.projects.value?.map(\.name) == ["Launch"])
         #expect(store.home.value?.needsYou.map(\.id) == ["d1"] && store.state.decisions.first?.capability == "driveCreate")
-        #expect(store.state.hasPermanent && store.state.isPanelOpen)
+        #expect(!store.state.hasPermanent && !store.state.isPanelOpen)
     }
 
     @Test("Answering a request removes it at once and tells the server exactly once")

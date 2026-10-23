@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { localStores } from "../fixtures/local.ts";
 import { bearer, insertMessage, signIn, stubPosting } from "./helpers.ts";
 
-test("a work item's steps and results show as one card in its thread, updated in place, and in its work card", async ({
+test("a work item's steps and results show as its one card, pinned in its thread and updated in place", async ({
   page,
 }) => {
   const stores = await localStores();
@@ -28,7 +28,7 @@ test("a work item's steps and results show as one card in its thread, updated in
     ],
     [{ label: "Registered acme-widgets.com", value: "expires 2027-10-22", ok: true }],
   );
-  // The one card the server posts the first time steps or results are set.
+  // A card message for the thread's own work is drawn once, as the pinned card.
   await insertMessage(sql, owner.business, `work:${work.id}`, {
     author: "system",
     kind: "card",
@@ -38,13 +38,10 @@ test("a work item's steps and results show as one card in its thread, updated in
   await stubPosting(page);
   try {
     await signIn(page, sql, owner.person);
-    // Home's moving line says where the steps stand.
-    await expect(page.getByText("1 of 3 · Set up email")).toBeVisible();
-
     await page.goto(`/${owner.business}/thread/${work.id}`);
-    const card = page.getByTestId("work-progress");
+    const card = page.getByTestId("work-card");
     await expect(card).toHaveCount(1);
-    await expect(card).toContainText("1 of 3 · Set up email");
+    await expect(card.getByTestId("work-step")).toHaveText("Step 2 of 3");
     await expect(card.getByRole("list", { name: "Steps" }).getByRole("listitem")).toHaveText([
       "Register the domain",
       "Set up email",
@@ -53,10 +50,8 @@ test("a work item's steps and results show as one card in its thread, updated in
     await expect(card.getByRole("list", { name: "Results" })).toHaveText(
       "Registered acme-widgets.com· expires 2027-10-22✓",
     );
-    // The work card, its permanent view, shows the same.
-    const panel = page.getByRole("region", { name: "Work item" });
-    await expect(panel.getByTestId("work-results")).toContainText("Registered acme-widgets.com");
-    await expect(panel.getByTestId("work-steps")).toContainText("Steps · 1 of 3 · Set up email");
+    // A thread has no permanent view: the card is the work.
+    await expect(page.getByRole("button", { name: /side panel/ })).toHaveCount(0);
 
     // A later change updates the same card in place: no new message.
     await show(
@@ -71,8 +66,8 @@ test("a work item's steps and results show as one card in its thread, updated in
         { label: "Payment", value: "uncertain", ok: null },
       ],
     );
-    await expect(card).toContainText("3 of 3", { timeout: 15_000 });
-    await expect(page.getByTestId("work-progress")).toHaveCount(1);
+    await expect(card.getByTestId("work-step")).toHaveText("Step 3 of 3", { timeout: 15_000 });
+    await expect(page.getByTestId("work-card")).toHaveCount(1);
     const results = card.getByRole("list", { name: "Results" }).getByRole("listitem");
     await expect(results).toHaveText([
       "Live athttps://acme-widgets.com✓",

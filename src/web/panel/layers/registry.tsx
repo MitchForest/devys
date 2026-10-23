@@ -16,31 +16,21 @@ import {
 } from "lucide-react";
 import { useRef, useState, type ComponentType, type ReactNode } from "react";
 import { ref, type RecordKind, type Ref } from "../../../protocol/ref.ts";
-import {
-  useApps,
-  useBusinessId,
-  useEmployees,
-  usePerson,
-  useProjects,
-  useUnread,
-  useWork,
-} from "../../app/data.ts";
-import { chipFor, isOpen } from "../../app/names.ts";
+import { useApps, useBusinessId, usePerson, useProjects, useWork } from "../../app/data.ts";
+import { isOpen } from "../../app/names.ts";
 import { useNav, usePlace, type Layer } from "../../app/navigation.ts";
 import { useUi } from "../../app/ui.ts";
 import { useAsk } from "../../app/workspace.tsx";
-import { EmployeePortrait } from "../../design/portrait.tsx";
-import { EmptyNote, StatusChip } from "../../design/primitives.tsx";
-import { ThreadLink } from "../../shell/links.tsx";
+import { EmptyNote } from "../../design/primitives.tsx";
 import { ProjectSummary } from "../overview.tsx";
 import { RoutineLayer } from "../routines.tsx";
-import { waitingNote, WorkDetail } from "../work.tsx";
+import { WorkCard } from "../work-card.tsx";
 import { CodeApp, DocumentsApp } from "./apps.tsx";
 import { BrowserLayer } from "./browser.tsx";
 import { CodeSessionLayer } from "./code-session.tsx";
 import { ArtifactLayer } from "./documents-artifact.tsx";
 import { FileView } from "./documents-file.tsx";
-import { AppCard, AppLayer } from "./team-app.tsx";
+import { AppLayer } from "./team-app.tsx";
 import { kindOf, recordNames, useNames } from "./titles.ts";
 
 interface RecordView {
@@ -79,7 +69,6 @@ export const records: Record<RecordKind, RecordView> = {
     icon: ListChecks,
     keepable: false,
     Layer: WorkItemLayer,
-    Card: WorkItemCard,
   },
   "work/project": {
     icon: FolderKanban,
@@ -95,7 +84,6 @@ export const records: Record<RecordKind, RecordView> = {
     icon: Plug,
     keepable: false,
     Layer: AppLayer,
-    Card: AppCard,
   },
 };
 
@@ -162,11 +150,11 @@ function FileLayer({ id }: { id: string }) {
   );
 }
 
+/** A work item as a layer is its card, which opens its thread. */
 function WorkItemLayer({ id }: { id: string }) {
-  const item = useWork().data?.find((w) => w.id === id);
   return (
     <div className="h-full overflow-y-auto px-4 pt-3.5 pb-6">
-      {item ? <WorkDetail item={item} /> : <EmptyNote>This work item no longer exists.</EmptyNote>}
+      <WorkCard id={id} inThread={false} />
     </div>
   );
 }
@@ -188,8 +176,8 @@ const card =
   "mx-auto flex w-full max-w-[520px] items-center gap-2.5 rounded-card border border-hairline bg-sheet px-3 py-2 text-left shadow-resting transition-colors hover:bg-sheet-tint";
 
 /**
- * An event in a conversation: the card of the record it points at, from the record's view. A
- * hand-off is the work item's card; anything else opens its layer.
+ * An event in a conversation: the record's own card where its view has one, otherwise a card
+ * that opens its layer.
  */
 export function RecordCard({ value, text }: { value: Ref | null; text: string }) {
   const nav = useNav();
@@ -246,49 +234,6 @@ function CodeSessionCard({ id, text }: { id: string; text: string }) {
       <span className="min-w-0 flex-1 truncate text-control font-semibold text-ink">{text}</span>
       <span className="shrink-0 text-caption font-medium text-ink-3">View</span>
     </button>
-  );
-}
-
-/** A hand-off: the work item's owner, live status and unread replies; it opens the thread. */
-function WorkItemCard({ id, text }: { id: string; text: string }) {
-  const item = useWork().data?.find((w) => w.id === id);
-  const employees = useEmployees();
-  const unread = useUnread(`work:${id}`);
-  if (!item)
-    return (
-      <div className="mx-auto flex max-w-[90%] items-center gap-2 rounded-full border border-hairline bg-sheet-tint px-3 py-1.5 text-detail text-ink-2">
-        <ListChecks className="size-3.5 shrink-0 text-indigo" />
-        <span className="min-w-0 truncate">{text}</span>
-      </div>
-    );
-  const owner = employees.find((e) => e.id === item.owner_employee_id);
-  const chip = chipFor(item.state);
-  return (
-    <ThreadLink workId={item.id} data-testid="handoff" title="Open the thread" className={card}>
-      {owner ? (
-        <EmployeePortrait employee={owner} size={22} />
-      ) : (
-        <ListChecks className="size-4 shrink-0 text-indigo" />
-      )}
-      <span className="flex min-w-0 flex-col">
-        <span className="truncate text-control font-semibold text-ink">{item.title}</span>
-        <span className="truncate text-caption text-ink-3">
-          {[
-            owner?.name,
-            item.state === "waiting" ? waitingNote(item) || item.next_action : item.next_action,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-        </span>
-      </span>
-      <span className="ml-auto" />
-      {unread > 0 && (
-        <span className="shrink-0 text-caption font-semibold text-indigo">{unread} new</span>
-      )}
-      <StatusChip tone={chip.tone} small>
-        {chip.title}
-      </StatusChip>
-    </ThreadLink>
   );
 }
 

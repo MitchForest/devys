@@ -67,6 +67,11 @@ export type Turn =
   | { tap: string; optional?: boolean }
   /** Ends the run, passing, at the first pending request of this kind (or one of these). */
   | { stop: AskKind | AskKind[] }
+  /**
+   * Taps Start on the latest plan waiting for it, as the owner who read it. `optional`: skipped
+   * when no plan waits.
+   */
+  | { start: true; optional?: boolean }
   /** Adds the secret a pending secret request asks for, under the name it asks for. */
   | { answer: "secret"; secret: NewSecret }
   /** Answers a pending approve (not a spend: that needs a device signature) or decision. */
@@ -192,7 +197,12 @@ type Decision = {
   status: string;
   requested_at: string;
 };
-type WorkItem = Record<string, unknown> & { id: string; title: string; state: string };
+type WorkItem = Record<string, unknown> & {
+  id: string;
+  title: string;
+  state: string;
+  steps: { title: string; state: string; by?: "owner" }[];
+};
 type Employee = { id: string; name: string; template: string };
 
 function owner(token: string, businessId: string) {
@@ -555,7 +565,18 @@ async function play(scenario: Scenario, out: string) {
         }
         break;
       }
-      if ("answer" in turn) {
+      if ("start" in turn) {
+        const proposed = (await api.work()).filter((item) => item.state === "proposed").at(-1);
+        if (!proposed) {
+          step(turn.optional ? "ok" : "failed", "no plan waiting for Start");
+          if (turn.optional) continue;
+          status = "failed";
+          break;
+        }
+        await api.call(`/work/${proposed.id}/start`, { body: {} });
+        place = `work:${proposed.id}`;
+        step("ok", `started the plan: ${proposed.steps.map((s) => s.title).join(" → ")}`);
+      } else if ("answer" in turn) {
         const want: AskKind = turn.answer === "secret" ? "secret" : "approve";
         const found = (await pending()).find(
           (decision) =>
@@ -802,6 +823,13 @@ async function collect(
     (value) => value.length >= 3 && everythingRead.includes(value),
   );
   const typed = steps.filter((step) => step.note.startsWith("owner had to type"));
+  // One request to the owner at a time on a work item: never two waiting at once.
+  const overlapping = items.filter(
+    (item) =>
+      requests.filter(
+        (d) => d.work_item_id === item.id && d.capability === "askOwner" && d.status === "pending",
+      ).length > 1,
+  );
 
   const check = (pass: boolean) => (pass ? "pass" : "FAIL");
   const shots = readdirSync(out)
@@ -829,6 +857,7 @@ async function collect(
     `- ${check(!leaks.length)} No internals in what the owner reads${leaks.length ? ":" : ""}`,
     ...leaks.map((leak) => `  - ${leak.where}: ${leak.found.join("; ")}`),
     `- ${check(!exposed.length)} Secrets never in the transcript or wire`,
+    `- ${check(!overlapping.length)} One request to the owner at a time per work item${overlapping.length ? `: ${overlapping.map((item) => `"${item.title}"`).join(", ")}` : ""}`,
     `- ${check(!chipless.length)} Chips offered with every question${chipless.length ? ":" : ""}`,
     ...chipless.map((m) => `  - ${name(m.author)}: "${questions(m.text).join(" ")}"`),
     `- ${manyQuestions.length ? "note" : "pass"} One question per turn (heuristic, reported only)${manyQuestions.length ? ":" : ""}`,

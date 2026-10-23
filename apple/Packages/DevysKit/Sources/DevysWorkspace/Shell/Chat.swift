@@ -381,10 +381,9 @@ private struct ChatActionButton: View {
     }
 }
 
-/// A hand-off or other event, opened through the record registry. A hand-off is the work item's
-/// card: its owner, live status and whether it has unread replies; it opens the thread. A
-/// published page opens as a layer, any other record where the registry says; a record kind this
-/// client does not know is only its text.
+/// An event, opened through the record registry: a published page opens as a layer, any other
+/// record where the registry says. A work item's events are its words (its card is the work); a
+/// record kind this client does not know is only its text.
 struct EventCard: View {
     let store: StoreOf<Workspace>
     let event: ChatTimeline.Event
@@ -394,11 +393,6 @@ struct EventCard: View {
     private var artifactID: String? {
         guard case .layer(.artifact(let id, _)) = target else { return nil }
         return id
-    }
-
-    private var workItem: WorkItem? {
-        guard case .place(.thread(let id)) = target else { return nil }
-        return store.work.value?.first { $0.id == id }
     }
 
     var body: some View {
@@ -413,10 +407,6 @@ struct EventCard: View {
                         .accessibilityHidden(true)
                     lines(store.artifacts.contains { $0.id == artifactID } ? store.state.artifactName(artifactID) : event.text, pageDetail(artifactID))
                 }
-            } else if let item = workItem {
-                handoff(item)
-            } else if case .layer(.remoteApp(let appID)) = target {
-                RemoteAppCard(store: store, appID: appID, text: event.text)
             } else if let target, let ref = event.ref, ref.recordKind == "code/session" {
                 // A coding session's milestone in words; View opens the session's own record.
                 ConversationCard(help: "View the coding session") { open(target) } label: {
@@ -430,7 +420,7 @@ struct EventCard: View {
                     Spacer(minLength: 4)
                     Text("View").font(DevysTypography.caption.weight(.medium)).foregroundStyle(DevysColors.ink3)
                 }
-            } else if let target, let ref = event.ref {
+            } else if let target, let ref = event.ref, ref.recordKind != "work/item" {
                 // Named as the web names it: the record's title over its kind.
                 ConversationCard(help: "Open") { open(target) } label: {
                     Image(systemName: Self.symbol(ref))
@@ -456,29 +446,9 @@ struct EventCard: View {
         .padding(.vertical, 6)
     }
 
-    private func handoff(_ item: WorkItem) -> some View {
-        let owner = store.state.employee(item.ownerEmployeeID)
-        let unread = store.state.unread(.work(item.id))
-        let next = item.state == .waiting ? item.waitCondition.map { "waiting on \($0)" } : item.nextAction
-        return ConversationCard(help: "Open the thread") { store.send(.threadOpened(item.id)) } label: {
-            if let owner {
-                Portrait(store.state.portrait(for: owner), size: 22, isAnimated: false)
-            } else {
-                Image(systemName: "checklist").foregroundStyle(DevysColors.indigo).accessibilityHidden(true)
-            }
-            lines(item.title, [owner?.name, next].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: " · "))
-            Spacer(minLength: 4)
-            if unread > 0 {
-                Text("\(unread) new").font(DevysTypography.caption.weight(.semibold)).foregroundStyle(DevysColors.indigo)
-            }
-            item.state.chip(size: .small)
-        }
-    }
-
     private static func symbol(_ ref: Ref) -> String {
         switch ref.recordKind {
         case "code/session": "chevron.left.forwardslash.chevron.right"
-        case "work/item": "checklist"
         case "work/project": "folder"
         case "work/routine": "repeat"
         default: "doc.text"

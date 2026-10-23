@@ -63,32 +63,46 @@ extension DevysHTTPClient {
         try await send(authorized(session, path: "api/businesses/\(businessID)/browser/screenshot"))
     }
 
+    /// Brings the business's own Chrome window to the front on its current tab (the trusted Mac
+    /// host only); the process to activate, when the host knows it.
+    public func browserFront(_ session: DeviceSession, businessID: String) async throws -> Int? {
+        struct Fronted: Decodable { let pid: Int? }
+        let fronted: Fronted = try await send(authorized(session, path: "api/businesses/\(businessID)/browser/front", method: "POST"))
+        return fronted.pid
+    }
+
     public func browserInput(_ session: DeviceSession, businessID: String, _ input: BrowserInput) async throws {
         _ = try await raw(json(session, path: "api/businesses/\(businessID)/browser/input", method: "POST", body: input))
     }
 }
 
-/// The business's browser: status, a live picture, and the owner's own input.
+/// The business's browser: status, a live picture, the owner's own input, and its window
+/// brought to the front on the Mac.
 public struct BrowserClient: Sendable {
     public var status: @Sendable (_ businessID: String) async throws -> BrowserStatus
     public var picture: @Sendable (_ businessID: String) async throws -> BrowserPicture
     public var input: @Sendable (_ businessID: String, BrowserInput) async throws -> Void
+    /// The Chrome process whose window came to the front, when the host knows it.
+    public var front: @Sendable (_ businessID: String) async throws -> Int?
 
     public init(
         status: @escaping @Sendable (String) async throws -> BrowserStatus,
         picture: @escaping @Sendable (String) async throws -> BrowserPicture,
-        input: @escaping @Sendable (String, BrowserInput) async throws -> Void
+        input: @escaping @Sendable (String, BrowserInput) async throws -> Void,
+        front: @escaping @Sendable (String) async throws -> Int? = { _ in nil }
     ) {
         self.status = status
         self.picture = picture
         self.input = input
+        self.front = front
     }
 
     public static func live(_ hub: SessionHub) -> Self {
         Self(
             status: { business in try await hub.call { api, session in try await api.browserStatus(session, businessID: business) } },
             picture: { business in try await hub.call { api, session in try await api.browserPicture(session, businessID: business) } },
-            input: { business, input in try await hub.call { api, session in try await api.browserInput(session, businessID: business, input) } }
+            input: { business, input in try await hub.call { api, session in try await api.browserInput(session, businessID: business, input) } },
+            front: { business in try await hub.call { api, session in try await api.browserFront(session, businessID: business) } }
         )
     }
 

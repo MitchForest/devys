@@ -5,7 +5,7 @@ import DevysDesignSystem
 import SwiftUI
 
 // Routines as the owner sees them: listed on an employee's desk and a project's overview, read in
-// their layer, and proposed in Needs you. A running routine changes only by a new decision, so the
+// their layer, and proposed as a card in the chat. A running routine changes only by a new decision, so the
 // owner pauses and resumes it here and changes it by asking its employee. The same words as the web.
 
 /// How routines and waiting work read, as the web words them.
@@ -133,7 +133,7 @@ private struct RoutineRow: View {
     }
 }
 
-/// Pause for an active routine, Resume for a paused one; a proposed one is decided in Needs you.
+/// Pause for an active routine, Resume for a paused one; a proposed one is decided on its card in the chat.
 private struct RoutinePauseButton: View {
     let store: StoreOf<Workspace>
     let routine: Routine
@@ -210,7 +210,7 @@ struct RoutineLayer: View {
                         HStack(spacing: 0) {
                             Text(RoutineText.state(routine.state)).foregroundStyle(RoutineText.color(routine.state))
                             if routine.state == .proposed {
-                                Text(" · Waiting for your decision in Needs you").foregroundStyle(DevysColors.ink3)
+                                Text(" · Waiting for your decision").foregroundStyle(DevysColors.ink3)
                             }
                         }
                         .font(DevysTypography.secondary)
@@ -236,8 +236,8 @@ struct RoutineLayer: View {
     }
 }
 
-/// An employee's proposed routine in Needs you, readable as a whole; approving activates exactly
-/// this revision.
+/// An employee's proposed routine, one card where it was asked, readable as a whole; approving
+/// activates exactly this revision.
 struct RoutineProposal: View {
     let store: StoreOf<Workspace>
     let decision: Decision

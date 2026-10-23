@@ -13,14 +13,12 @@ export interface WorkItemDefaults {
   projectId?: string;
 }
 
+/** The places with a permanent view: an employee's desk, a project's overview. */
+type PermanentKind = Extract<PlaceKind, "direct" | "project">;
+
 /** Whether each kind of place shows its permanent view; the owner's choice is remembered. */
-const panelDefaults: Record<PlaceKind, boolean> = {
-  home: true,
-  direct: false,
-  project: true,
-  thread: true,
-};
-const savedPanels = (): Record<PlaceKind, boolean> => {
+const panelDefaults: Record<PermanentKind, boolean> = { direct: false, project: true };
+const savedPanels = (): Record<PermanentKind, boolean> => {
   try {
     return { ...panelDefaults, ...JSON.parse(localStorage.getItem("panels") ?? "{}") };
   } catch {
@@ -29,7 +27,7 @@ const savedPanels = (): Record<PlaceKind, boolean> => {
 };
 
 interface Ui {
-  panels: Record<PlaceKind, boolean>;
+  panels: Record<PermanentKind, boolean>;
   /** Too narrow for both columns: the permanent view lies over the conversation when asked. */
   overlay: boolean;
   wide: boolean;
@@ -91,7 +89,7 @@ export const ui = {
   closedLayers: () => store.set({ wide: false }),
   openedLayer: () => store.set({ referencing: true }),
   /** Shows or hides the permanent view for this kind of place, remembered across visits. */
-  togglePermanent: (kind: PlaceKind, narrow: boolean) => {
+  togglePermanent: (kind: PermanentKind, narrow: boolean) => {
     if (narrow) return store.set((s) => ({ overlay: !s.overlay }));
     store.set((s) => {
       const panels = { ...s.panels, [kind]: !s.panels[kind] };

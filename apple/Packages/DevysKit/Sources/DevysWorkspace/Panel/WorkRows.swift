@@ -55,6 +55,9 @@ struct WorkActions: View {
 
     var body: some View {
         Button("Open thread", systemImage: "arrow.up.right.square") { store.send(.threadOpened(item.id)) }
+        Button(store.state.isFollowing(item.id) ? "Stop following" : "Follow each step", systemImage: store.state.isFollowing(item.id) ? "bell.slash" : "bell") {
+            store.send(.followToggled(item.id))
+        }
         if item.state.isOpen {
             TakeoverButton(store: store, item: item)
         }

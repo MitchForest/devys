@@ -27,6 +27,7 @@ export default {
     { tap: "handle", optional: true },
     { tap: "name", optional: true },
     { tap: "email", optional: true },
+    { start: true, optional: true },
     { stop: ["take_over", "connect", "secret", "approve", "decision"] },
   ],
 } satisfies Scenario;

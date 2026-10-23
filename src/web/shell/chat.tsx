@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import type { NeedsYouItem } from "../../app/wire.ts";
 import type { Employee } from "../../identity/contract.ts";
 import { answerersOf, draft, useDraft, type Conversation } from "../app/conversation.ts";
 import { employeeOf } from "../../conversations/contract.ts";
@@ -24,7 +25,14 @@ import {
   timeline,
   type Bubble as TimelineBubble,
 } from "../app/timeline.ts";
-import { useDecisions, useEmployees, useChiefOfStaff, usePerson, useWork } from "../app/data.ts";
+import {
+  useDecisions,
+  useEmployees,
+  useChiefOfStaff,
+  useHome,
+  usePerson,
+  useWork,
+} from "../app/data.ts";
 import { useStartThread } from "../app/mutations.ts";
 import { usePlace } from "../app/navigation.ts";
 import { ui } from "../app/ui.ts";
@@ -41,11 +49,11 @@ import { InlineMarkdown } from "../design/markdown.tsx";
 import { EmployeePortrait } from "../design/portrait.tsx";
 import { Spinner } from "../design/spinner.tsx";
 import { DecisionCard } from "../panel/work.tsx";
-import { BrowserThumbnail } from "../panel/layers/browser.tsx";
+import { ReconnectCard } from "../panel/layers/team-app.tsx";
 import { RecordCard, ViewedRecord } from "../panel/layers/registry.tsx";
 import { useRecordTitle } from "../panel/layers/titles.ts";
 import { PausedBanner } from "../panel/desk.tsx";
-import { WorkProgressCard } from "../panel/work-progress.tsx";
+import { WorkCard } from "../panel/work-card.tsx";
 import { parseRef } from "../../protocol/ref.ts";
 import { Bubble, BubbleContent, BubbleReactions } from "@/components/ui/bubble";
 import {
@@ -101,7 +109,8 @@ function useAuthorName() {
 
 /**
  * A conversation laid out like Messages: yours on the right in indigo, everyone else's on
- * the left beside their face and name. Hand-offs show as cards that open the work item.
+ * the left beside their face and name. Work shows as its live card where it was created; a
+ * thread's own card is pinned below the conversation, not in it.
  */
 export function ConversationView({
   conversation,
@@ -114,23 +123,28 @@ export function ConversationView({
 }) {
   const person = usePerson();
   const decisions = useDecisions().data;
+  const reconnects = useHome().data?.needs_you.filter(
+    (item): item is Extract<NeedsYouItem, { kind: "reconnect" }> => item.kind === "reconnect",
+  );
   const employees = useEmployees();
   const place = usePlace();
   const [loadingOlder, setLoadingOlder] = useState(false);
   const { messages: history, pending, key } = conversation;
-  const items = history ? timeline(history, pending, `person:${person?.id}`, new Date()) : [];
-  // Requests waiting on the owner: from this DM's employee, or about this work item.
-  const ref = key?.slice(key.indexOf(":") + 1);
-  // Requests wait where they were asked: a work item's in its thread, others in the DM. A
-  // channel shows none; its threads' cards say they need the owner. Home's are in Needs you.
-  const waiting = (decisions ?? []).filter((d) =>
-    place.kind === "home"
-      ? false
-      : key?.startsWith("direct:")
-        ? d.employee_id === ref && !d.work_item_id
-        : key?.startsWith("work:")
-          ? d.work_item_id === ref
-          : false,
+  const thread = key?.startsWith("work:") ? key.slice("work:".length) : undefined;
+  // A thread's own card is pinned under it; any other card is the work it shows.
+  const items = (
+    history ? timeline(history, pending, `person:${person?.id}`, new Date()) : []
+  ).filter(
+    (item) =>
+      !thread ||
+      item.kind === "heading" ||
+      item.bubble.kind !== "card" ||
+      parseRef(item.bubble.ref)?.id !== thread,
+  );
+  // A request about a work item is in that item's card; any other waits where it was asked.
+  const waiting = (decisions ?? []).filter(
+    (d) =>
+      !d.work_item_id && key !== undefined && (d.conversation ?? `direct:${d.employee_id}`) === key,
   );
   const lastMine = items.findLastIndex((item) => item.kind !== "heading" && item.bubble.mine);
   return (
@@ -184,10 +198,10 @@ export function ConversationView({
                       className={startsGroup(item.bubble) ? "pt-2.5" : "pt-0.5"}
                     >
                       {item.bubble.kind === "card" ? (
-                        <WorkProgressCard
+                        <WorkCard
                           id={parseRef(item.bubble.ref)?.id ?? ""}
                           text={item.bubble.text}
-                          inThread={key?.startsWith("work:") ?? false}
+                          inThread={false}
                         />
                       ) : item.bubble.kind === "event" ? (
                         <>
@@ -206,26 +220,29 @@ export function ConversationView({
                     </MessageScrollerItem>
                   ),
                 )}
-                {conversation.working.map((id) => {
-                  const employee = employees.find((e) => e.id === id);
-                  return (
-                    employee && (
-                      <MessageScrollerItem key={`working-${id}`} className="pt-2.5">
-                        <WorkingRow employee={employee} />
-                      </MessageScrollerItem>
-                    )
-                  );
-                })}
+                {/* In a thread its card says who is working. */}
+                {!thread &&
+                  conversation.working.map((id) => {
+                    const employee = employees.find((e) => e.id === id);
+                    return (
+                      employee && (
+                        <MessageScrollerItem key={`working-${id}`} className="pt-2.5">
+                          <WorkingRow employee={employee} />
+                        </MessageScrollerItem>
+                      )
+                    );
+                  })}
                 {waiting.map((decision) => (
                   <MessageScrollerItem key={decision.id} className="pt-2.5">
                     <DecisionCard decision={decision} />
                   </MessageScrollerItem>
                 ))}
-                {key?.startsWith("work:") && ref && (
-                  <MessageScrollerItem>
-                    <BrowserThumbnail workId={ref} />
-                  </MessageScrollerItem>
-                )}
+                {place.kind === "home" &&
+                  reconnects?.map((item) => (
+                    <MessageScrollerItem key={`reconnect-${item.app.id}`} className="pt-2.5">
+                      <ReconnectCard app={item.app} />
+                    </MessageScrollerItem>
+                  ))}
               </>
             )}
           </MessageScrollerContent>

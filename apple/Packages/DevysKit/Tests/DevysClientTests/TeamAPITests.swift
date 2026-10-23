@@ -321,6 +321,25 @@ struct TeamAPITests {
         #expect(url.path() == "/api/businesses/b1/decisions" && url.query() == "work_item=c1")
     }
 
+    @Test("Start posts to the plan's start route; owner steps read as the owner's; front answers the Chrome process")
+    func startAndFront() async throws {
+        let recorder = Recorder()
+        let proposed = """
+        {"id":"c1","owner_employee_id":"admin","title":"Buy the domain","objective":"","next_action":"","wait_condition":null,
+         "due_at":null,"state":"ready","evidence":[],"results":[],"revision":2,"taken_over_by":null,"project_id":null,
+         "steps":[{"title":"Sign in to the registrar","state":"todo","by":"owner"},{"title":"Register it","state":"todo"}],
+         "updated_at":"2026-10-23T15:00:00.000Z"}
+        """
+        let started = try await api(body: proposed, recorder: recorder).startWorkItem(Self.session, businessID: "b1", id: "c1")
+        let request = try #require(await recorder.requests.last)
+        #expect(request.httpMethod == "POST" && request.url?.path() == "/api/businesses/b1/work/c1/start")
+        #expect(started.steps.map(\.text) == ["You: Sign in to the registrar", "Register it"] && started.steps.last?.doer == nil)
+
+        let pid = try await api(body: #"{"pid":null}"#, recorder: recorder).browserFront(Self.session, businessID: "b1")
+        let front = try #require(await recorder.requests.last)
+        #expect(pid == nil && front.httpMethod == "POST" && front.url?.path() == "/api/businesses/b1/browser/front")
+    }
+
     @Test("Google Drive's connection state decodes and ignores the file list")
     func google() async throws {
         let recorder = Recorder()

@@ -26,8 +26,6 @@ export const keys = {
   business: (b: string) => ["business", b] as const,
   detail: (b: string) => ["business", b, "detail"] as const,
   work: (b: string) => ["business", b, "work"] as const,
-  workDecisions: (b: string, work: string, revision: number) =>
-    ["business", b, "decisions", work, revision] as const,
   projects: (b: string) => ["business", b, "projects"] as const,
   routines: (b: string) => ["business", b, "routines"] as const,
   home: (b: string) => ["business", b, "home"] as const,

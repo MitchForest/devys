@@ -61,8 +61,6 @@ package struct Workspace {
         package var team = TeamState()
         /// The work item being written in the New work item sheet.
         package var newWorkItem: WorkItemDraft?
-        /// The plan being edited on a work card, after the owner took that work over.
-        package var workPlan: WorkPlanDraft?
         /// The New project sheet, while it is open.
         package var newProject: ProjectSheet?
         /// The signing sheet for a spend approval, while it is open.
@@ -70,14 +68,14 @@ package struct Workspace {
         /// The secure entry sheet for an employee's secret request, while it is open.
         package var secretEntry: SecretEntrySheet?
         package var memory: Loadable<[MemoryClaim]> = .loading
-        /// The business's work items; the requests waiting on the owner are Home's.
+        /// The business's work items.
         package var work: Loadable<[WorkItem]> = .loading
         package var projects: Loadable<[Project]> = .loading
         /// The business's routines: each employee's desk and each project's overview list theirs.
         package var routines: Loadable<[Routine]> = .loading
         /// The app directory; installed apps with something to show are in the sidebar.
         package var apps: Loadable<[AppEntry]> = .loading
-        /// What needs the owner, and work at a glance: Home's permanent view.
+        /// What needs the owner: each request shows in its work item's card, or where it was asked.
         package var home: Loadable<Home> = .loading
         /// The business's saved files, newest first.
         package var artifacts: [Artifact] = []
@@ -163,7 +161,8 @@ package struct Workspace {
         case statusLoaded(EmployeeScope, EmployeeStatus)
         case memoryLoaded([MemoryClaim])
         case loadFailed(DevysHTTPError, memory: Bool)
-        case stopTapped
+        /// Stops an employee's run: the one named, or the employee of the conversation in view.
+        case stopTapped(employeeID: String?)
         case stopFinished(String)
         case noticeDismissed
         case signOutTapped
@@ -199,6 +198,7 @@ package struct Workspace {
     @Dependency(\.profileClient) var profileClient: ProfileClient
     @Dependency(\.panelsClient) var panelsClient: PanelsClient
     @Dependency(\.signingClient) var signing: SigningClient
+    @Dependency(\.browserClient) var browser: BrowserClient
 
     package var body: some Feature {
         Update { state, action in
@@ -332,8 +332,9 @@ package struct Workspace {
             case .loadFailed(let error, let memory):
                 loadFailed(error, memory: memory, state: &state)
 
-            case .stopTapped:
-                guard !state.isStopping, let scope = state.chiefOfStaffScope else { return }
+            case .stopTapped(let employeeID):
+                guard !state.isStopping, !state.businessID.isEmpty, let id = employeeID ?? state.employeeInView else { return }
+                let scope = EmployeeScope(businessID: state.businessID, employeeID: id)
                 state.isStopping = true
                 let runtime = runtime
                 store.addTask {
@@ -453,7 +454,6 @@ extension Workspace {
         state.summaries = [:]
         state.team.hiring = nil
         state.newWorkItem = nil
-        state.workPlan = nil
         state.newProject = nil
         state.memory = .loading
         state.access = .loading

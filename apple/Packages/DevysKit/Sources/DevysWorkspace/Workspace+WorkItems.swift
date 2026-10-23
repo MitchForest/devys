@@ -39,49 +39,6 @@ package struct WorkItemDraft: Equatable {
     }
 }
 
-/// A work item's plan being edited on its work card, after the owner took it over: what's next,
-/// what it waits on and the day it's due, saved as one change at the revision on screen.
-package struct WorkPlanDraft: Equatable {
-    package let workItemID: String
-    package var nextAction: String
-    package var waiting: String
-    package var hasDue: Bool
-    /// The day it's due; saved as the end of that day.
-    package var due: Date
-    package var isSaving = false
-    package var error: String?
-
-    package init(_ item: WorkItem) {
-        workItemID = item.id
-        nextAction = item.nextAction
-        waiting = item.waitCondition ?? ""
-        let due = item.dueAt.flatMap(ServerDate.parse)
-        hasDue = due != nil
-        self.due = due ?? Date.now.addingTimeInterval(86_400)
-    }
-
-    /// Only what differs from the item as it is now, at its revision; nil when nothing changed.
-    package func change(from item: WorkItem) -> WorkItemChange? {
-        var change = WorkItemChange(expectedRevision: item.revision)
-        let next = nextAction.trimmingCharacters(in: .whitespacesAndNewlines)
-        if next != item.nextAction { change.nextAction = String(next.prefix(1000)) }
-        let waiting = waiting.trimmingCharacters(in: .whitespacesAndNewlines)
-        if waiting != (item.waitCondition ?? "") { change.waitCondition = waiting.isEmpty ? .clear : .set(String(waiting.prefix(1000))) }
-        let saved = item.dueAt.flatMap(ServerDate.parse)
-        if !hasDue, saved != nil {
-            change.dueAt = .clear
-        } else if hasDue, saved.map({ !Calendar.current.isDate($0, inSameDayAs: due) }) ?? true {
-            change.dueAt = .set(ServerDate.format(Self.endOfDay(due)))
-        }
-        return change == WorkItemChange(expectedRevision: item.revision) ? nil : change
-    }
-
-    /// 23:59 on that day in the owner's time zone, as the web saves a due date.
-    static func endOfDay(_ date: Date) -> Date {
-        Calendar.current.date(bySettingHour: 23, minute: 59, second: 0, of: date) ?? date
-    }
-}
-
 package enum WorkItemIntent {
     /// From New (no presets), an employee's desk (its owner) or a project's overview (its project).
     case newWorkItemTapped(ownerID: String?, projectID: String?)
@@ -90,14 +47,8 @@ package enum WorkItemIntent {
     case created(WorkItem)
     case failed(String)
     case cancelled
-    /// Edit opens the plan of work the owner has taken over; Cancel closes it unsaved.
-    case planEditTapped(workItemID: String)
-    case planEdited(WorkPlanDraft)
-    case planSaveTapped
-    case planSaved
-    /// The draft stays to save again; the latest item is on screen.
-    case planSaveFailed
-    case planEditCancelled
+    /// Start on a plan that waits for the owner: its employee takes it now.
+    case startTapped(workItemID: String)
     /// Hands the work to another employee, ready to start.
     case reassigned(workItemID: String, ownerID: String)
 }
@@ -122,19 +73,11 @@ extension Workspace {
             state.newWorkItem?.error = message
         case .cancelled:
             state.newWorkItem = nil
-        case .planEditTapped(let workItemID):
-            guard let item = state.work.value?.first(where: { $0.id == workItemID }), state.isHandEditable(item) else { return }
-            state.workPlan = WorkPlanDraft(item)
-        case .planEdited(let draft):
-            guard state.workPlan?.workItemID == draft.workItemID else { return }
-            state.workPlan = draft
-        case .planSaveTapped:
-            savePlan(state: &state)
-        case .planSaved, .planEditCancelled:
-            state.workPlan = nil
-        case .planSaveFailed:
-            state.workPlan?.isSaving = false
-            state.workPlan?.error = "That wasn't saved. If it changed meanwhile, the latest is shown; save again to apply."
+        case .startTapped(let workItemID):
+            guard state.work.value?.first(where: { $0.id == workItemID })?.state == .proposed else { return }
+            changeWork(state, failure: "That plan couldn't start. Try again.") { runtime, businessID in
+                _ = try await runtime.startWork(businessID, workItemID)
+            }
         case .reassigned(let workItemID, let ownerID):
             guard let item = state.work.value?.first(where: { $0.id == workItemID }), item.ownerEmployeeID != ownerID else { return }
             updateWorkItem(workItemID, .reassign(item, to: ownerID), state: state)
@@ -159,33 +102,6 @@ extension Workspace {
             }
             try await reloadWork(runtime, businessID)
             try store.send(Action(.workItem(.created(created))))
-        }
-    }
-
-    /// Saves the plan as one change against the item as it is now; with nothing changed, closes.
-    func savePlan(state: inout State) {
-        guard var draft = state.workPlan, !draft.isSaving, !state.businessID.isEmpty,
-              let item = state.work.value?.first(where: { $0.id == draft.workItemID }), state.isHandEditable(item) else { return }
-        guard let change = draft.change(from: item) else {
-            state.workPlan = nil
-            return
-        }
-        draft.isSaving = true
-        draft.error = nil
-        state.workPlan = draft
-        let businessID = state.businessID
-        let runtime = runtime
-        store.addTask {
-            let saved: Bool
-            do {
-                _ = try await runtime.updateWorkItem(businessID, item.id, change)
-                saved = true
-            } catch {
-                saved = false
-            }
-            // The latest loads either way, so a failed save is retried against it.
-            try await reloadWork(runtime, businessID)
-            try store.send(Action(.workItem(saved ? .planSaved : .planSaveFailed)))
         }
     }
 

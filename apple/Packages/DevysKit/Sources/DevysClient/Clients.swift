@@ -81,8 +81,8 @@ public struct RuntimeClient: Sendable {
     public var createWorkItem: @Sendable (_ businessID: String, NewWorkItem) async throws -> WorkItem
     public var updateWorkItem: @Sendable (_ businessID: String, _ workItemID: String, WorkItemChange) async throws -> WorkItem
     public var setTakeover: @Sendable (_ businessID: String, _ workItemID: String, _ takeOver: Bool) async throws -> Void
-    /// One work item's requests, answered ones included.
-    public var workDecisions: @Sendable (_ businessID: String, _ workItemID: String) async throws -> [Decision]
+    /// Starts a plan that waits for the owner's Start.
+    public var startWork: @Sendable (_ businessID: String, _ workItemID: String) async throws -> WorkItem
     public var answer: @Sendable (_ businessID: String, _ decisionID: String, _ approve: Bool) async throws -> Void
     /// Answers a file request with the file the owner chose; it goes into the business folder.
     public var sendFile: @Sendable (_ businessID: String, _ decisionID: String, ChosenFile) async throws -> Void
@@ -167,7 +167,7 @@ public struct RuntimeClient: Sendable {
             throw DevysHTTPError.unauthorized
         },
         setTakeover: @escaping @Sendable (String, String, Bool) async throws -> Void = { _, _, _ in },
-        workDecisions: @escaping @Sendable (String, String) async throws -> [Decision] = { _, _ in [] },
+        startWork: @escaping @Sendable (String, String) async throws -> WorkItem = { _, _ in throw DevysHTTPError.unauthorized },
         answer: @escaping @Sendable (String, String, Bool) async throws -> Void = { _, _, _ in },
         sendFile: @escaping @Sendable (String, String, ChosenFile) async throws -> Void = { _, _, _ in },
         projects: @escaping @Sendable (String) async throws -> [Project] = { _ in [] },
@@ -231,7 +231,7 @@ public struct RuntimeClient: Sendable {
         self.createWorkItem = createWorkItem
         self.updateWorkItem = updateWorkItem
         self.setTakeover = setTakeover
-        self.workDecisions = workDecisions
+        self.startWork = startWork
         self.answer = answer
         self.sendFile = sendFile
         self.projects = projects
@@ -472,8 +472,8 @@ extension RuntimeClient {
             setTakeover: { id, workItem, takeOver in
                 try await hub.call { api, session in try await api.setTakeover(session, businessID: id, id: workItem, takeOver: takeOver) }
             },
-            workDecisions: { id, workItem in
-                try await hub.call { api, session in try await api.decisions(session, businessID: id, workItemID: workItem) }
+            startWork: { id, workItem in
+                try await hub.call { api, session in try await api.startWorkItem(session, businessID: id, id: workItem) }
             },
             answer: { id, decision, approve in
                 try await hub.call { api, session in try await api.answer(session, businessID: id, decisionID: decision, approve: approve) }

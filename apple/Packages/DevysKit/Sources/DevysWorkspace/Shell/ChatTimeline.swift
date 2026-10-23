@@ -2,7 +2,7 @@ package import DevysClient
 package import Foundation
 
 /// A conversation as a group chat lays it out: messages grouped by author, a time
-/// heading when the day changes or an hour passes, hand-off events as centred cards,
+/// heading when the day changes or an hour passes, events and work cards centred,
 /// and sent-but-unposted messages last.
 package struct ChatTimeline: Equatable {
     package enum Position: Equatable { case single, first, middle, last }
@@ -37,7 +37,7 @@ package struct ChatTimeline: Equatable {
         package var startsGroup: Bool { position == .single || position == .first }
     }
 
-    /// A hand-off or other system event; `ref` is the record it is about.
+    /// A system event or a work item's card; `ref` is the record it is about.
     package struct Event: Equatable, Identifiable {
         package let id: String
         package let text: String

@@ -50,6 +50,13 @@ private actor AskServer {
 
     func refuse(_ error: any Error & Sendable) { refusal = error }
     func takeOver(_ id: String, _ taking: Bool) { takeovers.append((id, taking)) }
+
+    /// The business's Chrome brought to the front, after the take over.
+    var fronts: [String] = []
+    func front(_ business: String) -> Int? {
+        fronts.append(business)
+        return nil
+    }
 }
 
 private let spend = Decision(
@@ -145,6 +152,12 @@ struct AskingFeatureTests {
                 allow: { _, _ in },
                 biometry: { "Touch ID" }
             )
+            $0.browserClient = BrowserClient(
+                status: { _ in BrowserStatus(open: false) },
+                picture: { _ in throw DevysHTTPError.rejected(status: 503, message: "No browser.") },
+                input: { _, _ in },
+                front: { await server.front($0) }
+            )
             $0.continuousClock = ContinuousClock()
         } operation: {
             Store(initialState: Workspace.State(server: URL(string: "http://127.0.0.1:5173")!)) { Workspace() }
@@ -196,17 +209,33 @@ struct AskingFeatureTests {
         #expect(store.signing == nil)
     }
 
-    @Test("Take over on a take-over request takes the work over and opens its live browser beside the thread")
-    func takesOver() async {
-        let server = AskServer(home: Home(needsYou: [NeedsYouItem(signIn, title: "Register the domain")]))
-        let store = makeStore(server)
-        await settle("home", until: { store.home.value?.needsYou.first?.kind == .takeOver })
-        store.send(.takeOverTapped("c1"))
-        #expect(store.place == .thread("c1") && store.state.topLayer == .browser(workID: "c1"))
-        for _ in 0..<2_000 where await server.takeovers.isEmpty { await Task.yield() }
-        let takeovers = await server.takeovers
-        #expect(takeovers.count == 1 && takeovers.first?.0 == "c1" && takeovers.first?.1 == true)
-    }
+    #if os(macOS)
+        @Test("Open Chrome on a take-over request takes the work over, then brings the business's Chrome to the front")
+        func takesOver() async {
+            let server = AskServer(home: Home(needsYou: [NeedsYouItem(signIn, title: "Register the domain")]))
+            let store = makeStore(server)
+            await settle("home", until: { store.home.value?.needsYou.first?.kind == .takeOver })
+            store.send(.takeOverTapped("c1"))
+            for _ in 0..<4_000 where await server.fronts.isEmpty { await Task.yield() }
+            let takeovers = await server.takeovers
+            #expect(takeovers.count == 1 && takeovers.first?.0 == "c1" && takeovers.first?.1 == true)
+            #expect(await server.fronts == ["acme"])
+            #expect(store.place == .home && store.layers.isEmpty, "the Mac's in-app browser is only a preview; the owner works in Chrome")
+        }
+    #else
+        @Test("Take over on a take-over request takes the work over and opens its live browser beside the thread")
+        func takesOver() async {
+            let server = AskServer(home: Home(needsYou: [NeedsYouItem(signIn, title: "Register the domain")]))
+            let store = makeStore(server)
+            await settle("home", until: { store.home.value?.needsYou.first?.kind == .takeOver })
+            store.send(.takeOverTapped("c1"))
+            #expect(store.place == .thread("c1") && store.state.topLayer == .browser(workID: "c1"))
+            for _ in 0..<2_000 where await server.takeovers.isEmpty { await Task.yield() }
+            let takeovers = await server.takeovers
+            #expect(takeovers.count == 1 && takeovers.first?.0 == "c1" && takeovers.first?.1 == true)
+            #expect(await server.fronts.isEmpty)
+        }
+    #endif
 
     @Test("A secret request opens the secure entry sheet for that name; the value goes to the vault, never into state")
     func addsSecret() async {
@@ -242,7 +271,7 @@ struct AskingFeatureTests {
         #expect(DecisionText.title(logoRequest) == "Your logo, for the site")
     }
 
-    @Test("A file request is answered with the chosen file, once, and leaves Needs you")
+    @Test("A file request is answered with the chosen file, once, and is no longer waiting")
     func sendsFile() async {
         let server = AskServer(home: Home(needsYou: [NeedsYouItem(logoRequest, title: "Register the domain")]))
         let store = makeStore(server)

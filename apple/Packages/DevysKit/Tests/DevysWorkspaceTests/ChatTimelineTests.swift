@@ -181,7 +181,7 @@ struct ChatTimelineTests {
         #expect(state.mood(for: state.snapshot.employees[1]) == .idle)
     }
 
-    @Test("Take-over is mine only when the signed-in person has it; a work item shows its own decisions")
+    @Test("Take-over is mine only when the signed-in person has it; a work item shows its own request")
     func takeoverAndWorkDecisions() {
         var state = Workspace.State(server: URL(string: "http://127.0.0.1:5173")!)
         state.account = .fixture
@@ -196,7 +196,7 @@ struct ChatTimelineTests {
             NeedsYouItem(Decision(id: "d2", employeeID: "growth", capability: "email.send", input: .object([:])), title: "email.send"),
             NeedsYouItem(kind: .work, id: "c2", title: "PR", workID: "c2")
         ]))
-        #expect(state.decisions(for: free).map(\.id) == ["d1"])
-        #expect(state.decisions(for: mine).isEmpty)
+        #expect(state.request(for: free)?.id == "d1")
+        #expect(state.request(for: mine) == nil)
     }
 }

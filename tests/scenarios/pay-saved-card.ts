@@ -29,5 +29,9 @@ export default {
     payment: "The saved card",
     years: "1 year",
   },
-  turns: [{ say: "Can you buy the domain acmeroasters-sample.com for us?" }, { stop: "spend" }],
+  turns: [
+    { say: "Can you buy the domain acmeroasters-sample.com for us?" },
+    { start: true, optional: true },
+    { stop: "spend" },
+  ],
 } satisfies Scenario;

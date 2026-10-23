@@ -48,7 +48,7 @@ const showPanel = async (page: Page) => {
   if (await show.isVisible()) await show.click();
 };
 
-test("routines show on the desk and overview, open read-only, pause and resume, and are proposed in Needs you", async ({
+test("routines show on the desk and overview, open read-only, pause and resume, and are proposed in the chat where asked", async ({
   page,
 }) => {
   const stores = await localStores();
@@ -107,9 +107,9 @@ test("routines show on the desk and overview, open read-only, pause and resume, 
   try {
     await signIn(page, sql, owner.person);
 
-    // Needs you: the proposal reads as a whole, its long instruction folded.
-    const needsYou = page.getByRole("region", { name: "Needs you" });
-    const proposal = needsYou.getByTestId("routine-proposal");
+    // Growth's chat, where it asked: the proposal reads as a whole, its long instruction folded.
+    await sidebar(page).getByRole("link", { name: "Growth" }).click();
+    const proposal = page.getByRole("main").getByTestId("routine-proposal");
     await expect(proposal.getByText("Growth proposes a routine")).toBeVisible();
     await expect(proposal.getByText("Inbox sweep")).toBeVisible();
     await expect(proposal.getByText("Every hour (America/New_York)")).toBeVisible();
@@ -175,9 +175,9 @@ test("routines show on the desk and overview, open read-only, pause and resume, 
     await expect(overview.getByText("Inbox sweep")).toHaveCount(0);
 
     // Approving the proposal answers that exact request.
-    await sidebar(page).getByRole("link", { name: /^Home/ }).click();
+    await sidebar(page).getByRole("link", { name: "Growth" }).click();
     await page
-      .getByRole("region", { name: "Needs you" })
+      .getByRole("main")
       .getByTestId("routine-proposal")
       .getByRole("button", { name: "Approve" })
       .click();

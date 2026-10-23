@@ -46,8 +46,8 @@ also verified live. No public product has launched.
 - **Asking the owner.** `askOwner`, a core capability of the Work app every role holds, is
   asked in a work item's thread and returns at once: **approve** an exact action (what, with
   whom, an amount and renewal for a spend) or **take over** (sign-in, 2FA, CAPTCHA in the
-  business's browser). Requests are decisions with a kind, listed in Needs you; the answer is
-  posted in the thread, which wakes the employee, and asking again with the same input reads
+  business's browser). Requests are decisions with a kind, one pending per work item at a time,
+  shown in the work item's live card; the answer is posted in the thread, which wakes the employee, and asking again with the same input reads
   it. An approve with an amount is a spend approval: only a signature by one of the owner's
   device keys over its canonical payload approves it (the web shows it and cannot sign). The
   Mac and iPhone apps hold a Secure Enclave P-256 key unlocked by Face ID or Touch ID (or the
@@ -67,7 +67,7 @@ also verified live. No public product has launched.
   again once, at that time; a due date is only a deadline.
 - **Routines.** An employee proposes recurring work (a five-field cron in a time zone,
   optionally within active hours) or work started by an event, for a responsibility or a
-  project; the owner's decision in Needs you activates that exact revision. The minute tick
+  project; the owner's decision (one card where it was asked) activates that exact revision. The minute tick
   runs each due slot once (`routine:<id>:<slot>`; missed slots run once, not as a backlog) in
   the project's channel or the employee's direct chat. A quiet routine that finds nothing
   posts nothing and is counted in the briefing. The owner pauses and resumes routines; a
@@ -76,8 +76,8 @@ also verified live. No public product has launched.
   installed for every business. An app's capabilities are hidden from employees and refused unless the app is
   installed, as well as granted. The owner installs, removes and pins apps in Settings.
 - **Remote apps (local mode).** An employee finds an app with `appSearch` (the business's apps
-  and the official MCP Registry) and asks with `askOwner` (kind connect); the owner sees a card
-  with its logo, name and why in the thread and in Needs you, or adds one in **Settings › Apps &
+  and the official MCP Registry) and asks with `askOwner` (kind connect); the work item's card shows
+  its logo, name and why with Connect, or the owner adds one in **Settings › Apps &
   connections › Add app** (search, or paste an MCP server's address). Connect opens the
   provider's own sign-in (OAuth 2.1 as the MCP spec has it, through the official TypeScript SDK
   on the Mac host; tokens are vault secrets only the host opens). One review sets what employees
@@ -108,9 +108,11 @@ also verified live. No public product has launched.
   the Chief of Staff, then a project's channel, a direct chat or a work item's thread, with the
   face of whoever answers inside the field (tap to choose someone else), a placeholder
   naming them, @-autocomplete, a mic that dictates and, in an empty field, a button that
-  starts a hands-free conversation. The right panel shows that conversation's permanent view (Needs
-  you, the employee's desk, the project overview, the work card), remembered open or
-  closed per kind, with layers stacked above it: pages with their versions, files, the
+  starts a hands-free conversation. A work item is one live card (its plan with the owner's
+  steps as "You: …", and one line: Working with Stop, Ready when you are with Start, Your turn
+  with its one action, Waiting, or Done), shown where it was created and pinned above a
+  thread's composer; plans with an owner step, a payment or anything public wait for Start. The
+  right panel is only for looking: an employee's desk or a project's overview, and layers: pages with their versions, files, the
   Documents and Code apps, coding sessions and the live browser. A page published in reply
   opens on its own and a new version replaces it in place; **Start a thread** on a message
   creates a work item; **Ask** quotes a selection into the composer; the open layer goes
@@ -172,7 +174,7 @@ also verified live. No public product has launched.
   password or card by name without the employee seeing it (below).
 - **Secrets by name (local mode).** The owner adds a business's secrets (an API key, a password,
   a card) in **Settings › Secrets** or when an employee asks with `askOwner` (kind secret, in
-  Needs you), in a secure entry sheet; lists show names only. Each is encrypted under its own key
+  its work item's card), in a secure entry sheet; lists show names only. Each is encrypted under its own key
   in Postgres, wrapped by a master key the Mac host keeps in a file its employees' processes
   cannot read. Employees name secrets: `run` and deploys get them as environment variables of
   that one process, redacted from output; `browserFill` types a password, or a card only against

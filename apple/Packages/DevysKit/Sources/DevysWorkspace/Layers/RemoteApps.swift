@@ -5,7 +5,7 @@ import DevysClient
 import DevysDesignSystem
 import SwiftUI
 
-// MARK: - Remote apps (`devys:team/app/<id>`): the connect card, Needs you rows, the review layer
+// MARK: - Remote apps (`devys:team/app/<id>`): Connect, a connect request, the review layer
 
 /// An app's logo as Devys serves it (loaded with this device's sign-in), or its first letter.
 struct AppLogo: View {
@@ -99,46 +99,8 @@ extension Workspace.State {
     }
 }
 
-/// The connect card in a conversation: logo, name, the one line why, and Connect.
-struct RemoteAppCard: View {
-    let store: StoreOf<Workspace>
-    let appID: String
-    let text: String
-
-    var body: some View {
-        if let app = store.state.remoteApp(appID) {
-            let why = text.isEmpty ? app.summary : text
-            HStack(spacing: 10) {
-                Button { store.send(.layerOpened(.remoteApp(app.id))) } label: {
-                    HStack(spacing: 10) {
-                        AppLogo(path: app.logo, name: app.name, size: 30)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(app.name).font(DevysTypography.control.weight(.semibold)).foregroundStyle(DevysColors.ink)
-                            if !why.isEmpty {
-                                Text(why).font(DevysTypography.caption).foregroundStyle(DevysColors.ink3).lineLimit(2)
-                            }
-                        }
-                        Spacer(minLength: 4)
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("Open")
-                AppActionButton(store: store, app: app)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .frame(maxWidth: 520, alignment: .leading)
-            .background(DevysColors.sheet, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay { RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(DevysColors.hairline, lineWidth: 1) }
-            .devysElevation(.resting)
-        } else {
-            Text(text).font(DevysTypography.secondary).foregroundStyle(DevysColors.ink2).lineLimit(1)
-        }
-    }
-}
-
-/// An app an employee asks the owner to connect, in Needs you.
+/// An app an employee asks the owner to connect, not for a work item: one card in the chat where
+/// it was asked. A work item's connect request is on its card.
 struct ConnectRequestRow: View {
     let store: StoreOf<Workspace>
     let decision: Decision
@@ -161,29 +123,6 @@ struct ConnectRequestRow: View {
                 }
                 Button("Decline") { store.send(.decisionAnswered(decision.id, approve: false)) }
                     .buttonStyle(DevysButtonStyle(.raised, compact: true))
-                Spacer(minLength: 4)
-                if let workID = decision.workItemID {
-                    Button("Thread") { store.send(.threadOpened(workID)) }
-                        .buttonStyle(.plain).font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
-                }
-            }
-        }
-        .devysCard(padding: 12)
-    }
-}
-
-/// A remote app whose sign-in stopped working: Reconnect.
-struct ReconnectRow: View {
-    let store: StoreOf<Workspace>
-    let app: AppBadge
-
-    var body: some View {
-        HStack(spacing: 10) {
-            AppLogo(path: app.logo, name: app.name, size: 26)
-            Text("Reconnect \(app.name)").font(DevysTypography.control).foregroundStyle(DevysColors.ink).lineLimit(1)
-            Spacer(minLength: 4)
-            if let entry = store.state.remoteApp(app.id) {
-                AppActionButton(store: store, app: entry)
             }
         }
         .devysCard(padding: 12)

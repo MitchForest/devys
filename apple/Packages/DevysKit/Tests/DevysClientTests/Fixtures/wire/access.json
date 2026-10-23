@@ -348,7 +348,7 @@
       "constraints": {},
       "responsibility": null,
       "created_at": "2026-01-01T00:00:00.000Z",
-      "description": "Ask the owner to activate a proposed routine (its ref) at exactly this revision. It is the owner's decision each time: the request waits in Needs you, and once approved, calling it again with the same input activates it. A later revision needs a new decision.",
+      "description": "Ask the owner to activate a proposed routine (its ref) at exactly this revision. It is the owner's decision each time: the request waits for the owner, and once approved, calling it again with the same input activates it. A later revision needs a new decision.",
       "effect": "change",
       "limits": false
     },

@@ -100,11 +100,11 @@ test("the owner hires from a template, edits and retires, and talks to any emplo
     expect(workItem.owner_employee_id).toBe(growth.id);
     expect(workItem.project_id).toBe(project.id);
 
-    // Its thread opens in the middle, under the project, with its work card.
+    // Its thread opens in the middle, under the project, with its card pinned above the reply.
     await expect(page.getByTestId("place-title")).toHaveText("Write the launch post");
-    const card = page.getByRole("region", { name: "Work item" });
-    await expect(card.getByTestId("work-item-owner")).toHaveText("Growth");
-    await expect(card.getByTestId("panel-title")).toHaveText("Write the launch post");
+    const card = page.getByTestId("work-card");
+    await expect(card.getByText("Growth", { exact: true })).toBeVisible();
+    await expect(card.getByText("Write the launch post")).toBeVisible();
     await page.getByRole("textbox", { name: "Reply" }).fill("Start with the outline.");
     await page.getByRole("button", { name: "Send" }).click();
     await expect.poll(() => sent.length).toBe(2);

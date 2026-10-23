@@ -25,8 +25,8 @@ test("on a phone: tabs of Home, Projects, Team and Apps; the conversation full s
   });
   await insertMessage(sql, owner.business, `project:${project.id}`, {
     author: "system",
-    kind: "event",
-    text: 'Growth took on "Write a tagline".',
+    kind: "card",
+    text: "Write a tagline",
     ref: `devys:work/item/${workItem.id}`,
   });
   const sent = await stubPosting(page);
@@ -67,14 +67,12 @@ test("on a phone: tabs of Home, Projects, Team and Apps; the conversation full s
     await page.keyboard.press("Escape");
     await expect(details).toBeHidden();
 
-    // A hand-off card opens the thread full screen; its work card is its details.
-    await page.getByTestId("handoff").click();
+    // The work's card opens the thread full screen, its card pinned above the reply; a thread
+    // has no details sheet.
+    await page.getByTestId("work-card").getByText("Write a tagline").click();
     await expect(page.getByRole("textbox", { name: "Reply" })).toBeVisible();
-    await page.getByRole("button", { name: "Details" }).click();
-    await expect(details.getByRole("region", { name: "Work item" })).toBeVisible();
-    await expect(details.getByTestId("work-item-owner")).toHaveText("Growth");
-    await page.keyboard.press("Escape");
-    await expect(details).toBeHidden();
+    await expect(page.getByTestId("work-card").getByText("Growth", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Details" })).toHaveCount(0);
     await page.getByRole("textbox", { name: "Reply" }).fill("Under six words.");
     await page.getByRole("button", { name: "Send" }).click();
     await expect.poll(() => sent.length).toBe(1);

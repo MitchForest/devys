@@ -25,6 +25,7 @@ export default {
     { tap: "email", optional: true },
     { tap: "mailbox", optional: true },
     { tap: "email", optional: true },
+    { start: true, optional: true },
     { stop: ["connect", "take_over", "secret", "approve", "decision"] },
   ],
 } satisfies Scenario;

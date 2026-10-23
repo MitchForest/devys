@@ -1,17 +1,15 @@
-import { Code2, SquareTerminal } from "lucide-react";
+import { SquareTerminal } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { ref } from "../../protocol/ref.ts";
 import { api } from "../app/api.ts";
 import type { LiveCodingSession } from "../../apps/code/contract.ts";
-import type { WorkItem } from "../../work/contract.ts";
 import { openTerminalWindow } from "../shell/terminal-window.tsx";
 import { useBusinessId, useEmployees } from "../app/data.ts";
 import { useNav } from "../app/navigation.ts";
 import { keys, poll, problemOf } from "../app/query.ts";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { StatusChip, type Tone } from "../design/primitives.tsx";
+import type { Tone } from "../design/primitives.tsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -27,13 +25,6 @@ export const stateChip: Record<LiveCodingSession["state"], { tone: Tone; title: 
   unavailable: { tone: "waiting", title: "Mac host unavailable" },
 };
 
-/** The "3 files changed, …" line of a diff stat. */
-const changeLine = (diffStat: string) =>
-  diffStat
-    .split("\n")
-    .find((line) => /files? changed/.test(line))
-    ?.trim() ?? (diffStat ? `${diffStat.split("\n").length} files changed` : "No changes yet");
-
 /** Polls a work item's coding sessions while it is shown; the provider is the source. */
 export function useSessions(businessId: string, workId: string) {
   return useQuery({
@@ -42,59 +33,6 @@ export function useSessions(businessId: string, workId: string) {
     select: (result) => result.sessions,
     refetchInterval: poll,
   });
-}
-
-/** The coding sessions on a work item, each opening its session view. */
-export function CodingSessions({ item }: { item: WorkItem }) {
-  const businessId = useBusinessId();
-  const nav = useNav();
-  const sessions = useSessions(businessId, item.id).data ?? [];
-  if (!sessions.length) return null;
-  return (
-    <div className="flex flex-col gap-1" data-testid="coding-sessions">
-      <div className="flex items-center gap-2">
-        <span className="text-label font-medium text-ink-3">Coding · {sessions.length}</span>
-        {sessions.some((session) => session.purpose === "build") && (
-          <Button
-            variant="quiet"
-            size="compact"
-            onClick={() => void openTerminalWindow(businessId, { work: item.id })}
-          >
-            <SquareTerminal /> Open terminal
-          </Button>
-        )}
-      </div>
-      {sessions.map((session) => {
-        const chip = stateChip[session.state];
-        return (
-          <button
-            key={session.id}
-            type="button"
-            onClick={() =>
-              nav.openLayer({ kind: "record", ref: ref("code", "session", session.id) })
-            }
-            className="flex items-center gap-2 rounded-small px-2 py-1.5 text-left hover:bg-sheet-tint"
-          >
-            <Code2 className="size-4 shrink-0 text-ink-3" />
-            <span className="flex min-w-0 flex-col">
-              <span className="truncate text-detail font-medium text-ink">
-                {providerName(session.provider)}
-                {session.purpose === "review" ? " · review" : ""}
-              </span>
-              <span className="truncate text-caption text-ink-3">
-                {session.branch} · {changeLine(session.diff_stat)}
-              </span>
-            </span>
-            <span className="ml-auto shrink-0">
-              <StatusChip tone={chip.tone} small>
-                {chip.title}
-              </StatusChip>
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  );
 }
 
 /**

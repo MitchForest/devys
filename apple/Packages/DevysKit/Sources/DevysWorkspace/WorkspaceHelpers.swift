@@ -82,10 +82,7 @@ extension Workspace.Action {
     package static func workItemEdited(_ draft: WorkItemDraft) -> Self { Self(.workItem(.edited(draft))) }
     package static var workItemConfirmed: Self { Self(.workItem(.confirmed)) }
     package static var workItemCancelled: Self { Self(.workItem(.cancelled)) }
-    package static func planEditTapped(_ id: String) -> Self { Self(.workItem(.planEditTapped(workItemID: id))) }
-    package static func planEdited(_ draft: WorkPlanDraft) -> Self { Self(.workItem(.planEdited(draft))) }
-    package static var planSaveTapped: Self { Self(.workItem(.planSaveTapped)) }
-    package static var planEditCancelled: Self { Self(.workItem(.planEditCancelled)) }
+    package static func startTapped(_ id: String) -> Self { Self(.workItem(.startTapped(workItemID: id))) }
     package static func reassigned(_ id: String, to owner: String) -> Self { Self(.workItem(.reassigned(workItemID: id, ownerID: owner))) }
     package static var hireTapped: Self { Self(.team(.hireTapped)) }
     package static func templateChosen(_ id: String) -> Self { Self(.team(.templateChosen(id))) }
@@ -141,7 +138,9 @@ extension Workspace.Action {
     package static func paletteToggled(_ open: Bool) -> Self { Self(.paletteToggled(open)) }
     package static var refreshTapped: Self { Self(.refreshTapped) }
     package static func activeChanged(_ isActive: Bool) -> Self { Self(.activeChanged(isActive)) }
-    package static var stopTapped: Self { Self(.stopTapped) }
+    /// ⌘.: the employee of the conversation in view.
+    package static var stopTapped: Self { Self(.stopTapped(employeeID: nil)) }
+    package static func stopTapped(_ employeeID: String) -> Self { Self(.stopTapped(employeeID: employeeID)) }
     package static var noticeDismissed: Self { Self(.noticeDismissed) }
     package static var signOutTapped: Self { Self(.signOutTapped) }
     package static func preferencesToggled(_ open: Bool) -> Self { Self(.preferencesToggled(open)) }

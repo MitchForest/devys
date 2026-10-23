@@ -28,12 +28,6 @@ public struct CodingSession: Equatable, Sendable, Decodable, Identifiable {
 
     public var providerName: String { provider == "codex" ? "Codex" : "Claude Code" }
 
-    /// The "3 files changed, …" line of the diff stat.
-    public var changeLine: String {
-        diffStat.split(separator: "\n").first { $0.contains("changed") }.map { String($0).trimmingCharacters(in: .whitespaces) }
-            ?? (diffStat.isEmpty ? "No changes yet" : "\(diffStat.split(separator: "\n").count) files changed")
-    }
-
     public init(
         id: String,
         provider: String,

@@ -15,7 +15,7 @@ const blankCard = { number: "", expiry: "", cvc: "", name: "", postal: "" };
  * The secure entry sheet: a secret's value, or a card, typed (or filled by the browser) and sent
  * straight to the server, which hands it to the Mac host to seal. The value lives only in this
  * form's state while it is open: never in a query cache, a conversation, a URL or a log, and it is
- * forgotten when the sheet closes. Opened from Settings › Secrets, or from a request in Needs you
+ * forgotten when the sheet closes. Opened from Settings › Secrets, or from a request's card
  * with the name and kind fixed.
  */
 export function SecretEntrySheet({

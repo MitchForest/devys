@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { localStores } from "../fixtures/local.ts";
 import { sidebar, signIn } from "./helpers.ts";
 
-test("Home's Needs you approves an exact request; new work opens its thread and is edited there", async ({
+test("Home asks once, inline, and approves an exact request; new work opens its thread with its card pinned", async ({
   page,
 }) => {
   const stores = await localStores();
@@ -22,22 +22,17 @@ test("Home's Needs you approves an exact request; new work opens its thread and 
   try {
     await signIn(page, sql, owner.person);
 
-    // The request waits on Home: counted on its row, in Needs you, and inline in the chat.
+    // The request waits on Home: counted on its row and shown once, inline in the chat.
     await expect(sidebar(page).getByRole("link", { name: /^Home/ })).toHaveAccessibleName(
       "Home, 1",
     );
-    const needsYou = page.getByRole("region", { name: "Needs you" });
-    await expect(needsYou.getByTestId("panel-title")).toHaveText("Needs you");
-    await expect(needsYou.getByText("Chief of Staff asks")).toBeVisible();
-    // Home lists it once, in Needs you; the conversation beside it doesn't repeat it.
-    await expect(page.getByRole("main").getByText("https://example.com")).toHaveCount(0);
-
-    // Its exact input unfolds on demand, and Approve answers it in place.
-    await needsYou.getByRole("button", { name: "Details" }).click();
-    await expect(needsYou.getByText("https://example.com")).toBeVisible();
-    await needsYou.getByRole("button", { name: "Approve" }).click();
-    await expect(needsYou).toBeHidden();
-    await expect(page.getByRole("main").getByText("https://example.com")).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Needs you" })).toHaveCount(0);
+    const request = page.getByTestId("request-card");
+    await expect(request).toHaveCount(1);
+    await expect(request.getByText("Chief of Staff asked to run this exactly:")).toBeVisible();
+    await expect(request.getByText("https://example.com")).toBeVisible();
+    await request.getByRole("button", { name: "Approve" }).click();
+    await expect(request).toHaveCount(0);
     await expect(sidebar(page).getByRole("link", { name: /^Home/ })).toHaveAccessibleName("Home");
     await expect
       .poll(
@@ -50,7 +45,7 @@ test("Home's Needs you approves an exact request; new work opens its thread and 
       )
       .toBe("approved");
 
-    // New → New work item opens the work item's thread with its card beside it.
+    // New → New work item opens the work item's thread with its card pinned above the reply.
     await sidebar(page).getByRole("button", { name: "New", exact: true }).click();
     await page.getByRole("menuitem", { name: "New work item" }).click();
     const dialog = page.getByRole("dialog", { name: "New work item" });
@@ -58,16 +53,13 @@ test("Home's Needs you approves an exact request; new work opens its thread and 
     await dialog.getByRole("button", { name: "Create work item" }).click();
     await expect(dialog).toBeHidden();
     await expect(page.getByTestId("place-title")).toHaveText("Draft the PR inquiry");
-    const card = page.getByRole("region", { name: "Work item" });
-    await expect(card.getByTestId("work-item-owner")).toHaveText("Chief of Staff");
+    const card = page.getByTestId("work-card");
+    await expect(card.getByText("Chief of Staff", { exact: true })).toBeVisible();
 
-    // The card is read-only until the owner takes the work over, which fences its employee.
-    await expect(card.getByRole("button", { name: "Edit next, waiting on and due" })).toHaveCount(
-      0,
-    );
-    await expect(card.getByRole("button", { name: "Mark done" })).toHaveCount(0);
-    await card.getByRole("button", { name: "Take over" }).click();
-    await expect(card.getByRole("button", { name: "Hand back" })).toBeVisible();
+    // Right-click takes the work over, which fences its employee; the card says the owner has it.
+    await card.getByText("Draft the PR inquiry").click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Take over" }).click();
+    await expect(card.getByTestId("work-state")).toHaveText("You have it");
     expect(
       (
         await sql.row<{ taken_over_by: string | null }>(
@@ -77,28 +69,20 @@ test("Home's Needs you approves an exact request; new work opens its thread and 
       )?.taken_over_by,
     ).toBe(owner.person);
 
-    // Then they edit what's next and what it waits on at the revision on screen.
-    await card.getByRole("button", { name: "Edit next, waiting on and due" }).click();
-    await card.getByLabel("Next").fill("Email three editors");
-    await card.getByLabel("Waiting on").fill("The press kit");
-    await card.getByRole("button", { name: "Save" }).click();
-    await expect(card.getByText("Email three editors")).toBeVisible();
-    expect(
-      await sql.row<{ next_action: string; wait_condition: string | null }>(
-        "SELECT next_action, wait_condition FROM work_items WHERE business_id = $1",
-        [owner.business],
-      ),
-    ).toEqual({
-      next_action: "Email three editors",
-      wait_condition: "The press kit",
-    });
-
-    // Hand back gives it back, read-only again.
+    // Hand back gives it back.
     await card.getByRole("button", { name: "Hand back" }).click();
-    await expect(card.getByRole("button", { name: "Take over" })).toBeVisible();
-    await expect(card.getByRole("button", { name: "Edit next, waiting on and due" })).toHaveCount(
-      0,
-    );
+    await expect(card.getByText("You have it")).toHaveCount(0);
+    await expect
+      .poll(
+        async () =>
+          (
+            await sql.row<{ taken_over_by: string | null }>(
+              "SELECT taken_over_by FROM work_items WHERE business_id = $1",
+              [owner.business],
+            )
+          )?.taken_over_by,
+      )
+      .toBeNull();
   } finally {
     await page.close();
     await stores.remove([owner]);

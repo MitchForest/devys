@@ -16,7 +16,7 @@ export interface Bubble {
   replyTo: string | null;
   viaVoice: boolean;
   reactions: readonly string[];
-  /** What an event opens: a hand-off card's work item, a page. */
+  /** What an event or card opens: a work item, a page, a coding session. */
   ref: Ref | null;
   /** Answers to tap, offered on the latest employee message until the owner says anything. */
   replies: readonly string[];

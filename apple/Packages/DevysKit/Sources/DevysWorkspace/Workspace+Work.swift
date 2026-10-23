@@ -42,7 +42,7 @@ package enum ProjectIntent {
 }
 
 /// The owner pauses an active routine or resumes a paused one; a proposed one is activated by
-/// answering its decision in Needs you.
+/// answering its request where it was asked.
 package enum RoutineIntent {
     case pauseTapped(routineID: String)
     case resumeTapped(routineID: String)
@@ -97,8 +97,6 @@ extension Workspace {
         case .workItemStateSet(let workItemID, let target):
             setState(workItemID, target, state: state)
         case .takeoverToggled(let workItemID):
-            // Taking over or handing back closes any plan left open on that work.
-            if state.workPlan?.workItemID == workItemID { state.workPlan = nil }
             toggleTakeover(workItemID, state: state)
         default:
             break

@@ -26,6 +26,7 @@ export default {
     { tap: "address", optional: true },
     { tap: "payment", optional: true },
     { tap: "registrar", optional: true },
+    { start: true, optional: true },
     { stop: ["connect", "take_over", "secret", "spend", "approve", "decision"] },
   ],
 } satisfies Scenario;

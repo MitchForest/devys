@@ -187,7 +187,7 @@ test("a turn that stopped is Devys's notice, not the employee's words, with Ask 
   }
 });
 
-test("a project opens on its channel; a hand-off card opens the thread; Back and Start a thread", async ({
+test("a project opens on its channel; the work's card opens the thread; Back and Start a thread", async ({
   page,
 }) => {
   const stores = await localStores();
@@ -215,8 +215,8 @@ test("a project opens on its channel; a hand-off card opens the thread; Back and
   });
   await insertMessage(sql, owner.business, channel, {
     author: "system",
-    kind: "event",
-    text: 'Growth took on "Write a tagline".',
+    kind: "card",
+    text: "Write a tagline",
     ref: `devys:work/item/${workItem.id}`,
   });
   const sent = await stubPosting(page, () => [growth.id]);
@@ -255,18 +255,18 @@ test("a project opens on its channel; a hand-off card opens the thread; Back and
       "Launch",
     );
 
-    // The hand-off card moves the middle into the work item's thread; its card is the panel.
+    // The work's card moves the middle into its thread, where the card is pinned.
     await sidebar(page)
       .getByRole("link", { name: /^Launch/ })
       .click();
-    await page.getByTestId("handoff").click();
+    await page.getByTestId("work-card").getByText("Write a tagline").click();
     await expect(page.getByTestId("place-title")).toHaveText("Write a tagline");
     await expect(
       page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Launch" }),
     ).toBeVisible();
-    const card = page.getByRole("region", { name: "Work item" });
-    await expect(card.getByTestId("panel-title")).toHaveText("Write a tagline");
-    await expect(card.getByTestId("work-item-owner")).toHaveText("Growth");
+    const card = page.getByTestId("work-card");
+    await expect(card).toHaveCount(1);
+    await expect(card.getByText("Growth", { exact: true })).toBeVisible();
     // The thread is an address: a reload keeps it and its Back; the browser's Back leaves it.
     await expect(page).toHaveURL(`/${owner.business}/thread/${workItem.id}`);
     await page.reload();
@@ -301,8 +301,8 @@ test("a project opens on its channel; a hand-off card opens the thread; Back and
     await page.getByRole("menuitem", { name: "Start a thread" }).click();
     await expect(page.getByTestId("place-title")).toHaveText("Growth, can you write the tagline?");
     await expect(
-      page.getByRole("region", { name: "Work item" }).getByTestId("work-item-owner"),
-    ).toHaveText("Chief of Staff");
+      page.getByTestId("work-card").getByText("Chief of Staff", { exact: true }),
+    ).toBeVisible();
     expect(
       await sql.row<{ owner_employee_id: string; project_id: string }>(
         "SELECT owner_employee_id, project_id FROM work_items WHERE business_id = $1 AND title = $2",

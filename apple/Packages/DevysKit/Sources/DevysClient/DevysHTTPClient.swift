@@ -115,6 +115,11 @@ public struct DevysHTTPClient: Sendable {
         ))
     }
 
+    /// Starts a plan that waits for the owner: its employee takes it now. 409 once it has started.
+    public func startWorkItem(_ session: DeviceSession, businessID: String, id: String) async throws -> WorkItem {
+        try await send(authorized(session, path: "api/businesses/\(businessID)/work/\(id)/start", method: "POST"))
+    }
+
     /// One work item's requests with their answers. Pending ones across the business are Home's.
     public func decisions(_ session: DeviceSession, businessID: String, workItemID: String) async throws -> [Decision] {
         struct Page: Decodable { let decisions: [Decision] }

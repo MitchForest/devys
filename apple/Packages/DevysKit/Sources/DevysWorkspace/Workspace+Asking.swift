@@ -1,3 +1,6 @@
+#if os(macOS)
+    import AppKit
+#endif
 import ComposableArchitecture2
 import Dependencies
 package import DevysClient
@@ -29,7 +32,8 @@ package enum AskingIntent {
     /// Nil when the approval was signed and sent; otherwise why not.
     case signFinished(String?)
     case signDismissed
-    /// A take-over request: the owner takes the work over and its live browser opens.
+    /// A take-over request: the owner takes the work over. On the Mac the business's own Chrome
+    /// comes to the front to work in; elsewhere its live browser opens.
     case takeOverTapped(workItemID: String)
     /// A secret request: the secure entry sheet opens for that name (a card when it asks one).
     case secretTapped(decisionID: String)
@@ -79,11 +83,15 @@ extension Workspace {
         case .signDismissed:
             if state.signing?.isSigning != true { state.signing = nil }
         case .takeOverTapped(let workItemID):
-            reducePlace(.threadOpened(workItemID), state: &state)
-            reducePlace(.layerOpened(.browser(workID: workItemID)), state: &state)
-            changeWork(state, failure: "Couldn't take that work over.") { runtime, businessID in
-                try await runtime.setTakeover(businessID, workItemID, true)
-            }
+            #if os(macOS)
+                takeOverInChrome(workItemID, state: state)
+            #else
+                reducePlace(.threadOpened(workItemID), state: &state)
+                reducePlace(.layerOpened(.browser(workID: workItemID)), state: &state)
+                changeWork(state, failure: "Couldn't take that work over.") { runtime, businessID in
+                    try await runtime.setTakeover(businessID, workItemID, true)
+                }
+            #endif
         case .secretTapped, .secretSubmitted, .secretFinished, .secretDismissed:
             reduceSecretEntry(intent, state: &state)
         case .fileChosen(let decisionID, let file):
@@ -93,6 +101,40 @@ extension Workspace {
             }
         }
     }
+
+    #if os(macOS)
+        /// Takes the work over, then brings the business's own Chrome window to the front, where
+        /// the owner clicks and types; Hand back on the card returns it to its employee.
+        private func takeOverInChrome(_ workItemID: String, state: State) {
+            let businessID = state.businessID
+            guard !businessID.isEmpty else { return }
+            let runtime = runtime
+            let browser = browser
+            store.addTask {
+                do {
+                    try await runtime.setTakeover(businessID, workItemID, true)
+                } catch {
+                    try store.send(Action(.stopFinished("Couldn't take that work over.")))
+                    try await reloadWork(runtime, businessID)
+                    return
+                }
+                do {
+                    if let pid = try await browser.front(businessID) { await Self.activate(pid) }
+                } catch {
+                    try store.send(Action(.stopFinished("Chrome couldn't be brought to the front. Open it from the Dock.")))
+                }
+                try await reloadWork(runtime, businessID)
+            }
+        }
+
+        /// Hands activation to the Chrome process and activates it, as macOS's cooperative
+        /// activation asks of the app in front.
+        @MainActor static func activate(_ pid: Int) {
+            guard let chrome = NSRunningApplication(processIdentifier: pid_t(pid)) else { return }
+            NSApplication.shared.yieldActivation(to: chrome)
+            chrome.activate()
+        }
+    #endif
 
     /// The secure entry sheet for an employee's secret request; the value never enters state.
     private func reduceSecretEntry(_ intent: AskingIntent, state: inout State) {

@@ -81,18 +81,6 @@ private actor TeamServer {
         return updated
     }
 
-    /// Someone else changes the item meanwhile.
-    func touch(_ id: String) {
-        guard let index = workItems.firstIndex(where: { $0.id == id }) else { return }
-        let item = workItems[index]
-        workItems[index] = WorkItem(
-            id: id, ownerEmployeeID: item.ownerEmployeeID, title: item.title, nextAction: item.nextAction,
-            waitCondition: item.waitCondition, dueAt: item.dueAt, state: item.state, revision: item.revision + 1, takenOverBy: item.takenOverBy
-        )
-    }
-
-    func add(_ item: WorkItem) { workItems.append(item) }
-
     func create(_ newItem: NewWorkItem) -> WorkItem {
         newItems.append(newItem)
         let item = WorkItem(id: "c\(workItems.count + 1)", ownerEmployeeID: newItem.owner, title: newItem.title, projectID: newItem.projectID)
@@ -242,60 +230,6 @@ struct TeamFeatureTests {
         #expect(changes.count == 1)
         #expect(changes.first?.1 == WorkItemChange(expectedRevision: 3, owner: "engineering", state: .ready))
         #expect(store.work.value?.first?.state == .ready)
-    }
-
-    @Test("The work card is read-only until taken over; Edit saves only what changed, at the revision on screen")
-    func editsPlan() async {
-        let server = TeamServer()
-        await server.add(WorkItem(id: "c9", ownerEmployeeID: "growth", title: "Press kit", nextAction: "Draft it", state: .inProgress, revision: 1, takenOverBy: "person-preview"))
-        let store = await makeStore(server)
-        await settle("account and work", until: { store.account != nil && store.work.value?.count == 2 })
-
-        store.send(.planEditTapped("c1"))
-        #expect(store.workPlan == nil, "work the owner hasn't taken over stays read-only")
-
-        store.send(.planEditTapped("c9"))
-        #expect(store.workPlan?.workItemID == "c9" && store.workPlan?.nextAction == "Draft it" && store.workPlan?.hasDue == false)
-        store.send(.planSaveTapped)
-        #expect(store.workPlan == nil, "nothing changed closes the editor")
-        #expect(await server.changes.isEmpty)
-
-        store.send(.planEditTapped("c9"))
-        guard var draft = store.workPlan else { return #expect(Bool(false), "the editor opens") }
-        draft.nextAction = "  Send it to press  "
-        draft.waiting = "Logo files"
-        store.send(.planEdited(draft))
-        await server.touch("c9")
-        store.send(.planSaveTapped)
-        await settle("conflict", until: { store.workPlan?.error != nil && store.work.value?[1].revision == 2 })
-        #expect(store.workPlan?.nextAction == "  Send it to press  ", "the draft stays to save again")
-
-        store.send(.planSaveTapped)
-        await settle("saved", until: { store.workPlan == nil && store.work.value?[1].nextAction == "Send it to press" })
-        let change = await server.changes.last?.1
-        #expect(change == WorkItemChange(expectedRevision: 2, nextAction: "Send it to press", waitCondition: .set("Logo files")))
-        #expect(store.work.value?[1].waitCondition == "Logo files")
-
-        store.send(.planEditTapped("c9"))
-        store.send(.takeoverToggled("c9"))
-        #expect(store.workPlan == nil, "handing back closes the editor")
-    }
-
-    @Test("A plan's due date is saved as the end of that day, and only when the day changes")
-    func planDue() {
-        var calendar = Calendar.current
-        calendar.timeZone = .current
-        let noon = calendar.date(from: DateComponents(year: 2026, month: 10, day: 22, hour: 12))!
-        let item = WorkItem(id: "c1", ownerEmployeeID: "ops", title: "T", dueAt: ServerDate.format(noon), revision: 4)
-        var draft = WorkPlanDraft(item)
-        #expect(draft.hasDue && draft.change(from: item) == nil)
-        draft.due = calendar.date(byAdding: .hour, value: 3, to: noon)!
-        #expect(draft.change(from: item) == nil, "the same day is no change")
-        draft.due = calendar.date(byAdding: .day, value: 1, to: noon)!
-        let endOfNextDay = calendar.date(from: DateComponents(year: 2026, month: 10, day: 23, hour: 23, minute: 59))!
-        #expect(draft.change(from: item) == WorkItemChange(expectedRevision: 4, dueAt: .set(ServerDate.format(endOfNextDay))))
-        draft.hasDue = false
-        #expect(draft.change(from: item) == WorkItemChange(expectedRevision: 4, dueAt: .clear))
     }
 
     @Test("A proposed hire reads as the hire it asks for")
