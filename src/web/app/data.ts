@@ -60,10 +60,10 @@ const employeesOf = (d: { employees: readonly Employee[] }) => d.employees;
 export const useEmployees = () => useDetail(employeesOf) ?? none;
 export const useMembers = () => useDetail((d) => d.members) ?? none;
 export const useArtifacts = () => useDetail((d) => d.artifacts) ?? none;
-const operationsOf = (d: { employees: readonly Employee[] }) =>
-  d.employees.find((e) => e.template === "operations") ?? d.employees[0];
-/** The Head of Operations: Home's conversation. */
-export const useOperations = () => useDetail(operationsOf);
+const chiefOfStaffOf = (d: { employees: readonly Employee[] }) =>
+  d.employees.find((e) => e.template === "chief-of-staff") ?? d.employees[0];
+/** The Chief of Staff: Home's conversation. */
+export const useChiefOfStaff = () => useDetail(chiefOfStaffOf);
 
 /** An employee's name by id, for rows that only hold the id. */
 export function useEmployeeName() {

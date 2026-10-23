@@ -11,13 +11,13 @@ test("Home's Needs you approves an exact request; new work opens its thread and 
   const owner = await stores.owner("Jordan", "Acme");
   const grant = await sql.row<{ id: string }>(
     "SELECT id FROM grants WHERE employee_id = $1 AND capability = 'readPublicUrl' AND revoked_at IS NULL",
-    [owner.operations],
+    [owner.chiefOfStaff],
   );
   const decision = randomUUID();
   await sql.run(
     `INSERT INTO decisions (id, business_id, employee_id, grant_id, capability, input, input_hash, expires_at)
      VALUES ($1, $2, $3, $4, 'readPublicUrl', '{"url":"https://example.com"}', 'fixture', now() + interval '1 hour')`,
-    [decision, owner.business, owner.operations, grant!.id],
+    [decision, owner.business, owner.chiefOfStaff, grant!.id],
   );
   try {
     await signIn(page, sql, owner.person);
@@ -28,7 +28,7 @@ test("Home's Needs you approves an exact request; new work opens its thread and 
     );
     const needsYou = page.getByRole("region", { name: "Needs you" });
     await expect(needsYou.getByTestId("panel-title")).toHaveText("Needs you");
-    await expect(needsYou.getByText("Head of Operations asks")).toBeVisible();
+    await expect(needsYou.getByText("Chief of Staff asks")).toBeVisible();
     // Home lists it once, in Needs you; the conversation beside it doesn't repeat it.
     await expect(page.getByRole("main").getByText("https://example.com")).toHaveCount(0);
 
@@ -59,7 +59,7 @@ test("Home's Needs you approves an exact request; new work opens its thread and 
     await expect(dialog).toBeHidden();
     await expect(page.getByTestId("place-title")).toHaveText("Draft the PR inquiry");
     const card = page.getByRole("region", { name: "Work item" });
-    await expect(card.getByTestId("work-item-owner")).toHaveText("Head of Operations");
+    await expect(card.getByTestId("work-item-owner")).toHaveText("Chief of Staff");
 
     // The card is read-only until the owner takes the work over, which fences its employee.
     await expect(card.getByRole("button", { name: "Edit next, waiting on and due" })).toHaveCount(
@@ -129,7 +129,7 @@ test("Settings → Businesses creates a business with its starting team and swit
     const form = settings.getByRole("form", { name: "New business" });
     await form.getByLabel("Name").fill("Globex");
     await form.getByLabel("Brief").fill("Sells widgets online.");
-    // A Head of Operations always; Growth is left out of this starting team.
+    // A Chief of Staff always; Growth is left out of this starting team.
     await form.getByRole("switch", { name: /^Growth/ }).uncheck({ force: true });
     await form.getByRole("button", { name: "Create business" }).click();
     await expect.poll(created).toBeTruthy();
@@ -143,7 +143,7 @@ test("Settings → Businesses creates a business with its starting team and swit
     );
     await expect(page.getByTestId("place-title")).toHaveText("Home");
     await expect(sidebar(page).getByRole("heading", { name: "Globex" })).toBeVisible();
-    for (const name of ["Head of Operations", "Engineering", "Business Operations"])
+    for (const name of ["Chief of Staff", "Engineering", "Admin"])
       await expect(sidebar(page).getByRole("link", { name, exact: true })).toBeVisible();
     await expect(sidebar(page).getByRole("link", { name: "Growth", exact: true })).toHaveCount(0);
     expect(

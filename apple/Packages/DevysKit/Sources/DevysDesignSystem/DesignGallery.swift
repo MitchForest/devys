@@ -46,7 +46,7 @@ public struct DesignGallery: View {
                 }
                 panel("Actions") {
                     HStack(spacing: 10) {
-                        Button("Ask Operations", systemImage: "sparkles") {}.buttonStyle(.aurora)
+                        Button("Ask the Chief of Staff", systemImage: "sparkles") {}.buttonStyle(.aurora)
                         Button("Approve", systemImage: "faceid") {}.buttonStyle(.aurora)
                         Button("Review") {}.buttonStyle(.raised)
                         Button("Later") {}.buttonStyle(.quiet)
@@ -95,7 +95,7 @@ public struct DesignGallery: View {
                         }
                         .devysCard()
                         .frame(width: 300)
-                        Composer("Ask Operations…", text: $draft) {}.frame(width: 320)
+                        Composer("Ask the Chief of Staff…", text: $draft) {}.frame(width: 320)
                     }
                 }
             }

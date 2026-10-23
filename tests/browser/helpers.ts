@@ -41,8 +41,8 @@ export async function signIn(page: Page, sql: Sql, person: string, { phone = fal
   );
   await page.goto(`/#signin=${token}`);
   if (phone) {
-    // A phone has no sidebar: Home is the conversation with Operations, full screen.
-    await expect(page.getByLabel("Message Head of Operations")).toBeVisible();
+    // A phone has no sidebar: Home is the conversation with the Chief of Staff, full screen.
+    await expect(page.getByLabel("Message Chief of Staff")).toBeVisible();
     return;
   }
   await expect(sidebar(page).getByRole("link", { name: /^Home/ })).toBeVisible();

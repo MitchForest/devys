@@ -63,23 +63,18 @@ it("a new business starts with its brief and the chosen team, each with its temp
   const { person } = await business("Owner's first");
   const as = await session(person);
   const roles = await json<{ roles: { id: string; capabilities: string[] }[] }>(as("/api/roles"));
-  expect(roles.roles.map((role) => role.id)).toEqual([
-    "engineering",
-    "growth",
-    "business-operations",
-    "custom",
-  ]);
+  expect(roles.roles.map((role) => role.id)).toEqual(["admin", "finance", "growth", "engineering", "custom"]);
   expect(
     (
       await as("/api/businesses", {
         method: "POST",
-        body: JSON.stringify({ name: "Bad", team: ["operations"] }),
+        body: JSON.stringify({ name: "Bad", team: ["chief-of-staff"] }),
       })
     ).status,
   ).toBe(400);
   const created = await json<{
     business: { id: string; brief: string };
-    operations: Employee;
+    chief_of_staff: Employee;
     team: Employee[];
   }>(
     as("/api/businesses", {
@@ -96,9 +91,9 @@ it("a new business starts with its brief and the chosen team, each with its temp
     ["Engineering", "engineering"],
     ["Growth", "growth"],
   ]);
-  const operations = await grantsOf(created.operations.id);
-  expect(operations.hireEmployee).toBe("ask");
-  expect(operations.run).toBe("auto");
+  const chiefOfStaff = await grantsOf(created.chief_of_staff.id);
+  expect(chiefOfStaff.hireEmployee).toBe("ask");
+  expect(chiefOfStaff.run).toBe("auto");
   const engineering = await grantsOf(created.team[0]!.id);
   expect(engineering.run).toBe("auto");
   expect(engineering.hireEmployee).toBeUndefined();
@@ -114,7 +109,7 @@ it("members hire from templates, edit employees and the brief, and retire with a
     (
       await as(`${path}/employees`, {
         method: "POST",
-        body: JSON.stringify({ template: "operations" }),
+        body: JSON.stringify({ template: "chief-of-staff" }),
       })
     ).status,
   ).toBe(400);
@@ -161,7 +156,7 @@ it("members hire from templates, edit employees and the brief, and retire with a
   );
   expect(
     (
-      await as(`${path}/employees/${acme.operations.id}/retire`, {
+      await as(`${path}/employees/${acme.chiefOfStaff.id}/retire`, {
         method: "POST",
         body: JSON.stringify({ reassign_to: growth.id }),
       })
@@ -177,23 +172,23 @@ it("members hire from templates, edit employees and the brief, and retire with a
   ).toBe(400);
   const retired = await as(`${path}/employees/${growth.id}/retire`, {
     method: "POST",
-    body: JSON.stringify({ reassign_to: acme.operations.id }),
+    body: JSON.stringify({ reassign_to: acme.chiefOfStaff.id }),
   });
   expect(retired.status).toBe(200);
   const after = await json<{ employees: Employee[] }>(as(path));
-  expect(after.employees.map((e) => e.id)).toEqual([acme.operations.id]);
+  expect(after.employees.map((e) => e.id)).toEqual([acme.chiefOfStaff.id]);
   const moved = await sql.row<{ owner_employee_id: string }>(
     "SELECT owner_employee_id FROM work_items WHERE id = $1",
     [work.id],
   );
-  expect(moved?.owner_employee_id).toBe(acme.operations.id);
+  expect(moved?.owner_employee_id).toBe(acme.chiefOfStaff.id);
   // The successor leads and joins the retired employee's projects, so its channel is answered.
   expect(await sql.row("SELECT lead_employee_id FROM projects WHERE id = $1", [launch.id])).toEqual(
-    { lead_employee_id: acme.operations.id },
+    { lead_employee_id: acme.chiefOfStaff.id },
   );
   expect(
     await sql.rows("SELECT employee_id FROM project_members WHERE project_id = $1", [launch.id]),
-  ).toEqual([{ employee_id: acme.operations.id }]);
+  ).toEqual([{ employee_id: acme.chiefOfStaff.id }]);
   expect(stopped.some((name) => name.includes(growth.id))).toBe(true);
 });
 
@@ -251,7 +246,7 @@ it("projects have a lead, members, a goal, deadline and budget, and work created
     }),
   );
   expect(project).toMatchObject({
-    lead_employee_id: acme.operations.id,
+    lead_employee_id: acme.chiefOfStaff.id,
     goal: "Go live",
     deadline: "2026-12-01",
     budget: { cents: 50_000, currency: "USD" },
@@ -267,7 +262,7 @@ it("projects have a lead, members, a goal, deadline and budget, and work created
       method: "POST",
       body: JSON.stringify({
         title: "Buy the domain",
-        owner: acme.operations.id,
+        owner: acme.chiefOfStaff.id,
         project_id: projectId,
       }),
     });
@@ -339,7 +334,7 @@ it("Home lists what needs the owner and the work at a glance, and briefs them on
   const acme = await business("Home");
   const as = await session(acme.person);
   const path = `/api/businesses/${acme.business.id}`;
-  const ops = acme.operations.id;
+  const ops = acme.chiefOfStaff.id;
   const scope = acme.scope;
   const work = async (title: string, state: string, extra = "") => {
     const created = await Effect.runPromise(
@@ -376,10 +371,10 @@ it("Home lists what needs the owner and the work at a glance, and briefs them on
   expect(home.glance.moving.map((item) => item.id).sort()).toEqual([asked, moving].sort());
   expect(home.glance.stuck.map((item) => item.id)).toEqual([late]);
   expect(home.glance.spent_cents).toBeNull();
-  // The owner has never read the chat with Operations: nothing to brief against.
+  // The owner has never read the chat with the Chief of Staff: nothing to brief against.
   expect(home).toMatchObject({ since: null, briefing: null });
 
-  // The owner last read Operations' chat ten hours ago; the work above changed since.
+  // The owner last read the Chief of Staff's chat ten hours ago; the work above changed since.
   const key = `direct:${ops}` as const;
   const { message } = await Effect.runPromise(
     postMessage(db, scope.businessId, key, {
@@ -409,7 +404,7 @@ it("Home lists what needs the owner and the work at a glance, and briefs them on
 it("Home posts no briefing when nothing happened while the owner was away", async () => {
   const quiet = await business("Quiet");
   const as = await session(quiet.person);
-  const key = `direct:${quiet.operations.id}` as const;
+  const key = `direct:${quiet.chiefOfStaff.id}` as const;
   const { message } = await Effect.runPromise(
     postMessage(db, quiet.business.id, key, { author: "system", text: "Hello", clientId: "hello" }),
   );

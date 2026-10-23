@@ -6,6 +6,10 @@ import {
   type WorkStep,
 } from "../../work/contract.ts";
 import { useWork } from "../app/data.ts";
+import { chipFor } from "../app/names.ts";
+import { useNav } from "../app/navigation.ts";
+import { StatusChip } from "../design/primitives.tsx";
+import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const stepIcon = {
@@ -89,17 +93,58 @@ export function WorkProgress({ item }: { item: WorkItem }) {
  * A work item's card in its thread: one per item, drawn from the item as it is now, so each
  * change to its steps or results updates it in place.
  */
-export function WorkProgressCard({ id, text }: { id: string; text: string }) {
+export function WorkProgressCard({
+  id,
+  text,
+  inThread,
+}: {
+  id: string;
+  text: string;
+  /** In its own thread the card is its progress; elsewhere it names the work and opens it. */
+  inThread: boolean;
+}) {
   const item = useWork().data?.find((w) => w.id === id);
-  return (
-    <div
-      data-testid="work-progress"
-      className="mx-auto flex w-full max-w-[520px] flex-col gap-2 rounded-card border border-hairline bg-sheet px-3 py-2.5 shadow-resting"
-    >
-      <span className="truncate text-caption font-medium text-ink-3">
-        {item ? (progressText(item.steps) ?? "Results") : text}
-      </span>
+  const nav = useNav();
+  const progress = item
+    ? (progressText(item.steps) ?? (item.results.length ? "Results" : null))
+    : null;
+  const body = (
+    <>
+      {inThread ? (
+        <span className="truncate text-caption font-medium text-ink-3">{progress ?? text}</span>
+      ) : (
+        <div className="flex items-center gap-2">
+          <span className="min-w-0 flex-1 truncate text-body font-semibold text-ink">
+            {item?.title ?? text}
+          </span>
+          {item && (
+            <StatusChip tone={chipFor(item.state).tone} small>
+              {chipFor(item.state).title}
+            </StatusChip>
+          )}
+          <ChevronRight className="size-4 shrink-0 text-ink-3" />
+        </div>
+      )}
+      {!inThread && progress && (
+        <span className="truncate text-caption text-ink-3">{progress}</span>
+      )}
       {item && <WorkProgress item={item} />}
+    </>
+  );
+  const frame =
+    "mx-auto flex w-full max-w-[520px] flex-col gap-2 rounded-card border border-hairline bg-sheet px-3 py-2.5 text-left shadow-resting";
+  return inThread ? (
+    <div data-testid="work-progress" className={frame}>
+      {body}
     </div>
+  ) : (
+    <button
+      type="button"
+      data-testid="work-progress"
+      onClick={() => nav.openThread(id)}
+      className={cn(frame, "transition-colors duration-150 hover:bg-sheet-tint")}
+    >
+      {body}
+    </button>
   );
 }

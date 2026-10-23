@@ -12,13 +12,14 @@ export const team = defineApp({
   skills: [],
   connections: [],
   appears: "never",
-  // Operations proposes hires (its template holds hireEmployee in `ask` mode); every employee may
+  // The Chief of Staff proposes hires (its template holds hireEmployee in `ask` mode); every employee may
   // look for an app to ask the owner to connect.
   defaultGrants: {
-    operations: ["hireEmployee", "appSearch"],
+    "chief-of-staff": ["hireEmployee", "appSearch"],
     engineering: ["appSearch"],
     growth: ["appSearch"],
-    "business-operations": ["appSearch"],
+    admin: ["appSearch"],
+    finance: ["appSearch"],
     custom: ["appSearch"],
   },
 });

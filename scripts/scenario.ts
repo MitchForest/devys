@@ -57,7 +57,7 @@ export type AskKind =
 
 /** One thing the owner does, then waits for the team to settle. */
 export type Turn =
-  /** Says this. `to`: an employee's name (their direct chat) or `thread` (the latest work thread); Operations by default. */
+  /** Says this. `to`: an employee's name (their direct chat) or `thread` (the latest work thread); the Chief of Staff by default. */
   | { say: string; to?: string }
   /**
    * Taps the suggested reply matching this persona fact (any other fact if none does), or the
@@ -78,11 +78,11 @@ export interface Scenario {
   business: {
     name: string;
     brief?: string;
-    /** Employees hired besides the Head of Operations. */
+    /** Employees hired besides the Chief of Staff. */
     team?: { template: HireableRoleId; name?: string; responsibilities?: string }[];
     /** Secrets and cards already saved. */
     secrets?: NewSecret[];
-    /** What the business has already told Operations to remember. */
+    /** What the business has already told the Chief of Staff to remember. */
     memories?: string[];
     /** Business apps to install by id. */
     apps?: string[];
@@ -370,9 +370,9 @@ async function seed(db: pg.Client, scenario: Scenario) {
     await db.query("DELETE FROM people WHERE id = $1", [person]);
     throw new Error(`Creating the business failed: ${created.status}`);
   }
-  const { business, operations } = (await created.json()) as {
+  const { business, chief_of_staff: chiefOfStaff } = (await created.json()) as {
     business: { id: string };
-    operations: Employee;
+    chief_of_staff: Employee;
   };
   const api = owner(token, business.id);
   const {
@@ -400,7 +400,7 @@ async function seed(db: pg.Client, scenario: Scenario) {
     if (!response.ok) throw new Error(`Remembering failed: ${response.status}`);
   }
   for (const repository of repositories) seedRepository(business.id, repository);
-  return { person, token, business: business.id, operations, api };
+  return { person, token, business: business.id, chiefOfStaff, api };
 }
 
 /** A repository already in the business folder, as the owner would have it: one commit, no remote. */
@@ -496,9 +496,9 @@ async function screens(db: pg.Client, person: string) {
 }
 
 /** Where a conversation opens in the web app. */
-function placeOf(business: string, key: string, operations: string) {
+function placeOf(business: string, key: string, chiefOfStaff: string) {
   const [kind, id] = key.split(":");
-  if (kind === "direct") return id === operations ? `/${business}` : `/${business}/chat/${id}`;
+  if (kind === "direct") return id === chiefOfStaff ? `/${business}` : `/${business}/chat/${id}`;
   if (kind === "work") return `/${business}/thread/${id}`;
   return `/${business}/project/${id}`;
 }
@@ -511,7 +511,7 @@ async function play(scenario: Scenario, out: string) {
   const db = new pg.Client({ connectionString: databaseUrl(database) });
   await db.connect();
   const seeded = await seed(db, scenario);
-  const { api, business, operations, person } = seeded;
+  const { api, business, chiefOfStaff, person } = seeded;
   log(`Seeded ${scenario.business.name} (${business})`);
   const steps: Step[] = [];
   let firstReply: number | undefined;
@@ -520,7 +520,7 @@ async function play(scenario: Scenario, out: string) {
   const shooter = await screens(db, person);
   let touch = 0;
   /** The conversation the owner is looking at: where the team last spoke to them. */
-  let place = `direct:${operations.id}`;
+  let place = `direct:${chiefOfStaff.id}`;
   const minutes = scenario.turnMinutes ?? 10;
   const pending = async () => (await api.decisions()).filter((d) => d.status === "pending");
   try {
@@ -530,7 +530,7 @@ async function play(scenario: Scenario, out: string) {
       const shot = async () => {
         touch++;
         await shooter.take(
-          placeOf(business, place, operations.id),
+          placeOf(business, place, chiefOfStaff.id),
           join(out, `${String(touch).padStart(2, "0")}-touch`),
         );
       };
@@ -583,7 +583,7 @@ async function play(scenario: Scenario, out: string) {
             ? place.startsWith("work:")
               ? place
               : `work:${(await api.work()).at(-1)?.id}`
-            : `direct:${employees.find((employee) => employee.name === turn.to)?.id ?? operations.id}`;
+            : `direct:${employees.find((employee) => employee.name === turn.to)?.id ?? chiefOfStaff.id}`;
         const posted = await api.post(key, turn.say);
         firstPost ??= Date.parse(posted.message.created_at);
         place = key;
@@ -667,7 +667,7 @@ async function play(scenario: Scenario, out: string) {
         if (!scripted) {
           touch++;
           await shooter.take(
-            placeOf(business, blocking.conversation ?? place, operations.id),
+            placeOf(business, blocking.conversation ?? place, chiefOfStaff.id),
             join(out, `${String(touch).padStart(2, "0")}-touch`),
           );
           steps.push({

@@ -84,20 +84,45 @@ struct WorkProgressCard: View {
     let store: StoreOf<Workspace>
     let workItemID: String
     let text: String
+    /// In its own thread the card is its progress; elsewhere it names the work and opens it.
+    var inThread = true
+    @State private var hovering = false
 
     var body: some View {
         let item = store.work.value?.first { $0.id == workItemID }
+        let progress = item.flatMap { WorkStep.progress($0.steps) ?? ($0.results.isEmpty ? nil : "Results") }
+        if inThread {
+            card(item, progress)
+        } else {
+            Button { store.send(.threadOpened(workItemID)) } label: { card(item, progress) }
+                .buttonStyle(.plain)
+                .onHover { hovering = $0 }
+                .help("Open the work item")
+        }
+    }
+
+    private func card(_ item: WorkItem?, _ progress: String?) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(item.map { WorkStep.progress($0.steps) ?? "Results" } ?? text)
-                .font(DevysTypography.caption).foregroundStyle(DevysColors.ink3).lineLimit(1)
+            if inThread {
+                Text(progress ?? text).font(DevysTypography.caption).foregroundStyle(DevysColors.ink3).lineLimit(1)
+            } else {
+                HStack(spacing: 8) {
+                    Text(item?.title ?? text).font(DevysTypography.body.weight(.semibold)).foregroundStyle(DevysColors.ink).lineLimit(1)
+                    Spacer(minLength: 4)
+                    if let item { item.state.chip(size: .small) }
+                    Image(systemName: "chevron.right").font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
+                }
+                if let progress { Text(progress).font(DevysTypography.caption).foregroundStyle(DevysColors.ink3).lineLimit(1) }
+            }
             if let item, !item.steps.isEmpty { WorkStepsView(steps: item.steps) }
             if let item, !item.results.isEmpty { WorkResultsView(results: item.results) }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .frame(maxWidth: 520, alignment: .leading)
-        .background(DevysColors.sheet, in: RoundedRectangle(cornerRadius: DevysRadius.card, style: .continuous))
+        .background(hovering ? DevysColors.sheetTint : DevysColors.sheet, in: RoundedRectangle(cornerRadius: DevysRadius.card, style: .continuous))
         .overlay { RoundedRectangle(cornerRadius: DevysRadius.card, style: .continuous).strokeBorder(DevysColors.hairline, lineWidth: 1) }
+        .contentShape(Rectangle())
         .frame(maxWidth: .infinity)
         .padding(.vertical, 6)
         .accessibilityIdentifier("work-progress")

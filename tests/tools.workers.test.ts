@@ -116,7 +116,7 @@ it("the instructions list the available skills by name and description, and poin
 it("an employee's prompt names each colleague with the employee id work and projects take", () => {
   const text = identityText(
     {
-      name: "Head of Operations",
+      name: "Chief of Staff",
       responsibilities: "Runs the business.",
       businessName: "Acme",
       brief: "",

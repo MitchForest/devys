@@ -60,14 +60,14 @@ test("the owner hires from a template, edits and retires, and talks to any emplo
       text: "Draft three launch headlines.",
     });
 
-    // Operations can't be retired. The desk stays open for every direct chat.
-    await sidebar(page).getByRole("link", { name: "Head of Operations" }).click();
-    await expect(page.getByTestId("place-title")).toHaveText("Head of Operations");
-    const operationsDesk = page.getByRole("region", {
-      name: "Head of Operations's desk",
+    // The Chief of Staff can't be retired. The desk stays open for every direct chat.
+    await sidebar(page).getByRole("link", { name: "Chief of Staff" }).click();
+    await expect(page.getByTestId("place-title")).toHaveText("Chief of Staff");
+    const chiefOfStaffDesk = page.getByRole("region", {
+      name: "Chief of Staff's desk",
     });
-    await expect(operationsDesk).toBeVisible();
-    await expect(operationsDesk.getByRole("button", { name: "Retire…" })).toHaveCount(0);
+    await expect(chiefOfStaffDesk).toBeVisible();
+    await expect(chiefOfStaffDesk.getByRole("button", { name: "Retire…" })).toHaveCount(0);
 
     // A project's overview starts a thread in it, owned by whoever the owner picks.
     await sidebar(page).getByRole("button", { name: "New", exact: true }).click();
@@ -120,16 +120,16 @@ test("the owner hires from a template, edits and retires, and talks to any emplo
       .click();
     const retire = page.getByRole("dialog", { name: "Retire Growth?" });
     await expect(retire).toContainText("1 open work item moves");
-    await retire.getByLabel("Hand open work to").selectOption({ label: "Head of Operations" });
+    await retire.getByLabel("Hand open work to").selectOption({ label: "Chief of Staff" });
     await retire.getByRole("button", { name: "Retire", exact: true }).click();
-    await expect(page.getByTestId("place-title")).toHaveText("Head of Operations");
+    await expect(page.getByTestId("place-title")).toHaveText("Chief of Staff");
     await expect(sidebar(page).getByRole("link", { name: "Growth" })).toHaveCount(0);
     expect(
       (await sql.row<{ owner_employee_id: string }>(
         "SELECT owner_employee_id FROM work_items WHERE id = $1",
         [workItem.id],
       ))!.owner_employee_id,
-    ).toBe(owner.operations);
+    ).toBe(owner.chiefOfStaff);
     expect(
       (await sql.row<{ retired: boolean }>(
         "SELECT revoked_at IS NOT NULL AS retired FROM employees WHERE id = $1",

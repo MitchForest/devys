@@ -66,7 +66,7 @@ struct SidebarSections: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             if only == nil {
-                placeRow(.home, "Home", unread: store.operations.map { store.state.unread(.direct($0.id)) } ?? 0, needsYou: store.home.value?.needsYou.count ?? 0) {
+                placeRow(.home, "Home", unread: store.chiefOfStaff.map { store.state.unread(.direct($0.id)) } ?? 0, needsYou: store.home.value?.needsYou.count ?? 0) {
                     Image(systemName: "house").font(.system(size: 13, weight: .medium)).frame(width: 20).accessibilityHidden(true)
                 }
                 ForEach(nestedThreads(nil)) { threadRow($0) }

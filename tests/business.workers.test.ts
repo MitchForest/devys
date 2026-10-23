@@ -33,7 +33,7 @@ async function session(person: string) {
     ).then((response) => response ?? new Response(null, { status: 404 }));
 }
 
-it("a person sees only their businesses and can create one staffed with a Head of Operations", async () => {
+it("a person sees only their businesses and can create one staffed with a Chief of Staff", async () => {
   const acme = await business("Acme");
   await business("Someone else's");
   const as = await session(acme.person);
@@ -44,17 +44,17 @@ it("a person sees only their businesses and can create one staffed with a Head o
     body: JSON.stringify({ name: "Globex" }),
   });
   expect(created.status).toBe(201);
-  const { business: globex, operations } = (await created.json()) as {
+  const { business: globex, chief_of_staff: chiefOfStaff } = (await created.json()) as {
     business: { id: string };
-    operations: { name: string };
+    chief_of_staff: { name: string };
   };
-  expect(operations.name).toBe("Head of Operations");
+  expect(chiefOfStaff.name).toBe("Chief of Staff");
   const after = (await (await as("/api/me")).json()) as { businesses: { name: string }[] };
   expect(after.businesses.map((b) => b.name)).toEqual(["Acme", "Globex"]);
   const detail = (await (await as(`/api/businesses/${globex.id}`)).json()) as {
     employees: { name: string }[];
   };
-  expect(detail.employees.map((e) => e.name)).toEqual(["Head of Operations"]);
+  expect(detail.employees.map((e) => e.name)).toEqual(["Chief of Staff"]);
 });
 
 it("a person changes the name they go by; a blank or long one is refused", async () => {
@@ -90,18 +90,18 @@ it("another business's routes, employees, memory, files and connections do not e
     `${other}/export`,
     `${other}/connections/google`,
     `${other}/artifacts/00000000-0000-4000-a000-000000000001`,
-    `${other}/employees/${globex.operations.id}/status`,
-    `${other}/conversations/direct:${globex.operations.id}`,
+    `${other}/employees/${globex.chiefOfStaff.id}/status`,
+    `${other}/conversations/direct:${globex.chiefOfStaff.id}`,
   ])
     expect((await as(path)).status, path).toBe(404);
   for (const path of [
     `${other}/employees`,
-    `${other}/conversations/direct:${globex.operations.id}/messages`,
-    `${other}/employees/${globex.operations.id}/stop`,
+    `${other}/conversations/direct:${globex.chiefOfStaff.id}/messages`,
+    `${other}/employees/${globex.chiefOfStaff.id}/stop`,
   ])
     expect((await as(path, { method: "POST", body: "{}" })).status, path).toBe(404);
   // Inside its own business, a member still cannot reach an employee of another business.
-  const mine = `/api/businesses/${acme.business.id}/employees/${globex.operations.id}`;
+  const mine = `/api/businesses/${acme.business.id}/employees/${globex.chiefOfStaff.id}`;
   expect((await as(`${mine}/status`)).status).toBe(404);
   expect(
     (await as(`/api/businesses/${acme.business.id}/artifacts/00000000-0000-4000-a000-000000000001`))
@@ -131,7 +131,7 @@ it("a member adds employees to their own business and the list shows them", asyn
   });
   expect(created.status).toBe(201);
   const detail = (await (await as(path)).json()) as { employees: { name: string }[] };
-  expect(detail.employees.map((e) => e.name)).toEqual(["Head of Operations", "Growth"]);
+  expect(detail.employees.map((e) => e.name)).toEqual(["Chief of Staff", "Growth"]);
 });
 
 it("employees run on a configured model chosen at hire time and changeable by members", async () => {
@@ -159,7 +159,7 @@ it("employees run on a configured model chosen at hire time and changeable by me
     employees: { name: string; model: string }[];
   };
   expect(detail.employees.map((e) => [e.name, e.model])).toEqual([
-    ["Head of Operations", catalog.defaults.employee],
+    ["Chief of Staff", catalog.defaults.employee],
     ["Growth", "gemini-4-argon"],
   ]);
   // Someone outside the business cannot change its employees' models.

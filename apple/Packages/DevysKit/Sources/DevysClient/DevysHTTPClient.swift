@@ -40,7 +40,7 @@ public struct DevysHTTPClient: Sendable {
         try await send(authorized(session, path: "api/businesses/\(id)"))
     }
 
-    /// Creates a business owned by the signed-in person: a Head of Operations plus the starting team.
+    /// Creates a business owned by the signed-in person: a Chief of Staff plus the starting team.
     public func createBusiness(_ session: DeviceSession, _ business: NewBusiness) async throws -> Business {
         struct Created: Decodable { let business: Business }
         let created: Created = try await send(json(session, path: "api/businesses", method: "POST", body: business))

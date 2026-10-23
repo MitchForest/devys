@@ -47,8 +47,8 @@ test("New project with goal, deadline, budget, lead and team opens its channel a
     await dialog.getByLabel("Deadline").fill("2026-12-15");
     await dialog.getByLabel("Budget").fill("1500");
     await dialog.getByLabel("Lead").selectOption({ label: "Growth" });
-    await dialog.getByRole("button", { name: /Head of Operations/ }).click();
-    await expect(dialog.getByRole("button", { name: /Head of Operations/ })).toHaveAttribute(
+    await dialog.getByRole("button", { name: /Chief of Staff/ }).click();
+    await expect(dialog.getByRole("button", { name: /Chief of Staff/ })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -69,7 +69,7 @@ test("New project with goal, deadline, budget, lead and team opens its channel a
     await expect(overview.getByText(/^Dec 15 · \d+d$/)).toBeVisible();
     await expect(overview.getByText("$1,500")).toBeVisible();
     await expect(overview.getByRole("button", { name: "Growth" })).toBeVisible();
-    await expect(overview.getByRole("button", { name: "Head of Operations" })).toBeVisible();
+    await expect(overview.getByRole("button", { name: "Chief of Staff" })).toBeVisible();
     // No work yet: the Work section holds no standing description.
     await expect(overview.getByText("No threads yet.", { exact: false })).toHaveCount(0);
 
@@ -95,7 +95,7 @@ test("New project with goal, deadline, budget, lead and team opens its channel a
     expect(
       await sql.row("SELECT 1 FROM project_members WHERE project_id = $1 AND employee_id = $2", [
         project.id,
-        owner.operations,
+        owner.chiefOfStaff,
       ]),
     ).toBeTruthy();
 
@@ -243,7 +243,7 @@ test("the Documents app opens as a layer; Esc goes back one layer; the panel is 
     const documents = page.getByRole("region", { name: "Documents" });
     await expect(documents.getByTestId("panel-title")).toHaveText("Documents");
     await expect(page.getByTestId("place-title")).toHaveText("Home");
-    await expect(page.getByLabel("Message Head of Operations")).toBeVisible();
+    await expect(page.getByLabel("Message Chief of Staff")).toBeVisible();
 
     // A record opens as a further layer; Esc goes back one layer at a time.
     await documents.getByRole("button", { name: /^Roadmap/ }).click();
@@ -276,8 +276,8 @@ test("the Documents app opens as a layer; Esc goes back one layer; the panel is 
 
     await sidebar(page).getByRole("link", { name: "Launch" }).click();
     await expect(overview).toHaveCount(0);
-    await sidebar(page).getByRole("link", { name: "Head of Operations" }).click();
-    await expect(page.getByRole("region", { name: "Head of Operations's desk" })).toBeVisible();
+    await sidebar(page).getByRole("link", { name: "Chief of Staff" }).click();
+    await expect(page.getByRole("region", { name: "Chief of Staff's desk" })).toBeVisible();
 
     // Remembered across visits, on this device.
     await page.reload();

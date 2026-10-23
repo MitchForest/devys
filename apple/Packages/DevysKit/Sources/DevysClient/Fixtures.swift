@@ -11,9 +11,9 @@ import Foundation
             employees: [
                 Employee(
                     id: "ops",
-                    name: "Head of Operations",
+                    name: "Chief of Staff",
                     responsibilities: "Coordinates launch work and brings you decisions",
-                    template: "operations",
+                    template: "chief-of-staff",
                     avatar: AvatarSpec(palette: .blue, shape: .roundedSquare, seed: 7),
                     summary: "Updating the launch plan after your note on email",
                     model: "claude-opus-5-5"
@@ -38,9 +38,9 @@ import Foundation
                 ),
                 Employee(
                     id: "business-ops",
-                    name: "Business Operations",
+                    name: "Admin",
                     responsibilities: "Accounts, purchases and suppliers",
-                    template: "business-operations",
+                    template: "admin",
                     avatar: AvatarSpec(palette: .purple, shape: .capsule, seed: 5),
                     summary: "Comparing Workspace plans",
                     model: "claude-opus-5-5"
@@ -53,9 +53,9 @@ import Foundation
             employees: [
                 Employee(
                     id: "globex-ops",
-                    name: "Head of Operations",
+                    name: "Chief of Staff",
                     responsibilities: "Coordinates Globex's growth work",
-                    template: "operations",
+                    template: "chief-of-staff",
                     avatar: AvatarSpec(palette: .teal, shape: .circle, seed: 2),
                     summary: "Watching sign-ups and support",
                     model: "claude-opus-5-5"

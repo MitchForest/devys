@@ -1,5 +1,5 @@
 /**
- * Google Analytics and Search Console for the business's site: Operations should plan it as
+ * Google Analytics and Search Console for the business's site: the Chief of Staff should plan it as
  * steps and hand the Google sign-in to the owner (take over) rather than ask for a password,
  * in the business's own Google account.
  */

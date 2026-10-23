@@ -149,7 +149,7 @@ extension Workspace {
         }
     }
 
-    /// The place's conversation opens in the middle; Home's waits for Operations to load.
+    /// The place's conversation opens in the middle; Home's waits for the Chief of Staff to load.
     func openConversation(_ state: inout State) {
         let key = state.mainKey
         guard key != state.main?.key else {

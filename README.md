@@ -14,7 +14,7 @@ this repository.
 ongoing responsibilities), its **Projects** (bounded initiatives with an optional goal,
 deadline, budget and lead), its **Apps** (the business's records, the capabilities on them
 and the accounts behind them, such as Documents and Code) and **Home**, the owner's seat:
-what needs them, a briefing, and the conversation with the Head of Operations. The owner
+what needs them, a briefing, and the conversation with the Chief of Staff. The owner
 delegates by talking and reviews by glancing: the conversation is always the middle of the
 screen, and the right panel shows what it is about, with records, diffs and pages opening
 on top of it.
@@ -31,10 +31,10 @@ also verified live. No public product has launched.
   mode runs commands and file access on the trusted Mac host; cloud mode uses Cloudflare
   Sandbox.
 - **Businesses and teams.** A business has a brief and a starting team. Role templates
-  live in code (`src/app/team.ts`: Head of Operations, Engineering, Growth, Business
-  Operations, Custom). Hiring copies a template and its grants; employees can be edited
-  and retired (open work is handed to a colleague; Operations cannot be retired).
-  Operations holds `hireEmployee` in `ask` mode, so its hire proposals arrive as
+  live in code (`src/identity/team.ts`: Chief of Staff, Admin, Finance, Growth, Engineering,
+  Custom). Hiring copies a template and its grants; employees can be edited
+  and retired (open work is handed to a colleague; the Chief of Staff cannot be retired).
+  The Chief of Staff holds `hireEmployee` in `ask` mode, so its hire proposals arrive as
   decisions. Each employee is one Pi Durable Object running on its chosen model.
 - **Authority.** Grants with typed limits in `auto` or `ask` mode; no grant denies.
   Single-use decisions bind the exact input and the work item and are approved in a
@@ -62,7 +62,7 @@ also verified live. No public product has launched.
   employee under `<work item>:<revision>`. A project has an optional goal, deadline,
   budget (a limit; spending arrives with P1), lead and team; its work items belong to it
   (`project_id`) and kept pages and files are references to them. A work item is changed and
-  its coding steered only in its own thread (Operations changes work from anywhere). An
+  its coding steered only in its own thread (the Chief of Staff changes work from anywhere). An
   employee's follow-up (`workUpdate` with state `waiting` and `wakeAt`) makes the work ready
   again once, at that time; a due date is only a deadline.
 - **Routines.** An employee proposes recurring work (a five-field cron in a time zone,
@@ -87,7 +87,7 @@ also verified live. No public product has launched.
   against a signed spend approval, filled by the host and never shown to the employee.
 - **Home.** `GET /home` returns what needs the owner (pending decisions, work needing a
   decision) and the business at a glance (moving, stuck). When the owner returns after
-  eight hours, Operations' briefing (done, moving, stuck) is posted in their direct chat
+  eight hours, the Chief of Staff's briefing (done, moving, stuck) is posted in their direct chat
   from records, without starting any turn.
 - **Conversations.** One shared record (Postgres) per direct chat (`direct:<employee>`),
   project channel (`project:<project>`) and work item thread (`work:<work item>`). Who answers: an owner message
@@ -105,7 +105,7 @@ also verified live. No public product has launched.
 - **Clients.** One sidebar of Home (with what needs the owner), Projects (threads that
   need the owner or that they follow nested under each), Team (status and unread) and the
   business's apps. The middle is always a conversation: Home is the direct chat with
-  Operations, then a project's channel, a direct chat or a work item's thread, with the
+  the Chief of Staff, then a project's channel, a direct chat or a work item's thread, with the
   face of whoever answers inside the field (tap to choose someone else), a placeholder
   naming them, @-autocomplete, a mic that dictates and, in an empty field, a button that
   starts a hands-free conversation. The right panel shows that conversation's permanent view (Needs
@@ -540,8 +540,8 @@ when there is none) and works once, for ten minutes. Other devices then connect 
 allowed from that browser.
 
 After signing in, create a business from the apps or `POST /api/businesses` with a
-`name`, optional `brief` and optional starting `team` (`engineering`, `growth`,
-`business-operations`); its Head of Operations starts with the operations template's
+`name`, optional `brief` and optional starting `team` (`admin`, `finance`, `growth`,
+`engineering`); its Chief of Staff starts with the chief-of-staff template's
 grants. Bind an iMessage chat to an employee with
 `POST /api/businesses/:id/employees/:employee/channels` and
 `{"channel": "imessage", "sender": "+15551234567", "chat": "any;-;+15551234567"}`.

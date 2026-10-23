@@ -20,7 +20,7 @@ export async function localStores(channel = false) {
     files: proxy.env.FILES,
     /**
      * A person who owns a new business, created through the API so its Head of
-     * Operations gets the real operations preset of grants.
+     * The Chief of Staff gets the real operations preset of grants.
      */
     async owner(name: string, businessName = `${name}'s business`) {
       const person = randomUUID();
@@ -40,9 +40,9 @@ export async function localStores(channel = false) {
       if (!response.ok) throw new Error(`Creating a business failed: ${response.status}`);
       const created = (await response.json()) as {
         business: { id: string };
-        operations: { id: string };
+        chief_of_staff: { id: string };
       };
-      return { person, business: created.business.id, operations: created.operations.id };
+      return { person, business: created.business.id, chiefOfStaff: created.chief_of_staff.id };
     },
     /** Removes fixtures and everything they own, children first. */
     async remove(owners: { person: string; business: string }[]) {

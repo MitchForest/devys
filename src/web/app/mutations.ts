@@ -386,7 +386,7 @@ export function useRetire() {
     {
       failure: ({ employee }, error) =>
         error instanceof ApiError && error.status === 409
-          ? "The Head of Operations can't be retired."
+          ? "The Chief of Staff can't be retired."
           : `${employee.name} couldn't be retired.`,
       settles: workSettles,
       succeeded: (_result, { successor }) => nav.message(successor),

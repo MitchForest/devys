@@ -97,8 +97,8 @@ export async function employeeRoute(
         : undefined;
     if (!successor)
       return new Response("Choose another employee to take over the open work", { status: 400 });
-    if (record.template === "operations")
-      return new Response("The Head of Operations can't be retired", { status: 409 });
+    if (record.template === "chief-of-staff")
+      return new Response("The Chief of Staff can't be retired", { status: 409 });
     // Retire and hand the work over together: a retired employee must never hold open work.
     await atomically(env.HYPERDRIVE, async (db) => {
       await Effect.runPromise(retireEmployee(db, scope));

@@ -515,13 +515,10 @@ function TeamPane() {
 }
 
 const startingRoles: { value: StartingRole; title: string; summary: string }[] = [
+  { value: "admin", title: "Admin", summary: "Accounts, domains, email, suppliers and documents" },
+  { value: "finance", title: "Finance", summary: "Paying for things, budgets and the books" },
+  { value: "growth", title: "Growth", summary: "Marketing, analytics and outreach" },
   { value: "engineering", title: "Engineering", summary: "Builds, fixes and ships software" },
-  { value: "growth", title: "Growth", summary: "Research, positioning and outreach" },
-  {
-    value: "business-operations",
-    title: "Business Operations",
-    summary: "Records, documents, suppliers and admin",
-  },
 ];
 
 /** Every business you belong to: its name, brief and look, and a way to start another. */
@@ -560,7 +557,7 @@ function BusinessesPane() {
   );
 }
 
-/** A business starts with a Head of Operations and, if you like, a starting team. */
+/** A business starts with a Chief of Staff and, if you like, a starting team. */
 export function NewBusiness({ created }: { created: () => void }) {
   const createBusiness = useCreateBusiness();
   const [name, setName] = useState("");
@@ -604,7 +601,7 @@ export function NewBusiness({ created }: { created: () => void }) {
       </Field>
       <div className="flex flex-col gap-2.5">
         <span className="text-label font-medium text-ink-3">Starting team</span>
-        <span className="text-detail text-ink-2">A Head of Operations always, and:</span>
+        <span className="text-detail text-ink-2">A Chief of Staff always, and:</span>
         {startingRoles.map((role) => (
           <Switch
             key={role.value}

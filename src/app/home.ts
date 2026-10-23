@@ -56,7 +56,7 @@ const quietly = (quiet: readonly { title: string; runs: number }[]) =>
   quiet.map(({ title, runs }) => `"${title}" ${runs === 1 ? "once" : `${runs} times`}`).join(", ");
 
 /**
- * Operations' briefing, composed from records: what got done, started and became stuck since
+ * The Chief of Staff's briefing, composed from records: what got done, started and became stuck since
  * the owner last read their direct chat, and the quiet routine runs that found nothing (and so
  * posted nothing). Nothing when nothing happened.
  */
@@ -86,7 +86,7 @@ export function briefing(
 
 /**
  * The owner's Home: what needs them and the business at a glance. Opening it after a while
- * away posts Operations' briefing in their direct chat, once per return; it wakes nobody.
+ * away posts the Chief of Staff's briefing in their direct chat, once per return; it wakes nobody.
  */
 export async function homeRoute(
   env: Env,
@@ -169,8 +169,8 @@ export async function homeRoute(
         at: item.updated_at,
       })),
   ];
-  const operations = employees.find((employee) => employee.template === "operations");
-  const key = operations ? (`direct:${operations.id}` as const) : undefined;
+  const chiefOfStaff = employees.find((employee) => employee.template === "chief-of-staff");
+  const key = chiefOfStaff ? (`direct:${chiefOfStaff.id}` as const) : undefined;
   const since = key
     ? await Effect.runPromise(readAt(env.HYPERDRIVE, business.id, key, `person:${person.id}`))
     : undefined;
@@ -189,7 +189,7 @@ export async function homeRoute(
       ? await Effect.runPromise(
           // Stored, not delivered: no employee turn starts. One per last-read hour.
           postMessage(env.HYPERDRIVE, business.id, key, {
-            author: `employee:${operations!.id}`,
+            author: `employee:${chiefOfStaff!.id}`,
             text,
             clientId: `briefing:${since!.slice(0, 13).replace("T", "-")}`,
           }),

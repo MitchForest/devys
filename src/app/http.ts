@@ -161,32 +161,37 @@ async function route(request: Request, env: Env): Promise<Response | undefined> 
     const name = typeof input.name === "string" ? input.name.trim() : "";
     if (!name || name.length > 80) return new Response("Send a business name", { status: 400 });
     const brief = typeof input.brief === "string" ? input.brief.trim().slice(0, 4000) : "";
-    // The starting team: templates hired alongside the Head of Operations.
+    // The starting team: templates hired alongside the Chief of Staff.
     const team = Array.isArray(input.team) ? input.team.map(roleTemplate) : [];
     if (
-      team.some((template) => !template || template.id === "operations" || template.id === "custom")
+      team.some(
+        (template) => !template || template.id === "chief-of-staff" || template.id === "custom",
+      )
     )
-      return new Response("The starting team takes engineering, growth or business-operations", {
+      return new Response("The starting team takes admin, finance, growth or engineering", {
         status: 400,
       });
-    const operations = roleTemplate("operations")!;
+    const chiefOfStaff = roleTemplate("chief-of-staff")!;
     const catalog = capabilities(env);
     const hirer = hiring(() => catalog);
-    // The business, its Head of Operations, their grants and the starting team, or nothing.
+    // The business, its Chief of Staff, their grants and the starting team, or nothing.
     const { created, hired } = await atomically(env.HYPERDRIVE, async (db) => {
       const created = await Effect.runPromise(
         createBusiness(db, person.id, {
           name,
           brief,
           model: modelsConfig.defaults.employee,
-          operations: { name: operations.name, responsibilities: operations.responsibilities },
+          chiefOfStaff: {
+            name: chiefOfStaff.name,
+            responsibilities: chiefOfStaff.responsibilities,
+          },
         }),
       );
       await Effect.runPromise(
         grantAll(
           db,
-          { businessId: created.business.id, employeeId: created.operations.id },
-          templateGrants(operations.id, catalog),
+          { businessId: created.business.id, employeeId: created.chiefOfStaff.id },
+          templateGrants(chiefOfStaff.id, catalog),
         ),
       );
       await Effect.runPromise(install(db, created.business.id, defaultApps));
@@ -198,7 +203,11 @@ async function route(request: Request, env: Env): Promise<Response | undefined> 
       }
       return { created, hired };
     });
-    return respond(BusinessCreated, { ...created, team: hired }, { status: 201 });
+    return respond(
+      BusinessCreated,
+      { business: created.business, chief_of_staff: created.chiefOfStaff, team: hired },
+      { status: 201 },
+    );
   }
   if (path === "/api/connections/google/callback" && request.method === "GET")
     return finishGoogle(request, env, connectionVault(env), person.id, async (businessId) =>

@@ -4,7 +4,7 @@ import DevysClient
 import DevysDesignSystem
 import SwiftUI
 
-/// The middle of the screen, always a conversation: Home's chat with Operations, a direct
+/// The middle of the screen, always a conversation: Home's chat with the Chief of Staff, a direct
 /// chat, a project's channel or a work item's thread. It also takes dictation and hands-free voice.
 struct ConversationPane: View {
     let store: StoreOf<Workspace>
@@ -97,7 +97,7 @@ struct ConversationMessages: View {
                     TimeHeading(date: date)
                 case .event(let event):
                     if event.isCard, case .workItem(let id)? = event.ref {
-                        WorkProgressCard(store: store, workItemID: id, text: event.text)
+                        WorkProgressCard(store: store, workItemID: id, text: event.text, inThread: key.kind == .work)
                     } else {
                         EventCard(store: store, event: event)
                     }
@@ -147,7 +147,7 @@ struct ConversationMessages: View {
     private var emptyText: String {
         let name = store.state.employee(key.ref)?.name
         return switch store.place {
-        case .home: "Tell \(name ?? "Operations") what you need. @mention anyone to bring them in."
+        case .home: "Tell \(name ?? "Chief of Staff") what you need. @mention anyone to bring them in."
         case .direct: "Message \(name ?? "them"). @mention a colleague to bring them in."
         case .project(let id): "Tell the team what \(store.state.project(id)?.name ?? "the project") needs. Each piece of work gets its own thread."
         case .thread: "Nothing said about this yet."
@@ -158,7 +158,8 @@ struct ConversationMessages: View {
     /// in its thread, others in the employee's direct chat. Home's are in Needs you beside it.
     private var decisions: [Decision] {
         guard store.place != .home else { return [] }
-        let all = store.state.decisions
+        // A connect request is its app's card, already in the conversation.
+        let all = store.state.decisions.filter { $0.kind != .connect }
         return switch key.kind {
         case .direct: all.filter { $0.employeeID == key.ref && $0.workItemID == nil }
         case .work: all.filter { $0.workItemID == key.ref }

@@ -7,7 +7,7 @@ import { rpc } from "../protocol/rpc.ts";
 import { hire, hireInput, type Hiring } from "./team.ts";
 
 /**
- * The Team app's capability. Employees propose hires through it; Operations holds it in `ask`
+ * The Team app's capability. Employees propose hires through it; the Chief of Staff holds it in `ask`
  * mode, so a proposal becomes a decision and approving it lets the identical call through once.
  */
 export function teamCapabilities(db: Database, hiring: Hiring) {
@@ -15,7 +15,7 @@ export function teamCapabilities(db: Database, hiring: Hiring) {
     capability({
       name: "hireEmployee",
       description:
-        "Hire a new employee from a role template (engineering, growth, business-operations or custom) with a name, responsibilities and optionally a model id. The owner approves each hire.",
+        "Hire a new employee from a role template (admin, finance, growth, engineering or custom) with a name, responsibilities and optionally a model id. The owner approves each hire.",
       effect: "change",
       // Each call hires someone new: after an interruption, list the team before trying again.
       replay: "reconcile",

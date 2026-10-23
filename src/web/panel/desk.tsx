@@ -20,7 +20,7 @@ import {
   useEmployees,
   useMemory,
   useModels,
-  useOperations,
+  useChiefOfStaff,
   useRoutines,
   useStatus,
   useWork,
@@ -90,13 +90,13 @@ export function Desk({ employeeId, close }: { employeeId: string; close: () => v
 }
 
 function EmployeeDesk({ employee, close }: { employee: Employee; close: () => void }) {
-  const operations = useOperations();
+  const chiefOfStaff = useChiefOfStaff();
   const work = useWork().data;
   const routines = (useRoutines().data ?? []).filter((r) => r.employee_id === employee.id);
   const mood = useMood(employee);
   const working = useWorking(employee.id);
   const togglePause = useTogglePause();
-  const isOperations = employee.id === operations?.id;
+  const isChiefOfStaff = employee.id === chiefOfStaff?.id;
   const owned = (work ?? []).filter((item) => item.owner_employee_id === employee.id);
   const open = owned.filter((item) => isOpen(item.state));
   const done = owned
@@ -166,13 +166,13 @@ function EmployeeDesk({ employee, close }: { employee: Employee; close: () => vo
           <Disclosure title="Access">
             <AccessPane employee={employee} />
           </Disclosure>
-          {isOperations && (
+          {isChiefOfStaff && (
             <Disclosure title="Memory">
               <MemoryPane />
             </Disclosure>
           )}
         </div>
-        {employee.template !== "operations" && (
+        {employee.template !== "chief-of-staff" && (
           <div>
             <RetireButton employee={employee} />
           </div>
@@ -312,14 +312,14 @@ function ResponsibilitiesPane({ employee }: { employee: Employee }) {
 /** Retiring hands the employee's open work to a colleague; their history stays readable. */
 function RetireButton({ employee }: { employee: Employee }) {
   const employees = useEmployees();
-  const operations = useOperations();
+  const chiefOfStaff = useChiefOfStaff();
   const work = useWork().data;
   const retire = useRetire();
   const [open, setOpen] = useState(false);
   const others = employees.filter((e) => e.id !== employee.id);
   const [successor, setSuccessor] = useState("");
   const busy = retire.isPending;
-  const chosen = successor || operations?.id || others[0]?.id || "";
+  const chosen = successor || chiefOfStaff?.id || others[0]?.id || "";
   const openWork = (work ?? []).filter(
     (item) => item.owner_employee_id === employee.id && isOpen(item.state),
   ).length;
@@ -438,7 +438,7 @@ function ModelRow({ employee }: { employee: Employee }) {
   );
 }
 
-/** The business's memory, as Operations keeps it. */
+/** The business's memory, as the Chief of Staff keeps it. */
 function MemoryPane() {
   const memory = useMemory();
   return (

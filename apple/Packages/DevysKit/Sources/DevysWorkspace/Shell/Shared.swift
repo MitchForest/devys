@@ -94,7 +94,7 @@ extension Workspace.State {
 
     func employee(_ id: String?) -> Employee? { snapshot.employees.first { $0.id == id } }
 
-    /// While talking by voice, Operations' face follows the conversation.
+    /// While talking by voice, the Chief of Staff's face follows the conversation.
     var voiceMood: BotMood? {
         switch voice {
         case .starting, .listening, .finishing: .listening
@@ -104,7 +104,7 @@ extension Workspace.State {
         }
     }
 
-    var operationsMood: BotMood {
+    var chiefOfStaffMood: BotMood {
         switch status {
         case .failed: .oops
         case .loading: .thinking
@@ -112,9 +112,9 @@ extension Workspace.State {
         }
     }
 
-    /// An employee's face: Operations follows its live state; everyone else their runtime.
+    /// An employee's face: the Chief of Staff follows its live state; everyone else their runtime.
     func mood(for employee: Employee) -> BotMood {
-        if employee.id == operations?.id { return operationsMood }
+        if employee.id == chiefOfStaff?.id { return chiefOfStaffMood }
         return isWorking(employee.id) ? .working : .idle
     }
 

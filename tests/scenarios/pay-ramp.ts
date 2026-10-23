@@ -1,5 +1,5 @@
 /**
- * Paying with nothing set up: the owner's business pays through Ramp. Operations should ask how
+ * Paying with nothing set up: the owner's business pays through Ramp. The Chief of Staff should ask how
  * the business pays with one tap's worth of choices, then ask to connect Ramp. The run stops at
  * the connect request, which only the owner can complete.
  */

@@ -65,20 +65,21 @@ public struct RoleTemplate: Equatable, Sendable, Decodable, Identifiable {
     /// Plain names for the templates, for places that only have the id.
     public static func displayName(_ id: String) -> String {
         switch id {
-        case "operations": "Head of Operations"
+        case "chief-of-staff": "Chief of Staff"
         case "engineering": "Engineering"
         case "growth": "Growth"
-        case "business-operations": "Business Operations"
+        case "admin": "Admin"
+        case "finance": "Finance"
         case "custom": "Custom"
         default: id
         }
     }
 
     /// The optional starting team a new business suggests.
-    public static let startingTeam = ["engineering", "growth", "business-operations"]
+    public static let startingTeam = ["admin", "finance", "growth", "engineering"]
 }
 
-/// A new business: its brief and the starting team hired alongside the Head of Operations.
+/// A new business: its brief and the starting team hired alongside the Chief of Staff.
 public struct NewBusiness: Equatable, Sendable, Encodable {
     public let name: String
     public let brief: String

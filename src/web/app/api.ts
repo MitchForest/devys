@@ -86,8 +86,8 @@ import {
   type TextSave,
 } from "../../app/wire.ts";
 
-/** The templates a new business can start its team with, beside the Head of Operations. */
-export type StartingRole = Exclude<RoleTemplateId, "operations" | "custom">;
+/** The templates a new business can start its team with, beside the Chief of Staff. */
+export type StartingRole = Exclude<RoleTemplateId, "chief-of-staff" | "custom">;
 interface OutgoingMessage {
   /** The sender's own id, so a retried post is stored once. */
   id: string;

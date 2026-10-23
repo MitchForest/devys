@@ -25,5 +25,5 @@ export const code = defineApp({
   // The owner's own GitHub login on the Mac until the broker holds a GitHub connection.
   connections: [{ provider: "github", scopes: [] }],
   appears: "records",
-  defaultGrants: { operations: coding, engineering: coding },
+  defaultGrants: { "chief-of-staff": coding, engineering: coding },
 });

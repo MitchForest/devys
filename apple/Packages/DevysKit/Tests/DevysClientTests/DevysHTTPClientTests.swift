@@ -37,13 +37,13 @@ struct DevysHTTPClientTests {
         let detail = try await api(
             body: """
             {"business":{"id":"b1","name":"Acme"},
-             "employees":[{"id":"e1","business_id":"b1","name":"Head of Operations","responsibilities":"Runs the business.","model":"gpt-6.1-sol"}],
+             "employees":[{"id":"e1","business_id":"b1","name":"Chief of Staff","responsibilities":"Runs the business.","model":"gpt-6.1-sol"}],
              "members":[{"id":"p1","display_name":"Mitch"}],
              "artifacts":[{"id":"a1","filename":"x.md","content_type":"text/markdown","byte_length":3,"created_at":"2026-10-19T00:00:00.000Z","latest_id":"a1"}]}
             """,
             recorder: recorder
         ).business(session, id: "b1")
-        #expect(detail.employees.map(\.name) == ["Head of Operations"])
+        #expect(detail.employees.map(\.name) == ["Chief of Staff"])
         #expect(detail.employees.first?.summary == "Runs the business.")
         #expect(detail.employees.first?.model == "gpt-6.1-sol")
         #expect(detail.artifacts.first?.byteLength == 3)

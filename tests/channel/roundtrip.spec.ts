@@ -82,9 +82,9 @@ test("native Pi admission and channel delivery deduplicate input and respect a s
   const owner = fixture.business;
   await sql.run(
     "INSERT INTO channel_bindings(id,business_id,employee_id,person_id,channel,sender_id,chat_id) VALUES($1,$2,$3,$4,'imessage',$5,$6)",
-    [randomUUID(), fixture.business, fixture.operations, fixture.person, sender, chat],
+    [randomUUID(), fixture.business, fixture.chiefOfStaff, fixture.person, sender, chat],
   );
-  const status = `/api/businesses/${fixture.business}/employees/${fixture.operations}/status`;
+  const status = `/api/businesses/${fixture.business}/employees/${fixture.chiefOfStaff}/status`;
   const access = createHash("sha256").update(randomUUID()).digest("hex");
   await sql.run(
     "INSERT INTO web_sessions(token_hash,person_id,expires_at) VALUES($1,$2,now() + interval '1 hour')",

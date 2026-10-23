@@ -79,7 +79,10 @@ export function capabilities(
       (businessId, ref) => keepable(env, businessId, ref),
       (businessId, work) => codingIncomplete(env, businessId, work),
       (businessId, employeeId) => coordinates(env.HYPERDRIVE, { businessId, employeeId }),
-      (businessId, work) => showWorkCard(env, businessId, work),
+      async (businessId, work, conversation) => {
+        const key = conversation === undefined ? undefined : conversationKey(conversation);
+        if (conversation === undefined || key) await showWorkCard(env, businessId, work, key);
+      },
       (asking, request) => askOwnerConnecting(env, asking, request, appCatalog),
     ),
     ...appSearchCapabilities(async (businessId, query) =>

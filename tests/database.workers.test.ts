@@ -243,14 +243,14 @@ it("a business export pages through every employee's history, memory and artifac
     [other.business.id],
   );
   await Effect.runPromise(
-    postMessage(db, created.business.id, `direct:${created.operations.id}`, {
+    postMessage(db, created.business.id, `direct:${created.chiefOfStaff.id}`, {
       author: `person:${created.person}`,
       text: "Ship Friday",
       clientId: "export-message",
     }),
   );
   await Effect.runPromise(
-    postMessage(db, other.business.id, `direct:${other.operations.id}`, {
+    postMessage(db, other.business.id, `direct:${other.chiefOfStaff.id}`, {
       author: `person:${other.person}`,
       text: "Not ours",
       clientId: "export-other",
@@ -269,7 +269,7 @@ it("a business export pages through every employee's history, memory and artifac
       }),
     },
   } as unknown as Env;
-  const records = (await exportBusiness(runtime, created.business, [created.operations]).text())
+  const records = (await exportBusiness(runtime, created.business, [created.chiefOfStaff]).text())
     .trim()
     .split("\n")
     .map(
@@ -282,16 +282,16 @@ it("a business export pages through every employee's history, memory and artifac
   expect(records.filter((row) => row.kind === "memory")).toHaveLength(55);
   expect(records.filter((row) => row.kind === "artifact")).toHaveLength(101);
   expect(records.find((row) => row.kind === "conversation-entry")?.employee).toBe(
-    created.operations.id,
+    created.chiefOfStaff.id,
   );
-  expect(histories).toEqual([JSON.stringify([created.business.id, created.operations.id])]);
+  expect(histories).toEqual([JSON.stringify([created.business.id, created.chiefOfStaff.id])]);
   expect(records.at(-1)).toEqual({ kind: "complete" });
 });
 
 it("conversation history reads the conversation the turn answers, never one the model names", async () => {
   const created = await business("History");
   const other = await business("Elsewhere");
-  const ops = created.operations.id;
+  const ops = created.chiefOfStaff.id;
   const key = `direct:${ops}` as const;
   for (let i = 0; i < 35; i++)
     await Effect.runPromise(
@@ -302,7 +302,7 @@ it("conversation history reads the conversation the turn answers, never one the 
       }),
     );
   await Effect.runPromise(
-    postMessage(db, other.business.id, `direct:${other.operations.id}`, {
+    postMessage(db, other.business.id, `direct:${other.chiefOfStaff.id}`, {
       author: `person:${other.person}`,
       text: "secret",
       clientId: "history-other",
@@ -324,11 +324,11 @@ it("conversation history reads the conversation the turn answers, never one the 
         }),
       ),
     ) as Promise<{ messages: { id: string; from: string; text: string }[]; before: string | null }>;
-  const latest = await read({ conversation: `direct:${other.operations.id}` }, key);
+  const latest = await read({ conversation: `direct:${other.chiefOfStaff.id}` }, key);
   expect(latest.messages).toHaveLength(30);
   expect(latest.messages.at(-1)).toMatchObject({ from: "Owner", text: "message 34" });
-  expect(latest.messages.at(-2)).toMatchObject({ from: "Head of Operations", text: "message 33" });
-  expect(latest.messages[0]).toMatchObject({ from: "Head of Operations", text: "message 5" });
+  expect(latest.messages.at(-2)).toMatchObject({ from: "Chief of Staff", text: "message 33" });
+  expect(latest.messages[0]).toMatchObject({ from: "Chief of Staff", text: "message 5" });
   const older = await read({ before: latest.before }, key);
   expect(older.messages.map((m) => m.text)).toEqual([0, 1, 2, 3, 4].map((i) => `message ${i}`));
   expect(older.before).toBeNull();

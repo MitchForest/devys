@@ -32,7 +32,7 @@ export interface CodingDependencies {
   ): Promise<void>;
   /** Commits this work item's evidence names (accepted, checked or deployed): rollback targets. */
   knownCommits(scope: Scope, workItemId: string): Promise<string[]>;
-  /** Whether this employee directs others' work (the Head of Operations). */
+  /** Whether this employee directs others' work (the Chief of Staff). */
   coordinates(scope: Scope): Promise<boolean>;
 }
 
@@ -82,7 +82,7 @@ export const codingInstructions = (purpose: "build" | "review") =>
 /**
  * Fails unless the call is in a work item's thread, which is where its coding sessions are
  * started and steered: one place per work item, under that item's conditions. No one is exempt,
- * Operations included, since the item's conditions apply only there.
+ * The Chief of Staff included, since the item's conditions apply only there.
  */
 const workItem = Effect.gen(function* () {
   const invocation = yield* Invocation;
@@ -111,7 +111,7 @@ export function codingCapabilities(dependencies: CodingDependencies) {
           code: "conflict",
           message: `This coding session belongs to another work item: steer it in that item's thread (${ref("work", "item", found.work_item_id)}).`,
         });
-      // A session is steered by the employee who started it, or by Operations.
+      // A session is steered by the employee who started it, or by the Chief of Staff.
       const scope = { businessId: invocation.businessId, employeeId: invocation.employeeId };
       if (
         found.employee_id !== invocation.employeeId &&

@@ -103,7 +103,7 @@ test("looks, the owner's photo, voice and settings work on the web as on native"
         async () =>
           (
             await sql.row<{ look: unknown }>("SELECT look FROM employees WHERE id = $1", [
-              owner.operations,
+              owner.chiefOfStaff,
             ])
           )?.look,
       )
@@ -133,13 +133,13 @@ test("looks, the owner's photo, voice and settings work on the web as on native"
     await page.keyboard.press("Escape");
 
     // Dictation fills the direct chat's draft; sending marks the message as dictated.
-    await sidebar(page).getByRole("link", { name: "Head of Operations" }).click();
+    await sidebar(page).getByRole("link", { name: "Chief of Staff" }).click();
     await page.getByRole("button", { name: "Dictate" }).click();
-    await expect(page.getByLabel("Message Head of Operations")).toHaveValue("What is due today?");
+    await expect(page.getByLabel("Message Chief of Staff")).toHaveValue("What is due today?");
     const sent = page.waitForResponse(
       (response) =>
         decodeURIComponent(response.url()).endsWith(
-          `/conversations/direct:${owner.operations}/messages`,
+          `/conversations/direct:${owner.chiefOfStaff}/messages`,
         ) && response.request().method() === "POST",
     );
     await page.getByRole("button", { name: "Send" }).click();
@@ -148,10 +148,10 @@ test("looks, the owner's photo, voice and settings work on the web as on native"
       text: "What is due today?",
       via_voice: true,
     });
-    // The server stores it as dictated, in Operations' DM.
+    // The server stores it as dictated, in the Chief of Staff's DM.
     expect(await response.json()).toMatchObject({
       message: { text: "What is due today?", via_voice: true },
-      to: [owner.operations],
+      to: [owner.chiefOfStaff],
     });
     await expect(page.getByText("What is due today?")).toBeVisible();
 

@@ -59,7 +59,7 @@ public struct Employee: Equatable, Sendable, Identifiable, Decodable {
     public var name: String
     /// The employee's responsibilities, in the owner's words.
     public var responsibilities: String
-    /// The role template it was hired from: operations, engineering, growth, business-operations or custom.
+    /// The role template it was hired from: chief-of-staff, admin, finance, engineering, growth or custom.
     public var template: String
     public var avatar: AvatarSpec
     public var summary: String
@@ -116,8 +116,8 @@ public struct Employee: Equatable, Sendable, Identifiable, Decodable {
         )
     }
 
-    /// The Head of Operations can't be retired.
-    public var isOperations: Bool { template == "operations" }
+    /// The Chief of Staff can't be retired.
+    public var isChiefOfStaff: Bool { template == "chief-of-staff" }
 
     enum CodingKeys: String, CodingKey { case id, name, responsibilities, template, paused, look, model }
 }

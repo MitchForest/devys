@@ -34,8 +34,8 @@ package enum PlaceIntent {
 }
 
 extension Workspace.State {
-    /// The conversation the place shows; Home waits for Operations to load.
-    package var mainKey: ConversationKey? { place.conversation(operations: operations?.id) }
+    /// The conversation the place shows; Home waits for the Chief of Staff to load.
+    package var mainKey: ConversationKey? { place.conversation(chiefOfStaff: chiefOfStaff?.id) }
 
     /// Whether the place's permanent view has anything: an empty one is never shown.
     package var hasPermanent: Bool {
@@ -186,7 +186,7 @@ extension Workspace {
     /// it mentions, else who answers here), in the project it was said in, titled from it.
     func startThread(on messageID: String, state: inout State) {
         guard let open = state.main, let message = open.message(messageID), !state.businessID.isEmpty else { return }
-        let owner = message.employeeID ?? message.mentions.first ?? state.recipients(in: open.key).first ?? state.operations?.id
+        let owner = message.employeeID ?? message.mentions.first ?? state.recipients(in: open.key).first ?? state.chiefOfStaff?.id
         guard let owner else { return }
         let text = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
         let newItem = NewWorkItem(

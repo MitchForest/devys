@@ -446,7 +446,7 @@ it("a follow-up wakes waiting work once, and any other state clears it", async (
   expect(moved).toMatchObject({ state: "in_progress", wakeAt: null });
 });
 
-it("work is updated from any conversation but completed only in its thread; Operations anywhere", async () => {
+it("work is updated from any conversation but completed only in its thread; the Chief of Staff anywhere", async () => {
   const { scope } = await business();
   const engineer = await Effect.runPromise(
     createEmployee(db, scope.businessId, {
@@ -512,7 +512,7 @@ it("work is updated from any conversation but completed only in its thread; Oper
       named("workCreate").execute({ title: "Follow-on" }).pipe(as(mine, elsewhere)),
     ),
   ).toMatchObject({ title: "Follow-on" });
-  // Operations coordinates from its own direct chat.
+  // The Chief of Staff coordinates from its own direct chat.
   await Effect.runPromise(grant(db, scope, { capability: named("workUpdate"), mode: "auto" }));
   expect(
     await Effect.runPromise(

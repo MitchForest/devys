@@ -25,7 +25,7 @@
       "connections": [],
       "appears": "never",
       "default_grants": {
-        "operations": [
+        "chief-of-staff": [
           "run",
           "read",
           "write",
@@ -34,7 +34,16 @@
           "readSkill",
           "secretList"
         ],
-        "engineering": [
+        "admin": [
+          "run",
+          "read",
+          "write",
+          "printPdf",
+          "importAttachment",
+          "readSkill",
+          "secretList"
+        ],
+        "finance": [
           "run",
           "read",
           "write",
@@ -52,7 +61,7 @@
           "readSkill",
           "secretList"
         ],
-        "business-operations": [
+        "engineering": [
           "run",
           "read",
           "write",
@@ -101,13 +110,19 @@
       "connections": [],
       "appears": "never",
       "default_grants": {
-        "operations": [
+        "chief-of-staff": [
           "browserScript",
           "browserScreenshot",
           "browserTabs",
           "browserFill"
         ],
-        "engineering": [
+        "admin": [
+          "browserScript",
+          "browserScreenshot",
+          "browserTabs",
+          "browserFill"
+        ],
+        "finance": [
           "browserScript",
           "browserScreenshot",
           "browserTabs",
@@ -119,7 +134,7 @@
           "browserTabs",
           "browserFill"
         ],
-        "business-operations": [
+        "engineering": [
           "browserScript",
           "browserScreenshot",
           "browserTabs",
@@ -146,16 +161,19 @@
       "connections": [],
       "appears": "never",
       "default_grants": {
-        "operations": [
+        "chief-of-staff": [
           "readPublicUrl"
         ],
-        "engineering": [
+        "admin": [
+          "readPublicUrl"
+        ],
+        "finance": [
           "readPublicUrl"
         ],
         "growth": [
           "readPublicUrl"
         ],
-        "business-operations": [
+        "engineering": [
           "readPublicUrl"
         ]
       },
@@ -181,12 +199,17 @@
       "connections": [],
       "appears": "never",
       "default_grants": {
-        "operations": [
+        "chief-of-staff": [
           "recall",
           "remember",
           "forget"
         ],
-        "engineering": [
+        "admin": [
+          "recall",
+          "remember",
+          "forget"
+        ],
+        "finance": [
           "recall",
           "remember",
           "forget"
@@ -196,7 +219,7 @@
           "remember",
           "forget"
         ],
-        "business-operations": [
+        "engineering": [
           "recall",
           "remember",
           "forget"
@@ -233,11 +256,15 @@
       "connections": [],
       "appears": "never",
       "default_grants": {
-        "operations": [
+        "chief-of-staff": [
           "conversationHistory",
           "suggestReplies"
         ],
-        "engineering": [
+        "admin": [
+          "conversationHistory",
+          "suggestReplies"
+        ],
+        "finance": [
           "conversationHistory",
           "suggestReplies"
         ],
@@ -245,7 +272,7 @@
           "conversationHistory",
           "suggestReplies"
         ],
-        "business-operations": [
+        "engineering": [
           "conversationHistory",
           "suggestReplies"
         ],
@@ -304,7 +331,7 @@
       "connections": [],
       "appears": "never",
       "default_grants": {
-        "operations": [
+        "chief-of-staff": [
           "workList",
           "workCreate",
           "workUpdate",
@@ -319,7 +346,22 @@
           "routinePause",
           "askOwner"
         ],
-        "engineering": [
+        "admin": [
+          "workList",
+          "workCreate",
+          "workUpdate",
+          "workComplete",
+          "projectList",
+          "projectCreate",
+          "projectUpdate",
+          "projectAdd",
+          "routineList",
+          "routinePropose",
+          "routineActivate",
+          "routinePause",
+          "askOwner"
+        ],
+        "finance": [
           "workList",
           "workCreate",
           "workUpdate",
@@ -349,7 +391,7 @@
           "routinePause",
           "askOwner"
         ],
-        "business-operations": [
+        "engineering": [
           "workList",
           "workCreate",
           "workUpdate",
@@ -406,17 +448,20 @@
       "connections": [],
       "appears": "never",
       "default_grants": {
-        "operations": [
+        "chief-of-staff": [
           "hireEmployee",
           "appSearch"
         ],
-        "engineering": [
+        "admin": [
+          "appSearch"
+        ],
+        "finance": [
           "appSearch"
         ],
         "growth": [
           "appSearch"
         ],
-        "business-operations": [
+        "engineering": [
           "appSearch"
         ],
         "custom": [
@@ -471,7 +516,7 @@
       ],
       "appears": "always",
       "default_grants": {
-        "operations": [
+        "chief-of-staff": [
           "artifactPage",
           "artifactRead",
           "artifactEdit",
@@ -481,11 +526,25 @@
           "driveCreate",
           "driveUpdate"
         ],
-        "engineering": [
+        "admin": [
           "artifactPage",
           "artifactRead",
           "artifactEdit",
-          "publishArtifact"
+          "publishArtifact",
+          "driveList",
+          "driveRead",
+          "driveCreate",
+          "driveUpdate"
+        ],
+        "finance": [
+          "artifactPage",
+          "artifactRead",
+          "artifactEdit",
+          "publishArtifact",
+          "driveList",
+          "driveRead",
+          "driveCreate",
+          "driveUpdate"
         ],
         "growth": [
           "artifactPage",
@@ -493,15 +552,11 @@
           "artifactEdit",
           "publishArtifact"
         ],
-        "business-operations": [
+        "engineering": [
           "artifactPage",
           "artifactRead",
           "artifactEdit",
-          "publishArtifact",
-          "driveList",
-          "driveRead",
-          "driveCreate",
-          "driveUpdate"
+          "publishArtifact"
         ]
       },
       "installed": true,
@@ -546,7 +601,7 @@
       ],
       "appears": "records",
       "default_grants": {
-        "operations": [
+        "chief-of-staff": [
           "codingStart",
           "codingStatus",
           "codingSend",

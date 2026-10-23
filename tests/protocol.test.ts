@@ -49,7 +49,7 @@ describe("Effect capability boundary", () => {
     expect(result.code).toBe("forbidden");
     expect(seen).toEqual([["double", { value: 2 }]]);
   });
-  it("runs validated operations", async () => {
+  it("runs validated chiefOfStaff", async () => {
     expect(
       await Effect.runPromise(
         double.execute({ value: 4 }).pipe(Effect.provideService(Invocation, invocation)),

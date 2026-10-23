@@ -1,7 +1,7 @@
 /**
  * Where the owner is lives in the URL, so Back, forward, reload and links all work:
  *
- * - `/$business` is Home, the direct chat with Operations
+ * - `/$business` is Home, the direct chat with the Chief of Staff
  * - `/$business/chat/$employee`, `/$business/project/$project`, `/$business/thread/$work`
  * - `/$business/settings/$section`, over the place it was opened from
  * - `?app=code` opens an app beside the conversation (`?app=browser` the live browser of the
@@ -17,7 +17,7 @@ import { parseRef, ref, type Ref } from "../../protocol/ref.ts";
 import { ui, type PlaceKind } from "./ui.ts";
 
 /**
- * Where the owner is: always a conversation. Home is the direct chat with Operations; a
+ * Where the owner is: always a conversation. Home is the direct chat with the Chief of Staff; a
  * project is its channel; a thread is a work item's conversation.
  */
 export type Place =
@@ -83,14 +83,14 @@ export const validateLayerSearch = (search: Record<string, unknown>): LayerSearc
 
 export const samePlace = (a: Place, b: Place) => JSON.stringify(a) === JSON.stringify(b);
 
-/** The conversation a place shows: Home's is the direct chat with Operations. */
+/** The conversation a place shows: Home's is the direct chat with the Chief of Staff. */
 export const conversationOf = (
   place: Place,
-  operations: string | undefined,
+  chiefOfStaff: string | undefined,
 ): ConversationKey | undefined =>
   place.kind === "home"
-    ? operations
-      ? `direct:${operations}`
+    ? chiefOfStaff
+      ? `direct:${chiefOfStaff}`
       : undefined
     : place.kind === "direct"
       ? `direct:${place.employeeId}`

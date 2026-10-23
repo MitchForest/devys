@@ -41,11 +41,11 @@ struct Desk: View {
                         Disclosure(title: "Responsibilities") { ResponsibilitiesEditor(store: store, employee: employee).id(employee.id) }
                         Disclosure(title: "Model") { ModelSection(store: store, employee: employee) }
                         Disclosure(title: "Access") { AccessPane(store: store, employee: employee) }
-                        if employee.isOperations {
+                        if employee.isChiefOfStaff {
                             Disclosure(title: "Memory") { MemoryList(store: store) }
                         }
                     }
-                    if !employee.isOperations {
+                    if !employee.isChiefOfStaff {
                         Button("Retire…", systemImage: "person.badge.minus") { retiring = true }
                             .buttonStyle(DevysButtonStyle(.quiet, compact: true))
                             .fixedSize()
@@ -178,7 +178,7 @@ private struct ResponsibilitiesEditor: View {
     }
 }
 
-/// What Operations remembers about the business, with where each fact came from.
+/// What the Chief of Staff remembers about the business, with where each fact came from.
 private struct MemoryList: View {
     let store: StoreOf<Workspace>
 
@@ -241,6 +241,6 @@ private struct RetireSheet: View {
         .padding(DevysSpacing.roomy)
         .sheetFrame(width: 360, height: 240)
         .presentationDetents([.medium])
-        .onAppear { successor = store.operations?.id ?? others.first?.id ?? "" }
+        .onAppear { successor = store.chiefOfStaff?.id ?? others.first?.id ?? "" }
     }
 }

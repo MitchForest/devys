@@ -106,7 +106,7 @@ extension Workspace {
     func reduceWorkItem(_ intent: WorkItemIntent, state: inout State) {
         switch intent {
         case .newWorkItemTapped(let ownerID, let projectID):
-            guard let owner = ownerID ?? state.operations?.id else { return }
+            guard let owner = ownerID ?? state.chiefOfStaff?.id else { return }
             state.newWorkItem = WorkItemDraft(ownerID: owner, due: Date.now.addingTimeInterval(86_400), projectID: projectID)
         case .edited(let draft):
             guard state.newWorkItem != nil else { return }

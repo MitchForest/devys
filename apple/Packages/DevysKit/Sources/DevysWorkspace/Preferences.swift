@@ -269,7 +269,7 @@ public struct Preferences {
                 let settings = state.voiceSettings
                 store.addTask {
                     await playback.stop()
-                    try? await playback.speak("Hi, I'm Operations. Two things need you today.", settings.voiceID, settings.rate)
+                    try? await playback.speak("Hi, I'm the Chief of Staff. Two things need you today.", settings.voiceID, settings.rate)
                 }
             }
         }

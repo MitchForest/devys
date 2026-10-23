@@ -15,10 +15,11 @@ export const conversations = defineApp({
   appears: "never",
   // Every employee reads back in the conversation it is answering and offers replies to tap.
   defaultGrants: {
-    operations: ["conversationHistory", "suggestReplies"],
+    "chief-of-staff": ["conversationHistory", "suggestReplies"],
     engineering: ["conversationHistory", "suggestReplies"],
     growth: ["conversationHistory", "suggestReplies"],
-    "business-operations": ["conversationHistory", "suggestReplies"],
+    admin: ["conversationHistory", "suggestReplies"],
+    finance: ["conversationHistory", "suggestReplies"],
     custom: ["conversationHistory", "suggestReplies"],
   },
 });

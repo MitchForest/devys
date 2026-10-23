@@ -162,7 +162,7 @@ extension Workspace {
 
     func answer(_ decisionID: String, approve: Bool, state: inout State) {
         if let home = state.home.value { state.home = .loaded(home.answering(decisionID)) }
-        changeWork(state, failure: "That request was already answered or has expired.") { runtime, businessID in
+        changeWork(state, failure: "Couldn't answer that request. Try again.") { runtime, businessID in
             try await runtime.answer(businessID, decisionID, approve)
         }
     }
@@ -192,6 +192,9 @@ extension Workspace {
         store.addTask {
             do {
                 try await change(runtime, businessID)
+            } catch DevysHTTPError.rejected(let status, let message) where (400..<500).contains(status) && !message.isEmpty {
+                // The server's refusal says what to do instead ("Connect the app…").
+                try store.send(Action(.stopFinished(message)))
             } catch {
                 try store.send(Action(.stopFinished(failure)))
             }

@@ -103,7 +103,7 @@ struct ConversationFeatureTests {
         } operation: {
             Store(initialState: Workspace.State(server: URL(string: "http://127.0.0.1:5173")!)) { Workspace() }
         }
-        await settle("team and projects") { store.operationsScope != nil && store.projects.value != nil && store.work.value != nil }
+        await settle("team and projects") { store.chiefOfStaffScope != nil && store.projects.value != nil && store.work.value != nil }
         return store
     }
 
@@ -175,7 +175,7 @@ struct ConversationFeatureTests {
         #expect(conversation.recipients(team: team, fallback: "growth") == ["growth"])
         conversation.respondent = "ops"
         #expect(conversation.recipients(team: team, fallback: "growth") == ["ops"])
-        conversation.draft = "@Growth and @Business Operations"
+        conversation.draft = "@Growth and @Admin"
         #expect(conversation.recipients(team: team, fallback: "growth") == ["growth", "business-ops"])
     }
 

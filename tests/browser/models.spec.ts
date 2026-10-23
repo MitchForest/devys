@@ -8,7 +8,7 @@ test("the owner sees and changes an employee's model on its desk", async ({ page
   const owner = await stores.owner("Casey", "Acme");
   const model = async () =>
     (await sql.row<{ model: string }>("SELECT model FROM employees WHERE id = $1", [
-      owner.operations,
+      owner.chiefOfStaff,
     ]))!.model;
   // Spend comes from the runtime; a fixed status keeps it deterministic without model calls.
   const usage = {
@@ -46,10 +46,10 @@ test("the owner sees and changes an employee's model on its desk", async ({ page
   );
   try {
     await signIn(page, sql, owner.person);
-    await sidebar(page).getByRole("link", { name: "Head of Operations" }).click();
+    await sidebar(page).getByRole("link", { name: "Chief of Staff" }).click();
     await page.getByRole("button", { name: /^Show side panel/ }).click();
     const desk = page.getByRole("region", {
-      name: "Head of Operations's desk",
+      name: "Chief of Staff's desk",
     });
     await desk.getByText("Model", { exact: true }).first().click();
 

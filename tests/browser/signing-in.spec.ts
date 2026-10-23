@@ -95,7 +95,7 @@ test("signed in with no business: name it, and start", async ({ page }) => {
       "SELECT business_id FROM memberships WHERE person_id = $1",
       [person],
     ))!.business_id;
-    // The starting team is hired with the Head of Operations.
+    // The starting team is hired with the Chief of Staff.
     expect(
       (await sql.row<{ n: number }>(
         "SELECT count(*)::int AS n FROM employees WHERE business_id = $1",

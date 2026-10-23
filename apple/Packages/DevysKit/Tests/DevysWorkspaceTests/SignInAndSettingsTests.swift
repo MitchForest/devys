@@ -282,7 +282,7 @@ struct DevicesAndBusinessesTests {
         store.send(.newBusinessEdited(draft))
         store.send(.createBusinessTapped)
         await settle("created", until: { store.newBusiness == nil })
-        #expect(await server.created == [NewBusiness(name: "Globex", brief: "Shared notes for families", team: ["engineering", "business-operations"])])
+        #expect(await server.created == [NewBusiness(name: "Globex", brief: "Shared notes for families", team: ["engineering", "admin"])])
     }
 
     @Test("The owner's name saves trimmed; a blank one is refused here")

@@ -103,7 +103,7 @@ struct PlacesFeatureTests {
         } operation: {
             Store(initialState: Workspace.State(server: URL(string: "http://127.0.0.1:5173")!)) { Workspace() }
         }
-        await settle("team, work and projects") { store.operationsScope != nil && store.projects.value != nil && store.work.value != nil }
+        await settle("team, work and projects") { store.chiefOfStaffScope != nil && store.projects.value != nil && store.work.value != nil }
         return store
     }
 
@@ -120,7 +120,7 @@ struct PlacesFeatureTests {
         await settle("conversation") { store.main?.key == store.state.mainKey && store.main?.messages.value != nil }
     }
 
-    @Test("Home is the direct chat with Operations; a thread remembers where it opened from, and Back returns")
+    @Test("Home is the direct chat with the Chief of Staff; a thread remembers where it opened from, and Back returns")
     func placesAndBack() async {
         let store = await makeStore(PlacesServer())
         await settle("Home's conversation") { store.main?.key == .direct("ops") }

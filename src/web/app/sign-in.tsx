@@ -219,8 +219,8 @@ export function JoinPrompt() {
   );
 }
 
-/** Hired with the Head of Operations when a business starts; changed later in Settings. */
-const startingTeam: StartingRole[] = ["engineering", "growth", "business-operations"];
+/** Hired with the Chief of Staff when a business starts; changed later in Settings. */
+const startingTeam: StartingRole[] = ["admin", "finance", "growth", "engineering"];
 
 /** Signed in with no business yet: its name, a line about it if you like, and start. */
 export function FirstBusiness() {

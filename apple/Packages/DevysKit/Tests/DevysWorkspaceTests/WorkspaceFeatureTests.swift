@@ -115,8 +115,8 @@ struct WorkspaceFeatureTests {
         await settle("status and memory") { store.status.value != nil && store.memory.value != nil }
         #expect(store.businesses.map(\.name) == ["Acme", "Globex"])
         #expect(store.snapshot.businessName == "Acme")
-        #expect(store.snapshot.employees.first?.name == "Head of Operations")
-        #expect(store.operationsScope == EmployeeScope(businessID: "acme", employeeID: "ops"))
+        #expect(store.snapshot.employees.first?.name == "Chief of Staff")
+        #expect(store.chiefOfStaffScope == EmployeeScope(businessID: "acme", employeeID: "ops"))
         #expect(store.status.value == .fixture)
         #expect(store.memory.value == MemoryClaim.fixtures)
         #expect(store.ownerFirstName == "Mitch")
@@ -166,7 +166,7 @@ struct WorkspaceFeatureTests {
     func stops() async {
         let calls = Calls()
         let store = makeStore(calls: calls)
-        await settle("team") { store.operationsScope != nil }
+        await settle("team") { store.chiefOfStaffScope != nil }
         store.send(.stopTapped)
         await settle("stop finished") { !store.isStopping && store.notice != nil }
         #expect(await calls.stops == 1)
@@ -176,13 +176,13 @@ struct WorkspaceFeatureTests {
     @Test("Switching business loads that business's team and returns to Home")
     func switchesBusiness() async {
         let store = makeStore(calls: Calls())
-        await settle("team") { store.operationsScope != nil }
+        await settle("team") { store.chiefOfStaffScope != nil }
         store.send(.placeSelected(.project("launch")))
         store.send(.layerOpened(.app("documents")))
         store.send(.businessSelected("globex"))
         #expect(store.snapshot.businessName == "Globex")
         #expect(store.place == .home && store.layers.isEmpty && store.history.isEmpty)
-        await settle("Globex's team") { store.operationsScope?.businessID == "globex" }
+        await settle("Globex's team") { store.chiefOfStaffScope?.businessID == "globex" }
         // A status answer for the business just left is ignored.
         store.send(Workspace.Action(.statusLoaded(EmployeeScope(businessID: "acme", employeeID: "ops"), .fixture)))
         #expect(store.status.value == nil)
@@ -261,7 +261,7 @@ struct AccessFeatureTests {
     func grants() async {
         let server = AccessServer()
         let store = makeStore(server)
-        await settle("team", until: { store.operationsScope != nil })
+        await settle("team", until: { store.chiefOfStaffScope != nil })
         store.send(.accessRequested("ops"))
         await settle("access", until: { store.access.value != nil })
         #expect(store.access.value?.grants.map(\.capability) == ["recall"])
@@ -277,7 +277,7 @@ struct AccessFeatureTests {
     func pause() async {
         let server = AccessServer()
         let store = makeStore(server)
-        await settle("team", until: { store.operationsScope != nil })
+        await settle("team", until: { store.chiefOfStaffScope != nil })
         store.send(.pauseToggled("growth"))
         #expect(store.snapshot.employees.first { $0.id == "growth" }?.paused == true)
         for _ in 0..<2_000 where await server.pauses.isEmpty { await Task.yield() }
@@ -401,11 +401,11 @@ struct WorkFeatureTests {
         #expect(await server.added == ["p1:devys:documents/artifact/a1"])
     }
 
-    @Test("A new work item defaults to the Head of Operations and opens its thread; state changes carry the revision on screen")
+    @Test("A new work item defaults to the Chief of Staff and opens its thread; state changes carry the revision on screen")
     func changes() async {
         let server = WorkServer()
         let store = makeStore(server)
-        await settle("work", until: { store.work.value != nil && store.operationsScope != nil })
+        await settle("work", until: { store.work.value != nil && store.chiefOfStaffScope != nil })
         store.send(.newWorkItemTapped())
         guard var draft = store.newWorkItem else { return #expect(Bool(false), "the sheet opens") }
         #expect(draft.ownerID == "ops" && draft.projectID == nil)
@@ -464,7 +464,7 @@ struct ModelFeatureTests {
     @Test("Opening an employee's desk loads the catalog and that employee's spend")
     func loadsCatalogAndUsage() async {
         let store = makeStore(ModelServer())
-        await settle("team", until: { store.operationsScope != nil })
+        await settle("team", until: { store.chiefOfStaffScope != nil })
         store.send(.modelRequested("growth"))
         await settle("catalog", until: { store.models.catalog != nil && store.models.usage["growth"] != nil })
         #expect(store.models.catalog == .golden)
@@ -476,7 +476,7 @@ struct ModelFeatureTests {
     func changes() async {
         let server = ModelServer()
         let store = makeStore(server)
-        await settle("team", until: { store.operationsScope != nil })
+        await settle("team", until: { store.chiefOfStaffScope != nil })
         #expect(model(store, "growth") == "claude-opus-5-5")
         store.send(.modelSelected("growth", "gpt-6.1-sol"))
         #expect(model(store, "growth") == "gpt-6.1-sol")
@@ -495,7 +495,7 @@ struct ModelFeatureTests {
         let server = ModelServer()
         await server.refuse()
         let store = makeStore(server)
-        await settle("team", until: { store.operationsScope != nil })
+        await settle("team", until: { store.chiefOfStaffScope != nil })
         store.send(.modelSelected("growth", "gemini-3.8-flash"))
         #expect(model(store, "growth") == "gemini-3.8-flash")
         await settle("rollback", until: { store.models.errors["growth"] != nil })

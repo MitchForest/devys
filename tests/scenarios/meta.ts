@@ -1,5 +1,5 @@
 /**
- * A Facebook Page, an Instagram account and a Meta business portfolio, no ads: Operations should
+ * A Facebook Page, an Instagram account and a Meta business portfolio, no ads: the Chief of Staff should
  * ask for the name and handle with chips, use the business's email (not the owner's personal
  * one), hand sign-ins and checks to the owner (take over) and create nothing before asking.
  */

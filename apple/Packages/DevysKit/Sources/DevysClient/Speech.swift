@@ -100,7 +100,7 @@ public struct VoiceSettings: Equatable, Sendable, Codable {
     public var voiceID: String?
     /// 0.5–1.5 times the system's default speaking rate.
     public var rate: Double
-    /// Read Operations' replies aloud.
+    /// Read the Chief of Staff's replies aloud.
     public var speaksReplies: Bool
 
     public init(voiceID: String? = nil, rate: Double = 1, speaksReplies: Bool = false) {

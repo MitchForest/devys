@@ -1,5 +1,5 @@
 /**
- * Email on the business's own domain, with nothing set up yet: Operations should ask which
+ * Email on the business's own domain, with nothing set up yet: the Chief of Staff should ask which
  * provider (chips, its recommendation first), plan the work as steps (the mailbox, the DNS
  * records, verification, a test delivery) and stop at the first thing only the owner can do.
  */

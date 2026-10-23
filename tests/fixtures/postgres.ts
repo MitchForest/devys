@@ -12,7 +12,7 @@ export const sql = {
   rows: <T>(text: string, values: unknown[] = []) => query(db, (s) => s.rows<T>(text, values)),
 };
 
-/** A person who owns a fresh business staffed with a Head of Operations, with its default apps. */
+/** A person who owns a fresh business staffed with a Chief of Staff, with its default apps. */
 export async function business(name = "Test business") {
   const person = crypto.randomUUID();
   await sql.run("INSERT INTO people (id, display_name) VALUES ($1, 'Owner')", [person]);
@@ -21,14 +21,14 @@ export async function business(name = "Test business") {
       name,
       brief: "",
       model: "claude-opus-5-5",
-      operations: { name: "Head of Operations", responsibilities: "Runs the business day to day." },
+      chiefOfStaff: { name: "Chief of Staff", responsibilities: "Runs the business day to day." },
     }),
   );
   await Effect.runPromise(install(db, created.business.id, defaultApps));
   return {
     person,
     business: created.business,
-    operations: created.operations,
-    scope: { businessId: created.business.id, employeeId: created.operations.id },
+    chiefOfStaff: created.chiefOfStaff,
+    scope: { businessId: created.business.id, employeeId: created.chiefOfStaff.id },
   };
 }

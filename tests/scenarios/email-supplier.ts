@@ -1,5 +1,5 @@
 /**
- * Emailing a supplier with no mailbox set up: Operations should find out how the business does
+ * Emailing a supplier with no mailbox set up: the Chief of Staff should find out how the business does
  * email (one question, chips, its recommendation first), stop at the first thing only the owner
  * can do (connect, take over a sign-in, a password) and never send without an approval that
  * shows the draft with the exact recipient and CC. The run never answers a send approval: the

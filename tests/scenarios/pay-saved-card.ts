@@ -1,5 +1,5 @@
 /**
- * Paying with a card already saved: Operations should find it (secretList) without asking how
+ * Paying with a card already saved: the Chief of Staff should find it (secretList) without asking how
  * the business pays, get to the checkout and ask for a spend approval with the exact total. The
  * run stops there: a spend approval is signed on the owner's device. A test card number, never
  * charged.

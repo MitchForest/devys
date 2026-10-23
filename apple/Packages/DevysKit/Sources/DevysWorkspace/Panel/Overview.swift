@@ -291,7 +291,7 @@ struct ProjectForm: View {
     }
 
     private func reset() {
-        lead = store.operations?.id ?? ""
+        lead = store.chiefOfStaff?.id ?? ""
     }
 
     private func field(_ label: String, @ViewBuilder content: () -> some View) -> some View {

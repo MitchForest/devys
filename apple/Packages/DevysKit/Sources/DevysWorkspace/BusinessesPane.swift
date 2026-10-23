@@ -168,7 +168,7 @@ private struct ExportFile: FileDocument {
     }
 }
 
-/// New business: a name, a brief, and the starting team hired with the Head of Operations.
+/// New business: a name, a brief, and the starting team hired with the Chief of Staff.
 struct NewBusinessSheet: View {
     let store: StoreOf<Preferences>
 
@@ -182,7 +182,7 @@ struct NewBusinessSheet: View {
                 }
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Starting team").font(DevysTypography.label).foregroundStyle(DevysColors.ink3)
-                    Text("A Head of Operations always joins. Hire the others now or later.")
+                    Text("A Chief of Staff always joins. Hire the others now or later.")
                         .font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3)
                     ForEach(RoleTemplate.startingTeam, id: \.self) { template in
                         Toggle(RoleTemplate.displayName(template), isOn: Binding(

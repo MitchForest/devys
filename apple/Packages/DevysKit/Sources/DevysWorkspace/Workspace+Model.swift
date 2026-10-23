@@ -9,7 +9,7 @@ import Foundation
 package struct EmployeeModels {
     /// Loaded when an employee's desk first shows.
     package var catalog: ModelCatalog?
-    /// Spend by employee id for employees other than Operations, whose spend comes with its status.
+    /// Spend by employee id for employees other than the Chief of Staff, whose spend comes with its status.
     package var usage: [String: RuntimeUsage] = [:]
     /// Why the last model change for an employee didn't go through, by employee id.
     package var errors: [String: String] = [:]
@@ -29,7 +29,7 @@ package enum ModelIntent {
 extension Workspace.State {
     /// What an employee's runtime has spent, when it has reported any.
     package func usage(of employeeID: String) -> RuntimeUsage? {
-        employeeID == operations?.id ? status.value?.state.usage : models.usage[employeeID]
+        employeeID == chiefOfStaff?.id ? status.value?.state.usage : models.usage[employeeID]
     }
 }
 
@@ -60,9 +60,9 @@ extension Workspace {
         }
     }
 
-    /// Operations' spend arrives with its status; anyone else's is read when their desk opens.
+    /// The Chief of Staff's spend arrives with its status; anyone else's is read when their desk opens.
     func loadUsage(_ employeeID: String, state: State) {
-        guard employeeID != state.operations?.id, let scope = scope(of: employeeID, in: state) else { return }
+        guard employeeID != state.chiefOfStaff?.id, let scope = scope(of: employeeID, in: state) else { return }
         let runtime = runtime
         store.addTask {
             guard let status = try? await runtime.status(scope) else { return }

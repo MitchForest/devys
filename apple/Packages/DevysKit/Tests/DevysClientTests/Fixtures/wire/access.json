@@ -381,7 +381,7 @@
       "constraints": {},
       "responsibility": null,
       "created_at": "2026-01-01T00:00:00.000Z",
-      "description": "Propose a routine: work you (or, for Operations, another employee) run on a schedule or when an event happens, for a responsibility or a project (its ref; runs then speak in its channel, else in the employee's direct chat). trigger is {kind: \"cron\", expression: five-field cron like \"0 9 * * 1\", timezone: the owner's IANA zone, hours?: {start: \"09:00\", end: \"18:00\", days?: [\"mon\", …]}} or {kind: \"event\", source, type, filters: {field: exact value}}. notify when_found makes a quiet check-in: a run that finds nothing posts nothing. To change a routine, pass its ref and revision as returned: that is a new proposal and it stops running until approved. Proposing activates nothing: then call routineActivate with the ref and revision it returns, which asks the owner. For a one-off look later, use workUpdate with wakeAt instead.",
+      "description": "Propose a routine: work you (or, for the Chief of Staff, another employee) run on a schedule or when an event happens, for a responsibility or a project (its ref; runs then speak in its channel, else in the employee's direct chat). trigger is {kind: \"cron\", expression: five-field cron like \"0 9 * * 1\", timezone: the owner's IANA zone, hours?: {start: \"09:00\", end: \"18:00\", days?: [\"mon\", …]}} or {kind: \"event\", source, type, filters: {field: exact value}}. notify when_found makes a quiet check-in: a run that finds nothing posts nothing. To change a routine, pass its ref and revision as returned: that is a new proposal and it stops running until approved. Proposing activates nothing: then call routineActivate with the ref and revision it returns, which asks the owner. For a one-off look later, use workUpdate with wakeAt instead.",
       "effect": "change",
       "limits": false
     },
@@ -501,7 +501,7 @@
     },
     {
       "capability": "hireEmployee",
-      "description": "Hire a new employee from a role template (engineering, growth, business-operations or custom) with a name, responsibilities and optionally a model id. The owner approves each hire.",
+      "description": "Hire a new employee from a role template (admin, finance, growth, engineering or custom) with a name, responsibilities and optionally a model id. The owner approves each hire.",
       "effect": "change",
       "limits": false
     }

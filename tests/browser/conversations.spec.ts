@@ -12,19 +12,19 @@ test("a direct chat is the middle; who answers follows replies and @mentions; re
   const growth = await post<{ id: string }>(`/api/businesses/${owner.business}/employees`, {
     template: "growth",
   });
-  const sent = await stubPosting(page, () => [owner.operations]);
-  const direct = `direct:${owner.operations}`;
+  const sent = await stubPosting(page, () => [owner.chiefOfStaff]);
+  const direct = `direct:${owner.chiefOfStaff}`;
   try {
     await signIn(page, sql, owner.person);
     await expect(sidebar(page).getByRole("link", { name: "Growth" })).toBeVisible();
-    await sidebar(page).getByRole("link", { name: "Head of Operations" }).click();
-    await expect(page.getByTestId("place-title")).toHaveText("Head of Operations");
-    const field = page.getByLabel("Message Head of Operations");
+    await sidebar(page).getByRole("link", { name: "Chief of Staff" }).click();
+    await expect(page.getByTestId("place-title")).toHaveText("Chief of Staff");
+    const field = page.getByLabel("Message Chief of Staff");
     await expect(field).toBeVisible();
 
     // An empty direct chat: its employee answers.
     const chip = page.getByTestId("to-names");
-    await expect(chip).toHaveAttribute("data-names", "Head of Operations");
+    await expect(chip).toHaveAttribute("data-names", "Chief of Staff");
 
     // The owner's bubble shows at once and the post goes to this chat.
     await field.fill("What is due this week?");
@@ -35,9 +35,9 @@ test("a direct chat is the middle; who answers follows replies and @mentions; re
     expect(sent[0]!.body).toMatchObject({ text: "What is due this week?" });
     expect(sent[0]!.body.id).toMatch(/^[A-Za-z0-9-]{8,64}$/);
 
-    // Operations answers and Growth chimes in: Growth spoke last, so Growth answers next.
+    // The Chief of Staff answers and Growth chimes in: Growth spoke last, so Growth answers next.
     const answer = await insertMessage(sql, owner.business, direct, {
-      author: `employee:${owner.operations}`,
+      author: `employee:${owner.chiefOfStaff}`,
       text: "The launch post and the pricing page.",
     });
     await insertMessage(sql, owner.business, direct, {
@@ -63,11 +63,11 @@ test("a direct chat is the middle; who answers follows replies and @mentions; re
       )
       .toEqual({ emoji: "👍" });
 
-    // Replying to Operations' message makes Operations the one who answers.
+    // Replying to the Chief of Staff's message makes the Chief of Staff the one who answers.
     await page.getByText("The launch post and the pricing page.").click({ button: "right" });
     await page.getByRole("menuitem", { name: "Reply" }).click();
-    await expect(page.getByText("Replying to Head of Operations")).toBeVisible();
-    await expect(chip).toHaveAttribute("data-names", "Head of Operations");
+    await expect(page.getByText("Replying to Chief of Staff")).toBeVisible();
+    await expect(chip).toHaveAttribute("data-names", "Chief of Staff");
     await field.fill("Start with the pricing page.");
     await page.keyboard.press("Enter");
     await expect.poll(() => sent.length).toBe(2);
@@ -117,22 +117,22 @@ test("an employee's suggested replies show under its question; a tap answers it 
   const stores = await localStores();
   const { sql } = stores;
   const owner = await stores.owner("Casey", "Acme");
-  const sent = await stubPosting(page, () => [owner.operations]);
-  const direct = `direct:${owner.operations}`;
+  const sent = await stubPosting(page, () => [owner.chiefOfStaff]);
+  const direct = `direct:${owner.chiefOfStaff}`;
   await insertMessage(sql, owner.business, direct, {
-    author: `employee:${owner.operations}`,
+    author: `employee:${owner.chiefOfStaff}`,
     text: "An older question.",
     replies: ["Old"],
   });
   const question = await insertMessage(sql, owner.business, direct, {
-    author: `employee:${owner.operations}`,
+    author: `employee:${owner.chiefOfStaff}`,
     text: "Should the launch post go out today?",
     replies: ["Today", "Tomorrow"],
   });
   try {
     await signIn(page, sql, owner.person);
-    await sidebar(page).getByRole("link", { name: "Head of Operations" }).click();
-    const field = page.getByLabel("Message Head of Operations");
+    await sidebar(page).getByRole("link", { name: "Chief of Staff" }).click();
+    const field = page.getByLabel("Message Chief of Staff");
     await field.fill("Half-written thought");
     // Only the latest employee message offers its replies.
     const replies = page.getByRole("group", { name: "Suggested replies" });
@@ -157,8 +157,8 @@ test("a turn that stopped is Devys's notice, not the employee's words, with Ask 
   const stores = await localStores();
   const { sql } = stores;
   const owner = await stores.owner("Drew", "Acme");
-  const sent = await stubPosting(page, () => [owner.operations]);
-  const direct = `direct:${owner.operations}`;
+  const sent = await stubPosting(page, () => [owner.chiefOfStaff]);
+  const direct = `direct:${owner.chiefOfStaff}`;
   await insertMessage(sql, owner.business, direct, {
     author: `person:${owner.person}`,
     text: "Find a venue",
@@ -166,13 +166,13 @@ test("a turn that stopped is Devys's notice, not the employee's words, with Ask 
   await insertMessage(sql, owner.business, direct, {
     author: "system",
     kind: "event",
-    text: "Head of Operations stopped: it took too long.",
+    text: "Chief of Staff stopped: it took too long.",
     replies: ["Ask again"],
   });
   try {
     await signIn(page, sql, owner.person);
-    await sidebar(page).getByRole("link", { name: "Head of Operations" }).click();
-    await expect(page.getByText("Head of Operations stopped: it took too long.")).toBeVisible();
+    await sidebar(page).getByRole("link", { name: "Chief of Staff" }).click();
+    await expect(page.getByText("Chief of Staff stopped: it took too long.")).toBeVisible();
     // An event, not a message: no speaker line or bubble of the employee's.
     await expect(page.getByTestId("speaker")).toHaveCount(0);
     const replies = page.getByRole("group", { name: "Suggested replies" });
@@ -201,7 +201,7 @@ test("a project opens on its channel; a hand-off card opens the thread; Back and
   const project = await post<{ id: string }>(`${path}/projects`, {
     name: "Launch",
     goal: "Ship Acme v1",
-    lead: owner.operations,
+    lead: owner.chiefOfStaff,
   });
   const workItem = await post<{ id: string }>(`${path}/work`, {
     title: "Write a tagline",
@@ -210,7 +210,7 @@ test("a project opens on its channel; a hand-off card opens the thread; Back and
   });
   const channel = `project:${project.id}`;
   await insertMessage(sql, owner.business, channel, {
-    author: `employee:${owner.operations}`,
+    author: `employee:${owner.chiefOfStaff}`,
     text: "Growth, can you write the tagline?",
   });
   await insertMessage(sql, owner.business, channel, {
@@ -302,13 +302,13 @@ test("a project opens on its channel; a hand-off card opens the thread; Back and
     await expect(page.getByTestId("place-title")).toHaveText("Growth, can you write the tagline?");
     await expect(
       page.getByRole("region", { name: "Work item" }).getByTestId("work-item-owner"),
-    ).toHaveText("Head of Operations");
+    ).toHaveText("Chief of Staff");
     expect(
       await sql.row<{ owner_employee_id: string; project_id: string }>(
         "SELECT owner_employee_id, project_id FROM work_items WHERE business_id = $1 AND title = $2",
         [owner.business, "Growth, can you write the tagline?"],
       ),
-    ).toEqual({ owner_employee_id: owner.operations, project_id: project.id });
+    ).toEqual({ owner_employee_id: owner.chiefOfStaff, project_id: project.id });
     await page.getByRole("button", { name: "Back (⌘[)" }).click();
     await expect(page.getByTestId("place-title")).toHaveText("Launch");
   } finally {

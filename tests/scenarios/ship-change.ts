@@ -1,5 +1,5 @@
 /**
- * A change to the business's website, shipped: Operations should run a coding session on the
+ * A change to the business's website, shipped: the Chief of Staff should run a coding session on the
  * repository in the business folder, accept it, and (with no GitHub remote) say so and ask how
  * to publish rather than invent one, then ask once for the merge and deploy with the exact
  * steps. The run never approves a production deploy.

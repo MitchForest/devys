@@ -24,7 +24,7 @@ import {
   timeline,
   type Bubble as TimelineBubble,
 } from "../app/timeline.ts";
-import { useDecisions, useEmployees, useOperations, usePerson, useWork } from "../app/data.ts";
+import { useDecisions, useEmployees, useChiefOfStaff, usePerson, useWork } from "../app/data.ts";
 import { useStartThread } from "../app/mutations.ts";
 import { usePlace } from "../app/navigation.ts";
 import { ui } from "../app/ui.ts";
@@ -187,6 +187,7 @@ export function ConversationView({
                         <WorkProgressCard
                           id={parseRef(item.bubble.ref)?.id ?? ""}
                           text={item.bubble.text}
+                          inThread={key?.startsWith("work:") ?? false}
                         />
                       ) : item.bubble.kind === "event" ? (
                         <>
@@ -250,7 +251,7 @@ function MessageRow({
   conversation: Conversation;
 }) {
   const employees = useEmployees();
-  const operations = useOperations();
+  const chiefOfStaff = useChiefOfStaff();
   const work = useWork().data;
   const place = usePlace();
   const start = useStartThread();
@@ -266,7 +267,7 @@ function MessageRow({
       author ??
       mentions[0] ??
       answerersOf(conversation, draft.get(conversation.key).text, employees).to[0] ??
-      operations?.id;
+      chiefOfStaff?.id;
     if (!owner) return;
     const projectId =
       place.kind === "project"

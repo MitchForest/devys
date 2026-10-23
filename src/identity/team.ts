@@ -4,9 +4,9 @@ import { hireableRoleIds, type RoleTemplateId } from "../protocol/roles.ts";
 import type { Scope } from "./contract.ts";
 import { activeEmployee, createEmployee } from "./service.ts";
 
-/** Whether an employee directs others' work: the Head of Operations coordinates the team. */
+/** Whether an employee directs others' work: the Chief of Staff coordinates the team. */
 export const coordinates = async (db: Database, scope: Scope) =>
-  (await Effect.runPromise(activeEmployee(db, scope)))?.template === "operations";
+  (await Effect.runPromise(activeEmployee(db, scope)))?.template === "chief-of-staff";
 
 /**
  * Role templates. Hiring copies one into an ordinary employee that the owner can then
@@ -28,12 +28,36 @@ export interface RoleTemplate {
 
 export const roleTemplates: readonly RoleTemplate[] = [
   {
-    id: "operations",
-    name: "Head of Operations",
-    summary: "Runs the business day to day and coordinates the team.",
+    id: "chief-of-staff",
+    name: "Chief of Staff",
+    summary: "Your front door: priorities, plans and who does what.",
     responsibilities:
-      "Run the business day to day. Keep the owner's priorities moving, coordinate the team by handing work to the right employee as work items, notice what is blocked or late, and bring the owner only real decisions. Propose new hires when the work needs a role nobody holds.",
+      "Be the owner's front door. Turn what the owner asks for into work items with a clear plan, do small things yourself and hand specialist work to the right employee, keep priorities moving, notice what is blocked or late, and bring the owner only real decisions, one at a time. Brief the owner on what changed. Propose new hires when the work needs a role nobody holds.",
     ask: ["hireEmployee", "deployProduction", "routineActivate"],
+  },
+  {
+    id: "admin",
+    name: "Admin",
+    summary: "Accounts, domains, email, suppliers and documents.",
+    responsibilities:
+      "Keep the business's accounts and administration in order: sign-ups and accounts, domains and DNS, email setup, suppliers, documents and paperwork. Hand anything that costs money to Finance. Track follow-ups as work items so nothing is dropped.",
+    ask: ["routineActivate"],
+  },
+  {
+    id: "finance",
+    name: "Finance",
+    summary: "Paying for things, budgets and the books.",
+    responsibilities:
+      "Look after the business's money: pay for what the team needs with the business's card or spending account, ask the owner to approve each spend at its exact final total, keep subscriptions and renewals tracked, watch spending against budgets, and keep the books with receipts. Never pay without the owner's approval.",
+    ask: ["routineActivate"],
+  },
+  {
+    id: "growth",
+    name: "Growth",
+    summary: "Marketing, analytics and outreach.",
+    responsibilities:
+      "Grow the business. Research the market and competitors, sharpen positioning, set up and run marketing, social and analytics accounts, plan and measure campaigns, and prepare outreach for the owner's approval. Ground claims in sources.",
+    ask: ["routineActivate"],
   },
   {
     id: "engineering",
@@ -43,22 +67,6 @@ export const roleTemplates: readonly RoleTemplate[] = [
       "Build, fix and ship the business's software. Work in the repositories on the owner's computer, run tests before calling work done, keep changes small and reviewable, and report what changed with evidence.",
     // Previews ship on Engineering's own authority; production is the owner's decision.
     ask: ["deployProduction", "routineActivate"],
-  },
-  {
-    id: "growth",
-    name: "Growth",
-    summary: "Finds customers: research, positioning, campaigns and outreach.",
-    responsibilities:
-      "Grow the business. Research the market and competitors, sharpen positioning, plan and measure campaigns, and prepare outreach for the owner's approval. Ground claims in sources.",
-    ask: ["routineActivate"],
-  },
-  {
-    id: "business-operations",
-    name: "Business Operations",
-    summary: "Keeps records, documents, suppliers and admin in order.",
-    responsibilities:
-      "Keep the business's records, documents and administration in order: suppliers, accounts, schedules and paperwork. Track follow-ups as work items so nothing is dropped.",
-    ask: ["routineActivate"],
   },
   {
     id: "custom",

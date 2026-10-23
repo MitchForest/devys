@@ -12,9 +12,10 @@ export const web = defineApp({
   connections: [],
   appears: "never",
   defaultGrants: {
-    operations: ["readPublicUrl"],
+    "chief-of-staff": ["readPublicUrl"],
     engineering: ["readPublicUrl"],
     growth: ["readPublicUrl"],
-    "business-operations": ["readPublicUrl"],
+    admin: ["readPublicUrl"],
+    finance: ["readPublicUrl"],
   },
 });

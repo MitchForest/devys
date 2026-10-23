@@ -49,7 +49,7 @@ package struct Workspace {
         package var isActive = true
         package var isSidebarVisible = true
         package var isPaletteOpen = false
-        /// The Head of Operations' runtime state.
+        /// The Chief of Staff's runtime state.
         package var status: Loadable<EmployeeStatus> = .loading
         /// Each employee's latest runtime status, refreshed every tick; the sidebar's status dots derive from it.
         package var statuses: [String: EmployeeStatus] = [:]
@@ -113,11 +113,11 @@ package struct Workspace {
         }
 
         package var isRunning: Bool { status.value?.isRunning ?? false }
-        /// Every business starts with its Head of Operations; the server lists it first.
-        package var operations: Employee? { snapshot.employees.first }
-        /// Where Operations' runtime and conversation live, once the team has loaded.
-        package var operationsScope: EmployeeScope? {
-            operations.map { EmployeeScope(businessID: businessID, employeeID: $0.id) }
+        /// Every business starts with its Chief of Staff; the server lists it first.
+        package var chiefOfStaff: Employee? { snapshot.employees.first }
+        /// Where the Chief of Staff's runtime and conversation live, once the team has loaded.
+        package var chiefOfStaffScope: EmployeeScope? {
+            chiefOfStaff.map { EmployeeScope(businessID: businessID, employeeID: $0.id) }
         }
         package var ownerFirstName: String? {
             account?.person.displayName.split(separator: " ").first.map(String.init)
@@ -239,7 +239,7 @@ package struct Workspace {
                 loadMemory(state)
                 loadWork(state)
                 loadSummaries(state)
-                // Home's conversation is Operations', known once the team has loaded.
+                // Home's conversation is the Chief of Staff's, known once the team has loaded.
                 openConversation(&state)
 
             case .tick:
@@ -323,7 +323,7 @@ package struct Workspace {
             case .statusLoaded(let scope, let snapshot):
                 guard scope.businessID == state.businessID else { return }
                 state.statuses[scope.employeeID] = snapshot
-                if scope == state.operationsScope { state.status = .loaded(snapshot) }
+                if scope == state.chiefOfStaffScope { state.status = .loaded(snapshot) }
                 settleAwaiting(&state)
 
             case .memoryLoaded(let claims):
@@ -333,7 +333,7 @@ package struct Workspace {
                 loadFailed(error, memory: memory, state: &state)
 
             case .stopTapped:
-                guard !state.isStopping, let scope = state.operationsScope else { return }
+                guard !state.isStopping, let scope = state.chiefOfStaffScope else { return }
                 state.isStopping = true
                 let runtime = runtime
                 store.addTask {
@@ -519,9 +519,9 @@ extension Workspace {
         }
     }
 
-    /// Operations first, whose failures show; then everyone else, whose status dot derives from it.
+    /// The Chief of Staff first, whose failures show; then everyone else, whose status dot derives from it.
     func loadStatus(_ state: State) {
-        guard let scope = state.operationsScope else { return }
+        guard let scope = state.chiefOfStaffScope else { return }
         let others = state.snapshot.employees.dropFirst().map { EmployeeScope(businessID: state.businessID, employeeID: $0.id) }
         let runtime = runtime
         store.addTask {

@@ -17,7 +17,7 @@ import {
   useBusinessId,
   useEmployees,
   useHome,
-  useOperations,
+  useChiefOfStaff,
   useOwnerPhoto,
   usePerson,
   usePlaceTitle,
@@ -416,15 +416,15 @@ function Shortcuts({ togglePanel }: { togglePanel: () => void }) {
   const nav = useNav();
   const refresh = useRefresh();
   const stop = useStop();
-  const operations = useOperations();
-  const running = isRunning(useStatus(operations?.id).data);
+  const chiefOfStaff = useChiefOfStaff();
+  const running = isRunning(useStatus(chiefOfStaff?.id).data);
   const { layers } = useLayers();
-  const latest = useRef({ togglePanel, refresh, stop, operations, running, layered: false });
+  const latest = useRef({ togglePanel, refresh, stop, chiefOfStaff, running, layered: false });
   latest.current = {
     togglePanel,
     refresh,
     stop,
-    operations,
+    chiefOfStaff,
     running,
     layered: layers.length > 0,
   };
@@ -455,9 +455,9 @@ function Shortcuts({ togglePanel }: { togglePanel: () => void }) {
       } else if (event.key === "r" && !event.shiftKey && !event.altKey) {
         event.preventDefault();
         void now.refresh();
-      } else if (event.key === "." && now.running && now.operations) {
+      } else if (event.key === "." && now.running && now.chiefOfStaff) {
         event.preventDefault();
-        now.stop.mutate(now.operations.id);
+        now.stop.mutate(now.chiefOfStaff.id);
       }
     };
     window.addEventListener("keydown", keys);
@@ -485,7 +485,7 @@ function CompactShell() {
   const business = useBusiness();
   const businesses = useBusinesses();
   const businessId = useBusinessId();
-  const operations = useOperations();
+  const chiefOfStaff = useChiefOfStaff();
   const place = usePlace();
   const { layers } = useLayers();
   const canGoBack = useCanGoBack();
@@ -572,9 +572,9 @@ function CompactShell() {
               {needsYou === 1 ? "1 needs you" : `${needsYou} need you`}
             </button>
           )}
-          {list === null && place.kind === "home" && operations && (
-            <button type="button" aria-label={operations.name} onClick={() => setSheet(true)}>
-              <EmployeePortrait employee={operations} size={28} />
+          {list === null && place.kind === "home" && chiefOfStaff && (
+            <button type="button" aria-label={chiefOfStaff.name} onClick={() => setSheet(true)}>
+              <EmployeePortrait employee={chiefOfStaff} size={28} />
             </button>
           )}
         </header>

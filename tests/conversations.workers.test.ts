@@ -69,7 +69,7 @@ async function owner() {
 
 it("a DM continues with its employee; a reply from the employee lands in the same DM", async () => {
   const { acme, received, bindings, as, say } = await owner();
-  const ops = acme.operations.id;
+  const ops = acme.chiefOfStaff.id;
   const first = await say(`direct:${ops}`, { id: "dm-message-0001", text: "What is next?" });
   expect(first.to).toEqual([ops]);
   expect(received.at(-1)?.input.chatId).toBe(`app:${acme.business.id}:${ops}`);
@@ -105,7 +105,7 @@ it("a DM continues with its employee; a reply from the employee lands in the sam
 
 it("in a project the lead answers first, then whoever spoke last, and a mention brings someone in", async () => {
   const { acme, growth, received, bindings, as, say } = await owner();
-  const ops = acme.operations.id;
+  const ops = acme.chiefOfStaff.id;
   const project = (await (
     await as("/projects", {
       method: "POST",
@@ -126,7 +126,7 @@ it("in a project the lead answers first, then whoever spoke last, and a mention 
     "op-2",
     received.at(-1)!.input.messageId,
   );
-  // No mention: Operations spoke last, so Operations continues.
+  // No mention: the Chief of Staff spoke last, so the Chief of Staff continues.
   expect((await say(key, { id: "project-message-02", text: "Go on." })).to).toEqual([ops]);
   // Mentioning Growth by name brings Growth in, with what it missed.
   const asked = await say(key, { id: "project-message-03", text: "@Growth which channel?" });
@@ -134,12 +134,12 @@ it("in a project the lead answers first, then whoever spoke last, and a mention 
   const delivered = received.at(-1)!;
   expect(delivered.employee).toBe(growth.id);
   expect(delivered.input.text).toContain("Since you last looked:");
-  expect(delivered.input.text).toContain("[Head of Operations] Domain, then site.");
+  expect(delivered.input.text).toContain("[Chief of Staff] Domain, then site.");
 });
 
 it("an employee asks a colleague in the open, and the answer comes back to it", async () => {
   const { acme, growth, received, bindings, say } = await owner();
-  const ops = acme.operations.id;
+  const ops = acme.chiefOfStaff.id;
   const start = await say(`direct:${ops}`, { id: "ask-message-0001", text: "Get us a tagline." });
   const opsChat = received.at(-1)!.input.chatId;
   await postFromEmployee(
@@ -151,10 +151,10 @@ it("an employee asks a colleague in the open, and the answer comes back to it", 
   );
   const toGrowth = received.at(-1)!;
   expect(toGrowth.employee).toBe(growth.id);
-  // Growth works in Operations' DM, as its own context there.
+  // Growth works in the Chief of Staff's DM, as its own context there.
   expect(toGrowth.input.chatId).toBe(`app:${acme.business.id}:${growth.id}:direct:${ops}`);
   expect(toGrowth.input.senderId).toBe(`employee:${ops}`);
-  expect(toGrowth.input.text).toContain("From your colleague Head of Operations.");
+  expect(toGrowth.input.text).toContain("From your colleague Chief of Staff.");
   await postFromEmployee(
     bindings,
     toGrowth.input.chatId,
@@ -165,7 +165,7 @@ it("an employee asks a colleague in the open, and the answer comes back to it", 
   const back = received.at(-1)!;
   expect(back.employee).toBe(ops);
   expect(back.input.text).toContain("Write it down.");
-  // Operations' thanks wakes nobody.
+  // The Chief of Staff's thanks wakes nobody.
   const before = received.length;
   await postFromEmployee(bindings, opsChat, "Thanks, Growth.", "op-5", back.input.messageId);
   expect(received).toHaveLength(before);
@@ -173,8 +173,8 @@ it("an employee asks a colleague in the open, and the answer comes back to it", 
 
 it("refuses to post into a conversation whose only responder is paused", async () => {
   const { acme, as } = await owner();
-  await sql.run("UPDATE employees SET paused_at = now() WHERE id = $1", [acme.operations.id]);
-  const response = await as(`/conversations/direct:${acme.operations.id}/messages`, {
+  await sql.run("UPDATE employees SET paused_at = now() WHERE id = $1", [acme.chiefOfStaff.id]);
+  const response = await as(`/conversations/direct:${acme.chiefOfStaff.id}/messages`, {
     method: "POST",
     body: JSON.stringify({ id: "paused-dm-00001", text: "Hello?" }),
   });
@@ -183,7 +183,7 @@ it("refuses to post into a conversation whose only responder is paused", async (
 
 it("iMessage is another way into the employee's DM: both sides are kept there, once", async () => {
   const { acme, received, bindings, as } = await owner();
-  const ops = acme.operations.id;
+  const ops = acme.chiefOfStaff.id;
   const binding = { businessId: acme.business.id, employeeId: ops, personId: acme.person };
   await recordChannelMessage(bindings, binding, "photon-guid-1", "Book the domain");
   await recordChannelMessage(bindings, binding, "photon-guid-1", "Book the domain");
@@ -263,7 +263,7 @@ it("client ids are per conversation, and read positions follow insertion order",
 
 it("a post retried after its delivery failed reaches the employee once, with the same text", async () => {
   const acme = await business("Retries");
-  const ops = acme.operations.id;
+  const ops = acme.chiefOfStaff.id;
   const delivered: Inbound[] = [];
   let failing = true;
   const bindings = {
@@ -307,7 +307,7 @@ it("a post retried after its delivery failed reaches the employee once, with the
 
 it("the record the owner is viewing goes with a message as its ref, and only a record of the business", async () => {
   const { acme, received, as, say } = await owner();
-  const ops = acme.operations.id;
+  const ops = acme.chiefOfStaff.id;
   const project = (await (
     await as("/projects", { method: "POST", body: JSON.stringify({ name: "Launch" }) })
   ).json()) as { id: string };
@@ -336,7 +336,7 @@ it("the record the owner is viewing goes with a message as its ref, and only a r
 
 it("suggested replies go on the employee's next message only, drop when the owner speaks, and a tap answers that message", async () => {
   const { acme, received, bindings, as, say } = await owner();
-  const ops = acme.operations.id;
+  const ops = acme.chiefOfStaff.id;
   const key = `direct:${ops}`;
   const suggest = capabilities(bindings).find((contract) => contract.name === "suggestReplies")!;
   const offer = (options: string[]) =>
@@ -377,7 +377,7 @@ it("suggested replies go on the employee's next message only, drop when the owne
   // A tap is the owner's reply to the message it was offered on: its author answers.
   const tapped = await say(key, { id: "suggest-message-03", text: "Calm", reply_to: question!.id });
   expect(tapped.to).toEqual([ops]);
-  expect(received.at(-1)!.input.text).toContain('Replying to Head of Operations: "Bold or calm?"');
+  expect(received.at(-1)!.input.text).toContain('Replying to Chief of Staff: "Bold or calm?"');
   expect(
     (await sql.rows("SELECT 1 FROM suggested_replies WHERE business_id = $1", [acme.business.id]))
       .length,

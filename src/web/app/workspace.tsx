@@ -25,7 +25,7 @@ import {
   unfinished,
   useBusinessId,
   useEmployees,
-  useOperations,
+  useChiefOfStaff,
   useStatus,
 } from "./data.ts";
 import { conversationOf, refOfLayer, useLayers, useNav, usePlace } from "./navigation.ts";
@@ -49,7 +49,7 @@ const MainKeyContext = createContext<ConversationKey | undefined>(undefined);
 const WorkingContext = createContext<readonly string[]>([]);
 const VoiceContext = createContext<VoiceActions | undefined>(undefined);
 
-/** Voice, as the composer and Operations' face show it. */
+/** Voice, as the composer and the Chief of Staff's face show it. */
 const voiceStore = createStore<{
   phase: VoicePhase;
   conversationMode: boolean;
@@ -185,11 +185,11 @@ type Detail = typeof BusinessDetail.Type;
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const businessId = useBusinessId();
   const place = usePlace();
-  const operations = useOperations();
+  const chiefOfStaff = useChiefOfStaff();
   const employees = useEmployees();
   const nav = useNav();
   const client = useQueryClient();
-  const key = conversationOf(place, operations?.id);
+  const key = conversationOf(place, chiefOfStaff?.id);
   const voiceRef = useRef<VoiceActions>(undefined);
 
   /** A page published in the conversation on screen opens beside it. */
@@ -264,14 +264,14 @@ export function useWorking(employeeId: string) {
   return isRunning(state) || answering.includes(employeeId) || unfinished(state);
 }
 
-/** An employee's face: Operations follows the voice conversation; everyone else their runtime. */
+/** An employee's face: the Chief of Staff follows the voice conversation; everyone else their runtime. */
 export function useMood(employee: Employee): Mood {
-  const operations = useOperations();
+  const chiefOfStaff = useChiefOfStaff();
   const status = useStatus(employee.id);
   const working = useWorking(employee.id);
   const voice = useVoicePhase();
-  if (employee.id === operations?.id) {
-    // While talking by voice, Operations' face follows the conversation.
+  if (employee.id === chiefOfStaff?.id) {
+    // While talking by voice, the Chief of Staff's face follows the conversation.
     if (voice === "starting" || voice === "listening" || voice === "finishing") return "listening";
     if (voice === "awaitingReply") return "thinking";
     if (voice === "speaking") return "working";

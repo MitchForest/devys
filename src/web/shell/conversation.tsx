@@ -1,4 +1,4 @@
-import { useEmployees, useOperations, useProjects } from "../app/data.ts";
+import { useEmployees, useChiefOfStaff, useProjects } from "../app/data.ts";
 import { usePlace } from "../app/navigation.ts";
 import { ui, useUi } from "../app/ui.ts";
 import { useMain } from "../app/workspace.tsx";
@@ -6,21 +6,21 @@ import { EmployeePortrait } from "../design/portrait.tsx";
 import { Composer, ConversationView } from "./chat.tsx";
 
 /**
- * The middle of the screen, always a conversation: Home's chat with Operations, a direct
+ * The middle of the screen, always a conversation: Home's chat with the Chief of Staff, a direct
  * chat, a project's channel or a work item's thread.
  */
 export function ConversationPane() {
   const place = usePlace();
   const main = useMain();
   const employees = useEmployees();
-  const operations = useOperations();
+  const chiefOfStaff = useChiefOfStaff();
   const projects = useProjects().data;
   const notice = useUi((state) => state.notice);
   const employee =
     place.kind === "direct"
       ? employees.find((e) => e.id === place.employeeId)
       : place.kind === "home"
-        ? operations
+        ? chiefOfStaff
         : undefined;
   const project = place.kind === "project" ? projects?.find((p) => p.id === place.id) : undefined;
   const label =
@@ -41,7 +41,7 @@ export function ConversationPane() {
         {employee && <EmployeePortrait employee={employee} size={48} />}
         <span className="max-w-[360px] text-body text-ink-3">
           {place.kind === "home"
-            ? `Tell ${employee?.name ?? "Operations"} what you need. @mention anyone to bring them in.`
+            ? `Tell ${employee?.name ?? "Chief of Staff"} what you need. @mention anyone to bring them in.`
             : `Message ${employee?.name ?? "them"}. @mention a colleague to bring them in.`}
         </span>
       </>

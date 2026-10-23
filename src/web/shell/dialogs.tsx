@@ -2,7 +2,7 @@ import { ChevronDown, ChevronLeft, KeyRound, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { ApiError } from "../app/api.ts";
 import type { RoleTemplate } from "../../identity/contract.ts";
-import { useEmployees, useModels, useOperations, useProjects, useRoles } from "../app/data.ts";
+import { useEmployees, useModels, useChiefOfStaff, useProjects, useRoles } from "../app/data.ts";
 import { useCreateProject, useCreateWorkItem, useHire } from "../app/mutations.ts";
 import { accessTitle } from "../app/names.ts";
 import { problemOf } from "../app/query.ts";
@@ -235,11 +235,11 @@ export function NewWorkItemDialog() {
 
 function NewWorkItemForm({ defaults }: { defaults: WorkItemDefaults }) {
   const employees = useEmployees();
-  const operations = useOperations();
+  const chiefOfStaff = useChiefOfStaff();
   const projects = useProjects().data;
   const createWorkItem = useCreateWorkItem();
   const [title, setTitle] = useState("");
-  const [owner, setOwner] = useState(defaults.owner ?? operations?.id ?? "");
+  const [owner, setOwner] = useState(defaults.owner ?? chiefOfStaff?.id ?? "");
   const [objective, setObjective] = useState("");
   const [due, setDue] = useState("");
   const [projectId, setProjectId] = useState(defaults.projectId ?? "");
@@ -365,12 +365,12 @@ function ProjectFields({
   cancel: () => void;
 }) {
   const employees = useEmployees();
-  const operations = useOperations();
+  const chiefOfStaff = useChiefOfStaff();
   const [name, setName] = useState("");
   const [goal, setGoal] = useState("");
   const [deadline, setDeadline] = useState("");
   const [budget, setBudget] = useState("");
-  const [lead, setLead] = useState(operations?.id ?? "");
+  const [lead, setLead] = useState(chiefOfStaff?.id ?? "");
   const [members, setMembers] = useState<readonly string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();

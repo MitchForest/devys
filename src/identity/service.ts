@@ -102,7 +102,7 @@ export const activeEmployee = (db: Database, scope: Scope) =>
     ),
   );
 
-/** Creates a business owned by this person, staffed with a Head of Operations. */
+/** Creates a business owned by this person, staffed with a Chief of Staff. */
 export const createBusiness = (
   db: Database,
   personId: string,
@@ -110,7 +110,7 @@ export const createBusiness = (
     name: string;
     brief: string;
     model: string;
-    operations: { name: string; responsibilities: string };
+    chiefOfStaff: { name: string; responsibilities: string };
   },
 ) =>
   database(
@@ -118,13 +118,13 @@ export const createBusiness = (
     async (sql) => {
       const { name, brief, model } = input;
       const business: Business = { id: crypto.randomUUID(), name, look: null, brief };
-      const operations: Employee = {
+      const chiefOfStaff: Employee = {
         id: crypto.randomUUID(),
         business_id: business.id,
-        name: input.operations.name,
-        responsibilities: input.operations.responsibilities,
+        name: input.chiefOfStaff.name,
+        responsibilities: input.chiefOfStaff.responsibilities,
         model,
-        template: "operations",
+        template: "chief-of-staff",
         paused: false,
         look: null,
       };
@@ -141,10 +141,10 @@ export const createBusiness = (
       if (member !== 1) throw new Error("Person is not active");
       await sql.run(
         `INSERT INTO employees (id, business_id, name, responsibilities, model, template)
-         VALUES ($1, $2, $3, $4, $5, 'operations')`,
-        [operations.id, business.id, operations.name, operations.responsibilities, model],
+         VALUES ($1, $2, $3, $4, $5, 'chief-of-staff')`,
+        [chiefOfStaff.id, business.id, chiefOfStaff.name, chiefOfStaff.responsibilities, model],
       );
-      return { business, operations };
+      return { business, chiefOfStaff };
     },
     { transaction: true },
   );
@@ -189,7 +189,7 @@ export const retireEmployee = (db: Database, scope: Scope) =>
   database(db, (sql) =>
     sql.run(
       `UPDATE employees SET revoked_at = now()
-       WHERE business_id = $1 AND id = $2 AND revoked_at IS NULL AND template <> 'operations'`,
+       WHERE business_id = $1 AND id = $2 AND revoked_at IS NULL AND template <> 'chief-of-staff'`,
       [scope.businessId, scope.employeeId],
     ),
   );

@@ -21,9 +21,10 @@ export const browser = defineApp({
   connections: [],
   appears: "never",
   defaultGrants: {
-    operations: capabilities,
+    "chief-of-staff": capabilities,
     engineering: capabilities,
     growth: capabilities,
-    "business-operations": capabilities,
+    admin: capabilities,
+    finance: capabilities,
   },
 });

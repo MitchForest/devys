@@ -56,7 +56,7 @@ it("an employee wakes only those it mentions, and the asker when answering a req
   expect(answer("employee:eng", "2")).toEqual(["ops"]);
   expect(answer("employee:eng", null)).toEqual([]);
   expect(answer("employee:ops", null, ["growth", "ops"])).toEqual(["growth"]);
-  // Operations thanking Engineering wakes nobody: Engineering asked nothing.
+  // The Chief of Staff thanking Engineering wakes nobody: Engineering asked nothing.
   const thanks = [...history, said("3", "employee:eng")];
   expect(
     responders({
@@ -99,7 +99,7 @@ it("memory learns the owner's words, not catch-up context or colleagues' message
         1,
       ),
       entry(
-        "<owner-context>\nFrom your colleague Operations.\n</owner-context>\n\nPlease check Stripe.",
+        "<owner-context>\nFrom your colleague the Chief of Staff.\n</owner-context>\n\nPlease check Stripe.",
         2,
       ),
     ],

@@ -15,11 +15,11 @@ test("a connect card in the thread and Needs you; the review turns the app on", 
   const post = await bearer(sql, owner.person);
   const work = await post<{ id: string }>(`/api/businesses/${owner.business}/work`, {
     title: "Pay the paper supplier",
-    owner: owner.operations,
+    owner: owner.chiefOfStaff,
   });
   const grant = await sql.row<{ id: string }>(
     "SELECT id FROM grants WHERE employee_id = $1 AND capability = 'askOwner' AND revoked_at IS NULL",
-    [owner.operations],
+    [owner.chiefOfStaff],
   );
   // Ledger: added and asked for, not connected yet.
   await sql.run(
@@ -36,7 +36,7 @@ test("a connect card in the thread and Needs you; the review turns the app on", 
     [
       request,
       owner.business,
-      owner.operations,
+      owner.chiefOfStaff,
       grant!.id,
       JSON.stringify(ask),
       work.id,
@@ -55,7 +55,7 @@ test("a connect card in the thread and Needs you; the review turns the app on", 
     const needsYou = page.getByRole("region", { name: "Needs you" });
     const row = needsYou.getByTestId("connect-request");
     await expect(row.getByText("Ledger", { exact: true })).toBeVisible();
-    await expect(row.getByText(`Head of Operations: ${ask.why}`)).toBeVisible();
+    await expect(row.getByText(`Chief of Staff: ${ask.why}`)).toBeVisible();
     await expect(row.getByRole("button", { name: "Connect" })).toBeVisible();
     await expect(row.getByText("ledger.example")).toHaveCount(0);
 
@@ -122,7 +122,7 @@ test("a connect card in the thread and Needs you; the review turns the app on", 
         await sql.row<{ mode: string }>(
           `SELECT mode FROM grants WHERE business_id = $1 AND employee_id = $2 AND capability = $3
              AND revoked_at IS NULL`,
-          [owner.business, owner.operations, capability],
+          [owner.business, owner.chiefOfStaff, capability],
         )
       )?.mode;
     expect(await mode("ledger_list_entries")).toBe("auto");

@@ -631,7 +631,7 @@ it("a create rerun under the same operation id makes one work item and one proje
   expect(counted).toEqual({ items: 1, projects: 1 });
 });
 
-it("an employee changes only its own work items; Operations changes anyone's", async () => {
+it("an employee changes only its own work items; the Chief of Staff changes anyone's", async () => {
   const { scope } = await business();
   const engineer = await Effect.runPromise(
     createEmployee(db, scope.businessId, {
@@ -795,4 +795,36 @@ it("work, project and routine capabilities name the record they change ref and i
     for (const old of ["item", "expectedRevision", "routine"])
       expect(fields, name).not.toContain(old);
   }
+});
+
+it("work created while talking to the owner shows its card in that conversation, not twice", async () => {
+  const { scope } = await business();
+  await Effect.runPromise(grant(db, scope, { capability: named("workCreate"), mode: "auto" }));
+  const direct = `direct:${scope.employeeId}` as const;
+  const inChat = (title: string, conversation: string) =>
+    Effect.runPromise(
+      named("workCreate")
+        .execute({ title })
+        .pipe(
+          Effect.provideService(Invocation, {
+            ...scope,
+            conversation,
+            operationId: crypto.randomUUID(),
+            authorize: () => Effect.void,
+            assertActive: () => Effect.void,
+          }),
+        ),
+    ) as Promise<{ ref: string }>;
+  const created = await inChat("Buy the domain", direct);
+  const cards = async (key: `${string}:${string}`) =>
+    (await Effect.runPromise(messages(db, scope.businessId, key as typeof direct))).filter(
+      (m) => m.kind === "card",
+    );
+  expect((await cards(direct)).map((m) => [m.ref, m.text])).toEqual([
+    [created.ref, "Buy the domain"],
+  ]);
+  // Work made in a thread is already in that thread; nothing else shows it.
+  const nested = await inChat("Check the DNS", `work:${created.ref.split("/").at(-1)}`);
+  expect(await cards(`work:${nested.ref.split("/").at(-1)}`)).toEqual([]);
+  expect(await cards(direct)).toHaveLength(1);
 });

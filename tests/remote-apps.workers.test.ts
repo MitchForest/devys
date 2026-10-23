@@ -306,9 +306,7 @@ it("an employee finds an app, asks to connect it; the owner signs in, reviews an
     }),
     expect.objectContaining({ capability: "acmebooks_ramp_mpp_creds", line: "never", fixed: true }),
   ]);
-  expect(review.employees).toEqual([
-    { id: scope.employeeId, name: "Head of Operations", uses: true },
-  ]);
+  expect(review.employees).toEqual([{ id: scope.employeeId, name: "Chief of Staff", uses: true }]);
   // Its logo: the icon its serverInfo names, fetched once and served by Devys.
   const logo = await call(review.app.logo!.replace(`/api/businesses/${acme.id}`, ""));
   expect(logo.headers.get("content-type")).toBe("image/png");

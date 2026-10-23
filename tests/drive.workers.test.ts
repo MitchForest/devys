@@ -214,7 +214,7 @@ it("an uncertain create is inspected without uploading twice and changed inputs 
   ).rejects.toThrow("different inputs");
   expect(await listDrive(db, owner)).toHaveLength(1);
 });
-it("stale revisions and cancelled operations cannot issue an update", async () => {
+it("stale revisions and cancelled chiefOfStaff cannot issue an update", async () => {
   let writes = 0;
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const url = String(input);

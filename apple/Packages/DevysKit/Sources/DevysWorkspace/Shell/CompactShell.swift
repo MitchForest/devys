@@ -120,7 +120,7 @@ struct CompactShell: View {
         }
     }
 
-    /// Home: how many things need the owner, and Operations; either opens Needs you.
+    /// Home: how many things need the owner, and the Chief of Staff; either opens Needs you.
     private var homeTrailing: some View {
         HStack(spacing: 8) {
             let count = store.home.value?.needsYou.count ?? 0
@@ -135,9 +135,9 @@ struct CompactShell: View {
                 }
                 .buttonStyle(.plain)
             }
-            if let ops = store.operations {
+            if let ops = store.chiefOfStaff {
                 Button { showsDetails = true } label: {
-                    Portrait(store.state.portrait(for: ops), size: 28, mood: store.state.voiceMood ?? store.operationsMood, label: ops.name)
+                    Portrait(store.state.portrait(for: ops), size: 28, mood: store.state.voiceMood ?? store.chiefOfStaffMood, label: ops.name)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(ops.name)

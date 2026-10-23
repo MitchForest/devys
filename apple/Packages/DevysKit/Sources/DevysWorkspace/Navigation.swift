@@ -1,6 +1,6 @@
 package import DevysClient
 
-/// Where the owner is: always a conversation. Home is the direct chat with Operations; a
+/// Where the owner is: always a conversation. Home is the direct chat with the Chief of Staff; a
 /// project is its channel; a thread is a work item's conversation.
 package enum Place: Hashable, Sendable {
     case home
@@ -24,10 +24,10 @@ package enum Place: Hashable, Sendable {
         }
     }
 
-    /// The conversation this place shows: Home's is the direct chat with Operations.
-    package func conversation(operations: String?) -> ConversationKey? {
+    /// The conversation this place shows: Home's is the direct chat with the Chief of Staff.
+    package func conversation(chiefOfStaff: String?) -> ConversationKey? {
         switch self {
-        case .home: operations.map(ConversationKey.direct)
+        case .home: chiefOfStaff.map(ConversationKey.direct)
         case .direct(let id): .direct(id)
         case .project(let id): .project(id)
         case .thread(let id): .work(id)

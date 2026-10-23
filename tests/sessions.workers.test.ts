@@ -129,7 +129,7 @@ it("stop aborts work running in a work session", async () => {
   await send(target, "m-slow", target.work("c-9"), "Do the slow thing");
   const [running] = await until(
     () => target.agent.runningWork(),
-    (operations) => operations.length === 1,
+    (chiefOfStaff) => chiefOfStaff.length === 1,
   );
   const id = await target.agent.idOf("m-slow");
   expect(running).toMatchObject({ operationId: id });
@@ -142,7 +142,7 @@ it("stop aborts work running in a work session", async () => {
   await target.agent.stop(target.scope);
   await until(
     () => target.agent.runningWork(),
-    (operations) => operations.length === 0,
+    (chiefOfStaff) => chiefOfStaff.length === 0,
   );
   expect(await target.agent.cancels()).toBe(1);
   const status = JSON.parse(await target.agent.inspect(target.scope));
@@ -187,14 +187,14 @@ it("a message in a work item's thread acts for that work item", async () => {
   await send(target, "m-thread", `${target.app}:work:c-7`, "Do the slow thing");
   const [running] = await until(
     () => target.agent.runningWork(),
-    (operations) => operations.length === 1,
+    (chiefOfStaff) => chiefOfStaff.length === 1,
   );
   // The owner talking in the thread is fenced by the work item, as dispatched work is.
   expect(await target.agent.workItemIn(running!.session)).toBe("c-7");
   await target.agent.stop(target.scope);
   await until(
     () => target.agent.runningWork(),
-    (operations) => operations.length === 0,
+    (chiefOfStaff) => chiefOfStaff.length === 0,
   );
 });
 

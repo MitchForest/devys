@@ -65,7 +65,7 @@ public struct Project: Equatable, Sendable, Decodable, Identifiable {
 }
 
 /// A new project's name, goal, deadline, budget, lead and team. A nil goal, deadline or budget
-/// is none; a nil lead lets the server pick Operations.
+/// is none; a nil lead lets the server pick the Chief of Staff.
 public struct ProjectChange: Equatable, Sendable, Encodable {
     public var name: String
     public var goal: String?

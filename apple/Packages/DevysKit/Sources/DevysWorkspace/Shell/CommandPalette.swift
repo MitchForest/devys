@@ -72,7 +72,7 @@ struct CommandPalette: View {
     }
 
     private var targets: [Target] {
-        var all = [Target(id: "home", title: "Home", detail: store.operations?.name ?? "Operations", symbol: "house", action: .placeSelected(.home))]
+        var all = [Target(id: "home", title: "Home", detail: store.chiefOfStaff?.name ?? "Chief of Staff", symbol: "house", action: .placeSelected(.home))]
         all += (store.projects.value ?? []).map { Target(id: $0.id, title: $0.name, detail: "Project", symbol: "square.grid.2x2", action: .placeSelected(.project($0.id))) }
         all += store.snapshot.employees.map { Target(id: "dm-\($0.id)", title: $0.name, detail: "Team", symbol: "bubble.left", action: .message($0.id)) }
         all += (store.work.value ?? []).filter(\.state.isOpen).map { Target(id: $0.id, title: $0.title, detail: "Thread", symbol: "checklist", action: .threadOpened($0.id)) }

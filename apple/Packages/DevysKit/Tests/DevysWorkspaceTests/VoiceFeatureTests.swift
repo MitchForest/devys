@@ -38,7 +38,7 @@ private actor ScriptedMicrophone {
     }
 }
 
-/// Operations' DM as the server keeps it: each posted message, then Operations' answer once one is set.
+/// The Chief of Staff's DM as the server keeps it: each posted message, then the Chief of Staff's answer once one is set.
 private actor Conversation {
     var posted: [NewMessage] = []
     var messages: [ConversationMessage] = []
@@ -117,9 +117,9 @@ struct VoiceFeatureTests {
         } operation: {
             Store(initialState: Workspace.State(server: URL(string: "http://127.0.0.1:5173")!)) { Workspace() }
         }
-        await settle("team") { store.operationsScope != nil }
+        await settle("team") { store.chiefOfStaffScope != nil }
         store.send(.message("ops"))
-        await settle("Operations' DM") { store.main?.messages.value != nil }
+        await settle("The Chief of Staff's DM") { store.main?.messages.value != nil }
         return store
     }
 

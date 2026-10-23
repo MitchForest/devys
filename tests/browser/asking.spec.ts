@@ -12,11 +12,11 @@ test("Needs you shows what employees ask: a spend is approved on a Mac or iPhone
   const post = await bearer(sql, owner.person);
   const work = await post<{ id: string }>(`/api/businesses/${owner.business}/work`, {
     title: "Register the domain",
-    owner: owner.operations,
+    owner: owner.chiefOfStaff,
   });
   const grant = await sql.row<{ id: string }>(
     "SELECT id FROM grants WHERE employee_id = $1 AND capability = 'askOwner' AND revoked_at IS NULL",
-    [owner.operations],
+    [owner.chiefOfStaff],
   );
   // What the employee asked with askOwner, in the work item's thread.
   const ask = async (kind: string, input: unknown) => {
@@ -29,7 +29,7 @@ test("Needs you shows what employees ask: a spend is approved on a Mac or iPhone
         id,
         kind,
         owner.business,
-        owner.operations,
+        owner.chiefOfStaff,
         grant!.id,
         JSON.stringify(input),
         work.id,
@@ -94,11 +94,11 @@ test("a secret request opens the secure entry sheet; the value goes in one post 
   const post = await bearer(sql, owner.person);
   const work = await post<{ id: string }>(`/api/businesses/${owner.business}/work`, {
     title: "Register the domain",
-    owner: owner.operations,
+    owner: owner.chiefOfStaff,
   });
   const grant = await sql.row<{ id: string }>(
     "SELECT id FROM grants WHERE employee_id = $1 AND capability = 'askOwner' AND revoked_at IS NULL",
-    [owner.operations],
+    [owner.chiefOfStaff],
   );
   const id = randomUUID();
   await sql.run(
@@ -108,7 +108,7 @@ test("a secret request opens the secure entry sheet; the value goes in one post 
     [
       id,
       owner.business,
-      owner.operations,
+      owner.chiefOfStaff,
       grant!.id,
       JSON.stringify({ kind: "secret", name: "RAMP_CARD", why: "The company card", spend: true }),
       work.id,
@@ -187,11 +187,11 @@ test("an approval lists its steps and shows its draft; a file request sends the 
   const post = await bearer(sql, owner.person);
   const work = await post<{ id: string }>(`/api/businesses/${owner.business}/work`, {
     title: "Ship the waitlist page",
-    owner: owner.operations,
+    owner: owner.chiefOfStaff,
   });
   const grant = await sql.row<{ id: string }>(
     "SELECT id FROM grants WHERE employee_id = $1 AND capability = 'askOwner' AND revoked_at IS NULL",
-    [owner.operations],
+    [owner.chiefOfStaff],
   );
   const page_ = randomUUID();
   await sql.run(
@@ -209,7 +209,7 @@ test("an approval lists its steps and shows its draft; a file request sends the 
         id,
         kind,
         owner.business,
-        owner.operations,
+        owner.chiefOfStaff,
         grant!.id,
         JSON.stringify(input),
         work.id,

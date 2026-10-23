@@ -44,8 +44,9 @@ export async function projectRoute(
 
   if (path === "/projects") {
     const { goal, deadline, budget, ...input } = await decodedBody(request, 8_000, NewProject);
-    // Operations leads a project nobody was named to lead.
-    const lead = input.lead ?? employees.find((employee) => employee.template === "operations")?.id;
+    // The Chief of Staff leads a project nobody was named to lead.
+    const lead =
+      input.lead ?? employees.find((employee) => employee.template === "chief-of-staff")?.id;
     const refused = notEmployees(input);
     if (refused) return refused;
     return respond(

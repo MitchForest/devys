@@ -166,9 +166,9 @@ extension Workspace {
         }
     }
 
-    /// Open work moves to the successor first; the Head of Operations can't be retired.
+    /// Open work moves to the successor first; the Chief of Staff can't be retired.
     func retire(_ employeeID: String, successorID: String, state: State) {
-        guard let employee = state.snapshot.employees.first(where: { $0.id == employeeID }), !employee.isOperations,
+        guard let employee = state.snapshot.employees.first(where: { $0.id == employeeID }), !employee.isChiefOfStaff,
               successorID != employeeID, state.snapshot.employees.contains(where: { $0.id == successorID }),
               let scope = scope(of: employeeID, in: state)
         else { return }

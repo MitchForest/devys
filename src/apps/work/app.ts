@@ -38,10 +38,11 @@ export const work = defineApp({
   // (askOwner). Every role holds routineActivate in `ask` mode (its template says so): activation
   // is the owner's decision.
   defaultGrants: {
-    operations: capabilities,
+    "chief-of-staff": capabilities,
     engineering: capabilities,
     growth: capabilities,
-    "business-operations": capabilities,
+    admin: capabilities,
+    finance: capabilities,
     custom: capabilities,
   },
 });

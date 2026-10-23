@@ -31,15 +31,15 @@ async function signedIn(person: string) {
     )) ?? new Response(null, { status: 404 });
 }
 
-it("a new business's Head of Operations starts with the operations preset", async () => {
+it("a new business's Chief of Staff starts with its template's preset", async () => {
   const person = crypto.randomUUID();
   await sql.run("INSERT INTO people (id, display_name) VALUES ($1, 'Owner')", [person]);
   const as = await signedIn(person);
   const created = (await (
     await as("/api/businesses", { method: "POST", body: JSON.stringify({ name: "Acme" }) })
-  ).json()) as { business: { id: string }; operations: { id: string } };
+  ).json()) as { business: { id: string }; chief_of_staff: { id: string } };
   const access = (await (
-    await as(`/api/businesses/${created.business.id}/employees/${created.operations.id}/access`)
+    await as(`/api/businesses/${created.business.id}/employees/${created.chief_of_staff.id}/access`)
   ).json()) as {
     grants: { capability: string; mode: string; effect: string }[];
     available: unknown[];

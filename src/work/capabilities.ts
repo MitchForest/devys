@@ -145,13 +145,13 @@ export function workCapabilities(
   keepable: (businessId: string, ref: Ref) => Promise<boolean>,
   /** Why this work cannot be completed yet (such as a coding check that has not passed). */
   completionBlocked: (businessId: string, work: WorkItem) => Promise<string | undefined>,
-  /** Whether this employee directs others' work (the Head of Operations). */
+  /** Whether this employee directs others' work (the Chief of Staff). */
   coordinates: (businessId: string, employeeId: string) => Promise<boolean>,
   /**
-   * Shows the work item's steps and results in its thread: one card, which clients draw from
-   * the item as it is now, so each later change updates it in place.
+   * Shows the work item as one card in a conversation (its thread unless named), which clients
+   * draw from the item as it is now, so each later change updates it in place.
    */
-  showCard: (businessId: string, work: WorkItem) => Promise<void>,
+  showCard: (businessId: string, work: WorkItem, conversation?: string) => Promise<void>,
   /** Asks the owner, bound to this work item (authority's request, connected in wiring). */
   askOwner: (
     asking: { businessId: string; employeeId: string; workItemId: string; conversation: string },
@@ -159,7 +159,7 @@ export function workCapabilities(
   ) => Promise<Decision>,
 ) {
   /**
-   * A work item is changed by its owner (colleagues ask there); Operations, coordinating,
+   * A work item is changed by its owner (colleagues ask there); the Chief of Staff, coordinating,
    * changes anyone's. Its plan and state change from any conversation, so what the owner asks
    * for in a chat is recorded there; it is completed only in its own thread, where it is
    * worked, so it is never finished twice from two places.
@@ -212,7 +212,7 @@ export function workCapabilities(
             message: "Leads and members must be employees of this business",
           });
     });
-  /** A routine is changed by its employee, or by Operations. */
+  /** A routine is changed by its employee, or by the Chief of Staff. */
   const ownRoutine = (id: string) =>
     Effect.gen(function* () {
       const { businessId, employeeId } = yield* Invocation;
@@ -228,7 +228,7 @@ export function workCapabilities(
       )
         return yield* new CapabilityError({
           code: "forbidden",
-          message: "Another employee's routine: ask them, or Operations.",
+          message: "Another employee's routine: ask them, or the Chief of Staff.",
         });
       return found;
     });
@@ -269,7 +269,7 @@ export function workCapabilities(
       output: Summary,
       execute: (input) =>
         Effect.gen(function* () {
-          const { businessId, employeeId, operationId } = yield* Invocation;
+          const { businessId, employeeId, operationId, conversation } = yield* Invocation;
           const owner = input.owner ?? employeeId;
           if (!(yield* rpc(() => employeeIn(businessId, owner))))
             return yield* new CapabilityError({
@@ -282,20 +282,22 @@ export function workCapabilities(
               message: "No such project in this business",
             });
           const id = yield* Effect.promise(() => stableId(`${businessId}:${operationId}`));
-          return summary(
-            yield* stored(
-              createWorkItem(db, businessId, {
-                id,
-                owner,
-                title: input.title,
-                ...(input.objective ? { objective: input.objective } : {}),
-                ...(input.nextAction ? { nextAction: input.nextAction } : {}),
-                ...(input.dueAt ? { dueAt: new Date(input.dueAt).toISOString() } : {}),
-                ...(input.project ? { projectId: input.project } : {}),
-                createdBy: `employee:${employeeId}`,
-              }),
-            ),
+          const created = yield* stored(
+            createWorkItem(db, businessId, {
+              id,
+              owner,
+              title: input.title,
+              ...(input.objective ? { objective: input.objective } : {}),
+              ...(input.nextAction ? { nextAction: input.nextAction } : {}),
+              ...(input.dueAt ? { dueAt: new Date(input.dueAt).toISOString() } : {}),
+              ...(input.project ? { projectId: input.project } : {}),
+              createdBy: `employee:${employeeId}`,
+            }),
           );
+          // The conversation it came from shows its card, which opens it and follows its progress.
+          if (conversation && !conversation.startsWith("work:"))
+            yield* rpc(() => showCard(businessId, created, conversation));
+          return summary(created);
         }),
     }),
     capability({
@@ -511,7 +513,7 @@ export function workCapabilities(
     capability({
       name: "routinePropose",
       description:
-        'Propose a routine: work you (or, for Operations, another employee) run on a schedule or when an event happens, for a responsibility or a project (its ref; runs then speak in its channel, else in the employee\'s direct chat). trigger is {kind: "cron", expression: five-field cron like "0 9 * * 1", timezone: the owner\'s IANA zone, hours?: {start: "09:00", end: "18:00", days?: ["mon", …]}} or {kind: "event", source, type, filters: {field: exact value}}. notify when_found makes a quiet check-in: a run that finds nothing posts nothing. To change a routine, pass its ref and revision as returned: that is a new proposal and it stops running until approved. Proposing activates nothing: then call routineActivate with the ref and revision it returns, which asks the owner. For a one-off look later, use workUpdate with wakeAt instead.',
+        'Propose a routine: work you (or, for the Chief of Staff, another employee) run on a schedule or when an event happens, for a responsibility or a project (its ref; runs then speak in its channel, else in the employee\'s direct chat). trigger is {kind: "cron", expression: five-field cron like "0 9 * * 1", timezone: the owner\'s IANA zone, hours?: {start: "09:00", end: "18:00", days?: ["mon", …]}} or {kind: "event", source, type, filters: {field: exact value}}. notify when_found makes a quiet check-in: a run that finds nothing posts nothing. To change a routine, pass its ref and revision as returned: that is a new proposal and it stops running until approved. Proposing activates nothing: then call routineActivate with the ref and revision it returns, which asks the owner. For a one-off look later, use workUpdate with wakeAt instead.',
       effect: "change",
       replay: "idempotent",
       input: Schema.Struct({
@@ -532,7 +534,8 @@ export function workCapabilities(
           if (employee !== employeeId && !(yield* rpc(() => coordinates(businessId, employeeId))))
             return yield* new CapabilityError({
               code: "forbidden",
-              message: "Propose routines for yourself; Operations proposes them for others.",
+              message:
+                "Propose routines for yourself; the Chief of Staff proposes them for others.",
             });
           if (!(yield* rpc(() => employeeIn(businessId, employee))))
             return yield* new CapabilityError({

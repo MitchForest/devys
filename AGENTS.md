@@ -11,11 +11,13 @@ today; target design and historical evidence must remain distinguishable.
 - Build Devys for businesses operated by agents. The first dogfood business's launch is
   the first release; a second business is the next test of generality.
 - Product model (2026-10-20): a business is its Team (employees), Projects (bounded
-  initiatives), Apps (records, capabilities, connections) and Home (the owner's needs-you
-  list, briefing and conversation with Operations). Use the canonical words and meanings
-  in `.docs/DEVYS.md`. The owner delegates by talking and reviews by glancing: the
-  conversation is always the middle of the screen; the right panel shows its permanent
-  view and temporary layers (records, diffs, pages, app views) that agents update in place.
+  initiatives), Apps (records, capabilities, connections) and Home (the conversation with
+  the Chief of Staff and its briefing). Use the canonical words and meanings in
+  `.docs/DEVYS.md`. The owner delegates by talking and reviews by glancing: the
+  conversation is always the middle of the screen; the right panel is only for looking at
+  something (layers: records, diffs, pages, app views, the live browser) that agents update in
+  place. Focus (2026-10-23): a work item is one plan shown as one live card, with at most one
+  thing asked of the owner at a time; nothing is shown twice.
 - The delivery plan owns launch sequencing and business-specific work. Do not encode
   one business's tasks into core rules. Field-service parity and wearables remain
   deferred vertical references.

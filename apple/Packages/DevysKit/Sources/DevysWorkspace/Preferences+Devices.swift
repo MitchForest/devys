@@ -9,7 +9,7 @@ package import Foundation
 package struct NewBusinessDraft: Equatable {
     package var name = ""
     package var brief = ""
-    /// Starting-team templates hired alongside the Head of Operations; all on by default.
+    /// Starting-team templates hired alongside the Chief of Staff; all on by default.
     package var team = Set(RoleTemplate.startingTeam)
     package var isSubmitting = false
     package var error: String?

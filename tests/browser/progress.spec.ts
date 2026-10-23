@@ -12,7 +12,7 @@ test("a work item's steps and results show as one card in its thread, updated in
   const path = `/api/businesses/${owner.business}`;
   const work = await post<{ id: string }>(`${path}/work`, {
     title: "Set up acme-widgets.com",
-    owner: owner.operations,
+    owner: owner.chiefOfStaff,
   });
   const show = (steps: unknown[], results: unknown[]) =>
     sql.run(

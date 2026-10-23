@@ -38,7 +38,7 @@ test("a sign-in link is single-use; downloads and sessions enforce business isol
     await expect(
       page.getByRole("navigation", { name: "Sidebar" }).getByRole("link", { name: /^Home/ }),
     ).toBeVisible();
-    await expect(page.getByLabel("Message Head of Operations")).toBeVisible();
+    await expect(page.getByLabel("Message Chief of Staff")).toBeVisible();
     await page.getByRole("button", { name: "Account" }).click();
     await page.getByRole("menuitem", { name: "Apps & connections…" }).click();
     const settings = page.getByRole("dialog", { name: "Settings" });

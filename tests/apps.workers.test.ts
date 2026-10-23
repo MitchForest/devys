@@ -177,7 +177,7 @@ const coding = [
 ];
 const before: Record<string, string[]> = {
   // "all": every capability.
-  operations: [
+  "chief-of-staff": [
     ...collaboration,
     ...files,
     "run",
@@ -198,30 +198,26 @@ const before: Record<string, string[]> = {
     "readPublicUrl",
   ],
   growth: [...collaboration, ...files, ...artifacts, ...browsing, "readPublicUrl"],
-  "business-operations": [
-    ...collaboration,
-    ...files,
-    ...artifacts,
-    ...drive,
-    ...browsing,
-    "readPublicUrl",
-  ],
+  admin: [...collaboration, ...files, ...artifacts, ...drive, ...browsing, "readPublicUrl"],
+  finance: [...collaboration, ...files, ...artifacts, ...drive, ...browsing, "readPublicUrl"],
   custom: [...collaboration],
 };
 // Every role also sees the business's saved secrets by name (secretList).
 const coreAdded: Record<string, string[]> = {
-  operations: ["appSearch", "secretList"],
+  "chief-of-staff": ["appSearch", "secretList"],
   engineering: ["appSearch", "secretList"],
   growth: ["run", "appSearch", "secretList"],
-  "business-operations": ["run", "appSearch", "secretList"],
+  admin: ["run", "appSearch", "secretList"],
+  finance: ["run", "appSearch", "secretList"],
   custom: ["run", "read", "write", "readSkill", "appSearch", "secretList"],
 };
 // Activating a routine is the owner's decision, whatever the role.
 const asked: Record<string, string[]> = {
-  operations: ["deployProduction", "hireEmployee", "routineActivate"],
+  "chief-of-staff": ["deployProduction", "hireEmployee", "routineActivate"],
   engineering: ["deployProduction", "routineActivate"],
   growth: ["routineActivate"],
-  "business-operations": ["routineActivate"],
+  admin: ["routineActivate"],
+  finance: ["routineActivate"],
   custom: ["routineActivate"],
 };
 

@@ -28,10 +28,10 @@ import { SecretEntry } from "../vault/contract.ts";
 
 /** `GET /api/me`. */
 export const Me = Schema.Struct({ person: Person, businesses: Schema.Array(Business) });
-/** `POST /api/businesses`: the business, its Head of Operations and the starting team. */
+/** `POST /api/businesses`: the business, its Chief of Staff and the starting team. */
 export const BusinessCreated = Schema.Struct({
   business: Business,
-  operations: Employee,
+  chief_of_staff: Employee,
   team: Schema.Array(Employee),
 });
 /** `PUT /api/businesses/:id`. */
@@ -366,7 +366,7 @@ export type NeedsYouItem = typeof NeedsYouItem.Type;
 /** A request in Needs you: a decision, an approve, a take over, a secret or a connect. */
 export type NeedsYouRequest = Exclude<NeedsYouItem, { kind: "work" } | { kind: "reconnect" }>;
 /**
- * `GET …/home`: what needs the owner, work at a glance, and Operations' briefing when it was
+ * `GET …/home`: what needs the owner, work at a glance, and the Chief of Staff's briefing when it was
  * posted by this read (`since` is when they last read their direct chat).
  */
 export const Home = Schema.Struct({

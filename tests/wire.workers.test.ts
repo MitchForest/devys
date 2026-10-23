@@ -98,8 +98,8 @@ const local = {
 } as unknown as Env;
 
 it("every route the clients read answers in its wire schema; the golden files match", async () => {
-  const { person, business: acme, operations, scope } = await business("Acme Plumbing");
-  [person, acme.id, operations.id].forEach(register);
+  const { person, business: acme, chiefOfStaff, scope } = await business("Acme Plumbing");
+  [person, acme.id, chiefOfStaff.id].forEach(register);
   const sessionToken = Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) =>
     b.toString(16).padStart(2, "0"),
   ).join("");
@@ -172,7 +172,7 @@ it("every route the clients read answers in its wire schema; the golden files ma
       goal: "Open bookings for the spring season",
       deadline: "2026-12-01",
       budget: { cents: 250_000, currency: "USD" },
-      lead: operations.id,
+      lead: chiefOfStaff.id,
       members: [engineer.id],
     }),
   );
@@ -260,7 +260,7 @@ it("every route the clients read answers in its wire schema; the golden files ma
     WorkItem,
     await call(`${at}/work`, "POST", {
       title: "Order fittings",
-      owner: operations.id,
+      owner: chiefOfStaff.id,
       project_id: launch.id,
     }).then(async (created) => {
       const item = (await created.json()) as { id: string; revision: number };
@@ -369,7 +369,7 @@ it("every route the clients read answers in its wire schema; the golden files ma
       acme.id,
       replies,
       {
-        employeeId: operations.id,
+        employeeId: chiefOfStaff.id,
         projectId: null,
         title: "Supplier replies",
         instruction: "Answer supplier replies about prices.",
@@ -381,7 +381,7 @@ it("every route the clients read answers in its wire schema; the golden files ma
         },
         notify: "when_found",
       },
-      `employee:${operations.id}`,
+      `employee:${chiefOfStaff.id}`,
     ),
   );
   await Effect.runPromise(activateRoutine(db, acme.id, replies, 1, null));
@@ -392,7 +392,7 @@ it("every route the clients read answers in its wire schema; the golden files ma
     "posted",
     wire.Posted,
     await call(
-      `${at}/conversations/${encodeURIComponent(`direct:${operations.id}`)}/messages`,
+      `${at}/conversations/${encodeURIComponent(`direct:${chiefOfStaff.id}`)}/messages`,
       "POST",
       {
         id: crypto.randomUUID(),
@@ -402,7 +402,7 @@ it("every route the clients read answers in its wire schema; the golden files ma
   );
   register(posted.message.id);
   // Ada answers with a question and the replies she offers for it.
-  const direct = `direct:${operations.id}` as const;
+  const direct = `direct:${chiefOfStaff.id}` as const;
   await Effect.runPromise(suggestReplies(db, acme.id, direct, engineer.id, ["Ship it", "Wait"]));
   const answered = await Effect.runPromise(
     postMessage(db, acme.id, direct, {
@@ -424,7 +424,7 @@ it("every route the clients read answers in its wire schema; the golden files ma
   await keep(
     "conversation",
     wire.ConversationPage,
-    await call(`${at}/conversations/${encodeURIComponent(`direct:${operations.id}`)}`),
+    await call(`${at}/conversations/${encodeURIComponent(`direct:${chiefOfStaff.id}`)}`),
   );
   await keep(
     "conversation-work",
@@ -453,7 +453,7 @@ it("every route the clients read answers in its wire schema; the golden files ma
         registryName: "example.books/acme",
         website: "https://books.example",
         logo: null,
-        addedBy: `employee:${operations.id}`,
+        addedBy: `employee:${chiefOfStaff.id}`,
       },
       [],
     ),
@@ -506,7 +506,7 @@ it("every route the clients read answers in its wire schema; the golden files ma
     wire.AppChanged,
     await call(`${at}/apps/${ledger.id}/accept`, "POST", {
       lines: { ledger_list_entries: "own", ledger_post_entry: "ask" },
-      employees: [operations.id],
+      employees: [chiefOfStaff.id],
     }),
   );
   await Effect.runPromise(lapseRemoteApp(db, acme.id, ledger.id));
@@ -705,10 +705,12 @@ it("every route the clients read answers in its wire schema; the golden files ma
   });
   const body = (await created.clone().json()) as {
     business: { id: string };
-    operations: { id: string };
+    chief_of_staff: { id: string };
     team: { id: string }[];
   };
-  [body.business.id, body.operations.id, ...body.team.map((member) => member.id)].forEach(register);
+  [body.business.id, body.chief_of_staff.id, ...body.team.map((member) => member.id)].forEach(
+    register,
+  );
   await keep("business-created", wire.BusinessCreated, created);
 
   // This iPhone's signing key (a fixed public key, so the file is stable).

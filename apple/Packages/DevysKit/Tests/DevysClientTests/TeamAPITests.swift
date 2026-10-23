@@ -124,7 +124,7 @@ struct TeamAPITests {
 
         let business = try await api(
             status: 201,
-            body: #"{"business":{"id":"b2","name":"Globex","look":null,"brief":"Notes app"},"operations":{},"team":[]}"#,
+            body: #"{"business":{"id":"b2","name":"Globex","look":null,"brief":"Notes app"},"chief_of_staff":{},"team":[]}"#,
             recorder: recorder
         ).createBusiness(Self.session, NewBusiness(name: "Globex", brief: "Notes app", team: ["engineering", "growth"]))
         #expect(business.brief == "Notes app")
@@ -171,8 +171,8 @@ struct TeamAPITests {
         (request, body) = try await sent(recorder)
         #expect(request.url?.path() == "/api/businesses/b1/employees/e1/retire")
         #expect(body["reassign_to"] as? String == "ops")
-        await #expect(throws: DevysHTTPError.rejected(status: 409, message: "The Head of Operations can't be retired")) {
-            try await api(status: 409, body: "The Head of Operations can't be retired", recorder: recorder)
+        await #expect(throws: DevysHTTPError.rejected(status: 409, message: "The Chief of Staff can't be retired")) {
+            try await api(status: 409, body: "The Chief of Staff can't be retired", recorder: recorder)
                 .retire(Self.session, Self.scope, reassignTo: "e2")
         }
     }

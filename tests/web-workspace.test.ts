@@ -139,13 +139,10 @@ describe("conversation timeline, as native ChatTimeline", () => {
 describe("@-mentions in a draft, as the server reads them", () => {
   it("finds employees by @Name, case-insensitively, including names with spaces", () => {
     const team = [
-      { id: "ops", name: "Head of Operations" },
+      { id: "ops", name: "Chief of Staff" },
       { id: "g", name: "Growth" },
     ];
-    expect(mentionsIn("@growth and @Head of Operations, please", team).sort()).toEqual([
-      "g",
-      "ops",
-    ]);
+    expect(mentionsIn("@growth and @Chief of Staff, please", team).sort()).toEqual(["g", "ops"]);
     expect(mentionsIn("no one here", team)).toEqual([]);
   });
 });

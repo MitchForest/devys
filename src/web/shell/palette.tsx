@@ -36,7 +36,7 @@ export function CommandPalette() {
     {
       id: "home",
       title: "Home",
-      detail: "Operations",
+      detail: "Chief of Staff",
       icon: House,
       go: { place: { kind: "home" } },
     },

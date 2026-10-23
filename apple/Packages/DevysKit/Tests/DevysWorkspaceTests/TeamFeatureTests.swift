@@ -133,7 +133,7 @@ struct TeamFeatureTests {
         } operation: {
             Store(initialState: Workspace.State(server: URL(string: "http://127.0.0.1:5173")!)) { Workspace() }
         }
-        await settle("team and work", until: { store.operationsScope != nil && store.work.value != nil })
+        await settle("team and work", until: { store.chiefOfStaffScope != nil && store.work.value != nil })
         return store
     }
 
@@ -181,7 +181,7 @@ struct TeamFeatureTests {
         #expect(change == ProfileChange(responsibilities: "PR and paid social"))
     }
 
-    @Test("Retiring hands open work to the successor and opens their direct chat; Operations can't be retired")
+    @Test("Retiring hands open work to the successor and opens their direct chat; the Chief of Staff can't be retired")
     func retires() async {
         let server = TeamServer()
         let store = await makeStore(server)
@@ -200,9 +200,9 @@ struct TeamFeatureTests {
         let team = [
             Employee(id: "a", name: "Growth", responsibilities: "", model: "claude-opus-5-5"),
             Employee(id: "b", name: "Growth Lead", responsibilities: "", model: "claude-opus-5-5"),
-            Employee(id: "c", name: "Head of Operations", responsibilities: "", model: "claude-opus-5-5")
+            Employee(id: "c", name: "Chief of Staff", responsibilities: "", model: "claude-opus-5-5")
         ]
-        #expect(Mentions.recipients(in: "@growth lead and @Head of Operations", team: team) == ["b", "c"])
+        #expect(Mentions.recipients(in: "@growth lead and @Chief of Staff", team: team) == ["b", "c"])
         #expect(Mentions.recipients(in: "@Growth and @Growth Lead", team: team) == ["a", "b"])
         #expect(Mentions.recipients(in: "no mentions", team: team).isEmpty)
     }

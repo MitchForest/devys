@@ -38,10 +38,11 @@ const titles: Record<string, string> = {
 export const accessTitle = (capability: string) => titles[capability] ?? capability;
 
 const templateTitles: Record<RoleTemplateId, string> = {
-  operations: "Head of Operations",
+  "chief-of-staff": "Chief of Staff",
   engineering: "Engineering",
   growth: "Growth",
-  "business-operations": "Business Operations",
+  admin: "Admin",
+  finance: "Finance",
   custom: "Custom role",
 };
 /** The role an employee was hired into, as a short title; responsibilities carry the detail. */

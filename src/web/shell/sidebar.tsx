@@ -20,7 +20,7 @@ import {
   useEmployees,
   useFollowed,
   useHome,
-  useOperations,
+  useChiefOfStaff,
   useProjects,
   useUnread,
   useWork,
@@ -121,10 +121,10 @@ export const useShownApps = () => (useApps().data ?? []).filter((app) => app.vis
  */
 export function SidebarSections({ only }: { only?: "projects" | "team" }) {
   const employees = useEmployees();
-  const operations = useOperations();
+  const chiefOfStaff = useChiefOfStaff();
   const projects = useProjects().data ?? [];
   const needsYou = useHome().data?.needs_you.length ?? 0;
-  const homeUnread = useUnread(operations ? `direct:${operations.id}` : undefined);
+  const homeUnread = useUnread(chiefOfStaff ? `direct:${chiefOfStaff.id}` : undefined);
   const threads = useNestedThreads();
   const shownApps = useShownApps();
   const all = only === undefined;
