@@ -14,6 +14,7 @@ export function hostBrowser(host: { url: string; token: string }, businessId: st
     screenshot: (viewer) => call("screenshot", { viewer }),
     input: (action) => call("input", { action }),
     fill: (request, driver) => call("fill", { ...request, driver }),
+    front: () => call("front"),
   };
 }
 
@@ -31,5 +32,6 @@ export function unavailableBrowser(): Browser {
     screenshot: refuse,
     input: refuse,
     fill: refuse,
+    front: refuse,
   };
 }

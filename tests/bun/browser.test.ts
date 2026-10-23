@@ -228,6 +228,14 @@ it.skipIf(!existsSync(chrome))(
     const left = await acme.tabs({ action: "close", tab: second.id }, "work-1");
     expect(left).toHaveLength(1);
     expect(left[0]).toMatchObject({ current: true, title: "Frames" });
+
+    // The owner's turn: the business's own Chrome comes to the front on the tab it left, and
+    // the Mac app learns which process to activate.
+    const fronted = await acme.front();
+    expect(fronted.pid).toBeGreaterThan(0);
+    expect(
+      (await acme.tabs({ action: "list" }, "work-1")).find((tab) => tab.current),
+    ).toMatchObject({ title: "Frames" });
   },
 );
 

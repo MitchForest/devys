@@ -22,6 +22,10 @@ export const BrowserStatus = Schema.Struct({
 });
 export type BrowserStatus = typeof BrowserStatus.Type;
 
+/** The business's Chrome brought to the front for the owner: its process, for the Mac app. */
+export const Fronted = Schema.Struct({ pid: Schema.NullOr(Schema.Number) });
+export type Fronted = typeof Fronted.Type;
+
 /** A JPEG of the visible page, base64, in CSS pixels (so clicks map 1:1). */
 export const Screenshot = Schema.Struct({
   jpeg: Schema.String,
@@ -155,6 +159,8 @@ export interface Browser {
    */
   screenshot(viewer: "owner" | "employee"): Promise<Screenshot>;
   input(action: OwnerInput): Promise<PageState>;
+  /** Brings the business's own Chrome window, on its current tab, to the front (local mode). */
+  front(): Promise<Fronted>;
   /**
    * The host fills a secret into the page's fields (a card only on the merchant's site), may
    * submit, and pauses employees' scripts, events and screenshots until the page moves on; the

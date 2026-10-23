@@ -188,16 +188,13 @@ async function owner() {
     );
   const remote = async (name: string) =>
     (await remoteCapabilities(local, scope.businessId)).find((item) => item.name === name);
-  /**
-   * The thread, without hand-offs: under the full run another file's dispatcher may hand this
-   * work item on and post its card here at any time. The app's connect card stays.
-   */
+  /** The work item's thread as the owner reads it. */
   const thread = async () =>
     (
       (await json(`/conversations/${encodeURIComponent(`work:${work.id}`)}`)) as {
         messages: { text: string; ref: string | null; kind: string }[];
       }
-    ).messages.filter((message) => !message.ref?.startsWith("devys:work/item/"));
+    ).messages;
   /** The owner signs in at the provider: its authorize page sends them back to Devys. */
   const signIn = async (url: string) => {
     const authorized = await fetch(url, { redirect: "manual" });
@@ -233,16 +230,14 @@ it("an employee finds an app, asks to connect it; the owner signs in, reviews an
   expect(found.apps.map((each) => each.app)).toEqual(["example.books/acme"]);
   expect(found.apps[0]).toMatchObject({ name: "Acme Books", installed: false });
 
-  // askOwner connect: the card in the thread and the request in Needs you.
+  // askOwner connect: the request, with the app it names, shown in its work item's card. The
+  // thread gets no separate connect card.
   const ask = { kind: "connect", app: "example.books/acme", why: "To read and draft bills" };
   const asked = await use<{ request: string; kind: string; state: string }>("askOwner", ask);
   expect(asked).toMatchObject({ kind: "connect", state: "asked" });
-  const card = (await thread()).find((message) => message.ref?.startsWith("devys:team/app/"));
-  expect(card).toMatchObject({
-    kind: "event",
-    text: "To read and draft bills",
-    ref: "devys:team/app/acmebooks",
-  });
+  expect((await thread()).some((message) => message.ref?.startsWith("devys:team/app/"))).toBe(
+    false,
+  );
   const home = await json<{ needs_you: Record<string, unknown>[] }>("/home");
   expect(home.needs_you).toEqual([
     expect.objectContaining({

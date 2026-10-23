@@ -18,7 +18,7 @@ import { askOwnerFor } from "../src/app/asking.ts";
 import { secretsRoute } from "../src/app/vault.ts";
 import { DeviceKey } from "../src/authority/contract.ts";
 import { grant } from "../src/authority/service.ts";
-import { BrowserStatus, PageState, Screenshot } from "../src/browser/contract.ts";
+import { BrowserStatus, Fronted, PageState, Screenshot } from "../src/browser/contract.ts";
 import {
   DeviceList,
   Employee,
@@ -254,7 +254,7 @@ it("every route the clients read answers in its wire schema; the golden files ma
       { kind: "employee", id: engineer.id },
     ),
   );
-  await showWorkCard(bindings, acme.id, shown!);
+  await showWorkCard(bindings, acme.id, shown!, `direct:${chiefOfStaff.id}`);
   const supplier = await keep(
     "work-item-updated",
     WorkItem,
@@ -661,6 +661,7 @@ it("every route the clients read answers in its wire schema; the golden files ma
       driving: true,
     },
     "/browser/screenshot": { jpeg: "/9j/4AAQSkZJRg==", width: 1280, height: 800 },
+    "/browser/front": { pid: 4242 },
     // The host seals what the secure entry sheet sends; the Worker stores only this.
     "/vault/seal": {
       business: acme.id,
@@ -694,6 +695,16 @@ it("every route the clients read answers in its wire schema; the golden files ma
     );
     await keep("browser", BrowserStatus, (await mac("/browser", browserRoute))!);
     await keep("screenshot", Screenshot, (await mac("/browser/screenshot", browserRoute))!);
+    // The owner's turn in the browser: the business's Chrome comes to the front.
+    await keep(
+      "browser-front",
+      Fronted,
+      (await browserRoute(
+        new Request(`https://devys.test${at}/browser/front`, { method: "POST" }),
+        local,
+        access("/browser/front"),
+      ))!,
+    );
     // Settings › Secrets: names, kinds and who added them; the value is never answered back.
     const added = await secretsRoute(
       new Request(`https://devys.test${at}/secrets`, {

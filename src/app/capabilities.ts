@@ -80,8 +80,8 @@ export function capabilities(
       (businessId, work) => codingIncomplete(env, businessId, work),
       (businessId, employeeId) => coordinates(env.HYPERDRIVE, { businessId, employeeId }),
       async (businessId, work, conversation) => {
-        const key = conversation === undefined ? undefined : conversationKey(conversation);
-        if (conversation === undefined || key) await showWorkCard(env, businessId, work, key);
+        const key = conversationKey(conversation);
+        if (key) await showWorkCard(env, businessId, work, key);
       },
       (asking, request) => askOwnerConnecting(env, asking, request, appCatalog),
     ),

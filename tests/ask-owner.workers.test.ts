@@ -113,7 +113,7 @@ async function owner() {
       (await (
         await mac.call(at(`/conversations/${encodeURIComponent(`work:${work.id}`)}`))
       ).json()) as { messages: { text: string; mentions: string[]; ref: string | null }[] }
-    ).messages.filter((message) => !message.ref?.startsWith("devys:work/item/"));
+    ).messages;
   return { ...acme, work, mac, at, ask, thread };
 }
 

@@ -1,5 +1,5 @@
 import type { Business } from "../identity/contract.ts";
-import { BrowserStatus, OwnerInput, PageState, Screenshot } from "../browser/contract.ts";
+import { BrowserStatus, Fronted, OwnerInput, PageState, Screenshot } from "../browser/contract.ts";
 import { respond } from "../protocol/http.ts";
 import type { Env } from "./env.ts";
 import { modeOf } from "./mode.ts";
@@ -22,6 +22,10 @@ export async function browserRoute(
     return respond(BrowserStatus, await browser.status());
   if (path === "/browser/screenshot" && request.method === "GET")
     return respond(Screenshot, await browser.screenshot("owner"));
+  if (path === "/browser/front" && request.method === "POST") {
+    if (!trusted) return forbidden();
+    return respond(Fronted, await browser.front());
+  }
   if (path === "/browser/input" && request.method === "POST") {
     if (!trusted) return forbidden();
     const action = await decodedBody(request, 8_000, OwnerInput);

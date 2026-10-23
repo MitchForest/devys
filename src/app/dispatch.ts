@@ -7,7 +7,6 @@ import { scopeName } from "../identity/contract.ts";
 import { activeEmployee, pausedEmployees } from "../identity/service.ts";
 import type { WorkItem } from "../work/contract.ts";
 import { readyWorkItems, markSubmitted, wakeFollowUps } from "../work/service.ts";
-import { postEvent } from "./conversations.ts";
 import { dispatchRoutines } from "./routines.ts";
 
 /**
@@ -45,14 +44,6 @@ async function handOver(env: Env, work: WorkItem & { business_id: string }) {
   const scope = { businessId: work.business_id, employeeId: work.owner_employee_id };
   const employee = await Effect.runPromise(activeEmployee(env.HYPERDRIVE, scope));
   if (!employee || employee.paused) return;
-  // A hand-off card in the work item's thread and in its project's channel, once per owner.
-  const card = {
-    clientId: `handoff:${work.id}:${employee.id}`,
-    text: `${employee.name} took on "${work.title}".`,
-    ref: ref("work", "item", work.id),
-  };
-  await postEvent(env, work.business_id, `work:${work.id}`, card);
-  if (work.project_id) await postEvent(env, work.business_id, `project:${work.project_id}`, card);
   await env.AGENT.getByName(scopeName(scope)).receive(scope, {
     messageId: `${work.id}:${work.revision}`,
     senderId: "dispatcher",

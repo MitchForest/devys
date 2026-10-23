@@ -309,7 +309,7 @@ it("a due date is a deadline: ready work due next month is handed over now", asy
   );
 });
 
-it("work in a project is handed over with a card in its thread and in the project's channel", async () => {
+it("handing work over posts nothing: no hand-off card in its thread or its project's channel", async () => {
   const { scope } = await business();
   const agentEnv = {
     ...bindings,
@@ -330,9 +330,7 @@ it("work in a project is handed over with a card in its thread and in the projec
   await dispatchReady(agentEnv);
   await dispatchReady(agentEnv);
   for (const key of [`work:${work.id}`, `project:${launch.id}`] as const)
-    expect(
-      (await Effect.runPromise(messages(db, scope.businessId, key))).map((m) => [m.kind, m.ref]),
-    ).toEqual([["event", `devys:work/item/${work.id}`]]);
+    expect(await Effect.runPromise(messages(db, scope.businessId, key))).toEqual([]);
 });
 
 it("paused employees' work and a failing hand-off never hold up other work", async () => {
@@ -680,7 +678,7 @@ it("an employee changes only its own work items; the Chief of Staff changes anyo
   ).toMatchObject({ nextAction: "Draft" });
 });
 
-it("steps and results are replaced whole, bounded, and shown as one card in the thread updated in place", async () => {
+it("steps and results are replaced whole and bounded; the thread posts no card (clients pin it)", async () => {
   const { scope } = await business();
   for (const name of ["workCreate", "workUpdate", "workComplete"])
     await Effect.runPromise(grant(db, scope, { capability: named(name), mode: "auto" }));
@@ -718,8 +716,6 @@ it("steps and results are replaced whole, bounded, and shown as one card in the 
     ],
   });
   expect(planned.steps).toHaveLength(2);
-  const [card] = await cards();
-  expect(card).toMatchObject({ kind: "card", ref: created.ref, author: "system" });
 
   // Each change replaces the whole list; the same one card stands for it.
   const moved = await update(planned, {
@@ -741,7 +737,8 @@ it("steps and results are replaced whole, bounded, and shown as one card in the 
   const fewer = await update(moved, { results: [{ label: "MX records", ok: true }] });
   expect(fewer.results).toEqual([{ label: "MX records", ok: true }]);
   expect(fewer.steps).toHaveLength(2);
-  expect((await cards()).map((m) => m.id)).toEqual([card!.id]);
+  // The thread shows the work item's live card above its messages; nothing is posted for it.
+  expect(await cards()).toEqual([]);
 
   // Bounded: at most 10 steps and 12 results, short words, https links only.
   const step = { title: "A step", state: "todo" };
@@ -772,7 +769,7 @@ it("steps and results are replaced whole, bounded, and shown as one card in the 
     state: "completed",
     results: [{ label: "Test email delivered", ok: true }],
   });
-  expect(await cards()).toHaveLength(1);
+  expect(await cards()).toEqual([]);
   expect(await Effect.runPromise(workItem(db, scope.businessId, id))).toMatchObject({
     results: [{ label: "Test email delivered", ok: true }],
   });

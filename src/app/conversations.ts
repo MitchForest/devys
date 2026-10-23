@@ -353,15 +353,14 @@ export const postEvent = (
   );
 
 /**
- * A work item's card in a conversation: in its thread, posted the first time its steps or
- * results are set, and where it was created from. Clients draw it from the item as it is now,
- * so every later change updates each card in place.
+ * A work item's card in the conversation it was created from. Clients draw it from the item as
+ * it is now, so every later change updates the card in place.
  */
 export const showWorkCard = (
   env: Env,
   businessId: string,
   work: { id: string; title: string },
-  conversation: ConversationKey = `work:${work.id}`,
+  conversation: ConversationKey,
 ) =>
   postEvent(env, businessId, conversation, {
     kind: "card",

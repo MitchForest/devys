@@ -148,10 +148,11 @@ export function workCapabilities(
   /** Whether this employee directs others' work (the Chief of Staff). */
   coordinates: (businessId: string, employeeId: string) => Promise<boolean>,
   /**
-   * Shows the work item as one card in a conversation (its thread unless named), which clients
-   * draw from the item as it is now, so each later change updates it in place.
+   * Shows the work item as one card in the conversation it was created from; clients draw it
+   * from the item as it is now, so each later change updates it in place. Its thread shows the
+   * same card above its messages without a post.
    */
-  showCard: (businessId: string, work: WorkItem, conversation?: string) => Promise<void>,
+  showCard: (businessId: string, work: WorkItem, conversation: string) => Promise<void>,
   /** Asks the owner, bound to this work item (authority's request, connected in wiring). */
   askOwner: (
     asking: { businessId: string; employeeId: string; workItemId: string; conversation: string },
@@ -200,7 +201,6 @@ export function workCapabilities(
           code: "conflict",
           message: "The work item changed or was taken over; list it again",
         });
-      if (value.steps || value.results) yield* rpc(() => showCard(businessId, updated));
       return summary(updated);
     });
   const checkEmployees = (businessId: string, ids: readonly string[]) =>
@@ -300,7 +300,6 @@ export function workCapabilities(
               createdBy: `employee:${employeeId}`,
             }),
           );
-          if (input.steps?.length) yield* rpc(() => showCard(businessId, created));
           // The conversation it came from shows its card, which opens it and follows its progress.
           if (conversation && !conversation.startsWith("work:"))
             yield* rpc(() => showCard(businessId, created, conversation));

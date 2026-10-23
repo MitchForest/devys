@@ -32,6 +32,7 @@ import type {
   PageState,
   Screenshot,
   Tab,
+  Fronted,
 } from "../contract.ts";
 
 interface BrowsersHostOptions {
@@ -847,6 +848,14 @@ export function browsersHost(options: BrowsersHostOptions): HostRoutes {
           return fill(running, business, input);
         case "/browser/input":
           return act(() => ownerInput(running, input.action as OwnerInput));
+        case "/browser/front":
+          // The owner's turn: their business's real Chrome, on the tab the employee left.
+          return act(async () => {
+            const tab = await current(running);
+            await running.session.domains.Target.activateTarget({ targetId: tab.id });
+            await onTab(running, () => running.session.domains.Page.bringToFront());
+            return { pid: running.chrome.pid ?? null } satisfies Fronted;
+          });
         default:
           throw new HostRefusal(404, "Not found");
       }

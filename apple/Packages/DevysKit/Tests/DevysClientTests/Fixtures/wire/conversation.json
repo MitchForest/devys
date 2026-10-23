@@ -1,6 +1,20 @@
 {
   "messages": [
     {
+      "id": "00000000-0000-4000-8000-000000000019",
+      "conversation": "direct:00000000-0000-4000-8000-000000000003",
+      "author": "system",
+      "kind": "card",
+      "text": "Publish the booking page",
+      "reply_to": null,
+      "mentions": [],
+      "via_voice": false,
+      "ref": "devys:work/item/00000000-0000-4000-8000-000000000008",
+      "replies": [],
+      "created_at": "2026-01-01T00:00:00.000Z",
+      "reactions": []
+    },
+    {
       "id": "00000000-0000-4000-8000-000000000017",
       "conversation": "direct:00000000-0000-4000-8000-000000000003",
       "author": "person:00000000-0000-4000-8000-000000000001",

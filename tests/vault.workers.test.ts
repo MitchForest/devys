@@ -141,7 +141,7 @@ async function owner() {
       (await (await call(`/conversations/${encodeURIComponent(`work:${work.id}`)}`)).json()) as {
         messages: { text: string; ref: string | null }[];
       }
-    ).messages.filter((message) => !message.ref?.startsWith("devys:work/item/"));
+    ).messages;
   return { ...acme, work, call, secrets, use, thread };
 }
 

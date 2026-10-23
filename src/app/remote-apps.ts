@@ -12,7 +12,6 @@ import { parse } from "tldts";
 import type { Env } from "./env.ts";
 import type { Database } from "../data/database.ts";
 import { modeOf } from "./mode.ts";
-import { postEvent } from "./conversations.ts";
 import { answerText, askOwnerFor, tellEmployee } from "./asking.ts";
 import type { OwnerRequest } from "../authority/contract.ts";
 import {
@@ -56,7 +55,6 @@ import { publicFetch } from "../egress/public.ts";
 import { sha256, sha256Bytes } from "../protocol/bytes.ts";
 import type { Capability } from "../protocol/capability.ts";
 import { HostRefusal } from "../protocol/host.ts";
-import { ref } from "../protocol/ref.ts";
 import type { Sealed } from "../vault/contract.ts";
 
 /** The official MCP Registry (registry.modelcontextprotocol.io, API v0.1). */
@@ -765,25 +763,6 @@ export async function removeApp(env: Env, businessId: string, app: RemoteApp) {
   await Effect.runPromise(removeRemoteApp(env.HYPERDRIVE, businessId, app.id));
 }
 
-/**
- * The connect card an `askOwner` connect posts in its thread: the app's ref, which clients draw
- * with its name and logo, and why it's needed as the text.
- */
-export async function postConnectCard(
-  env: Env,
-  businessId: string,
-  workItemId: string,
-  decisionId: string,
-  app: RemoteApp,
-  why: string,
-) {
-  await postEvent(env, businessId, `work:${workItemId}`, {
-    clientId: `connect:${decisionId}`,
-    text: why,
-    ref: ref("team", "app", app.id),
-  });
-}
-
 // A card from a card app (Ramp), for browserFill.
 
 /**
@@ -880,8 +859,6 @@ export async function askOwnerConnecting(
       `${app.name} is already on: use it (describe_capabilities); ask the owner if you need more of it`,
     );
   }
-  const decision = await askOwnerFor(env, asking, request);
-  if (decision.status === "pending")
-    await postConnectCard(env, asking.businessId, asking.workItemId, decision.id, app, request.why);
-  return decision;
+  // The work item's card shows the request with the app's name and logo.
+  return askOwnerFor(env, asking, request);
 }
