@@ -235,16 +235,20 @@ private struct ChatRow: View {
                             Text(SidebarTime.text(date)).font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
                         }
                     }
-                    HStack(spacing: 4) {
-                        Text(line)
-                            .font(DevysTypography.secondary)
-                            .foregroundStyle(working ? DevysColors.indigo : DevysColors.ink3)
-                            .lineLimit(1)
-                        Spacer(minLength: 4)
-                        if entry.place == .home, let count = store.home.value?.needsYou.count, count > 0 {
-                            NeedsYouBadge(count: count)
-                        } else if entry.unread > 0, !selected {
-                            UnreadDot()
+                    // A second line only when there is something to say: the name centres otherwise.
+                    let needsYou = entry.place == .home ? store.home.value?.needsYou.count ?? 0 : 0
+                    if !line.isEmpty || needsYou > 0 || (entry.unread > 0 && !selected) {
+                        HStack(spacing: 4) {
+                            Text(line)
+                                .font(DevysTypography.secondary)
+                                .foregroundStyle(working ? DevysColors.indigo : DevysColors.ink3)
+                                .lineLimit(1)
+                            Spacer(minLength: 4)
+                            if needsYou > 0 {
+                                NeedsYouBadge(count: needsYou)
+                            } else if entry.unread > 0, !selected {
+                                UnreadDot()
+                            }
                         }
                     }
                 }
