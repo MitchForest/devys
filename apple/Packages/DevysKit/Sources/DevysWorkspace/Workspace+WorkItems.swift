@@ -65,9 +65,9 @@ extension Workspace {
         case .confirmed:
             submitWorkItem(state: &state)
         case .created(let item):
-            // A work item opens its thread once saved.
+            // A work item opens beside the conversation once saved.
             state.newWorkItem = nil
-            reducePlace(.threadOpened(item.id), state: &state)
+            reducePlace(.workOpened(item.id), state: &state)
         case .failed(let message):
             state.newWorkItem?.isSubmitting = false
             state.newWorkItem?.error = message

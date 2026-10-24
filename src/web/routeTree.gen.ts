@@ -15,7 +15,6 @@ import { Route as BusinessIndexRouteImport } from './routes/$business/index'
 import { Route as BusinessChatEmployeeRouteImport } from './routes/$business/chat.$employee'
 import { Route as BusinessProjectProjectRouteImport } from './routes/$business/project.$project'
 import { Route as BusinessSettingsSectionRouteImport } from './routes/$business/settings.$section'
-import { Route as BusinessThreadWorkRouteImport } from './routes/$business/thread.$work'
 import { Route as TerminalBusinessIdRouteImport } from './routes/terminal.$business.$id'
 
 const IndexRoute = IndexRouteImport.update({
@@ -48,11 +47,6 @@ const BusinessSettingsSectionRoute = BusinessSettingsSectionRouteImport.update({
   path: '/settings/$section',
   getParentRoute: () => BusinessRoute,
 } as any)
-const BusinessThreadWorkRoute = BusinessThreadWorkRouteImport.update({
-  id: '/thread/$work',
-  path: '/thread/$work',
-  getParentRoute: () => BusinessRoute,
-} as any)
 const TerminalBusinessIdRoute = TerminalBusinessIdRouteImport.update({
   id: '/terminal/$business/$id',
   path: '/terminal/$business/$id',
@@ -66,7 +60,6 @@ export interface FileRoutesByFullPath {
   '/$business/chat/$employee': typeof BusinessChatEmployeeRoute
   '/$business/project/$project': typeof BusinessProjectProjectRoute
   '/$business/settings/$section': typeof BusinessSettingsSectionRoute
-  '/$business/thread/$work': typeof BusinessThreadWorkRoute
   '/terminal/$business/$id': typeof TerminalBusinessIdRoute
 }
 export interface FileRoutesByTo {
@@ -75,7 +68,6 @@ export interface FileRoutesByTo {
   '/$business/chat/$employee': typeof BusinessChatEmployeeRoute
   '/$business/project/$project': typeof BusinessProjectProjectRoute
   '/$business/settings/$section': typeof BusinessSettingsSectionRoute
-  '/$business/thread/$work': typeof BusinessThreadWorkRoute
   '/terminal/$business/$id': typeof TerminalBusinessIdRoute
 }
 export interface FileRoutesById {
@@ -86,7 +78,6 @@ export interface FileRoutesById {
   '/$business/chat/$employee': typeof BusinessChatEmployeeRoute
   '/$business/project/$project': typeof BusinessProjectProjectRoute
   '/$business/settings/$section': typeof BusinessSettingsSectionRoute
-  '/$business/thread/$work': typeof BusinessThreadWorkRoute
   '/terminal/$business/$id': typeof TerminalBusinessIdRoute
 }
 export interface FileRouteTypes {
@@ -98,7 +89,6 @@ export interface FileRouteTypes {
     | '/$business/chat/$employee'
     | '/$business/project/$project'
     | '/$business/settings/$section'
-    | '/$business/thread/$work'
     | '/terminal/$business/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -107,7 +97,6 @@ export interface FileRouteTypes {
     | '/$business/chat/$employee'
     | '/$business/project/$project'
     | '/$business/settings/$section'
-    | '/$business/thread/$work'
     | '/terminal/$business/$id'
   id:
     | '__root__'
@@ -117,7 +106,6 @@ export interface FileRouteTypes {
     | '/$business/chat/$employee'
     | '/$business/project/$project'
     | '/$business/settings/$section'
-    | '/$business/thread/$work'
     | '/terminal/$business/$id'
   fileRoutesById: FileRoutesById
 }
@@ -171,13 +159,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BusinessSettingsSectionRouteImport
       parentRoute: typeof BusinessRoute
     }
-    '/$business/thread/$work': {
-      id: '/$business/thread/$work'
-      path: '/thread/$work'
-      fullPath: '/$business/thread/$work'
-      preLoaderRoute: typeof BusinessThreadWorkRouteImport
-      parentRoute: typeof BusinessRoute
-    }
     '/terminal/$business/$id': {
       id: '/terminal/$business/$id'
       path: '/terminal/$business/$id'
@@ -193,7 +174,6 @@ interface BusinessRouteChildren {
   BusinessChatEmployeeRoute: typeof BusinessChatEmployeeRoute
   BusinessProjectProjectRoute: typeof BusinessProjectProjectRoute
   BusinessSettingsSectionRoute: typeof BusinessSettingsSectionRoute
-  BusinessThreadWorkRoute: typeof BusinessThreadWorkRoute
 }
 
 const BusinessRouteChildren: BusinessRouteChildren = {
@@ -201,7 +181,6 @@ const BusinessRouteChildren: BusinessRouteChildren = {
   BusinessChatEmployeeRoute: BusinessChatEmployeeRoute,
   BusinessProjectProjectRoute: BusinessProjectProjectRoute,
   BusinessSettingsSectionRoute: BusinessSettingsSectionRoute,
-  BusinessThreadWorkRoute: BusinessThreadWorkRoute,
 }
 
 const BusinessRouteWithChildren = BusinessRoute._addFileChildren(

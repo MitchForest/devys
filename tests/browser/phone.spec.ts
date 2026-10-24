@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { localStores } from "../fixtures/local.ts";
-import { bearer, insertMessage, signIn, stubPosting } from "./helpers.ts";
+import { bearer, insertMessage, signIn, stubPosting, workView } from "./helpers.ts";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -51,17 +51,18 @@ test("on a phone: the list, then one conversation full screen; Back to the list;
     await page.keyboard.press("Escape");
     await expect(page.getByRole("region", { name: "Launch overview" })).toHaveCount(0);
 
-    // The work's card opens the thread full screen, its card pinned above the reply.
-    await page.getByTestId("work-card").getByText("Write a tagline").click();
-    await expect(page.getByRole("textbox", { name: "Reply" })).toBeVisible();
-    await expect(page.getByTestId("work-card").getByText("Growth", { exact: true })).toBeVisible();
-    await page.getByRole("textbox", { name: "Reply" }).fill("Under six words.");
-    await page.getByRole("button", { name: "Send" }).click();
+    // The work's line opens it as a sheet over the channel, with its reply field.
+    await page.getByTestId("work-chip").click();
+    const work = workView(page);
+    await expect(work.getByTestId("work-card").getByText("Growth", { exact: true })).toBeVisible();
+    await work.getByRole("textbox", { name: "Reply to Growth" }).fill("Under six words.");
+    await work.getByRole("button", { name: "Send" }).click();
     await expect.poll(() => sent.length).toBe(1);
     expect(sent[0]!.key).toBe(`work:${workItem.id}`);
 
-    // Back returns to the channel, then to the list.
-    await page.getByRole("button", { name: "Back", exact: true }).click();
+    // Closing it returns to the channel; Back to the list.
+    await page.keyboard.press("Escape");
+    await expect(work).toHaveCount(0);
     await expect(page.getByLabel("Message Launch")).toBeVisible();
     await page.getByRole("button", { name: "Back", exact: true }).click();
     await page.getByRole("link", { name: /^Growth/ }).click();

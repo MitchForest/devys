@@ -5,6 +5,8 @@ import {
   bearer,
   insertMessage,
   openAbout,
+  openWork,
+  workView,
   sidebar,
   signIn,
   stubPosting,
@@ -77,7 +79,7 @@ async function stubRuntime(page: Page, running: () => string | null) {
   return stops;
 }
 
-test("Home is the Chief of Staff, its desk the header's popover; work made there is one live card: Ready when you are, Start, then Working with Stop and Watch", async ({
+test("Home is the Chief of Staff, its desk the header's popover; work made there is one line that opens it beside the chat: Ready when you are, Start, then Working with Stop and Watch", async ({
   page,
 }) => {
   const stores = await localStores();
@@ -165,9 +167,15 @@ test("Home is the Chief of Staff, its desk the header's popover; work made there
     // The request without work shows once, in the chat.
     await expect(page.getByTestId("request-card")).toHaveCount(1);
 
-    const card = page.getByTestId("work-card");
-    await expect(card).toHaveCount(1);
-    await expect(card.getByText("Buy acme-widgets.com")).toBeVisible();
+    // In the chat the work is one line; the plan is shown once, beside it.
+    const chip = page.getByTestId("work-chip");
+    await expect(chip).toHaveCount(1);
+    await expect(chip).toContainText("Buy acme-widgets.com · Chief of Staff");
+    await expect(chip.getByTestId("work-chip-state")).toHaveText("Ready when you are");
+    await expect(page.getByTestId("work-card")).toHaveCount(0);
+    await chip.click();
+    await expect(page.getByTestId("place-title")).toHaveText("Chief of Staff");
+    const card = workView(page).getByTestId("work-card");
     await expect(card.getByTestId("work-step")).toHaveText("Step 1 of 3");
     await expect(card.getByRole("list", { name: "Steps" }).getByRole("listitem")).toHaveText([
       "Find the domain",
@@ -189,10 +197,15 @@ test("Home is the Chief of Staff, its desk the header's popover; work made there
     ]);
     running = `work:${work.id}`;
     driving = true;
-    // The plan shows the step; the line says what the employee is doing in it right now.
+    // The plan shows the step; the line says what the employee is doing in it right now, and
+    // so do the chip and the sidebar's Work row.
     await expect(card.getByTestId("work-state")).toHaveText("Opening example.com…", {
       timeout: 15_000,
     });
+    await expect(chip.getByTestId("work-chip-state")).toHaveText("Opening example.com…");
+    await expect(page.getByTestId("work-row")).toHaveAccessibleName(
+      "Buy acme-widgets.com, Opening example.com…",
+    );
     await expect(card.getByRole("button", { name: "Watch" })).toBeVisible({ timeout: 15_000 });
     await page.screenshot({ path: "/tmp/f1-working.png" });
     await card.getByRole("button", { name: "Stop" }).click();
@@ -202,17 +215,18 @@ test("Home is the Chief of Staff, its desk the header's popover; work made there
     running = `direct:${owner.chiefOfStaff}`;
     await expect(card.getByRole("button", { name: "Stop" })).toHaveCount(0, { timeout: 15_000 });
 
-    // Tapping the card opens its thread, where it is pinned and the browser can be watched.
+    // Watch opens the browser over the work; closing it returns to the work.
     running = `work:${work.id}`;
-    await card.getByText("Buy acme-widgets.com").click();
-    await expect(page.getByTestId("place-title")).toHaveText("Buy acme-widgets.com");
-    const pinned = page.getByTestId("work-card");
-    await expect(pinned).toHaveCount(1);
-    await pinned.getByRole("button", { name: "Watch" }).click();
-    await expect(page).toHaveURL(new RegExp(`/thread/${work.id}\\?app=browser`));
+    await card.getByRole("button", { name: "Watch" }).click({ timeout: 15_000 });
+    await expect(page).toHaveURL(
+      new RegExp(`\\?layer=devys:work/item/${work.id}&layer=browser:${work.id}$`),
+    );
     // The in-app browser is a picture to watch; the owner types in the business's Chrome.
     await expect(page.getByTestId("browser-view")).toBeVisible();
     await expect(page.getByLabel("Type into the page")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(workView(page)).toBeVisible();
+    await expect(page.getByTestId("place-title")).toHaveText("Chief of Staff");
   } finally {
     await page.close();
     await stores.remove([owner]);
@@ -220,7 +234,7 @@ test("Home is the Chief of Staff, its desk the header's popover; work made there
   }
 });
 
-test("in its thread the card is pinned above the reply, with one ask at a time: Connect, then Open Chrome and Hand back", async ({
+test("beside the chat the work's card heads its conversation, with one ask at a time: Connect, then Open Chrome and Hand back", async ({
   page,
 }) => {
   const stores = await localStores();
@@ -271,23 +285,27 @@ test("in its thread the card is pinned above the reply, with one ask at a time: 
   });
   try {
     await signIn(page, sql, owner.person);
-    await page.goto(`/${owner.business}/thread/${pay.id}`);
-    const card = page.getByTestId("work-card");
+    await openWork(page, owner.business, pay.id);
+    const card = workView(page).getByTestId("work-card");
     await expect(card).toHaveCount(1);
-    // A thread has no permanent view: the card is the work.
-    await expect(page.getByRole("button", { name: /side panel/ })).toHaveCount(0);
     await expect(card.getByTestId("work-state")).toHaveText("Your turn: Connect Ledger");
+    // The sidebar's Work row says the same, waiting on the owner first.
+    await expect(page.getByTestId("work-row").first()).toHaveAccessibleName(/, Your turn: /);
     await expect(card.getByRole("button", { name: "Connect" })).toBeVisible();
     await expect(card.getByText("ledger.example")).toHaveCount(0);
     // Nothing twice: no separate request or app card in the conversation.
     await expect(page.getByTestId("request-card")).toHaveCount(0);
     await expect(page.getByTestId("app-card")).toHaveCount(0);
-    // Pinned between the conversation and the reply.
-    const said = await page.getByText("I need the books to see what we owe.").boundingBox();
-    const pinned = await card.boundingBox();
-    const reply = await page.getByRole("textbox", { name: "Reply" }).boundingBox();
-    expect(pinned!.y).toBeGreaterThan(said!.y + said!.height);
-    expect(pinned!.y + pinned!.height).toBeLessThanOrEqual(reply!.y);
+    // The card heads the work's conversation; the reply field is under it.
+    const said = await workView(page)
+      .getByText("I need the books to see what we owe.")
+      .boundingBox();
+    const heading = await card.boundingBox();
+    const reply = await workView(page)
+      .getByRole("textbox", { name: "Reply to Chief of Staff" })
+      .boundingBox();
+    expect(heading!.y + heading!.height).toBeLessThanOrEqual(said!.y);
+    expect(said!.y + said!.height).toBeLessThanOrEqual(reply!.y);
     await page.screenshot({ path: "/tmp/f1-your-turn-connect.png" });
     // Connected: the app's review is the next step, from the same card.
     await sql.run("UPDATE remote_apps SET state = 'review' WHERE business_id = $1", [
@@ -296,7 +314,7 @@ test("in its thread the card is pinned above the reply, with one ask at a time: 
     await expect(card.getByRole("button", { name: "Review" })).toBeVisible({ timeout: 15_000 });
 
     // A sign-in: Open Chrome takes the work over and brings the business's Chrome forward.
-    await page.goto(`/${owner.business}/thread/${domain.id}`);
+    await openWork(page, owner.business, domain.id);
     await expect(card.getByTestId("work-state")).toHaveText(
       "Your turn: Sign in to the registrar (2FA)",
     );
@@ -305,7 +323,7 @@ test("in its thread the card is pinned above the reply, with one ask at a time: 
     await expect.poll(() => fronted.length).toBe(1);
     await expect.poll(() => statusOf(sql, signInRequest)).toBe("approved");
     await expect(card.getByTestId("work-state")).toHaveText("You have it");
-    await expect(page).not.toHaveURL(/app=browser/);
+    await expect(page).not.toHaveURL(/layer=browser:/);
     await page.screenshot({ path: "/tmp/f1-you-have-it.png" });
     await card.getByRole("button", { name: "Hand back" }).click();
     await expect
@@ -321,10 +339,10 @@ test("in its thread the card is pinned above the reply, with one ask at a time: 
       .toBeNull();
     await expect(card.getByText("You have it")).toHaveCount(0);
 
-    // Where Chrome can't come forward, the live browser opens beside the thread instead.
-    await page.goto(`/${owner.business}/thread/${email.id}`);
+    // Where Chrome can't come forward, the live browser opens over the work instead.
+    await openWork(page, owner.business, email.id);
     await card.getByRole("button", { name: "Open Chrome" }).click();
-    await expect(page).toHaveURL(new RegExp(`/thread/${email.id}\\?app=browser`));
+    await expect(page).toHaveURL(new RegExp(`layer=browser:${email.id}$`));
     await expect(
       page.getByTestId("browser-view").getByRole("button", { name: "Hand back" }),
     ).toBeVisible();

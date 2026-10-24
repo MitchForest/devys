@@ -2,13 +2,12 @@
  * Where the owner is lives in the URL, so Back, forward, reload and links all work:
  *
  * - `/$business` is Home, the direct chat with the Chief of Staff
- * - `/$business/chat/$employee`, `/$business/project/$project`, `/$business/thread/$work`
+ * - `/$business/chat/$employee`, `/$business/project/$project`
  * - `/$business/settings/$section`, over the place it was opened from
- * - `?app=browser` opens the live browser of the thread's work beside the conversation, and each
- *   `?layer=<ref>` stacks a record over it, in order.
+ * - each `?layer=` stacks a view beside the conversation, in order: a record by its ref (a work
+ *   item, a page, a file) or `browser:<work>`, the live browser of a work item.
  *
- * The history entry carries what a URL cannot: the places a thread was opened from (for the
- * toolbar's Back) and whether the top layer opened on its own.
+ * The history entry carries what a URL cannot: whether the top layer opened on its own.
  */
 import { useRouter, useRouterState } from "@tanstack/react-router";
 import { useMemo } from "react";
@@ -17,25 +16,29 @@ import { parseRef, ref, type Ref } from "../../protocol/ref.ts";
 import { ui, type PlaceKind } from "./ui.ts";
 
 /**
- * Where the owner is: always a conversation. Home is the direct chat with the Chief of Staff; a
- * project is its channel; a thread is a work item's conversation.
+ * Where the owner is: always a conversation with someone. Home is the direct chat with the Chief
+ * of Staff; a project is its channel. Work opens beside it, as a layer.
  */
 export type Place =
   | { kind: "home" }
   | { kind: "direct"; employeeId: string }
-  | { kind: "project"; id: string }
-  | { kind: "thread"; workId: string };
+  | { kind: "project"; id: string };
 
 /**
  * A view beside the conversation: a record (by its ref, shown by the layer registry for its
- * kind) or the live browser of a thread's work. The right panel shows only these.
+ * kind; a work item is its plan and its own conversation) or a work item's live browser. The
+ * right panel shows only these.
  */
 export type Layer = { kind: "record"; ref: Ref } | { kind: "browser"; workId: string };
 
+/** A work item's layer: its card, plan and conversation, beside whatever chat is open. */
+export const workLayer = (workId: string): Layer => ({
+  kind: "record",
+  ref: ref("work", "item", workId),
+});
+
 declare module "@tanstack/history" {
   interface HistoryState {
-    /** The places a thread was opened from, newest last: the toolbar's Back. */
-    trail?: Place[];
     /** The place Settings was opened over. */
     behind?: Place;
     /** The top layer opened on its own, so the next one may replace it. */
@@ -47,7 +50,6 @@ declare module "@tanstack/history" {
 
 /** The layer stack as the URL holds it. */
 export interface LayerSearch {
-  app?: string;
   layer?: string[];
 }
 
@@ -71,12 +73,10 @@ export function stringifySearch(search: Record<string, unknown>) {
   );
   return parts.length ? `?${parts.join("&")}` : "";
 }
-export const validateLayerSearch = (search: Record<string, unknown>): LayerSearch => ({
-  ...(typeof search.app === "string" && search.app ? { app: search.app } : {}),
-  ...(Array.isArray(search.layer) && search.layer.length
+export const validateLayerSearch = (search: Record<string, unknown>): LayerSearch =>
+  Array.isArray(search.layer) && search.layer.length
     ? { layer: search.layer.filter((each): each is string => typeof each === "string") }
-    : {}),
-});
+    : {};
 
 export const samePlace = (a: Place, b: Place) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -91,33 +91,30 @@ export const conversationOf = (
       : undefined
     : place.kind === "direct"
       ? `direct:${place.employeeId}`
-      : place.kind === "project"
-        ? `project:${place.id}`
-        : `work:${place.workId}`;
+      : `project:${place.id}`;
 
 /** The record a layer shows; the browser is not a record. */
 export const refOfLayer = (layer: Layer): Ref | undefined =>
   layer.kind === "record" ? layer.ref : undefined;
 
-/** The layer that shows a record, or undefined for anything that is not a ref. */
+/** The layer a URL entry names: a record's ref, or `browser:<work>`; undefined for anything else. */
 export const layerOfRef = (value: string): Layer | undefined =>
-  parseRef(value) ? { kind: "record", ref: value as Ref } : undefined;
+  parseRef(value)
+    ? { kind: "record", ref: value as Ref }
+    : /^browser:[A-Za-z0-9-]{1,64}$/.test(value)
+      ? { kind: "browser", workId: value.slice("browser:".length) }
+      : undefined;
 
-/** The stack a URL describes. The browser belongs to the thread's work. */
-function layersOf(search: LayerSearch, place: Place): Layer[] {
-  const work = place.kind === "thread" ? place.workId : undefined;
-  const base: Layer[] = search.app === "browser" && work ? [{ kind: "browser", workId: work }] : [];
-  return [...base, ...(search.layer ?? []).flatMap((value) => layerOfRef(value) ?? [])];
-}
+/** The stack a URL describes, bottom first. */
+const layersOf = (search: LayerSearch): Layer[] =>
+  (search.layer ?? []).flatMap((value) => layerOfRef(value) ?? []);
 
-/** The URL's form of a stack: the browser (always at the bottom), then each record's ref. */
+/** The URL's form of a stack, bottom first. */
 function searchOf(layers: readonly Layer[]): LayerSearch {
-  const browser = layers.some((layer) => layer.kind === "browser");
-  const refs = layers.flatMap((layer) => refOfLayer(layer) ?? []);
-  return {
-    ...(browser ? { app: "browser" } : {}),
-    ...(refs.length ? { layer: refs } : {}),
-  };
+  const entries = layers.map((layer) =>
+    layer.kind === "browser" ? `browser:${layer.workId}` : layer.ref,
+  );
+  return entries.length ? { layer: entries } : {};
 }
 
 type Router = ReturnType<typeof useRouter>;
@@ -126,7 +123,7 @@ type RouterState = Router["state"];
 const placeKey = (place: Place) =>
   place.kind === "home"
     ? "home:"
-    : `${place.kind}:${place.kind === "direct" ? place.employeeId : place.kind === "project" ? place.id : place.workId}`;
+    : `${place.kind}:${place.kind === "direct" ? place.employeeId : place.id}`;
 const placeOfKey = (key: string): Place => {
   const at = key.indexOf(":");
   const kind = key.slice(0, at) as PlaceKind;
@@ -135,9 +132,7 @@ const placeOfKey = (key: string): Place => {
     ? { kind, employeeId: id }
     : kind === "project"
       ? { kind, id }
-      : kind === "thread"
-        ? { kind, workId: id }
-        : { kind: "home" };
+      : { kind: "home" };
 };
 
 function placeKeyOf(state: RouterState) {
@@ -148,8 +143,6 @@ function placeKeyOf(state: RouterState) {
       return `direct:${params.employee}`;
     case "/$business/project/$project":
       return `project:${params.project}`;
-    case "/$business/thread/$work":
-      return `thread:${params.work}`;
     case "/$business/settings/$section": {
       const behind = state.location.state.behind;
       return behind ? placeKey(behind) : "home:";
@@ -180,29 +173,34 @@ export const useSettingsSection = () =>
 
 /** The layer stack in the right panel, and how its top layer came to be there. */
 export function useLayers() {
-  const place = usePlace();
   const key = useRouterState({
     select: (state) => {
-      const { app, layer } = searchIn(state);
+      const { layer } = searchIn(state);
       const { auto, updatedBy } = state.location.state;
-      return JSON.stringify([app, layer, auto, updatedBy]);
+      return JSON.stringify([layer, auto, updatedBy]);
     },
   });
   return useMemo(() => {
-    const [app, layer, auto, updatedBy] = JSON.parse(key) as [
-      string | undefined,
+    const [layer, auto, updatedBy] = JSON.parse(key) as [
       string[] | undefined,
       boolean | undefined,
       string | undefined,
     ];
-    const layers = layersOf({ ...(app ? { app } : {}), ...(layer ? { layer } : {}) }, place);
+    const layers = layersOf(layer ? { layer } : {});
     return { layers, top: layers.at(-1), auto: Boolean(auto), updatedBy };
-  }, [key, place]);
+  }, [key]);
 }
 
-/** Whether the toolbar's Back has somewhere to go. */
-export const useCanGoBack = () =>
-  useRouterState({ select: (state) => (state.location.state.trail?.length ?? 0) > 0 });
+/** The work item whose layer is in the panel's stack, nearest the top: what a file or session there serves. */
+export function useWorkInPanel(): string | undefined {
+  const { layers } = useLayers();
+  for (const layer of layers.toReversed()) {
+    if (layer.kind === "browser") return layer.workId;
+    const parsed = parseRef(layer.ref);
+    if (parsed?.app === "work" && parsed.kind === "item") return parsed.id;
+  }
+  return undefined;
+}
 
 /** The address of a place, for links and navigation. */
 export function routeOf(business: string, place: Place) {
@@ -219,8 +217,6 @@ export function routeOf(business: string, place: Place) {
         to: "/$business/project/$project",
         params: { business, project: place.id },
       } as const;
-    case "thread":
-      return { to: "/$business/thread/$work", params: { business, work: place.workId } } as const;
   }
 }
 
@@ -236,18 +232,15 @@ function makeNav(router: Router) {
     return {
       business: params.business ?? "",
       place,
-      layers: layersOf(searchIn(state), place),
+      layers: layersOf(searchIn(state)),
       history: state.location.state,
     };
   };
-  const go = (
-    place: Place,
-    options: { trail?: Place[]; business?: string; replace?: boolean; layers?: Layer[] } = {},
-  ) =>
+  const go = (place: Place, options: { business?: string; replace?: boolean } = {}) =>
     void router.navigate({
       ...routeOf(options.business ?? now().business, place),
-      search: (options.layers ? searchOf(options.layers) : {}) as never,
-      state: options.trail?.length ? { trail: options.trail } : {},
+      search: {} as never,
+      state: {},
       ...(options.replace ? { replace: true } : {}),
     } as never);
   /** Changes the stack over the current place, keeping how the owner got there. */
@@ -260,7 +253,6 @@ function makeNav(router: Router) {
       to: ".",
       search: searchOf(layers) as never,
       state: {
-        ...(history.trail ? { trail: history.trail } : {}),
         ...(history.behind ? { behind: history.behind } : {}),
         ...(options.auto ? { auto: true } : {}),
         ...(options.updatedBy ? { updatedBy: options.updatedBy } : {}),
@@ -274,41 +266,35 @@ function makeNav(router: Router) {
       ui.leftPlace();
       go({ kind: "home" }, { business: id });
     },
-    /** Goes to a place from the sidebar: the layers close, Back starts over. */
+    /** Goes to a place from the sidebar: the layers close. */
     selectPlace: (place: Place) => {
       ui.leftPlace();
       go(place);
     },
     /** Opens the DM with an employee. */
     message: (employeeId: string) => nav.selectPlace({ kind: "direct", employeeId }),
-    /** Moves into a work item's thread; Back returns to where the owner was. */
-    openThread: (workId: string) => {
-      const { place, history } = now();
-      if (place.kind === "thread" && place.workId === workId) return;
-      go({ kind: "thread", workId }, { trail: [...(history.trail ?? []), place] });
-    },
-    /** Opens a work item's live browser beside its thread, from wherever the owner is. */
-    openBrowser: (workId: string) => {
-      const { place, history } = now();
-      if (place.kind === "thread" && place.workId === workId)
-        return nav.openLayer({ kind: "browser", workId });
+    /**
+     * Opens a work item beside the conversation on screen, whichever it is: its own stack, so
+     * the panel shows it alone; opening the one already on top does nothing.
+     */
+    openWork: (workId: string) => {
       ui.openedLayer();
-      go(
-        { kind: "thread", workId },
-        { trail: [...(history.trail ?? []), place], layers: [{ kind: "browser", workId }] },
-      );
+      const { layers } = now();
+      const work = workLayer(workId);
+      if (JSON.stringify(layers.at(-1)) === JSON.stringify(work)) return;
+      setLayers([work]);
     },
-    back: () => {
-      const trail = now().history.trail ?? [];
-      const previous = trail.at(-1);
-      if (previous) go(previous, { trail: trail.slice(0, -1) });
+    /** Opens a work item's live browser over the work, so closing it returns to the work. */
+    openBrowser: (workId: string) => {
+      ui.openedLayer();
+      setLayers([workLayer(workId), { kind: "browser", workId }]);
     },
-    /** Stacks a layer; the browser starts a new stack, and opening what is on top does nothing. */
+    /** Stacks a layer; opening what is on top does nothing. */
     openLayer: (layer: Layer) => {
       ui.openedLayer();
       const { layers } = now();
       if (JSON.stringify(layers.at(-1)) === JSON.stringify(layer)) return;
-      setLayers(layer.kind === "browser" ? [layer] : [...layers, layer]);
+      setLayers([...layers, layer]);
     },
     /** Replaces the top layer, as stepping through a page's versions does. */
     replaceLayer: (layer: Layer) =>
@@ -344,12 +330,12 @@ function makeNav(router: Router) {
       setLayers([page], { replace: true, auto: true });
     },
     openSettings: (section = "account") => {
-      const { business, place, history } = now();
+      const { business, place } = now();
       void router.navigate({
         to: "/$business/settings/$section",
         params: { business, section },
         search: (current: Record<string, unknown>) => current as never,
-        state: { ...(history.trail ? { trail: history.trail } : {}), behind: place },
+        state: { behind: place },
       });
     },
     setSettingsSection: (section: string) =>

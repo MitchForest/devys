@@ -81,7 +81,7 @@ const matches = (row: Row, query: string) => {
 /**
  * ⌘K, after Grok Bot's: a search field over rows (a face or icon, a title, an optional grey
  * line, a shortcut). Empty, it offers the Chief of Staff, the actions, Settings and everyone
- * else; typing filters those and the threads, pages and files of the current business.
+ * else; typing filters those and the work, pages and files of the current business.
  */
 export function CommandPalette() {
   const paletteOpen = useUi((state) => state.paletteOpen);
@@ -184,11 +184,11 @@ export function CommandPalette() {
         run: openLayer({ kind: "record", ref: ref("documents", "file", entry.path) }),
       })),
     ...work.map((item): Row => ({
-      id: `thread-${item.id}`,
+      id: `work-${item.id}`,
       title: item.title,
-      detail: "Thread",
+      detail: "Work",
       mark: { icon: ListChecks },
-      run: () => nav.openThread(item.id),
+      run: () => nav.openWork(item.id),
     })),
   ];
   const all = [...(chiefOfStaff ? [employeeRow(chiefOfStaff)] : []), ...actions, ...people];

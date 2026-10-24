@@ -35,18 +35,12 @@ extension WorkItemState {
 }
 
 extension Workspace.State {
-    /// A place's title, and in a thread the project above it, so the breadcrumb reads
-    /// "Launch › Fix sitemap".
-    package func title(of place: Place) -> (title: String, parent: (title: String, place: Place)?) {
+    /// A place's title: the employee's (Home is the Chief of Staff's) or the project's name.
+    package func title(of place: Place) -> String {
         switch place {
-        // Home is the Chief of Staff's chat, named for them.
-        case .home: return (chiefOfStaff?.name ?? "Home", nil)
-        case .direct(let id): return (snapshot.employees.first { $0.id == id }?.name ?? "Message", nil)
-        case .project(let id): return (projects.value?.first { $0.id == id }?.name ?? "Project", nil)
-        case .thread(let id):
-            let item = work.value?.first { $0.id == id }
-            let project = item?.projectID.flatMap { projectID in projects.value?.first { $0.id == projectID } }
-            return (item?.title ?? "Thread", project.map { ($0.name, Place.project($0.id)) })
+        case .home: chiefOfStaff?.name ?? "Home"
+        case .direct(let id): snapshot.employees.first { $0.id == id }?.name ?? "Message"
+        case .project(let id): projects.value?.first { $0.id == id }?.name ?? "Project"
         }
     }
 
@@ -131,10 +125,9 @@ extension Workspace.State {
         item.state.isOpen && isMine(item)
     }
 
-    /// The work item of the thread on screen, which a layer opened here belongs to.
-    var threadItem: WorkItem? {
-        guard case .thread(let id) = place else { return nil }
-        return work.value?.first { $0.id == id }
+    /// The work item open beside the conversation, which a layer over it belongs to.
+    var panelItem: WorkItem? {
+        workInPanel.flatMap { id in work.value?.first { $0.id == id } }
     }
 
     /// Who has taken the work item over, as the signed-in person reads it; nil while its

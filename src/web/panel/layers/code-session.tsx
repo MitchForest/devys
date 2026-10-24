@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { lazy, Suspense } from "react";
 import { api } from "../../app/api.ts";
 import { useBusinessId, useWork } from "../../app/data.ts";
-import { usePlace } from "../../app/navigation.ts";
+import { useWorkInPanel } from "../../app/navigation.ts";
 import { keys, problemOf } from "../../app/query.ts";
 import { useSessions } from "../coding.tsx";
 
@@ -20,14 +20,12 @@ const SessionView = lazy(() =>
  */
 export function CodeSessionLayer({ id }: { id: string }) {
   const businessId = useBusinessId();
-  const place = usePlace();
+  const inPanel = useWorkInPanel();
   const coded = useQuery({
     queryKey: keys.codingWork(businessId),
     queryFn: () => api.codingWork(businessId),
   });
-  const workId =
-    coded.data?.sessions.find((session) => session.id === id)?.work_item_id ??
-    (place.kind === "thread" ? place.workId : undefined);
+  const workId = coded.data?.sessions.find((session) => session.id === id)?.work_item_id ?? inPanel;
   if (!workId)
     return (
       <p role={coded.isError ? "alert" : undefined} className="p-4 text-body text-ink-3">

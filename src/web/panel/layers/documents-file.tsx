@@ -72,7 +72,7 @@ type Loaded = { text: string; revision: string } | { bytes: ArrayBuffer; revisio
 
 /**
  * One file from the business's folder, read-only: the owner asks about a selection or comments
- * on it. Opened in the thread of a work item the owner has taken over (`work`), documents,
+ * on it. Opened over a work item the owner has taken over (`work`), documents,
  * sheets and whiteboards edit in place and save over the revision they were read at.
  */
 export function FileView({
@@ -85,7 +85,7 @@ export function FileView({
   file: FileEntry;
   /** The turn it is read at: a finished turn reads it again. */
   turn?: number;
-  /** The work item the owner has taken over, whose thread this file opened in. */
+  /** The work item the owner has taken over, over which this file opened. */
   work?: string | undefined;
 }) {
   const kind = fileKind(file.name);
@@ -380,7 +380,7 @@ function CommentBar({
       api.commentOnFile(businessId, {
         id: crypto.randomUUID(),
         path,
-        // A work item's thread (addressed to its owner) or an employee's DM.
+        // A work item's conversation (addressed to its owner) or an employee's DM.
         ...(to.startsWith("work:") ? { work: to.slice("work:".length) } : { employee: to }),
         comments,
       }),
@@ -449,7 +449,7 @@ function CommentBar({
               </option>
             ))}
             {openWork.length > 0 && (
-              <optgroup label="A work item's thread">
+              <optgroup label="Work">
                 {openWork.map((item) => (
                   <option key={item.id} value={`work:${item.id}`}>
                     {item.title}

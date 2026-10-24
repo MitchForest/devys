@@ -9,7 +9,7 @@ import {
   useWork,
 } from "../app/data.ts";
 import { useRefresh, useStop } from "../app/mutations.ts";
-import { useCanGoBack, useLayers, useNav, usePlace } from "../app/navigation.ts";
+import { useLayers, useNav, usePlace, useWorkInPanel } from "../app/navigation.ts";
 import { ui, uiState, useUi } from "../app/ui.ts";
 import { useStatus, isRunning } from "../app/data.ts";
 import { BusinessPortrait } from "../design/portrait.tsx";
@@ -252,20 +252,20 @@ function BusinessStrip() {
 }
 
 /**
- * The employee of the conversation in view, whom ⌘. stops: Home's Chief of Staff, a direct
- * chat's employee, or the owner of a thread's work.
+ * The employee ⌘. stops: the owner of the work open beside the conversation, else Home's Chief
+ * of Staff or a direct chat's employee.
  */
 function useSpeaking() {
   const place = usePlace();
   const chiefOfStaff = useChiefOfStaff();
   const work = useWork().data;
+  const open = useWorkInPanel();
+  if (open) return work?.find((item) => item.id === open)?.owner_employee_id;
   return place.kind === "home"
     ? chiefOfStaff?.id
     : place.kind === "direct"
       ? place.employeeId
-      : place.kind === "thread"
-        ? work?.find((item) => item.id === place.workId)?.owner_employee_id
-        : undefined;
+      : undefined;
 }
 
 /**
@@ -303,9 +303,6 @@ function Shortcuts({ closePanel }: { closePanel: () => void }) {
       if (event.key === "k" && !event.ctrlKey) {
         event.preventDefault();
         ui.togglePalette();
-      } else if (event.key === "[" && history.state?.trail?.length) {
-        event.preventDefault();
-        nav.back();
       } else if (event.ctrlKey && event.key.toLowerCase() === "s") {
         event.preventDefault();
         ui.toggleSidebar();
@@ -335,7 +332,6 @@ function CompactShell() {
   const business = useBusiness();
   const place = usePlace();
   const { layers } = useLayers();
-  const canGoBack = useCanGoBack();
   // The list shows until the owner opens something from it.
   const [list, setList] = useState(false);
   return (
@@ -358,7 +354,7 @@ function CompactShell() {
               <button
                 type="button"
                 aria-label="Back"
-                onClick={() => (canGoBack ? nav.back() : setList(true))}
+                onClick={() => setList(true)}
                 className="absolute left-3 grid size-8 place-items-center rounded-full text-indigo"
               >
                 <ChevronLeft className="size-5" />

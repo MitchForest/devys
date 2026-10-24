@@ -169,3 +169,10 @@ export async function stubPosting(page: Page, to: () => string[] = () => []) {
   });
   return sent;
 }
+
+/** Opens a work item beside Home, as its URL does: `?layer=devys:work/item/<id>`. */
+export const openWork = (page: Page, business: string, workId: string) =>
+  page.goto(`/${business}?layer=devys:work/item/${workId}`);
+
+/** The work open beside the conversation: its card, conversation and reply field. */
+export const workView = (page: Page) => page.getByTestId("work-view");

@@ -169,8 +169,8 @@ export function useTakeover() {
 
 /**
  * The owner takes the work over (which fences its employee) and the business's own Chrome comes
- * to the front on the Mac; where it can't (no host here), the live browser opens beside the
- * thread. Hand back returns it.
+ * to the front on the Mac; where it can't (no host here), the live browser opens over the work.
+ * Hand back returns it.
  */
 export function useOpenChrome() {
   const nav = useNav();
@@ -283,7 +283,7 @@ export function useSidebarMark() {
   );
 }
 
-/** A work item the owner started: they follow it, and its thread opens. */
+/** A work item the owner started: they follow it, and it opens beside the conversation. */
 export function useCreateWorkItem() {
   const nav = useNav();
   const follow = useFollow();
@@ -291,16 +291,16 @@ export function useCreateWorkItem() {
     settles: workSettles,
     succeeded: (created) => {
       follow.mutate({ workId: created.id, on: true });
-      nav.openThread(created.id);
+      nav.openWork(created.id);
     },
   });
 }
 
 /**
- * Starts a thread on a message: a work item owned by whoever it addressed, in the project it
- * was said in, titled from the message.
+ * Makes a message into work: a work item owned by whoever it addressed, in the project it was
+ * said in, titled from the message; it opens beside the conversation.
  */
-export function useStartThread() {
+export function useMakeWork() {
   const nav = useNav();
   const follow = useFollow();
   return useChange(
@@ -314,11 +314,11 @@ export function useStartThread() {
       });
     },
     {
-      failure: "That thread couldn't be started.",
+      failure: "That work couldn't be started.",
       settles: workSettles,
       succeeded: (created) => {
         follow.mutate({ workId: created.id, on: true });
-        nav.openThread(created.id);
+        nav.openWork(created.id);
       },
     },
   );

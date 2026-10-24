@@ -34,14 +34,14 @@ struct ConversationHeader: View {
     }
 }
 
-/// The face and name of the conversation in a pill; a thread shows its title.
+/// The face and name of the conversation in a pill.
 struct HeaderPill: View {
     let store: StoreOf<Workspace>
     let action: () -> Void
     @State private var hovering = false
 
     var body: some View {
-        let title = store.state.title(of: store.place).title
+        let title = store.state.title(of: store.place)
         let opens = store.state.hasDetails
         Button(action: action) {
             HStack(spacing: 8) {
@@ -78,23 +78,18 @@ struct HeaderPill: View {
                 Portrait(store.state.portrait(for: employee), size: 24, mood: store.state.mood(for: employee), isAnimated: false)
             }
         case .project(let id):
-            BusinessTile(String(store.state.title(of: store.place).title.prefix(1)), tint: store.state.projectTint(id), size: 24)
-        case .thread:
-            Image(systemName: "checklist").font(.system(size: 12, weight: .medium)).foregroundStyle(DevysColors.indigo)
-                .frame(width: 24, height: 24)
-                .accessibilityHidden(true)
+            BusinessTile(String(store.state.title(of: store.place).prefix(1)), tint: store.state.projectTint(id), size: 24)
         }
     }
 }
 
 extension Workspace.State {
     /// The header opens a desk (an employee's chat, Home's is the Chief of Staff's) or a project's
-    /// details; a thread's work is its card.
+    /// details.
     package var hasDetails: Bool {
         switch place {
         case .home: chiefOfStaff != nil
         case .direct, .project: true
-        case .thread: false
         }
     }
 }
@@ -110,7 +105,6 @@ struct PlaceDetails: View {
             if let chief = store.chiefOfStaff { Desk(store: store, employeeID: chief.id, close: close).id(chief.id) }
         case .direct(let id): Desk(store: store, employeeID: id, close: close).id(id)
         case .project(let id): Overview(store: store, projectID: id, close: close).id(id)
-        case .thread: EmptyView()
         }
     }
 }
@@ -129,7 +123,6 @@ private struct ProjectPins: View {
                         if let target = Records.open(ref) {
                             switch target {
                             case .layer(let layer): store.send(.layerOpened(layer))
-                            case .place(.thread(let id)): store.send(.threadOpened(id))
                             case .place(let place): store.send(.placeSelected(place))
                             }
                         }

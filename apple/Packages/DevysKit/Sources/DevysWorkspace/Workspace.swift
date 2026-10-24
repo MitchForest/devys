@@ -28,8 +28,6 @@ package struct Workspace {
         /// The open business and its team.
         package var snapshot = WorkspaceSnapshot.empty
         package var place: Place = .home
-        /// Places the owner came from, for Back (a thread opened from a channel).
-        package var history: [Place] = []
         /// Temporary views in the right panel, the top one last; the panel shows only for them.
         package var layers: [OpenLayer] = []
         /// ⤢: the panel takes everything but the conversation's minimum while a layer is open.
@@ -55,6 +53,9 @@ package struct Workspace {
         package var statuses: [String: EmployeeStatus] = [:]
         /// The conversation in the middle: Home's, a direct chat, a channel or a thread.
         package var main: OpenConversation?
+        /// The conversation of the work open beside it, in the right panel: loaded, polled and read
+        /// as the main one is.
+        package var aside: OpenConversation?
         /// Started conversations' newest message and unread count, by key.
         package var summaries: [String: ConversationSummary] = [:]
         /// The steps behind replies the owner opened, by message id; a finished turn's don't change.
@@ -463,6 +464,7 @@ extension Workspace {
         state.statuses = [:]
         if state.isConversationMode { endConversation(&state) } else if state.voice.isCapturing { cancelCapture(&state) }
         state.main = nil
+        state.aside = nil
         state.summaries = [:]
         state.team.hiring = nil
         state.newWorkItem = nil
@@ -482,7 +484,6 @@ extension Workspace {
         state.artifacts = []
         state.repliesToSpeak = []
         state.place = .home
-        state.history = []
         state.layers = []
         state.isWide = false
         guard !id.isEmpty else { return }

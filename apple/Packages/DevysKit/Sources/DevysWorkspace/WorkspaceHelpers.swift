@@ -31,10 +31,10 @@ extension Workspace {
             switch parts("DEVYS_PLACE") {
             case ("direct", let id)?: state.place = .direct(id)
             case ("project", let id)?: state.place = .project(id)
-            case ("thread", let id)?: state.place = .thread(id)
             default: break
             }
             switch parts("DEVYS_LAYER") {
+            case ("work", let id)?: state.layers = [OpenLayer(.work(id))]
             case ("artifact", let id)?: state.layers = [OpenLayer(.artifact(id))]
             case ("file", let path)?: state.layers = [OpenLayer(.file(path))]
             default: break
@@ -122,8 +122,8 @@ extension Workspace.Action {
     package static func conversationErrorDismissed(_ key: ConversationKey) -> Self { Self(.conversation(.errorDismissed(key))) }
     package static func placeSelected(_ place: Place) -> Self { Self(.place(.selected(place))) }
     package static func message(_ employeeID: String) -> Self { placeSelected(.direct(employeeID)) }
-    package static func threadOpened(_ id: String) -> Self { Self(.place(.threadOpened(id))) }
-    package static var backTapped: Self { Self(.place(.backTapped)) }
+    package static func workOpened(_ id: String) -> Self { Self(.place(.workOpened(id))) }
+    package static func browserOpened(_ workID: String) -> Self { Self(.place(.browserOpened(workID: workID))) }
     package static func layerOpened(_ layer: Layer) -> Self { Self(.place(.layerOpened(layer))) }
     package static func layerReplaced(_ layer: Layer) -> Self { Self(.place(.layerReplaced(layer))) }
     package static var layerPopped: Self { Self(.place(.layerPopped)) }
@@ -132,7 +132,7 @@ extension Workspace.Action {
     package static func narrowChanged(_ isNarrow: Bool) -> Self { Self(.place(.narrowChanged(isNarrow))) }
     package static func referencingSet(_ isOn: Bool) -> Self { Self(.place(.referencingSet(isOn))) }
     package static func askTapped(_ quote: String) -> Self { Self(.place(.askTapped(quote))) }
-    package static func startThreadTapped(_ messageID: String) -> Self { Self(.place(.startThreadTapped(messageID: messageID))) }
+    package static func makeWorkTapped(_ messageID: String) -> Self { Self(.place(.makeWorkTapped(messageID: messageID))) }
     package static func routinePauseTapped(_ id: String) -> Self { Self(.routine(.pauseTapped(routineID: id))) }
     package static func routineResumeTapped(_ id: String) -> Self { Self(.routine(.resumeTapped(routineID: id))) }
     package static var newProjectTapped: Self { Self(.project(.newTapped)) }

@@ -119,25 +119,26 @@ struct PlacesFeatureTests {
         await settle("conversation") { store.main?.key == store.state.mainKey && store.main?.messages.value != nil }
     }
 
-    @Test("Home is the direct chat with the Chief of Staff; a thread remembers where it opened from, and Back returns")
-    func placesAndBack() async {
+    @Test("Home is the direct chat with the Chief of Staff; work opens beside any conversation, with its own conversation open there")
+    func placesAndWork() async {
         let store = await makeStore(PlacesServer())
         await settle("Home's conversation") { store.main?.key == .direct("ops") }
         #expect(store.place == .home)
         store.send(.placeSelected(.project("p1")))
         #expect(store.main?.key == .project("p1"))
-        store.send(.threadOpened("c1"))
-        store.send(.threadOpened("c1"))
-        #expect(store.place == .thread("c1") && store.history == [.project("p1")])
-        #expect(store.main?.key == .work("c1"))
-        store.send(.backTapped)
-        #expect(store.place == .project("p1") && store.history.isEmpty)
-        store.send(.backTapped)
-        #expect(store.place == .project("p1"))
-        // The sidebar starts Back over.
-        store.send(.threadOpened("c1"))
+        store.send(.workOpened("c1"))
+        store.send(.workOpened("c1"))
+        #expect(store.place == .project("p1") && store.layers.map(\.layer) == [.work("c1")])
+        #expect(store.main?.key == .project("p1") && store.aside?.key == .work("c1"))
+        // A page over the work keeps the work's conversation open; closing the panel lets it go.
+        store.send(.layerOpened(.artifact("a1")))
+        #expect(store.aside?.key == .work("c1"))
+        store.send(.layersClosed)
+        #expect(store.aside == nil)
+        // The sidebar closes the work as it moves.
+        store.send(.workOpened("c1"))
         store.send(.placeSelected(.direct("growth")))
-        #expect(store.history.isEmpty && store.main?.key == .direct("growth"))
+        #expect(store.layers.isEmpty && store.aside == nil && store.main?.key == .direct("growth"))
     }
 
     @Test("Layers stack in the right panel: ‹ goes back one, × closes them all, a new place closes them")
@@ -156,9 +157,10 @@ struct PlacesFeatureTests {
         #expect(store.state.isWideShown)
         store.send(.layersClosed)
         #expect(store.layers.isEmpty && !store.isWide && !store.state.isWideShown)
-        store.send(.layerOpened(.browser(workID: "c1")))
-        store.send(.threadOpened("c1"))
-        #expect(store.layers.isEmpty)
+        store.send(.browserOpened("c1"))
+        store.send(.layerPopped)
+        #expect(store.layers.map(\.layer) == [.work("c1")], "closing the browser returns to the work")
+        store.send(.layersClosed)
         // The panel is there only for layers.
         store.send(.layerOpened(.session(workID: "c1", sessionID: "s1")))
         #expect(store.state.isPanelOpen)
@@ -223,8 +225,8 @@ struct PlacesFeatureTests {
         #expect(store.main?.draft == "> line one\n> line two\n\n")
     }
 
-    @Test("Start a thread: owned by whoever the message addressed, in the project it was said in, and it opens")
-    func startThread() async {
+    @Test("Make it work: owned by whoever the message addressed, in the project it was said in, and it opens beside the channel")
+    func makeWork() async {
         let server = PlacesServer()
         let fromGrowth = await server.add(.project("p1"), "employee:growth", "The sitemap drops /blog.\n\nNeeds a fix.")
         let mentioning = await server.add(.project("p1"), "person:person-preview", "@Engineering can you check deploys?", mentions: ["engineering"])
@@ -232,21 +234,17 @@ struct PlacesFeatureTests {
         let store = await makeStore(server)
         await open(.project("p1"), in: store)
 
-        store.send(.startThreadTapped(fromGrowth.id))
-        await settle("thread from an employee's message") { store.place == .thread("c2") }
-        #expect(store.history == [.project("p1")])
+        store.send(.makeWorkTapped(fromGrowth.id))
+        await settle("work from an employee's message") { store.state.topLayer == .work("c2") }
+        #expect(store.place == .project("p1") && store.main?.key == .project("p1"))
         #expect(await server.newItems.last == NewWorkItem(title: "The sitemap drops /blog.", owner: "growth", objective: "The sitemap drops /blog.\n\nNeeds a fix.", projectID: "p1"))
 
-        store.send(.backTapped)
-        await settle("the channel") { store.main?.key == .project("p1") && store.main?.messages.value != nil }
-        store.send(.startThreadTapped(mentioning.id))
-        await settle("thread for the mentioned") { await server.newItems.count == 2 }
+        store.send(.makeWorkTapped(mentioning.id))
+        await settle("work for the mentioned") { await server.newItems.count == 2 }
         #expect(await server.newItems.last?.owner == "engineering")
 
-        store.send(.backTapped)
-        await settle("the channel again") { store.main?.key == .project("p1") && store.main?.messages.value != nil }
-        store.send(.startThreadTapped(plain.id))
-        await settle("thread for who answers here") { await server.newItems.count == 3 }
+        store.send(.makeWorkTapped(plain.id))
+        await settle("work for who answers here") { await server.newItems.count == 3 }
         // Nobody addressed: who answers in the channel (its lead), titled from its words.
         #expect(await server.newItems.last == NewWorkItem(title: "Decide pricing", owner: "growth", objective: "Decide pricing", projectID: "p1"))
     }

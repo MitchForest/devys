@@ -18,13 +18,14 @@ import { useRef, useState, type ComponentType, type ReactNode } from "react";
 import { ref, type RecordKind, type Ref } from "../../../protocol/ref.ts";
 import { useBusinessId, usePerson, useProjects, useWork } from "../../app/data.ts";
 import { isOpen } from "../../app/names.ts";
-import { useNav, usePlace, type Layer } from "../../app/navigation.ts";
+import { useNav, useWorkInPanel, type Layer } from "../../app/navigation.ts";
 import { useUi } from "../../app/ui.ts";
 import { useAsk } from "../../app/workspace.tsx";
 import { EmptyNote } from "../../design/primitives.tsx";
 import { ProjectSummary } from "../overview.tsx";
 import { RoutineLayer } from "../routines.tsx";
-import { WorkCard } from "../work-card.tsx";
+import { WorkChip } from "../work-card.tsx";
+import { WorkView } from "../work-view.tsx";
 import { BrowserLayer } from "./browser.tsx";
 import { CodeSessionLayer } from "./code-session.tsx";
 import { ArtifactLayer } from "./documents-artifact.tsx";
@@ -67,7 +68,8 @@ export const records: Record<RecordKind, RecordView> = {
   "work/item": {
     icon: ListChecks,
     keepable: false,
-    Layer: WorkItemLayer,
+    Layer: WorkView,
+    Card: WorkChip,
   },
   "work/project": {
     icon: FolderKanban,
@@ -118,15 +120,15 @@ export function LayerView({ layer }: { layer: Layer }) {
 }
 
 /**
- * A file as a layer. In the thread of a work item the owner has taken over it is editable and
- * saves for that work item; a finished turn reads it again (an employee may have changed it).
+ * A file as a layer. Over a work item the owner has taken over it is editable and saves for that
+ * work item; a finished turn reads it again (an employee may have changed it).
  */
 function FileLayer({ id }: { id: string }) {
   const businessId = useBusinessId();
   const turns = useUi((state) => state.turns);
-  const place = usePlace();
+  const workId = useWorkInPanel();
   const person = usePerson();
-  const item = useWork().data?.find((w) => place.kind === "thread" && w.id === place.workId);
+  const item = useWork().data?.find((w) => w.id === workId);
   const handEditing =
     item && person && item.taken_over_by === person.id && isOpen(item.state) ? item.id : undefined;
   return (
@@ -137,15 +139,6 @@ function FileLayer({ id }: { id: string }) {
       work={handEditing}
       file={{ name: fileName(id), path: id, kind: "file", size: 0 }}
     />
-  );
-}
-
-/** A work item as a layer is its card, which opens its thread. */
-function WorkItemLayer({ id }: { id: string }) {
-  return (
-    <div className="h-full overflow-y-auto px-4 pt-3.5 pb-6">
-      <WorkCard id={id} inThread={false} />
-    </div>
   );
 }
 

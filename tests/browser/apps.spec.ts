@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { localStores } from "../fixtures/local.ts";
-import { bearer, sidebar, signIn } from "./helpers.ts";
+import { bearer, openWork, sidebar, signIn, workView } from "./helpers.ts";
 
 // LP6: a remote app an employee asks the owner to connect. The owner sees the ask on the work's
 // card (logo, name, Connect), then its one review (on its own, asks first, never, who uses it),
@@ -45,12 +45,12 @@ test("a connect request is the work card's one ask; the review turns the app on"
   );
   try {
     await signIn(page, sql, owner.person);
-    // Home counts it; the thread's card asks it, with the app's name and Connect.
+    // Home counts it; the work's card asks it, with the app's name and Connect.
     await expect(sidebar(page).getByRole("link", { name: /^Chief of Staff/ })).toHaveAccessibleName(
       "Chief of Staff, 1",
     );
-    await page.goto(`/${owner.business}/thread/${work.id}`);
-    const card = page.getByTestId("work-card");
+    await openWork(page, owner.business, work.id);
+    const card = workView(page).getByTestId("work-card");
     await expect(card.getByTestId("work-state")).toHaveText("Your turn: Connect Ledger");
     await expect(card.getByRole("button", { name: "Connect" })).toBeVisible();
     await expect(card.getByRole("button", { name: "Approve" })).toHaveCount(0);

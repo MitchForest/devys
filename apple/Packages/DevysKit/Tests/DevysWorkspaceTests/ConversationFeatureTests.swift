@@ -340,7 +340,7 @@ struct ConversationFeatureTests {
         await settle("waiting on the author") { store.main?.awaiting == ["growth"] }
     }
 
-    @Test("A work item's card moves the middle into its thread under the project; Back returns to the channel")
+    @Test("A work item's line opens it beside the channel: its own conversation is read and answered there")
     func workCard() async throws {
         let server = ConversationServer()
         await server.add(.project("p1"), "system", "Write a tagline", kind: .card, ref: .workItem("c1"))
@@ -351,22 +351,19 @@ struct ConversationFeatureTests {
         let card = try #require(timeline.items.compactMap { if case .event(let event) = $0 { event } else { nil } }.first)
         let ref = try #require(card.ref)
         #expect(ref == .workItem("c1"))
-        store.send(.threadOpened(ref.id))
-        #expect(store.place == .thread("c1"))
-        #expect(store.history == [.project("p1")])
-        #expect(store.state.title(of: store.place).title == "Write a tagline")
-        #expect(store.state.title(of: store.place).parent?.place == .project("p1"))
-        await settle("work thread") { store.main?.key == .work("c1") && store.main?.messages.value?.count == 1 }
-        #expect(!store.state.isPanelOpen, "the thread's card is pinned above its composer, not in the panel")
+        store.send(.workOpened(ref.id))
+        #expect(store.place == .project("p1") && store.state.isPanelOpen)
+        #expect(store.state.reference(for: .work("c1")).title == "Write a tagline")
+        await settle("the work's conversation") { store.aside?.key == .work("c1") && store.aside?.messages.value?.count == 1 }
+        #expect(store.main?.key == .project("p1"), "the channel stays in the middle")
         store.send(.draftChanged(.work("c1"), "Make them shorter"))
         store.send(.sendTapped(.work("c1")))
-        await settle("posted to the work thread") { await server.posts.count == 1 }
+        await settle("posted to the work") { await server.posts.count == 1 }
         #expect(await server.posts.first?.key == "work:c1")
-        #expect(store.main?.draft.isEmpty == true)
-        store.send(.backTapped)
-        #expect(store.place == .project("p1"))
-        #expect(store.history.isEmpty)
-        #expect(store.main?.key == .project("p1"))
+        #expect(await server.posts.first?.message.ref == nil, "a reply in the work's own conversation doesn't carry the work as what's viewed")
+        #expect(store.aside?.draft.isEmpty == true)
+        store.send(.layersClosed)
+        #expect(store.aside == nil && store.main?.key == .project("p1"))
     }
 
     @Test("Unread counts come from the server and clear while the conversation is on screen")

@@ -12,7 +12,7 @@ extension EmployeeStatus {
 
 extension Workspace.State {
     package func conversation(_ key: ConversationKey) -> OpenConversation? {
-        main?.key == key ? main : nil
+        main?.key == key ? main : aside?.key == key ? aside : nil
     }
 
     package func unread(_ key: ConversationKey) -> Int { summaries[key.rawValue]?.unread ?? 0 }
@@ -113,14 +113,7 @@ extension Workspace {
         case .draftChanged, .mentionPicked, .responderPicked, .replyTapped, .replyCancelled, .errorDismissed:
             reduceDraft(intent, state: &state)
         case .sendTapped(let key):
-            guard let open = state.conversation(key), !open.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-            if state.voice.mode == .dictation { cancelCapture(&state) }
-            // The record the owner is looking at goes with the message as its ref, so "this" means
-            // what is on screen.
-            // An attached business file goes as the ref instead of what is on screen.
-            send(open.draft, viaVoice: open.draftUsedVoice, ref: open.attachment ?? state.reference?.ref, in: key, state: &state)
-            update(key, &state) { $0.attachment = nil }
-            state.isReferencing = false
+            sendDraft(in: key, state: &state)
         case .answerPicked, .answersDone, .somethingElseTapped, .attachmentSet, .uploadChosen, .uploadFailed:
             reduceQuestion(intent, state: &state)
         case .posted(let key, let clientID, let message):
@@ -167,11 +160,25 @@ extension Workspace {
         }
     }
 
+    /// Sends a conversation's draft. The record the owner is looking at goes with a message in the
+    /// middle as its ref, so "this" means what is on screen; the work's own conversation beside it
+    /// needs none. An attached business file goes as the ref instead of what is on screen.
+    func sendDraft(in key: ConversationKey, state: inout State) {
+        guard let open = state.conversation(key), !open.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        if state.voice.mode == .dictation { cancelCapture(&state) }
+        let isMain = key == state.main?.key
+        send(open.draft, viaVoice: open.draftUsedVoice, ref: open.attachment ?? (isMain ? state.reference?.ref : nil), in: key, state: &state)
+        update(key, &state) { $0.attachment = nil }
+        if isMain { state.isReferencing = false }
+    }
+
     /// What's open and already seen stays read, whatever an older count says.
     func loadedSummaries(_ summaries: [ConversationSummary], state: inout State) {
         state.summaries = Dictionary(summaries.map { ($0.key, $0) }) { first, _ in first }
-        guard let open = state.main, let seen = state.summaries[open.key.rawValue], seen.last?.createdAt == open.readAt else { return }
-        state.summaries[open.key.rawValue] = seen.with(unread: 0)
+        for open in [state.main, state.aside].compactMap(\.self) {
+            guard let seen = state.summaries[open.key.rawValue], seen.last?.createdAt == open.readAt else { continue }
+            state.summaries[open.key.rawValue] = seen.with(unread: 0)
+        }
     }
 
     /// A question card's answers: one sends at once (replying to its message, so its author
@@ -294,6 +301,10 @@ extension Workspace {
     }
 
     func update(_ key: ConversationKey, _ state: inout State, _ change: (inout OpenConversation) -> Void) {
+        if var open = state.aside, open.key == key {
+            change(&open)
+            state.aside = open
+        }
         if var open = state.main, open.key == key {
             change(&open)
             state.main = open
@@ -328,6 +339,7 @@ extension Workspace {
     func refreshConversations(_ state: State) {
         loadSummaries(state)
         if let key = state.main?.key { loadPage(key, state: state) }
+        if let key = state.aside?.key { loadPage(key, state: state) }
     }
 
     /// The conversation list: loaded from the server, or a work thread followed or not.

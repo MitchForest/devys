@@ -207,8 +207,8 @@ struct TeamFeatureTests {
         draft.objective = "acme.example or similar"
         store.send(.workItemEdited(draft))
         store.send(.workItemConfirmed)
-        await settle("created", until: { store.newWorkItem == nil && store.place == .thread("c2") })
-        #expect(store.history == [.project("p1")])
+        await settle("created", until: { store.newWorkItem == nil && store.state.topLayer == .work("c2") })
+        #expect(store.place == .project("p1"))
         #expect(store.work.value?.last?.projectID == "p1")
         let newItem = await server.newItems.first
         #expect(newItem == NewWorkItem(title: "Book the domain", owner: "ops", objective: "acme.example or similar", projectID: "p1"))

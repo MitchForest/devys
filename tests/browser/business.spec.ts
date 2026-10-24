@@ -1,9 +1,9 @@
 import { test, expect } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { localStores } from "../fixtures/local.ts";
-import { insertMessage, openSettings, sidebar, signIn } from "./helpers.ts";
+import { insertMessage, openSettings, sidebar, signIn, workView } from "./helpers.ts";
 
-test("Home asks once, inline, and approves an exact request; new work opens its thread with its card pinned", async ({
+test("Home asks once, inline, and approves an exact request; a message made into work opens beside the chat", async ({
   page,
 }) => {
   const stores = await localStores();
@@ -47,19 +47,20 @@ test("Home asks once, inline, and approves an exact request; new work opens its 
       )
       .toBe("approved");
 
-    // Start a thread on a message: the work item's thread opens with its card above the reply.
+    // Make a message into work: it opens beside the chat, which stays where it was.
     await insertMessage(sql, owner.business, `direct:${owner.chiefOfStaff}`, {
       author: `employee:${owner.chiefOfStaff}`,
       text: "Draft the PR inquiry",
     });
     await page.getByText("Draft the PR inquiry").click({ button: "right", timeout: 15_000 });
-    await page.getByRole("menuitem", { name: "Start a thread" }).click();
-    await expect(page.getByTestId("place-title")).toHaveText("Draft the PR inquiry");
-    const card = page.getByTestId("work-card");
+    await page.getByRole("menuitem", { name: "Make it work" }).click();
+    await expect(page.getByTestId("place-title")).toHaveText("Chief of Staff");
+    const card = workView(page).getByTestId("work-card");
     await expect(card.getByText("Chief of Staff", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("work-row")).toHaveAccessibleName(/^Draft the PR inquiry, /);
 
     // Right-click takes the work over, which fences its employee; the card says the owner has it.
-    await card.getByText("Draft the PR inquiry").click({ button: "right" });
+    await card.getByText("Chief of Staff", { exact: true }).click({ button: "right" });
     await page.getByRole("menuitem", { name: "Take over" }).click();
     await expect(card.getByTestId("work-state")).toHaveText("You have it");
     expect(

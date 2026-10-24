@@ -6,11 +6,12 @@ import Foundation
 // MARK: - Places, the right panel and its layers
 
 package enum PlaceIntent {
-    /// From the sidebar or ⌘K: the layers close and Back starts over.
+    /// From the sidebar or ⌘K: the layers close.
     case selected(Place)
-    /// Moves into a work item's thread; Back returns to where the owner was.
-    case threadOpened(String)
-    case backTapped
+    /// Opens a work item beside the conversation on screen, whichever it is: its own stack.
+    case workOpened(String)
+    /// Opens a work item's live browser over the work, so closing it returns to the work.
+    case browserOpened(workID: String)
     /// Stacks a layer over the right panel; opening what is already on top does nothing.
     case layerOpened(Layer)
     /// Replaces the top layer, as a page's earlier version does.
@@ -26,9 +27,9 @@ package enum PlaceIntent {
     case referencingSet(Bool)
     /// Quotes a selection from a layer into the draft: the owner edits by asking.
     case askTapped(String)
-    /// Starts a thread on a message in the conversation on screen.
-    case startThreadTapped(messageID: String)
-    case threadCreated(WorkItem)
+    /// Makes a message in the conversation on screen into work.
+    case makeWorkTapped(messageID: String)
+    case workCreated(WorkItem)
 }
 
 extension Workspace.State {
@@ -50,6 +51,7 @@ extension Workspace.State {
     /// What a layer is, in words, for its header and the reference sent with a message.
     package func reference(for layer: Layer) -> LayerReference {
         let title = switch layer {
+        case .work(let id): work.value?.first { $0.id == id }?.title ?? "Work"
         case .artifact(let id, _): artifactName(id)
         case .file(let path): (path as NSString).lastPathComponent
         case .session: "Coding session"
@@ -70,13 +72,22 @@ extension Workspace.State {
         apps.value?.first { $0.id == id }?.name ?? id.prefix(1).uppercased() + id.dropFirst()
     }
 
-    /// The project a new thread belongs to: the channel's, or the open thread's.
+    /// The project new work made from a message belongs to: the channel's.
     var currentProjectID: String? {
-        switch place {
-        case .project(let id): id
-        case .thread(let id): work.value?.first { $0.id == id }?.projectID
-        case .home, .direct: nil
+        if case .project(let id) = place { id } else { nil }
+    }
+
+    /// The work item whose layer is in the panel's stack, nearest the top: what a browser, file or
+    /// session over it serves, and whose conversation is open beside the main one.
+    package var workInPanel: String? {
+        for open in layers.reversed() {
+            switch open.layer {
+            case .work(let id), .browser(let id): return id
+            case .session(let id, _): return id
+            default: continue
+            }
         }
+        return nil
     }
 }
 
@@ -84,19 +95,15 @@ extension Workspace {
     func reducePlace(_ intent: PlaceIntent, state: inout State) {
         switch intent {
         case .selected(let place):
-            state.history = []
             state.layers = []
             state.isWide = false
             go(to: place, state: &state)
-        case .threadOpened(let id):
-            guard state.place != .thread(id) else { return }
-            state.history.append(state.place)
-            state.layers = []
-            go(to: .thread(id), state: &state)
-        case .backTapped:
-            guard let previous = state.history.popLast() else { return }
-            state.layers = []
-            go(to: previous, state: &state)
+        case .workOpened(let id), .layerOpened(.work(let id)):
+            state.isReferencing = true
+            if state.topLayer != .work(id) { state.layers = [OpenLayer(.work(id))] }
+        case .browserOpened(let workID):
+            state.isReferencing = true
+            state.layers = [OpenLayer(.work(workID)), OpenLayer(.browser(workID: workID))]
         case .layerOpened(let layer):
             state.isReferencing = true
             if state.topLayer != layer { state.layers.append(OpenLayer(layer)) }
@@ -118,11 +125,20 @@ extension Workspace {
             guard let key = state.main?.key else { return }
             let lines = quote.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: "\n", omittingEmptySubsequences: false).prefix(12)
             update(key, &state) { $0.draft = lines.map { "> \($0)" }.joined(separator: "\n") + "\n\n" + $0.draft }
-        case .startThreadTapped(let messageID):
-            startThread(on: messageID, state: &state)
-        case .threadCreated(let item):
-            reducePlace(.threadOpened(item.id), state: &state)
+        case .makeWorkTapped(let messageID):
+            makeWork(of: messageID, state: &state)
+        case .workCreated(let item):
+            reducePlace(.workOpened(item.id), state: &state)
         }
+        syncAside(&state)
+    }
+
+    /// The work open beside the conversation keeps its own conversation open while it is there.
+    func syncAside(_ state: inout State) {
+        let key = state.workInPanel.map(ConversationKey.work)
+        guard key != state.aside?.key else { return }
+        state.aside = key.map(OpenConversation.init)
+        if let key { loadPage(key, state: state) }
     }
 
     func go(to place: Place, state: inout State) {
@@ -144,11 +160,12 @@ extension Workspace {
         } else if state.layers.last?.auto ?? true {
             state.layers = [OpenLayer(.artifact(id), auto: true)]
         }
+        syncAside(&state)
     }
 
-    /// A thread on a message is a work item owned by whoever it addressed (its author, else who
-    /// it mentions, else who answers here), in the project it was said in, titled from it.
-    func startThread(on messageID: String, state: inout State) {
+    /// Work made from a message is owned by whoever it addressed (its author, else who it
+    /// mentions, else who answers here), in the project it was said in, titled from it.
+    func makeWork(of messageID: String, state: inout State) {
         guard let open = state.main, let message = open.message(messageID), !state.businessID.isEmpty else { return }
         let owner = message.employeeID ?? message.mentions.first ?? state.recipients(in: open.key).first ?? state.chiefOfStaff?.id
         guard let owner else { return }
@@ -166,11 +183,11 @@ extension Workspace {
             do {
                 created = try await runtime.createWorkItem(businessID, newItem)
             } catch {
-                try store.send(Action(.stopFinished("That thread couldn't be started.")))
+                try store.send(Action(.stopFinished("That work couldn't be started.")))
                 return
             }
             try await reloadWork(runtime, businessID)
-            try store.send(Action(.place(.threadCreated(created))))
+            try store.send(Action(.place(.workCreated(created))))
         }
     }
 }

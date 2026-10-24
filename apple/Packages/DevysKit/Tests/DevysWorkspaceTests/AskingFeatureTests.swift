@@ -223,13 +223,13 @@ struct AskingFeatureTests {
             #expect(store.place == .home && store.layers.isEmpty, "the Mac's in-app browser is only a preview; the owner works in Chrome")
         }
     #else
-        @Test("Take over on a take-over request takes the work over and opens its live browser beside the thread")
+        @Test("Take over on a take-over request takes the work over and opens its live browser over the work")
         func takesOver() async {
             let server = AskServer(home: Home(needsYou: [NeedsYouItem(signIn, title: "Register the domain")]))
             let store = makeStore(server)
             await settle("home", until: { store.home.value?.needsYou.first?.kind == .takeOver })
             store.send(.takeOverTapped("c1"))
-            #expect(store.place == .thread("c1") && store.state.topLayer == .browser(workID: "c1"))
+            #expect(store.place == .home && store.layers.map(\.layer) == [.work("c1"), .browser(workID: "c1")])
             for _ in 0..<2_000 where await server.takeovers.isEmpty { await Task.yield() }
             let takeovers = await server.takeovers
             #expect(takeovers.count == 1 && takeovers.first?.0 == "c1" && takeovers.first?.1 == true)

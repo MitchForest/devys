@@ -82,9 +82,7 @@ struct CompactShell: View {
             ToolbarItem(placement: .topBarTrailing) { NewMenu(store: store) }
         } else {
             ToolbarItem(placement: .topBarLeading) {
-                Button("Back", systemImage: "chevron.left") {
-                    if store.history.isEmpty { showsList = true } else { store.send(.backTapped) }
-                }
+                Button("Back", systemImage: "chevron.left") { showsList = true }
             }
             ToolbarItem(placement: .principal) {
                 HeaderPill(store: store) { showsDetails = true }

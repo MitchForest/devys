@@ -11,6 +11,8 @@ struct LayerView: View {
 
     var body: some View {
         switch layer {
+        case .work(let id):
+            WorkLayer(store: store, workID: id)
         case .artifact(let id, let updatedBy):
             ArtifactLayer(store: store, artifactID: id, updatedBy: updatedBy)
         case .file(let path):
@@ -83,6 +85,57 @@ extension FileKind {
         case .whiteboard: "scribble"
         case .text: "chevron.left.forwardslash.chevron.right"
         case .other: "doc"
+        }
+    }
+}
+
+/// A work item beside the conversation, whichever it is: its card (the plan, what its employee is
+/// doing now, the one thing asked of the owner, the results), then what was said about it, and a
+/// field to reply to whoever is on it.
+private struct WorkLayer: View {
+    let store: StoreOf<Workspace>
+    let workID: String
+    @FocusState private var focused: Bool
+
+    private var key: ConversationKey { .work(workID) }
+
+    var body: some View {
+        let owner = store.work.value?.first { $0.id == workID }.map { store.state.employeeName($0.ownerEmployeeID) }
+        VStack(spacing: 0) {
+            WorkProgressCard(store: store, workItemID: workID)
+            ScrollView {
+                ConversationMessages(store: store, key: key)
+                    .padding(.horizontal, DevysSpacing.regular)
+                    .padding(.vertical, 12)
+            }
+            .defaultScrollAnchor(.bottom, for: .initialOffset)
+            .defaultScrollAnchor(.bottom, for: .sizeChanges)
+            HStack(alignment: .bottom, spacing: 8) {
+                TextField(
+                    "Reply to \(owner ?? "them")",
+                    text: Binding(get: { store.state.conversation(key)?.draft ?? "" }, set: { store.send(.draftChanged(key, $0)) }),
+                    axis: .vertical
+                )
+                .textFieldStyle(.plain)
+                .font(DevysTypography.body)
+                .lineLimit(1...6)
+                .focused($focused)
+                .onSubmit { store.send(.sendTapped(key)) }
+                .padding(.vertical, 6)
+                Button("Send", systemImage: "arrow.up") { store.send(.sendTapped(key)) }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 26, height: 26)
+                    .background(DevysColors.indigo, in: Circle())
+                    .disabled((store.state.conversation(key)?.draft ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .padding(.leading, 14)
+            .padding(.trailing, 6)
+            .padding(.vertical, 5)
+            .background(DevysColors.well, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .padding(10)
         }
     }
 }

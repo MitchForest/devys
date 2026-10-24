@@ -6,7 +6,7 @@
 import type { Ref } from "../../protocol/ref.ts";
 import { createStore, useStore } from "./store.ts";
 
-export type PlaceKind = "home" | "direct" | "project" | "thread";
+export type PlaceKind = "home" | "direct" | "project";
 
 /** Opening "New work item" from a project or an employee fills in what it can. */
 export interface WorkItemDefaults {

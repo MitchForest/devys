@@ -53,7 +53,7 @@ function useWorkChanges() {
 /**
  * What the owner can do to a work item from a row: take it over or hand it back. Changing it by
  * hand (marking it, cancelling, reopening) is for work they have taken over, which fences its
- * employee; otherwise they ask in its thread (owner decision 2026-10-21).
+ * employee; otherwise they ask in its conversation (owner decision 2026-10-21).
  */
 function WorkActions({ item, extra }: { item: WorkItem; extra?: ReactNode }) {
   const actions = useWorkChanges();
@@ -137,7 +137,7 @@ export function WithWorkActions({
   );
 }
 
-/** One work item: what, who, what's next and its state. Click to open its thread. */
+/** One work item: what, who, what's next and its state. Click to open it beside the conversation. */
 export function WorkRow({
   item,
   extra,
@@ -168,7 +168,7 @@ export function WorkRow({
     <WithWorkActions item={item} extra={extra}>
       <button
         type="button"
-        onClick={() => nav.openThread(item.id)}
+        onClick={() => nav.openWork(item.id)}
         className={
           compact
             ? "-mx-2 flex w-[calc(100%+16px)] items-center gap-2.5 rounded-small px-2 py-1.5 text-left transition-colors duration-150 hover:bg-sheet-tint"

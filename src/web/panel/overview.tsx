@@ -22,7 +22,7 @@ const groups = [
 
 /**
  * A channel's permanent view: what the project is for and by when, who is on it, its work by
- * status and the records it keeps. Everything opens a thread or a layer; the project itself is
+ * status and the records it keeps. Everything opens beside the conversation; the project itself is
  * changed by asking in its channel.
  */
 export function Overview({ projectId, close }: { projectId: string; close: () => void }) {
@@ -139,7 +139,7 @@ export function ProjectSummary({ project }: { project: Project }) {
             onClick={() => ui.newWorkItem({ projectId: project.id })}
             className="text-caption text-ink-3 hover:text-ink-2"
           >
-            <Plus className="inline size-3" /> Thread
+            <Plus className="inline size-3" /> Work
           </button>
         }
       >

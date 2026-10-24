@@ -143,13 +143,12 @@ function useDriven(workId: string) {
 }
 
 /**
- * A work item, as one live card drawn from the item as it is now: its title, who is on it,
- * the plan with the current step, its results, and one line of state with its one action.
- * In its thread it is pinned above the composer; anywhere else it opens the thread.
+ * A work item, drawn from the item as it is now: who is on it, the plan with the current step,
+ * its results, and one line of state with its one action. It heads the work's view beside the
+ * conversation, whose header names it.
  */
-export function WorkCard({ id, text, inThread }: { id: string; text?: string; inThread: boolean }) {
+export function WorkCard({ id }: { id: string }) {
   const item = useWork().data?.find((w) => w.id === id);
-  const nav = useNav();
   const owner = useEmployees().find((e) => e.id === item?.owner_employee_id);
   const run = useStatus(item?.owner_employee_id).data?.run;
   const stop = useStop();
@@ -161,49 +160,21 @@ export function WorkCard({ id, text, inThread }: { id: string; text?: string; in
   const done = item?.steps.filter((step) => step.state === "done").length ?? 0;
   const total = item?.steps.length ?? 0;
   const step = total ? `Step ${Math.min(done + 1, total)} of ${total}` : undefined;
-  const frame = cn(
-    "flex w-full flex-col gap-2.5 rounded-card border border-hairline bg-sheet px-3.5 py-3 text-left shadow-resting",
-    !inThread &&
-      "mx-auto max-w-[520px] cursor-pointer transition-colors duration-150 hover:bg-sheet-tint",
-  );
+  const frame = "flex w-full flex-col gap-2.5 border-b border-hairline px-4 pt-1 pb-3.5 text-left";
   if (!item)
     return (
       <div data-testid="work-card" className={frame}>
-        <span className="truncate text-body font-semibold text-ink">{text ?? "Work"}</span>
+        <span className="text-body text-ink-3">This work is no longer here.</span>
       </div>
     );
-  const open = () => nav.openThread(id);
   // Right-click (or long-press) to take it over, hand it back, or mark it by hand.
   return (
     <WithWorkActions item={item}>
-      <div
-        data-testid="work-card"
-        className={frame}
-        {...(inThread
-          ? {}
-          : {
-              onClick: (event: React.MouseEvent) => {
-                // Its buttons act; anywhere else on the card opens the thread.
-                if (!(event.target as HTMLElement).closest("button, a, input")) open();
-              },
-            })}
-      >
+      <div data-testid="work-card" className={frame}>
         <div className="flex items-start gap-2">
-          <div className="flex min-w-0 flex-1 flex-col">
-            {inThread ? (
-              <span className="truncate text-body font-semibold text-ink">{item.title}</span>
-            ) : (
-              <button
-                type="button"
-                onClick={open}
-                title="Open the thread"
-                className="truncate text-left text-body font-semibold text-ink"
-              >
-                {item.title}
-              </button>
-            )}
-            {owner && <span className="truncate text-caption text-ink-3">{owner.name}</span>}
-          </div>
+          <span className="min-w-0 flex-1 truncate pt-0.5 text-caption text-ink-3">
+            {owner?.name}
+          </span>
           {step && (
             <span className="shrink-0 pt-0.5 text-caption text-ink-3" data-testid="work-step">
               {step}
@@ -214,7 +185,6 @@ export function WorkCard({ id, text, inThread }: { id: string; text?: string; in
               <Square className="fill-current" /> Stop
             </Button>
           )}
-          {!inThread && !working && <ChevronRight className="mt-0.5 size-4 shrink-0 text-ink-3" />}
         </div>
         {item.steps.length > 0 && <WorkSteps steps={item.steps} />}
         {item.results.length > 0 && <WorkResults results={item.results} />}
@@ -376,5 +346,82 @@ function YourTurn({ request }: { request: NeedsYouRequest }) {
         )}
       </RequestActions>
     </div>
+  );
+}
+
+/**
+ * Where a work item stands, in one line, for the chip in a conversation and its sidebar row:
+ * what the owner is asked to do, what its employee is doing now, or how far it got.
+ */
+export function useWorkLine(item: WorkItem | undefined): {
+  tone: keyof typeof lineTone;
+  text: string;
+} {
+  const person = usePerson();
+  const request = usePendingRequest(item?.id ?? "");
+  const run = useStatus(item?.owner_employee_id).data?.run;
+  if (!item) return { tone: "quiet", text: "" };
+  if (item.state === "completed") return { tone: "done", text: "Done" };
+  if (item.state === "cancelled") return { tone: "quiet", text: "Cancelled" };
+  if (item.taken_over_by !== null)
+    return item.taken_over_by === person?.id
+      ? { tone: "you", text: "You have it" }
+      : { tone: "quiet", text: "Taken over" };
+  if (request) return { tone: "you", text: `Your turn: ${requestTitle(request)}` };
+  if (item.state === "proposed") return { tone: "you", text: "Ready when you are" };
+  if (run && !run.stopped && run.conversation === `work:${item.id}`)
+    return { tone: "working", text: `${run.doing}…` };
+  if (item.state === "needs_decision") return { tone: "you", text: "Your turn" };
+  if (item.state === "waiting")
+    return {
+      tone: "quiet",
+      text: item.wait_condition ? `Waiting on ${item.wait_condition}` : "Waiting",
+    };
+  const done = item.steps.filter((step) => step.state === "done").length;
+  return {
+    tone: "quiet",
+    text: item.steps.length
+      ? `Step ${Math.min(done + 1, item.steps.length)} of ${item.steps.length}`
+      : item.next_action || (item.state === "ready" ? "Not started" : "Under way"),
+  };
+}
+
+/**
+ * A work item in a conversation: one line (its title, who is on it, where it stands) that opens
+ * the work beside the conversation. The plan is shown once, there.
+ */
+export function WorkChip({ id, text }: { id: string; text?: string }) {
+  const item = useWork().data?.find((w) => w.id === id);
+  const owner = useEmployees().find((e) => e.id === item?.owner_employee_id);
+  const line = useWorkLine(item);
+  const nav = useNav();
+  return (
+    <button
+      type="button"
+      data-testid="work-chip"
+      onClick={() => nav.openWork(id)}
+      className="mx-auto flex w-full max-w-[520px] items-center gap-2.5 rounded-card border border-hairline bg-sheet px-3.5 py-2.5 text-left shadow-resting transition-colors duration-150 hover:bg-sheet-tint"
+    >
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-control font-semibold text-ink">
+          {item?.title ?? text ?? "Work"}
+          {owner && <span className="font-normal text-ink-3"> · {owner.name}</span>}
+        </span>
+        {line.text && (
+          <span
+            className={cn(
+              "flex min-w-0 items-center gap-1.5 text-detail font-medium",
+              lineTone[line.tone].color,
+            )}
+          >
+            {lineTone[line.tone].icon}
+            <span className="truncate" data-testid="work-chip-state">
+              {line.text}
+            </span>
+          </span>
+        )}
+      </span>
+      <ChevronRight className="size-4 shrink-0 text-ink-3" />
+    </button>
   );
 }

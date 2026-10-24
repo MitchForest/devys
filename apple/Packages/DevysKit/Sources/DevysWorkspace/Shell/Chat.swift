@@ -20,7 +20,7 @@ struct MessageRow: View {
     private var selection: Set<String>? { store.state.conversation(key)?.selection }
     private var isSelecting: Bool { selection != nil }
     private var isSelected: Bool { selection?.contains(bubble.id) == true }
-    /// A thread starts from a message anywhere but inside a thread.
+    /// A message becomes work anywhere but in a work item's own conversation.
     private var startsThreads: Bool { canAct && key.kind != .work }
     static let avatarSize: CGFloat = 26
     /// Room beside a bubble that its hover actions sit in, so showing them never moves the text.
@@ -152,7 +152,7 @@ struct MessageRow: View {
             }
             ChatActionButton("Reply", symbol: "arrowshape.turn.up.left") { store.send(.replyTapped(key, bubble.id)) }
             if startsThreads {
-                ChatActionButton("Start a thread", symbol: "bubble.left.and.text.bubble.right") { store.send(.startThreadTapped(bubble.id)) }
+                ChatActionButton("Make it work", symbol: "checklist") { store.send(.makeWorkTapped(bubble.id)) }
             }
         }
         .transition(.opacity)
@@ -171,7 +171,7 @@ struct MessageRow: View {
             Button("Reply", systemImage: "arrowshape.turn.up.left") { store.send(.replyTapped(key, bubble.id)) }
         }
         if startsThreads {
-            Button("Start a thread", systemImage: "bubble.left.and.text.bubble.right") { store.send(.startThreadTapped(bubble.id)) }
+            Button("Make it work", systemImage: "checklist") { store.send(.makeWorkTapped(bubble.id)) }
         }
         Button("Copy", systemImage: "doc.on.doc") { DevysPasteboard.copy(bubble.text) }
         if bubble.delivery == nil {
@@ -197,11 +197,10 @@ struct MessageRow: View {
 
     /// The record the message was about, "Viewing Pricing", which opens it where the registry says.
     @ViewBuilder private var viewed: some View {
-        if let ref = bubble.ref, let target = Records.open(ref, work: store.state.threadItem?.id) {
+        if let ref = bubble.ref, let target = Records.open(ref, work: store.state.panelItem?.id) {
             Button {
                 switch target {
                 case .layer(let layer): store.send(.layerOpened(layer))
-                case .place(.thread(let id)): store.send(.threadOpened(id))
                 case .place(let place): store.send(.placeSelected(place))
                 }
             } label: {
@@ -404,7 +403,7 @@ struct EventCard: View {
     let store: StoreOf<Workspace>
     let event: ChatTimeline.Event
 
-    private var target: RecordTarget? { event.ref.flatMap { Records.open($0, work: store.state.threadItem?.id) } }
+    private var target: RecordTarget? { event.ref.flatMap { Records.open($0, work: store.state.panelItem?.id) } }
 
     private var artifactID: String? {
         guard case .layer(.artifact(let id, _)) = target else { return nil }
@@ -474,7 +473,6 @@ struct EventCard: View {
     private func open(_ target: RecordTarget) {
         switch target {
         case .layer(let layer): store.send(.layerOpened(layer))
-        case .place(.thread(let id)): store.send(.threadOpened(id))
         case .place(let place): store.send(.placeSelected(place))
         }
     }

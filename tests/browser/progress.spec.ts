@@ -1,8 +1,8 @@
 import { test, expect } from "@playwright/test";
 import { localStores } from "../fixtures/local.ts";
-import { bearer, insertMessage, signIn, stubPosting } from "./helpers.ts";
+import { bearer, insertMessage, openWork, signIn, stubPosting, workView } from "./helpers.ts";
 
-test("a work item's steps and results show as its one card, pinned in its thread and updated in place", async ({
+test("a work item opens beside the conversation: its card heads its conversation, updated in place", async ({
   page,
 }) => {
   const stores = await localStores();
@@ -28,7 +28,7 @@ test("a work item's steps and results show as its one card, pinned in its thread
     ],
     [{ label: "Registered acme-widgets.com", value: "expires 2027-10-22", ok: true }],
   );
-  // A card message for the thread's own work is drawn once, as the pinned card.
+  // A card message in the work's own conversation is drawn once, as the card heading it.
   await insertMessage(sql, owner.business, `work:${work.id}`, {
     author: "system",
     kind: "card",
@@ -38,8 +38,10 @@ test("a work item's steps and results show as its one card, pinned in its thread
   await stubPosting(page);
   try {
     await signIn(page, sql, owner.person);
-    await page.goto(`/${owner.business}/thread/${work.id}`);
-    const card = page.getByTestId("work-card");
+    await openWork(page, owner.business, work.id);
+    // Beside Home: the conversation in the middle stays the Chief of Staff's.
+    await expect(page.getByTestId("place-title")).toHaveText("Chief of Staff");
+    const card = workView(page).getByTestId("work-card");
     await expect(card).toHaveCount(1);
     await expect(card.getByTestId("work-step")).toHaveText("Step 2 of 3");
     await expect(card.getByRole("list", { name: "Steps" }).getByRole("listitem")).toHaveText([
@@ -50,8 +52,13 @@ test("a work item's steps and results show as its one card, pinned in its thread
     await expect(card.getByRole("list", { name: "Results" })).toHaveText(
       "Registered acme-widgets.com · expires 2027-10-22 ✓",
     );
-    // A thread has no permanent view: the card is the work.
-    await expect(page.getByRole("button", { name: /side panel/ })).toHaveCount(0);
+    await expect(
+      workView(page).getByRole("textbox", { name: "Reply to Chief of Staff" }),
+    ).toBeVisible();
+    // The sidebar lists it under Work, where it stands, marked as the one open.
+    const row = page.getByTestId("work-row");
+    await expect(row).toHaveAccessibleName("Set up acme-widgets.com, Step 2 of 3");
+    await expect(row).toHaveAttribute("aria-current", "true");
 
     // A later change updates the same card in place: no new message. A link shows as its site.
     await show(

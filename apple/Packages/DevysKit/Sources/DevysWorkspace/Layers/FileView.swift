@@ -77,7 +77,7 @@ struct FileView: View {
 
     private var kind: FileKind { FileKind(file.name) }
     /// The thread's work item, when the file is open in one.
-    private var item: WorkItem? { store.state.threadItem }
+    private var item: WorkItem? { store.state.panelItem }
     /// Only these kinds have an editor, and only after Take over.
     private var editable: Bool {
         (kind == .markdown || kind == .sheet || kind == .whiteboard) && item.map(store.state.isHandEditable) == true

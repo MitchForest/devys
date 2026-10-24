@@ -27,13 +27,6 @@ struct ConversationPane: View {
                     // Opens at the newest message and follows new ones; a short conversation starts at the top.
                     .defaultScrollAnchor(.bottom, for: .initialOffset)
                     .defaultScrollAnchor(.bottom, for: .sizeChanges)
-                    if key.kind == .work {
-                        WorkProgressCard(store: store, workItemID: key.ref, text: "")
-                            .padding(.horizontal, DevysSpacing.regular)
-                            .padding(.bottom, 8)
-                            .frame(maxWidth: 780)
-                            .frame(maxWidth: .infinity)
-                    }
                     Group {
                         if let selection = store.state.conversation(key)?.selection {
                             SelectionBar(store: store, key: key, selection: selection)
@@ -152,8 +145,8 @@ struct ConversationMessages: View {
                     TimeHeading(date: date)
                 case .event(let event):
                     if event.isCard, case .workItem(let id)? = event.ref {
-                        // In its own thread the card is pinned above the composer instead.
-                        if key != .work(id) { WorkProgressCard(store: store, workItemID: id, text: event.text, inThread: false) }
+                        // In its own conversation the card heads the work's view instead.
+                        if key != .work(id) { WorkChip(store: store, workItemID: id, text: event.text) }
                     } else {
                         EventCard(store: store, event: event)
                     }
@@ -204,8 +197,7 @@ struct ConversationMessages: View {
         return switch store.place {
         case .home: "Tell \(name ?? "Chief of Staff") what you need. @mention anyone to bring them in."
         case .direct: "Message \(name ?? "them"). @mention a colleague to bring them in."
-        case .project(let id): "Tell the team what \(store.state.project(id)?.name ?? "the project") needs. Each piece of work gets its own thread."
-        case .thread: "Nothing said about this yet."
+        case .project(let id): "Tell the team what \(store.state.project(id)?.name ?? "the project") needs. Work opens beside it."
         }
     }
 }

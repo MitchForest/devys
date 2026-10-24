@@ -138,7 +138,7 @@ function budgetFor(size) {
   return size < 28 ? "minimal" : size < 64 ? "poses" : "full";
 }
 
-function pose(face, mood, time, pokePhase, motion) {
+function pose(face, mood, time, motion) {
   if (mood === "off") return { standby: true };
   const geo = GEOMETRY[face.family];
   const temp = face.temperament;
@@ -146,18 +146,10 @@ function pose(face, mood, time, pokePhase, motion) {
   const ex = expression(mood);
   let render = geo.ring ? "ring" : "fill";
   let height = ex.height;
-  let width = 1;
   let gx = ex.gx;
   let gy = ex.gy;
 
-  if (face.budget === "full" && pokePhase != null && pokePhase >= 0 && pokePhase < 0.9) {
-    render = "arc";
-    if (motion) {
-      const spring = Math.exp(-pokePhase * 5) * Math.cos(pokePhase * 22) * 0.1;
-      width = 1 + spring;
-      height *= 1 - spring;
-    }
-  } else if (ex.render) {
+  if (ex.render) {
     render = ex.render;
   }
 
@@ -172,7 +164,7 @@ function pose(face, mood, time, pokePhase, motion) {
   const cx = 0.5 + gx * 0.055;
   const cy = 0.5 + gy * 0.055 + ex.lift * 0.1;
   const eyes = [-1, 1].map((dir) => {
-    const w = geo.width * width;
+    const w = geo.width;
     const h = Math.max(geo.height * height, 0.02);
     let eyeRender = render;
     if (eyeRender === "ring" && h < geo.height * 0.5) eyeRender = "fill";
@@ -215,7 +207,6 @@ function mount(canvas) {
     mood: canvas.dataset.mood || "idle",
     previousMood: null,
     moodChangedAt: 0,
-    pokedAt: null,
     lastDraw: 0,
     visible: true,
   };
@@ -227,10 +218,6 @@ function mount(canvas) {
   canvas.style.height = `${size}px`;
   face.ctx.scale(dpr, dpr);
   canvas.setAttribute("role", canvas.getAttribute("aria-label") ? "img" : "presentation");
-  if (face.budget === "full") {
-    canvas.addEventListener("click", () => (face.pokedAt = performance.now() / 1000));
-    canvas.style.cursor = "pointer";
-  }
   visibility.observe(canvas);
   faces.add(face);
   draw(face, performance.now() / 1000);
@@ -281,8 +268,7 @@ function draw(face, time) {
       morph = 1 - phase * 2;
     } else morph = phase * 2 - 1;
   }
-  const poke = face.pokedAt == null ? null : time - face.pokedAt;
-  const p = pose(face, mood, time, poke, motion);
+  const p = pose(face, mood, time, motion);
 
   if (p.standby) {
     const pulse = motion ? 0.22 + 0.14 * Math.sin(time * 1.6) : 0.3;
@@ -390,8 +376,7 @@ function loop(now) {
       face.moodChangedAt = time;
       face.lastDraw = 0;
     }
-    const transitioning =
-      time - face.moodChangedAt < 0.32 || (face.pokedAt && time - face.pokedAt < 0.9);
+    const transitioning = time - face.moodChangedAt < 0.32;
     const interval = transitioning ? 1 / 30 : INTERVAL[face.budget];
     if (face.visible && time - face.lastDraw >= interval) {
       face.lastDraw = time;

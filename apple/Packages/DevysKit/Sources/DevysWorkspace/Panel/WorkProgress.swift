@@ -93,67 +93,83 @@ struct WorkResultsView: View {
     }
 }
 
-/// A work item's one live card, drawn from the item as it is now so it updates in place: its
-/// title and who is on it, the plan, its results and one line of state with at most one thing
-/// for the owner to do. In its thread it is pinned above the composer; elsewhere (where the work
-/// was handed out) a tap opens the thread.
+/// A work item, drawn from the item as it is now so it updates in place: who is on it, the plan,
+/// its results and one line of state with at most one thing for the owner to do. It heads the
+/// work's view beside the conversation, whose header names it.
 struct WorkProgressCard: View {
     let store: StoreOf<Workspace>
     let workItemID: String
+
+    var body: some View {
+        let item = store.work.value?.first { $0.id == workItemID }
+        VStack(alignment: .leading, spacing: 10) {
+            if let item {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(store.state.employeeName(item.ownerEmployeeID))
+                        .font(DevysTypography.caption).foregroundStyle(DevysColors.ink3).lineLimit(1)
+                    Spacer(minLength: 8)
+                    if let position = store.state.stepPosition(item), item.state.isOpen {
+                        Text(position).font(DevysTypography.caption).foregroundStyle(DevysColors.ink3).fixedSize()
+                    }
+                }
+                if !item.steps.isEmpty { WorkStepsView(steps: item.steps) }
+                if !item.results.isEmpty { WorkResultsView(results: item.results) }
+                WorkStateLine(store: store, item: item, line: store.state.cardLine(item))
+            } else {
+                Text("This work is no longer here.").font(DevysTypography.body).foregroundStyle(DevysColors.ink3)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 4)
+        .padding(.bottom, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .bottom) { Rectangle().fill(DevysColors.hairline).frame(height: 1) }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("work-card")
+    }
+}
+
+/// A work item in a conversation: one line (its title, who is on it, where it stands) that opens
+/// the work beside the conversation. The plan is shown once, there.
+struct WorkChip: View {
+    let store: StoreOf<Workspace>
+    let workItemID: String
     let text: String
-    var inThread = true
     @State private var hovering = false
 
     var body: some View {
         let item = store.work.value?.first { $0.id == workItemID }
-        if inThread {
-            card(item)
-        } else {
-            card(item)
-                .contentShape(Rectangle())
-                .onTapGesture { store.send(.threadOpened(workItemID)) }
-                .onHover { hovering = $0 }
-                .accessibilityAction(named: "Open the thread") { store.send(.threadOpened(workItemID)) }
-                .help("Open the thread")
-        }
-    }
-
-    private func card(_ item: WorkItem?) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            header(item)
-            if let item {
-                if !item.steps.isEmpty { WorkStepsView(steps: item.steps) }
-                if !item.results.isEmpty { WorkResultsView(results: item.results) }
-                WorkStateLine(store: store, item: item, line: store.state.cardLine(item))
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .frame(maxWidth: inThread ? .infinity : 560, alignment: .leading)
-        .background(hovering ? DevysColors.sheetTint : DevysColors.sheet, in: RoundedRectangle(cornerRadius: DevysRadius.card, style: .continuous))
-        .overlay { RoundedRectangle(cornerRadius: DevysRadius.card, style: .continuous).strokeBorder(DevysColors.hairline, lineWidth: 1) }
-        .devysElevation(.resting)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, inThread ? 0 : 6)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("work-card")
-    }
-
-    private func header(_ item: WorkItem?) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(item?.title ?? text).font(DevysTypography.body.weight(.semibold)).foregroundStyle(DevysColors.ink).lineLimit(2)
-            if let item {
-                Text("· \(store.state.employeeName(item.ownerEmployeeID))")
-                    .font(DevysTypography.secondary).foregroundStyle(DevysColors.ink3).lineLimit(1)
-            }
-            Spacer(minLength: 8)
-            if let item, let position = store.state.stepPosition(item), item.state.isOpen {
-                Text(position).font(DevysTypography.caption).foregroundStyle(DevysColors.ink3).fixedSize()
-            }
-            if !inThread {
+        let status = item.map(store.state.workStatus)
+        Button { store.send(.workOpened(workItemID)) } label: {
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 0) {
+                        Text(item?.title ?? text).font(DevysTypography.control.weight(.semibold)).foregroundStyle(DevysColors.ink)
+                        if let item {
+                            Text(" · \(store.state.employeeName(item.ownerEmployeeID))").font(DevysTypography.control).foregroundStyle(DevysColors.ink3)
+                        }
+                    }
+                    .lineLimit(1)
+                    if let status, !status.text.isEmpty {
+                        Text(status.text).font(DevysTypography.secondary.weight(.medium)).foregroundStyle(status.tone.color).lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 6)
                 Image(systemName: "chevron.right").font(DevysTypography.caption).foregroundStyle(DevysColors.ink3).accessibilityHidden(true)
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .frame(maxWidth: 520, alignment: .leading)
+            .background(hovering ? DevysColors.sheetTint : DevysColors.sheet, in: RoundedRectangle(cornerRadius: DevysRadius.card, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: DevysRadius.card, style: .continuous).strokeBorder(DevysColors.hairline, lineWidth: 1) }
+            .devysElevation(.resting)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+        .accessibilityIdentifier("work-chip")
     }
 }
 
@@ -174,7 +190,7 @@ private struct WorkStateLine: View {
                 label("\(doing)…")
                 Spacer(minLength: 6)
                 if browsing {
-                    Button("Watch") { store.send(.layerOpened(.browser(workID: item.id))) }
+                    Button("Watch") { store.send(.browserOpened(item.id)) }
                         .buttonStyle(DevysButtonStyle(.quiet, compact: true))
                         .help("Watch the browser")
                 }
@@ -272,6 +288,18 @@ private struct YourTurn: View {
         } else {
             // Approve and Decline answer an approval; any other request has its one action.
             RequestActions(store: store, decision: decision, compact: true, declines: [.approve, .decision].contains(decision.kind) && !decision.isSpend)
+        }
+    }
+}
+
+extension WorkStatus.Tone {
+    /// Amber when it waits on the owner, indigo while it runs, green once done.
+    var color: Color {
+        switch self {
+        case .you: DevysColors.amber
+        case .working: DevysColors.indigo
+        case .done: DevysColors.green
+        case .quiet: DevysColors.ink3
         }
     }
 }

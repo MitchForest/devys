@@ -41,10 +41,9 @@ import {
   usePerson,
   useRunningIn,
   useStatus,
-  useWork,
 } from "../app/data.ts";
 import { queries } from "../app/query.ts";
-import { useStartThread, useUpload } from "../app/mutations.ts";
+import { useMakeWork, useUpload } from "../app/mutations.ts";
 import { usePlace } from "../app/navigation.ts";
 import { ui, useUi } from "../app/ui.ts";
 import {
@@ -64,7 +63,7 @@ import { ReconnectCard } from "../panel/layers/team-app.tsx";
 import { RecordCard, ViewedRecord } from "../panel/layers/registry.tsx";
 import { useRecordTitle } from "../panel/layers/titles.ts";
 import { PausedBanner } from "../panel/desk.tsx";
-import { WorkCard } from "../panel/work-card.tsx";
+import { WorkChip } from "../panel/work-card.tsx";
 import { AttachDialog } from "./attach.tsx";
 import { parseRef } from "../../protocol/ref.ts";
 import { Bubble, BubbleContent, BubbleReactions } from "@/components/ui/bubble";
@@ -121,8 +120,8 @@ function useAuthorName() {
 
 /**
  * A conversation laid out like Messages: yours on the right in indigo, everyone else's on
- * the left beside their face and name. Work shows as its live card where it was created; a
- * thread's own card is pinned below the conversation, not in it.
+ * the left beside their face and name. Work shows as one line where it was created, which
+ * opens it beside the conversation; in a work item's own conversation its card heads it instead.
  */
 export function ConversationView({
   conversation,
@@ -143,7 +142,7 @@ export function ConversationView({
   const [loadingOlder, setLoadingOlder] = useState(false);
   const { messages: history, pending, key } = conversation;
   const thread = key?.startsWith("work:") ? key.slice("work:".length) : undefined;
-  // A thread's own card is pinned under it; any other card is the work it shows.
+  // A work item's own card heads its view; any other card is the work it shows.
   const items = (
     history ? timeline(history, pending, `person:${person?.id}`, new Date()) : []
   ).filter(
@@ -213,10 +212,9 @@ export function ConversationView({
                       className={startsGroup(item.bubble) ? "pt-2.5" : "pt-0.5"}
                     >
                       {item.bubble.kind === "card" ? (
-                        <WorkCard
+                        <WorkChip
                           id={parseRef(item.bubble.ref)?.id ?? ""}
                           text={item.bubble.text}
-                          inThread={false}
                         />
                       ) : item.bubble.kind === "event" ? (
                         <>
@@ -235,7 +233,7 @@ export function ConversationView({
                     </MessageScrollerItem>
                   ),
                 )}
-                {/* In a thread its card says who is working. */}
+                {/* In a work item's own conversation its card says who is working. */}
                 {!thread &&
                   working.map((id) => {
                     const employee = employees.find((e) => e.id === id);
@@ -284,13 +282,12 @@ function MessageRow({
 }) {
   const employees = useEmployees();
   const chiefOfStaff = useChiefOfStaff();
-  const work = useWork().data;
   const place = usePlace();
-  const start = useStartThread();
+  const start = useMakeWork();
   const nameOf = useAuthorName();
   const [picking, setPicking] = useState(false);
-  // A thread starts from a message anywhere but inside a thread.
-  const threads = place.kind !== "thread" && !bubble.delivery;
+  // A message becomes work anywhere but inside a work item's own conversation.
+  const threads = !conversation.key?.startsWith("work:") && !bubble.delivery;
   /** A work item owned by whoever the message addressed, in the project it was said in. */
   const startThread = () => {
     const mentions = conversation.messages?.find((m) => m.id === bubble.id)?.mentions ?? [];
@@ -301,12 +298,7 @@ function MessageRow({
       answerersOf(conversation, draft.get(conversation.key).text, employees).to[0] ??
       chiefOfStaff?.id;
     if (!owner) return;
-    const projectId =
-      place.kind === "project"
-        ? place.id
-        : place.kind === "thread"
-          ? (work?.find((w) => w.id === place.workId)?.project_id ?? undefined)
-          : undefined;
+    const projectId = place.kind === "project" ? place.id : undefined;
     start.mutate({ text: bubble.text, owner, ...(projectId ? { projectId } : {}) });
   };
   const mine = bubble.mine;
@@ -406,7 +398,7 @@ function MessageRow({
                   )}
                   {threads && (
                     <ContextMenuItem onClick={startThread}>
-                      <MessageSquarePlus /> Start a thread
+                      <MessageSquarePlus /> Make it work
                     </ContextMenuItem>
                   )}
                   <ContextMenuItem
@@ -430,7 +422,7 @@ function MessageRow({
                     <Reply />
                   </ChatActionButton>
                   {threads && (
-                    <ChatActionButton label="Start a thread" onClick={startThread}>
+                    <ChatActionButton label="Make it work" onClick={startThread}>
                       <MessageSquarePlus />
                     </ChatActionButton>
                   )}

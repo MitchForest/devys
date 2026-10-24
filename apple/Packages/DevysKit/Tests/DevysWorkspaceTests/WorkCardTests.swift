@@ -103,10 +103,10 @@ struct WorkCardTests {
         let store = await makeStore(server)
         await settle("Home has a request", until: { store.home.value?.isEmpty == false })
         #expect(store.place == .home && store.state.hasDetails && !store.state.isPanelOpen)
-        store.send(.threadOpened("c1"))
-        #expect(!store.state.hasDetails && !store.state.isPanelOpen)
-        store.send(.layerOpened(.browser(workID: "c1")))
-        #expect(store.state.isPanelOpen, "a layer opens the panel")
+        store.send(.workOpened("c1"))
+        #expect(store.state.hasDetails && store.state.isPanelOpen, "work opens beside the conversation, which keeps its details")
+        store.send(.browserOpened("c1"))
+        #expect(store.layers.map(\.layer) == [.work("c1"), .browser(workID: "c1")], "the browser over the work")
         store.send(.placeSelected(.project("p1")))
         #expect(store.state.hasDetails && !store.state.isPanelOpen)
         store.send(.placeSelected(.direct("growth")))
@@ -168,6 +168,36 @@ struct WorkCardTests {
         #expect(sentence.runs.contains { $0.link?.host() == "www.godaddy.com" })
     }
 
+    @Test("The sidebar's Work: open work, waiting on the owner first; finished work only while its end is unread and under a day old")
+    func sidebarWork() {
+        var state = Workspace.State(server: localServer)
+        state.account = .fixture
+        let now = Date.now
+        let recent = ServerDate.format(now.addingTimeInterval(-3_600))
+        let old = ServerDate.format(now.addingTimeInterval(-3 * 86_400))
+        state.work = .loaded([
+            WorkItem(id: "w1", ownerEmployeeID: "growth", title: "Waiting on DNS", waitCondition: "DNS", state: .waiting, updatedAt: recent),
+            WorkItem(id: "w2", ownerEmployeeID: "growth", title: "Ship", state: .proposed, updatedAt: old),
+            WorkItem(id: "w3", ownerEmployeeID: "growth", title: "Register", state: .inProgress, steps: [WorkStep(title: "Find it", state: .done), WorkStep(title: "Buy it", state: .doing)], updatedAt: recent),
+            WorkItem(id: "w4", ownerEmployeeID: "growth", title: "Done, unread", state: .completed, updatedAt: recent),
+            WorkItem(id: "w5", ownerEmployeeID: "growth", title: "Done, seen", state: .completed, updatedAt: recent),
+            WorkItem(id: "w6", ownerEmployeeID: "growth", title: "Done long ago", state: .completed, updatedAt: old),
+            WorkItem(id: "w7", ownerEmployeeID: "growth", title: "Cancelled", state: .cancelled, updatedAt: recent)
+        ])
+        state.summaries = [
+            "work:w4": ConversationSummary(key: "work:w4", last: nil, unread: 1),
+            "work:w5": ConversationSummary(key: "work:w5", last: nil, unread: 0),
+            "work:w6": ConversationSummary(key: "work:w6", last: nil, unread: 2)
+        ]
+        #expect(state.activeWork(now: now).map(\.id) == ["w2", "w3", "w1", "w4"])
+        #expect(state.workStatus(state.work.value![1]) == WorkStatus(tone: .you, text: "Ready when you are"))
+        #expect(state.workStatus(state.work.value![2]) == WorkStatus(tone: .quiet, text: "Step 2 of 2"))
+        #expect(state.workStatus(state.work.value![0]) == WorkStatus(tone: .quiet, text: "Waiting on DNS"))
+        #expect(state.workStatus(state.work.value![3]) == WorkStatus(tone: .done, text: "Done"))
+        state.statuses["growth"] = running("work:w3")
+        #expect(state.workStatus(state.work.value![2]) == WorkStatus(tone: .working, text: "Opening example.com…"))
+    }
+
     @Test("Start sends the start request for a plan waiting on the owner, and nothing for one already going")
     func starts() async {
         let server = CardServer()
@@ -190,8 +220,8 @@ struct WorkCardTests {
 
         store.send(.placeSelected(.project("p1")))
         #expect(store.state.employeeInView == "growth", "a channel's lead")
-        store.send(.threadOpened("c2"))
-        #expect(store.state.employeeInView == "engineering", "a thread's owner")
+        store.send(.workOpened("c2"))
+        #expect(store.state.employeeInView == "engineering", "the owner of the work open beside it")
         store.send(.stopTapped)
         for _ in 0..<4_000 where await server.stops.count < 2 { await Task.yield() }
         #expect(await server.stops.last == EmployeeScope(businessID: "acme", employeeID: "engineering"))

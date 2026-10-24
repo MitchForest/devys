@@ -3,8 +3,8 @@ import DevysClient
 import DevysDesignSystem
 import SwiftUI
 
-/// One work item: what, who, what's next and its state. Click to open its thread; right-click to
-/// act on it. Compact rows sit in a permanent view.
+/// One work item: what, who, what's next and its state. Click to open it beside the
+/// conversation; right-click to act on it. Compact rows sit in a permanent view.
 struct WorkRow: View {
     let store: StoreOf<Workspace>
     let item: WorkItem
@@ -29,13 +29,13 @@ struct WorkRow: View {
         .background(hovering ? DevysColors.sheetTint : .clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .contentShape(Rectangle())
         .padding(.horizontal, compact ? -8 : 0)
-        .onTapGesture { store.send(.threadOpened(item.id)) }
+        .onTapGesture { store.send(.workOpened(item.id)) }
         .onHover { hovering = $0 }
         .animation(DevysMotion.quick, value: hovering)
         .contextMenu { WorkActions(store: store, item: item) }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
-        .accessibilityAction { store.send(.threadOpened(item.id)) }
+        .accessibilityAction { store.send(.workOpened(item.id)) }
     }
 
     private var detail: String {
@@ -46,15 +46,15 @@ struct WorkRow: View {
     }
 }
 
-/// What the owner can do to a work item from a row: open its thread and take it over. Changing it
-/// by hand (reassigning, marking it, cancelling) is for work the owner has taken over; otherwise
-/// they ask in its thread.
+/// What the owner can do to a work item from a row: open it and take it over. Changing it by hand
+/// (reassigning, marking it, cancelling) is for work the owner has taken over; otherwise they ask
+/// in its conversation.
 struct WorkActions: View {
     let store: StoreOf<Workspace>
     let item: WorkItem
 
     var body: some View {
-        Button("Open thread", systemImage: "arrow.up.right.square") { store.send(.threadOpened(item.id)) }
+        Button("Open", systemImage: "arrow.up.right.square") { store.send(.workOpened(item.id)) }
         Button(store.state.isFollowing(item.id) ? "Stop following" : "Follow each step", systemImage: store.state.isFollowing(item.id) ? "bell.slash" : "bell") {
             store.send(.followToggled(item.id))
         }

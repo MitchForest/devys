@@ -1,7 +1,14 @@
 package import DevysClient
-import Foundation
+package import Foundation
 
 // MARK: - A work item's one live card: where it stands, in one line
+
+/// Where a work item stands, in one line and one tone.
+package struct WorkStatus: Equatable {
+    package enum Tone: Equatable { case you, working, done, quiet }
+    package let tone: Tone
+    package let text: String
+}
 
 /// The one line of state a work item's card shows, with at most one thing for the owner to do.
 package enum WorkCardLine: Equatable {
@@ -57,16 +64,59 @@ extension Workspace.State {
         return .quiet
     }
 
+    /// Where a work item stands in one line, for its chip in a conversation and its sidebar row:
+    /// what the owner is asked to do, what its employee is doing now, or how far it got.
+    package func workStatus(_ item: WorkItem) -> WorkStatus {
+        switch cardLine(item) {
+        case .working(let doing): WorkStatus(tone: .working, text: "\(doing)…")
+        case .ready: WorkStatus(tone: .you, text: "Ready when you are")
+        case .yourTurn(let request): WorkStatus(tone: .you, text: "Your turn: \(DecisionText.ask(request))")
+        case .yours: WorkStatus(tone: .you, text: "You have it")
+        case .waiting(let condition): WorkStatus(tone: .quiet, text: "Waiting on \(condition)")
+        case .done: WorkStatus(tone: .done, text: "Done")
+        case .upNext, .quiet:
+            if item.state == .cancelled {
+                WorkStatus(tone: .quiet, text: "Cancelled")
+            } else if item.state == .needsDecision {
+                WorkStatus(tone: .you, text: "Your turn")
+            } else {
+                WorkStatus(tone: .quiet, text: stepPosition(item) ?? (item.nextAction.isEmpty ? (item.state == .ready ? "Not started" : "Under way") : item.nextAction))
+            }
+        }
+    }
+
+    /// The work in the sidebar: everything open, and finished work until the owner has seen how
+    /// it ended (its last word unread) for at most a day; it is archived after that, still found
+    /// with ⌘K. Those waiting on the owner first, then the ones running, then the rest, newest first.
+    package func activeWork(now: Date = .now) -> [WorkItem] {
+        let shown = (work.value ?? []).filter { item in
+            switch item.state {
+            case .completed:
+                let unread = summaries[ConversationKey.work(item.id).rawValue]?.unread ?? 0
+                return unread > 0 && now.timeIntervalSince(ServerDate.parse(item.updatedAt) ?? .distantPast) < 86_400
+            case .cancelled: return false
+            default: return true
+            }
+        }
+        func rank(_ item: WorkItem) -> Int {
+            if request(for: item) != nil || item.state == .proposed || item.state == .needsDecision { return 0 }
+            if item.state == .inProgress || item.state == .ready { return 1 }
+            return item.state == .completed ? 3 : 2
+        }
+        return shown.sorted { (rank($0), $1.updatedAt) < (rank($1), $0.updatedAt) }
+    }
+
     /// "Step 3 of 5": the first step not yet done; nil without steps or once all are done.
     package func stepPosition(_ item: WorkItem) -> String? {
         guard let current = item.steps.firstIndex(where: { $0.state != .done }) else { return nil }
         return "Step \(current + 1) of \(item.steps.count)"
     }
 
-    /// The employee of the conversation in view, whom ⌘. stops: Home's Chief of Staff, a direct
-    /// chat's employee, a channel's lead, a thread's owner.
+    /// The employee ⌘. stops: the owner of the work open beside the conversation, else the
+    /// conversation's own (Home's Chief of Staff, a direct chat's employee, a channel's lead).
     package var employeeInView: String? {
-        mainKey.flatMap(defaultResponder(for:))
+        if let workID = workInPanel { return work.value?.first { $0.id == workID }?.ownerEmployeeID }
+        return mainKey.flatMap(defaultResponder(for:))
     }
 }
 

@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { localStores } from "../fixtures/local.ts";
-import { bearer, insertMessage, sidebar, signIn, stubPosting } from "./helpers.ts";
+import { bearer, insertMessage, sidebar, signIn, stubPosting, workView } from "./helpers.ts";
 
 test("a direct chat is the middle; who answers follows replies and @mentions; reactions show", async ({
   page,
@@ -184,7 +184,7 @@ test("a turn that stopped is Devys's notice, not the employee's words, with Ask 
   }
 });
 
-test("a project opens on its channel; the work's card opens the thread; Back and Start a thread", async ({
+test("a project opens on its channel; its work opens beside it, and a message is made into work", async ({
   page,
 }) => {
   const stores = await localStores();
@@ -251,49 +251,48 @@ test("a project opens on its channel; the work's card opens the thread; Back and
       "Launch",
     );
 
-    // The work's card moves the middle into its thread, where the card is pinned.
+    // The work's line opens it beside the channel, which stays in the middle.
     await sidebar(page)
       .getByRole("link", { name: /^Launch/ })
       .click();
-    await page.getByTestId("work-card").getByText("Write a tagline").click();
-    await expect(page.getByTestId("place-title")).toHaveText("Write a tagline");
-    const card = page.getByTestId("work-card");
+    await page.getByTestId("work-chip").click();
+    await expect(page.getByTestId("place-title")).toHaveText("Launch");
+    const card = workView(page).getByTestId("work-card");
     await expect(card).toHaveCount(1);
     await expect(card.getByText("Growth", { exact: true })).toBeVisible();
-    // The thread is an address: a reload keeps it and its Back; the browser's Back leaves it.
-    await expect(page).toHaveURL(`/${owner.business}/thread/${workItem.id}`);
+    // It is an address: a reload keeps it open; the browser's Back closes it.
+    await expect(page).toHaveURL(
+      `/${owner.business}/project/${project.id}?layer=devys:work/item/${workItem.id}`,
+    );
     await page.reload();
-    await expect(page.getByTestId("place-title")).toHaveText("Write a tagline");
+    await expect(workView(page)).toBeVisible();
     await page.goBack();
-    await expect(page.getByTestId("place-title")).toHaveText("Launch");
+    await expect(workView(page)).toHaveCount(0);
     await page.goForward();
-    await expect(page.getByTestId("place-title")).toHaveText("Write a tagline");
-    await expect(page.getByRole("button", { name: "Back" })).toBeVisible();
-    await expect(page.getByText("Growth, can you write the tagline?")).toHaveCount(0);
+    await expect(workView(page)).toBeVisible();
+    // What is said about it is in its view; the reply goes to whoever is on it.
     await insertMessage(sql, owner.business, `work:${workItem.id}`, {
       author: `employee:${growth.id}`,
       text: "Drafting three options.",
     });
-    await expect(page.getByText("Drafting three options.")).toBeVisible({
+    await expect(workView(page).getByText("Drafting three options.")).toBeVisible({
       timeout: 10_000,
     });
-    await expect(page.getByTestId("to-names")).toHaveAttribute("data-names", "Growth");
-    await page.getByRole("textbox", { name: "Reply" }).fill("Keep it under six words.");
-    await page.getByRole("button", { name: "Send" }).click();
+    await workView(page)
+      .getByRole("textbox", { name: "Reply to Growth" })
+      .fill("Keep it under six words.");
+    await workView(page).getByRole("button", { name: "Send" }).click();
     await expect.poll(() => sent.length).toBe(1);
     expect(sent[0]!.key).toBe(`work:${workItem.id}`);
-
-    // Back returns to the channel.
-    await page.getByRole("button", { name: "Back" }).click();
-    await expect(page.getByTestId("place-title")).toHaveText("Launch");
+    // The channel is still there, beside it.
     await expect(page.getByText("Growth, can you write the tagline?")).toBeVisible();
 
-    // Start a thread on a message: a work item owned by its author, in this project.
+    // Make a message into work: owned by its author, in this project; it opens beside the channel.
     await page.getByText("Growth, can you write the tagline?").click({ button: "right" });
-    await page.getByRole("menuitem", { name: "Start a thread" }).click();
-    await expect(page.getByTestId("place-title")).toHaveText("Growth, can you write the tagline?");
+    await page.getByRole("menuitem", { name: "Make it work" }).click();
+    await expect(page.getByTestId("place-title")).toHaveText("Launch");
     await expect(
-      page.getByTestId("work-card").getByText("Chief of Staff", { exact: true }),
+      workView(page).getByTestId("work-card").getByText("Chief of Staff", { exact: true }),
     ).toBeVisible();
     expect(
       await sql.row<{ owner_employee_id: string; project_id: string }>(
@@ -301,8 +300,6 @@ test("a project opens on its channel; the work's card opens the thread; Back and
         [owner.business, "Growth, can you write the tagline?"],
       ),
     ).toEqual({ owner_employee_id: owner.chiefOfStaff, project_id: project.id });
-    await page.getByRole("button", { name: "Back" }).click();
-    await expect(page.getByTestId("place-title")).toHaveText("Launch");
   } finally {
     // Stop the page's polling and read receipts before its business is removed.
     await page.close();

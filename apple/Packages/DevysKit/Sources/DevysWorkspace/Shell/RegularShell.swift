@@ -208,7 +208,6 @@ private struct ResizeHandle: View {
                 HStack(spacing: 6) {
                     SidebarToggle(store: store)
                     ToolbarIconButton("Search (⌘K)", symbol: "magnifyingglass") { store.send(.paletteToggled(true)) }
-                    BackButton(store: store)
                 }
             }
             .sharedBackgroundVisibility(.hidden)
@@ -224,7 +223,6 @@ private struct ShellToolbar: View {
         HStack(spacing: 6) {
             SidebarToggle(store: store)
             ToolbarIconButton("Search (⌘K)", symbol: "magnifyingglass") { store.send(.paletteToggled(true)) }
-            BackButton(store: store)
             Spacer(minLength: DevysSpacing.regular)
             #if os(iOS)
                 NewMenu(store: store)
@@ -242,17 +240,6 @@ private struct SidebarToggle: View {
     var body: some View {
         ToolbarIconButton(store.isSidebarVisible ? "Hide sidebar (⌃⌘S)" : "Show sidebar (⌃⌘S)", symbol: "sidebar.left") {
             store.send(.sidebarToggled)
-        }
-    }
-}
-
-/// Back returns from a thread to where it was opened.
-private struct BackButton: View {
-    let store: StoreOf<Workspace>
-
-    var body: some View {
-        if !store.history.isEmpty {
-            ToolbarIconButton("Back (⌘[)", symbol: "chevron.left") { store.send(.backTapped) }
         }
     }
 }
@@ -302,7 +289,6 @@ private struct Shortcuts: View {
                 Button("New Employee") { store.send(.hireTapped) }.keyboardShortcut("n", modifiers: .command)
                 Button("New Project") { store.send(.newProjectTapped) }.keyboardShortcut("n", modifiers: [.command, .shift])
             #endif
-            Button("Back") { store.send(.backTapped) }.keyboardShortcut("[", modifiers: .command).disabled(store.history.isEmpty)
             Button("Sidebar") { store.send(.sidebarToggled) }.keyboardShortcut("s", modifiers: [.command, .control])
             // Esc goes back one layer, unless the palette or a panel over the workspace has it.
             Button("Back one layer") { store.send(.layerPopped) }.keyboardShortcut(.escape, modifiers: [])

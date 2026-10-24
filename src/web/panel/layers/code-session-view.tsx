@@ -30,7 +30,7 @@ import { Input } from "@/components/ui/input";
  * One coding session: its latest reply, the running diff with line comments, and a composer
  * that talks to the session directly once the owner has taken the work item over. Comments are
  * always sendable: with the owner's message while they drive, otherwise as one message in the
- * work item's thread for its employee.
+ * work item's conversation for its employee.
  */
 export default function SessionView({
   item,
@@ -99,7 +99,7 @@ export default function SessionView({
     mutationFn: () => api.stopSession(businessId, item.id, session.id),
     onSuccess: onChanged,
   });
-  /** Until the owner drives, comments go to the work item's employee in its thread. */
+  /** Until the owner drives, comments go to the work item's employee in its conversation. */
   const commenting = useMutation({
     mutationFn: () =>
       api.post(businessId, `work:${item.id}`, {
@@ -221,7 +221,8 @@ export default function SessionView({
           ) : (
             <div className="flex items-center gap-2">
               <span className="text-caption text-ink-3">
-                {count} for {employeeName(item.owner_employee_id)}, in this work item's thread.
+                {count} for {employeeName(item.owner_employee_id)}, in this work item's
+                conversation.
               </span>
               <Button size="compact" onClick={sendComments}>
                 <Send /> Send {count}

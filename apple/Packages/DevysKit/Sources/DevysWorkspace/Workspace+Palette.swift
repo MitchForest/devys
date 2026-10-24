@@ -9,7 +9,6 @@ package enum PaletteCommand: Hashable, Sendable {
     case connectApps
     case shortcuts
     case settings(PreferencesSection)
-    case thread(String)
     case layer(Layer)
 }
 
@@ -77,7 +76,7 @@ extension Workspace.State {
         let needle = query.trimmingCharacters(in: .whitespaces).lowercased()
         guard !needle.isEmpty else { return rows }
         rows += (work.value ?? []).filter(\.state.isOpen).map { item in
-            PaletteRow(id: "thread-\(item.id)", title: item.title, detail: "Thread", icon: .symbol("checklist"), command: .thread(item.id))
+            PaletteRow(id: "work-\(item.id)", title: item.title, detail: "Work", icon: .symbol("checklist"), command: .layer(.work(item.id)))
         }
         rows += artifacts.filter { $0.contentType == "text/html" && $0.latestID == $0.id }.map { page in
             PaletteRow(id: "page-\(page.id)", title: artifactName(page.id), detail: "Page", icon: .symbol("doc.richtext"), command: .layer(.artifact(page.id)))
@@ -106,7 +105,7 @@ extension Workspace {
             case .connectApps: reduceSidebar(.connectAppsToggled(true), state: &state)
             case .shortcuts: state.isShowingShortcuts = true
             case .settings(let section): Self.openSettings(at: section, state: &state)
-            case .thread(let id): reducePlace(.threadOpened(id), state: &state)
+            case .layer(.work(let id)): reducePlace(.workOpened(id), state: &state)
             case .layer(let layer): reducePlace(.layerOpened(layer), state: &state)
             }
         }

@@ -86,8 +86,7 @@ extension Workspace {
             #if os(macOS)
                 takeOverInChrome(workItemID, state: state)
             #else
-                reducePlace(.threadOpened(workItemID), state: &state)
-                reducePlace(.layerOpened(.browser(workID: workItemID)), state: &state)
+                reducePlace(.browserOpened(workID: workItemID), state: &state)
                 changeWork(state, failure: "Couldn't take that work over.") { runtime, businessID in
                     try await runtime.setTakeover(businessID, workItemID, true)
                 }

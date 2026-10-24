@@ -109,21 +109,24 @@ also verified live. No public product has launched.
   standard team (Chief of Staff, Admin, Finance, Growth, Engineering); the Chief of Staff greets
   the owner. Documents, code and the browser
   are what employees do, never sidebar entries. The middle is always a conversation (the Chief of
-  Staff's chat first), a project's channel, a direct chat or a work item's thread, under a
+  Staff's chat first), a project's channel or a direct chat, under a
   centred pill that opens the desk or project details, with the
   face of whoever answers inside the field (tap to choose someone else), a placeholder
   naming them, @-autocomplete, a mic that dictates and, in an empty field, a button that
-  starts a hands-free conversation. A work item is one live card (its plan with the owner's
-  steps as "You: …", and one line: what its employee is doing now with Stop, Ready when you
-  are with Start, Your turn with its one action, Waiting, or Done), shown where it was created
-  and pinned above a thread's composer; plans with an owner step, a payment or anything public
-  wait for Start. While an employee works in a chat its typing row says what it is doing in
+  starts a hands-free conversation. Work opens beside whatever conversation is on screen, in the
+  right panel: its card (its plan with the owner's steps as "You: …", and one line: what its
+  employee is doing now with Stop, Ready when you are with Start, Your turn with its one action,
+  Waiting, or Done), then its own conversation (hand-offs, answers) and a field to reply to
+  whoever is on it. In the chat where it was started it is one line that opens it, and the
+  sidebar lists it under Work while it is going (waiting on the owner first), and until the
+  owner has seen how it ended, for at most a day; ⌘K still finds it after. Plans with an owner
+  step, a payment or anything public wait for Start; Watch opens the live browser over the work. While an employee works in a chat its typing row says what it is doing in
   plain words ("Opening godaddy.com…", each capability's own phrase, never a tool name or
   command), and a reply that took steps carries "Worked for 1m 20s · 6 steps", which opens the
   steps, read from the employee's own record of the turn. Reasoning summaries are not shown. The
   right panel is only for looking: an employee's desk or a project's overview, and layers: pages with their versions, files, the
   Documents and Code apps, coding sessions and the live browser. A page published in reply
-  opens on its own and a new version replaces it in place; **Start a thread** on a message
+  opens on its own and a new version replaces it in place; **Make it work** on a message
   creates a work item; **Ask** quotes a selection into the composer; the open layer goes
   with the next message as a reference. Phones have Home, Projects, Team and Apps tabs
   with the panel and layers as sheets. Dictation and hands-free voice, looks stored on the
@@ -367,8 +370,8 @@ Settings (⌘, on macOS; the account or business menu on iPhone and iPad):
 The design system (`DevysDesignSystem`) follows
 the design direction. Debug builds open a Design
 Gallery from the Debug menu (⌥⌘G), or as the whole window with `DEVYS_GALLERY=1`.
-`DEVYS_PLACE` (`direct:<id>`, `project:<id>`, `thread:<id>` or `palette`), `DEVYS_LAYER`
-(`app:<id>`, `artifact:<id>`, `file:<path>`), `DEVYS_PANEL=open` and `DEVYS_SIDEBAR=hidden`
+`DEVYS_PLACE` (`direct:<id>`, `project:<id>` or `palette`), `DEVYS_LAYER`
+(`work:<id>`, `app:<id>`, `artifact:<id>`, `file:<path>`), `DEVYS_PANEL=open` and `DEVYS_SIDEBAR=hidden`
 open a screen at launch, and `DEVYS_SETTINGS` (`account`, `apps`, `team`, `businesses`,
 `appearance`) opens Settings, all for screenshots in debug builds.
 

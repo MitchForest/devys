@@ -181,7 +181,7 @@ struct WorkspaceFeatureTests {
         store.send(.layerOpened(.artifact("a1")))
         store.send(.businessSelected("globex"))
         #expect(store.snapshot.businessName == "Globex")
-        #expect(store.place == .home && store.layers.isEmpty && store.history.isEmpty)
+        #expect(store.place == .home && store.layers.isEmpty && store.aside == nil)
         await settle("Globex's team") { store.chiefOfStaffScope?.businessID == "globex" }
         // A status answer for the business just left is ignored.
         store.send(Workspace.Action(.statusLoaded(EmployeeScope(businessID: "acme", employeeID: "ops"), .fixture)))
@@ -412,7 +412,7 @@ struct WorkFeatureTests {
         draft.title = "  Draft the PR inquiry  "
         store.send(.workItemEdited(draft))
         store.send(.workItemConfirmed)
-        await settle("created", until: { store.work.value?.count == 2 && store.newWorkItem == nil && store.place == .thread("c2") })
+        await settle("created", until: { store.work.value?.count == 2 && store.newWorkItem == nil && store.state.topLayer == .work("c2") })
         let created = await server.created
         #expect(created.first?.title == "Draft the PR inquiry" && created.first?.owner == "ops")
         store.send(.workItemStateSet("c1", .waiting))

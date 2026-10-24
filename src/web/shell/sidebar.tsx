@@ -17,20 +17,24 @@ import type { Employee } from "../../identity/contract.ts";
 import {
   useChiefOfStaff,
   useDecisions,
+  useEmployees,
   useHome,
   useOwnerPhoto,
   usePerson,
   useSidebar,
   type SidebarRow,
+  useActiveWork,
 } from "../app/data.ts";
 import { useSetProfile, useSidebarMark, useTogglePause } from "../app/mutations.ts";
-import { conversationOf, useNav, usePlace } from "../app/navigation.ts";
+import { conversationOf, useNav, usePlace, useWorkInPanel } from "../app/navigation.ts";
 import { templateTitle } from "../app/names.ts";
 import { ui } from "../app/ui.ts";
 import { useMood } from "../app/workspace.tsx";
 import { BusinessTile, PersonPortrait } from "../design/face.tsx";
 import { EmployeePortrait } from "../design/portrait.tsx";
 import { RetireDialog } from "../panel/desk.tsx";
+import { useWorkLine } from "../panel/work-card.tsx";
+import type { WorkItem } from "../../work/contract.ts";
 import { listTime } from "../lib/format.ts";
 import { PlaceLink } from "./links.tsx";
 import { ConnectAppsButton } from "./connect-apps.tsx";
@@ -128,12 +132,17 @@ function SidebarFooter() {
   );
 }
 
-/** Tiles, Projects and Chats: the sidebar's body. */
+/** Tiles, Work, Projects and Chats: the sidebar's body. */
 function SidebarList() {
   const { pinned, projects, chats } = useSidebar();
+  const work = useActiveWork();
   return (
     <div className="flex flex-col gap-0.5">
       {pinned.length > 0 && <Tiles rows={pinned} />}
+      {work.length > 0 && <SectionLabel>Work</SectionLabel>}
+      {work.map((item) => (
+        <WorkRow key={item.id} item={item} />
+      ))}
       {projects.length > 0 && <SectionLabel>Projects</SectionLabel>}
       {projects.map((row) => (
         <ChatRow key={row.key} row={row} />
@@ -145,6 +154,56 @@ function SidebarList() {
         <ChatRow key={row.key} row={row} />
       ))}
     </div>
+  );
+}
+
+/**
+ * A work item: who is on it, its title and where it stands ("Your turn: Connect Ramp" in amber,
+ * "Opening godaddy.com…" while it runs). It opens beside whatever conversation is on screen.
+ */
+function WorkRow({ item }: { item: WorkItem }) {
+  const nav = useNav();
+  const open = useWorkInPanel() === item.id;
+  const owner = useEmployees().find((e) => e.id === item.owner_employee_id);
+  const line = useWorkLine(item);
+  return (
+    <button
+      type="button"
+      data-testid="work-row"
+      aria-label={`${item.title}, ${line.text}`}
+      aria-current={open ? "true" : undefined}
+      onClick={() => nav.openWork(item.id)}
+      className={cn(
+        "flex w-full items-center gap-2.5 rounded-card px-2 py-[7px] text-left transition-[background-color,box-shadow] duration-200",
+        open ? "bg-sheet shadow-resting" : "hover:bg-sheet/60",
+      )}
+    >
+      {owner ? <EmployeePortrait employee={owner} size={28} /> : <span className="size-7" />}
+      <span className="flex min-w-0 flex-1 flex-col gap-px">
+        <span
+          className={cn(
+            "truncate text-control text-ink",
+            line.tone === "you" ? "font-semibold" : "font-medium",
+          )}
+        >
+          {item.title}
+        </span>
+        <span
+          className={cn(
+            "truncate text-detail",
+            line.tone === "you"
+              ? "text-amber"
+              : line.tone === "working"
+                ? "text-indigo"
+                : line.tone === "done"
+                  ? "text-green"
+                  : "text-ink-3",
+          )}
+        >
+          {line.text}
+        </span>
+      </span>
+    </button>
   );
 }
 

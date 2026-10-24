@@ -9,6 +9,7 @@ import {
   sidebar,
   signIn,
   stubPosting,
+  workView,
 } from "./helpers.ts";
 
 test("the owner hires from a template, edits and retires, and talks to any employee", async ({
@@ -90,7 +91,7 @@ test("the owner hires from a template, edits and retires, and talks to any emplo
     ))!;
     await openAbout(page);
     const overview = page.getByRole("region", { name: "Launch overview" });
-    await overview.getByRole("button", { name: "Thread" }).click();
+    await overview.getByRole("button", { name: "Work" }).click();
     const dialog = page.getByRole("dialog", { name: "New work item" });
     await dialog.getByLabel("Title").fill("Write the launch post");
     await dialog.getByLabel("Owner").selectOption({ label: "Growth" });
@@ -109,16 +110,16 @@ test("the owner hires from a template, edits and retires, and talks to any emplo
     expect(workItem.owner_employee_id).toBe(growth.id);
     expect(workItem.project_id).toBe(project.id);
 
-    // Its thread opens in the middle, under the project, with its card pinned above the reply.
-    await expect(page.getByTestId("place-title")).toHaveText("Write the launch post");
-    const card = page.getByTestId("work-card");
+    // It opens beside the project's channel, which stays in the middle.
+    await expect(page.getByTestId("place-title")).toHaveText("Launch");
+    const card = workView(page).getByTestId("work-card");
     await expect(card.getByText("Growth", { exact: true })).toBeVisible();
-    await expect(card.getByText("Write the launch post")).toBeVisible();
-    await page.getByRole("textbox", { name: "Reply" }).fill("Start with the outline.");
-    await page.getByRole("button", { name: "Send" }).click();
+    await workView(page)
+      .getByRole("textbox", { name: "Reply to Growth" })
+      .fill("Start with the outline.");
+    await workView(page).getByRole("button", { name: "Send" }).click();
     await expect.poll(() => sent.length).toBe(2);
     expect(sent[1]!.key).toBe(`work:${workItem.id}`);
-    await page.getByRole("button", { name: "Back" }).click();
     await openAbout(page);
     await expect(overview.getByText("Write the launch post")).toBeVisible();
     await page.keyboard.press("Escape");

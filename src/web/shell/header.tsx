@@ -1,8 +1,8 @@
-import { ChevronLeft, FileText, Code2, PanelLeft } from "lucide-react";
+import { FileText, Code2, PanelLeft } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { Ref } from "../../protocol/ref.ts";
-import { useChiefOfStaff, useEmployees, usePlaceTitle, useProjects, useWork } from "../app/data.ts";
-import { useCanGoBack, useLayers, useNav, usePlace, type Place } from "../app/navigation.ts";
+import { useChiefOfStaff, useEmployees, usePlaceTitle, useProjects } from "../app/data.ts";
+import { useLayers, useNav, usePlace, type Place } from "../app/navigation.ts";
 import { ui, useUi } from "../app/ui.ts";
 import { useMood } from "../app/workspace.tsx";
 import { BusinessTile } from "../design/face.tsx";
@@ -19,13 +19,11 @@ const pill =
 
 /**
  * The conversation's header: a centred pill with the face (or project tile) and name, which
- * opens the employee's desk or the project's details as a popover. Back returns from a thread;
- * the sidebar shows again from here when hidden.
+ * opens the employee's desk or the project's details as a popover; the sidebar shows again from
+ * here when hidden.
  */
 export function ConversationHeader() {
   const place = usePlace();
-  const nav = useNav();
-  const canGoBack = useCanGoBack();
   const sidebarVisible = useUi((state) => state.sidebarVisible);
   return (
     <header className="relative flex h-[52px] shrink-0 items-center justify-center px-3">
@@ -37,11 +35,6 @@ export function ConversationHeader() {
             </HeaderButton>
             <SearchButton />
           </>
-        )}
-        {canGoBack && (
-          <HeaderButton label="Back (⌘[)" onClick={nav.back}>
-            <ChevronLeft className="size-4" />
-          </HeaderButton>
         )}
       </div>
       <PlacePill key={JSON.stringify(place)} place={place} />
@@ -78,17 +71,12 @@ export function PlacePill({ place }: { place: Place }) {
   const employees = useEmployees();
   const chiefOfStaff = useChiefOfStaff();
   const projects = useProjects().data ?? [];
-  const work = useWork().data;
   const employee =
     place.kind === "home"
       ? chiefOfStaff
       : place.kind === "direct"
         ? employees.find((e) => e.id === place.employeeId)
-        : place.kind === "thread"
-          ? employees.find(
-              (e) => e.id === work?.find((w) => w.id === place.workId)?.owner_employee_id,
-            )
-          : undefined;
+        : undefined;
   const projectIndex = place.kind === "project" ? projects.findIndex((p) => p.id === place.id) : -1;
   const face =
     place.kind === "project" ? (
@@ -101,14 +89,6 @@ export function PlacePill({ place }: { place: Place }) {
       {title}
     </span>
   );
-  // A thread's work is its card; the pill only names it.
-  if (place.kind === "thread")
-    return (
-      <div className={pill}>
-        {face}
-        {name}
-      </div>
-    );
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger

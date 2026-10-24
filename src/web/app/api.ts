@@ -334,7 +334,7 @@ export const api = {
     return { conflict: false as const, ...decode(SavedFile, url, await response.json()) };
   },
   fileUrl: (b: string, path: string) => `${business(b)}/files/raw?path=${encodeURIComponent(path)}`,
-  /** Comments sent as one message: to an employee's DM, or a work item's thread (its owner). */
+  /** Comments sent as one message: to an employee's DM, or a work item's conversation (its owner). */
   commentOnFile: (b: string, comment: typeof FileComments.Encoded) =>
     post(Posted, `${business(b)}/files/comments`, comment),
   terminals: (b: string) => get(Terminals, `${business(b)}/terminals`),

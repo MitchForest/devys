@@ -178,7 +178,7 @@ function NewEmployeeForm() {
 /** The end of the chosen day, in the owner's time zone. */
 export const endOfDay = (date: string) => new Date(`${date}T23:59:00`).toISOString();
 
-/** A new work item: what, who owns it, why, by when and which project it is in. Its thread opens. */
+/** A new work item: what, who owns it, why, by when and which project it is in. It opens beside the conversation. */
 export function NewWorkItemDialog() {
   const defaults = useUi((state) => state.newWorkItem);
   // The opening's defaults are kept while it closes, and each opening is a fresh form.

@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { localStores } from "../fixtures/local.ts";
-import { bearer, signIn } from "./helpers.ts";
+import { bearer, openWork, signIn, workView } from "./helpers.ts";
 
 test("a work item's card asks one thing at a time: a spend says it is approved on a Mac or iPhone", async ({
   page,
@@ -18,7 +18,7 @@ test("a work item's card asks one thing at a time: a spend says it is approved o
     "SELECT id FROM grants WHERE employee_id = $1 AND capability = 'askOwner' AND revoked_at IS NULL",
     [owner.chiefOfStaff],
   );
-  // What the employee asked with askOwner, in the work item's thread.
+  // What the employee asked with askOwner, in the work item's conversation.
   const ask = async (kind: string, input: unknown, at: string) => {
     const id = randomUUID();
     await sql.run(
@@ -58,8 +58,8 @@ test("a work item's card asks one thing at a time: a spend says it is approved o
   );
   try {
     await signIn(page, sql, owner.person);
-    await page.goto(`/${owner.business}/thread/${work.id}`);
-    const card = page.getByTestId("work-card");
+    await openWork(page, owner.business, work.id);
+    const card = workView(page).getByTestId("work-card");
     await expect(card.getByTestId("work-state")).toHaveText(
       "Your turn: Spend $12.99: Register acme-plumbing.example for one year",
     );
@@ -133,8 +133,8 @@ test("a secret request opens the secure entry sheet; the value goes in one post 
   });
   try {
     await signIn(page, sql, owner.person);
-    await page.goto(`/${owner.business}/thread/${work.id}`);
-    const needsYou = page.getByTestId("work-card");
+    await openWork(page, owner.business, work.id);
+    const needsYou = workView(page).getByTestId("work-card");
     // The owner reads what it is; the name is the employee's and never shows.
     await expect(needsYou.getByTestId("work-state")).toHaveText("Your turn: Your card");
     await expect(needsYou.getByText("RAMP_CARD")).toHaveCount(0);
@@ -247,8 +247,8 @@ test("an approval lists its steps and shows its draft; a file request sends the 
   });
   try {
     await signIn(page, sql, owner.person);
-    await page.goto(`/${owner.business}/thread/${work.id}`);
-    const card = page.getByTestId("work-card");
+    await openWork(page, owner.business, work.id);
+    const card = workView(page).getByTestId("work-card");
     await expect(card.getByTestId("request-steps").getByRole("listitem")).toHaveText([
       "Merge PR #12 at a1b2c3",
       "Deploy a1b2c3 of site to production",
@@ -260,8 +260,8 @@ test("an approval lists its steps and shows its draft; a file request sends the 
     await draft.getByRole("button", { name: /Launch email/ }).click();
     await expect(page).toHaveURL(/layer=/);
 
-    await page.goto(`/${owner.business}/thread/${brand.id}`);
-    const needsYou = page.getByTestId("work-card");
+    await openWork(page, owner.business, brand.id);
+    const needsYou = workView(page).getByTestId("work-card");
     await expect(needsYou.getByTestId("work-state")).toHaveText(
       "Your turn: Your logo, for the site",
     );

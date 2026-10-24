@@ -4,8 +4,8 @@ import DevysClient
 import DevysDesignSystem
 import SwiftUI
 
-/// The sidebar is people and projects, as Messages lays out a list: pinned tiles, Projects while
-/// one is active, then Chats, most recent first; the owner's face (Settings) and Connect apps at
+/// The sidebar is people, work and projects, as Messages lays out a list: pinned tiles, Work while
+/// any is going, Projects while one is active, then Chats, most recent first; the owner's face (Settings) and Connect apps at
 /// the bottom. Search and New are ⌘K and the menu bar (the title bar's search on the Mac).
 struct Sidebar: View {
     let store: StoreOf<Workspace>
@@ -24,8 +24,9 @@ struct Sidebar: View {
     }
 }
 
-/// The list itself, the sidebar's and the phone's: tiles, Projects (only while one is active) and
-/// Chats. `opened` runs after a row opens something, so the phone can leave its list.
+/// The list itself, the sidebar's and the phone's: tiles, Work (only while any is going), Projects
+/// (only while one is active) and Chats. `opened` runs after a row opens something, so the phone
+/// can leave its list.
 struct SidebarList: View {
     let store: StoreOf<Workspace>
     var opened: () -> Void = {}
@@ -35,13 +36,24 @@ struct SidebarList: View {
 
     var body: some View {
         let layout = store.state.sidebar
+        let work = store.state.activeWork()
         VStack(alignment: .leading, spacing: 2) {
             if !layout.pinned.isEmpty { tiles(layout.pinned) }
+            if !work.isEmpty {
+                heading("Work")
+                ForEach(work) { item in
+                    WorkSidebarRow(store: store, item: item) {
+                        store.send(.workOpened(item.id))
+                        opened()
+                    }
+                    .contextMenu { WorkActions(store: store, item: item) }
+                }
+            }
             if !layout.projects.isEmpty {
                 heading("Projects")
                 ForEach(layout.projects) { row($0) }
-                heading("Chats")
             }
+            if !work.isEmpty || !layout.projects.isEmpty { heading("Chats") }
             ForEach(layout.chats) { row($0) }
         }
         .alert("Rename", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } }), presenting: renaming) { employee in
@@ -370,5 +382,54 @@ struct ConnectAppsButton: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .accessibilityLabel("Connect apps")
+    }
+}
+
+/// A work item in the sidebar: who is on it, its title and where it stands ("Your turn: Connect
+/// Ramp" in amber, "Opening godaddy.com…" while it runs). It opens beside whatever conversation is
+/// on screen.
+private struct WorkSidebarRow: View {
+    let store: StoreOf<Workspace>
+    let item: WorkItem
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        let status = store.state.workStatus(item)
+        let open = store.state.workInPanel == item.id
+        Button(action: action) {
+            HStack(spacing: 10) {
+                if let owner = store.state.employee(item.ownerEmployeeID) {
+                    Portrait(store.state.portrait(for: owner), size: 28, mood: store.state.mood(for: owner), isAnimated: false)
+                }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(item.title)
+                        .font(DevysTypography.control.weight(status.tone == .you ? .semibold : .medium))
+                        .foregroundStyle(DevysColors.ink)
+                        .lineLimit(1)
+                    Text(status.text)
+                        .font(DevysTypography.secondary)
+                        .foregroundStyle(status.tone.color)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                if open {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous).fill(DevysColors.sheet).devysElevation(.resting)
+                } else if hovering {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous).fill(DevysColors.track.opacity(0.45))
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(item.title), \(status.text)")
+        .accessibilityAddTraits(open ? .isSelected : [])
     }
 }

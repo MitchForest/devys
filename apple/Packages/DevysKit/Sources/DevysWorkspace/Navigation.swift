@@ -1,15 +1,14 @@
 package import DevysClient
 
-/// Where the owner is: always a conversation. Home is the direct chat with the Chief of Staff; a
-/// project is its channel; a thread is a work item's conversation.
+/// Where the owner is: always a conversation with someone. Home is the direct chat with the Chief
+/// of Staff; a project is its channel. Work opens beside it, as a layer.
 package enum Place: Hashable, Sendable {
     case home
     case direct(String)
     case project(String)
-    case thread(String)
 
     package enum Kind: String, CaseIterable, Hashable, Sendable {
-        case home, direct, project, thread
+        case home, direct, project
     }
 
     package var kind: Kind {
@@ -17,7 +16,6 @@ package enum Place: Hashable, Sendable {
         case .home: .home
         case .direct: .direct
         case .project: .project
-        case .thread: .thread
         }
     }
 
@@ -27,13 +25,14 @@ package enum Place: Hashable, Sendable {
         case .home: chiefOfStaff.map(ConversationKey.direct)
         case .direct(let id): .direct(id)
         case .project(let id): .project(id)
-        case .thread(let id): .work(id)
         }
     }
 }
 
 /// A temporary view in the right panel, which opens only for one.
 package enum Layer: Hashable, Sendable {
+    /// A work item beside the conversation: its card, plan and its own conversation.
+    case work(String)
     /// A page an employee published; `updatedBy` names who replaced it while it was open.
     case artifact(String, updatedBy: String? = nil)
     case file(String)
@@ -68,6 +67,7 @@ extension Layer {
     /// not a record.
     package var ref: Ref? {
         switch self {
+        case .work(let id): .workItem(id)
         case .artifact(let id, _): .artifact(id)
         case .file(let path): .file(path)
         case .session(_, let sessionID): .codeSession(sessionID)
@@ -93,14 +93,14 @@ package enum RecordTarget: Hashable, Sendable {
 /// The one registry of what opens each record kind the apps declare (their manifests' `records`),
 /// keyed by `<app>/<kind>` from the ref, the same rules as the web. A kind not here opens nothing.
 package enum Records {
-    /// `work`: the work item of the thread on screen, which a coding session belongs to.
+    /// `work`: the work item open beside the conversation, which a coding session belongs to.
     package typealias Opener = @Sendable (_ id: String, _ work: String?) -> RecordTarget?
 
     package static let registry: [String: Opener] = [
         "documents/artifact": { id, _ in .layer(.artifact(id)) },
         "documents/file": { id, _ in .layer(.file(id)) },
         "code/session": { id, work in work.map { .layer(.session(workID: $0, sessionID: id)) } },
-        "work/item": { id, _ in .place(.thread(id)) },
+        "work/item": { id, _ in .layer(.work(id)) },
         "work/project": { id, _ in .place(.project(id)) },
         "work/routine": { id, _ in .layer(.routine(id)) },
         "team/app": { id, _ in .layer(.remoteApp(id)) }

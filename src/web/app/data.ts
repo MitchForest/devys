@@ -8,7 +8,7 @@ import { useCallback } from "react";
 import type { Home, Me as MeSchema, NeedsYouRequest, RuntimeState } from "../../app/wire.ts";
 import type { ConversationKey, ConversationSummary } from "../../conversations/contract.ts";
 import type { Employee } from "../../identity/contract.ts";
-import type { Project } from "../../work/contract.ts";
+import type { Project, WorkItem } from "../../work/contract.ts";
 import { api } from "./api.ts";
 import type { Place } from "./navigation.ts";
 import { meQuery, queries, keys } from "./query.ts";
@@ -117,6 +117,40 @@ const followedOf = (d: { conversations: readonly { key: string; following: boole
   d.conversations
     .filter((summary) => summary.following && summary.key.startsWith("work:"))
     .map((summary) => summary.key.slice("work:".length));
+const workUnreadOf = (d: { conversations: readonly { key: string; unread: number }[] }) =>
+  new Map(
+    d.conversations
+      .filter((summary) => summary.key.startsWith("work:"))
+      .map((summary) => [summary.key.slice("work:".length), summary.unread] as const),
+  );
+const day = 24 * 60 * 60_000;
+
+/**
+ * The work in the sidebar: everything open, and finished work until the owner has seen how it
+ * ended (its last word unread) for at most a day; it is archived after that, still found with ⌘K.
+ * Those waiting on the owner first, then the ones running, then the rest, newest first.
+ */
+export function useActiveWork() {
+  const work = useWork().data ?? [];
+  const unread = useQuery({ ...queries.summaries(useBusinessId()), select: workUnreadOf }).data;
+  const asked = new Set((useDecisions().data ?? []).flatMap((d) => d.work_item_id ?? []));
+  const now = Date.now();
+  const shown = work.filter((item) =>
+    item.state === "completed"
+      ? (unread?.get(item.id) ?? 0) > 0 && now - Date.parse(item.updated_at) < day
+      : item.state !== "cancelled",
+  );
+  const rank = (item: WorkItem) =>
+    asked.has(item.id) || item.state === "proposed" || item.state === "needs_decision"
+      ? 0
+      : item.state === "in_progress" || item.state === "ready"
+        ? 1
+        : item.state === "completed"
+          ? 3
+          : 2;
+  return shown.toSorted((a, b) => rank(a) - rank(b) || b.updated_at.localeCompare(a.updated_at));
+}
+
 /** Work items the signed-in person follows, by id. */
 export const useFollowed = (): readonly string[] =>
   useQuery({ ...queries.summaries(useBusinessId()), select: followedOf }).data ?? none;
@@ -234,11 +268,10 @@ export const isRunning = (state: RuntimeState | undefined) =>
 export const unfinished = (state: RuntimeState | undefined) =>
   state?.inbox.some((i) => i.status !== "done" && i.status !== "failed") ?? false;
 
-/** A place's title: the employee's or project's name, or a thread's work. */
+/** A place's title: the employee's or project's name. */
 export function usePlaceTitle(place: Place): string {
   const employees = useEmployees();
   const projects = useProjects().data;
-  const work = useWork().data;
   switch (place.kind) {
     case "home":
       // Home is the Chief of Staff's chat, named for them.
@@ -247,7 +280,5 @@ export function usePlaceTitle(place: Place): string {
       return employees.find((e) => e.id === place.employeeId)?.name ?? "Message";
     case "project":
       return projects?.find((p) => p.id === place.id)?.name ?? "Project";
-    case "thread":
-      return work?.find((w) => w.id === place.workId)?.title ?? "Thread";
   }
 }
