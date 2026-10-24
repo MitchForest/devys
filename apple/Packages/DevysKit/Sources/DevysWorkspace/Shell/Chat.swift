@@ -40,14 +40,17 @@ struct MessageRow: View {
                 } else {
                     avatar
                 }
-                // The actions float beside the bubble, outside its layout.
+                // The actions hang outside the bubble, in the room beside it: anchored to a
+                // zero-width point on its outer edge, so they can only extend away from the text.
                 bubbleView
                     .overlay(alignment: isOwner ? .leading : .trailing) {
                         if isHovering, canAct {
-                            actions
-                                .fixedSize()
-                                .alignmentGuide(isOwner ? .leading : .trailing) { size in
-                                    isOwner ? size[.trailing] + 6 : size[.leading] - 6
+                            Color.clear
+                                .frame(width: 0, height: 0)
+                                .overlay(alignment: isOwner ? .trailing : .leading) {
+                                    actions
+                                        .fixedSize()
+                                        .padding(isOwner ? .trailing : .leading, 6)
                                 }
                         }
                     }
