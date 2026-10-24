@@ -18,7 +18,6 @@ public struct DevysAvatar: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
-    @State private var pokedAt: Date?
     @State private var previousMood: BotMood?
     @State private var moodChangedAt: Date?
 
@@ -74,15 +73,9 @@ public struct DevysAvatar: View {
         }
         .accessibilityHidden(label == nil)
         .accessibilityLabel(Text(accessibilitySummary))
-        return Group {
-            if budget == .full, isAnimated {
-                // Alongside, never instead: a face inside a button (a pinned tile, the header's
-                // pill) still opens what the button opens, as on the web.
-                core.simultaneousGesture(TapGesture().onEnded { pokedAt = Date() })
-            } else {
-                core
-            }
-        }
+        // No tap of its own: a face sits inside buttons (a pinned tile, the header's pill), and
+        // a tap on it would win over theirs. It reacts when its caller says so (`reactAt`).
+        return core
     }
 
     private var budget: MotionBudget { MotionBudget(size: size) }
@@ -100,15 +93,8 @@ public struct DevysAvatar: View {
         return "\(label), \(mood.accessibilityDescription)"
     }
 
-    /// The most recent poke, whether from a tap or the caller's trigger.
-    private var pokeStart: Date? {
-        switch (pokedAt, reactAt) {
-        case (nil, nil): nil
-        case (let poked?, nil): poked
-        case (nil, let react?): react
-        case (let poked?, let react?): max(poked, react)
-        }
-    }
+    /// When the caller last asked the face to react.
+    private var pokeStart: Date? { reactAt }
 
     private func draw(context: GraphicsContext, canvasSize: CGSize, time: Double) {
         let side = min(canvasSize.width, canvasSize.height)
