@@ -3,7 +3,6 @@ import {
   CirclePlay,
   EyeOff,
   MessageCircle,
-  MoreHorizontal,
   PanelLeft,
   Pencil,
   Pin,
@@ -42,13 +41,6 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -329,7 +321,7 @@ function ChatRow({ row }: { row: SidebarRow }) {
               {row.title}
             </span>
             {row.last && (
-              <span className="ml-auto shrink-0 text-caption text-ink-3 group-hover/row:invisible">
+              <span className="ml-auto shrink-0 text-caption text-ink-3">
                 {listTime(row.last.created_at)}
               </span>
             )}
@@ -409,12 +401,12 @@ function useRowActions(row: SidebarRow, open: (dialog: "rename" | "retire") => v
   return actions.filter((group) => group.length > 0);
 }
 
-/** The same actions on right-click and behind the hover "…" button. */
+/** A row's actions, on right-click (or a two-finger click), as Messages. */
 function RowMenus({ row, children }: { row: SidebarRow; children: React.ReactNode }) {
   const [dialog, setDialog] = useState<"rename" | "retire">();
   const groups = useRowActions(row, setDialog);
   return (
-    <div className="group/row relative">
+    <div className="relative">
       <ContextMenu>
         <ContextMenuTrigger render={<div />}>{children}</ContextMenuTrigger>
         <ContextMenuContent className="min-w-48">
@@ -434,30 +426,6 @@ function RowMenus({ row, children }: { row: SidebarRow; children: React.ReactNod
           ))}
         </ContextMenuContent>
       </ContextMenu>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          aria-label={`More for ${row.title}`}
-          className="absolute top-1.5 right-1.5 grid size-6 place-items-center rounded-full bg-sheet text-ink-2 opacity-0 shadow-resting transition-opacity group-hover/row:opacity-100 hover:text-ink focus-visible:opacity-100 data-[popup-open]:opacity-100"
-        >
-          <MoreHorizontal className="size-3.5" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-auto min-w-48">
-          {groups.map((group, index) => (
-            <div key={index}>
-              {index > 0 && <DropdownMenuSeparator />}
-              {group.map((action) => (
-                <DropdownMenuItem
-                  key={action.label}
-                  onClick={action.run}
-                  {...(action.destructive ? { variant: "destructive" as const } : {})}
-                >
-                  <action.icon /> {action.label}
-                </DropdownMenuItem>
-              ))}
-            </div>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
       {row.kind === "employee" && dialog === "rename" && (
         <RenameDialog employee={row.employee} close={() => setDialog(undefined)} />
       )}

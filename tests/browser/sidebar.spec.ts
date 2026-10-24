@@ -71,10 +71,11 @@ test("pinned tiles, chats as rows, and each row's menu: pin, unpin, mark unread,
       .poll(async () => (await mark(sql, `direct:${owner.chiefOfStaff}`))?.pinned)
       .toBe(false);
 
-    // Mark Finance unread, from the hover "…" button this time.
+    // Mark Finance unread. Hovering a row adds no button: its actions are on right-click alone.
     const financeRow = sidebar(page).getByRole("link", { name: "Finance", exact: true });
     await financeRow.hover();
-    await sidebar(page).getByRole("button", { name: "More for Finance" }).click();
+    await expect(sidebar(page).getByRole("button", { name: /^More for/ })).toHaveCount(0);
+    await financeRow.click({ button: "right" });
     await page.getByRole("menuitem", { name: "Mark as unread" }).click();
     await expect(sidebar(page).getByRole("link", { name: "Finance, 1 unread" })).toBeVisible();
     await expect.poll(async () => (await mark(sql, `direct:${finance.id}`))?.unread).toBe(true);
