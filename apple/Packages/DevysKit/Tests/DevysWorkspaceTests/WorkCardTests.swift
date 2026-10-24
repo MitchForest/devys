@@ -162,7 +162,7 @@ struct WorkCardTests {
 
     @Test("A result reads as one sentence: label · value · its site as a link, and its mark")
     func resultSentence() {
-        let result = WorkResult(label: "GoDaddy price", value: "$4,999", url: "https://www.godaddy.com/domainsearch/find?domainToCheck=edulist.com", check: .held)
+        let result = WorkResult(label: "GoDaddy price", value: "$4,999", url: "https://www.godaddy.com/domainsearch/find?domainToCheck=acme-widgets.com", check: .held)
         let sentence = WorkResultsView.sentence(result)
         #expect(String(sentence.characters) == "GoDaddy price · $4,999 · godaddy.com ✓")
         #expect(sentence.runs.contains { $0.link?.host() == "www.godaddy.com" })
