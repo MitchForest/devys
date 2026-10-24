@@ -28,6 +28,13 @@ export const idOf = (key: ConversationKey) => key.slice(key.indexOf(":") + 1);
  * One entry in a conversation: something someone said, an event such as a hand-off, or a card,
  * which shows its record (`ref`) as it is now and so is updated in place, never reposted.
  */
+/**
+ * How an employee's reply was worked out: how long its turn took and how many steps it shows
+ * (the steps themselves stay in the employee's own record, read when the owner opens them).
+ */
+export const Worked = Schema.Struct({ ms: Schema.Int, steps: Schema.Int });
+export type Worked = typeof Worked.Type;
+
 export const Message = Schema.Struct({
   id: Schema.String,
   conversation: ConversationKey,
@@ -50,6 +57,8 @@ export const Message = Schema.Struct({
   question: Schema.NullOr(Schema.String),
   /** The owner may pick several answers, sent together with Done. */
   pick_many: Schema.Boolean,
+  /** An employee's reply that took steps: shown under it as "Worked for 1m · 6 steps". */
+  worked: Schema.NullOr(Worked),
   created_at: Timestamp,
 });
 export type Message = typeof Message.Type;

@@ -14,6 +14,7 @@ export function teamCapabilities(db: Database, hiring: Hiring) {
   return [
     capability({
       name: "hireEmployee",
+      activity: "Hiring a colleague",
       description:
         "Hire a new employee from a role template (admin, finance, growth, engineering or custom) with a name, responsibilities and optionally a model id. The owner approves each hire.",
       effect: "change",
@@ -58,6 +59,7 @@ export function appSearchCapabilities(
   return [
     capability({
       name: "appSearch",
+      activity: "Searching the app directory",
       description:
         'Find apps for a job by name or what they do ("ramp", "accounting", "calendar"): the business\'s own apps and the public MCP Registry. An app that isn\'t on yet is connected by the owner: pass its `app` to askOwner {kind: "connect", app, why} in a work item\'s thread. When you know an app\'s MCP server address (https://…), askOwner connect takes that too.',
       effect: "read",

@@ -2,11 +2,12 @@ import { Effect } from "effect";
 import type { Env } from "./env.ts";
 import { appReactions } from "../channels/app.ts";
 import { type Business, type Person } from "../identity/contract.ts";
-import { conversationKey, employeeOf } from "../conversations/contract.ts";
+import { conversationKey, employeeOf, type ConversationKey } from "../conversations/contract.ts";
 import {
   conversationSummaries,
   markConversation,
   markSeen,
+  replyTurnOf,
   setFollowing,
 } from "../conversations/service.ts";
 import { conversationExists, conversationPage, postFromPerson } from "./conversations.ts";
@@ -20,6 +21,7 @@ import {
   Posted,
   Read,
   SidebarMark,
+  Steps,
   Welcomed,
 } from "./wire.ts";
 import { appChat } from "../channels/app.ts";
@@ -49,6 +51,16 @@ async function welcome(env: Env, businessId: string, personId: string) {
   return true;
 }
 
+/** The steps behind an employee's reply, from that employee's own record of its turn. */
+async function stepsOf(env: Env, businessId: string, key: ConversationKey, messageId: string) {
+  const turn = await Effect.runPromise(
+    replyTurnOf(env.HYPERDRIVE, businessId, key, decodeURIComponent(messageId)),
+  );
+  if (!turn) return [];
+  const scope = { businessId, employeeId: turn.employeeId };
+  return (await env.AGENT.getByName(scopeName(scope)).turn(scope, turn.operationId))?.steps ?? [];
+}
+
 /**
  * The business's shared conversations: DMs (`direct:<employee>`), project channels
  * (`project:<id>`) and work threads (`work:<id>`). Posting wakes whoever the conversation's rules
@@ -70,10 +82,16 @@ export async function conversationRoute(
         conversationSummaries(env.HYPERDRIVE, business.id, person.id),
       ),
     });
-  const [, raw, action] =
-    /^\/conversations\/([^/]+)(?:\/(messages|read|follow|sidebar))?$/.exec(path) ?? [];
+  const [, raw, action, messageId] =
+    /^\/conversations\/([^/]+)(?:\/(messages|read|follow|sidebar)(?:\/([^/]+)\/steps)?)?$/.exec(
+      path,
+    ) ?? [];
   const key = conversationKey(decodeURIComponent(raw ?? ""));
   if (!key || !(await conversationExists(env, business.id, key))) return notFound();
+  if (messageId !== undefined) {
+    if (action !== "messages" || request.method !== "GET") return notFound();
+    return respond(Steps, { steps: await stepsOf(env, business.id, key, messageId) });
+  }
   if (!action && request.method === "GET") {
     const before = new URL(request.url).searchParams.get("before") ?? undefined;
     const page = await conversationPage(env, business.id, key, before);

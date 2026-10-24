@@ -157,7 +157,7 @@ private struct WorkStateLine: View {
             switch line {
             case .working(let doing):
                 dot(DevysColors.indigo)
-                label(doing.isEmpty ? "Working" : "Working · \(doing)")
+                label("\(doing)…")
                 Spacer(minLength: 6)
                 if browsing {
                     Button("Watch") { store.send(.layerOpened(.browser(workID: item.id))) }

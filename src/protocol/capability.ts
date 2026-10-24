@@ -1,4 +1,4 @@
-import { Context, Effect, Schema } from "effect";
+import { Context, Effect, Option, Schema } from "effect";
 
 export class CapabilityError extends Schema.TaggedError<CapabilityError>()("CapabilityError", {
   code: Schema.Literals([
@@ -67,6 +67,11 @@ export interface Capability {
    * production"), so an owner's approval listing that step in the same work item covers it.
    */
   readonly step?: (input: unknown, businessId: string) => Promise<string | undefined>;
+  /**
+   * What the employee is doing while this runs, as the owner reads it ("Searching the app
+   * directory"): never a command, path, id or tool name. Given the call's arguments when known.
+   */
+  readonly activity: (args?: unknown) => string;
   readonly execute: (args: unknown) => Effect.Effect<unknown, CapabilityError, Invocation>;
 }
 
@@ -83,10 +88,21 @@ export function capability<I, O, C = never>(definition: {
   core?: true;
   remoteSchema?: Record<string, unknown>;
   step?: (input: I, businessId: string) => Promise<string | undefined>;
+  /** The phrase, or one made from the input (undefined when the arguments aren't known). */
+  activity: string | ((input: I | undefined) => string);
   execute: (input: I) => Effect.Effect<O, CapabilityError, Invocation>;
 }): Capability {
+  const { activity } = definition;
   const contract: Capability = {
     ...definition,
+    activity: (args) =>
+      typeof activity === "string"
+        ? activity
+        : activity(
+            args === undefined
+              ? undefined
+              : Option.getOrUndefined(Schema.decodeUnknownOption(definition.input)(args)),
+          ),
     step: definition.step && ((input, businessId) => definition.step!(input as I, businessId)),
     constraints: definition.constraints && {
       schema: definition.constraints.schema,
@@ -148,3 +164,12 @@ export const FilePath = Schema.String.check(
       !path.includes("\u0000") && !path.split("/").some((part) => part === "." || part === ".."),
   ),
 );
+
+/** A web address's site, as the owner reads it ("godaddy.com"), without any of its path. */
+export const siteOf = (url: string | undefined) => {
+  try {
+    return url ? new URL(url).hostname.replace(/^www\./, "") || undefined : undefined;
+  } catch {
+    return undefined;
+  }
+};

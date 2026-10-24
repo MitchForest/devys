@@ -2,7 +2,7 @@
  * The business's records as components read them: each hook subscribes to one query, so a
  * component re-renders only when what it shows changed.
  */
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { useCallback } from "react";
 import type { Home, Me as MeSchema, NeedsYouRequest, RuntimeState } from "../../app/wire.ts";
@@ -208,6 +208,24 @@ export const useStatus = (employeeId: string | undefined) =>
     enabled: Boolean(employeeId),
     select: (d) => d.state,
   });
+
+/** Employees running a turn in this conversation now, whoever sent what woke them. */
+export function useRunningIn(key: string | undefined) {
+  const businessId = useBusinessId();
+  const employees = useEmployees();
+  const statuses = useQueries({
+    queries: employees.map((employee) => ({
+      ...queries.status(businessId, employee.id),
+      enabled: key !== undefined,
+    })),
+  });
+  return employees
+    .filter((_, index) => {
+      const run = statuses[index]?.data?.state.run;
+      return key !== undefined && run && !run.stopped && run.conversation === key;
+    })
+    .map((employee) => employee.id);
+}
 
 /** An employee's runtime has a run going. */
 export const isRunning = (state: RuntimeState | undefined) =>

@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { conversationKey, type ConversationKey } from "../conversations/contract.ts";
+import { conversationKey, type ConversationKey, type Worked } from "../conversations/contract.ts";
 import type { Scope } from "../identity/contract.ts";
 /** Provider adapters normalize identifiers before entering the agent host. */
 const Id = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(512));
@@ -53,7 +53,8 @@ export interface Channel {
   prepare(scope: Scope, input: Inbound): Promise<string>;
   /**
    * Delivers the reply of the employee `scope` names. `inReplyTo` is the inbound message id
-   * the reply answers, where the channel records it.
+   * the reply answers, where the channel records it; `worked`, how its turn was worked out,
+   * where the channel shows it.
    */
   send(
     scope: Scope,
@@ -61,6 +62,7 @@ export interface Channel {
     text: string,
     operationId: string,
     inReplyTo?: string,
+    worked?: Worked,
   ): Promise<Delivery>;
   /**
    * Says, as Devys and never as the employee, that a turn ended without the employee's answer

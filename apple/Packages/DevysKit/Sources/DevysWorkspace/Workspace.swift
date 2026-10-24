@@ -57,6 +57,8 @@ package struct Workspace {
         package var main: OpenConversation?
         /// Started conversations' newest message and unread count, by key.
         package var summaries: [String: ConversationSummary] = [:]
+        /// The steps behind replies the owner opened, by message id; a finished turn's don't change.
+        package var steps: [String: Loadable<[String]>] = [:]
         /// Roles to hire into, the hire in progress.
         package var team = TeamState()
         /// The work item being written in the New work item sheet.

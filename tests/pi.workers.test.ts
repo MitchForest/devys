@@ -55,6 +55,15 @@ it("Pi activates a discovered capability and calls it without exposing all integ
   expect(await probe.writes()).toBe(1);
 });
 
+it("a turn's steps read as the owner's words, never tool names", async () => {
+  const probe = bindings.PI.getByName(crypto.randomUUID());
+  const { worked, doing } = JSON.parse(await probe.steps());
+  expect(worked.steps).toEqual(["Looking through its apps", "Opening your attachment"]);
+  expect(worked.ms).toBeGreaterThanOrEqual(0);
+  // Finished, its newest entry is the reply: nothing is being called.
+  expect(doing).toBe("Thinking");
+});
+
 it("native Pi compaction preserves older entries for later retrieval", async () => {
   const probe = bindings.PI.getByName(crypto.randomUUID());
   const result = JSON.parse(await probe.compactAndReadOlder());

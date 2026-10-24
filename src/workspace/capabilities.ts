@@ -27,6 +27,7 @@ export function workspaceCapabilities(
   return [
     capability({
       name: "secretList",
+      activity: "Checking saved keys and passwords",
       description:
         "List the secrets and cards the owner has saved for this business: each one's name (what run's `secrets` and browserFill take), whether it is a secret or a card, who added it and when. Never a value. Check here before asking the owner for a key or a card.",
       effect: "read",
@@ -56,6 +57,7 @@ export function workspaceCapabilities(
     }),
     capability({
       name: "readSkill",
+      activity: "Reading a how-to",
       description:
         "Load a skill listed in your instructions by name: its description and instructions. A business skill also gives the path of its SKILL.md; its scripts and files sit beside it.",
       effect: "read",
@@ -90,6 +92,7 @@ export function workspaceCapabilities(
     }),
     capability({
       name: "importAttachment",
+      activity: "Opening your attachment",
       description:
         "Copy a saved message attachment to a file, using its attachment id and an absolute path.",
       effect: "change",
@@ -110,6 +113,7 @@ export function workspaceCapabilities(
     }),
     capability({
       name: "read",
+      activity: "Reading a file",
       description: "Read a UTF-8 file by absolute path (64 KB maximum).",
       effect: "read",
       replay: "read",
@@ -125,6 +129,7 @@ export function workspaceCapabilities(
     }),
     capability({
       name: "write",
+      activity: "Writing a file",
       description: "Write a UTF-8 file by absolute path. This replaces its contents.",
       effect: "change",
       replay: "idempotent",
@@ -140,6 +145,7 @@ export function workspaceCapabilities(
     }),
     capability({
       name: "printPdf",
+      activity: "Making a PDF",
       description:
         "Print an HTML file to a PDF with a real browser, for documents meant to be read or sent as PDFs. Write the HTML (with its own styles) first; give absolute paths ending in .html and .pdf.",
       effect: "change",
@@ -154,6 +160,7 @@ export function workspaceCapabilities(
     }),
     capability({
       name: "run",
+      activity: "Working on its computer",
       description:
         "Run a shell command where you work (your instructions say where). On an uncertain result, inspect existing state; never blindly repeat a side effect. `secrets` names the business's secrets this one command needs (an API key, a token): each is set as the environment variable of its name for this command only, and redacted from its output, so refer to it as $NAME and never print, store or send it anywhere else. A secret the business lacks is asked for with askOwner (kind secret). Cards are never put in a command.",
       effect: "change",

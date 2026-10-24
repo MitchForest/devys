@@ -4,6 +4,7 @@ import {
   AudioLines,
   CircleAlert,
   Copy,
+  ChevronRight,
   CornerUpLeft,
   Hand,
   Eye,
@@ -17,11 +18,12 @@ import {
   Upload,
   X,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { NeedsYouItem } from "../../app/wire.ts";
 import type { Employee } from "../../identity/contract.ts";
 import { answerersOf, draft, useDraft, type Conversation } from "../app/conversation.ts";
-import { employeeOf } from "../../conversations/contract.ts";
+import { employeeOf, type ConversationKey, type Worked } from "../../conversations/contract.ts";
 import { capturing, loadVoiceSettings, modeOf } from "../app/voice.ts";
 import {
   endsGroup,
@@ -31,13 +33,17 @@ import {
   type Bubble as TimelineBubble,
 } from "../app/timeline.ts";
 import {
+  useBusinessId,
   useDecisions,
   useEmployees,
   useChiefOfStaff,
   useHome,
   usePerson,
+  useRunningIn,
+  useStatus,
   useWork,
 } from "../app/data.ts";
+import { queries } from "../app/query.ts";
 import { useStartThread, useUpload } from "../app/mutations.ts";
 import { usePlace } from "../app/navigation.ts";
 import { ui, useUi } from "../app/ui.ts";
@@ -94,7 +100,7 @@ import {
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { dateTime, relativeDay } from "../lib/format.ts";
+import { dateTime, elapsed, relativeDay } from "../lib/format.ts";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -153,6 +159,9 @@ export function ConversationView({
       !d.work_item_id && key !== undefined && (d.conversation ?? `direct:${d.employee_id}`) === key,
   );
   const lastMine = items.findLastIndex((item) => item.kind !== "heading" && item.bubble.mine);
+  // Answering what was sent from here, or working here because something else woke them.
+  const runningHere = useRunningIn(thread ? undefined : key);
+  const working = [...new Set([...conversation.working, ...runningHere])];
   return (
     // Opens at the newest message; a message the owner sends moves to the top, with the
     // answer arriving beneath it.
@@ -228,7 +237,7 @@ export function ConversationView({
                 )}
                 {/* In a thread its card says who is working. */}
                 {!thread &&
-                  conversation.working.map((id) => {
+                  working.map((id) => {
                     const employee = employees.find((e) => e.id === id);
                     return (
                       employee && (
@@ -476,6 +485,12 @@ function MessageRow({
           )}
         </MessageContent>
       </Message>
+      {/* Under the bubble, clear of the face, which stays beside its message. */}
+      {bubble.worked && conversation.key && (
+        <div className="pt-[3px]" style={{ paddingLeft: avatarSize + 8 }}>
+          <WorkedFor message={bubble.id} worked={bubble.worked} conversation={conversation.key} />
+        </div>
+      )}
       {bubble.replies.length > 0 && (
         <QuestionCard
           bubble={bubble}
@@ -627,26 +642,82 @@ function ChatActionButton({
   );
 }
 
-/** An employee answering: their face, three dots, and their name. */
+/** An employee answering: their face and name, three dots, and what they are doing now. */
 function WorkingRow({ employee }: { employee: Employee }) {
+  const doing = useStatus(employee.id).data?.run?.doing;
   return (
     <div className="flex items-end gap-2" role="status">
       <EmployeePortrait employee={employee} size={avatarSize} mood="thinking" />
       <div className="flex flex-col gap-[3px]">
-        <span className="px-3 text-caption text-ink-3">{employee.name} is working…</span>
+        <span className="px-3 text-caption text-ink-3">{employee.name}</span>
         <div
-          className="flex w-fit gap-1 bg-track px-3 py-2.5"
+          className="flex w-fit items-center gap-2 bg-track px-3 py-2"
           style={{ borderRadius: "18px 18px 18px 4px" }}
         >
-          {[0, 1, 2].map((i) => (
-            <span
-              key={i}
-              className="size-1.5 animate-pulse rounded-full bg-ink-3"
-              style={{ animationDelay: `${i * 175}ms` }}
-            />
-          ))}
+          <span className="flex gap-1">
+            {[0, 1, 2].map((i) => (
+              <span
+                key={i}
+                className="size-1.5 animate-pulse rounded-full bg-ink-3"
+                style={{ animationDelay: `${i * 175}ms` }}
+              />
+            ))}
+          </span>
+          {doing && (
+            <span className="text-detail text-ink-2" data-testid="doing">
+              {doing}…
+            </span>
+          )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Under an employee's reply that took steps: "Worked for 1m 20s · 6 steps", which opens the
+ * steps in the owner's words, read from the employee when first opened.
+ */
+function WorkedFor({
+  message,
+  worked,
+  conversation,
+}: {
+  message: string;
+  worked: Worked;
+  conversation: ConversationKey;
+}) {
+  const [open, setOpen] = useState(false);
+  const steps = useQuery({
+    ...queries.steps(useBusinessId(), conversation, message),
+    enabled: open,
+  });
+  return (
+    <div className="flex flex-col gap-1 px-3">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        className="inline-flex w-fit items-center gap-0.5 text-caption text-ink-3 hover:text-ink-2"
+      >
+        Worked for {elapsed(worked.ms)} · {worked.steps} {worked.steps === 1 ? "step" : "steps"}
+        <ChevronRight className={cn("size-3 transition-transform", open && "rotate-90")} />
+      </button>
+      {open && (
+        <ol className="flex flex-col gap-0.5 border-l border-hairline pl-2.5" aria-label="Steps">
+          {steps.isPending ? (
+            <li className="text-caption text-ink-3">Loading…</li>
+          ) : steps.data?.steps.length ? (
+            steps.data.steps.map((step, index) => (
+              <li key={index} className="text-caption text-ink-2">
+                {step}
+              </li>
+            ))
+          ) : (
+            <li className="text-caption text-ink-3">The steps are no longer kept.</li>
+          )}
+        </ol>
+      )}
     </div>
   );
 }

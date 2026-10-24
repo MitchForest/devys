@@ -70,6 +70,8 @@ public struct RuntimeClient: Sendable {
     public var follow: @Sendable (_ businessID: String, ConversationKey, _ on: Bool) async throws -> Void
     /// Pins, hides or marks a conversation unread in the signed-in person's sidebar.
     public var markSidebar: @Sendable (_ businessID: String, ConversationKey, SidebarMark) async throws -> Void
+    /// The steps the turn behind an employee's reply took, in the owner's words.
+    public var steps: @Sendable (_ businessID: String, ConversationKey, _ messageID: String) async throws -> [String]
     /// A tapback on a message, addressed to the employee who wrote it.
     public var react: @Sendable (EmployeeScope, Reaction) async throws -> Void
     public var access: @Sendable (EmployeeScope) async throws -> AccessList
@@ -160,6 +162,7 @@ public struct RuntimeClient: Sendable {
         markRead: @escaping @Sendable (String, ConversationKey, String) async throws -> Void = { _, _, _ in },
         follow: @escaping @Sendable (String, ConversationKey, Bool) async throws -> Void = { _, _, _ in },
         markSidebar: @escaping @Sendable (String, ConversationKey, SidebarMark) async throws -> Void = { _, _, _ in },
+        steps: @escaping @Sendable (String, ConversationKey, String) async throws -> [String] = { _, _, _ in [] },
         react: @escaping @Sendable (EmployeeScope, Reaction) async throws -> Void = { _, _ in },
         access: @escaping @Sendable (EmployeeScope) async throws -> AccessList = { _ in AccessList(grants: [], available: []) },
         grant: @escaping @Sendable (EmployeeScope, String, AccessMode) async throws -> Void = { _, _, _ in },
@@ -231,6 +234,7 @@ public struct RuntimeClient: Sendable {
         self.markRead = markRead
         self.follow = follow
         self.markSidebar = markSidebar
+        self.steps = steps
         self.react = react
         self.access = access
         self.grant = grant
@@ -470,6 +474,9 @@ extension RuntimeClient {
             },
             markSidebar: { id, key, mark in
                 _ = try await hub.call { api, session in try await api.markSidebar(session, businessID: id, key: key, mark) }
+            },
+            steps: { id, key, message in
+                try await hub.call { api, session in try await api.steps(session, businessID: id, key: key, messageID: message) }
             },
             react: { scope, reaction in try await hub.call { api, session in try await api.react(session, scope, reaction) } },
             access: { scope in try await hub.call { api, session in try await api.access(session, scope) } },

@@ -18,6 +18,7 @@ import {
   responders,
   type ConversationKey,
   type Message,
+  type Worked,
 } from "../conversations/contract.ts";
 import {
   markSeen,
@@ -254,11 +255,12 @@ export async function postFromEmployee(
   text: string,
   operationId: string,
   inReplyTo?: string,
+  worked?: Worked,
 ) {
   const chat = employeeChatOf(chatId);
   if (!chat) throw new Error(`No conversation for chat ${chatId}`);
   const key = chat.conversation ?? (`direct:${chat.scope.employeeId}` as const);
-  await reply(env, chat.scope, key, text, operationId, inReplyTo);
+  await reply(env, chat.scope, key, text, operationId, inReplyTo, worked);
 }
 
 /**
@@ -289,6 +291,7 @@ async function reply(
   text: string,
   operationId: string,
   inReplyTo?: string,
+  worked?: Worked,
 ) {
   const employees = await Effect.runPromise(employeesOf(env.HYPERDRIVE, scope.businessId));
   await post(env, scope.businessId, key, {
@@ -296,6 +299,7 @@ async function reply(
     text,
     clientId: `reply:${operationId}`,
     replyTo: inReplyTo ?? null,
+    ...(worked ? { worked } : {}),
     mentions: mentionsIn(
       text,
       employees.filter((employee) => employee.id !== scope.employeeId),

@@ -139,6 +139,7 @@ export function codingCapabilities(dependencies: CodingDependencies) {
   return [
     capability({
       name: "codingStart",
+      activity: "Starting a coding session",
       description:
         "Start a coding session on this work item with Codex or Claude Code. It works in its own git worktree of the repository (an absolute path on the owner's Mac), of the business's GitHub repository (cloneRepository: owner/name, cloned into the business folder the first time), or of a new empty repository (newRepository: a folder name). Write the objective as a complete brief: what to build or change, the acceptance checks, and anything it must not do. It runs on its own; you are told when its turn ends. purpose 'review' starts a read-only session on another coding session's worktree (pass its ref as reviews). Steer, accept, publish and deploy a session by the ref this returns.",
       effect: "change",
@@ -233,6 +234,7 @@ export function codingCapabilities(dependencies: CodingDependencies) {
     }),
     capability({
       name: "codingStatus",
+      activity: "Checking on the coding",
       description:
         "Show this work item's coding sessions, or one of them (its ref): each one's ref, state, latest reply, and what changed in its worktree.",
       effect: "read",
@@ -253,6 +255,7 @@ export function codingCapabilities(dependencies: CodingDependencies) {
     }),
     capability({
       name: "codingSend",
+      activity: "Guiding the coding session",
       description:
         "Tell a coding session (its ref) something: while it works this steers the running turn; otherwise it starts its next turn. Be specific about what to change and how to verify it.",
       effect: "change",
@@ -277,6 +280,7 @@ export function codingCapabilities(dependencies: CodingDependencies) {
     }),
     capability({
       name: "codingStop",
+      activity: "Stopping the coding session",
       description:
         "Interrupt a coding session's running turn (name the session by its ref). Its changes so far stay in its worktree.",
       effect: "change",
@@ -293,6 +297,7 @@ export function codingCapabilities(dependencies: CodingDependencies) {
     }),
     capability({
       name: "codingAccept",
+      activity: "Accepting the code changes",
       description:
         "Accept a coding session's work (by its ref): Devys commits its worktree on its branch and runs the repository's check command (for example `bun run verify`) against that commit. You are told how the check ended, and the commit and result are recorded as evidence. Publishing (codingPublish), merging and deploying are separate.",
       effect: "change",
@@ -331,6 +336,7 @@ export function codingCapabilities(dependencies: CodingDependencies) {
     }),
     capability({
       name: "codingPublish",
+      activity: "Publishing the code",
       description:
         "Publish a coding session's accepted work (by its ref) for review: Devys pushes the accepted commit to the session's branch on the business's GitHub repository (owner/name, which must be the repository's origin) and opens a pull request into the default branch, or returns the one already open. Accept the work and let its check pass first. Merging and deploying are separate decisions.",
       effect: "external",
@@ -390,6 +396,7 @@ export function codingCapabilities(dependencies: CodingDependencies) {
         : "the repository's own production deploy command";
     return capability({
       name: stage === "preview" ? "deployPreview" : "deployProduction",
+      activity: stage === "preview" ? "Deploying a preview" : "Putting the site live",
       description: [
         `Deploy to ${stage} with ${how}, then check the URL it prints (or the one you give) answers. Deploy either a coding session's accepted, checked commit (name the session by its ref), or, when the repository needs no change, the repository itself (repository: its absolute path) at its current commit: its worktree must be clean, and a repository this work item has a coding session on deploys through that session.`,
         "`secrets` names the business's secrets the command needs (each set as the variable of its name, redacted from the output). The result arrives in this work item.",

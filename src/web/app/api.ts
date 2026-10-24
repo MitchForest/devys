@@ -73,6 +73,7 @@ import {
   Retired,
   Secrets,
   SidebarMark,
+  Steps,
   Revoked,
   Roles,
   RuntimeStatus,
@@ -232,6 +233,9 @@ export const api = {
   /** Posts in a conversation; `to` is who answers. A 409 says everyone who would is paused. */
   post: (b: string, key: ConversationKey, message: OutgoingMessage) =>
     post(Posted, `${conversation(b, key)}/messages`, message),
+  /** The steps the turn behind an employee's reply took. */
+  steps: (b: string, key: ConversationKey, message: string) =>
+    get(Steps, `${conversation(b, key)}/messages/${encodeURIComponent(message)}/steps`),
   markRead: (b: string, key: ConversationKey, at: string) =>
     post(Read, `${conversation(b, key)}/read`, { at }),
   /** How the signed-in person keeps a conversation in their sidebar: pinned, hidden, unread. */

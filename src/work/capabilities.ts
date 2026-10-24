@@ -235,6 +235,7 @@ export function workCapabilities(
   return [
     capability({
       name: "workList",
+      activity: "Checking the work",
       description:
         "List the business's work items: what is owed, who is accountable, the next action and state, its steps and results, each with its ref and revision. Read before changing one; a change passes its ref and revision as they are.",
       effect: "read",
@@ -254,6 +255,7 @@ export function workCapabilities(
     }),
     capability({
       name: "workCreate",
+      activity: "Writing the plan",
       description:
         'Record something the business owes: a title, objective and next action, accountable to you or another employee, optionally in a project. Use for work that outlives this conversation. Give work of more than two steps its plan as steps (at most 10, each {title, state: todo, by?: "owner"}): a few plain words each ("Connect Ramp", "Sign in to the registrar", "Approve the total"), in order, with by: "owner" on each step only the owner can do (connect an app, sign in, approve a payment). A plan with a step for the owner, a payment or anything public waits for the owner\'s Start (it always does with an owner step; set waitForStart for a payment or anything public) and is handed to its employee once started; any other plan starts at once. Start approves the order only: each payment, send, publish or production deploy is still asked when reached. Returns its ref and revision, which workUpdate and workComplete take as they are.',
       effect: "change",
@@ -308,6 +310,7 @@ export function workCapabilities(
     }),
     capability({
       name: "workUpdate",
+      activity: "Updating the plan",
       description:
         'Update a work item (ref and revision, as workList or the last change returned them), from any conversation: the next action, its state (ready, in_progress, waiting, needs_decision, cancelled), what it waits on, or its due date (a deadline only). needs_decision is for a question or request the owner has in front of them now; a ready item is handed to you in its thread, so never set needs_decision for a request you have yet to make. steps is the whole plan the owner watches in the thread for anything that takes more than a minute (at most 10, each {title, state: todo, doing, done or blocked}); send it again as each step moves. results is the whole list of what it achieved, each checked from outside (at most 12, each {label, value?, url? (https), ok?: true held, false failed, null uncertain}), such as {label: "Live at", url} or {label: "MX records", ok: true}. Each replaces the last. To follow up later ("look again Thursday"), set state waiting with wakeAt: at that time it becomes ready and is handed back to you in its thread, once. A routine (routinePropose) is for work that recurs.',
       effect: "change",
@@ -361,6 +364,7 @@ export function workCapabilities(
     }),
     capability({
       name: "workComplete",
+      activity: "Wrapping up the work",
       description:
         "Mark a work item (ref and revision, as returned) completed, in its own thread, with evidence: what was done and where to see it, and results: the whole list of what it achieved, as in workUpdate, each checked from outside first. Saying 'done' in chat does not complete work.",
       effect: "change",
@@ -387,6 +391,7 @@ export function workCapabilities(
     }),
     capability({
       name: "projectList",
+      activity: "Checking projects",
       description:
         "List the business's projects (bounded initiatives like Launch): goal, deadline, budget, lead, members and the refs of the artifacts and files each one shows. Its work items carry its ref as project in workList.",
       effect: "read",
@@ -401,6 +406,7 @@ export function workCapabilities(
     }),
     capability({
       name: "projectCreate",
+      activity: "Starting a project",
       description:
         "Create a project: a bounded initiative with a name and optionally a goal, a deadline (YYYY-MM-DD), a budget in cents and a currency, and assigned employees. You lead it.",
       effect: "change",
@@ -434,6 +440,7 @@ export function workCapabilities(
     }),
     capability({
       name: "projectUpdate",
+      activity: "Updating the project",
       description:
         "Change a project (its ref): its name, goal, deadline or budget (null clears one), its lead, or its members (the whole list).",
       effect: "change",
@@ -469,6 +476,7 @@ export function workCapabilities(
     }),
     capability({
       name: "projectAdd",
+      activity: "Adding to the project",
       description:
         "Show a record on a project (its ref): record is a saved artifact (devys:documents/artifact/<id>), a file in the business folder (devys:documents/file/<percent-encoded absolute path>) or a coding session (devys:code/session/<id>). It's a reference: the record keeps one home and can appear in several projects. Returns the project. Work items join a project when created with its ref as project.",
       effect: "change",
@@ -495,6 +503,7 @@ export function workCapabilities(
     }),
     capability({
       name: "routineList",
+      activity: "Checking routines",
       description:
         "List the business's routines (recurring or event-started work), or one employee's or one project's: each with its ref, schedule in words, state (proposed, active, paused), revision, next run and last result.",
       effect: "read",
@@ -518,6 +527,7 @@ export function workCapabilities(
     }),
     capability({
       name: "routinePropose",
+      activity: "Proposing a routine",
       description:
         'Propose a routine: work you (or, for the Chief of Staff, another employee) run on a schedule or when an event happens, for a responsibility or a project (its ref; runs then speak in its channel, else in the employee\'s direct chat). trigger is {kind: "cron", expression: five-field cron like "0 9 * * 1", timezone: the owner\'s IANA zone, hours?: {start: "09:00", end: "18:00", days?: ["mon", …]}} or {kind: "event", source, type, filters: {field: exact value}}. notify when_found makes a quiet check-in: a run that finds nothing posts nothing. To change a routine, pass its ref and revision as returned: that is a new proposal and it stops running until approved. Proposing activates nothing: then call routineActivate with the ref and revision it returns, which asks the owner. For a one-off look later, use workUpdate with wakeAt instead.',
       effect: "change",
@@ -589,6 +599,7 @@ export function workCapabilities(
     }),
     capability({
       name: "routineActivate",
+      activity: "Turning on a routine",
       description:
         "Ask the owner to activate a proposed routine (its ref) at exactly this revision. It is the owner's decision each time: the request waits for the owner, and once approved, calling it again with the same input activates it. A later revision needs a new decision.",
       effect: "change",
@@ -621,6 +632,7 @@ export function workCapabilities(
     }),
     capability({
       name: "routinePause",
+      activity: "Pausing a routine",
       description:
         "Pause an active routine (its ref) of yours, such as one that no longer finds anything worth doing; say why where you are talking. Only the owner resumes it.",
       effect: "change",
@@ -642,6 +654,7 @@ export function workCapabilities(
     }),
     capability({
       name: "askOwner",
+      activity: "Asking you",
       description:
         'Bring the owner in, from a work item\'s thread; a turn in a direct chat or channel can\'t ask: workCreate the work, say you will ask there, and ask when you continue in its thread (leave it ready: it is handed to you there within a minute). {kind: "approve", action, counterparty, amount?, renewal?}: before a consequential action you will take anywhere (browser, shell, an app), state it exactly: action is what you will do, counterparty who or where (merchant, site, person; for a card payment, the merchant\'s site such as namecheap.com, where the card will be filled); any spend has amount {cents, currency}, which the owner signs with Face ID or Touch ID, and renewal says what recurs. To ask once for several actions that go together, list each exactly in steps (["Merge PR #12 at a1b2c3", "Deploy a1b2c3 of site to production"]): the approval covers those steps and nothing else. To show the owner what goes out (an email draft, a post, an invoice, a page), pass it as preview: the ref of a page or a file; changing it afterwards voids the approval, so ask again. {kind: "take_over", reason, url?}: something only the owner can do in the business\'s browser (sign in, 2FA, CAPTCHA); they take the work over, do it and hand it back. {kind: "secret", name, why, spend?}: a secret the business lacks (an API key, a password; spend: true for a card), named as you will use it (STRIPE_KEY); the owner enters it in a secure sheet and you use it by name (run\'s secrets, browserFill), never seeing it. {kind: "connect", app, why}: an app the business doesn\'t have yet (an id or registry name from appSearch, or an MCP server\'s https address); the owner connects it with its own sign-in and chooses what you may do with it; why is one line on the card. {kind: "file", purpose, accept?}: a file only the owner has (a logo, a signed contract, an ID scan); purpose is one line on the card, accept the media types it may be (["image/*", "application/pdf"]); their file arrives in the business folder and its ref in this thread. It returns at once: carry on with other work or wait; the answer arrives in this thread. Asking again with exactly the same input tells you where it stands (asked, approved, declined, taken_over, done). A changed amount, merchant or action is a new request. Never ask for passwords, codes or card numbers in chat.',
       effect: "change",

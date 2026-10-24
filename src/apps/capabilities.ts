@@ -32,6 +32,7 @@ export function remoteCapability(
     ),
     effect: reads ? "read" : "external",
     replay: reads ? "read" : "reconcile",
+    activity: `Using ${app.name}`,
     remoteSchema: tool.input,
     input: Schema.Record(Schema.String, Schema.Unknown).check(
       Schema.makeFilter(

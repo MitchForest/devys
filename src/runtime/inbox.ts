@@ -2,7 +2,7 @@ import type { PiHarness } from "agents/harness/pi";
 import type { LifecycleJobs } from "agents/lifecycle";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { Channel, Inbound, Notice } from "../channels/contract.ts";
-import type { ConversationKey } from "../conversations/contract.ts";
+import type { ConversationKey, Worked } from "../conversations/contract.ts";
 import type { Scope } from "../identity/contract.ts";
 import { defaultLimits } from "../protocol/limits.ts";
 import { sha256 } from "../protocol/bytes.ts";
@@ -10,6 +10,7 @@ import type { WorkspacePort } from "../workspace/contract.ts";
 import {
   messageKey,
   messageOf,
+  operationsOf,
   outboxKey,
   recentKey,
   replyTurn,
@@ -27,10 +28,6 @@ type Later = { rescheduleAt: number };
  * when the employee finished without saying anything even when asked once more for its reply.
  */
 type Answer = string | { notice: Notice } | null;
-
-/** The Pi operations a message has: its turn and, once asked, its reply follow-up. */
-const operationsOf = (message: ChannelMessage) =>
-  message.replyAsked ? [message.id, replyTurn(message.id)] : [message.id];
 
 /**
  * Devys's own inputs (dispatched work, coding events): their turns may end in cards and
@@ -62,6 +59,8 @@ export function channelInbox(deps: {
   interruptCoding: () => Promise<void>;
   /** Applies current operator settings to a session with nothing pending. */
   configureIdle: (session: string) => Promise<void>;
+  /** How a finished turn was worked out, from its operations' entries in its session. */
+  worked: (session: string, operationIds: readonly string[]) => Promise<Worked | undefined>;
 }) {
   const { storage, harness, sessions } = deps;
   let stopping = 0;
@@ -222,9 +221,22 @@ export function channelInbox(deps: {
       const answer = await answerOf(message, conversation);
       if (answer === null) return;
       if (typeof answer === "object" && "rescheduleAt" in answer) return answer;
-      output = await queueReply(storage, message, answer);
+      output = await queueReply(
+        storage,
+        message,
+        answer,
+        typeof answer === "string" ? await workedFor(message.id, conversation) : undefined,
+      );
     }
     return deliver({ storage, channel: deps.channel, scope }, message, output);
+  }
+
+  /** The summary under a reply; a reply never waits on it, so one that can't be read is left out. */
+  async function workedFor(id: string, conversation: ConversationKey | undefined) {
+    const message = await storage.get<ChannelMessage>(messageKey(id));
+    const session = await sessions.known(conversation);
+    if (!message || session === undefined) return undefined;
+    return deps.worked(session, operationsOf(message)).catch(() => undefined);
   }
 
   /** Reads a channel message's text once, giving up after three failed attempts. */

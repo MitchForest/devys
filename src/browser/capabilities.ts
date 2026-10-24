@@ -1,6 +1,6 @@
 import { DynamicWorkerExecutor } from "@cloudflare/codemode";
 import { Effect, Exit, Schema } from "effect";
-import { capability, CapabilityError, Image, Invocation } from "../protocol/capability.ts";
+import { capability, CapabilityError, Image, Invocation, siteOf } from "../protocol/capability.ts";
 import { HostRefusal } from "../protocol/host.ts";
 import { rpc } from "../protocol/rpc.ts";
 import { SecretName, type Sealed } from "../vault/contract.ts";
@@ -102,6 +102,10 @@ export function browserCapabilities(
   return [
     capability({
       name: "browserScript",
+      activity: (input) => {
+        const site = siteOf(/https?:\/\/[^\s"'`)]+/.exec(input?.script ?? "")?.[0]);
+        return site ? `Opening ${site}` : "Working in the browser";
+      },
       description:
         "Run a JavaScript snippet against the business's own browser (Chrome on the business's profile, where the owner is signed in to its sites). `session.<Domain>.<method>(params)` sends any Chrome DevTools Protocol command to the current tab (Page.navigate, Runtime.evaluate, Input.dispatchMouseEvent, Input.insertText, DOM.setFileInputFiles, …); `session.use(targetId)` routes to another tab or a cross-origin frame; `session.waitFor(event, predicate?, ms?)` waits for an event after your last command; `listPageTargets()` lists tabs. Await each call; the last expression (or `return`) is the result. Read the using-the-browser skill first. Clicking and typing can submit, buy or send: only do what the work allows; never type passwords or card numbers (browserFill does).",
       effect: "external",
@@ -161,6 +165,7 @@ export function browserCapabilities(
     }),
     capability({
       name: "browserScreenshot",
+      activity: "Looking at the page",
       description:
         "See the current tab of the business's browser: a picture of the visible page in CSS pixels, so a point in it is the x and y Input.dispatchMouseEvent takes in browserScript.",
       effect: "read",
@@ -191,6 +196,10 @@ export function browserCapabilities(
     }),
     capability({
       name: "browserTabs",
+      activity: (input) =>
+        input?.action === "open"
+          ? `Opening ${siteOf(input.url) ?? "a new tab"}`
+          : "Looking at the browser tabs",
       description:
         "List the business's browser tabs, or switch to, open (a URL) or close one. The current tab is the one browserScript and browserScreenshot act on and the owner watches.",
       effect: "change",
@@ -212,6 +221,7 @@ export function browserCapabilities(
     }),
     capability({
       name: "browserFill",
+      activity: "Filling in details securely",
       description:
         "Fill a secret into the business's browser without ever seeing it: a password (part value) or a card (parts number, expiry MM/YY, month, year, cvc, name, postal), each field found by CSS selector or by clicking its x,y; a field inside another site's payment frame names its target (from listPageTargets/browserTabs). submit clicks a button afterwards. A card is a stored one (secret) or a one-time card from a connected card app such as Ramp (card: {app, fund, country?}: the app as appSearch names it, the fund to pay from and the merchant's two-letter country, US by default; the host asks the app for a card of the approval's exact amount and merchant, and you never see it). A card needs approval: the request id of the owner's signed spend approval in this work item's thread (askOwner approve with the amount and the merchant's site as counterparty, e.g. namecheap.com); the page must be on that site, and one approval is one fill. After a fill, scripts and screenshots wait until the page moves on (at most two minutes); a failed fill clears what it filled.",
       effect: "external",

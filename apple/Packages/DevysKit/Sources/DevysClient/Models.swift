@@ -108,12 +108,15 @@ public struct RuntimeState: Equatable, Sendable, Decodable {
         public let deadline: Double?
         /// The conversation it runs for: "work:<id>", "direct:<employee id>", "project:<id>".
         public let conversation: String?
+        /// What it is doing now, in the owner's words ("Opening godaddy.com", "Thinking").
+        public let doing: String
 
-        public init(id: String, stopped: Bool, deadline: Double?, conversation: String? = nil) {
+        public init(id: String, stopped: Bool, deadline: Double?, conversation: String? = nil, doing: String = "Working") {
             self.id = id
             self.stopped = stopped
             self.deadline = deadline
             self.conversation = conversation
+            self.doing = doing
         }
     }
 }

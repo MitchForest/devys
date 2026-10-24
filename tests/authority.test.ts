@@ -7,6 +7,7 @@ import { capability } from "../src/protocol/capability.ts";
 
 const read = capability({
   name: "readPublicUrl",
+  activity: "Reading a web page",
   description: "Read a public page",
   effect: "read",
   constraints: {
@@ -20,6 +21,7 @@ const read = capability({
 });
 const plain = capability({
   name: "remember",
+  activity: "Doing it",
   description: "Save a fact",
   effect: "change",
   replay: "idempotent",

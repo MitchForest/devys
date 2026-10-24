@@ -111,6 +111,7 @@ extension Workspace.Action {
     package static func employeeRenamed(_ id: String, _ name: String) -> Self { Self(.team(.renamed(employeeID: id, name: name))) }
     package static func followToggled(_ workItemID: String) -> Self { Self(.conversation(.followToggled(workItemID: workItemID))) }
     package static func retryTapped(_ key: ConversationKey, _ clientID: String) -> Self { Self(.conversation(.retryTapped(key, clientID: clientID))) }
+    package static func stepsRequested(_ key: ConversationKey, _ messageID: String) -> Self { Self(.conversation(.stepsRequested(key, messageID: messageID))) }
     package static func replyTapped(_ key: ConversationKey, _ messageID: String) -> Self { Self(.conversation(.replyTapped(key, messageID: messageID))) }
     package static func replyCancelled(_ key: ConversationKey) -> Self { Self(.conversation(.replyCancelled(key))) }
     package static func reactionTapped(_ key: ConversationKey, _ messageID: String, _ emoji: String) -> Self {

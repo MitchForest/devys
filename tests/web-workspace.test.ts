@@ -24,6 +24,7 @@ const message = (
   replies: [],
   question: null,
   pick_many: false,
+  worked: null,
   created_at: at,
   reactions: [],
 });

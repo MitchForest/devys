@@ -114,9 +114,13 @@ also verified live. No public product has launched.
   face of whoever answers inside the field (tap to choose someone else), a placeholder
   naming them, @-autocomplete, a mic that dictates and, in an empty field, a button that
   starts a hands-free conversation. A work item is one live card (its plan with the owner's
-  steps as "You: …", and one line: Working with Stop, Ready when you are with Start, Your turn
-  with its one action, Waiting, or Done), shown where it was created and pinned above a
-  thread's composer; plans with an owner step, a payment or anything public wait for Start. The
+  steps as "You: …", and one line: what its employee is doing now with Stop, Ready when you
+  are with Start, Your turn with its one action, Waiting, or Done), shown where it was created
+  and pinned above a thread's composer; plans with an owner step, a payment or anything public
+  wait for Start. While an employee works in a chat its typing row says what it is doing in
+  plain words ("Opening godaddy.com…", each capability's own phrase, never a tool name or
+  command), and a reply that took steps carries "Worked for 1m 20s · 6 steps", which opens the
+  steps, read from the employee's own record of the turn. Reasoning summaries are not shown. The
   right panel is only for looking: an employee's desk or a project's overview, and layers: pages with their versions, files, the
   Documents and Code apps, coding sessions and the live browser. A page published in reply
   opens on its own and a new version replaces it in place; **Start a thread** on a message

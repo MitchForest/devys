@@ -1,4 +1,5 @@
 import type { Inbound, Notice } from "../channels/contract.ts";
+import type { Worked } from "../conversations/contract.ts";
 /** Adapter receipts only; Pi owns queued/running/completed work. */
 export interface ChannelMessage {
   id: string;
@@ -24,12 +25,17 @@ export interface Outbox {
   notice?: Notice;
   /** The inbound message the reply answers. */
   replyTo?: string;
+  /** How the turn behind the employee's words was worked out, when it took steps. */
+  worked?: Worked;
   attempts: number;
   status: "pending" | "sent" | "uncertain" | "cancelled";
 }
 
 /** The operation id of the one follow-up that asks for a reply the turn did not write. */
 export const replyTurn = (id: string) => `${id}:reply`;
+/** The Pi operations a message has: its turn and, once asked, its reply follow-up. */
+export const operationsOf = (message: ChannelMessage) =>
+  message.replyAsked ? [message.id, replyTurn(message.id)] : [message.id];
 /** The message an operation answers: its own id, or the id its reply follow-up names. */
 export const messageOf = (operationId: string) => operationId.replace(/:reply$/, "");
 

@@ -127,7 +127,7 @@ struct ConversationMessages: View {
                         ))
                 }
             }
-            ForEach(store.snapshot.employees.filter { open.awaiting.contains($0.id) }) { employee in
+            ForEach(store.state.working(in: key)) { employee in
                 WorkingIndicator(store: store, employee: employee).padding(.top, 10)
             }
             ForEach(store.state.requests(in: key)) { request in
@@ -137,7 +137,7 @@ struct ConversationMessages: View {
             }
         }
         .animation(DevysMotion.arrive, value: timeline.items.map(\.id))
-        .animation(DevysMotion.quick, value: open.awaiting)
+        .animation(DevysMotion.quick, value: store.state.working(in: key).map(\.id))
     }
 
     private var empty: some View {

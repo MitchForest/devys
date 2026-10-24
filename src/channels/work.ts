@@ -7,7 +7,7 @@ import {
   type Inbound,
   type Notice,
 } from "./contract.ts";
-import { idOf, kindOf } from "../conversations/contract.ts";
+import { idOf, kindOf, type Worked } from "../conversations/contract.ts";
 
 /** Work handed to an employee is addressed `work:<business>:<employee>:work:<work item>`. */
 export const workChat = (scope: Scope, workItemId: string) =>
@@ -20,7 +20,7 @@ export const workChat = (scope: Scope, workItemId: string) =>
  */
 export function workChannel(dependencies: {
   open: (scope: Scope, workItemId: string) => Promise<boolean>;
-  post: (chatId: string, text: string, operationId: string) => Promise<void>;
+  post: (chatId: string, text: string, operationId: string, worked?: Worked) => Promise<void>;
   /** Posts Devys's notice about a turn as an event in the thread. */
   notice: (chatId: string, notice: Notice, operationId: string) => Promise<void>;
 }): Channel {
@@ -41,8 +41,8 @@ export function workChannel(dependencies: {
     },
     readText: async (input) => text(input),
     prepare: async (_scope, input) => text(input),
-    send: async (_scope, chatId, reply, operationId) => {
-      await dependencies.post(chatId, reply, operationId);
+    send: async (_scope, chatId, reply, operationId, _inReplyTo, worked) => {
+      await dependencies.post(chatId, reply, operationId, worked);
       return { status: "sent", guid: null };
     },
     notice: async (_scope, chatId, notice, operationId) => {

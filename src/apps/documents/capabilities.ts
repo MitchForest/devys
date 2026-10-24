@@ -72,6 +72,7 @@ export function artifactCapabilities(
   return [
     capability({
       name: "artifactPage",
+      activity: "Making a page",
       description:
         "Publish a self-contained HTML page (a report, dashboard, comparison or plan) the owner sees in this conversation and can keep in a project. It renders offline and alone: inline CSS and scripts and data: images only; no forms, frames or network. Each call makes a new page and returns its ref; change one with artifactEdit.",
       effect: "change",
@@ -85,6 +86,7 @@ export function artifactCapabilities(
     }),
     capability({
       name: "artifactRead",
+      activity: "Reading a page",
       description:
         "Read one of the business's pages or text artifacts (its ref, devys:documents/artifact/<id>): its title, version, content type and text (the first 200 KB). A page's latest version is `latest`; read that one before changing it.",
       effect: "read",
@@ -132,6 +134,7 @@ export function artifactCapabilities(
     }),
     capability({
       name: "artifactEdit",
+      activity: "Editing a page",
       description:
         "Change one of the business's pages (its ref, devys:documents/artifact/<id>) by replacing one exact piece of its HTML (it must appear once), publishing the result as the next version with a new ref.",
       effect: "change",
@@ -160,6 +163,7 @@ export function artifactCapabilities(
     }),
     capability({
       name: "publishArtifact",
+      activity: "Publishing a page",
       description:
         "Save a file (absolute path) as a durable private downloadable artifact. The returned link requires a member login.",
       effect: "change",
@@ -216,6 +220,7 @@ export function driveCapabilities(drive: Drive) {
   return [
     capability({
       name: "driveList",
+      activity: "Looking in Google Drive",
       description: "List Google Drive files selected for this business or created by Devys.",
       effect: "read",
       replay: "read",
@@ -231,6 +236,7 @@ export function driveCapabilities(drive: Drive) {
     }),
     capability({
       name: "driveRead",
+      activity: "Reading a Google Drive file",
       description:
         "Read a selected text file or export a selected Google Doc as plain text, up to 64 KB. Retain etag when proposing a text-file update.",
       effect: "read",
@@ -252,6 +258,7 @@ export function driveCapabilities(drive: Drive) {
     }),
     capability({
       name: "driveCreate",
+      activity: "Creating a Google Drive file",
       description:
         "Create a plain-text file in the connected Drive. If uncertain, inspect the returned file id; do not blindly create another copy.",
       effect: "external",
@@ -273,6 +280,7 @@ export function driveCapabilities(drive: Drive) {
     }),
     capability({
       name: "driveUpdate",
+      activity: "Updating a Google Drive file",
       description:
         "Replace the contents of a selected text file using the etag from driveRead. Native Google Docs updates are not supported. Inspect an uncertain outcome before another write.",
       effect: "external",

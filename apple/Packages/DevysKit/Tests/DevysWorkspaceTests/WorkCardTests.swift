@@ -16,8 +16,8 @@ private func settle(_ what: String, until condition: @MainActor () -> Bool) asyn
 
 private let localServer = URL(string: "http://127.0.0.1:5173")!
 
-nonisolated private func running(_ conversation: String?) -> EmployeeStatus {
-    EmployeeStatus(state: RuntimeState(run: .init(id: "r1", stopped: false, deadline: nil, conversation: conversation), inbox: [], outbox: []))
+nonisolated private func running(_ conversation: String?, doing: String = "Opening example.com") -> EmployeeStatus {
+    EmployeeStatus(state: RuntimeState(run: .init(id: "r1", stopped: false, deadline: nil, conversation: conversation, doing: doing), inbox: [], outbox: []))
 }
 
 nonisolated private let stopped = EmployeeStatus(state: RuntimeState(run: .init(id: "r0", stopped: true, deadline: nil, conversation: "work:c1"), inbox: [], outbox: []))
@@ -127,7 +127,7 @@ struct WorkCardTests {
         state.statuses["growth"] = stopped
         #expect(state.cardLine(working) == .upNext("Register it"))
         state.statuses["growth"] = running("work:c1")
-        #expect(state.cardLine(working) == .working("Register it"))
+        #expect(state.cardLine(working) == .working("Opening example.com"), "the plan shows the step; the line, what it is doing in it now")
 
         state.home = .loaded(Home(needsYou: [NeedsYouItem(deploy, title: "Deploy"), NeedsYouItem(connect, title: "Ramp", app: AppBadge(id: "ramp", name: "Ramp"))]))
         guard case .yourTurn(let request) = state.cardLine(working) else { return #expect(Bool(false), "a request waits on the owner") }
@@ -145,6 +145,21 @@ struct WorkCardTests {
         #expect(state.cardLine(WorkItem(id: "c5", ownerEmployeeID: "engineering", title: "Ship", state: .ready)) == .quiet)
     }
 
+    @Test("Who works in a chat: answering what was sent from here, or running there because something else woke them; a thread's card says it instead")
+    func workingHere() {
+        var state = Workspace.State(server: localServer)
+        state.account = .fixture
+        state.snapshot.employees = [Employee(id: "growth", name: "Growth", responsibilities: "", model: ""), Employee(id: "admin", name: "Admin", responsibilities: "", model: "")]
+        state.statuses["growth"] = running("direct:growth", doing: "Searching the app directory")
+        state.statuses["admin"] = running("work:c1")
+        #expect(state.working(in: .direct("growth")).map(\.id) == ["growth"])
+        #expect(state.working(in: .direct("admin")).isEmpty, "running elsewhere is not working here")
+        #expect(state.working(in: .work("c1")).isEmpty)
+        state.statuses["growth"] = stopped
+        #expect(state.working(in: .direct("growth")).isEmpty)
+        #expect(WorkedFor.elapsed(8_000) == "8s" && WorkedFor.elapsed(80_000) == "1m 20s" && WorkedFor.elapsed(3_900_000) == "1h 5m")
+    }
+
     @Test("Start sends the start request for a plan waiting on the owner, and nothing for one already going")
     func starts() async {
         let server = CardServer()
@@ -160,7 +175,7 @@ struct WorkCardTests {
     func stops() async {
         let server = CardServer()
         let store = await makeStore(server)
-        await settle("growth is working on it", until: { store.state.cardLine(store.work.value![0]) == .working("") })
+        await settle("growth is working on it", until: { store.state.cardLine(store.work.value![0]) == .working("Opening example.com") })
         store.send(.stopTapped("growth"))
         await settle("stopped", until: { !store.isStopping && store.notice != nil })
         #expect(await server.stops == [EmployeeScope(businessID: "acme", employeeID: "growth")])

@@ -95,6 +95,9 @@ export async function insertMessage(
     replies?: string[];
     question?: string;
     pickMany?: boolean;
+    /** An employee's reply that took steps, posted as the reply to Pi operation `clientId`. */
+    worked?: { ms: number; steps: number };
+    clientId?: string;
   },
 ) {
   const id = randomUUID();
@@ -104,8 +107,8 @@ export async function insertMessage(
   );
   await sql.run(
     `INSERT INTO messages (id, business_id, conversation, author, kind, text, ref, client_id, replies,
-       question, pick_many)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+       question, pick_many, worked)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
     [
       id,
       business,
@@ -114,10 +117,11 @@ export async function insertMessage(
       message.kind ?? "message",
       message.text,
       message.ref ?? null,
-      randomUUID(),
+      message.clientId ?? randomUUID(),
       message.replies ?? [],
       message.question ?? null,
       message.pickMany ?? false,
+      message.worked ?? null,
     ],
   );
   // Times are stored to the millisecond; the next message must come strictly after.
@@ -156,6 +160,7 @@ export async function stubPosting(page: Page, to: () => string[] = () => []) {
           replies: [],
           question: null,
           pick_many: false,
+          worked: null,
           created_at: new Date().toISOString(),
         },
         to: to(),

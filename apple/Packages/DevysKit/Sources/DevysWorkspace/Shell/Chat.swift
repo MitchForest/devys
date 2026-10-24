@@ -54,6 +54,10 @@ struct MessageRow: View {
                 if !isOwner { Spacer(minLength: Self.actionsRoom) }
             }
             viewed
+            if let worked = bubble.worked {
+                WorkedFor(store: store, key: key, messageID: bubble.id, worked: worked)
+                    .padding(.leading, Self.avatarSize + 8 + 12)
+            }
             if let question = bubble.question {
                 QuestionCard(store: store, key: key, question: question)
                     .padding(.leading, Self.avatarSize + 8)
@@ -474,24 +478,100 @@ private struct ConversationCard<Label: View>: View {
     }
 }
 
-/// "<Name> is working…" with their face and three dots.
+/// An employee working here: their face, three dots and what they are doing now
+/// ("Opening godaddy.com…").
 struct WorkingIndicator: View {
     let store: StoreOf<Workspace>
     let employee: Employee
 
+    private var doing: String? { store.state.statuses[employee.id]?.state.run?.doing }
+
     var body: some View {
-        HStack(alignment: .center, spacing: 8) {
+        HStack(alignment: .bottom, spacing: 8) {
             Portrait(store.state.portrait(for: employee), size: MessageRow.avatarSize, mood: .thinking)
-            TypingDots()
+            VStack(alignment: .leading, spacing: 3) {
+                Text(employee.name)
+                    .font(DevysTypography.caption.weight(.semibold))
+                    .foregroundStyle(DevysColors.ink2)
+                HStack(spacing: 8) {
+                    TypingDots()
+                    if let doing {
+                        Text("\(doing)…")
+                            .font(DevysTypography.secondary)
+                            .foregroundStyle(DevysColors.ink2)
+                            .contentTransition(.opacity)
+                    }
+                }
                 .padding(.horizontal, 12)
-                .padding(.vertical, 10)
+                .padding(.vertical, 8)
                 .background(DevysColors.track, in: UnevenRoundedRectangle(topLeadingRadius: 18, bottomLeadingRadius: 4, bottomTrailingRadius: 18, topTrailingRadius: 18, style: .continuous))
-            Text("\(employee.name) is working…").font(DevysTypography.caption).foregroundStyle(DevysColors.ink3)
+                .animation(DevysMotion.quick, value: doing)
+            }
             Spacer(minLength: 24)
         }
         .transition(.opacity)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(employee.name) is working")
+        .accessibilityLabel(doing.map { "\(employee.name): \($0)" } ?? "\(employee.name) is working")
+    }
+}
+
+/// Under an employee's reply that took steps: "Worked for 1m 20s · 6 steps", which opens the
+/// steps in the owner's words, read from the employee when first opened.
+struct WorkedFor: View {
+    let store: StoreOf<Workspace>
+    let key: ConversationKey
+    let messageID: String
+    let worked: Worked
+    @State private var isOpen = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Button {
+                withAnimation(DevysMotion.quick) { isOpen.toggle() }
+                if isOpen { store.send(.stepsRequested(key, messageID)) }
+            } label: {
+                HStack(spacing: 3) {
+                    Text("Worked for \(Self.elapsed(worked.ms)) · \(worked.steps) \(worked.steps == 1 ? "step" : "steps")")
+                    Image(systemName: "chevron.right")
+                        .imageScale(.small)
+                        .rotationEffect(.degrees(isOpen ? 90 : 0))
+                }
+                .font(DevysTypography.caption)
+                .foregroundStyle(DevysColors.ink3)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(isOpen ? "Open" : "Closed")
+            if isOpen {
+                VStack(alignment: .leading, spacing: 2) {
+                    switch store.state.steps[messageID] {
+                    case .loaded(let steps) where !steps.isEmpty:
+                        ForEach(Array(steps.enumerated()), id: \.offset) { _, step in
+                            Text(step).foregroundStyle(DevysColors.ink2)
+                        }
+                    case .loaded:
+                        Text("The steps are no longer kept.").foregroundStyle(DevysColors.ink3)
+                    case .failed(let problem):
+                        Text(problem).foregroundStyle(DevysColors.ink3)
+                    case .loading, nil:
+                        Text("Loading…").foregroundStyle(DevysColors.ink3)
+                    }
+                }
+                .font(DevysTypography.caption)
+                .padding(.leading, 10)
+                .overlay(alignment: .leading) { Rectangle().fill(DevysColors.hairline).frame(width: 1) }
+                .transition(.opacity)
+            }
+        }
+    }
+
+    /// `8s`, `1m 20s`, `1h 5m`, as the web says it.
+    static func elapsed(_ ms: Double) -> String {
+        let seconds = max(1, Int((ms / 1000).rounded()))
+        if seconds < 60 { return "\(seconds)s" }
+        let minutes = seconds / 60
+        if minutes < 60 { return seconds % 60 == 0 ? "\(minutes)m" : "\(minutes)m \(seconds % 60)s" }
+        return minutes % 60 == 0 ? "\(minutes / 60)h" : "\(minutes / 60)h \(minutes % 60)m"
     }
 }
 

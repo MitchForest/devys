@@ -57,8 +57,8 @@ export function channelFor(env: Env): Channel {
         await Effect.runPromise(memberBusiness(env.HYPERDRIVE, person, scope.businessId)),
       );
     },
-    post: (chatId, text, operationId, inReplyTo) =>
-      postFromEmployee(env, chatId, text, operationId, inReplyTo),
+    post: (chatId, text, operationId, inReplyTo, worked) =>
+      postFromEmployee(env, chatId, text, operationId, inReplyTo, worked),
     notice: (chatId, notice, operationId) => postNotice(env, chatId, notice, operationId),
   });
   const work = workChannel({
@@ -70,7 +70,8 @@ export function channelFor(env: Env): Channel {
         item.state !== "cancelled"
       );
     },
-    post: (chatId, text, operationId) => postFromEmployee(env, chatId, text, operationId),
+    post: (chatId, text, operationId, worked) =>
+      postFromEmployee(env, chatId, text, operationId, undefined, worked),
     notice: (chatId, notice, operationId) => postNotice(env, chatId, notice, operationId),
   });
   const routine = routineChannel({
@@ -91,8 +92,8 @@ export function channelFor(env: Env): Channel {
     binding: (input) => pick(input.chatId).binding(input),
     readText: (input) => pick(input.chatId).readText(input),
     prepare: (scope, input) => pick(input.chatId).prepare(scope, input),
-    send: (scope, chatId, text, operationId, inReplyTo) =>
-      pick(chatId).send(scope, chatId, text, operationId, inReplyTo),
+    send: (scope, chatId, text, operationId, inReplyTo, worked) =>
+      pick(chatId).send(scope, chatId, text, operationId, inReplyTo, worked),
     notice: (scope, chatId, notice, operationId) =>
       pick(chatId).notice(scope, chatId, notice, operationId),
   };

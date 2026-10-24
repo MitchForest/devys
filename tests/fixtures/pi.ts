@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { Lifecycle } from "agents/lifecycle";
-import { PiHarness } from "agents/harness/pi";
+import { PiHarness, ROOT_SESSION } from "agents/harness/pi";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { googleProvider } from "@earendil-works/pi-ai/providers/google";
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai/utils/event-stream";
@@ -17,6 +17,8 @@ import type { Env } from "../../infra/api.ts";
 import { devysExtension, initialTools } from "../../src/runtime/codemode.ts";
 import { capabilities } from "../../src/app/capabilities.ts";
 import { applicationModels } from "../../src/app/models.ts";
+import type { Capability } from "../../src/protocol/capability.ts";
+import { activity, turnEntries } from "../../src/runtime/activity.ts";
 
 interface ProbeEnv {
   LOADER: WorkerLoader;
@@ -24,6 +26,7 @@ interface ProbeEnv {
 }
 export class PiRecoveryProbe extends DurableObject<ProbeEnv> {
   readonly lifecycle = Lifecycle.install(this);
+  private contracts: Capability[] = [];
   readonly harness = new PiHarness({
     harness: async ({ storage, context }) => {
       const real = await this.ctx.storage.get<boolean>("real");
@@ -130,6 +133,7 @@ export class PiRecoveryProbe extends DurableObject<ProbeEnv> {
         },
       } as unknown as Env;
       const registry = createRegistry();
+      this.contracts = capabilities(env);
       const extension = devysExtension(env, capabilities(env), {
         identity: async () => "You are a test employee.",
         granted: async () => new Set(capabilities(env).map((contract) => contract.name)),
@@ -198,6 +202,18 @@ export class PiRecoveryProbe extends DurableObject<ProbeEnv> {
     const result = await this.harness.wait("discovery");
     const after = (await root.agent(BACKGROUND_CONTEXT)).tools.map((tool) => tool.name);
     return JSON.stringify({ before, after, result });
+  }
+  /** A turn's steps and what it is doing once finished, as the owner reads them. */
+  async steps() {
+    await this.ctx.storage.put("discovery", true);
+    await this.lifecycle.start();
+    await this.harness.submit("Import my attachment", { operationId: "discovery" });
+    await this.harness.wait("discovery");
+    const words = activity(this.contracts, async () => []);
+    return JSON.stringify({
+      worked: await words.worked(await turnEntries(this.harness, ROOT_SESSION, ["discovery"])),
+      doing: await words.doing(await turnEntries(this.harness, ROOT_SESSION, ["discovery"], 1)),
+    });
   }
   async resume() {
     await this.lifecycle.start();

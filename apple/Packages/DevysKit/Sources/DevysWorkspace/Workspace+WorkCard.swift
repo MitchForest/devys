@@ -5,7 +5,8 @@ import Foundation
 
 /// The one line of state a work item's card shows, with at most one thing for the owner to do.
 package enum WorkCardLine: Equatable {
-    /// Its employee is running on it now: the step it is doing, else its next action. Stop.
+    /// Its employee is running on it now, doing this (in the owner's words; the plan shows the
+    /// step). Stop.
     case working(String)
     /// A plan waiting for the owner's Start.
     case ready
@@ -50,10 +51,7 @@ extension Workspace.State {
         if isMine(item), item.state.isOpen { return .yours }
         if let request = request(for: item) { return .yourTurn(request) }
         if item.state == .proposed { return .ready }
-        if isWorking(on: item) {
-            let doing = item.steps.first { $0.state == .doing }?.text
-            return .working(doing ?? item.nextAction)
-        }
+        if isWorking(on: item) { return .working(statuses[item.ownerEmployeeID]?.state.run?.doing ?? "Working") }
         if item.state == .waiting, let condition = item.waitCondition, !condition.isEmpty { return .waiting(condition) }
         if item.state.isOpen, !item.nextAction.isEmpty { return .upNext(item.nextAction) }
         return .quiet

@@ -48,6 +48,18 @@ extension Workspace.State {
         conversation(key)?.recipients(team: snapshot.employees, fallback: defaultResponder(for: key)) ?? []
     }
 
+    /// Employees working in this conversation now: answering what was sent from here, or running
+    /// there because something else woke them. A thread's card says it instead.
+    package func working(in key: ConversationKey) -> [Employee] {
+        guard key.kind != .work else { return [] }
+        let awaiting = conversation(key)?.awaiting ?? []
+        return snapshot.employees.filter { employee in
+            if awaiting.contains(employee.id) { return true }
+            guard let run = statuses[employee.id]?.state.run, !run.stopped else { return false }
+            return run.conversation == key.rawValue
+        }
+    }
+
     /// Pi is running something for the employee, it owes an answer in an open conversation, or
     /// its inbox has unfinished messages. The same rule as the web's `workingOf`.
     package func isWorking(_ employeeID: String) -> Bool {
@@ -109,6 +121,21 @@ extension Workspace {
                 if conversation.awaitingAfter == messageID { conversation.stoppedPolling = true }
             }
             settleAwaiting(&state)
+        case .stepsRequested(let key, let messageID):
+            if case .loaded = state.steps[messageID] { return }
+            state.steps[messageID] = .loading
+            let businessID = state.businessID
+            let runtime = runtime
+            store.addTask {
+                do {
+                    let steps = try await runtime.steps(businessID, key, messageID)
+                    try store.send(Action(.conversation(.stepsLoaded(messageID: messageID, .loaded(steps)))))
+                } catch {
+                    try store.send(Action(.conversation(.stepsLoaded(messageID: messageID, .failed("The steps couldn't be loaded.")))))
+                }
+            }
+        case .stepsLoaded(let messageID, let steps):
+            state.steps[messageID] = steps
         }
     }
 

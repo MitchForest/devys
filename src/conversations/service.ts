@@ -1,9 +1,9 @@
 import type { Ref } from "../protocol/ref.ts";
 import { database, isoText, type Database } from "../data/database.ts";
-import { employeeOf, type ConversationKey, type Message } from "./contract.ts";
+import { employeeOf, type ConversationKey, type Message, type Worked } from "./contract.ts";
 
 const columns =
-  "id, conversation, author, kind, text, reply_to, mentions, via_voice, ref, replies, question, pick_many, created_at";
+  "id, conversation, author, kind, text, reply_to, mentions, via_voice, ref, replies, question, pick_many, worked, created_at";
 
 /**
  * Adds a message, creating the conversation on first use. A retried post with the same
@@ -26,6 +26,8 @@ export const postMessage = (
     ref?: Ref | null;
     /** An event's replies to tap. */
     replies?: readonly string[];
+    /** An employee's reply: how its turn was worked out. */
+    worked?: Worked;
   },
 ) =>
   database(
@@ -60,8 +62,8 @@ export const postMessage = (
       const inserted = await sql.row<Message>(
         `INSERT INTO messages
            (id, business_id, conversation, author, kind, text, reply_to, mentions, via_voice, ref,
-            client_id, replies, question, pick_many)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            client_id, replies, question, pick_many, worked)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
          ON CONFLICT (business_id, conversation, client_id) DO NOTHING
          RETURNING ${columns}`,
         [
@@ -79,6 +81,7 @@ export const postMessage = (
           card.replies,
           card.question,
           card.pick_many,
+          input.worked ?? null,
         ],
       );
       if (inserted) {
@@ -345,3 +348,20 @@ export const exportMessages = (db: Database, businessId: string, afterSeq: strin
       [businessId, afterSeq],
     ),
   );
+
+/**
+ * The employee turn behind a reply in a conversation: its author and the Pi operation it
+ * answered (posted as `reply:<operation>`); undefined for any other message.
+ */
+export const replyTurnOf = (db: Database, businessId: string, key: ConversationKey, id: string) =>
+  database(db, async (sql) => {
+    const row = await sql.row<{ author: string; client_id: string }>(
+      `SELECT author, client_id FROM messages
+       WHERE business_id = $1 AND conversation = $2 AND id = $3 AND client_id LIKE 'reply:%'`,
+      [businessId, key, id],
+    );
+    const employeeId = row && employeeOf(row.author);
+    return employeeId
+      ? { employeeId, operationId: row.client_id.slice("reply:".length) }
+      : undefined;
+  });

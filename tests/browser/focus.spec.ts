@@ -55,7 +55,15 @@ async function stubRuntime(page: Page, running: () => string | null) {
     return route.fulfill({
       json: {
         state: {
-          run: conversation ? { id: "run", stopped: false, deadline: null, conversation } : null,
+          run: conversation
+            ? {
+                id: "run",
+                stopped: false,
+                deadline: null,
+                conversation,
+                doing: "Opening example.com",
+              }
+            : null,
           inbox: [],
           outbox: [],
         },
@@ -181,7 +189,8 @@ test("Home is the Chief of Staff, its desk the header's popover; work made there
     ]);
     running = `work:${work.id}`;
     driving = true;
-    await expect(card.getByTestId("work-state")).toHaveText("Working · Find the domain", {
+    // The plan shows the step; the line says what the employee is doing in it right now.
+    await expect(card.getByTestId("work-state")).toHaveText("Opening example.com…", {
       timeout: 15_000,
     });
     await expect(card.getByRole("button", { name: "Watch" })).toBeVisible({ timeout: 15_000 });
@@ -319,6 +328,57 @@ test("in its thread the card is pinned above the reply, with one ask at a time: 
     await expect(
       page.getByTestId("browser-view").getByRole("button", { name: "Hand back" }),
     ).toBeVisible();
+  } finally {
+    await page.close();
+    await stores.remove([owner]);
+    await stores.dispose();
+  }
+});
+
+test("while an employee works in a chat it says what it is doing; a reply that took steps opens them", async ({
+  page,
+}) => {
+  const stores = await localStores();
+  const { sql } = stores;
+  const owner = await stores.owner("Quinn", "Acme");
+  try {
+    const home = `direct:${owner.chiefOfStaff}`;
+    await insertMessage(sql, owner.business, home, {
+      author: `employee:${owner.chiefOfStaff}`,
+      text: "The domain is available.",
+      clientId: "reply:turn-1",
+      worked: { ms: 80_000, steps: 2 },
+    });
+    let running: string | null = home;
+    await stubRuntime(page, () => running);
+    // The steps come from the employee's own record of the turn.
+    const asked: string[] = [];
+    await page.route(/\/messages\/[^/]+\/steps$/, (route) => {
+      asked.push(route.request().method());
+      return route.fulfill({
+        json: { steps: ["Searching the app directory", "Opening example.com"] },
+      });
+    });
+    await signIn(page, sql, owner.person);
+
+    // Working in Home, though nothing was sent from this browser: its face, dots and the phrase.
+    const working = page.getByRole("status").filter({ hasText: "Chief of Staff" });
+    await expect(working.getByTestId("doing")).toHaveText("Opening example.com…", {
+      timeout: 15_000,
+    });
+    running = null;
+    await expect(working).toHaveCount(0, { timeout: 15_000 });
+
+    // Under the reply, how it was worked out; the steps are read only when opened.
+    const disclosure = page.getByRole("button", { name: /^Worked for 1m 20s · 2 steps/ });
+    await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+    expect(asked).toEqual([]);
+    await disclosure.click();
+    await expect(page.getByRole("list", { name: "Steps" }).getByRole("listitem")).toHaveText([
+      "Searching the app directory",
+      "Opening example.com",
+    ]);
+    await page.screenshot({ path: "/tmp/worked-for.png" });
   } finally {
     await page.close();
     await stores.remove([owner]);

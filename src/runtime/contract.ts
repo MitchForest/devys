@@ -9,4 +9,6 @@ export interface AgentPort {
   inspect(scope: Scope): Promise<string>;
   /** One conversation's Pi entries; the employee's own direct chat when omitted. */
   history(scope: Scope, before?: number, conversation?: ConversationKey): Promise<string>;
+  /** The steps the turn behind a reply took, in the owner's words; null once forgotten. */
+  turn(scope: Scope, operationId: string): Promise<{ steps: string[]; ms: number } | null>;
 }

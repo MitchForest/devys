@@ -37,6 +37,7 @@ export const keys = {
   summaries: (b: string) => ["business", b, "summaries"] as const,
   conversation: (b: string, key: ConversationKey) => ["business", b, "conversation", key] as const,
   status: (b: string, employee: string) => ["business", b, "status", employee] as const,
+  steps: (b: string, message: string) => ["business", b, "steps", message] as const,
   access: (b: string, employee: string) => ["business", b, "access", employee] as const,
   folder: (b: string, path: string | null) => ["business", b, "folder", path] as const,
   file: (b: string, path: string, turn: number) => ["business", b, "file", path, turn] as const,
@@ -134,11 +135,19 @@ export const queries = {
       queryFn: () => api.conversations(b),
       refetchInterval: poll,
     }),
+  // A finished turn's steps don't change.
+  steps: (b: string, key: ConversationKey, message: string) =>
+    queryOptions({
+      queryKey: keys.steps(b, message),
+      queryFn: () => api.steps(b, key, message),
+      staleTime: Infinity,
+    }),
+  // Read faster while it runs, so what it is doing keeps up.
   status: (b: string, employee: string) =>
     queryOptions({
       queryKey: keys.status(b, employee),
       queryFn: () => api.status(b, employee),
-      refetchInterval: poll,
+      refetchInterval: (query) => (query.state.data?.state.run ? 2_000 : poll),
     }),
   // A remote app's state changes on the server (connected, lapsed), as on native.
   apps: (b: string) =>

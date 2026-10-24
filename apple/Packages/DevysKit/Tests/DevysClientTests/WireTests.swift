@@ -60,6 +60,7 @@ struct WireTests {
         "sidebar-mark": { try await $0.markSidebar($1, businessID: "b1", key: .direct("e1"), SidebarMark(pinned: true)) },
         "screenshot": { try await $0.browserPicture($1, businessID: "b1") },
         "status": { try await $0.status($1, scope) },
+        "steps": { try await $0.steps($1, businessID: "b1", key: .direct("e1"), messageID: "m1") },
         "terminals": { try await $0.terminals($1, businessID: "b1") },
         "transcript": { try await $0.sessionTranscript($1, businessID: "b1", workID: "w1", sessionID: "s1") },
         "work-item-updated": { try await $0.updateWorkItem($1, businessID: "b1", id: "w1", WorkItemChange(expectedRevision: 1)) },
@@ -114,6 +115,16 @@ struct WireTests {
         ])
         #expect(!"\(key)".contains("sk_live") && !String(reflecting: card).contains("4242"))
         #expect(NewSecret.isName("RAMP_CARD") && !NewSecret.isName("ramp") && !NewSecret.isName("1KEY"))
+    }
+
+    @Test("What a running employee is doing, how a reply was worked out and its steps decode in the owner's words")
+    func activity() async throws {
+        let status = try await Self.answering("status").status(Self.session, EmployeeScope(businessID: "b1", employeeID: "e1"))
+        #expect(status.state.run?.doing == "Opening example.com")
+        let direct = try await Self.answering("conversation").conversation(Self.session, businessID: "b1", key: .direct("e1"))
+        #expect(direct.messages.compactMap(\.worked) == [Worked(ms: 80_000, steps: 2)])
+        let steps = try await Self.answering("steps").steps(Self.session, businessID: "b1", key: .direct("e1"), messageID: "m1")
+        #expect(steps == ["Searching the app directory", "Opening example.com"])
     }
 
     @Test("A work item's steps and results, its card where it was created and Home's progress decode in the web's words")

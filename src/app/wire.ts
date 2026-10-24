@@ -121,6 +121,8 @@ const RuntimeState = Schema.Struct({
       deadline: Schema.NullOr(Schema.Number),
       /** The conversation the running turn is in (`work:<id>`, `direct:<id>`, `project:<id>`). */
       conversation: Schema.NullOr(Schema.String),
+      /** What it is doing now, in the owner's words ("Opening godaddy.com", "Thinking"). */
+      doing: Schema.String,
     }),
   ),
   inbox: Schema.Array(
@@ -175,6 +177,12 @@ const RuntimeState = Schema.Struct({
   ),
 });
 export type RuntimeState = typeof RuntimeState.Type;
+/**
+ * `GET …/conversations/:key/messages/:id/steps`: the steps the turn behind an employee's reply
+ * took, in the owner's words. Empty once the employee no longer keeps them.
+ */
+export const Steps = Schema.Struct({ steps: Schema.Array(Schema.String) });
+
 /** `GET …/employees/:id/status`. */
 export const RuntimeStatus = Schema.Struct({ state: RuntimeState });
 

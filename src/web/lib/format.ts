@@ -96,3 +96,12 @@ export function listTime(at: string | Date, now = new Date()) {
     return date.toLocaleDateString(undefined, { weekday: "short" });
   return date.toLocaleDateString(undefined, { month: "numeric", day: "numeric", year: "2-digit" });
 }
+
+/** How long work took, as a reply's footer says it: `8s`, `1m 20s`, `1h 5m`. */
+export function elapsed(ms: number) {
+  const seconds = Math.max(1, Math.round(ms / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return seconds % 60 ? `${minutes}m ${seconds % 60}s` : `${minutes}m`;
+  return minutes % 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes / 60}h`;
+}

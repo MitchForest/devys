@@ -56,7 +56,7 @@ struct DevysHTTPClientTests {
     func status() async throws {
         let recorder = Recorder()
         let body = """
-        {"state":{"run":{"id":"m1","stopped":false,"deadline":1760000000000},
+        {"state":{"run":{"id":"m1","stopped":false,"deadline":1760000000000,"conversation":null,"doing":"Thinking"},
                   "inbox":[{"id":"m1","text":"hi","received_at":1760000000000,"status":"running"}],
                   "outbox":[{"id":"m0","chat_id":"c","text":"hello","attempts":1,"status":"sent"}],
                   "checkpoint":null,"usage":{"input":1}}}

@@ -185,4 +185,7 @@ package enum ConversationIntent {
     case followToggled(workItemID: String)
     /// Fast polling after a message ended, answered or not.
     case waitEnded(ConversationKey, after: String)
+    /// "Worked for …" opened under a reply: its steps are read from its employee once.
+    case stepsRequested(ConversationKey, messageID: String)
+    case stepsLoaded(messageID: String, Loadable<[String]>)
 }

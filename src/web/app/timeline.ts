@@ -1,5 +1,5 @@
 import type { Ref } from "../../protocol/ref.ts";
-import type { ShownMessage } from "../../conversations/contract.ts";
+import type { ShownMessage, Worked } from "../../conversations/contract.ts";
 
 /** A conversation as Messages lays it out: grouped bubbles, with a heading when time passes. */
 type Position = "single" | "first" | "middle" | "last";
@@ -25,6 +25,8 @@ export interface Bubble {
   replies: readonly string[];
   question: string | null;
   pickMany: boolean;
+  /** An employee's reply that took steps: how long and how many. */
+  worked: Worked | null;
   sentAt?: Date;
   position: Position;
   /** Set for messages sent from this browser that the conversation doesn't show yet. */
@@ -95,6 +97,7 @@ export function timeline(
       replies: m === offered ? m.replies : [],
       question: m === offered ? m.question : null,
       pickMany: m === offered && m.pick_many,
+      worked: m.worked,
       sentAt: new Date(m.created_at),
       position: "single" as const,
     })),
@@ -111,6 +114,7 @@ export function timeline(
       replies: [],
       question: null,
       pickMany: false,
+      worked: null,
       sentAt: now,
       position: "single" as const,
       delivery: p.delivery,

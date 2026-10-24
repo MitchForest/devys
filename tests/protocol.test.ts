@@ -7,6 +7,7 @@ const input = Schema.Struct({ value: Schema.Number });
 const output = Schema.Struct({ doubled: Schema.Number });
 const double = capability({
   name: "double",
+  activity: "Doubling",
   description: "Double a number",
   effect: "read",
   replay: "read",

@@ -11,6 +11,8 @@ export async function employeeStatus(
   storage: DurableObjectStorage,
   harness: PiHarness,
   sessions: Sessions,
+  /** The owner's words for what a running operation is doing now. */
+  doing: (session: string, operationId: string) => Promise<string>,
 ) {
   const pi = await harness.pi();
   const [pending, recent, checkpoint, usage, known] = await Promise.all([
@@ -62,8 +64,13 @@ export async function employeeStatus(
     }),
   );
   const running = pending.find((item) => item.status === "running");
-  const current =
-    running && (await storage.get<ChannelMessage>(messageKey(messageOf(running.operationId))));
+  const [current, now] = running
+    ? await Promise.all([
+        storage.get<ChannelMessage>(messageKey(messageOf(running.operationId))),
+        // What it is doing is a courtesy: a status is never lost to it.
+        doing(running.session, running.operationId).catch(() => "Working"),
+      ])
+    : [];
   return {
     run: running
       ? {
@@ -72,6 +79,8 @@ export async function employeeStatus(
           deadline: current ? current.receivedAt + defaultLimits.maxDurationMs : null,
           // Where it is working: the conversation whose turn this is (a work item's thread, a chat).
           conversation: current ? runningIn(current.input.chatId) : null,
+          // What it is doing now, as the owner reads it ("Opening godaddy.com").
+          doing: now ?? "Working",
         }
       : null,
     inbox,

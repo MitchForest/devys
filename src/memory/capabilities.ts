@@ -17,6 +17,7 @@ export function memoryCapabilities(factory: MemoryFactory) {
   return [
     capability({
       name: "recall",
+      activity: "Recalling what it knows",
       description:
         "Search what the business knows (facts about the business, its owner and the people they work with) with evidence and scope. Empty query lists current knowledge. Use next as after for another page.",
       effect: "read",
@@ -35,6 +36,7 @@ export function memoryCapabilities(factory: MemoryFactory) {
     }),
     capability({
       name: "remember",
+      activity: "Noting that down",
       description:
         "Immediately save or correct a useful fact about the business, its owner or the people they work with. Use source=user only for an explicit owner statement; trusted host evidence is attached. Preserve temporary scope and exceptions. Pass expectedRevision from recall or the current memory context before correcting.",
       effect: "change",
@@ -55,6 +57,7 @@ export function memoryCapabilities(factory: MemoryFactory) {
     }),
     capability({
       name: "forget",
+      activity: "Forgetting what you asked",
       description:
         "Forget the selected memory keys and dependent claims. Suppress their source observations from future learning. This does not erase the original conversation transcript.",
       effect: "change",

@@ -63,6 +63,8 @@ package struct ChatTimeline: Equatable {
         package var ref: Ref?
         /// The question card offered on the latest employee message until the owner says anything.
         package var question: Question?
+        /// An employee's reply that took steps: how long and how many.
+        package var worked: Worked?
         package var position: Position
         /// Set for messages sent from this device that the server hasn't posted yet.
         package var delivery: PendingMessage.Delivery?
@@ -138,6 +140,7 @@ package struct ChatTimeline: Equatable {
                 sentAt: message.date,
                 ref: message.ref,
                 question: message.id == offered ? Question(message) : nil,
+                worked: message.worked,
                 position: .single
             )))
         }

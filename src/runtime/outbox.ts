@@ -1,4 +1,5 @@
 import type { Channel, Notice } from "../channels/contract.ts";
+import type { Worked } from "../conversations/contract.ts";
 import type { Scope } from "../identity/contract.ts";
 import { outboxKey, type ChannelMessage, type Outbox } from "./delivery.ts";
 
@@ -14,12 +15,13 @@ export function queueReply(
   storage: DurableObjectStorage,
   message: ChannelMessage,
   answer: string | { notice: Notice },
+  worked?: Worked,
 ) {
   const pending: Outbox = {
     id: message.id,
     chatId: message.input.chatId,
     ...(typeof answer === "string"
-      ? { text: answer.slice(0, 16_000) }
+      ? { text: answer.slice(0, 16_000), ...(worked ? { worked } : {}) }
       : { text: "", notice: answer.notice }),
     replyTo: message.input.messageId,
     attempts: 0,
@@ -67,7 +69,14 @@ export async function deliver(
   if (output.status !== "pending") return;
   const sent = output.notice
     ? await channel.notice(scope, output.chatId, output.notice, output.id)
-    : await channel.send(scope, output.chatId, output.text, output.id, output.replyTo);
+    : await channel.send(
+        scope,
+        output.chatId,
+        output.text,
+        output.id,
+        output.replyTo,
+        output.worked,
+      );
   output = await storage.transaction(async (tx) => {
     // Forgotten meanwhile: the send's outcome is still what is reported, not stored.
     const latest = (await tx.get<Outbox>(key)) ?? { ...output };

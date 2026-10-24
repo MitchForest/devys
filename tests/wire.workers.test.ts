@@ -119,6 +119,10 @@ it("every route the clients read answers in its wire schema; the golden files ma
         stop: async () => ({ stopped: true }),
         // The runtime's own state comes from Pi in a Durable Object; this is its shape.
         inspect: async () => JSON.stringify(runtimeState),
+        turn: async (_scope: unknown, operation: string) =>
+          operation === "wire-turn"
+            ? { steps: ["Searching the app directory", "Opening example.com"], ms: 80_000 }
+            : null,
       }),
     },
   } as unknown as Env;
@@ -425,8 +429,9 @@ it("every route the clients read answers in its wire schema; the golden files ma
     postMessage(db, acme.id, direct, {
       author: `employee:${engineer.id}`,
       text: "The site is ready. Ship it today?",
-      clientId: "wire-answer",
+      clientId: "reply:wire-turn",
       replyTo: posted.message.id,
+      worked: { ms: 80_000, steps: 2 },
     }),
   );
   register(answered.message.id);
@@ -447,6 +452,14 @@ it("every route the clients read answers in its wire schema; the golden files ma
     "conversation-work",
     wire.ConversationPage,
     await call(`${at}/conversations/${encodeURIComponent(`work:${site.id}`)}`),
+  );
+  // The steps behind Ada's reply, from her own record of the turn.
+  await keep(
+    "steps",
+    wire.Steps,
+    await call(
+      `${at}/conversations/${encodeURIComponent(direct)}/messages/${answered.message.id}/steps`,
+    ),
   );
   // The owner pins the Chief of Staff and marks the work thread unread in their sidebar.
   await keep(
@@ -810,6 +823,7 @@ const runtimeState = {
     stopped: false,
     deadline: 1_800_000_600_000,
     conversation: "work:00000000-0000-4000-8000-000000000009",
+    doing: "Opening example.com",
   },
   inbox: [
     { id: "message-1", text: "What's left?", received_at: 1_800_000_000_000, status: "done" },

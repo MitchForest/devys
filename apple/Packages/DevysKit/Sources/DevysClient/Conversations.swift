@@ -33,6 +33,28 @@ public struct ConversationKey: Hashable, Sendable, CustomStringConvertible {
     }
 }
 
+/// How an employee's reply was worked out: how long its turn took and how many steps it shows.
+public struct Worked: Equatable, Sendable, Decodable {
+    /// Milliseconds.
+    public let ms: Double
+    public let steps: Int
+
+    public init(ms: Double, steps: Int) {
+        self.ms = ms
+        self.steps = steps
+    }
+}
+
+/// `GET …/messages/:id/steps`: the steps the turn behind an employee's reply took, in the
+/// owner's words; empty once the employee no longer keeps them.
+public struct Steps: Equatable, Sendable, Decodable {
+    public let steps: [String]
+
+    public init(steps: [String]) {
+        self.steps = steps
+    }
+}
+
 /// One message in a shared conversation. Events are hand-off cards written by the system; a card
 /// shows its record (`ref`) as it is now, so it is updated in place.
 public struct ConversationMessage: Equatable, Sendable, Decodable, Identifiable {
@@ -56,6 +78,8 @@ public struct ConversationMessage: Equatable, Sendable, Decodable, Identifiable 
     public let question: String?
     /// The owner may pick several answers, then Done.
     public let pickMany: Bool
+    /// An employee's reply that took steps: "Worked for 1m 20s · 6 steps" under it.
+    public let worked: Worked?
     public let createdAt: String
     public var reactions: [String]
 
@@ -72,6 +96,7 @@ public struct ConversationMessage: Equatable, Sendable, Decodable, Identifiable 
         replies: [String] = [],
         question: String? = nil,
         pickMany: Bool = false,
+        worked: Worked? = nil,
         createdAt: String,
         reactions: [String] = []
     ) {
@@ -87,6 +112,7 @@ public struct ConversationMessage: Equatable, Sendable, Decodable, Identifiable 
         self.replies = replies
         self.question = question
         self.pickMany = pickMany
+        self.worked = worked
         self.createdAt = createdAt
         self.reactions = reactions
     }
@@ -106,13 +132,14 @@ public struct ConversationMessage: Equatable, Sendable, Decodable, Identifiable 
             replies: try container.decodeIfPresent([String].self, forKey: .replies) ?? [],
             question: try container.decodeIfPresent(String.self, forKey: .question),
             pickMany: try container.decodeIfPresent(Bool.self, forKey: .pickMany) ?? false,
+            worked: try container.decodeIfPresent(Worked.self, forKey: .worked),
             createdAt: try container.decode(String.self, forKey: .createdAt),
             reactions: try container.decodeIfPresent([String].self, forKey: .reactions) ?? []
         )
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, conversation, author, kind, text, mentions, ref, replies, reactions, question
+        case id, conversation, author, kind, text, mentions, ref, replies, reactions, question, worked
         case pickMany = "pick_many"
         case replyTo = "reply_to"
         case viaVoice = "via_voice"
@@ -297,6 +324,13 @@ extension DevysHTTPClient {
     /// Pins, hides or marks a conversation unread in the signed-in person's sidebar.
     public func markSidebar(_ session: DeviceSession, businessID: String, key: ConversationKey, _ mark: SidebarMark) async throws -> SidebarMark {
         try await send(withJSON(conversationRequest(session, businessID: businessID, key: key, action: "sidebar", method: "POST"), mark))
+    }
+
+    /// The steps the turn behind an employee's reply took.
+    public func steps(_ session: DeviceSession, businessID: String, key: ConversationKey, messageID: String) async throws -> [String] {
+        let id = messageID.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-"))) ?? messageID
+        let steps: Steps = try await send(conversationRequest(session, businessID: businessID, key: key, action: "messages/\(id)/steps"))
+        return steps.steps
     }
 
     /// The key goes in the path percent-encoded, so ":" survives every proxy.

@@ -202,14 +202,17 @@ export function WorkCard({ id, text, inThread }: { id: string; text?: string; in
         </div>
         {item.steps.length > 0 && <WorkSteps steps={item.steps} />}
         {item.results.length > 0 && <WorkResults results={item.results} />}
-        <StateLine item={item} working={working} />
+        <StateLine item={item} working={working ? (run?.doing ?? "Working") : undefined} />
       </div>
     </WithWorkActions>
   );
 }
 
-/** The card's one line of state, with its one action. */
-function StateLine({ item, working }: { item: WorkItem; working: boolean }) {
+/**
+ * The card's one line of state, with its one action. `working` is what its employee is doing
+ * now, while it works on this item (the plan above shows the step).
+ */
+function StateLine({ item, working }: { item: WorkItem; working: string | undefined }) {
   const person = usePerson();
   const members = useMembers();
   const request = usePendingRequest(item.id);
@@ -246,7 +249,7 @@ function StateLine({ item, working }: { item: WorkItem; working: boolean }) {
         Ready when you are
       </Line>
     );
-  if (working)
+  if (working !== undefined)
     return (
       <Line
         tone="working"
@@ -262,7 +265,7 @@ function StateLine({ item, working }: { item: WorkItem; working: boolean }) {
           )
         }
       >
-        Working · {item.steps.find((s) => s.state === "doing")?.title ?? item.next_action}
+        {working}…
       </Line>
     );
   if (item.state === "needs_decision")

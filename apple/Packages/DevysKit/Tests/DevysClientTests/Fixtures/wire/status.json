@@ -4,7 +4,8 @@
       "id": "message-2",
       "stopped": false,
       "deadline": 1800000600000,
-      "conversation": "work:00000000-0000-4000-8000-000000000072"
+      "conversation": "work:00000000-0000-4000-8000-000000000072",
+      "doing": "Opening example.com"
     },
     "inbox": [
       {

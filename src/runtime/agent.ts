@@ -13,8 +13,10 @@ import type { Memory } from "../memory/contract.ts";
 import type { Runner } from "../workspace/contract.ts";
 import type { Outcome } from "../authority/contract.ts";
 import type { Capability } from "../protocol/capability.ts";
+import { activity, turnEntries, workedOf } from "./activity.ts";
 import { devysExtension, initialTools } from "./codemode.ts";
 import { toolHost, type ActiveEmployee } from "./host.ts";
+import { messageKey, operationsOf, type ChannelMessage } from "./delivery.ts";
 import { channelInbox } from "./inbox.ts";
 import { memoryUpkeep } from "./memory-upkeep.ts";
 import { conversationOf, historyPage, sessionMap } from "./sessions.ts";
@@ -116,6 +118,9 @@ export abstract class AgentRuntime<
     defaults: { thinkingLevel: "low" },
   });
   private readonly sessions = sessionMap(this.ctx.storage, this.harness);
+  private readonly activity = activity(this.services.capabilities, () =>
+    this.services.remote(this.scope),
+  );
   private readonly employee = async () => this.services.employee(this.scope);
   private readonly memory = memoryUpkeep({
     storage: this.ctx.storage,
@@ -137,6 +142,8 @@ export abstract class AgentRuntime<
     paused: async () => (await this.employee())?.paused ?? false,
     interruptCoding: () => this.services.interruptCoding(this.scope),
     configureIdle: (session) => this.configureIdle(session),
+    worked: async (session, operationIds) =>
+      workedOf(await this.activity.worked(await turnEntries(this.harness, session, operationIds))),
   });
   protected readonly host = toolHost({
     storage: this.ctx.storage,
@@ -203,7 +210,24 @@ export abstract class AgentRuntime<
 
   async inspect(scope: Scope) {
     await this.start(scope);
-    return JSON.stringify(await employeeStatus(this.ctx.storage, this.harness, this.sessions));
+    return JSON.stringify(
+      await employeeStatus(this.ctx.storage, this.harness, this.sessions, async (session, id) =>
+        this.activity.doing(await turnEntries(this.harness, session, [id], 1)),
+      ),
+    );
+  }
+
+  /**
+   * The steps the turn behind a reply took, in the owner's words: the reply's Pi operation (its
+   * channel message, kept 30 days) and the follow-up asking for its words when there was one.
+   */
+  async turn(scope: Scope, operationId: string) {
+    await this.start(scope);
+    const message = await this.ctx.storage.get<ChannelMessage>(messageKey(operationId));
+    if (!message) return null;
+    const session = this.sessions.sessionIn(await this.sessions.all(), message.input.chatId);
+    if (session === undefined) return null;
+    return this.activity.worked(await turnEntries(this.harness, session, operationsOf(message)));
   }
 
   /** Pi's entries for one conversation, newest first; the employee's direct chat by default. */
