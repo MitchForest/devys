@@ -121,6 +121,14 @@ extension Workspace {
                 if conversation.awaitingAfter == messageID { conversation.stoppedPolling = true }
             }
             settleAwaiting(&state)
+        case .stepsRequested, .stepsLoaded:
+            reduceSteps(intent, state: &state)
+        }
+    }
+
+    /// "Worked for …" opened under a reply: its steps, read from its employee once.
+    private func reduceSteps(_ intent: ConversationIntent, state: inout State) {
+        switch intent {
         case .stepsRequested(let key, let messageID):
             if case .loaded = state.steps[messageID] { return }
             state.steps[messageID] = .loading
@@ -136,6 +144,8 @@ extension Workspace {
             }
         case .stepsLoaded(let messageID, let steps):
             state.steps[messageID] = steps
+        default:
+            break
         }
     }
 

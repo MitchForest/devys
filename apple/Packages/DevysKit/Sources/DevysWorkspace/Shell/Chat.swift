@@ -531,7 +531,7 @@ struct WorkedFor: View {
                 if isOpen { store.send(.stepsRequested(key, messageID)) }
             } label: {
                 HStack(spacing: 3) {
-                    Text("Worked for \(Self.elapsed(worked.ms)) · \(worked.steps) \(worked.steps == 1 ? "step" : "steps")")
+                    Text("Worked for \(Self.elapsed(worked.milliseconds)) · \(worked.steps) \(worked.steps == 1 ? "step" : "steps")")
                     Image(systemName: "chevron.right")
                         .imageScale(.small)
                         .rotationEffect(.degrees(isOpen ? 90 : 0))
@@ -566,12 +566,13 @@ struct WorkedFor: View {
     }
 
     /// `8s`, `1m 20s`, `1h 5m`, as the web says it.
-    static func elapsed(_ ms: Double) -> String {
-        let seconds = max(1, Int((ms / 1000).rounded()))
+    static func elapsed(_ milliseconds: Double) -> String {
+        let seconds = max(1, Int((milliseconds / 1000).rounded()))
         if seconds < 60 { return "\(seconds)s" }
         let minutes = seconds / 60
-        if minutes < 60 { return seconds % 60 == 0 ? "\(minutes)m" : "\(minutes)m \(seconds % 60)s" }
-        return minutes % 60 == 0 ? "\(minutes / 60)h" : "\(minutes / 60)h \(minutes % 60)m"
+        if minutes < 60 { return seconds.isMultiple(of: 60) ? "\(minutes)m" : "\(minutes)m \(seconds - minutes * 60)s" }
+        let hours = minutes / 60
+        return minutes.isMultiple(of: 60) ? "\(hours)h" : "\(hours)h \(minutes - hours * 60)m"
     }
 }
 

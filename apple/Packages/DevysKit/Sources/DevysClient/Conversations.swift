@@ -35,13 +35,17 @@ public struct ConversationKey: Hashable, Sendable, CustomStringConvertible {
 
 /// How an employee's reply was worked out: how long its turn took and how many steps it shows.
 public struct Worked: Equatable, Sendable, Decodable {
-    /// Milliseconds.
-    public let ms: Double
+    public let milliseconds: Double
     public let steps: Int
 
-    public init(ms: Double, steps: Int) {
-        self.ms = ms
+    public init(milliseconds: Double, steps: Int) {
+        self.milliseconds = milliseconds
         self.steps = steps
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case steps
+        case milliseconds = "ms"
     }
 }
 

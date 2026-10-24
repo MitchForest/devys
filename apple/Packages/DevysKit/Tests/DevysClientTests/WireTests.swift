@@ -122,7 +122,7 @@ struct WireTests {
         let status = try await Self.answering("status").status(Self.session, EmployeeScope(businessID: "b1", employeeID: "e1"))
         #expect(status.state.run?.doing == "Opening example.com")
         let direct = try await Self.answering("conversation").conversation(Self.session, businessID: "b1", key: .direct("e1"))
-        #expect(direct.messages.compactMap(\.worked) == [Worked(ms: 80_000, steps: 2)])
+        #expect(direct.messages.compactMap(\.worked) == [Worked(milliseconds: 80_000, steps: 2)])
         let steps = try await Self.answering("steps").steps(Self.session, businessID: "b1", key: .direct("e1"), messageID: "m1")
         #expect(steps == ["Searching the app directory", "Opening example.com"])
     }
