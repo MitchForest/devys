@@ -76,7 +76,9 @@ public struct DevysAvatar: View {
         .accessibilityLabel(Text(accessibilitySummary))
         return Group {
             if budget == .full, isAnimated {
-                core.onTapGesture { pokedAt = Date() }
+                // Alongside, never instead: a face inside a button (a pinned tile, the header's
+                // pill) still opens what the button opens, as on the web.
+                core.simultaneousGesture(TapGesture().onEnded { pokedAt = Date() })
             } else {
                 core
             }
