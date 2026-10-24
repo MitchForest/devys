@@ -24,6 +24,8 @@ import { appCatalog, appSkills, builtInDirectory } from "./apps.ts";
 import { keepable } from "./projects.ts";
 import { artifactUrl } from "./artifacts.ts";
 import { askOwnerConnecting, searchApps } from "./remote-apps.ts";
+import { pendingOn } from "../authority/service.ts";
+import { offersAnswers } from "../conversations/service.ts";
 import { connectionVault, filling } from "./vault.ts";
 /** Composition only: implementations and SQL belong to their domains. */
 export function capabilities(
@@ -84,6 +86,9 @@ export function capabilities(
         if (key) await showWorkCard(env, businessId, work, key);
       },
       (asking, request) => askOwnerConnecting(env, asking, request, appCatalog),
+      async (businessId, workItemId) =>
+        Boolean(await Effect.runPromise(pendingOn(env.HYPERDRIVE, businessId, workItemId))) ||
+        (await Effect.runPromise(offersAnswers(env.HYPERDRIVE, businessId, `work:${workItemId}`))),
     ),
     ...appSearchCapabilities(async (businessId, query) =>
       searchApps(env, businessId, query, await builtInDirectory(env, businessId)),

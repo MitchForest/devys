@@ -48,12 +48,12 @@ test("a work item's steps and results show as its one card, pinned in its thread
       "Send a test email",
     ]);
     await expect(card.getByRole("list", { name: "Results" })).toHaveText(
-      "Registered acme-widgets.com· expires 2027-10-22✓",
+      "Registered acme-widgets.com · expires 2027-10-22 ✓",
     );
     // A thread has no permanent view: the card is the work.
     await expect(page.getByRole("button", { name: /side panel/ })).toHaveCount(0);
 
-    // A later change updates the same card in place: no new message.
+    // A later change updates the same card in place: no new message. A link shows as its site.
     await show(
       [
         { title: "Register the domain", state: "done" },
@@ -61,7 +61,7 @@ test("a work item's steps and results show as its one card, pinned in its thread
         { title: "Send a test email", state: "done" },
       ],
       [
-        { label: "Live at", url: "https://acme-widgets.com", ok: true },
+        { label: "Live at", url: "https://www.acme-widgets.com/welcome?from=card", ok: true },
         { label: "MX records", ok: true },
         { label: "Payment", value: "uncertain", ok: null },
       ],
@@ -70,13 +70,13 @@ test("a work item's steps and results show as its one card, pinned in its thread
     await expect(page.getByTestId("work-card")).toHaveCount(1);
     const results = card.getByRole("list", { name: "Results" }).getByRole("listitem");
     await expect(results).toHaveText([
-      "Live athttps://acme-widgets.com✓",
-      "MX records✓",
-      "Payment· uncertain?",
+      "Live at · acme-widgets.com ✓",
+      "MX records ✓",
+      "Payment · uncertain ?",
     ]);
-    await expect(results.first().getByRole("link")).toHaveAttribute(
+    await expect(results.first().getByRole("link", { name: "acme-widgets.com" })).toHaveAttribute(
       "href",
-      "https://acme-widgets.com",
+      "https://www.acme-widgets.com/welcome?from=card",
     );
   } finally {
     // Stop the page's polling before its business is removed.

@@ -235,6 +235,16 @@ it("an employee finds an app, asks to connect it; the owner signs in, reviews an
   const ask = { kind: "connect", app: "example.books/acme", why: "To read and draft bills" };
   const asked = await use<{ request: string; kind: string; state: string }>("askOwner", ask);
   expect(asked).toMatchObject({ kind: "connect", state: "asked" });
+  // The request names the app by the business's own id, however the employee named it, so the
+  // card finds the app whose Connect it shows; asking again the same way reads the same request.
+  expect(
+    (
+      await sql.row<{ app: string }>("SELECT input->>'app' AS app FROM decisions WHERE id = $1", [
+        asked.request,
+      ])
+    )?.app,
+  ).toBe("acmebooks");
+  expect((await use<{ request: string }>("askOwner", ask)).request).toBe(asked.request);
   expect((await thread()).some((message) => message.ref?.startsWith("devys:team/app/"))).toBe(
     false,
   );

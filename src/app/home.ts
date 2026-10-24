@@ -110,8 +110,7 @@ export async function homeRoute(
   /** The remote app a request is about: the one a connect names, or the one whose tool asks. */
   const appOf = (decision: Decision) => {
     const request = ownerRequest(decision);
-    if (request?.kind === "connect")
-      return apps.find((app) => [app.id, app.url, app.registry_name].includes(request.app));
+    if (request?.kind === "connect") return apps.find((app) => app.id === request.app);
     return apps.find((app) => decision.capability.startsWith(`${app.id}_`));
   };
   /** A request's title: the routine or work it is about, the app, or the capability. */

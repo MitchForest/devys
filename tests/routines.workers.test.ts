@@ -580,3 +580,41 @@ it("the owner lists routines by employee and project, and pauses and resumes the
   expect((await call(`/routines/${proposed}/resume`, "POST")).status).toBe(409);
   expect((await call(`/routines/${crypto.randomUUID()}/pause`, "POST")).status).toBe(404);
 });
+
+it("the owner's turn always comes with something to tap: needs_decision needs a request or a question card", async () => {
+  const { scope } = await business();
+  await Effect.runPromise(grant(db, scope, { capability: named("workUpdate"), mode: "auto" }));
+  const work = await Effect.runPromise(
+    createWorkItem(db, scope.businessId, {
+      id: crypto.randomUUID(),
+      owner: scope.employeeId,
+      title: "Buy the domain",
+      createdBy: "person:test",
+    }),
+  );
+  const decide = (revision: number) =>
+    named("workUpdate")
+      .execute({ ref: ref("work", "item", work.id), revision, state: "needs_decision" })
+      .pipe(as(scope, { workItemId: work.id, conversation: `work:${work.id}` }));
+  // Told in words only: refused, with how to bring the owner in.
+  const told = await Effect.runPromise(Effect.flip(decide(1)));
+  expect(told).toMatchObject({ code: "invalid_input" });
+  expect((told as CapabilityError).message).toContain("askOwner");
+  // A question card in the thread is something to tap.
+  await sql.run(
+    "INSERT INTO conversations (business_id, key) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+    [scope.businessId, `work:${work.id}`],
+  );
+  await sql.run(
+    `INSERT INTO messages (id, business_id, conversation, author, text, client_id, replies, question)
+     VALUES ($1, $2, $3, $4, 'Which registrar?', $5, ARRAY['GoDaddy', 'Namecheap'], 'Which registrar?')`,
+    [
+      crypto.randomUUID(),
+      scope.businessId,
+      `work:${work.id}`,
+      `employee:${scope.employeeId}`,
+      crypto.randomUUID(),
+    ],
+  );
+  expect(await Effect.runPromise(decide(1))).toMatchObject({ state: "needs_decision" });
+});

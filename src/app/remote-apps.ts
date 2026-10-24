@@ -901,7 +901,9 @@ export async function cardSettled(
 /**
  * `askOwner`, with the connect kind's own steps: the app named is added (not yet connected) so
  * the owner sees its name and logo, an app already on is refused (it is there to use), and a new
- * request posts the connect card in the thread.
+ * request posts the connect card in the thread. The request names the app by the business's own
+ * id, however the employee named it (an id, a registry name or an address), so every client
+ * finds the app whose Connect the card shows.
  */
 export async function askOwnerConnecting(
   env: Env,
@@ -917,6 +919,7 @@ export async function askOwnerConnecting(
     `employee:${asking.employeeId}`,
     builtIn,
   );
+  const asked: OwnerRequest = { ...request, app: app.id };
   if (app.state === "on") {
     // Asking again reads where it stands; a new request for an app already on is refused.
     const grant = await Effect.runPromise(
@@ -931,7 +934,7 @@ export async function askOwnerConnecting(
       (await Effect.runPromise(
         standingRequest(env.HYPERDRIVE, {
           grantId: grant.id,
-          request,
+          request: asked,
           workItemId: asking.workItemId,
         }),
       ));
@@ -941,6 +944,6 @@ export async function askOwnerConnecting(
       `${app.name} is already on: use it (describe_capabilities); ask the owner if you need more of it`,
     );
   }
-  // The work item's card shows the request with the app's name and logo.
-  return askOwnerFor(env, asking, request);
+  // The work item's card shows the request with the app's name and logo, and its Connect.
+  return askOwnerFor(env, asking, asked);
 }

@@ -365,3 +365,22 @@ export const replyTurnOf = (db: Database, businessId: string, key: ConversationK
       ? { employeeId, operationId: row.client_id.slice("reply:".length) }
       : undefined;
   });
+
+/**
+ * Whether answers wait on the owner in a conversation: an employee's question card is its latest
+ * word (or one is set for its next message), so the owner has buttons to tap.
+ */
+export const offersAnswers = (db: Database, businessId: string, key: ConversationKey) =>
+  database(db, async (sql) => {
+    const set = await sql.row<{ n: number }>(
+      "SELECT count(*)::int AS n FROM suggested_replies WHERE business_id = $1 AND conversation = $2",
+      [businessId, key],
+    );
+    if (set!.n > 0) return true;
+    const latest = await sql.row<{ author: string; replies: string[] }>(
+      `SELECT author, replies FROM messages WHERE business_id = $1 AND conversation = $2
+       ORDER BY created_at DESC, seq DESC LIMIT 1`,
+      [businessId, key],
+    );
+    return Boolean(latest && employeeOf(latest.author) && latest.replies.length > 0);
+  });

@@ -46,28 +46,42 @@ struct WorkStepsView: View {
     }
 }
 
-/// What the work achieved, in the words of `WorkResult.text`: label · value, its link and its mark.
+/// What the work achieved, each one sentence that wraps as text: label · value · its site as a
+/// link, and its mark, as the web.
 struct WorkResultsView: View {
     let results: [WorkResult]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             ForEach(Array(results.enumerated()), id: \.offset) { _, result in
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(result.label).font(DevysTypography.secondary.weight(.medium)).foregroundStyle(DevysColors.ink)
-                    if let value = result.value {
-                        Text("· \(value)").font(DevysTypography.secondary).foregroundStyle(DevysColors.ink2)
-                    }
-                    if let link = result.url, let url = URL(string: link), url.scheme == "https" {
-                        Link(link, destination: url).font(DevysTypography.secondary).lineLimit(1).truncationMode(.middle)
-                    }
-                    if let mark = result.mark {
-                        Text(mark).font(DevysTypography.secondary.weight(.semibold)).foregroundStyle(Self.tint(result.check))
-                    }
-                }
-                .accessibilityElement(children: .combine)
+                Text(Self.sentence(result))
+                    .font(DevysTypography.secondary)
+                    .foregroundStyle(DevysColors.ink2)
+                    .tint(DevysColors.indigo)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+    }
+
+    static func sentence(_ result: WorkResult) -> AttributedString {
+        var label = AttributedString(result.label)
+        label.font = DevysTypography.secondary.weight(.medium)
+        label.foregroundColor = DevysColors.ink
+        var text = label
+        if let value = result.value { text += AttributedString(" · \(value)") }
+        if let link = result.url, let url = URL(string: link), url.scheme == "https", let host = url.host() {
+            var site = AttributedString(host.hasPrefix("www.") ? String(host.dropFirst(4)) : host)
+            site.link = url
+            text += AttributedString(" · ") + site
+        }
+        if let mark = result.mark {
+            var check = AttributedString(" \(mark)")
+            check.font = DevysTypography.secondary.weight(.semibold)
+            check.foregroundColor = tint(result.check)
+            text += check
+        }
+        return text
     }
 
     static func tint(_ check: WorkResult.Check?) -> Color {

@@ -158,6 +158,11 @@ export function workCapabilities(
     asking: { businessId: string; employeeId: string; workItemId: string; conversation: string },
     request: OwnerRequest,
   ) => Promise<Decision>,
+  /**
+   * Whether the owner has something to act on for this work item now: a pending request, or a
+   * question card in its thread. Either way they have buttons to tap.
+   */
+  ownerCanAct: (businessId: string, workItemId: string) => Promise<boolean>,
 ) {
   /**
    * A work item is changed by its owner (colleagues ask there); the Chief of Staff, coordinating,
@@ -350,6 +355,14 @@ export function workCapabilities(
             return yield* new CapabilityError({
               code: "invalid_input",
               message: "A follow-up (wakeAt) is a time in the future",
+            });
+          // The owner's turn always comes with what to tap, never as an instruction.
+          const { businessId } = yield* Invocation;
+          if (state === "needs_decision" && !(yield* rpc(() => ownerCanAct(businessId, id))))
+            return yield* new CapabilityError({
+              code: "invalid_input",
+              message:
+                "The owner's turn needs something to tap. Raise this step with askOwner in the work item's thread (connect an app, take_over to sign in, approve, a secret or a file), or ask its question there with suggestReplies; then set needs_decision. Don't tell the owner to do it in words.",
             });
           return yield* change(id, revision, {
             ...(state ? { state } : {}),

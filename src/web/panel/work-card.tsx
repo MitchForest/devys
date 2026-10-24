@@ -82,24 +82,40 @@ function Mark({ ok }: { ok: WorkResult["ok"] }) {
   );
 }
 
-/** What the work achieved: label · value, its link and its mark. */
+/** A link's site, as a result shows it ("godaddy.com"), never its whole address. */
+const siteOf = (url: string) => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+};
+
+/**
+ * What the work achieved, each one sentence that wraps as text: label · value · its site as a
+ * link, and its mark.
+ */
 function WorkResults({ results }: { results: readonly WorkResult[] }) {
   return (
     <ul className="flex flex-col gap-1" aria-label="Results">
       {results.map((result, index) => (
-        <li key={index} className="flex min-w-0 flex-wrap items-baseline gap-x-1 text-detail">
+        <li key={index} className="text-detail leading-[1.45] text-ink-2">
           <span className="font-medium text-ink">{result.label}</span>
-          {result.value && <span className="text-ink-2">· {result.value}</span>}
+          {result.value && <> · {result.value}</>}
           {result.url && (
-            <a
-              href={result.url}
-              target="_blank"
-              rel="noreferrer"
-              className="min-w-0 truncate text-indigo hover:underline"
-            >
-              {result.url}
-            </a>
-          )}
+            <>
+              {" · "}
+              <a
+                href={result.url}
+                target="_blank"
+                rel="noreferrer"
+                title={result.url}
+                className="text-indigo hover:underline"
+              >
+                {siteOf(result.url)}
+              </a>
+            </>
+          )}{" "}
           <Mark ok={result.ok} />
         </li>
       ))}
