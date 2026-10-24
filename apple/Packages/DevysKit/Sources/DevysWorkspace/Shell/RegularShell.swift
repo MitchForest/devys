@@ -112,9 +112,12 @@ struct RegularShell: View {
                     .clipped()
                     .background(DevysColors.sheetTint)
                 Hairline().opacity(layout.sidebar > 0 ? 1 : 0).frame(width: layout.sidebar > 0 ? 1 : 0)
+                // The conversation takes its new width at once and only its column slides: animating
+                // its width would reflow every message and re-anchor the scroll on every frame.
                 ConversationPane(store: store)
                     .frame(width: max(layout.conversation, WorkspaceLayout.minimumConversation))
-                    .frame(width: layout.conversation, alignment: .leading)
+                    .animation(nil, value: layout.conversation)
+                    .frame(width: layout.conversation, alignment: layout.conversation < WorkspaceLayout.minimumConversation ? .leading : .center)
                     .clipped()
                     .background(DevysColors.sheet)
                 ResizeHandle(width: $panelWidth)

@@ -17,7 +17,14 @@ import { RightPanel } from "../panel/panel.tsx";
 import { ConversationPane } from "./conversation.tsx";
 import { ConnectAppsSheet } from "./connect-apps.tsx";
 import { PlacePill } from "./header.tsx";
-import { compactQuery, defaultPanel, layout, panelRange, sidebarWidth } from "./layout.ts";
+import {
+  compactQuery,
+  defaultPanel,
+  layout,
+  minimumConversation,
+  panelRange,
+  sidebarWidth,
+} from "./layout.ts";
 import { NewEmployeeSheet, NewProjectDialog, NewWorkItemDialog } from "./dialogs.tsx";
 import { CommandPalette } from "./palette.tsx";
 import { Settings } from "./settings.tsx";
@@ -106,11 +113,22 @@ function RegularShell() {
               </div>
             </div>
             <div className={cn("shrink-0 bg-hairline", columns.sidebar ? "w-px" : "w-0")} />
+            {/* The conversation takes its new width at once and only its column slides:
+                animating its width would reflow every message and move the scroll each frame. */}
             <main
-              className={cn("relative min-w-0 shrink-0 overflow-hidden bg-sheet", motion)}
+              className={cn(
+                "relative flex min-w-0 shrink-0 overflow-hidden bg-sheet",
+                columns.conversation < minimumConversation ? "justify-start" : "justify-center",
+                motion,
+              )}
               style={{ width: columns.conversation }}
             >
-              <StableConversation />
+              <div
+                className="h-full shrink-0"
+                style={{ width: Math.max(columns.conversation, minimumConversation) }}
+              >
+                <StableConversation />
+              </div>
             </main>
             <ResizeHandle
               visible={columns.handle}

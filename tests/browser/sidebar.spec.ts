@@ -11,8 +11,9 @@ import {
   stubPosting,
 } from "./helpers.ts";
 
-// G (2026-10-23): the sidebar after Grok Bot. Pinned tiles (the Chief of Staff pinned: face and
-// name, no card or mark), Projects only while there are any, Chats as Messages rows with a menu; the header's pill
+// G (2026-10-23, pinning 2026-10-24): the sidebar after Grok Bot. Team, Work and Projects (only
+// while there are any), each with what is pinned at its top (the Chief of Staff by default), Team
+// as Messages rows with a menu; the header's pill
 // opens a desk or a project's details; Connect apps; question cards; New employee.
 
 /** The team's rows, top first, by the first word of their names. */
