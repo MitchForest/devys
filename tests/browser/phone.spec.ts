@@ -36,9 +36,8 @@ test("on a phone: the list, then one conversation full screen; Back to the list;
 
     // Back from a conversation is the list, as in Messages: tiles, Projects and Chats.
     await page.getByRole("button", { name: "Back", exact: true }).click();
-    await expect(
-      page.getByTestId("pinned").getByRole("link", { name: "Chief of Staff" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Team" })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Chief of Staff/ }).first()).toBeVisible();
     await expect(page.getByRole("heading", { name: "Projects" })).toBeVisible();
     await expect(page.getByRole("link", { name: /^Growth/ })).toBeVisible();
     await page.getByRole("link", { name: /^Launch/ }).click();

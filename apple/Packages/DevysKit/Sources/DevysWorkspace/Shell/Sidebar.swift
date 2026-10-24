@@ -4,8 +4,8 @@ import DevysClient
 import DevysDesignSystem
 import SwiftUI
 
-/// The sidebar is people, work and projects, as Messages lays out a list: pinned tiles, Work while
-/// any is going, Projects while one is active, then Chats, most recent first; the owner's face (Settings) and Connect apps at
+/// The sidebar is people, work and projects, as Messages lays out a list: Team (the rest most
+/// recent first), Work while any is going and Projects while one is active, each pinned first; the owner's face (Settings) and Connect apps at
 /// the bottom. Search and New are ⌘K and the menu bar (the title bar's search on the Mac).
 struct Sidebar: View {
     let store: StoreOf<Workspace>
@@ -24,9 +24,9 @@ struct Sidebar: View {
     }
 }
 
-/// The list itself, the sidebar's and the phone's: tiles, Work (only while any is going), Projects
-/// (only while one is active) and Chats. `opened` runs after a row opens something, so the phone
-/// can leave its list.
+/// The list itself, the sidebar's and the phone's: Team, Work (only while any is going) and
+/// Projects (only while one is active), each with what is pinned at its top. `opened` runs after a
+/// row opens something, so the phone can leave its list.
 struct SidebarList: View {
     let store: StoreOf<Workspace>
     var opened: () -> Void = {}
@@ -38,7 +38,8 @@ struct SidebarList: View {
         let layout = store.state.sidebar
         let work = store.state.activeWork()
         VStack(alignment: .leading, spacing: 2) {
-            if !layout.pinned.isEmpty { tiles(layout.pinned) }
+            heading("Team")
+            ForEach(layout.team) { row($0) }
             if !work.isEmpty {
                 heading("Work")
                 ForEach(work) { item in
@@ -46,15 +47,20 @@ struct SidebarList: View {
                         store.send(.workOpened(item.id))
                         opened()
                     }
-                    .contextMenu { WorkActions(store: store, item: item) }
+                    .contextMenu {
+                        let pinned = store.state.isPinned(work: item.id)
+                        Button(pinned ? "Unpin" : "Pin", systemImage: pinned ? "pin.slash" : "pin") {
+                            store.send(.sidebarMarked(.work(item.id), SidebarMark(pinned: !pinned)))
+                        }
+                        Divider()
+                        WorkActions(store: store, item: item)
+                    }
                 }
             }
             if !layout.projects.isEmpty {
                 heading("Projects")
                 ForEach(layout.projects) { row($0) }
             }
-            if !work.isEmpty || !layout.projects.isEmpty { heading("Chats") }
-            ForEach(layout.chats) { row($0) }
         }
         .alert("Rename", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } }), presenting: renaming) { employee in
             TextField("Name", text: $name)
@@ -68,19 +74,6 @@ struct SidebarList: View {
         .sheet(item: $retiring) { employee in
             RetireSheet(store: store, employee: employee) { retiring = nil }
         }
-    }
-
-    /// One tile alone fills the width with a large face; several share two columns.
-    private func tiles(_ entries: [SidebarEntry]) -> some View {
-        let single = entries.count == 1
-        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: single ? 1 : 2), spacing: 8) {
-            ForEach(entries) { entry in
-                PinnedTile(store: store, entry: entry, faceSize: single ? 88 : 52) { open(entry) }
-                    .contextMenu { menu(entry) }
-            }
-        }
-        .padding(.top, 4)
-        .padding(.bottom, 8)
     }
 
     private func row(_ entry: SidebarEntry) -> some View {
@@ -130,49 +123,6 @@ struct SidebarList: View {
             Button("Hide from Sidebar", systemImage: "eye.slash") { store.send(.sidebarMarked(entry.key, SidebarMark(hidden: true))) }
         }
     }
-}
-
-/// A pinned conversation: a big face (or project tile) on a light rounded square with the name
-/// under it. The Chief of Staff's carries a star.
-private struct PinnedTile: View {
-    let store: StoreOf<Workspace>
-    let entry: SidebarEntry
-    let faceSize: CGFloat
-    let action: () -> Void
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        let selected = store.place == entry.place
-        Button {
-            withAnimation(DevysMotion.select(reduceMotion: reduceMotion)) { action() }
-        } label: {
-            VStack(spacing: 8) {
-                SidebarFace(store: store, entry: entry, size: faceSize)
-                    .overlay(alignment: .topTrailing) {
-                        if needsYou > 0 {
-                            NeedsYouBadge(count: needsYou).offset(x: 6, y: -6)
-                        } else if entry.unread > 0, !selected {
-                            UnreadDot().offset(x: 2, y: -2)
-                        }
-                    }
-                Text(entry.title)
-                    .font(DevysTypography.control.weight(entry.unread > 0 || selected ? .semibold : .medium))
-                    .foregroundStyle(DevysColors.ink)
-                    .lineLimit(1)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, faceSize > 60 ? 16 : 12)
-            .padding(.horizontal, 8)
-            // As in Messages: the face and name alone; being pinned is the place and size.
-            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(entry.unread > 0 ? "\(entry.title), unread" : entry.title)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-
-    /// What waits on the owner counts on the Chief of Staff's face, Home's badge.
-    private var needsYou: Int { entry.place == .home ? store.home.value?.needsYou.count ?? 0 : 0 }
 }
 
 /// A chat row as Messages draws one: the face, the name in bold, the newest line in grey, the

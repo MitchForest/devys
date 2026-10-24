@@ -123,22 +123,32 @@ const workUnreadOf = (d: { conversations: readonly { key: string; unread: number
       .filter((summary) => summary.key.startsWith("work:"))
       .map((summary) => [summary.key.slice("work:".length), summary.unread] as const),
   );
+const workPinnedOf = (d: { conversations: readonly { key: string; pinned: boolean }[] }) =>
+  new Set(
+    d.conversations
+      .filter((summary) => summary.pinned && summary.key.startsWith("work:"))
+      .map((summary) => summary.key.slice("work:".length)),
+  );
 const day = 24 * 60 * 60_000;
 
 /**
- * The work in the sidebar: everything open, and finished work until the owner has seen how it
- * ended (its last word unread) for at most a day; it is archived after that, still found with ⌘K.
- * Those waiting on the owner first, then the ones running, then the rest, newest first.
+ * The work in the sidebar: what the owner pinned first, whatever its state, until unpinned; then
+ * everything open, and finished work until the owner has seen how it ended (its last word unread)
+ * for at most a day; it is archived after that, still found with ⌘K. Those waiting on the owner
+ * first, then the ones running, then the rest, newest first.
  */
-export function useActiveWork() {
+export function useActiveWork(): { item: WorkItem; pinned: boolean }[] {
   const work = useWork().data ?? [];
   const unread = useQuery({ ...queries.summaries(useBusinessId()), select: workUnreadOf }).data;
+  const pinned = useQuery({ ...queries.summaries(useBusinessId()), select: workPinnedOf }).data;
   const asked = new Set((useDecisions().data ?? []).flatMap((d) => d.work_item_id ?? []));
   const now = Date.now();
-  const shown = work.filter((item) =>
-    item.state === "completed"
-      ? (unread?.get(item.id) ?? 0) > 0 && now - Date.parse(item.updated_at) < day
-      : item.state !== "cancelled",
+  const shown = work.filter(
+    (item) =>
+      !pinned?.has(item.id) &&
+      (item.state === "completed"
+        ? (unread?.get(item.id) ?? 0) > 0 && now - Date.parse(item.updated_at) < day
+        : item.state !== "cancelled"),
   );
   const rank = (item: WorkItem) =>
     asked.has(item.id) || item.state === "proposed" || item.state === "needs_decision"
@@ -148,7 +158,12 @@ export function useActiveWork() {
         : item.state === "completed"
           ? 3
           : 2;
-  return shown.toSorted((a, b) => rank(a) - rank(b) || b.updated_at.localeCompare(a.updated_at));
+  return [
+    ...work.filter((item) => pinned?.has(item.id)).map((item) => ({ item, pinned: true })),
+    ...shown
+      .toSorted((a, b) => rank(a) - rank(b) || b.updated_at.localeCompare(a.updated_at))
+      .map((item) => ({ item, pinned: false })),
+  ];
 }
 
 /** Work items the signed-in person follows, by id. */
@@ -175,8 +190,8 @@ export type SidebarRow = {
 const summariesOf = (d: { conversations: readonly ConversationSummary[] }) => d.conversations;
 /**
  * The sidebar: every employee and project, whether or not anything was said yet, joined with
- * the person's marks. Pinned rows are tiles; hidden rows are left out until something new is
- * said; chats are most recent first.
+ * the person's marks. Each section has its pinned rows first; hidden rows are left out until
+ * something new is said; the rest of the team is most recent first.
  */
 export function useSidebar() {
   const employees = useEmployees();
@@ -223,15 +238,23 @@ export function useSidebar() {
   ];
   const latest = (row: SidebarRow) => row.last?.created_at ?? "";
   const shown = rows.filter((row) => !row.hidden);
+  const employeeRows = shown.filter((row) => row.kind === "employee");
+  const projectRows = shown.filter((row) => row.kind === "project");
   return {
-    pinned: shown.filter((row) => row.pinned),
-    projects: shown.filter((row) => !row.pinned && row.kind === "project"),
-    // Most recent first; those nobody has spoken in yet keep the team's order, after them.
-    chats: shown
-      .filter((row) => !row.pinned && row.kind === "employee")
-      .map((row, order) => ({ row, order }))
-      .sort((a, b) => latest(b.row).localeCompare(latest(a.row)) || a.order - b.order)
-      .map(({ row }) => row),
+    // Pinned first, in the team's order; then most recent first, those nobody has spoken in
+    // yet keeping the team's order after them.
+    team: [
+      ...employeeRows.filter((row) => row.pinned),
+      ...employeeRows
+        .filter((row) => !row.pinned)
+        .map((row, order) => ({ row, order }))
+        .sort((a, b) => latest(b.row).localeCompare(latest(a.row)) || a.order - b.order)
+        .map(({ row }) => row),
+    ],
+    projects: [
+      ...projectRows.filter((row) => row.pinned),
+      ...projectRows.filter((row) => !row.pinned),
+    ],
   };
 }
 

@@ -105,7 +105,7 @@ test("signed in with no business: name it, and start with the standard team", as
     ))!.business_id;
     // Starting asks the Chief of Staff to greet, once.
     await expect.poll(() => welcomed).toEqual(["POST"]);
-    // The standard team, the Chief of Staff pinned.
+    // The standard team, the Chief of Staff pinned at the top of Team.
     expect(
       (await sql.row<{ n: number }>(
         "SELECT count(*)::int AS n FROM employees WHERE business_id = $1",
@@ -114,9 +114,7 @@ test("signed in with no business: name it, and start with the standard team", as
     ).toBe(5);
     const sidebar = page.getByRole("navigation", { name: "Sidebar" });
     await expect(sidebar.getByRole("link")).toHaveCount(5);
-    await expect(
-      sidebar.getByTestId("pinned").getByRole("link", { name: "Chief of Staff" }),
-    ).toBeVisible();
+    await expect(sidebar.getByRole("link").first()).toHaveAccessibleName(/^Chief of Staff/);
   } finally {
     await stores.remove(business ? [{ person, business }] : []);
     if (!business) {

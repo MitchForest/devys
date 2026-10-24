@@ -169,7 +169,9 @@ test("a turn that stopped is Devys's notice, not the employee's words, with Ask 
   try {
     await signIn(page, sql, owner.person);
     await sidebar(page).getByRole("link", { name: "Chief of Staff" }).click();
-    await expect(page.getByText("Chief of Staff stopped: it took too long.")).toBeVisible();
+    await expect(
+      page.getByRole("main").getByText("Chief of Staff stopped: it took too long."),
+    ).toBeVisible();
     // An event, not a message: no speaker line or bubble of the employee's.
     await expect(page.getByTestId("speaker")).toHaveCount(0);
     const replies = page.getByTestId("question-card");

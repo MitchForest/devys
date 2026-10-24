@@ -85,11 +85,19 @@ extension Workspace.State {
         }
     }
 
-    /// The work in the sidebar: everything open, and finished work until the owner has seen how
-    /// it ended (its last word unread) for at most a day; it is archived after that, still found
-    /// with ⌘K. Those waiting on the owner first, then the ones running, then the rest, newest first.
+    /// Whether the signed-in person pinned this work item to the top of Work.
+    package func isPinned(work id: String) -> Bool {
+        summaries[ConversationKey.work(id).rawValue]?.pinned ?? false
+    }
+
+    /// The work in the sidebar: what the owner pinned first, whatever its state, until unpinned;
+    /// then everything open, and finished work until the owner has seen how it ended (its last
+    /// word unread) for at most a day; it is archived after that, still found with ⌘K. Those
+    /// waiting on the owner first, then the ones running, then the rest, newest first.
     package func activeWork(now: Date = .now) -> [WorkItem] {
-        let shown = (work.value ?? []).filter { item in
+        let all = work.value ?? []
+        let shown = all.filter { item in
+            if isPinned(work: item.id) { return false }
             switch item.state {
             case .completed:
                 let unread = summaries[ConversationKey.work(item.id).rawValue]?.unread ?? 0
@@ -103,7 +111,7 @@ extension Workspace.State {
             if item.state == .inProgress || item.state == .ready { return 1 }
             return item.state == .completed ? 3 : 2
         }
-        return shown.sorted { (rank($0), $1.updatedAt) < (rank($1), $0.updatedAt) }
+        return all.filter { isPinned(work: $0.id) } + shown.sorted { (rank($0), $1.updatedAt) < (rank($1), $0.updatedAt) }
     }
 
     /// "Step 3 of 5": the first step not yet done; nil without steps or once all are done.

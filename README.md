@@ -102,9 +102,10 @@ also verified live. No public product has launched.
   iMessage through Photon. iMessage messages and the employee's iMessage replies are
   recorded in that employee's DM conversation. iMessage is optional and has not been
   tested against a real Photon account.
-- **Clients.** A sidebar like Messages: pinned tiles (the Chief of Staff by default), Projects
-  while any exist, then Chats (face, name, last line, unread), each with Pin, Mark as unread,
-  Rename, Pause, Hide and Retire; the owner's face and **Connect apps** (21 listed services with
+- **Clients.** A sidebar like Messages in three sections, each with what is pinned at its top:
+  Team (face, name, last line, unread; the Chief of Staff pinned by default), Work (open work,
+  and a pinned item whatever its state, until unpinned) and Projects while any are active. Team
+  rows have Pin, Mark as unread, Rename, Pause, Hide and Retire; the owner's face and **Connect apps** (21 listed services with
   logos, categories and search, then the MCP Registry) at the bottom. A business starts with the
   standard team (Chief of Staff, Admin, Finance, Growth, Engineering); the Chief of Staff greets
   the owner. Documents, code and the browser

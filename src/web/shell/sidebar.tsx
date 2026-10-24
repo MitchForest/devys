@@ -132,25 +132,25 @@ function SidebarFooter() {
   );
 }
 
-/** Tiles, Work, Projects and Chats: the sidebar's body. */
+/**
+ * Team, Work (while any is going) and Projects (while one is active): the sidebar's body. Each
+ * section has what the owner pinned at its top.
+ */
 function SidebarList() {
-  const { pinned, projects, chats } = useSidebar();
+  const { team, projects } = useSidebar();
   const work = useActiveWork();
   return (
     <div className="flex flex-col gap-0.5">
-      {pinned.length > 0 && <Tiles rows={pinned} />}
+      <SectionLabel>Team</SectionLabel>
+      {team.map((row) => (
+        <ChatRow key={row.key} row={row} />
+      ))}
       {work.length > 0 && <SectionLabel>Work</SectionLabel>}
-      {work.map((item) => (
-        <WorkRow key={item.id} item={item} />
+      {work.map(({ item, pinned }) => (
+        <WorkRow key={item.id} item={item} pinned={pinned} />
       ))}
       {projects.length > 0 && <SectionLabel>Projects</SectionLabel>}
       {projects.map((row) => (
-        <ChatRow key={row.key} row={row} />
-      ))}
-      {chats.length > 0 && (pinned.length > 0 || projects.length > 0) && (
-        <SectionLabel>Chats</SectionLabel>
-      )}
-      {chats.map((row) => (
         <ChatRow key={row.key} row={row} />
       ))}
     </div>
@@ -159,51 +159,64 @@ function SidebarList() {
 
 /**
  * A work item: who is on it, its title and where it stands ("Your turn: Connect Ramp" in amber,
- * "Opening godaddy.com…" while it runs). It opens beside whatever conversation is on screen.
+ * "Opening godaddy.com…" while it runs). It opens beside whatever conversation is on screen;
+ * right-click pins it to the top of Work, or unpins it.
  */
-function WorkRow({ item }: { item: WorkItem }) {
+function WorkRow({ item, pinned }: { item: WorkItem; pinned: boolean }) {
   const nav = useNav();
+  const mark = useSidebarMark();
   const open = useWorkInPanel() === item.id;
   const owner = useEmployees().find((e) => e.id === item.owner_employee_id);
   const line = useWorkLine(item);
   return (
-    <button
-      type="button"
-      data-testid="work-row"
-      aria-label={`${item.title}, ${line.text}`}
-      aria-current={open ? "true" : undefined}
-      onClick={() => nav.openWork(item.id)}
-      className={cn(
-        "flex w-full items-center gap-2.5 rounded-card px-2 py-[7px] text-left transition-[background-color,box-shadow] duration-200",
-        open ? "bg-sheet shadow-resting" : "hover:bg-sheet/60",
-      )}
-    >
-      {owner ? <EmployeePortrait employee={owner} size={28} /> : <span className="size-7" />}
-      <span className="flex min-w-0 flex-1 flex-col gap-px">
-        <span
+    <ContextMenu>
+      <ContextMenuTrigger render={<div />}>
+        <button
+          type="button"
+          data-testid="work-row"
+          aria-label={`${item.title}, ${line.text}`}
+          aria-current={open ? "true" : undefined}
+          onClick={() => nav.openWork(item.id)}
           className={cn(
-            "truncate text-control text-ink",
-            line.tone === "you" ? "font-semibold" : "font-medium",
+            "flex w-full items-center gap-2.5 rounded-card px-2 py-[7px] text-left transition-[background-color,box-shadow] duration-200",
+            open ? "bg-sheet shadow-resting" : "hover:bg-sheet/60",
           )}
         >
-          {item.title}
-        </span>
-        <span
-          className={cn(
-            "truncate text-detail",
-            line.tone === "you"
-              ? "text-amber"
-              : line.tone === "working"
-                ? "text-indigo"
-                : line.tone === "done"
-                  ? "text-green"
-                  : "text-ink-3",
-          )}
+          {owner ? <EmployeePortrait employee={owner} size={28} /> : <span className="size-7" />}
+          <span className="flex min-w-0 flex-1 flex-col gap-px">
+            <span
+              className={cn(
+                "truncate text-control text-ink",
+                line.tone === "you" ? "font-semibold" : "font-medium",
+              )}
+            >
+              {item.title}
+            </span>
+            <span
+              className={cn(
+                "truncate text-detail",
+                line.tone === "you"
+                  ? "text-amber"
+                  : line.tone === "working"
+                    ? "text-indigo"
+                    : line.tone === "done"
+                      ? "text-green"
+                      : "text-ink-3",
+              )}
+            >
+              {line.text}
+            </span>
+          </span>
+        </button>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="min-w-40">
+        <ContextMenuItem
+          onClick={() => mark.mutate({ key: `work:${item.id}`, mark: { pinned: !pinned } })}
         >
-          {line.text}
-        </span>
-      </span>
-    </button>
+          {pinned ? <PinOff /> : <Pin />} {pinned ? "Unpin" : "Pin"}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
@@ -234,54 +247,6 @@ const labelOf = (row: SidebarRow, waiting: number) =>
     : row.unread
       ? `${row.title}, ${row.unread} unread`
       : row.title;
-
-/** Pinned conversations as tiles: a big face (or project tile) and the name under it. */
-function Tiles({ rows }: { rows: readonly SidebarRow[] }) {
-  const columns = Math.min(rows.length, 3);
-  const size = columns === 1 ? 88 : columns === 2 ? 64 : 52;
-  return (
-    <div
-      data-testid="pinned"
-      className="grid gap-1.5 pb-1"
-      style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
-    >
-      {rows.map((row) => (
-        <Tile key={row.key} row={row} size={size} />
-      ))}
-    </div>
-  );
-}
-
-function Tile({ row, size }: { row: SidebarRow; size: number }) {
-  const selected = useSelected(row);
-  const waiting = useWaiting(row);
-  return (
-    <RowMenus row={row}>
-      <PlaceLink
-        place={row.place}
-        aria-label={labelOf(row, waiting)}
-        aria-current={selected ? "page" : undefined}
-        className={cn(
-          // As in Messages: the face and name alone; being pinned is the place and size.
-          "relative flex flex-col items-center gap-1.5 px-1.5 pt-3 pb-2",
-        )}
-      >
-        <span className="relative">
-          <RowFace row={row} size={size} />
-        </span>
-        <span
-          className={cn(
-            "max-w-full truncate text-detail text-ink",
-            (row.unread > 0 || waiting > 0 || selected) && "font-semibold",
-          )}
-        >
-          {row.title}
-        </span>
-        <Mark unread={row.unread} waiting={waiting} className="absolute top-2 left-2" />
-      </PlaceLink>
-    </RowMenus>
-  );
-}
 
 /** A row's face: the employee's, with their mood, or the project's tile. */
 function RowFace({ row, size }: { row: SidebarRow; size: number }) {

@@ -15,7 +15,9 @@ import {
 // name, no card or mark), Projects only while there are any, Chats as Messages rows with a menu; the header's pill
 // opens a desk or a project's details; Connect apps; question cards; New employee.
 
-const pinned = (page: Page) => sidebar(page).getByTestId("pinned");
+/** The team's rows, top first, by the first word of their names. */
+const teamOrder = async (page: Page) =>
+  (await sidebar(page).getByRole("link").allInnerTexts()).map((text) => text.split("\n")[0]);
 const mark = async (sql: Awaited<ReturnType<typeof localStores>>["sql"], key: string) =>
   await sql.row<{ pinned: boolean; hidden: boolean; unread: boolean }>(
     `SELECT pinned_at IS NOT NULL AS pinned, hidden_at IS NOT NULL AS hidden,
@@ -23,7 +25,7 @@ const mark = async (sql: Awaited<ReturnType<typeof localStores>>["sql"], key: st
     [key],
   );
 
-test("pinned tiles, chats as rows, and each row's menu: pin, unpin, mark unread, hide", async ({
+test("Team, with what is pinned at its top, and each row's menu: pin, unpin, mark unread, hide", async ({
   page,
 }) => {
   const stores = await localStores();
@@ -38,11 +40,14 @@ test("pinned tiles, chats as rows, and each row's menu: pin, unpin, mark unread,
   await stubPosting(page);
   try {
     await signIn(page, sql, owner.person);
-    // The Chief of Staff alone is pinned, the face and name alone; nothing else heads the sidebar.
-    await expect(pinned(page).getByRole("link")).toHaveCount(1);
-    await expect(pinned(page).getByRole("link", { name: "Chief of Staff" })).toBeVisible();
-    await expect(pinned(page).getByTestId("star")).toHaveCount(0);
-    for (const name of ["Home", "Team", "Apps", "Documents", "Code"])
+    // Team heads the sidebar, the Chief of Staff (pinned) at its top; no tiles, no Chats.
+    await expect(sidebar(page).getByRole("heading", { name: "Team" })).toBeVisible();
+    await expect(sidebar(page).getByRole("heading", { name: "Chats" })).toHaveCount(0);
+    await expect(sidebar(page).getByTestId("pinned")).toHaveCount(0);
+    await expect
+      .poll(() => teamOrder(page))
+      .toEqual(["Chief of Staff", "Growth", "Admin", "Finance", "Engineering"]);
+    for (const name of ["Home", "Apps", "Documents", "Code"])
       await expect(sidebar(page).getByText(name, { exact: true })).toHaveCount(0);
     await expect(sidebar(page).getByRole("heading", { name: "Projects" })).toHaveCount(0);
 
@@ -52,24 +57,31 @@ test("pinned tiles, chats as rows, and each row's menu: pin, unpin, mark unread,
     await expect(growthRow).toContainText("Drafted three launch headlines for you.");
     await expect(sidebar(page).getByRole("link", { name: "Finance" })).toBeVisible();
 
-    // Pin Growth from its row's menu: it joins the tiles.
-    await growthRow.click({ button: "right" });
+    // Pin Finance from its row's menu: it moves up, under the Chief of Staff.
+    await sidebar(page).getByRole("link", { name: "Finance" }).click({ button: "right" });
     await page.getByRole("menuitem", { name: "Pin", exact: true }).click();
-    await expect(pinned(page).getByRole("link", { name: /^Growth/ })).toBeVisible();
-    await expect.poll(async () => (await mark(sql, `direct:${growth.id}`))?.pinned).toBe(true);
+    await expect
+      .poll(() => teamOrder(page))
+      .toEqual(["Chief of Staff", "Finance", "Growth", "Admin", "Engineering"]);
+    await expect.poll(async () => (await mark(sql, `direct:${finance.id}`))?.pinned).toBe(true);
     await page.mouse.move(0, 0);
     // Animations settle (popovers zoom in, faces draw) before the picture.
     await page.waitForTimeout(600);
     await page.screenshot({ path: "/tmp/g-sidebar.png" });
 
-    // Unpin the Chief of Staff: a row like the others, still the place the workspace opens.
-    await pinned(page).getByRole("link", { name: "Chief of Staff" }).click({ button: "right" });
+    // Unpin the Chief of Staff: it takes its place by the latest word, after what is pinned.
+    await sidebar(page)
+      .getByRole("link", { name: /^Chief of Staff/ })
+      .click({ button: "right" });
     await page.getByRole("menuitem", { name: "Unpin" }).click();
-    await expect(pinned(page).getByRole("link")).toHaveCount(1);
-    await expect(sidebar(page).getByRole("heading", { name: "Chats" }).locator("..")).toBeVisible();
+    await expect.poll(async () => (await teamOrder(page))[0]).toBe("Finance");
     await expect
       .poll(async () => (await mark(sql, `direct:${owner.chiefOfStaff}`))?.pinned)
       .toBe(false);
+    // Finance unpinned again, for what follows.
+    await sidebar(page).getByRole("link", { name: "Finance" }).click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Unpin" }).click();
+    await expect.poll(async () => (await mark(sql, `direct:${finance.id}`))?.pinned).toBe(false);
 
     // Mark Finance unread. Hovering a row adds no button: its actions are on right-click alone.
     const financeRow = sidebar(page).getByRole("link", { name: "Finance", exact: true });
@@ -95,6 +107,52 @@ test("pinned tiles, chats as rows, and each row's menu: pin, unpin, mark unread,
     await expect(sidebar(page).getByRole("link", { name: /^Finance/ })).toBeVisible({
       timeout: 15_000,
     });
+  } finally {
+    await page.close();
+    await stores.remove([owner]);
+    await stores.dispose();
+  }
+});
+
+test("work pins to the top of Work, and stays there while pinned, even done; unpinned, done work leaves", async ({
+  page,
+}) => {
+  const stores = await localStores();
+  const { sql } = stores;
+  const owner = await stores.owner("Rowan", "Acme");
+  const post = await bearer(sql, owner.person);
+  const path = `/api/businesses/${owner.business}`;
+  const first = await post<{ id: string }>(`${path}/work`, {
+    title: "Set up payroll",
+    owner: owner.team.finance,
+  });
+  const second = await post<{ id: string }>(`${path}/work`, {
+    title: "Buy acme-widgets.com",
+    owner: owner.team.admin,
+  });
+  await sql.run("UPDATE work_items SET updated_at = now() - interval '1 minute' WHERE id = $1", [
+    second.id,
+  ]);
+  const rows = () => sidebar(page).getByTestId("work-row");
+  try {
+    await signIn(page, sql, owner.person);
+    await expect(rows().first()).toHaveAccessibleName(/^Set up payroll, /);
+    // Pinned from its menu, it heads Work.
+    await rows().filter({ hasText: "Buy acme-widgets.com" }).click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Pin" }).click();
+    await expect(rows().first()).toHaveAccessibleName(/^Buy acme-widgets\.com, /);
+    await expect.poll(async () => (await mark(sql, `work:${second.id}`))?.pinned).toBe(true);
+    // Done and seen, it stays while pinned.
+    await sql.run("UPDATE work_items SET state = 'completed' WHERE id = $1", [second.id]);
+    await expect(rows().first()).toHaveAccessibleName("Buy acme-widgets.com, Done", {
+      timeout: 15_000,
+    });
+    // Unpinned, done work it has nothing unread in leaves.
+    await rows().first().click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Unpin" }).click();
+    await expect(rows()).toHaveCount(1);
+    await expect(rows().first()).toHaveAccessibleName(/^Set up payroll, /);
+    void first;
   } finally {
     await page.close();
     await stores.remove([owner]);

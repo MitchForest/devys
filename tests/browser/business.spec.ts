@@ -52,7 +52,10 @@ test("Home asks once, inline, and approves an exact request; a message made into
       author: `employee:${owner.chiefOfStaff}`,
       text: "Draft the PR inquiry",
     });
-    await page.getByText("Draft the PR inquiry").click({ button: "right", timeout: 15_000 });
+    await page
+      .getByRole("main")
+      .getByText("Draft the PR inquiry")
+      .click({ button: "right", timeout: 15_000 });
     await page.getByRole("menuitem", { name: "Make it work" }).click();
     await expect(page.getByTestId("place-title")).toHaveText("Chief of Staff");
     const card = workView(page).getByTestId("work-card");
@@ -133,9 +136,7 @@ test("Settings → Businesses creates a business with the standard team and swit
     );
     await expect(page.getByTestId("place-title")).toHaveText("Chief of Staff");
     await expect(sidebar(page).getByRole("link")).toHaveCount(5);
-    await expect(
-      sidebar(page).getByTestId("pinned").getByRole("link", { name: "Chief of Staff" }),
-    ).toBeVisible();
+    await expect(sidebar(page).getByRole("link").first()).toHaveAccessibleName(/^Chief of Staff/);
     expect(
       (await sql.row<{ brief: string }>("SELECT brief FROM businesses WHERE id = $1", [
         await created(),

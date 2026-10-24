@@ -78,7 +78,7 @@ struct SidebarFeatureTests {
         Issue.record("Timed out waiting for \(what)")
     }
 
-    @Test("Pinned are tiles, the Chief of Staff first; chats go most recent first, untalked-to after; hidden rows are left out")
+    @Test("Team has its pinned rows first, then the rest most recent first; hidden rows are left out")
     func rows() async {
         let server = SidebarServer()
         await server.set(ConversationSummary(key: "direct:ops", last: said(.direct("ops"), "Morning", at: 1), unread: 0, pinned: true))
@@ -88,9 +88,9 @@ struct SidebarFeatureTests {
         let store = await makeStore(server)
         await settle("summaries") { store.summaries.count == 4 }
         let layout = store.state.sidebar
-        #expect(layout.pinned.map(\.title) == ["Chief of Staff"] && layout.pinned.first?.place == .home)
-        #expect(layout.chats.map(\.title) == ["Growth", "Engineering"])
-        #expect(layout.chats.first?.preview == "Drafted the tagline" && layout.chats.first?.unread == 2)
+        #expect(layout.team.map(\.title) == ["Chief of Staff", "Growth", "Engineering"] && layout.team.first?.place == .home)
+        #expect(layout.team.first?.isPinned == true && layout.team.dropFirst().allSatisfy { !$0.isPinned })
+        #expect(layout.team[1].preview == "Drafted the tagline" && layout.team[1].unread == 2)
         #expect(layout.projects.isEmpty)
     }
 
@@ -106,7 +106,7 @@ struct SidebarFeatureTests {
         )
         let store = await makeStore(server)
         let layout = store.state.sidebar
-        #expect(layout.chats.map(\.title) == ["Chief of Staff", "Engineering", "Growth", "Admin"], "the team's order with nothing said")
+        #expect(layout.team.map(\.title) == ["Chief of Staff", "Engineering", "Growth", "Admin"], "the team's order with nothing said")
         #expect(layout.projects.map(\.title) == ["Launch", "New"], "a project whose work is all done leaves the sidebar")
         #expect(layout.projects.first?.place == .project("p1"))
     }
@@ -118,22 +118,42 @@ struct SidebarFeatureTests {
         let store = await makeStore(server)
         await settle("summaries") { store.summaries["direct:growth"] != nil }
         store.send(.sidebarMarked(.direct("growth"), SidebarMark(pinned: true)))
-        #expect(store.state.sidebar.pinned.map(\.title) == ["Growth"])
+        #expect(store.state.sidebar.team.first?.title == "Growth", "a pinned employee goes to the top of Team")
         await settle("pinned") { await server.marks.count == 1 }
         let first = await server.marks.first
         #expect(first?.key == "direct:growth" && first?.mark == SidebarMark(pinned: true))
 
         store.send(.sidebarMarked(.direct("engineering"), SidebarMark(unread: true)))
-        #expect(store.state.sidebar.chats.first { $0.title == "Engineering" }?.unread == 1)
+        #expect(store.state.sidebar.team.first { $0.title == "Engineering" }?.unread == 1)
         await settle("marked unread") { await server.marks.count == 2 }
 
         store.send(.placeSelected(.direct("growth")))
         store.send(.sidebarMarked(.direct("growth"), SidebarMark(hidden: true)))
         #expect(store.place == .home)
-        #expect(!store.state.sidebar.pinned.contains { $0.title == "Growth" } && !store.state.sidebar.chats.contains { $0.title == "Growth" })
+        #expect(!store.state.sidebar.team.contains { $0.title == "Growth" })
         await settle("hidden") { await server.marks.count == 3 }
         #expect(await server.marks.last?.mark == SidebarMark(hidden: true))
         await settle("summaries again") { store.summaries["direct:growth"]?.hidden == true }
+    }
+
+    @Test("A pinned work item stays at the top of Work whatever its state, until unpinned")
+    func pinnedWork() async {
+        let server = SidebarServer()
+        await server.setWork(
+            [
+                WorkItem(id: "w1", ownerEmployeeID: "growth", title: "Write it", state: .inProgress),
+                WorkItem(id: "w2", ownerEmployeeID: "growth", title: "Ship it", state: .completed)
+            ],
+            projects: []
+        )
+        await server.set(ConversationSummary(key: "work:w2", last: nil, unread: 0, pinned: true))
+        let store = await makeStore(server)
+        await settle("summaries") { store.summaries["work:w2"] != nil }
+        #expect(store.state.activeWork().map(\.id) == ["w2", "w1"], "finished and seen, but pinned")
+        store.send(.sidebarMarked(.work("w2"), SidebarMark(pinned: false)))
+        #expect(store.state.activeWork().map(\.id) == ["w1"])
+        await settle("unpinned") { await server.marks.count == 1 }
+        #expect(await server.marks.first?.key == "work:w2")
     }
 
     @Test("Rename… saves the name alone; Pause toggles the employee")

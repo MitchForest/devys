@@ -3,7 +3,7 @@ import Dependencies
 package import DevysClient
 package import Foundation
 
-// MARK: - The sidebar: pinned tiles, active projects and chats; Connect apps
+// MARK: - The sidebar: Team, Work and active Projects, each with what is pinned at its top
 
 /// One sidebar entry: an employee's direct chat or a project's channel, as the signed-in person
 /// keeps it (pinned, unread) with its newest line.
@@ -27,11 +27,10 @@ package struct SidebarEntry: Equatable, Identifiable {
     package var id: String { key.rawValue }
 }
 
-/// The sidebar as drawn: pinned tiles, then Projects (only active ones), then Chats.
+/// The sidebar as drawn: Team, then Projects (only active ones, or pinned), each pinned first.
 package struct SidebarLayout: Equatable {
-    package var pinned: [SidebarEntry] = []
+    package var team: [SidebarEntry] = []
     package var projects: [SidebarEntry] = []
-    package var chats: [SidebarEntry] = []
 }
 
 package enum SidebarIntent {
@@ -43,9 +42,9 @@ package enum SidebarIntent {
 }
 
 extension Workspace.State {
-    /// Every employee has a chat row (one not yet talked to as well), and every active project a
-    /// channel row, unless hidden; pinned ones are tiles. Employees keep the team's order (the
-    /// Chief of Staff first) as tiles, and chats go most recent first.
+    /// Every employee has a row (one not yet talked to as well), and every active project a
+    /// channel row, unless hidden. Each section has its pinned rows first, in the team's order (the
+    /// Chief of Staff first); the rest of the team goes most recent first.
     package var sidebar: SidebarLayout {
         var layout = SidebarLayout()
         let employees = snapshot.employees.compactMap { employee -> SidebarEntry? in
@@ -57,11 +56,10 @@ extension Workspace.State {
             guard let channel, channel.isPinned || isActive(project) else { return nil }
             return channel
         }
-        layout.pinned = employees.filter(\.isPinned) + channels.filter(\.isPinned)
-        layout.projects = channels.filter { !$0.isPinned }
-        let chats = employees.filter { !$0.isPinned }
+        layout.projects = channels.filter(\.isPinned) + channels.filter { !$0.isPinned }
+        let rest = employees.filter { !$0.isPinned }
         // Stable: rows with no message yet keep the team's order, after the talked-to ones.
-        layout.chats = chats.enumerated().sorted { first, second in
+        layout.team = employees.filter(\.isPinned) + rest.enumerated().sorted { first, second in
             switch (first.element.date, second.element.date) {
             case let (one?, two?) where one != two: one > two
             case (.some, nil): true
