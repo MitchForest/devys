@@ -56,6 +56,8 @@ package struct OpenConversation {
     package var attachment: Ref?
     /// A file from this device going up to the business folder, to be attached.
     package var isUploading = false
+    /// Messages ticked to copy together; nil while not selecting.
+    package var selection: Set<String>?
 
     package init(key: ConversationKey) {
         self.key = key
@@ -185,6 +187,8 @@ package enum ConversationIntent {
     case followToggled(workItemID: String)
     /// Fast polling after a message ended, answered or not.
     case waitEnded(ConversationKey, after: String)
+    /// Messages ticked to copy together (Select Messages); nil ends selecting.
+    case selectionSet(ConversationKey, Set<String>?)
     /// "Worked for …" opened under a reply: its steps are read from its employee once.
     case stepsRequested(ConversationKey, messageID: String)
     case stepsLoaded(messageID: String, Loadable<[String]>)

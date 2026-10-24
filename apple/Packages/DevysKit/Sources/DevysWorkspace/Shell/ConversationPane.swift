@@ -34,11 +34,17 @@ struct ConversationPane: View {
                             .frame(maxWidth: 780)
                             .frame(maxWidth: .infinity)
                     }
-                    ConversationComposer(store: store, key: key)
-                        .frame(maxWidth: 780)
-                        .padding(.horizontal, 10)
-                        .padding(.bottom, 10)
-                        .frame(maxWidth: .infinity)
+                    Group {
+                        if let selection = store.state.conversation(key)?.selection {
+                            SelectionBar(store: store, key: key, selection: selection)
+                        } else {
+                            ConversationComposer(store: store, key: key)
+                        }
+                    }
+                    .frame(maxWidth: 780)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 10)
+                    .frame(maxWidth: .infinity)
                 }
                 .id(key)
             } else {
@@ -51,6 +57,44 @@ struct ConversationPane: View {
             }
         }
         .animation(DevysMotion.quick, value: store.notice)
+    }
+}
+
+/// Select Messages, in place of the composer: how many are ticked, Select All, Copy (⌘C) and
+/// Done (Esc). Copy puts them on the clipboard, oldest first, as "Name: text".
+private struct SelectionBar: View {
+    let store: StoreOf<Workspace>
+    let key: ConversationKey
+    let selection: Set<String>
+
+    private var title: String {
+        if selection.isEmpty { return "Select messages" }
+        return selection.count == 1 ? "1 message selected" : "\(selection.count) messages selected"
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(title)
+                .font(DevysTypography.control)
+                .foregroundStyle(selection.isEmpty ? DevysColors.ink3 : DevysColors.ink)
+            Spacer(minLength: 8)
+            Button("Select All") { store.send(.selectionSet(key, store.state.selectableMessages(in: key))) }
+                .buttonStyle(DevysButtonStyle(.quiet, compact: true))
+                .keyboardShortcut("a", modifiers: .command)
+            Button("Copy", systemImage: "doc.on.doc") {
+                DevysPasteboard.copy(store.state.selectionText(in: key))
+                store.send(.selectionSet(key, nil))
+            }
+            .buttonStyle(DevysButtonStyle(.aurora, compact: true))
+            .keyboardShortcut("c", modifiers: .command)
+            .disabled(selection.isEmpty)
+            Button("Done") { store.send(.selectionSet(key, nil)) }
+                .buttonStyle(DevysButtonStyle(.quiet, compact: true))
+                .keyboardShortcut(.cancelAction)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(DevysColors.well, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }
 

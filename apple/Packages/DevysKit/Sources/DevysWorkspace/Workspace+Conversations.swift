@@ -48,6 +48,21 @@ extension Workspace.State {
         conversation(key)?.recipients(team: snapshot.employees, fallback: defaultResponder(for: key)) ?? []
     }
 
+    /// The selected messages as one text to paste, oldest first: "Name: text", a blank line
+    /// between them; the signed-in person is "You".
+    package func selectionText(in key: ConversationKey) -> String {
+        guard let open = conversation(key), let selection = open.selection else { return "" }
+        return (open.messages.value ?? [])
+            .filter { selection.contains($0.id) && !$0.isEvent }
+            .map { "\($0.employeeID.map(employeeName) ?? "You"): \($0.text)" }
+            .joined(separator: "\n\n")
+    }
+
+    /// Every message that can be selected in a conversation: what was said, not its events.
+    package func selectableMessages(in key: ConversationKey) -> Set<String> {
+        Set((conversation(key)?.messages.value ?? []).filter { !$0.isEvent }.map(\.id))
+    }
+
     /// Employees working in this conversation now: answering what was sent from here, or running
     /// there because something else woke them. A thread's card says it instead.
     package func working(in key: ConversationKey) -> [Employee] {
@@ -121,14 +136,17 @@ extension Workspace {
                 if conversation.awaitingAfter == messageID { conversation.stoppedPolling = true }
             }
             settleAwaiting(&state)
-        case .stepsRequested, .stepsLoaded:
-            reduceSteps(intent, state: &state)
+        case .stepsRequested, .stepsLoaded, .selectionSet:
+            reduceSaid(intent, state: &state)
         }
     }
 
-    /// "Worked for …" opened under a reply: its steps, read from its employee once.
-    private func reduceSteps(_ intent: ConversationIntent, state: inout State) {
+    /// What the owner does with messages already said: opens a reply's steps ("Worked for …",
+    /// read from its employee once), or ticks messages to copy together.
+    private func reduceSaid(_ intent: ConversationIntent, state: inout State) {
         switch intent {
+        case .selectionSet(let key, let selection):
+            update(key, &state) { $0.selection = selection }
         case .stepsRequested(let key, let messageID):
             if case .loaded = state.steps[messageID] { return }
             state.steps[messageID] = .loading

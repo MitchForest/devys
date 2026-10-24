@@ -15,7 +15,11 @@ struct MessageRow: View {
     @State private var swipe: CGFloat = 0
 
     private var isOwner: Bool { bubble.isOwner }
-    private var canAct: Bool { bubble.delivery == nil }
+    private var canAct: Bool { bubble.delivery == nil && !isSelecting }
+    /// Select Messages: ticked rows are copied together.
+    private var selection: Set<String>? { store.state.conversation(key)?.selection }
+    private var isSelecting: Bool { selection != nil }
+    private var isSelected: Bool { selection?.contains(bubble.id) == true }
     /// A thread starts from a message anywhere but inside a thread.
     private var startsThreads: Bool { canAct && key.kind != .work }
     static let avatarSize: CGFloat = 26
@@ -23,6 +27,38 @@ struct MessageRow: View {
     static let actionsRoom: CGFloat = 84
 
     var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            if isSelecting, bubble.delivery == nil {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 18))
+                    .foregroundStyle(isSelected ? DevysColors.indigo : DevysColors.ink3)
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+                    .accessibilityHidden(true)
+            }
+            message
+        }
+        // While selecting, a click anywhere on the row ticks it rather than selecting its text.
+        .overlay {
+            if isSelecting, bubble.delivery == nil {
+                Color.clear.contentShape(Rectangle()).onTapGesture { toggle() }
+            }
+        }
+        #if os(macOS)
+            // ⌘-click starts selecting, or ticks one more, as in a Finder list.
+            .simultaneousGesture(TapGesture().modifiers(.command).onEnded { if bubble.delivery == nil { toggle() } })
+        #endif
+        .animation(DevysMotion.quick, value: isSelecting)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    /// Ticks or unticks this message, starting Select Messages when it isn't on.
+    private func toggle() {
+        var next = selection ?? []
+        if next.contains(bubble.id) { next.remove(bubble.id) } else { next.insert(bubble.id) }
+        store.send(.selectionSet(key, next))
+    }
+
+    private var message: some View {
         VStack(alignment: isOwner ? .trailing : .leading, spacing: 3) {
             if !isOwner, bubble.startsGroup, let author {
                 Text(author.name)
@@ -138,6 +174,9 @@ struct MessageRow: View {
             Button("Start a thread", systemImage: "bubble.left.and.text.bubble.right") { store.send(.startThreadTapped(bubble.id)) }
         }
         Button("Copy", systemImage: "doc.on.doc") { DevysPasteboard.copy(bubble.text) }
+        if bubble.delivery == nil {
+            Button("Select Messages", systemImage: "checkmark.circle") { store.send(.selectionSet(key, [bubble.id])) }
+        }
     }
 
     #if os(iOS)

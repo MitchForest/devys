@@ -220,6 +220,24 @@ struct ConversationFeatureTests {
         #expect(store.main?.attachment == nil)
     }
 
+    @Test("Select Messages copies the ticked messages oldest first, as Name: text, without events")
+    func selectionCopies() {
+        var state = Workspace.State(server: URL(string: "http://127.0.0.1:5173")!)
+        state.snapshot.employees = BusinessDetail.fixture("acme").employees
+        let key = ConversationKey.direct("growth")
+        var open = OpenConversation(key: key)
+        open.messages = .loaded([
+            ConversationMessage(id: "m1", conversation: key.rawValue, author: "person:p1", text: "Which registrar?", createdAt: "2026-10-24T10:00:00.000Z"),
+            ConversationMessage(id: "m2", conversation: key.rawValue, author: "system", kind: .event, text: "Growth started a work item.", createdAt: "2026-10-24T10:00:01.000Z"),
+            ConversationMessage(id: "m3", conversation: key.rawValue, author: "employee:growth", text: "GoDaddy.", createdAt: "2026-10-24T10:00:02.000Z"),
+            ConversationMessage(id: "m4", conversation: key.rawValue, author: "employee:growth", text: "Not this one.", createdAt: "2026-10-24T10:00:03.000Z")
+        ])
+        state.main = open
+        state.main?.selection = ["m3", "m1", "m2"]
+        #expect(state.selectionText(in: key) == "You: Which registrar?\n\nGrowth: GoDaddy.")
+        #expect(state.selectableMessages(in: key) == ["m1", "m3", "m4"], "events aren't said, so they aren't selected")
+    }
+
     @Test("Before anyone speaks, the conversation's default answers: the direct chat's employee, the project's lead")
     func defaults() {
         let team = BusinessDetail.fixture("acme").employees
